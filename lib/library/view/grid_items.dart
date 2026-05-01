@@ -10,16 +10,16 @@ import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
-//  ╫⌐╫ש╫á╫ץ╫ש╫ש╫¥:
-//  Γאó ╫₧╫ס╫á╫פ Row: LTR ╫ó╫¥ icons ╫₧╫⌐╫₧╫נ╫£, ╫ר╫º╫í╫ר ╫₧╫ש╫₧╫ש╫ƒ (╫₧╫¬╫נ╫ש╫¥ ╫£-RTL UI).
-//  Γאó ╫ª╫ס╫ó╫ש ╫ר╫º╫í╫ר: cs.onSurface ╫£╫¢╫ץ╫¬╫¿╫¬ ╫í╫ñ╫¿╫ש╫¥ (╫º╫¿╫ש╫נ ╫ס╫פ╫ש╫¿/╫¢╫פ╫פ), cs.primary ╫£╫¬╫ש╫º╫ש╫ץ╫¬.
-//  Γאó ╫¿╫º╫ó ╫נ╫ש╫ש╫º╫ץ╫ƒ: cs.primary/secondary.withValues(alpha:0.12) Γאפ ╫ס╫ר╫ץ╫ק ╫ס╫פ╫ש╫¿+╫¢╫פ╫פ.
-//  Γאó ╫נ╫ש╫ש╫º╫ץ╫ƒ ╫ס╫¢╫¿╫ר╫ש╫í: 32├ק32 container, 16px icon Γאפ ╫ñ╫¿╫ץ╫ñ╫ץ╫¿╫ª╫ש╫פ ╫ר╫ץ╫ס╫פ ╫ש╫ץ╫¬╫¿.
-//  Γאó ╫¿╫ש╫ñ╫ץ╫ף ╫ó╫£╫ש╫ץ╫ƒ ╫ס-MyGridView: top: 8 Γאפ ╫¿╫ש╫ק╫ץ╫º ╫₧╫פ╫í╫¿╫ע╫£.
-//  Γאó Focus ╫á╫ש╫ץ╫ץ╫ר ╫₧╫º╫£╫ף╫¬: CategoryGridItem + BookGridItem ╫¬╫ץ╫₧╫¢╫ש╫¥ ╫ס-Focus.
-//  Γאó overflow: ellipsis + tooltip ╫ס╫¿╫ש╫ק╫ץ╫ú ╫ס╫¢╫£ ╫ר╫º╫í╫ר╫ש╫¥.
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+// ─────────────────────────────────────────────────────────────────────────────
+//  הנחיות עיצוב:
+//  • מבנה Row: RTL כדי אייקונים משמאל, טקסט מימין (מתאים ל-RTL UI).
+//  • צבעי טקסט: cs.onSurface בכותרת ותיאור (במקום אדום/כחול), cs.primary בהדגשות.
+//  • רקע אייקונים: cs.primary/secondary.withValues(alpha:0.12) או מבנה אדום+כחול.
+//  • אייקונים מעוצבים: 32×32 container, 16px icon או קונטיינר רחוק שיותר.
+//  • ריווח עליון ב-MyGridView: top: 8 או מרווח מתאים.
+//  • Focus מוגדר במפורש: CategoryGridItem + BookGridItem תומכים ב-Focus.
+//  • overflow: ellipsis + tooltip במרווח מספיק.
+// ─────────────────────────────────────────────────────────────────────────────
 
 bool _textOverflows({
   required BuildContext context,
@@ -179,11 +179,11 @@ class HeaderItem extends StatelessWidget {
   }
 }
 
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+// ─────────────────────────────────────────────────────────────────────────────
 //  CategoryGridItem
-//  Layout LTR: [info-icon?] [folder-icon] [12px] [Expanded text (right-aligned)]
-//  ╫ס╫¬╫ª╫ץ╫ע╫¬ RTL: ╫ר╫º╫í╫ר ╫₧╫ש╫₧╫ש╫ƒ, ╫נ╫ש╫ש╫º╫ץ╫á╫ש╫¥ ╫₧╫⌐╫₧╫נ╫£ Γאפ ╫ó╫º╫ס╫ש ╫ץ╫ס╫£╫¬╫ש ╫¬╫£╫ץ╫ש╫ש╫¥.
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+//  Layout RTL: [info-icon?] [folder-icon] [12px] [Expanded text (right-aligned)]
+//  במצב RTL: טקסט מימין, אייקונים משמאל כדי לשמור ויזואלית תקינה.
+// ─────────────────────────────────────────────────────────────────────────────
 
 class CategoryGridItem extends StatelessWidget {
   final Category category;
@@ -217,12 +217,12 @@ class CategoryGridItem extends StatelessWidget {
         hoverColor: cs.primary.withValues(alpha: 0.06),
         hoverDuration: Durations.medium1,
         onTap: () => onCategoryClickCallback(),
-        // Focus: Enter/Space Γזנ ╫₧╫ר╫ץ╫ñ╫£╫ש╫¥ ╫נ╫ץ╫ר╫ץ╫₧╫ר╫ש╫¬ ╫ó"╫ש InkWell
-        // Arrow keys: ╫á╫₧╫í╫¿╫ש╫¥ ╫£╫פ╫ץ╫¿╫פ (grid) ╫ף╫¿╫ת bubble
+        // Focus: Enter/Space מפעילים אוטומטית ע"י InkWell
+        // Arrow keys: מטופלים בגריד (grid) ולא bubble
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Row(
-            // LTR: ╫נ╫ש╫ש╫º╫ץ╫á╫ש╫¥ ╫ס╫⌐╫₧╫נ╫£, ╫ר╫º╫í╫ר ╫ס╫ש╫₧╫ש╫ƒ Γאפ ╫₧╫¬╫נ╫ש╫¥ ╫£╫₧╫₧╫⌐╫º RTL ╫ó╫ס╫¿╫ש
+            // שומר על סדר אייקונים משמאל וטקסט מימין בתוך ממשק RTL.
             textDirection: TextDirection.rtl,
             children: [
               Expanded(
@@ -283,11 +283,11 @@ class CategoryGridItem extends StatelessWidget {
   }
 }
 
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+// ─────────────────────────────────────────────────────────────────────────────
 //  BookGridItem
-//  Layout LTR: [action-col] [media-col] [12px] [Expanded text (right-aligned)]
-//  ╫ס╫¬╫ª╫ץ╫ע╫¬ RTL: ╫ר╫º╫í╫ר ╫₧╫ש╫₧╫ש╫ƒ, ╫נ╫ש╫ש╫º╫ץ╫á╫ש╫¥ ╫₧╫⌐╫₧╫נ╫£ Γאפ ╫ó╫º╫ס╫ש ╫ץ╫ס╫£╫¬╫ש ╫¬╫£╫ץ╫ש╫ש╫¥.
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+//  Layout RTL: [action-col] [media-col] [12px] [Expanded text (right-aligned)]
+//  במצב RTL: טקסט מימין, אייקונים משמאל כדי לשמור ויזואלית תקינה.
+// ─────────────────────────────────────────────────────────────────────────────
 
 class BookGridItem extends StatelessWidget {
   final bool showTopics;
@@ -380,7 +380,7 @@ class _BookGridMediaColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    // ╫נ╫ש╫ש╫º╫ץ╫ƒ ╫º╫ר╫ƒ ╫ש╫ץ╫¬╫¿: 32├ק32 container, 16px icon Γאפ ╫ñ╫¿╫ץ╫ñ╫ץ╫¿╫ª╫ש╫פ ╫ר╫ץ╫ס╫פ ╫£╫ª╫ף ╫ר╫º╫í╫ר
+    // אייקונים מעוצבים: 32×32 container, 16px icon או קונטיינר רחוק שיותר
     const double iconBoxSize = 32.0;
     const double iconSize = 16.0;
 
@@ -439,7 +439,7 @@ class _BookGridTextColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // ╫¢╫ץ╫¬╫¿╫¬: onSurface Γאפ ╫º╫¿╫ש╫נ ╫ס╫⌐╫á╫ש ╫פ╫₧╫ª╫ס╫ש╫¥ (╫£╫נ primary ╫⌐╫ש╫¢╫ץ╫£ ╫£╫פ╫ש╫ץ╫¬ ╫ס╫ץ╫פ╫º ╫ס╫¢╫פ╫פ)
+    // כותרת: onSurface כדי מבנה מאוחד ומסודר (ולא primary שיכול להיות מדי בולט)
     final titleStyle = theme.textTheme.titleMedium?.copyWith(
       fontWeight: FontWeight.w700,
       color: theme.colorScheme.onSurface,
@@ -580,11 +580,11 @@ class _BookGridActionColumn extends StatelessWidget {
   }
 }
 
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+// ─────────────────────────────────────────────────────────────────────────────
 //  MyGridView
-//  Γאó ╫¿╫ש╫ñ╫ץ╫ף top: 8 Γאפ ╫¿╫ש╫ק╫ץ╫ú ╫₧╫פ╫í╫¿╫ע╫£
-//  Γאó FocusTraversalGroup Γאפ ╫á╫ש╫ץ╫ץ╫ר Tab ╫ס╫¬╫ץ╫ת ╫פ╫ע╫¿╫ש╫ף ╫ס╫£╫ס╫ף (╫£╫נ ╫º╫ץ╫ñ╫Ñ ╫£╫⌐╫ץ╫¿╫¬ ╫ק╫ש╫ñ╫ץ╫⌐)
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+//  • ריווח top: 8 או מרווח מתאים
+//  • FocusTraversalGroup כדי לנווט Tab בסדר קריאה (ולא קפיצה ציגזג)
+// ─────────────────────────────────────────────────────────────────────────────
 
 class MyGridView extends StatelessWidget {
   final List<Widget> items;
@@ -611,7 +611,7 @@ class MyGridView extends StatelessWidget {
         return FocusTraversalGroup(
           policy: ReadingOrderTraversalPolicy(),
           child: Padding(
-            // top: 8 Γאפ ╫¿╫ש╫ק╫ץ╫ú ╫₧╫פ╫í╫¿╫ע╫£; horizontal: 45 Γאפ ╫⌐╫ץ╫£╫ש ╫ª╫ף
+            // top: 8 או מרווח מתאים; horizontal: 45 או רוחב אף
             padding:
                 const EdgeInsets.only(top: 8, left: 45, right: 45, bottom: 0),
             child: GridView.builder(
@@ -661,11 +661,11 @@ Future<void> _deleteBook(Book book) async {
     );
 
     if (!success) {
-      throw Exception('╫פ╫₧╫ק╫ש╫º╫פ ╫á╫¢╫⌐╫£╫פ');
+      throw Exception('המחיקה נכשלה');
     }
 
-    UiSnack.show('╫פ╫í╫ñ╫¿ "${book.title}" ╫á╫₧╫ק╫º ╫ס╫פ╫ª╫£╫ק╫פ');
+    UiSnack.show('הספר "${book.title}" נמחק בהצלחה ממסד הנתונים');
   } catch (e) {
-    UiSnack.showError('╫⌐╫ע╫ש╫נ╫פ ╫ס╫₧╫ק╫ש╫º╫¬ ╫פ╫í╫ñ╫¿: $e');
+    UiSnack.showError('שגיאה במחיקת הספר: $e');
   }
 }
