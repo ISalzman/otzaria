@@ -11,7 +11,6 @@ import 'package:otzaria/migration/dao/sqflite/sqlite3_utils.dart';
 /// - Indexed by book_id and line_number for fast queries
 class PersonalNotesDatabase {
   static const _databaseName = 'personal_notes.db';
-  static const _databaseVersion = 2;
 
   static const _tableNotes = 'personal_notes';
 
@@ -48,26 +47,12 @@ class PersonalNotesDatabase {
 
     final db = sqlite3.open(dbPath);
     db.execute('PRAGMA journal_mode=WAL');
-    _migrateSchema(db);
+    _createSchema(db);
     return db;
   }
 
-  /// Apply schema migrations based on user_version
-  void _migrateSchema(Database db) {
-    final currentVersion =
-        db.select('PRAGMA user_version').first.values.first as int;
-
-    if (currentVersion == 0) {
-      _createSchemaV1(db);
-    }
-    if (currentVersion < 2) {
-      _migrateV1ToV2(db);
-    }
-    db.execute('PRAGMA user_version = $_databaseVersion');
-  }
-
-  /// Create database schema version 1
-  void _createSchemaV1(Database db) {
+  /// Create the database schema
+  void _createSchema(Database db) {
     db.execute('''
       CREATE TABLE IF NOT EXISTS $_tableNotes (
         $_columnId TEXT PRIMARY KEY,
@@ -77,6 +62,8 @@ class PersonalNotesDatabase {
         $_columnLastKnownLine INTEGER,
         $_columnStatus TEXT NOT NULL,
         $_columnContent TEXT NOT NULL,
+        $_columnContentPlain TEXT NOT NULL DEFAULT '',
+        $_columnContentFormat TEXT NOT NULL DEFAULT 'plain',
         $_columnCreatedAt TEXT NOT NULL,
         $_columnUpdatedAt TEXT NOT NULL
       )
@@ -85,21 +72,6 @@ class PersonalNotesDatabase {
         'CREATE INDEX IF NOT EXISTS idx_book_id ON $_tableNotes($_columnBookId)');
     db.execute(
         'CREATE INDEX IF NOT EXISTS idx_book_line ON $_tableNotes($_columnBookId, $_columnLineNumber)');
-  }
-
-  /// Migrate schema from v1 to v2
-  void _migrateV1ToV2(Database db) {
-    // Check if columns already exist (safe to re-run)
-    final info = db.select('PRAGMA table_info($_tableNotes)');
-    final cols = info.map((r) => r['name'] as String).toSet();
-    if (!cols.contains(_columnContentPlain)) {
-      db.execute(
-          'ALTER TABLE $_tableNotes ADD COLUMN $_columnContentPlain TEXT NOT NULL DEFAULT \'\'');
-      db.execute(
-          'ALTER TABLE $_tableNotes ADD COLUMN $_columnContentFormat TEXT NOT NULL DEFAULT \'plain\'');
-      db.execute(
-          'UPDATE $_tableNotes SET $_columnContentPlain = $_columnContent WHERE $_columnContentPlain = \'\'');
-    }
   }
 
   /// Load all notes for a specific book

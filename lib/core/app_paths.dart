@@ -164,39 +164,10 @@ class AppPaths {
   }
 
   /// Resolves the notes database path - for cross-platform compatibility.
-  /// Also migrates the DB from the old sqflite location the first time it runs on mobile.
   static Future<String> resolveNotesDbPath(String fileName) async {
     final dbDir = Directory(p.join(await getDataRootPath(), 'databases'));
     if (!await dbDir.exists()) await dbDir.create(recursive: true);
-    final newPath = p.join(dbDir.path, fileName);
-
-    // Migrate from old sqflite location on mobile (one-time, idempotent)
-    if (!File(newPath).existsSync()) {
-      await _migrateNotesDbIfExists(fileName, newPath);
-    }
-
-    return newPath;
-  }
-
-  /// Copies the old sqflite database file to [newPath] if it exists at the
-  /// platform-specific sqflite default location.
-  static Future<void> _migrateNotesDbIfExists(
-      String fileName, String newPath) async {
-    try {
-      final docsDir = await getApplicationDocumentsDirectory();
-      // sqflite stored the DB differently per platform:
-      //   Android: {app}/databases/ (sibling of the app_flutter dir)
-      //   iOS:     Library/ (sibling of Documents in the container root)
-      final oldDir = Platform.isAndroid
-          ? p.join(docsDir.parent.path, 'databases')
-          : p.join(docsDir.parent.path, 'Library');
-      final oldFile = File(p.join(oldDir, fileName));
-      if (await oldFile.exists()) {
-        await oldFile.copy(newPath);
-      }
-    } catch (_) {
-      // Migration is best-effort; failure should not prevent the app from starting.
-    }
+    return p.join(dbDir.path, fileName);
   }
 
   /// Creates startup directories when eagerly required.

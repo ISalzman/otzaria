@@ -225,19 +225,17 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
         return false;
       }
 
-      // Use ID-based functions if available, otherwise fall back to name-based
+      final bookId = details.id;
       final bool isCompleted;
       final bool isInProgress;
 
-      if (details.id != null) {
-        isCompleted =
-            progressProvider.isBookCompletedById(details.id!, details);
-        isInProgress = progressProvider.isBookConsideredInProgressById(
-            details.id!, details);
+      if (bookId != null) {
+        isCompleted = progressProvider.isBookCompletedById(bookId, details);
+        isInProgress =
+            progressProvider.isBookConsideredInProgressById(bookId, details);
       } else {
-        isCompleted = progressProvider.isBookCompleted(category, name, details);
-        isInProgress = progressProvider.isBookConsideredInProgress(
-            category, name, details);
+        isCompleted = false;
+        isInProgress = false;
       }
 
       if (widget.selectedFilter == 'in_progress') {
@@ -319,8 +317,6 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
       if (details.id != null) {
         await progressProvider.clearBookProgressById(
           details.id!,
-          categoryName: topLevelCategory,
-          bookName: bookName,
           bookDetails: details,
         );
       }
