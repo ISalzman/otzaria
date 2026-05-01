@@ -6,7 +6,7 @@ import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart' show Screen;
-import 'package:otzaria/pdf_book/pdf_book_screen.dart';
+import 'package:otzaria/pdf_book/view/pdf_book_screen.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';

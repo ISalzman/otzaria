@@ -29,7 +29,7 @@ import 'package:otzaria/tabs/reading_screen.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
-import 'package:otzaria/pdf_book/pdf_book_screen.dart';
+import 'package:otzaria/pdf_book/view/pdf_book_screen.dart';
 import 'package:otzaria/tools/tools_screen.dart';
 import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
 import 'dart:async';

@@ -9,7 +9,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/pdf_book/pdf_commentary_content.dart';
+import 'package:otzaria/pdf_book/view/pdf_commentary_content.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';

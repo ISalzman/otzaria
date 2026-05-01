@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/pdf_book/pdf_book_screen.dart';
+import 'package:otzaria/pdf_book/view/pdf_book_screen.dart';
 
 void main() {
   group('shouldShowOpenPdfCommentaryPaneEntry', () {
