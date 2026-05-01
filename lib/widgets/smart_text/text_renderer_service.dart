@@ -17,8 +17,8 @@ class TextRendererService {
 
     // 0. תיקון סדר סימוני הערות (<sup>) ב-RTL
     processed = _fixFootnoteMarkers(processed);
-    // 0b. הסתרת טקסט ההערות המודפסות בתוך השורה (למשל "מ: ...")
-    processed = _hideInlineFootnotes(processed);
+    // 0b. עיצוב טקסט ההערות המודפסות בתוך השורה (גופן קטן ונטוי)
+    processed = _styleInlineFootnotes(processed);
 
     // 1. הסרת טעמים (אם נדרש)
     if (settings.removeTeamim) {
@@ -96,19 +96,21 @@ class TextRendererService {
         return '<sup$attrs>$wrappedInner</sup>';
       }
 
-      final converted = _convertToSuperscriptText(innerText);
-      return converted;
+      return '';
     });
   }
 
-  static String _hideInlineFootnotes(String text) {
+  static String _styleInlineFootnotes(String text) {
     return text.replaceAllMapped(
       RegExp(
-        r'<i\b([^>]*)\bclass="[^"]*\bfootnote\b[^"]*"([^>]*)>.*?</i>',
+        r'<i\b([^>]*)\bclass="[^"]*\bfootnote\b[^"]*"([^>]*)>(.*?)</i>',
         caseSensitive: false,
         dotAll: true,
       ),
-      (match) => '<span class="footnote-hidden">\u200B</span>',
+      (match) {
+        final content = match[3] ?? '';
+        return '<span style="font-size: 0.8em; font-style: italic;">$content</span>';
+      },
     );
   }
 
@@ -129,23 +131,6 @@ class TextRendererService {
     const isolateEnd = '\u2069'; // PDI
 
     return '$isolateStart$innerHtml$isolateEnd';
-  }
-
-  static String _convertToSuperscriptText(String text) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) return trimmed;
-
-    final isNumeric = RegExp(r'^[0-9]+$').hasMatch(trimmed);
-    final hasRtl = RegExp(r'[\u0590-\u08FF]').hasMatch(trimmed);
-
-    final isolatedText = isNumeric
-        ? '<span class="footnote-marker-number">$trimmed</span>'
-        : trimmed;
-
-    final isolateStart = hasRtl ? '\u2067' /* RLI */ : '\u2066' /* LRI */;
-    const isolateEnd = '\u2069'; // PDI
-    final dirMark = hasRtl ? '\u200F' /* RLM */ : '\u200E' /* LRM */;
-    return '$dirMark$isolateStart$isolatedText$isolateEnd$dirMark';
   }
 
   /// עוטף טקסט ב-div עם כיווניות RTL ו-justify
