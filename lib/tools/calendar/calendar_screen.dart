@@ -14,7 +14,7 @@ import 'package:otzaria/widgets/floating_panel.dart'
     show kMainPanelMinWidth, kSideBySideMinWidth;
 import 'package:otzaria/widgets/context_overlay_panel.dart';
 import 'package:otzaria/widgets/adaptive_side_pane.dart';
-import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
+import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/tools/calendar/dialogs/calendar_event_dialog.dart';
 import 'package:otzaria/tools/calendar/dialogs/calendar_print_dialog.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
@@ -30,7 +30,7 @@ import 'package:otzaria/tools/calendar/helpers/calendar_print_helpers.dart'
     as print_helper;
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 
-export 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
+export 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 
 class CalendarWidget extends StatefulWidget {
   const CalendarWidget({super.key});

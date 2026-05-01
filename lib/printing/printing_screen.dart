@@ -15,7 +15,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/navigation/custom_title_bar.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
-import 'package:otzaria/pdf_book/pdf_page_number_dispaly.dart';
+import 'package:otzaria/pdf_book/pdf_page_number_display.dart';
 import 'package:otzaria/pdf_book/pdf_thumbnails_screen.dart';
 import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
 import 'package:otzaria/printing/print_content_models.dart';
