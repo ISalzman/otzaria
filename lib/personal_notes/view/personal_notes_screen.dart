@@ -21,7 +21,7 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/widgets/lists/navigation_tree_tile.dart';
-import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';

@@ -4,7 +4,7 @@ import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/core/ui_snack.dart';
 
 // Cache של outlines — מפתח: title של הספר

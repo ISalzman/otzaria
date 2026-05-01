@@ -6,7 +6,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/gematria/models/gematria_search_result.dart';
-import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/widgets/layout/tool_result_card_shell.dart';

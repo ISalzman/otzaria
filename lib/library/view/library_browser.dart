@@ -31,7 +31,7 @@ import 'package:otzaria/library/view/library_panel_controller.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
-import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';

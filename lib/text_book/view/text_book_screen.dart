@@ -32,7 +32,7 @@ import 'package:otzaria/text_book/view/text_book_scaffold.dart';
 import 'package:otzaria/text_book/view/text_book_search_screen.dart';
 import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
 import 'package:otzaria/text_book/view/alt_toc_sidebar_view.dart';
-import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/page_converter.dart';
 import 'package:otzaria/utils/ref_helper.dart';

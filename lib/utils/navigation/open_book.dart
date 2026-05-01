@@ -4,7 +4,7 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/models/books.dart';
 import "package:flutter_bloc/flutter_bloc.dart";
-import 'package:otzaria/utils/book_open_coordinator.dart';
+import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 
 void openBook(BuildContext context, Book book, int index, String searchQuery,
     {bool ignoreHistory = false}) {

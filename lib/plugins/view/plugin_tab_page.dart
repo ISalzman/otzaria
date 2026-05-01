@@ -22,7 +22,7 @@ import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
-import 'package:otzaria/utils/book_open_coordinator.dart';
+import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/plugins/view/plugin_dev_error_view.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
