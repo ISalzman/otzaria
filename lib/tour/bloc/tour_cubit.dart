@@ -178,6 +178,7 @@ class TourCubit extends Cubit<TourState> {
         break;
       case TourInteractionType.currentTabChanged:
       case TourInteractionType.openedTextBook:
+      case TourInteractionType.readerPositionChanged:
         if (_commentaryOpportunityOpen &&
             (_commentaryOpportunityBook == null ||
                 _commentaryOpportunityBook == interaction.primaryValue)) {
