@@ -1914,6 +1914,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                               (state.currentScreen == Screen.reading ||
                                   state.currentScreen == Screen.search),
                           onClose: _toggleReadingSettingsPanel,
+                          deferChildBuildOnOpen: true,
+                          preserveChildStateOnClose: true,
                           child: Column(
                             children: [
                               Padding(

@@ -53,6 +53,17 @@ class ContextOverlayPanel extends StatefulWidget {
   /// ריפוד פנימי אחיד לתוכן הפאנל
   final EdgeInsetsGeometry contentPadding;
 
+  /// האם לדחות את בניית התוכן לפריים שאחרי פתיחת הפאנל.
+  ///
+  /// שימושי כאשר התוכן כבד, ורוצים שהמעטפת והאנימציה יופיעו מיד
+  /// בלי לחכות לסיום build/layout של כל התוכן.
+  final bool deferChildBuildOnOpen;
+
+  /// האם לשמור את התוכן חי גם אחרי סגירת הפאנל.
+  ///
+  /// כאשר `true`, עלות הבנייה משולמת רק בפתיחה הראשונה.
+  final bool preserveChildStateOnClose;
+
   const ContextOverlayPanel({
     super.key,
     required this.isOpen,
@@ -63,6 +74,8 @@ class ContextOverlayPanel extends StatefulWidget {
         AlignmentDirectional.centerEnd, // ברירת מחדל: שמאל בעברית (RTL)
     this.backgroundColor,
     this.contentPadding = const EdgeInsetsDirectional.fromSTEB(16, 16, 16, 16),
+    this.deferChildBuildOnOpen = false,
+    this.preserveChildStateOnClose = false,
   });
 
   @override
@@ -74,12 +87,16 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
   static const _slideDuration = Duration(milliseconds: 300);
 
   Timer? _disposeChildTimer;
+  bool _isDeferredBuildScheduled = false;
   late bool _shouldBuildChild;
 
   @override
   void initState() {
     super.initState();
-    _shouldBuildChild = widget.isOpen;
+    _shouldBuildChild = widget.isOpen && !widget.deferChildBuildOnOpen;
+    if (widget.isOpen && widget.deferChildBuildOnOpen) {
+      _scheduleDeferredChildBuild();
+    }
   }
 
   @override
@@ -88,11 +105,20 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
 
     if (widget.isOpen) {
       _disposeChildTimer?.cancel();
-      if (!_shouldBuildChild) {
+      if (_shouldBuildChild) {
+        return;
+      }
+      if (widget.deferChildBuildOnOpen) {
+        _scheduleDeferredChildBuild();
+      } else {
         setState(() {
           _shouldBuildChild = true;
         });
       }
+      return;
+    }
+
+    if (widget.preserveChildStateOnClose) {
       return;
     }
 
@@ -115,6 +141,23 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
   void dispose() {
     _disposeChildTimer?.cancel();
     super.dispose();
+  }
+
+  void _scheduleDeferredChildBuild() {
+    if (_shouldBuildChild || _isDeferredBuildScheduled) {
+      return;
+    }
+
+    _isDeferredBuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isDeferredBuildScheduled = false;
+      if (!mounted || !widget.isOpen || _shouldBuildChild) {
+        return;
+      }
+      setState(() {
+        _shouldBuildChild = true;
+      });
+    });
   }
 
   @override
