@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
-import 'package:otzaria/file_sync/file_sync_repository.dart';
+import 'package:otzaria/file_sync/repository/file_sync_repository.dart';
 import 'package:otzaria/file_sync/library_diff_sync_worker.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:path/path.dart' as path;
