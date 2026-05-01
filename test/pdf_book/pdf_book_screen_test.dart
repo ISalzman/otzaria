@@ -33,4 +33,36 @@ void main() {
       );
     });
   });
+
+  group('shouldShowOpenPdfLinksPaneEntry', () {
+    test('מחזירה true רק כשיש קישורים רלוונטיים והחלונית סגורה', () {
+      expect(
+        shouldShowOpenPdfLinksPaneEntry(
+          hasRelevantLinks: true,
+          isPaneOpen: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('מחזירה false כשאין קישורים רלוונטיים', () {
+      expect(
+        shouldShowOpenPdfLinksPaneEntry(
+          hasRelevantLinks: false,
+          isPaneOpen: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('מחזירה false כשהחלונית כבר פתוחה', () {
+      expect(
+        shouldShowOpenPdfLinksPaneEntry(
+          hasRelevantLinks: true,
+          isPaneOpen: true,
+        ),
+        isFalse,
+      );
+    });
+  });
 }

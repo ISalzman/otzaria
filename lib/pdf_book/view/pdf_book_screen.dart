@@ -101,6 +101,14 @@ bool shouldShowOpenPdfCommentaryPaneEntry({
   return hasRelevantCommentators && !isPaneOpen;
 }
 
+@visibleForTesting
+bool shouldShowOpenPdfLinksPaneEntry({
+  required bool hasRelevantLinks,
+  required bool isPaneOpen,
+}) {
+  return hasRelevantLinks && !isPaneOpen;
+}
+
 class _PdfBookScreenState extends State<PdfBookScreen>
     with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   static const int _defaultPdfLineRange = 50;
@@ -535,6 +543,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _bloc.add(const pdf_events.ToggleRightPane(show: true));
   }
 
+  void _openLinksPane() {
+    setState(() {
+      _rightPaneInitialTabIndex = 1;
+    });
+    _bloc.add(const pdf_events.ToggleRightPane(show: true));
+  }
+
   void _maybeRegisterPdfCommentaryOpportunity() {
     if (_linksLoading) {
       return;
@@ -662,27 +677,40 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ..._buildGroupedCommentatorEntries(relevantCommentators),
     ];
 
-    final linkChildren = relevantLinks
-        .map((link) => AppContextMenuEntry(
-              label: link.fallbackDisplayReference,
-              labelWidget: FutureBuilder<String>(
-                future: link.displayReference,
-                builder: (context, snapshot) => Text(
-                  snapshot.data ?? link.fallbackDisplayReference,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textDirection: TextDirection.rtl,
-                ),
+    final showOpenLinksPaneEntry = shouldShowOpenPdfLinksPaneEntry(
+      hasRelevantLinks: relevantLinks.isNotEmpty,
+      isPaneOpen: !isRightPaneClosed,
+    );
+
+    final linkChildren = <AppContextMenuEntry>[
+      if (showOpenLinksPaneEntry) ...[
+        AppContextMenuEntry(
+          label: 'פתח את חלונית הקישורים',
+          icon: FluentIcons.panel_right_24_regular,
+          onTap: () => _openLinksPane(),
+        ),
+        const AppContextMenuEntry.divider(),
+      ],
+      ...relevantLinks.map((link) => AppContextMenuEntry(
+            label: link.fallbackDisplayReference,
+            labelWidget: FutureBuilder<String>(
+              future: link.displayReference,
+              builder: (context, snapshot) => Text(
+                snapshot.data ?? link.fallbackDisplayReference,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textDirection: TextDirection.rtl,
               ),
-              onTap: () => openBook(
-                menuContext,
-                TextBook(title: utils.getTitleFromPath(link.path2)),
-                link.index2 - 1,
-                '',
-                ignoreHistory: false,
-              ),
-            ))
-        .toList();
+            ),
+            onTap: () => openBook(
+              menuContext,
+              TextBook(title: utils.getTitleFromPath(link.path2)),
+              link.index2 - 1,
+              '',
+              ignoreHistory: false,
+            ),
+          )),
+    ];
 
     return [
       AppContextMenuEntry(

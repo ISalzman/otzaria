@@ -55,6 +55,7 @@ class CombinedView extends StatefulWidget {
     this.isPreviewMode = false,
     this.onOpenPersonalNotes,
     this.onOpenCommentatorsPane,
+    this.onOpenLinksPane,
     this.isPaneOpen,
   });
 
@@ -68,6 +69,7 @@ class CombinedView extends StatefulWidget {
   final bool isPreviewMode;
   final VoidCallback? onOpenPersonalNotes;
   final VoidCallback? onOpenCommentatorsPane;
+  final VoidCallback? onOpenLinksPane;
   final bool Function()? isPaneOpen;
 
   @override
@@ -108,6 +110,14 @@ bool shouldShowOpenCommentatorsPaneEntry({
   return hasAvailableCommentators &&
       !showCommentaryAsExpansionTiles &&
       !isPaneOpen;
+}
+
+@visibleForTesting
+bool shouldShowOpenLinksPaneEntry({
+  required bool hasLinks,
+  required bool isPaneOpen,
+}) {
+  return hasLinks && !isPaneOpen;
 }
 
 class _CombinedViewState extends State<CombinedView> {
@@ -443,30 +453,43 @@ class _CombinedViewState extends State<CombinedView> {
           paragraphIndex),
     ];
 
-    List<AppContextMenuEntry> buildLinkChildren() => paragraphLinks
-        .map((link) => AppContextMenuEntry(
-              label: link.fallbackDisplayReference,
-              labelWidget: FutureBuilder<String>(
-                future: link.displayReference,
-                builder: (context, snapshot) => Text(
-                  snapshot.data ?? link.fallbackDisplayReference,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textDirection: TextDirection.rtl,
+    final showOpenLinksPaneEntry = shouldShowOpenLinksPaneEntry(
+      hasLinks: paragraphLinks.isNotEmpty,
+      isPaneOpen: widget.isPaneOpen?.call() ?? false,
+    );
+
+    List<AppContextMenuEntry> buildLinkChildren() => [
+          if (showOpenLinksPaneEntry) ...[
+            AppContextMenuEntry(
+              label: 'פתח את חלונית הקישורים',
+              icon: FluentIcons.panel_right_24_regular,
+              onTap: () => widget.onOpenLinksPane?.call(),
+            ),
+            const AppContextMenuEntry.divider(),
+          ],
+          ...paragraphLinks.map((link) => AppContextMenuEntry(
+                label: link.fallbackDisplayReference,
+                labelWidget: FutureBuilder<String>(
+                  future: link.displayReference,
+                  builder: (context, snapshot) => Text(
+                    snapshot.data ?? link.fallbackDisplayReference,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textDirection: TextDirection.rtl,
+                  ),
                 ),
-              ),
-              onTap: () => widget.openBookCallback(
-                TextBookTab(
-                  book: TextBook(title: utils.getTitleFromPath(link.path2)),
-                  index: link.index2 - 1,
-                  openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                          false) ||
-                      (Settings.getValue<bool>('key-default-sidebar-open') ??
-                          false),
+                onTap: () => widget.openBookCallback(
+                  TextBookTab(
+                    book: TextBook(title: utils.getTitleFromPath(link.path2)),
+                    index: link.index2 - 1,
+                    openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
+                            false) ||
+                        (Settings.getValue<bool>('key-default-sidebar-open') ??
+                            false),
+                  ),
                 ),
-              ),
-            ))
-        .toList();
+              )),
+        ];
 
     return [
       AppContextMenuEntry(
