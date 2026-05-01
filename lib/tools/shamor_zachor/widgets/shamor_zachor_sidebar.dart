@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:otzaria/widgets/thin_divider.dart';
-import 'package:otzaria/widgets/navigation_tree_tile.dart';
+import 'package:otzaria/widgets/misc/thin_divider.dart';
+import 'package:otzaria/widgets/lists/navigation_tree_tile.dart';
 import '../providers/shamor_zachor_data_provider.dart';
 import '../models/book_model.dart';
 

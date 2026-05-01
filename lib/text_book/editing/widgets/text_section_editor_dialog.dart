@@ -16,7 +16,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'markdown_toolbar.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 
 /// Full-screen dialog for editing text sections with split-pane interface

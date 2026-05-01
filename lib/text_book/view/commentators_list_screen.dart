@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
-import 'package:otzaria/widgets/commentators_selection_panel.dart';
+import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 
 class CommentatorsListView extends StatefulWidget {
   final VoidCallback? onCommentatorSelected;

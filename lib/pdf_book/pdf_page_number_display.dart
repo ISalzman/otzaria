@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 class PageNumberDisplay extends StatefulWidget {
   final PdfViewerController controller;

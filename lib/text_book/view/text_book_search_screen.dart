@@ -19,7 +19,7 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/widgets/nikud_search_button.dart';
+import 'package:otzaria/widgets/misc/nikud_search_button.dart';
 import 'package:otzaria/text_book/utils/section_search_utils.dart';
 import 'package:otzaria/text_book/utils/search_query_sync.dart';
 

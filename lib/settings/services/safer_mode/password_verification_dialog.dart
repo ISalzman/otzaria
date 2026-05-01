@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/widgets/keyboard_dialog_navigation.dart';
+import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
 
 /// דיאלוג לאימות סיסמה למצב מוגן
 class PasswordVerificationDialog extends StatefulWidget {
