@@ -12,6 +12,7 @@ enum LiveTipId {
 enum TourInteractionType {
   currentTabChanged,
   openedTextBook,
+  readerPositionChanged,
   sideBySideEnabled,
   textSelected,
   dictionaryUsed,

@@ -132,7 +132,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   FocusRepository? _focusRepository; // שמירת הפניה לשימוש ב-dispose
   final GlobalKey _viewModeMenuKey = GlobalKey(); // מפתח לתפריט בחירת התצוגה
   String? _selectedTextForSearch;
-  String? _lastCommentaryTipBook;
   Book? _pdfBook; // Companion PDF
   bool _hasPdfBook = false;
   bool _leftPaneAutoCloseQueuedByScroll = false;
@@ -783,8 +782,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final currentState = context.read<TextBookBloc>().state;
     if (currentState is TextBookLoaded &&
         currentState.availableCommentators.isNotEmpty &&
-        _lastCommentaryTipBook != widget.tab.title) {
-      _lastCommentaryTipBook = widget.tab.title;
+        !tourCubit.hasRegisteredCommentaryOpportunity) {
       tourCubit.recordInteraction(
         TourInteraction(
           type: TourInteractionType.commentaryAvailable,

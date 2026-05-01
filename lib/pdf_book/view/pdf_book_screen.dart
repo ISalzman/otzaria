@@ -44,8 +44,9 @@ import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'pdf_zoom_bar.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
-import 'package:otzaria/widgets/feedback/commentary_pane_tooltip.dart';
 import 'package:otzaria/pdf_book/view/pdf_scrollbar.dart';
+import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
@@ -515,11 +516,50 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return (commentators: sortedCommentators, links: links);
   }
 
+  void _recordCommentaryOpenedIfNeeded() {
+    if (_getRelevantContent().commentators.isNotEmpty) {
+      context.read<TourCubit>().recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.commentaryUsed,
+          primaryValue: widget.tab.title,
+        ),
+      );
+    }
+  }
+
   void _openCommentaryPane() {
+    _recordCommentaryOpenedIfNeeded();
     setState(() {
       _rightPaneInitialTabIndex = 0;
     });
     _bloc.add(const pdf_events.ToggleRightPane(show: true));
+  }
+
+  void _maybeRegisterPdfCommentaryOpportunity() {
+    if (_linksLoading) {
+      return;
+    }
+
+    final currentState = _bloc.state;
+    if (currentState is! PdfBookLoaded) {
+      return;
+    }
+
+    final tourCubit = context.read<TourCubit>();
+    if (tourCubit.hasRegisteredCommentaryOpportunity) {
+      return;
+    }
+
+    if (_getRelevantContent().commentators.isEmpty) {
+      return;
+    }
+
+    tourCubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.commentaryAvailable,
+        primaryValue: widget.tab.title,
+      ),
+    );
   }
 
   void _toggleCommentator(String commentator) {
@@ -1883,6 +1923,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
       if (mounted) {
         _linksLoading = false;
+        _maybeRegisterPdfCommentaryOpportunity();
         setState(() {});
       }
     } catch (e, stackTrace) {
@@ -1934,6 +1975,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   void _onPdfViewerControllerUpdate() async {
     if (!widget.tab.pdfViewerController.isReady) return;
 
+    final tourCubit = context.read<TourCubit>();
     widget.tab.savedZoom = widget.tab.pdfViewerController.value.zoom;
 
     final newPage = widget.tab.pdfViewerController.pageNumber ?? 1;
@@ -1956,6 +1998,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     final title = await refFromPageNumber(
         newPage, widget.tab.outline.value ?? [], widget.tab.book.title);
+    if (!mounted) return;
     if (token == _lastComputedForPage) {
       widget.tab.currentTitle.value = title;
 
@@ -1963,8 +2006,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         newPage,
         resolvedTitle: title,
       );
+      if (!mounted) return;
       widget.tab.currentTextLineNumber = resolved.start;
       widget.tab.currentTextLineNumberEnd = resolved.end;
+      _maybeRegisterPdfCommentaryOpportunity();
+      tourCubit.recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.readerPositionChanged,
+          primaryValue: widget.tab.title,
+        ),
+      );
       if (mounted) {
         setState(() {});
       }
@@ -2282,50 +2333,43 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             return Positioned(
               left: 0,
               top: MediaQuery.of(context).size.height * 0.10,
-              child: CommentaryPaneTooltip(
-                child: MouseRegion(
-                  onEnter: (_) =>
-                      _bloc.add(const pdf_events.SetRightPaneHovering(true)),
-                  onExit: (_) =>
-                      _bloc.add(const pdf_events.SetRightPaneHovering(false)),
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _rightPaneInitialTabIndex = 0;
-                      });
-                      _bloc.add(const pdf_events.ToggleRightPane(show: true));
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                      width: isHovering ? 48 : 20,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest
-                            .withValues(alpha: isHovering ? 0.95 : 0.8),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(40),
-                          bottomRight: Radius.circular(40),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: isHovering ? 8 : 4,
-                            offset: const Offset(2, 0),
-                          ),
-                        ],
+              child: MouseRegion(
+                onEnter: (_) =>
+                    _bloc.add(const pdf_events.SetRightPaneHovering(true)),
+                onExit: (_) =>
+                    _bloc.add(const pdf_events.SetRightPaneHovering(false)),
+                child: GestureDetector(
+                  onTap: _openCommentaryPane,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    width: isHovering ? 48 : 20,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest
+                          .withValues(alpha: isHovering ? 0.95 : 0.8),
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(40),
+                        bottomRight: Radius.circular(40),
                       ),
-                      child: Center(
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 150),
-                          opacity: isHovering ? 1.0 : 0.6,
-                          child: Icon(
-                            FluentIcons.chevron_right_24_regular,
-                            size: isHovering ? 24 : 18,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: isHovering ? 8 : 4,
+                          offset: const Offset(2, 0),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 150),
+                        opacity: isHovering ? 1.0 : 0.6,
+                        child: Icon(
+                          FluentIcons.chevron_right_24_regular,
+                          size: isHovering ? 24 : 18,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ),

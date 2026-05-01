@@ -219,6 +219,128 @@ void main() {
     await cubit.close();
   });
 
+  test('TourCubit לא מציג שוב טיפ מילון אחרי שהמשתמש סגר אותו', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    final cubit = TourCubit();
+
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.textSelected,
+        primaryValue: 'בראשית',
+      ),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.textSelected,
+        primaryValue: 'בראשית',
+      ),
+    );
+    expect(
+      cubit.state.activeLiveTipId,
+      LiveTipId.dictionaryContextMenuHint,
+    );
+
+    cubit.dismissLiveTip();
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.textSelected,
+        primaryValue: 'שמות',
+      ),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.textSelected,
+        primaryValue: 'שמות',
+      ),
+    );
+
+    expect(cubit.state.activeLiveTipId, isNull);
+    await cubit.close();
+  });
+
+  test('TourCubit רושם הזדמנות למפרשים פעם אחת בלבד לכל המופע', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    final cubit = TourCubit();
+
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.commentaryAvailable,
+        primaryValue: 'בראשית',
+      ),
+    );
+    expect(cubit.hasRegisteredCommentaryOpportunity, isTrue);
+
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.textSelected,
+        primaryValue: 'בראשית',
+      ),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.commentaryAvailable,
+        primaryValue: 'שמות',
+      ),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.currentTabChanged,
+        primaryValue: 'שמות',
+      ),
+    );
+
+    expect(cubit.state.activeLiveTipId, isNull);
+
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.openedTextBook,
+        primaryValue: 'בראשית',
+      ),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.currentTabChanged,
+        primaryValue: 'בראשית',
+      ),
+    );
+
+    expect(cubit.state.activeLiveTipId, LiveTipId.commentaryHint);
+    await cubit.close();
+  });
+
+  test('TourCubit מציג טיפ מפרשים גם אחרי ניווט בתוך PDF', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    final cubit = TourCubit();
+
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.commentaryAvailable,
+        primaryValue: 'בראשית',
+      ),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.readerPositionChanged,
+        primaryValue: 'בראשית',
+      ),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.readerPositionChanged,
+        primaryValue: 'בראשית',
+      ),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.readerPositionChanged,
+        primaryValue: 'בראשית',
+      ),
+    );
+
+    expect(cubit.state.activeLiveTipId, LiveTipId.commentaryHint);
+    await cubit.close();
+  });
+
   test('TourCubit מציג טיפ הצג לצד אחרי דילוג חוזר בין שני ספרים', () async {
     await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
     final cubit = TourCubit();

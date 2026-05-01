@@ -36,7 +36,6 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
-import 'package:otzaria/widgets/feedback/commentary_pane_tooltip.dart';
 
 /// קבועים לחישוב רוחב חלוניות המפרשים
 const double _kCommentaryPaneWidthFactor = 0.17;
@@ -76,7 +75,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   double? _leftWidth;
   double? _rightWidth;
   double? _bottomHeight;
-  double? _bottomLeftWidth; // רוחב המפרש התחתון השמאלי (כאשר יש 2 מפרשים תחתונים)
+  double?
+      _bottomLeftWidth; // רוחב המפרש התחתון השמאלי (כאשר יש 2 מפרשים תחתונים)
 
   // הגדרות הצגת טורים
   Map<String, bool> _columnVisibility = {
@@ -124,8 +124,9 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         screenWidth * 0.17;
     _bottomHeight = Settings.getValue<double>('page_shape_bottom_height') ??
         screenHeight * 0.27;
-    _bottomLeftWidth = Settings.getValue<double>('page_shape_bottom_left_width') ??
-        screenWidth * 0.5;
+    _bottomLeftWidth =
+        Settings.getValue<double>('page_shape_bottom_left_width') ??
+            screenWidth * 0.5;
 
     setState(() {});
   }
@@ -146,7 +147,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       Settings.setValue<double>('page_shape_bottom_height', _bottomHeight!);
     }
     if (_bottomLeftWidth != null) {
-      Settings.setValue<double>('page_shape_bottom_left_width', _bottomLeftWidth!);
+      Settings.setValue<double>(
+          'page_shape_bottom_left_width', _bottomLeftWidth!);
     }
   }
 
@@ -667,14 +669,14 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                   showDivider: false,
                                                   onDragDelta: (delta) {
                                                     setState(() {
-                                                      _leftWidth =
-                                                          ((_leftWidth ?? 
-                                                              MediaQuery.of(context)
-                                                                      .size
-                                                                      .width *
-                                                                  _kCommentaryPaneWidthFactor) -
-                                                                  delta)
-                                                              .clamp(
+                                                      _leftWidth = ((_leftWidth ??
+                                                                  MediaQuery.of(
+                                                                              context)
+                                                                          .size
+                                                                          .width *
+                                                                      _kCommentaryPaneWidthFactor) -
+                                                              delta)
+                                                          .clamp(
                                                         80.0,
                                                         MediaQuery.of(context)
                                                                 .size
@@ -719,14 +721,14 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                   showDivider: false,
                                                   onDragDelta: (delta) {
                                                     setState(() {
-                                                      _rightWidth =
-                                                          ((_rightWidth ?? 
-                                                              MediaQuery.of(context)
-                                                                      .size
-                                                                      .width *
-                                                                  _kCommentaryPaneWidthFactor) +
-                                                                  delta)
-                                                              .clamp(
+                                                      _rightWidth = ((_rightWidth ??
+                                                                  MediaQuery.of(
+                                                                              context)
+                                                                          .size
+                                                                          .width *
+                                                                      _kCommentaryPaneWidthFactor) +
+                                                              delta)
+                                                          .clamp(
                                                         80.0,
                                                         MediaQuery.of(context)
                                                                 .size
@@ -857,7 +859,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                       const SizedBox(width: 4),
                                                       SizedBox(
                                                         width: _bottomLeftWidth ??
-                                                            MediaQuery.of(context)
+                                                            MediaQuery.of(
+                                                                        context)
                                                                     .size
                                                                     .width *
                                                                 0.5,
@@ -882,17 +885,17 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                             Positioned(
                                                               top: 0,
                                                               bottom: 0,
-                                                              child: ResizableDragHandle(
-                                                                isVertical: true,
-                                                                showDivider: false,
-                                                                onDragDelta: (delta) {
+                                                              child:
+                                                                  ResizableDragHandle(
+                                                                isVertical:
+                                                                    true,
+                                                                showDivider:
+                                                                    false,
+                                                                onDragDelta:
+                                                                    (delta) {
                                                                   setState(() {
                                                                     _bottomLeftWidth =
-                                                                        ((_bottomLeftWidth ?? 
-                                                                            MediaQuery.of(context)
-                                                                                    .size
-                                                                                    .width *
-                                                                                0.5) -
+                                                                        ((_bottomLeftWidth ?? MediaQuery.of(context).size.width * 0.5) -
                                                                                 delta)
                                                                             .clamp(
                                                                       100.0,
@@ -903,7 +906,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                                     );
                                                                   });
                                                                 },
-                                                                onDragEnd: _saveSizes,
+                                                                onDragEnd:
+                                                                    _saveSizes,
                                                               ),
                                                             ),
                                                           ],
@@ -1025,55 +1029,51 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                         Positioned(
                           left: 0,
                           top: MediaQuery.of(context).size.height * 0.10,
-                          child: CommentaryPaneTooltip(
-                            child: MouseRegion(
-                              onEnter: (_) => setState(
-                                  () => _isHoveringSidebarHandle = true),
-                              onExit: (_) => setState(
-                                  () => _isHoveringSidebarHandle = false),
-                              child: GestureDetector(
-                                onTap: () => _openLeftSidebarTab(0),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  curve: Curves.easeOut,
-                                  width: _isHoveringSidebarHandle ? 48 : 20,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHighest
-                                        .withValues(
-                                            alpha: _isHoveringSidebarHandle
-                                                ? 0.95
-                                                : 0.8),
-                                    borderRadius: const BorderRadius.only(
-                                      topRight: Radius.circular(40),
-                                      bottomRight: Radius.circular(40),
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black
-                                            .withValues(alpha: 0.15),
-                                        blurRadius:
-                                            _isHoveringSidebarHandle ? 8 : 4,
-                                        offset: const Offset(2, 0),
-                                      ),
-                                    ],
+                          child: MouseRegion(
+                            onEnter: (_) =>
+                                setState(() => _isHoveringSidebarHandle = true),
+                            onExit: (_) => setState(
+                                () => _isHoveringSidebarHandle = false),
+                            child: GestureDetector(
+                              onTap: () => _openLeftSidebarTab(0),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeOut,
+                                width: _isHoveringSidebarHandle ? 48 : 20,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withValues(
+                                          alpha: _isHoveringSidebarHandle
+                                              ? 0.95
+                                              : 0.8),
+                                  borderRadius: const BorderRadius.only(
+                                    topRight: Radius.circular(40),
+                                    bottomRight: Radius.circular(40),
                                   ),
-                                  child: Center(
-                                    child: AnimatedOpacity(
-                                      duration:
-                                          const Duration(milliseconds: 150),
-                                      opacity:
-                                          _isHoveringSidebarHandle ? 1.0 : 0.6,
-                                      child: Icon(
-                                        FluentIcons.chevron_right_24_regular,
-                                        size:
-                                            _isHoveringSidebarHandle ? 24 : 18,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface,
-                                      ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.15),
+                                      blurRadius:
+                                          _isHoveringSidebarHandle ? 8 : 4,
+                                      offset: const Offset(2, 0),
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 150),
+                                    opacity:
+                                        _isHoveringSidebarHandle ? 1.0 : 0.6,
+                                    child: Icon(
+                                      FluentIcons.chevron_right_24_regular,
+                                      size: _isHoveringSidebarHandle ? 24 : 18,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface,
                                     ),
                                   ),
                                 ),
