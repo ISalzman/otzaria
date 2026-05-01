@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/file_sync/file_sync_bloc.dart';
-import 'package:otzaria/file_sync/file_sync_event.dart';
-import 'package:otzaria/file_sync/file_sync_repository.dart';
-import 'package:otzaria/file_sync/file_sync_state.dart';
+import 'package:otzaria/file_sync/bloc/file_sync_bloc.dart';
+import 'package:otzaria/file_sync/bloc/file_sync_event.dart';
+import 'package:otzaria/file_sync/repository/file_sync_repository.dart';
+import 'package:otzaria/file_sync/bloc/file_sync_state.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
 

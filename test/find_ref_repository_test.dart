@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
-import 'package:otzaria/find_ref/find_ref_repository.dart';
-import 'package:otzaria/find_ref/reference_books_cache.dart';
+import 'package:otzaria/find_ref/repository/find_ref_repository.dart';
+import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 
 class MockDataRepository extends Mock implements DataRepository {}
 
