@@ -28,7 +28,7 @@ void main() {
       await expectLater(
         PluginManifestValidator.validateManifest(
           manifest: manifest,
-          directoryPath: 'lib/plugins/sdk',
+          directoryPath: 'assets/plugin-sdk',
           currentAppVersion: '1.0.0-beta',
         ),
         completes,
