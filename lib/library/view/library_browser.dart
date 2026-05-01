@@ -23,7 +23,7 @@ import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/migration/sync/background_db_sync_worker.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
-import 'package:otzaria/navigation/main_window_screen.dart';
+import 'package:otzaria/navigation/view/main_window_screen.dart';
 import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/library/view/otzar_book_dialog.dart';
 import 'package:otzaria/library/view/book_preview_panel.dart';
