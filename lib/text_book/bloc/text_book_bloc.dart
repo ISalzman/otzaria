@@ -1,185 +1,27 @@
 import 'dart:async';
-import 'dart:isolate';
 import 'package:otzaria/models/books.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/models/links.dart';
-import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/ref_helper.dart';
-import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-// [EDITING DISABLED] import 'package:otzaria/text_book/editing/repository/overrides_repository.dart';
-// [EDITING DISABLED] import 'package:otzaria/text_book/editing/models/section_identifier.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/reading_left_pane_policy.dart';
-import 'package:otzaria/migration/models/category.dart' as db;
-
-List<Link> _mergeLinksByIdentity(
-  List<Link> existing,
-  List<Link> incoming,
-) {
-  final merged = <String, Link>{
-    for (final link in existing) _linkIdentityKey(link): link,
-  };
-
-  for (final link in incoming) {
-    merged[_linkIdentityKey(link)] = link;
-  }
-
-  final links = merged.values.toList();
-  links.sort((a, b) {
-    final indexCompare = a.index1.compareTo(b.index1);
-    if (indexCompare != 0) return indexCompare;
-
-    final pathCompare = a.path2.compareTo(b.path2);
-    if (pathCompare != 0) return pathCompare;
-
-    final targetCompare = a.index2.compareTo(b.index2);
-    if (targetCompare != 0) return targetCompare;
-
-    return a.connectionType.compareTo(b.connectionType);
-  });
-
-  return links;
-}
-
-String _linkIdentityKey(Link link) {
-  return '${link.index1}|${link.path2}|${link.index2}|${link.connectionType}|${link.start}|${link.end}';
-}
-
-Map<int, List<Link>> _buildLinksByLineMap(List<Link> links) {
-  final linksByLine = <int, List<Link>>{};
-  for (final link in links) {
-    final list = linksByLine[link.index1];
-    if (list == null) {
-      linksByLine[link.index1] = [link];
-    } else {
-      list.add(link);
-    }
-  }
-  return linksByLine;
-}
-
-List<Link> _computeVisibleLinks({
-  required List<Link> links,
-  required List<int> visibleIndices,
-  required int? selectedIndex,
-  required Map<int, List<Link>> linksByLine,
-}) {
-  final targetIndices =
-      selectedIndex != null ? [selectedIndex] : visibleIndices;
-
-  final visibleLinks = <Link>[];
-
-  for (final index in targetIndices) {
-    final candidates = linksByLine[index + 1] ?? const [];
-
-    for (final link in candidates) {
-      if (!LinkTypes.isCommentaryOrTargum(link.connectionType) &&
-          link.start == null &&
-          link.end == null) {
-        visibleLinks.add(link);
-      }
-    }
-  }
-
-  final titles = <Link, String>{};
-  final pathCache = <String, String>{};
-  for (final link in visibleLinks) {
-    titles[link] = pathCache.putIfAbsent(
-      link.path2,
-      () => utils.getTitleFromPath(link.path2),
-    );
-  }
-  visibleLinks.sort((a, b) => titles[a]!.compareTo(titles[b]!));
-
-  return visibleLinks;
-}
-
-Future<
-    ({
-      List<Link> links,
-      Map<int, List<Link>> linksByLine,
-      List<Link> visibleLinks
-    })> _processLinksForState({
-  required List<Link> existingLinks,
-  required List<Link> incomingLinks,
-  required bool replaceExisting,
-  required List<int> visibleIndices,
-  required int? selectedIndex,
-}) async {
-  const asyncProcessingThreshold = 250;
-  final estimatedLinkCount =
-      (replaceExisting ? 0 : existingLinks.length) + incomingLinks.length;
-
-  if (estimatedLinkCount <= asyncProcessingThreshold) {
-    final links = _mergeLinksByIdentity(
-      replaceExisting ? const [] : existingLinks,
-      incomingLinks,
-    );
-    final linksByLine = _buildLinksByLineMap(links);
-    final visibleLinks = _computeVisibleLinks(
-      links: links,
-      visibleIndices: visibleIndices,
-      selectedIndex: selectedIndex,
-      linksByLine: linksByLine,
-    );
-    return (
-      links: links,
-      linksByLine: linksByLine,
-      visibleLinks: visibleLinks,
-    );
-  }
-
-  return Isolate.run(() {
-    final links = _mergeLinksByIdentity(
-      replaceExisting ? const [] : existingLinks,
-      incomingLinks,
-    );
-    final linksByLine = _buildLinksByLineMap(links);
-    final visibleLinks = _computeVisibleLinks(
-      links: links,
-      visibleIndices: visibleIndices,
-      selectedIndex: selectedIndex,
-      linksByLine: linksByLine,
-    );
-    return (
-      links: links,
-      linksByLine: linksByLine,
-      visibleLinks: visibleLinks,
-    );
-  });
-}
-
-List<String> _buildPreviewLines(String previewContent, int previewStartLine) {
-  final previewLines = previewContent.split('\n');
-  if (previewStartLine <= 0) {
-    return previewLines;
-  }
-
-  return List<String>.filled(previewStartLine, '', growable: true)
-    ..addAll(previewLines);
-}
-
-Future<List<String>> _splitContentLines(String content) async {
-  if (content.isEmpty) {
-    return const [];
-  }
-
-  return Isolate.run(() => content.split('\n'));
-}
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/text_book/utils/link_processing.dart';
+import 'package:otzaria/text_book/utils/he_categories_enricher.dart';
+import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   static const int _linkLookBehindLines = 25;
@@ -197,7 +39,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     int? categoryId,
     String? fileType,
   }) _quickPreviewLoader;
-  // [EDITING DISABLED] final OverridesRepository _overridesRepository;
   final ItemScrollController scrollController;
   final ItemPositionsListener positionsListener;
 
@@ -212,7 +53,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   String? _cachedPageShapeTargetBookTitlesKey;
   List<String>? _cachedPageShapeTargetBookTitles;
   bool _isLoadingLinks = false;
-  bool _pendingLinksReload = false; // בקשת טעינה שנדחתה בגלל _isLoadingLinks
+  bool _pendingLinksReload = false;
   bool _awaitingInitialPageShapeVisibleSync = false;
 
   TextBookBloc({
@@ -223,12 +64,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       int? categoryId,
       String? fileType,
     })? quickPreviewLoader,
-    // [EDITING DISABLED] required OverridesRepository overridesRepository,
     required TextBookInitial initialState,
     required this.scrollController,
     required this.positionsListener,
-  })  : // [EDITING DISABLED] _overridesRepository = overridesRepository,
-        _quickPreviewLoader = quickPreviewLoader ??
+  })  : _quickPreviewLoader = quickPreviewLoader ??
             SqliteDataProvider.instance.getBookQuickPreview,
         super(initialState) {
     on<LoadContent>(_onLoadContent);
@@ -249,16 +88,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<ApplyFullBookContent>(_onApplyFullBookContent);
     on<CreateNoteFromToolbar>(_onCreateNoteFromToolbar);
     on<UpdateSelectedTextForNote>(_onUpdateSelectedTextForNote);
-
-    // [EDITING DISABLED] Editor events
-    // on<OpenEditor>(_onOpenEditor);
-    // on<OpenFullFileEditor>(_onOpenFullFileEditor);
-    // on<SaveEditedSection>(_onSaveEditedSection);
-    // on<LoadDraftIfAny>(_onLoadDraftIfAny);
-    // on<DiscardDraft>(_onDiscardDraft);
-    // on<CloseEditor>(_onCloseEditor);
-    // on<UpdateEditorText>(_onUpdateEditorText);
-    // on<AutoSaveDraft>(_onAutoSaveDraft);
     on<UpdateLinks>(_onUpdateLinks);
     on<UpdateAvailableCommentators>(_onUpdateAvailableCommentators);
     on<RefreshLinksForCurrentWindow>(_onRefreshLinksForCurrentWindow);
@@ -343,15 +172,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   @visibleForTesting
   static List<Link> mergeLinksForTesting(
-      List<Link> existing, List<Link> incoming) {
-    return _mergeLinksByIdentity(existing, incoming);
-  }
+          List<Link> existing, List<Link> incoming) =>
+      mergeLinksByIdentity(existing, incoming);
 
   @visibleForTesting
   static List<String> buildPreviewLinesForTesting(
-      String previewContent, int previewStartLine) {
-    return _buildPreviewLines(previewContent, previewStartLine);
-  }
+          String previewContent, int previewStartLine) =>
+      buildPreviewLines(previewContent, previewStartLine);
 
   Future<void> _onLoadContent(
     LoadContent event,
@@ -370,14 +197,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     bool initialShowPageShapeView = false;
 
-    // שמירת מפרשים קיימים כדי לא לאבד אותם ב-preserveState reload
     List<String> existingAvailableCommentators = const [];
     List<CommentatorGroup> existingCommentatorGroups = const [];
     bool? preservedRemoveNikud;
     bool? preservedPinLeftPane;
 
     if (state is TextBookLoaded && event.preserveState) {
-      // Preserve current state when reloading
       final currentState = state as TextBookLoaded;
       book = currentState.book;
       searchText = currentState.searchText;
@@ -395,7 +220,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       preservedRemoveNikud = currentState.removeNikud;
       preservedPinLeftPane = currentState.pinLeftPane;
     } else if (state is TextBookInitial) {
-      // Normal initial load
       final initial = state as TextBookInitial;
       book = initial.book;
       searchText = initial.searchText;
@@ -412,25 +236,20 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       emit(TextBookLoading(
           book, initial.index, initial.showLeftPane, initial.commentators));
     } else if (!event.preserveState) {
-      // Not preserving state and not initial, just emit current state
       if (state is TextBookLoaded) {
         emit(state);
       }
       return;
     } else {
-      return; // Invalid state combination
+      return;
     }
 
     try {
-      // ── שלב 1: התחלת טעינות מקבילות ──
-      // מתחילים את טעינת TOC במקביל לטעינת התוכן כדי לחסוך זמן
       final tocFuture = repository.getTableOfContents(book);
 
-      // טעינת תוכן הספר (עם fallback ל-preview אם ריק)
       String content = await repository.getBookContent(book);
       List<String>? contentLines;
       if (content.isEmpty) {
-        // Load quick preview (40 lines) for instant display
         final preview = await _quickPreviewLoader(
           book.title,
           visibleIndices.first,
@@ -441,23 +260,17 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         if (preview != null && preview.isNotEmpty) {
           final previewStartLine =
               (visibleIndices.first - 10).clamp(0, visibleIndices.first);
-          contentLines = _buildPreviewLines(preview, previewStartLine);
-
-          // Load full book in background
+          contentLines = buildPreviewLines(preview, previewStartLine);
           _loadFullBookInBackground(book);
         } else {
-          // Preview failed, load full book normally
           content = await repository.getBookContent(book);
         }
       }
 
-      contentLines ??= await _splitContentLines(content);
+      contentLines ??= await splitContentLines(content);
 
-      // ── שלב 2: המתנה ל-TOC (כבר רץ במקביל, צפוי להיות מוכן) ──
       final tableOfContents = await tocFuture;
 
-      // ── שלב 3: חישובים מהירים שלא דורשים I/O כבד ──
-      // חישוב כותרת נוכחית (תלוי ב-TOC שכבר מוכן)
       String? currentTitle;
       if (visibleIndices.isNotEmpty) {
         try {
@@ -468,7 +281,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         }
       }
 
-      // הגדרות ניקוד (קריאות Settings סינכרוניות + בדיקת נתיב קלה)
       final defaultRemoveNikud =
           Settings.getValue<bool>('key-default-nikud') ?? false;
       final removeNikudFromTanach =
@@ -484,12 +296,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         isTanach: isTanach,
       );
 
-      // קישורים מתחילים ריקים - יטענו ברקע אחרי הצגת הספר
       const List<Link> emptyLinks = [];
       const List<Link> emptyVisibleLinks = [];
 
-      // Set up position listener with debouncing to prevent excessive updates
-      // Remove old listener if exists
       if (_positionListenerCallback != null) {
         positionsListener.itemPositions
             .removeListener(_positionListenerCallback!);
@@ -560,9 +369,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       _setAwaitingInitialPageShapeVisibleSync(initialShowPageShapeView);
 
-      // ── שלב 4: EMIT ראשוני - הצגת הספר מיידית! ──
-      // בטעינה ראשונית: מפרשים ריקים, ייטענו ברקע
-      // ב-preserveState: שימור מפרשים קיימים כדי למנוע הבהוב
       emit(TextBookLoaded(
         book: book,
         content: contentLines,
@@ -609,21 +415,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             : null,
       ));
 
-      // ── שלב 5: טעינות ברקע - לא חוסמות את ה-UI ──
       _resetLoadedLinksWindow(book);
 
-      // טעינת קישורים ברקע אחרי הצגת הספר
-      _loadLinksInBackground(
-        book,
-        visibleIndices,
-      );
+      _loadLinksInBackground(book, visibleIndices);
 
-      // טעינת מפרשים ברקע (רשימת מפרשים זמינים + חלוקה לתקופות)
       if (event.loadCommentators) {
         _loadCommentatorsInBackground(book);
       }
 
-      // העשרת heCategories ברקע (אם חסר)
       _enrichHeCategoriesInBackground(book);
     } catch (e, st) {
       debugPrint('Error loading textbook: $e\n$st');
@@ -675,7 +474,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         showLeftPane: event.show,
         selectedIndex: currentState.selectedIndex,
         visibleLinks: event.show
-            ? _computeVisibleLinks(
+            ? computeVisibleLinks(
                 links: currentState.links,
                 visibleIndices: currentState.visibleIndices,
                 selectedIndex: currentState.selectedIndex,
@@ -700,7 +499,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
-      // שמירת ההגדרה ב-Settings כדי שתישמר כברירת מחדל
       Settings.setValue<bool>('key-splited-view', event.show);
       final updatedState = currentState.copyWith(
         showSplitView: event.show,
@@ -724,9 +522,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       emit(currentState.copyWith(
         showTzuratHadafView: event.show,
-        showPageShapeView: false, // כיבוי התצוגה החדשה
+        showPageShapeView: false,
         selectedIndex: currentState.selectedIndex,
-        // סגור את חלונית הניווט/חיפוש כשעוברים לצורת הדף
         showLeftPane: event.show ? false : currentState.showLeftPane,
       ));
     }
@@ -739,19 +536,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
 
-      // שמירת העדפת התצוגה לספר זה
       PageShapeSettingsManager.saveViewModePreference(
         currentState.book.title,
         event.show,
       );
 
-      // מצב צורת הדף נשמר פר-ספר (ב-toJson של הטאב), לא גלובלית
       _setAwaitingInitialPageShapeVisibleSync(event.show);
       final updatedState = currentState.copyWith(
         showPageShapeView: event.show,
-        showTzuratHadafView: false, // כיבוי התצוגה הישנה
+        showTzuratHadafView: false,
         selectedIndex: currentState.selectedIndex,
-        // סגור את חלונית הניווט/חיפוש כשעוברים לצורת הדף
         showLeftPane: event.show ? false : currentState.showLeftPane,
       );
       emit(updatedState);
@@ -761,7 +555,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         force: true,
       );
 
-      // כשיוצאים ממצב צורת הדף למצב רגיל, גלול למיקום הנוכחי
       if (!event.show && currentState.selectedIndex != null) {
         Future.delayed(const Duration(milliseconds: 100), () {
           if (scrollController.isAttached) {
@@ -782,7 +575,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
 
-      // עדכון המפרשים הפעילים בלבד, ללא שינוי של סוג התצוגה
       final updatedState = currentState.copyWith(
         activeCommentators: event.commentators,
         selectedIndex: currentState.selectedIndex,
@@ -846,15 +638,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         _setAwaitingInitialPageShapeVisibleSync(false);
       }
 
-      // בדיקה אם האינדקסים באמת השתנו
       if (_listsEqual(currentState.visibleIndices, event.visibleIndecies)) {
-        return; // אין שינוי, לא צריך לעדכן
+        return;
       }
 
       try {
         String? newTitle = currentState.currentTitle;
 
-        // עדכון הכותרת רק אם האינדקס הראשון השתנה
         if (event.visibleIndecies.isNotEmpty &&
             (currentState.visibleIndices.isEmpty ||
                 currentState.visibleIndices.first !=
@@ -864,8 +654,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         }
 
         int? index = currentState.selectedIndex;
-        // איפוס selectedIndex רק אם היתה גלילה משמעותית (יותר מ-3 שורות)
-        // כדי למנוע איפוס כשפשוט עוברים בין tabs
         if (index != null && !event.visibleIndecies.contains(index)) {
           final oldFirst = currentState.visibleIndices.isNotEmpty
               ? currentState.visibleIndices.first
@@ -874,16 +662,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
               ? event.visibleIndecies.first
               : 0;
 
-          // רק אם גללנו יותר מ-3 שורות, נאפס את הבחירה
           if ((oldFirst - newFirst).abs() > 3) {
             index = null;
           }
         }
 
-        // אופטימיזציה: חישוב ומיון קישורים נראים רק אם החלונית פתוחה או שיש שורה נבחרת לתפריט ההקשר
         final List<Link> visibleLinks;
         if (currentState.showLeftPane || index != null) {
-          visibleLinks = _computeVisibleLinks(
+          visibleLinks = computeVisibleLinks(
             links: currentState.links,
             visibleIndices: event.visibleIndecies,
             selectedIndex: index,
@@ -957,24 +743,21 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       return null;
     }
 
-    final normalized = targetBookTitles
+    return targetBookTitles
         .map((title) => title.trim())
         .where((title) => title.isNotEmpty)
         .toSet()
         .toList()
       ..sort();
-
-    return normalized;
   }
 
   String _targetBookTitlesSignature(Iterable<String>? targetBookTitles) {
-    final normalizedTargetBookTitles =
-        _normalizeTargetBookTitles(targetBookTitles);
-    if (normalizedTargetBookTitles == null) {
+    final normalized = _normalizeTargetBookTitles(targetBookTitles);
+    if (normalized == null) {
       return _allTargetBookTitlesSignature;
     }
 
-    return normalizedTargetBookTitles.join('||');
+    return normalized.join('||');
   }
 
   String _serializePageShapeConfiguration(Map<String, String?>? configuration) {
@@ -1102,7 +885,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         : state.visibleIndices;
   }
 
-  /// בדיקה אם שתי רשימות שוות
   bool _listsEqual(List<int> list1, List<int> list2) {
     if (list1.length != list2.length) return false;
     for (int i = 0; i < list1.length; i++) {
@@ -1133,7 +915,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
-      final visibleLinks = _computeVisibleLinks(
+      final visibleLinks = computeVisibleLinks(
         links: currentState.links,
         visibleIndices: currentState.visibleIndices,
         selectedIndex: event.index,
@@ -1144,8 +926,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         clearSelectedIndex: event.index == null,
         visibleLinks: visibleLinks,
       ));
-      // בחירה בקטע עדיין מרעננת נקודתית את חלון הקישורים
-      // כדי לוודא שתוכן ה-expansion tiles זמין מיידית.
       if (_isCommentariesBelowMode(currentState) &&
           !currentState.showPageShapeView &&
           event.index != null) {
@@ -1162,7 +942,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     final currentState = state as TextBookLoaded;
     emit(currentState.copyWith(highlightedLine: event.lineIndex));
 
-    // Cancel previous highlight timer if exists
     _highlightTimer?.cancel();
 
     _highlightTimer = Timer(const Duration(seconds: 2), () {
@@ -1241,7 +1020,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     CreateNoteFromToolbar event,
     Emitter<TextBookState> emit,
   ) {
-    // כרגע זה רק מציין שהאירוע התקבל
     // הלוגיקה האמיתית תהיה בכפתור בשורת הכלים
   }
 
@@ -1259,267 +1037,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
   }
 
-  // [EDITING DISABLED] - All editor event handlers commented out
-  // Future<void> _onOpenEditor(
-  //   OpenEditor event,
-  //   Emitter<TextBookState> emit,
-  // ) async {
-  //   if (state is! TextBookLoaded) return;
-  //
-  //   final currentState = state as TextBookLoaded;
-  //
-  //   try {
-  //     // Generate section identifier
-  //     final content = currentState.content[event.index];
-  //     final sectionId = SectionIdentifier.fromContent(
-  //       content: content,
-  //       index: event.index,
-  //     );
-  //
-  //     // Check if book has links file
-  //     final hasLinks =
-  //         await _overridesRepository.hasLinksFile(currentState.book.title);
-  //
-  //     // Load existing override or original content
-  //     final override = await _overridesRepository.readOverride(
-  //       currentState.book.title,
-  //       sectionId.sectionId,
-  //     );
-  //
-  //     final editorText = override?.markdownContent ?? content;
-  //
-  //     // Check for draft
-  //     final hasDraft = await _overridesRepository.hasNewerDraftThanOverride(
-  //       currentState.book.title,
-  //       sectionId.sectionId,
-  //     );
-  //
-  //     emit(currentState.copyWith(
-  //       isEditorOpen: true,
-  //       editorIndex: event.index,
-  //       editorSectionId: sectionId.sectionId,
-  //       editorText: editorText,
-  //       hasDraft: hasDraft,
-  //       hasLinksFile: hasLinks,
-  //     ));
-  //   } catch (e) {
-  //     // Handle error - could emit error state or show notification
-  //   }
-  // }
-  //
-  // Future<void> _onOpenFullFileEditor(
-  //   OpenFullFileEditor event,
-  //   Emitter<TextBookState> emit,
-  // ) async {
-  //   if (state is! TextBookLoaded) return;
-  //
-  //   final currentState = state as TextBookLoaded;
-  //
-  //   try {
-  //     // Combine all content into one string
-  //     final fullContent = currentState.content.join('\n\n');
-  //
-  //     // We don't need section identifier for full file - using fixed ID
-  //
-  //     // Check if book has links file
-  //     final hasLinks =
-  //         await _overridesRepository.hasLinksFile(currentState.book.title);
-  //
-  //     // Load existing override or original content
-  //     final override = await _overridesRepository.readOverride(
-  //       currentState.book.title,
-  //       'full_file',
-  //     );
-  //
-  //     final editorText = override?.markdownContent ?? fullContent;
-  //
-  //     // Check for draft
-  //     final hasDraft = await _overridesRepository.hasNewerDraftThanOverride(
-  //       currentState.book.title,
-  //       'full_file',
-  //     );
-  //
-  //     emit(currentState.copyWith(
-  //       isEditorOpen: true,
-  //       editorIndex: -1, // Special index for full file
-  //       editorSectionId: 'full_file',
-  //       editorText: editorText,
-  //       hasDraft: hasDraft,
-  //       hasLinksFile: hasLinks,
-  //     ));
-  //   } catch (e) {
-  //     // Debug: Error in _onOpenFullFileEditor: $e
-  //     // Handle error - could emit error state or show notification
-  //   }
-  // }
-  //
-  // Future<void> _onSaveEditedSection(
-  //   SaveEditedSection event,
-  //   Emitter<TextBookState> emit,
-  // ) async {
-  //   if (state is! TextBookLoaded) return;
-  //
-  //   final currentState = state as TextBookLoaded;
-  //
-  //   try {
-  //     // Handle full file editing differently
-  //     if (event.sectionId == 'full_file' && event.index == -1) {
-  //       // For full file editing, save the entire content to the original file
-  //       await repository.saveBookContent(currentState.book, event.markdown);
-  //
-  //       // Split the content back into sections for display
-  //       final sections = event.markdown
-  //           .split('\n\n')
-  //           .where((s) => s.trim().isNotEmpty)
-  //           .toList();
-  //
-  //       // If we have fewer sections than before, pad with empty strings
-  //       while (sections.length < currentState.content.length) {
-  //         sections.add('');
-  //       }
-  //
-  //       // Reload content to ensure we have the latest version
-  //       add(LoadContent(
-  //         fontSize: currentState.fontSize,
-  //         showSplitView: currentState.showSplitView,
-  //         removeNikud: currentState.removeNikud,
-  //         preserveState: true,
-  //       ));
-  //
-  //       return;
-  //     }
-  //
-  //     // Regular section editing - update the specific section and save the entire file
-  //     final updatedContent = List<String>.from(currentState.content);
-  //     updatedContent[event.index] = event.markdown;
-  //
-  //     // Join all sections back together and save to original file
-  //     final fullContent = updatedContent.join('\n\n');
-  //     await repository.saveBookContent(currentState.book, fullContent);
-  //
-  //     // Close editor immediately
-  //     emit(currentState.copyWith(
-  //       isEditorOpen: false,
-  //       editorIndex: null,
-  //       editorSectionId: null,
-  //       editorText: null,
-  //       hasDraft: false,
-  //     ));
-  //
-  //     // Reload content to ensure we have the latest version from the file system
-  //     add(LoadContent(
-  //       fontSize: currentState.fontSize,
-  //       showSplitView: currentState.showSplitView,
-  //       removeNikud: currentState.removeNikud,
-  //       preserveState: true,
-  //     ));
-  //   } catch (e) {
-  //     // Debug: Error in _onSaveEditedSection: $e
-  //     // Handle error - could show error message to user
-  //   }
-  // }
-  //
-  // Future<void> _onLoadDraftIfAny(
-  //   LoadDraftIfAny event,
-  //   Emitter<TextBookState> emit,
-  // ) async {
-  //   if (state is! TextBookLoaded) return;
-  //
-  //   final currentState = state as TextBookLoaded;
-  //
-  //   try {
-  //     final draft = await _overridesRepository.readDraft(
-  //       currentState.book.title,
-  //       event.sectionId,
-  //     );
-  //
-  //     if (draft != null) {
-  //       emit(currentState.copyWith(
-  //         editorText: draft.markdownContent,
-  //         hasDraft: false, // Draft is now loaded, so no longer "pending"
-  //       ));
-  //     }
-  //   } catch (e) {
-  //     // Handle error
-  //   }
-  // }
-  //
-  // Future<void> _onDiscardDraft(
-  //   DiscardDraft event,
-  //   Emitter<TextBookState> emit,
-  // ) async {
-  //   if (state is! TextBookLoaded) return;
-  //
-  //   final currentState = state as TextBookLoaded;
-  //
-  //   try {
-  //     await _overridesRepository.deleteDraft(
-  //       currentState.book.title,
-  //       event.sectionId,
-  //     );
-  //
-  //     emit(currentState.copyWith(hasDraft: false));
-  //   } catch (e) {
-  //     // Handle error
-  //   }
-  // }
-  //
-  // Future<void> _onCloseEditor(
-  //   CloseEditor event,
-  //   Emitter<TextBookState> emit,
-  // ) async {
-  //   if (state is! TextBookLoaded) return;
-  //
-  //   final currentState = state as TextBookLoaded;
-  //
-  //   emit(currentState.copyWith(
-  //     isEditorOpen: false,
-  //     editorIndex: null,
-  //     editorSectionId: null,
-  //     editorText: null,
-  //     hasDraft: false,
-  //   ));
-  // }
-  //
-  // Future<void> _onUpdateEditorText(
-  //   UpdateEditorText event,
-  //   Emitter<TextBookState> emit,
-  // ) async {
-  //   if (state is! TextBookLoaded) return;
-  //
-  //   final currentState = state as TextBookLoaded;
-  //
-  //   emit(currentState.copyWith(editorText: event.text));
-  // }
-  //
-  // Future<void> _onAutoSaveDraft(
-  //   AutoSaveDraft event,
-  //   Emitter<TextBookState> emit,
-  // ) async {
-  //   if (state is! TextBookLoaded) return;
-  //
-  //   final currentState = state as TextBookLoaded;
-  //
-  //   try {
-  //     await _overridesRepository.writeDraft(
-  //       currentState.book.title,
-  //       event.sectionId,
-  //       event.markdown,
-  //     );
-  //
-  //     // Don't emit state change for auto-save to avoid unnecessary rebuilds
-  //   } catch (e) {
-  //     // Handle error silently for auto-save
-  //   }
-  // }
-
   @override
   Future<void> close() {
-    // Cancel all timers
     _debounceTimer?.cancel();
     _highlightTimer?.cancel();
 
-    // Remove position listener
     if (_positionListenerCallback != null) {
       positionsListener.itemPositions
           .removeListener(_positionListenerCallback!);
@@ -1528,19 +1050,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return super.close();
   }
 
-  /// Loads the full book in the background and updates the state
-  void _loadFullBookInBackground(
-    TextBook book,
-  ) async {
+  void _loadFullBookInBackground(TextBook book) async {
     try {
-      // Load full content
       final fullContent = await repository.getBookContent(book);
 
       if (fullContent.isEmpty) {
         return;
       }
 
-      // Check if still in the same book (user might have navigated away)
       if (isClosed || state is! TextBookLoaded) {
         return;
       }
@@ -1552,18 +1069,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       add(ApplyFullBookContent(
         bookTitle: book.title,
-        content: await _splitContentLines(fullContent),
+        content: await splitContentLines(fullContent),
       ));
     } catch (e) {
       if (kDebugMode) {
         debugPrint(
             '⚠️ TextBookBloc::loadFullBook failed for ${book.title}: $e');
       }
-      // Silent fail - user already has preview
     }
   }
 
-  /// Loads links in the background after the book is displayed
   void _loadLinksInBackground(
     TextBook book,
     List<int> visibleIndices, {
@@ -1580,7 +1095,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     final window = _calculateLinksWindow(visibleIndices);
 
     if (_isLoadingLinks) {
-      // בקשה חדשה הגיעה בזמן שטעינה אחרת רצה — מסמנים לנסות שוב אחריה
       _pendingLinksReload = true;
       return;
     }
@@ -1621,7 +1135,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         targetBookTitles: targetBookTitles,
       );
 
-      // Check if still in the same book
       if (isClosed || state is! TextBookLoaded) {
         _isLoadingLinks = false;
         return;
@@ -1641,7 +1154,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final replaceExistingLinks = currentState.links.isNotEmpty &&
           _activeLinksTargetBookTitlesSignature != targetBookTitlesSignature;
 
-      // Use event to update links
       add(UpdateLinks(
         links,
         replaceExisting: replaceExistingLinks,
@@ -1672,7 +1184,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           '(window ${window.start}-${window.end}): $e',
         );
       }
-      // Silent fail - user already has the book displayed
     }
   }
 
@@ -1682,7 +1193,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) async {
     if (state is! TextBookLoaded) return;
     final stateBeforeAwait = state as TextBookLoaded;
-    final processedLinks = await _processLinksForState(
+    final processedLinks = await processLinksForState(
       existingLinks: stateBeforeAwait.links,
       incomingLinks: event.links.cast<Link>(),
       replaceExisting: event.replaceExisting,
@@ -1703,14 +1214,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         event.targetBookTitlesSignature ?? _allTargetBookTitlesSignature;
   }
 
-  /// Handler for updating available commentators after background loading
   void _onUpdateAvailableCommentators(
     UpdateAvailableCommentators event,
     Emitter<TextBookState> emit,
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
-      // בחירה אוטומטית של הערות כאשר אין מפרשים פעילים
       final autoSelectNotes = currentState.activeCommentators.isEmpty &&
           event.notesContent != null;
       final activeCommentators = autoSelectNotes
@@ -1747,7 +1256,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     );
   }
 
-  /// Loads available commentators in the background after the book is displayed
   void _loadCommentatorsInBackground(TextBook book) async {
     try {
       final availableCommentators =
@@ -1760,7 +1268,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       }
 
       final eras = await utils.splitByEra(allCommentators);
-      final groups = _buildCommentatorGroups(eras, allCommentators);
+      final groups = buildCommentatorGroups(eras, allCommentators);
 
       if (isClosed || state is! TextBookLoaded) {
         return;
@@ -1775,146 +1283,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           notesContent: notesContent));
     } catch (e) {
       debugPrint('⚠️ Failed to load commentators in background: $e');
-      // Silent fail - user already has the book displayed
     }
   }
 
-  /// Enriches heCategories metadata in the background after the book is displayed
   void _enrichHeCategoriesInBackground(TextBook book) async {
-    if (book.heCategories != null && book.heCategories!.isNotEmpty) {
-      return;
-    }
-
-    try {
-      // ניסיון 1: טעינה ממסד הנתונים
-      final sqliteProvider = SqliteDataProvider.instance;
-      if (await sqliteProvider.databaseExists() &&
-          sqliteProvider.isInitialized) {
-        final dbRepo = sqliteProvider.repository;
-        if (dbRepo != null) {
-          final dbBook = book.categoryId != null
-              ? await dbRepo.getBookByTitleAndCategory(
-                  book.title,
-                  book.categoryId!,
-                )
-              : await dbRepo.getBookByTitle(book.title);
-          if (dbBook != null) {
-            final category = await dbRepo.getCategory(dbBook.categoryId);
-            if (category != null) {
-              final categoryParts = <String>[];
-              db.Category? currentCategory = category;
-              while (currentCategory != null) {
-                categoryParts.insert(0, currentCategory.title);
-                if (currentCategory.parentId != null) {
-                  currentCategory =
-                      await dbRepo.getCategory(currentCategory.parentId!);
-                } else {
-                  break;
-                }
-              }
-              book.heCategories = categoryParts.join(', ');
-              debugPrint(
-                  '📚 Background: נטען heCategories מה-DB: "${book.heCategories}"');
-              return;
-            }
-          }
-        }
-      }
-
-      // ניסיון 2: טעינה מ-metadata
-      if (book.heCategories == null || book.heCategories!.isEmpty) {
-        final metadata = await FileSystemData.instance.metadata;
-        final bookMetadata = metadata[book.title];
-        if (bookMetadata != null) {
-          book.heCategories = bookMetadata['heCategories'];
-          book.author ??= bookMetadata['author'];
-          book.heEra ??= bookMetadata['heEra'];
-          if (book.heCategories != null && book.heCategories!.isNotEmpty) {
-            debugPrint(
-                '📚 Background: נטען heCategories מ-metadata: "${book.heCategories}"');
-            return;
-          }
-        }
-      }
-
-      // ניסיון 3: חילוץ מהנתיב
-      if (book.heCategories == null || book.heCategories!.isEmpty) {
-        final titleToPath = await FileSystemData.instance.titleToPath;
-        final bookPath = titleToPath[book.title];
-        if (bookPath != null) {
-          // titleToPath יכול להכיל נתיב קובץ (FS) או נתיב קטגוריה מה-DB.
-          if (bookPath.contains(Platform.pathSeparator)) {
-            final pathParts = bookPath.split(Platform.pathSeparator);
-            final otzariaIndex = pathParts.indexOf('אוצריא');
-            if (otzariaIndex >= 0 && otzariaIndex < pathParts.length - 2) {
-              final categories =
-                  pathParts.sublist(otzariaIndex + 1, pathParts.length - 1);
-              book.heCategories = categories.join(', ');
-              debugPrint(
-                  '📚 Background: נטען heCategories מהנתיב: "${book.heCategories}"');
-            }
-          } else {
-            final normalizedCategories = bookPath
-                .split(',')
-                .map((part) => part.trim())
-                .where((part) => part.isNotEmpty)
-                .join(', ');
-            if (normalizedCategories.isNotEmpty) {
-              book.heCategories = normalizedCategories;
-              debugPrint(
-                  '📚 Background: נטען heCategories מנתיב קטגוריה: "${book.heCategories}"');
-            }
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('⚠️ Failed to enrich heCategories in background: $e');
-    }
-  }
-
-  List<CommentatorGroup> _buildCommentatorGroups(
-      Map<String, List<String>> eras, List<String> availableCommentators) {
-    final known = <String>{
-      ...?eras['תורה שבכתב'],
-      ...?eras['חז"ל'],
-      ...?eras['ראשונים'],
-      ...?eras['אחרונים'],
-      ...?eras['מחברי זמננו'],
-    };
-
-    final others = (eras['מפרשים נוספים'] ?? [])
-        .toSet()
-        .union(availableCommentators
-            .where((c) => !known.contains(c))
-            .toList()
-            .toSet())
-        .toList();
-
-    return [
-      CommentatorGroup(
-        title: 'תורה שבכתב',
-        commentators: eras['תורה שבכתב'] ?? const [],
-      ),
-      CommentatorGroup(
-        title: 'חז"ל',
-        commentators: eras['חז"ל'] ?? const [],
-      ),
-      CommentatorGroup(
-        title: 'ראשונים',
-        commentators: eras['ראשונים'] ?? const [],
-      ),
-      CommentatorGroup(
-        title: 'אחרונים',
-        commentators: eras['אחרונים'] ?? const [],
-      ),
-      CommentatorGroup(
-        title: 'מחברי זמננו',
-        commentators: eras['מחברי זמננו'] ?? const [],
-      ),
-      CommentatorGroup(
-        title: 'שאר מפרשים',
-        commentators: others,
-      ),
-    ];
+    await enrichHeCategories(book);
   }
 }
