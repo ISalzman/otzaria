@@ -516,16 +516,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return (commentators: sortedCommentators, links: links);
   }
 
-  void _openCommentaryPane() {
-    final tourCubit = context.read<TourCubit>();
+  void _recordCommentaryOpenedIfNeeded() {
     if (_getRelevantContent().commentators.isNotEmpty) {
-      tourCubit.recordInteraction(
+      context.read<TourCubit>().recordInteraction(
         TourInteraction(
           type: TourInteractionType.commentaryUsed,
           primaryValue: widget.tab.title,
         ),
       );
     }
+  }
+
+  void _openCommentaryPane() {
+    _recordCommentaryOpenedIfNeeded();
     setState(() {
       _rightPaneInitialTabIndex = 0;
     });

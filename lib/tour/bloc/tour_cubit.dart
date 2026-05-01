@@ -147,9 +147,7 @@ class TourCubit extends Cubit<TourState> {
         if (!state.resolvedTips.contains(LiveTipId.dictionaryContextMenuHint)) {
           _textSelectionCount++;
         }
-        if (_commentaryOpportunityOpen &&
-            (_commentaryOpportunityBook == null ||
-                _commentaryOpportunityBook == interaction.primaryValue)) {
+        if (_isInteractionRelevantToOpportunity(interaction)) {
           _commentaryOpportunityScore++;
         }
         break;
@@ -179,13 +177,17 @@ class TourCubit extends Cubit<TourState> {
       case TourInteractionType.currentTabChanged:
       case TourInteractionType.openedTextBook:
       case TourInteractionType.readerPositionChanged:
-        if (_commentaryOpportunityOpen &&
-            (_commentaryOpportunityBook == null ||
-                _commentaryOpportunityBook == interaction.primaryValue)) {
+        if (_isInteractionRelevantToOpportunity(interaction)) {
           _commentaryOpportunityScore++;
         }
         break;
     }
+  }
+
+  bool _isInteractionRelevantToOpportunity(TourInteraction interaction) {
+    return _commentaryOpportunityOpen &&
+        (_commentaryOpportunityBook == null ||
+            _commentaryOpportunityBook == interaction.primaryValue);
   }
 
   void _markTipResolved(LiveTipId tipId) {
