@@ -21,7 +21,7 @@ import 'package:otzaria/history/view/history_screen.dart';
 import 'package:otzaria/widgets/misc/app_menu.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
-import 'package:otzaria/utils/fullscreen_helper.dart';
+import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';

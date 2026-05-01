@@ -10,7 +10,7 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
-import 'package:otzaria/utils/reading_left_pane_policy.dart';
+import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 
 /// Represents a tab that contains a text book.
 ///

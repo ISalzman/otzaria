@@ -9,7 +9,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
-import 'package:otzaria/utils/reading_left_pane_policy.dart';
+import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 
 class BookOpenCoordinator {
   final TabsBloc tabsBloc;

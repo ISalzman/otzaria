@@ -38,7 +38,7 @@ import 'package:otzaria/widgets/dialogs/password_dialog.dart';
 import 'pdf_thumbnails_screen.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/page_converter.dart';
-import 'package:otzaria/utils/reading_left_pane_policy.dart';
+import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:flutter/gestures.dart';
 import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
