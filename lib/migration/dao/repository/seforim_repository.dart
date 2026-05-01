@@ -1607,44 +1607,6 @@ class SeforimRepository {
     ''');
   }
 
-  /// Migrates existing links to use the new connection_type table.
-  /// This should be called once after updating the database schema.
-  Future<void> migrateConnectionTypes() async {
-    try {
-      // Make sure all connection types exist in the connection_type table
-      for (final type in ConnectionType.values) {
-        await getOrCreateConnectionType(type.name);
-      }
-
-      // Get all links from the database
-      final db = await _database.database;
-      final linksResult = db.select('SELECT * FROM link').toMapList();
-
-      // For each link, update the connectionTypeId
-      var migratedCount = 0;
-      for (final linkRow in linksResult) {
-        final linkId = linkRow['id'] as int;
-        final connectionTypeName = linkRow['connectionType']
-            as String; // This assumes the old column exists
-        final connectionTypeId =
-            await getOrCreateConnectionType(connectionTypeName);
-
-        // Execute a raw SQL query to update the link
-        final updateSql =
-            'UPDATE link SET connectionTypeId = $connectionTypeId WHERE id = $linkId';
-        db.execute(updateSql);
-
-        migratedCount++;
-      }
-
-      _logger.info('Successfully migrated $migratedCount links');
-    } catch (e) {
-      _logger
-          .severe('Error during connection types migration: ${e.toString()}');
-      rethrow;
-    }
-  }
-
   // --- Search ---
 
   /// Searches for text across all books.

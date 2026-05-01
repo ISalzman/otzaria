@@ -4,11 +4,8 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/models/plugin_published_record.dart';
 import 'package:otzaria/migration/dao/sqflite/sqlite3_utils.dart';
-import 'package:flutter/foundation.dart';
 
 class PluginSystemDatabase {
-  static const _databaseVersion = 2;
-
   PluginSystemDatabase._();
   static final PluginSystemDatabase instance = PluginSystemDatabase._();
 
@@ -24,43 +21,11 @@ class PluginSystemDatabase {
     final dbPath = await AppPaths.resolvePluginsDbPath();
     final db = sqlite3.open(dbPath);
     db.execute('PRAGMA journal_mode=WAL');
-    _migrateSchema(db);
+    _createSchema(db);
     return db;
   }
 
-  void _migrateSchema(Database db) {
-    var currentVersion =
-        db.select('PRAGMA user_version').first.values.first as int;
-    if (currentVersion == 0) {
-      _createSchemaV1(db);
-      currentVersion = 1;
-    }
-    if (currentVersion < 2) {
-      _migrateToV2(db);
-      currentVersion = 2;
-    }
-    db.execute('PRAGMA user_version = $_databaseVersion');
-  }
-
-  @visibleForTesting
-  void migrateSchemaForTest(Database db) {
-    _migrateSchema(db);
-  }
-
-  void _migrateToV2(Database db) {
-    final existingColumns = db
-        .select('PRAGMA table_info(plugin_installation)')
-        .map((r) => r['name'] as String)
-        .toSet();
-    if (!existingColumns.contains('source_type')) {
-      db.execute('ALTER TABLE plugin_installation ADD COLUMN source_type TEXT NOT NULL DEFAULT "packaged"');
-    }
-    if (!existingColumns.contains('dev_root_path')) {
-      db.execute('ALTER TABLE plugin_installation ADD COLUMN dev_root_path TEXT');
-    }
-  }
-
-  void _createSchemaV1(Database db) {
+  void _createSchema(Database db) {
     // 1. plugin_installation
     db.execute('''
       CREATE TABLE IF NOT EXISTS plugin_installation (
@@ -74,7 +39,9 @@ class PluginSystemDatabase {
         pinned INTEGER NOT NULL DEFAULT 1,
         manifest_json TEXT NOT NULL,
         installed_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        source_type TEXT NOT NULL DEFAULT 'packaged',
+        dev_root_path TEXT
       )
     ''');
 

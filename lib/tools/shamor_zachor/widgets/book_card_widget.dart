@@ -5,7 +5,6 @@ import 'package:logging/logging.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import '../models/book_model.dart';
-import '../models/progress_model.dart';
 import '../providers/shamor_zachor_progress_provider.dart';
 
 class BookCardWidget extends StatefulWidget {
@@ -101,20 +100,16 @@ class _BookCardWidgetState extends State<BookCardWidget> {
       final cycleTotals = List<int>.filled(_cycles.length, 0);
       final cycleCompleted = List<int>.filled(_cycles.length, 0);
 
+      final bookId = widget.bookDetails.id;
+      if (bookId == null) {
+        return;
+      }
+
       for (final item in widget.bookDetails.learnableItems) {
-        final PageProgress progress;
-        if (widget.bookDetails.id != null) {
-          progress = pp.getProgressForItemById(
-            widget.bookDetails.id!,
-            item.absoluteIndex,
-          );
-        } else {
-          progress = pp.getProgressForItem(
-            widget.topLevelCategoryKey,
-            widget.bookName,
-            item.absoluteIndex,
-          );
-        }
+        final progress = pp.getProgressForItemById(
+          bookId,
+          item.absoluteIndex,
+        );
 
         for (int index = 0; index < _cycles.length; index++) {
           cycleTotals[index]++;
@@ -132,33 +127,17 @@ class _BookCardWidgetState extends State<BookCardWidget> {
         growable: false,
       );
 
-      if (widget.bookDetails.id != null) {
-        newLearnProgress = pp
-            .getLearnProgressPercentageById(
-              widget.bookDetails.id!,
-              widget.bookDetails,
-            )
-            .clamp(0.0, 1.0);
+      newLearnProgress = pp
+          .getLearnProgressPercentageById(
+            bookId,
+            widget.bookDetails,
+          )
+          .clamp(0.0, 1.0);
 
-        newIsCompleted = pp.isBookCompletedById(
-          widget.bookDetails.id!,
-          widget.bookDetails,
-        );
-      } else {
-        newLearnProgress = pp
-            .getLearnProgressPercentage(
-              widget.topLevelCategoryKey,
-              widget.bookName,
-              widget.bookDetails,
-            )
-            .clamp(0.0, 1.0);
-
-        newIsCompleted = pp.isBookCompleted(
-          widget.topLevelCategoryKey,
-          widget.bookName,
-          widget.bookDetails,
-        );
-      }
+      newIsCompleted = pp.isBookCompletedById(
+        bookId,
+        widget.bookDetails,
+      );
 
       if (newLearnProgress != _learnProgress ||
           newIsCompleted != _isCompleted ||
@@ -518,17 +497,20 @@ class _BookCardWidgetState extends State<BookCardWidget> {
 
   String _getProgressStatusText() {
     try {
-      if (_progressProvider == null) {
+      final pp = _progressProvider;
+      final bookId = widget.bookDetails.id;
+      if (pp == null || bookId == null) {
         return 'לימוד פעיל';
       }
-      final summary = _progressProvider!.getBookProgressSummarySync(
+      final summary = pp.getBookProgressSummarySyncById(
+        bookId,
         widget.topLevelCategoryKey,
         widget.bookName,
         widget.bookDetails,
       );
       return summary.statusText;
     } catch (e, st) {
-      _logger.warning('getBookProgressSummarySync failed', e, st);
+      _logger.warning('getBookProgressSummarySyncById failed', e, st);
       return 'לימוד פעיל';
     }
   }

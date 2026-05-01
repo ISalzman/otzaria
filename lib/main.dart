@@ -47,7 +47,6 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
-import 'package:otzaria/personal_notes/migration/file_to_db_migrator.dart';
 import 'package:otzaria/file_sync/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/file_sync_repository.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
@@ -445,14 +444,11 @@ Future<void> _runAppBootstrap() async {
   );
 }
 
-/// אתחול כבד – רץ ברקע בזמן שה-splash מוצג
+/// אתחול כבד שרץ בזמן שה-splash מוצג.
 Future<void> _heavyInitialize() async {
-  // הצגת החלון תלויה ב-completer זה – חייב להיות מושלם תמיד, גם בכשל
+  // השחרור של ה-completer חייב לקרות גם אם אחד משלבי האתחול נכשל.
   try {
     await RustLib.init();
-    // HiveCache may fail if a second instance holds the .lock file.
-    // SharePreferenceCache is a safe fallback: settings won't persist for
-    // this session, but the app won't crash.
     try {
       await Settings.init(cacheProvider: HiveCache());
     } catch (_) {
@@ -460,17 +456,13 @@ Future<void> _heavyInitialize() async {
     }
 
     await _migrateWindowsLibraryPathFromInstallerPrefs();
-
-    // Settings מוכן — מחק לוג שגיאות ישן אם הגרסה השתנתה
     _clearErrorLogOnVersionChange();
 
-    // Settings מוכן — שחזר מיקום/גודל חלון לפני הצגת החלון
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       await WindowPersistence.restoreIfAny();
     }
   } finally {
-    // בכל מקרה (הצלחה או כשל) — מאפשר ל-waitUntilReadyToShow להציג את החלון
     if (!_windowReadyCompleter.isCompleted) {
       _windowReadyCompleter.complete();
     }
@@ -480,8 +472,6 @@ Future<void> _heavyInitialize() async {
   await createDirs();
   await loadCerts();
 
-  await SqliteDataProvider.instance.initialize();
-  await FileToDbMigrator.runMigration();
   await SqliteDataProvider.instance.initialize();
 
   try {
@@ -621,7 +611,6 @@ class _AppBootstrapState extends State<AppBootstrap> {
         _settingsRepository = SettingsRepository();
         _ready = true;
       });
-      // טעינת מילוני ארמי, ראשי תיבות וספרים ברקע אחרי הפריים הראשון של ה-App
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(
           DictionaryLookupRepository.instance.ensureLoaded().catchError((e) {
@@ -635,12 +624,15 @@ class _AppBootstrapState extends State<AppBootstrap> {
           if (kDebugMode) debugPrint('Failed to warm up AcronymsCache: $e');
         }));
       });
-    }).catchError((Object e, StackTrace st) {
+    }).catchError((Object error, StackTrace stackTrace) {
       _appendUnhandledErrorToLocalLog(
-          title: 'Bootstrap Error', error: e, stackTrace: st);
+        title: 'Bootstrap Error',
+        error: error,
+        stackTrace: stackTrace,
+      );
       if (!mounted) return;
       setState(() {
-        _error = e;
+        _error = error;
         _ready = true;
       });
     });
@@ -656,7 +648,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
         home: Scaffold(
           body: Center(
             child: Text(
-              'שגיאה בטעינה: $_error',
+              'שגיאת אתחול: $_error',
               textDirection: TextDirection.rtl,
             ),
           ),
@@ -705,8 +697,9 @@ class _AppBootstrapState extends State<AppBootstrap> {
           ),
           BlocProvider<FindRefBloc>(
             create: (_) => FindRefBloc(
-                findRefRepository:
-                    FindRefRepository(dataRepository: DataRepository.instance)),
+              findRefRepository:
+                  FindRefRepository(dataRepository: DataRepository.instance),
+            ),
           ),
           BlocProvider<PersonalNotesBloc>(
             create: (_) => PersonalNotesBloc(),
@@ -732,10 +725,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
           ),
           ChangeNotifierProvider<ShamorZachorProgressProvider>(
             lazy: true,
-            create: (context) {
-              final dataProvider = context.read<ShamorZachorDataProvider>();
-              return ShamorZachorProgressProvider(dataProvider: dataProvider);
-            },
+            create: (_) => ShamorZachorProgressProvider(),
           ),
           BlocProvider<WorkStatusCubit>(
             create: (_) => WorkStatusCubit(),

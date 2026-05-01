@@ -430,24 +430,14 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                         onChanged: (bool? newValue) async {
                           final bool selectAction = newValue == true;
                           final confirmed = await _showWarningDialog();
-                          if (confirmed && mounted) {
-                            if (widget.bookId != null) {
-                              await progressProvider
-                                  .toggleSelectAllForColumnById(
-                                widget.bookId!,
-                                bookDetails,
-                                columnId,
-                                selectAction,
-                              );
-                            } else {
-                              await progressProvider.toggleSelectAllForColumn(
-                                widget.topLevelCategoryKey,
-                                widget.bookName,
-                                bookDetails,
-                                columnId,
-                                selectAction,
-                              );
-                            }
+                          if (confirmed && mounted && widget.bookId != null) {
+                            await progressProvider
+                                .toggleSelectAllForColumnById(
+                              widget.bookId!,
+                              bookDetails,
+                              columnId,
+                              selectAction,
+                            );
                           }
                         },
                         tristate: true,
@@ -802,21 +792,10 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                                 value: state,
                                 tristate: true,
                                 onChanged: (value) async {
-                                  // toggleSectionColumn uses the old method internally
-                                  // We need to update all items in the section manually
                                   if (widget.bookId != null) {
                                     await progressProvider
                                         .toggleSectionColumnById(
                                       widget.bookId!,
-                                      bookDetails,
-                                      section.id,
-                                      columnId,
-                                      value == true,
-                                    );
-                                  } else {
-                                    await progressProvider.toggleSectionColumn(
-                                      widget.topLevelCategoryKey,
-                                      widget.bookName,
                                       bookDetails,
                                       section.id,
                                       columnId,

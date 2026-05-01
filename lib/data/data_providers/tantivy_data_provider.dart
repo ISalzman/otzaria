@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
 import 'package:search_engine/search_engine.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:otzaria/search/search_repository.dart';
@@ -198,23 +197,6 @@ class TantivyDataProvider {
       final lockPath = await AppPaths.getTantivyLockPath();
       booksDone = await _readBooksDoneFromBox(lockPath);
 
-      // One-time migration: if the current path is empty, try the legacy path.
-      // Close the current box first — migrateBooksDone opens Hive boxes directly
-      // and a simultaneous open of the same box name at a different path would
-      // conflict.
-      if (booksDone.isEmpty) {
-        await _closeBox();
-        final legacyPath =
-            p.join(await AppPaths.getDataRootPath(), 'index_state');
-        final migrated = await TantivyDataProvider.migrateBooksDone(
-          currentDir: lockPath,
-          legacyDir: legacyPath,
-        );
-        if (migrated.isNotEmpty) {
-          booksDone = migrated;
-        }
-      }
-
       final box = await _openBox(lockPath);
       _storedIndexStateVersion = _readIndexStateVersionFromBox(box);
       _catalogueOrderSignature = _readCatalogueOrderSignatureFromBox(box);
@@ -222,76 +204,6 @@ class TantivyDataProvider {
       debugPrint('⚠️ Error loading books done: $e');
       booksDone = [];
     }
-  }
-
-  /// Migrates the [books_indexed] Hive box from [legacyDir] to [currentDir].
-  ///
-  /// Performs a write → read-back verify → delete-legacy sequence so that
-  /// legacy files are removed only after the data has been confirmed at the
-  /// new location.
-  ///
-  /// Returns the migrated book list on success, or an empty list when:
-  ///  - the paths are identical;
-  ///  - [legacyDir] does not exist on disk;
-  ///  - [legacyDir] contains no book entries;
-  ///  - the read-back verification fails (legacy files are left intact).
-  ///
-  /// **Caller responsibility**: close any open [books_indexed] Hive box
-  /// *before* calling this method — Hive does not allow the same box name
-  /// to be open at two paths simultaneously.
-  @visibleForTesting
-  static Future<List<String>> migrateBooksDone({
-    required String currentDir,
-    required String legacyDir,
-  }) async {
-    if (currentDir == legacyDir || !Directory(legacyDir).existsSync()) {
-      return <String>[];
-    }
-
-    // 1. Read from legacy location.
-    final legacyBox =
-        await Hive.openBox<dynamic>('books_indexed', path: legacyDir);
-    final dynamic rawLegacy =
-        legacyBox.get(_booksDoneKey, defaultValue: <dynamic>[]);
-    final legacyBooks = rawLegacy is List
-        ? rawLegacy.map<String>((e) => e.toString()).toList(growable: false)
-        : <String>[];
-    await legacyBox.close();
-
-    if (legacyBooks.isEmpty) return <String>[];
-
-    // 2. Write to new location.
-    final currentBox =
-        await Hive.openBox<dynamic>('books_indexed', path: currentDir);
-    await currentBox.put(_booksDoneKey, legacyBooks);
-
-    // 3. Read-back verify before deleting legacy (safety net against I/O errors).
-    final dynamic rawVerified =
-        currentBox.get(_booksDoneKey, defaultValue: <dynamic>[]);
-    final verified = rawVerified is List
-        ? rawVerified.map<String>((e) => e.toString()).toList(growable: false)
-        : <String>[];
-    await currentBox.close();
-
-    if (verified.length != legacyBooks.length) {
-      debugPrint(
-          '⚠️ Migration verification failed — keeping legacy files intact.');
-      return <String>[];
-    }
-
-    // 4. Delete legacy Hive/Isar files.
-    for (final ext in const ['.hive', '.lock', '.isar', '.isar-lck']) {
-      final f = File('$legacyDir/books_indexed$ext');
-      if (f.existsSync()) {
-        try {
-          f.deleteSync();
-        } catch (e) {
-          debugPrint('⚠️ Could not delete legacy file $f: $e');
-        }
-      }
-    }
-
-    return legacyBooks;
   }
 
   Future<List<String>> _readBooksDoneFromBox(String directory) async {
