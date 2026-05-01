@@ -44,7 +44,7 @@ import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/utils/fullscreen_helper.dart';
 
-import 'package:otzaria/widgets/responsive_action_bar.dart';
+import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/models/book_model.dart';

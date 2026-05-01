@@ -6,7 +6,7 @@ import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/settings/tabs/settings_tabs_exports.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
-import 'package:otzaria/widgets/keyboard_navigator.dart';
+import 'package:otzaria/widgets/navigation/keyboard_navigator.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/layout_tokens.dart';

@@ -19,7 +19,7 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/context_menu_utils.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/widgets/app_menu.dart';
-import 'package:otzaria/widgets/panel_tab_header.dart';
+import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'dart:async'; // Added for Timer

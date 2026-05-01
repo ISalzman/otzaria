@@ -11,7 +11,7 @@ import 'package:otzaria/tools/acronyms_dictionary/acronyms_dictionary_screen.dar
 import 'package:otzaria/tools/aramaic_dictionary/aramaic_dictionary_screen.dart';
 import 'package:otzaria/tools/shamor_zachor/shamor_zachor.dart';
 import 'package:otzaria/tools/calendar/calendar_screen.dart';
-import 'package:otzaria/widgets/keyboard_navigator.dart';
+import 'package:otzaria/widgets/navigation/keyboard_navigator.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';

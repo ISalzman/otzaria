@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/settings/settings_exports.dart';
-import 'package:otzaria/widgets/app_top_bar.dart';
+import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 
 void main() {
   group('AppTopBar', () {

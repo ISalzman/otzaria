@@ -3,7 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/view/selected_line_links_view.dart';
-import 'package:otzaria/widgets/panel_tab_header.dart';
+import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 
 /// חלונית פנימית עבור צורת הדף שמציגה קישורים והערות אישיות.
 class LinksNotesSidebar extends StatefulWidget {

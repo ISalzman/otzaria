@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:otzaria/widgets/commentators_filter_header.dart';
+import 'package:otzaria/widgets/navigation/commentators_filter_header.dart';
 
 class CommentatorsFilterScreen extends StatelessWidget {
   final VoidCallback onBack;
