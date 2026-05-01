@@ -1,6 +1,6 @@
 import 'package:otzaria/models/books.dart'; // Import Book model
 import 'package:equatable/equatable.dart';
-import 'package:otzaria/find_ref/db_reference_result.dart';
+import 'package:otzaria/find_ref/repository/db_reference_result.dart';
 
 abstract class FindRefState extends Equatable {
   const FindRefState();

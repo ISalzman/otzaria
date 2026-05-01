@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/file_sync/file_sync_bloc.dart';
-import 'package:otzaria/file_sync/file_sync_event.dart';
-import 'package:otzaria/file_sync/file_sync_state.dart';
+import 'package:otzaria/file_sync/bloc/file_sync_bloc.dart';
+import 'package:otzaria/file_sync/bloc/file_sync_event.dart';
+import 'package:otzaria/file_sync/bloc/file_sync_state.dart';
 
 class SyncIconButton extends StatefulWidget {
   final double size;
