@@ -14,7 +14,7 @@
 //   → lib/settings/widgets/switch_settings_tile.dart
 //
 // toolCardColor, ToolPanelWrapper:
-//   → lib/widgets/tool_ui_helpers.dart
+//   → lib/widgets/misc/tool_ui_helpers.dart
 
 export 'package:otzaria/widgets/dialogs/app_dialogs.dart';
 export 'package:otzaria/widgets/buttons/action_buttons.dart';
