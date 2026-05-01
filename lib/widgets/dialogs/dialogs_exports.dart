@@ -23,7 +23,7 @@
 // ─── מיכל כללי ───────────────────────────────────────────────────────────────
 // [ReusableItemsDialog]                               → reusable_items_dialog.dart
 
-export '../confirmation_dialog.dart';
+export 'confirmation_dialog.dart';
 export 'app_dialogs.dart';
-export '../input_dialog.dart';
-export '../selection_dialog.dart';
+export 'input_dialog.dart';
+export 'selection_dialog.dart';

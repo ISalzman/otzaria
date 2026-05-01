@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/history/history_screen.dart';
-import 'package:otzaria/widgets/reusable_items_dialog.dart';
+import 'package:otzaria/widgets/dialogs/reusable_items_dialog.dart';
 
 class HistoryDialog extends StatelessWidget {
   const HistoryDialog({super.key});

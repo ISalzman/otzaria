@@ -16,7 +16,7 @@ import 'package:otzaria/services/phone_report_service.dart';
 import 'package:otzaria/services/book_details_service.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
-import 'package:otzaria/widgets/error_report_sender_email_dialog.dart';
+import 'package:otzaria/widgets/dialogs/error_report_sender_email_dialog.dart';
 import 'package:otzaria/widgets/phone_report_tab.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
