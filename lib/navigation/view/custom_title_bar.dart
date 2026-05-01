@@ -18,7 +18,7 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/widgets/navigation/scrollable_tab_bar.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/history/view/history_screen.dart';
-import 'package:otzaria/widgets/misc/app_menu.dart';
+import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';

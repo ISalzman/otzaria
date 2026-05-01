@@ -1,7 +1,7 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/widgets/misc/app_menu.dart';
+import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 
 void main() {
   testWidgets('Disabled app menu entries use muted foreground color',
