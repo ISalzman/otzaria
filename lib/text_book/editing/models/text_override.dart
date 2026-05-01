@@ -17,7 +17,7 @@ class TextOverride extends Equatable {
   /// Hash of the original source content when this override was created
   final String sourceHashOnOpen;
 
-  /// Application schema version for migration purposes
+  /// Application schema version for compatibility purposes
   final String appSchemaVersion;
 
   /// Original content for reference (optional)

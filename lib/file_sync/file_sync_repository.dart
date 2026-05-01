@@ -9,10 +9,6 @@ import 'package:sqlite3/sqlite3.dart' as sqlite3;
 import 'package:zstandard/zstandard.dart';
 
 class FileSyncRepository {
-  static const int _legacyDirectUpgradeSourceVersion = 3;
-  static const int _legacyDirectUpgradePublishedFromVersion = 133;
-  static const int _legacyDirectUpgradeTargetVersion = 134;
-
   final String githubOwner;
   final String repositoryName;
   bool isSyncing = false;
@@ -224,22 +220,14 @@ class FileSyncRepository {
     var version = currentVersion;
 
     while (true) {
-      final candidates = <DiffReleaseAsset>[
-        ...?bySourceVersion[version],
-        if (version == _legacyDirectUpgradeSourceVersion)
-          ...?bySourceVersion[_legacyDirectUpgradePublishedFromVersion],
-      ];
+      final candidates = bySourceVersion[version] ?? const <DiffReleaseAsset>[];
       if (candidates.isEmpty) {
         break;
       }
 
       DiffReleaseAsset? nextAsset;
       for (final candidate in candidates) {
-        if (candidate.toVersion == version + 1 ||
-            _isLegacyDirectUpgradeCandidate(
-              currentVersion: version,
-              candidate: candidate,
-            )) {
+        if (candidate.toVersion == version + 1) {
           nextAsset = candidate;
           break;
         }
@@ -257,15 +245,6 @@ class FileSyncRepository {
     }
 
     return chain;
-  }
-
-  static bool _isLegacyDirectUpgradeCandidate({
-    required int currentVersion,
-    required DiffReleaseAsset candidate,
-  }) {
-    return currentVersion == _legacyDirectUpgradeSourceVersion &&
-        candidate.fromVersion == _legacyDirectUpgradePublishedFromVersion &&
-        candidate.toVersion == _legacyDirectUpgradeTargetVersion;
   }
 
   Future<String> _downloadAndExtractDiff(DiffReleaseAsset asset) async {

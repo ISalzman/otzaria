@@ -159,23 +159,6 @@ void main() {
       expect(chain, isEmpty);
     });
 
-    test('allows the legacy direct upgrade from version 3 to 134', () {
-      final chain = FileSyncRepository.buildUpdateChain(
-        currentVersion: 3,
-        availableAssets: const [
-          DiffReleaseAsset(
-            fromVersion: 133,
-            toVersion: 134,
-            assetName: '133-134.DIFF.zst',
-            downloadUrl: 'https://example.com/133-134.DIFF.zst',
-            releaseTag: 'db-v134',
-            releaseName: 'db-v134',
-          ),
-        ],
-      );
-
-      expect(chain.map((asset) => asset.assetName), ['133-134.DIFF.zst']);
-    });
   });
 
   group('FileSyncRepository.splitSqlStatements', () {
@@ -240,7 +223,7 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
           ''');
       db.execute(
         'INSERT INTO db_meta (key, value) VALUES (?, ?)',
-        ['content_version_int', '3'],
+        ['content_version_int', '1'],
       );
       db.close();
     });
@@ -251,7 +234,7 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
       }
     });
 
-    test('checkForUpdates returns the legacy direct diff for version 3',
+    test('checkForUpdates returns the contiguous diff chain',
         () async {
       final repository = FileSyncRepository(
         githubOwner: 'Otzaria',
@@ -270,10 +253,10 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
       );
 
       final updates = await repository.checkForUpdates();
-      expect(updates, ['133-134.DIFF.zst']);
+      expect(updates, ['1-2.DIFF.zst', '2-3.DIFF.zst']);
     });
 
-    test('syncFiles applies the legacy direct diff for version 3', () async {
+    test('syncFiles applies the contiguous diff chain', () async {
       final repository = FileSyncRepository(
         githubOwner: 'Otzaria',
         repositoryName: 'SeforimLibrary',
@@ -285,7 +268,8 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
                 200,
                 headers: const {'content-type': 'application/json'},
               );
-            case 'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v134/133-134.DIFF.zst':
+            case 'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v2/1-2.DIFF.zst':
+            case 'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v3/2-3.DIFF.zst':
               return http.Response.bytes(const [1, 2, 3], 200);
           }
 
@@ -295,7 +279,7 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
           return Uint8List.fromList(
             utf8.encode('''
 BEGIN TRANSACTION;
-UPDATE db_meta SET value='134' WHERE "key"='content_version_int';
+UPDATE db_meta SET value=CAST(value AS INTEGER) + 1 WHERE "key"='content_version_int';
 COMMIT;
 '''),
           );
@@ -304,16 +288,29 @@ COMMIT;
 
       final appliedCount = await repository.syncFiles();
 
-      expect(appliedCount, 1);
-      expect(repository.totalFiles, 1);
-      expect(repository.currentProgress, 1);
-      expect(await repository.getCurrentLibraryVersion(), 134);
+      expect(appliedCount, 2);
+      expect(repository.totalFiles, 2);
+      expect(repository.currentProgress, 2);
+      expect(await repository.getCurrentLibraryVersion(), 3);
     });
   });
 }
 
 List<Map<String, Object?>> _buildReleasesPayload() {
   return [
+    {
+      'tag_name': 'db-v2',
+      'name': 'db-v2',
+      'draft': false,
+      'prerelease': false,
+      'assets': [
+        {
+          'name': '1-2.DIFF.zst',
+          'browser_download_url':
+              'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v2/1-2.DIFF.zst',
+        },
+      ],
+    },
     {
       'tag_name': 'db-v134',
       'name': 'db-v134',
