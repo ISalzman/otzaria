@@ -13,8 +13,8 @@ import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
-import 'package:otzaria/widgets/thin_divider.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/widgets/misc/thin_divider.dart';
 
 // Constants
 const double _kMinQueryLength = 2;

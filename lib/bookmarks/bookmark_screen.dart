@@ -12,7 +12,7 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/reading_left_pane_policy.dart';
-import 'package:otzaria/widgets/items_list_view.dart';
+import 'package:otzaria/widgets/lists/items_list_view.dart';
 
 class BookmarkView extends StatelessWidget {
   const BookmarkView({super.key});

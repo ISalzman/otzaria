@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 class OutlineView extends StatefulWidget {
   const OutlineView({

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
-import 'package:otzaria/widgets/otzaria_search_field.dart';
+import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
 class ItemsListView extends StatefulWidget {
   final List<dynamic> items;

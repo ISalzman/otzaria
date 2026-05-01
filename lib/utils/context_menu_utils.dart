@@ -13,7 +13,7 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/copy_utils.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
-import 'package:otzaria/widgets/app_menu.dart';
+import 'package:otzaria/widgets/misc/app_menu.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 
 /// פונקציות עזר לתפריטי הקשר במפרשים

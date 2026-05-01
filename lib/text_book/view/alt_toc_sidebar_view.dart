@@ -18,7 +18,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class AltTocSidebarView extends StatefulWidget {

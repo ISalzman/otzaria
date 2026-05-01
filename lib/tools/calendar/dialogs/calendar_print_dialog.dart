@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
-import 'package:otzaria/widgets/keyboard_dialog_navigation.dart';
+import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
 
 /// דיאלוג לקביעת טווח ההדפסה של לוח השנה.
 class CalendarPrintDialog extends StatefulWidget {

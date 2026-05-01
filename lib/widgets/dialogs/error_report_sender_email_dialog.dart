@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 Future<String?> showErrorReportSenderEmailDialog({
   required BuildContext context,

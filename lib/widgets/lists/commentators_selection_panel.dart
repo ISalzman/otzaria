@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
-import 'package:otzaria/widgets/filter_chips_widget.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 class CommentatorsSelectionPanel extends StatefulWidget {
   final List<CommentatorGroup> groups;

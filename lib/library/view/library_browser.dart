@@ -22,7 +22,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/migration/sync/background_db_sync_worker.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
-import 'package:otzaria/widgets/filter_chips_widget.dart';
+import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
 import 'package:otzaria/navigation/main_window_screen.dart';
 import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/library/view/otzar_book_dialog.dart';
@@ -37,7 +37,7 @@ import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
-import 'package:otzaria/widgets/otzaria_search_field.dart';
+import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 

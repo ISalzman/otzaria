@@ -18,7 +18,7 @@ import 'package:otzaria/search/view/search_edit_panel.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/widgets/layout/resizable_facet_filtering.dart';
 import 'package:otzaria/widgets/feedback/indexing_warning.dart';
-import 'package:otzaria/widgets/thin_divider.dart';
+import 'package:otzaria/widgets/misc/thin_divider.dart';
 
 class TantivyFullTextSearch extends StatefulWidget {
   final SearchingTab tab;

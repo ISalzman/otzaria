@@ -7,7 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/widgets/app_menu.dart';
+import 'package:otzaria/widgets/misc/app_menu.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/repository/data_repository.dart';

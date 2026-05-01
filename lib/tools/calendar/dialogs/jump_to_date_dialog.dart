@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 /// דיאלוג מעבר לתאריך בלוח השנה.
 class JumpToDateDialog extends StatefulWidget {

@@ -19,7 +19,7 @@ import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/inputs/segmented_button_tile.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/otzaria_search_field.dart';
+import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
 /// Main screen for Shamor Zachor with Split View (Sidebar + Content)
 class ShamorZachorMainScreen extends StatefulWidget {

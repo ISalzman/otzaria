@@ -15,7 +15,7 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:search_engine/search_engine.dart';
-import 'package:otzaria/widgets/nikud_search_button.dart';
+import 'package:otzaria/widgets/misc/nikud_search_button.dart';
 
 class PdfBookSearchView extends StatefulWidget {
   const PdfBookSearchView({

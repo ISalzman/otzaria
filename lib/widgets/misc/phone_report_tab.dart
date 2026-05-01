@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import '../models/phone_report_data.dart';
-import '../widgets/reporting_numbers_widget.dart';
+import 'package:otzaria/models/phone_report_data.dart';
+import 'package:otzaria/widgets/misc/reporting_numbers_widget.dart';
 
 /// Tab widget for phone-based error reporting
 class PhoneReportTab extends StatefulWidget {

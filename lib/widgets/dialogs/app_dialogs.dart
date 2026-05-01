@@ -22,7 +22,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:otzaria/core/app_restart.dart';
-import 'package:otzaria/widgets/keyboard_dialog_navigation.dart';
+import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
 
 // ── SingleActionDialog ────────────────────────────────────────────────────────
 

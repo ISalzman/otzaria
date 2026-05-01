@@ -6,7 +6,7 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 /// ווידג'ט לניהול אפשרויות חיפוש מתקדמות לכל מילה בנפרד.
 /// מחליף את שכפול הקוד בין SearchDialog ל-SearchEditPanel.

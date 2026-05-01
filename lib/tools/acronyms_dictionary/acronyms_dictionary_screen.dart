@@ -9,9 +9,9 @@ import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/tools/acronyms_dictionary/widgets/acronym_result_card.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
-import 'package:otzaria/widgets/otzaria_search_field.dart';
+import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/widgets/feedback/tool_empty_state.dart';
-import 'package:otzaria/widgets/tool_ui_helpers.dart';
+import 'package:otzaria/widgets/misc/tool_ui_helpers.dart';
 
 class AcronymsDictionaryScreen extends StatefulWidget {
   const AcronymsDictionaryScreen({super.key});

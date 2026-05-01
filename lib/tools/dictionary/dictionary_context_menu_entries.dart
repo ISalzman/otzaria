@@ -8,7 +8,7 @@ import 'package:otzaria/tools/dictionary/widgets/aramaic_dictionary_entry_view.d
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
-import 'package:otzaria/widgets/app_menu.dart';
+import 'package:otzaria/widgets/misc/app_menu.dart';
 
 /// בונה פריטי תפריט הקשר למילונים על סמך הטקסט המסומן.
 List<AppContextMenuEntry> buildDictionaryContextMenuEntries({

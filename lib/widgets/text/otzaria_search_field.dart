@@ -17,7 +17,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/widgets/inputs/app_input_tokens.dart';
 
 abstract class _ST {
