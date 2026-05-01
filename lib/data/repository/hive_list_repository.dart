@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:hive_ce/hive.dart';
-import 'package:otzaria/utils/hive_utils.dart';
+import 'package:otzaria/utils/file/hive_utils.dart';
 
 /// Generic repository for managing lists of objects in Hive.
 /// T must have `fromJson(Map<String, dynamic>)` and `toJson()` methods.

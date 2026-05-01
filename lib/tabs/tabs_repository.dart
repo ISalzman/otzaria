@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:hive_ce/hive.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
-import 'package:otzaria/utils/hive_utils.dart';
+import 'package:otzaria/utils/file/hive_utils.dart';
 import 'package:flutter/foundation.dart';
 
 class TabsRepository {

@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:otzaria/tabs/models/tab.dart';
-import 'package:otzaria/utils/hive_utils.dart';
+import 'package:otzaria/utils/file/hive_utils.dart';
 
 /// Represents a workspace in the application.
 ///

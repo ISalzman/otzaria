@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:otzaria/utils/zip_extractor_service.dart';
+import 'package:otzaria/utils/file/zip_extractor_service.dart';
 
 /// ווידג'ט לטיפול בהצגת דיאלוג התקדמות חילוץ ZIP
 class ZipExtractionProgressDialog {

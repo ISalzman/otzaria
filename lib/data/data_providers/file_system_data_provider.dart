@@ -12,7 +12,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/links.dart';
-import 'package:otzaria/utils/toc_parser.dart';
+import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:path/path.dart' as path;

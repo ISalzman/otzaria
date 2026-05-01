@@ -12,7 +12,7 @@ import '../../settings/engine/settings_repository.dart';
 import '../generator/generator.dart';
 import '../generator/link_processor.dart';
 import '../models/category.dart';
-import '../../utils/file_hidden_utils.dart';
+import '../../utils/file/file_hidden_utils.dart';
 
 /// Result of a file sync operation
 class FileSyncResult {

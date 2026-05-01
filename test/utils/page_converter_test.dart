@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/utils/page_map_builder.dart';
+import 'package:otzaria/utils/file/page_map_builder.dart';
 
 void main() {
   // ---------------------------------------------------------------------------

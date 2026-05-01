@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/utils/page_map_builder.dart';
+import 'package:otzaria/utils/file/page_map_builder.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 // A cache for the generated page maps to avoid rebuilding them on every conversion.
