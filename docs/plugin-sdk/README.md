@@ -48,3 +48,16 @@ dart tool/package_plugin.dart <path/to/your/plugin/folder>
 ---
 
 אם אתם מעוניינים בapi נוסף, כתבו לנו בגיטהאב!
+
+---
+
+## קבצי תשתית
+
+הקבצים הטכניים הדרושים לתוסף נמצאים ב-`assets/plugin-sdk/`:
+
+| קובץ | תוכן |
+|------|------|
+| `otzaria_plugin.js` | ספריית ה-JS שכל תוסף מייבא |
+| `otzaria_plugin.d.ts` | הגדרות TypeScript לאותה ספרייה (לנוחות מפתחים) |
+| `index.html` | תבנית התחלה לתוסף חדש |
+| `manifest.json` | תבנית קובץ manifest לתוסף חדש |
