@@ -22,13 +22,11 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 class BookPreviewPanel extends StatefulWidget {
   final Book? book;
   final Function(int index)? onOpenInReader; // מקבל את המיקום הנוכחי
-  final VoidCallback? onClose;
 
   const BookPreviewPanel({
     super.key,
     this.book,
     this.onOpenInReader,
-    this.onClose,
   });
 
   @override
@@ -361,14 +359,6 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                       widget.onOpenInReader?.call(_currentTextTab?.index ?? 0);
                     },
                   ),
-                  if (widget.onClose != null) ...[
-                    const SizedBox(width: 6),
-                    _PreviewPanelSecondaryButton(
-                      tooltip: 'הסתר תצוגה מקדימה',
-                      icon: FluentIcons.dismiss_24_regular,
-                      onPressed: widget.onClose!,
-                    ),
-                  ],
                 ],
               );
             },
@@ -474,14 +464,6 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                     tooltip: 'פתח בעיון (או לחץ פעמיים על הספר)',
                     onPressed: _openCurrentPreviewInReader,
                   ),
-                  if (widget.onClose != null) ...[
-                    const SizedBox(width: 6),
-                    _PreviewPanelSecondaryButton(
-                      tooltip: 'הסתר תצוגה מקדימה',
-                      icon: FluentIcons.dismiss_24_regular,
-                      onPressed: widget.onClose!,
-                    ),
-                  ],
                 ],
               );
             },

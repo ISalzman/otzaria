@@ -1,28 +1,25 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/widgets/feedback/data_source_indicator.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'dart:math';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/book_locator.dart';
-import 'package:otzaria/theme/app_tokens.dart';
-import 'package:otzaria/theme/app_surfaces.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
-//  ╫⌐╫ש╫á╫ץ╫ש╫ש╫¥:
-//  Γאó ╫₧╫ס╫á╫פ Row: LTR ╫ó╫¥ icons ╫₧╫⌐╫₧╫נ╫£, ╫ר╫º╫í╫ר ╫₧╫ש╫₧╫ש╫ƒ (╫₧╫¬╫נ╫ש╫¥ ╫£-RTL UI).
-//  Γאó ╫ª╫ס╫ó╫ש ╫ר╫º╫í╫ר: cs.onSurface ╫£╫¢╫ץ╫¬╫¿╫¬ ╫í╫ñ╫¿╫ש╫¥ (╫º╫¿╫ש╫נ ╫ס╫פ╫ש╫¿/╫¢╫פ╫פ), cs.primary ╫£╫¬╫ש╫º╫ש╫ץ╫¬.
-//  Γאó ╫¿╫º╫ó ╫נ╫ש╫ש╫º╫ץ╫ƒ: cs.primary/secondary.withValues(alpha:0.12) Γאפ ╫ס╫ר╫ץ╫ק ╫ס╫פ╫ש╫¿+╫¢╫פ╫פ.
-//  Γאó ╫נ╫ש╫ש╫º╫ץ╫ƒ ╫ס╫¢╫¿╫ר╫ש╫í: 32├ק32 container, 16px icon Γאפ ╫ñ╫¿╫ץ╫ñ╫ץ╫¿╫ª╫ש╫פ ╫ר╫ץ╫ס╫פ ╫ש╫ץ╫¬╫¿.
-//  Γאó ╫¿╫ש╫ñ╫ץ╫ף ╫ó╫£╫ש╫ץ╫ƒ ╫ס-MyGridView: top: 8 Γאפ ╫¿╫ש╫ק╫ץ╫º ╫₧╫פ╫í╫¿╫ע╫£.
-//  Γאó Focus ╫á╫ש╫ץ╫ץ╫ר ╫₧╫º╫£╫ף╫¬: CategoryGridItem + BookGridItem ╫¬╫ץ╫₧╫¢╫ש╫¥ ╫ס-Focus.
-//  Γאó overflow: ellipsis + tooltip ╫ס╫¿╫ש╫ק╫ץ╫ú ╫ס╫¢╫£ ╫ר╫º╫í╫ר╫ש╫¥.
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+// ─────────────────────────────────────────────────────────────────────────────
+//  הנחיות עיצוב:
+//  • מבנה Row: RTL כדי אייקונים משמאל, טקסט מימין (מתאים ל-RTL UI).
+//  • צבעי טקסט: cs.onSurface בכותרת ותיאור (במקום אדום/כחול), cs.primary בהדגשות.
+//  • רקע אייקונים: cs.primary/secondary.withValues(alpha:0.12) או מבנה אדום+כחול.
+//  • אייקונים מעוצבים: 32×32 container, 16px icon או קונטיינר רחוק שיותר.
+//  • ריווח עליון ב-MyGridView: top: 8 או מרווח מתאים.
+//  • Focus מוגדר במפורש: CategoryGridItem + BookGridItem תומכים ב-Focus.
+//  • overflow: ellipsis + tooltip במרווח מספיק.
+// ─────────────────────────────────────────────────────────────────────────────
 
 bool _textOverflows({
   required BuildContext context,
@@ -182,11 +179,11 @@ class HeaderItem extends StatelessWidget {
   }
 }
 
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+// ─────────────────────────────────────────────────────────────────────────────
 //  CategoryGridItem
-//  Layout LTR: [info-icon?] [folder-icon] [12px] [Expanded text (right-aligned)]
-//  ╫ס╫¬╫ª╫ץ╫ע╫¬ RTL: ╫ר╫º╫í╫ר ╫₧╫ש╫₧╫ש╫ƒ, ╫נ╫ש╫ש╫º╫ץ╫á╫ש╫¥ ╫₧╫⌐╫₧╫נ╫£ Γאפ ╫ó╫º╫ס╫ש ╫ץ╫ס╫£╫¬╫ש ╫¬╫£╫ץ╫ש╫ש╫¥.
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+//  Layout RTL: [info-icon?] [folder-icon] [12px] [Expanded text (right-aligned)]
+//  במצב RTL: טקסט מימין, אייקונים משמאל כדי לשמור ויזואלית תקינה.
+// ─────────────────────────────────────────────────────────────────────────────
 
 class CategoryGridItem extends StatelessWidget {
   final Category category;
@@ -220,15 +217,39 @@ class CategoryGridItem extends StatelessWidget {
         hoverColor: cs.primary.withValues(alpha: 0.06),
         hoverDuration: Durations.medium1,
         onTap: () => onCategoryClickCallback(),
-        // Focus: Enter/Space Γזנ ╫₧╫ר╫ץ╫ñ╫£╫ש╫¥ ╫נ╫ץ╫ר╫ץ╫₧╫ר╫ש╫¬ ╫ó"╫ש InkWell
-        // Arrow keys: ╫á╫₧╫í╫¿╫ש╫¥ ╫£╫פ╫ץ╫¿╫פ (grid) ╫ף╫¿╫ת bubble
+        // Focus: Enter/Space מפעילים אוטומטית ע"י InkWell
+        // Arrow keys: מטופלים בגריד (grid) ולא bubble
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Row(
-            // LTR: ╫נ╫ש╫ש╫º╫ץ╫á╫ש╫¥ ╫ס╫⌐╫₧╫נ╫£, ╫ר╫º╫í╫ר ╫ס╫ש╫₧╫ש╫ƒ Γאפ ╫₧╫¬╫נ╫ש╫¥ ╫£╫₧╫₧╫⌐╫º RTL ╫ó╫ס╫¿╫ש
-            textDirection: TextDirection.ltr,
+            // שומר על סדר אייקונים משמאל וטקסט מימין בתוך ממשק RTL.
+            textDirection: TextDirection.rtl,
             children: [
-              // ΓפאΓפא ╫נ╫ש╫ש╫º╫ץ╫ƒ ╫₧╫ש╫ף╫ó (╫⌐╫₧╫נ╫£ ╫º╫ש╫ª╫ץ╫á╫ש) ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    LibraryItemTitle(
+                      text: category.title,
+                      isFolder: true,
+                    ),
+                    if (category.shortDescription.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      LibraryOverflowTooltipText(
+                        text: category.shortDescription,
+                        maxLines: 2,
+                        textAlign: TextAlign.right,
+                        textDirection: TextDirection.rtl,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSecondaryContainer,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 18),
               if (category.shortDescription.isNotEmpty)
                 Tooltip(
                   message: category.shortDescription,
@@ -236,52 +257,22 @@ class CategoryGridItem extends StatelessWidget {
                   child: Icon(
                     FluentIcons.info_24_regular,
                     size: 16,
-                    color: theme.colorScheme.onSurfaceVariant
+                    color: theme.colorScheme.onSecondaryContainer
                         .withValues(alpha: 0.6),
                   ),
                 ),
-              // ΓפאΓפא ╫נ╫ש╫ש╫º╫ץ╫ƒ ╫¬╫ש╫º╫ש╫ש╫פ ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
               const SizedBox(width: 4),
               Container(
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
+                  color: cs.secondaryContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   FluentIcons.folder_24_filled,
-                  color: cs.onSurfaceVariant,
+                  color: cs.onSecondaryContainer,
                   size: 16,
-                ),
-              ),
-              const SizedBox(width: 18),
-              // ΓפאΓפא ╫ó╫₧╫ץ╫ף╫¬ ╫ר╫º╫í╫ר (╫ש╫₧╫ש╫ƒ) ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      LibraryItemTitle(
-                        text: category.title,
-                        isFolder: true,
-                      ),
-                      if (category.shortDescription.isNotEmpty) ...[
-                        const SizedBox(height: 3),
-                        LibraryOverflowTooltipText(
-                          text: category.shortDescription,
-                          maxLines: 2,
-                          textAlign: TextAlign.right,
-                          textDirection: TextDirection.rtl,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
                 ),
               ),
             ],
@@ -292,14 +283,15 @@ class CategoryGridItem extends StatelessWidget {
   }
 }
 
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+// ─────────────────────────────────────────────────────────────────────────────
 //  BookGridItem
-//  Layout LTR: [action-col] [media-col] [12px] [Expanded text (right-aligned)]
-//  ╫ס╫¬╫ª╫ץ╫ע╫¬ RTL: ╫ר╫º╫í╫ר ╫₧╫ש╫₧╫ש╫ƒ, ╫נ╫ש╫ש╫º╫ץ╫á╫ש╫¥ ╫₧╫⌐╫₧╫נ╫£ Γאפ ╫ó╫º╫ס╫ש ╫ץ╫ס╫£╫¬╫ש ╫¬╫£╫ץ╫ש╫ש╫¥.
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+//  Layout RTL: [action-col] [media-col] [12px] [Expanded text (right-aligned)]
+//  במצב RTL: טקסט מימין, אייקונים משמאל כדי לשמור ויזואלית תקינה.
+// ─────────────────────────────────────────────────────────────────────────────
 
 class BookGridItem extends StatelessWidget {
   final bool showTopics;
+  final bool isSelected;
   final Book book;
   final VoidCallback onBookClickCallback;
   final VoidCallback? onBookDeleted;
@@ -310,6 +302,7 @@ class BookGridItem extends StatelessWidget {
     required this.book,
     required this.onBookClickCallback,
     this.showTopics = false,
+    this.isSelected = false,
     this.onBookDeleted,
     this.focusNode,
   });
@@ -326,42 +319,45 @@ class BookGridItem extends StatelessWidget {
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
           side: BorderSide.none,
-          borderRadius: BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+          borderRadius: BorderRadius.all(
+            Radius.circular(AppTokens.radiusXL),
+          ),
         ),
-        child: InkWell(
-          focusNode: focusNode,
-          mouseCursor: SystemMouseCursors.click,
-          borderRadius: BorderRadius.circular(AppTokens.radiusXL),
-          hoverColor: cs.primary.withValues(alpha: 0.06),
-          onTap: () => onBookClickCallback(),
-          hoverDuration: Durations.medium1,
-          child: SizedBox.expand(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Row(
-                // LTR: action column Γזע media column Γזע text column
-                textDirection: TextDirection.ltr,
-                children: [
-                  // ΓפאΓפא ╫ó╫₧╫ץ╫ף╫¬ ╫ñ╫ó╫ץ╫£╫ץ╫¬ (╫⌐╫₧╫נ╫£ ╫º╫ש╫ª╫ץ╫á╫ש) ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
-                  _BookGridActionColumn(
-                    book: book,
-                    onBookDeleted: onBookDeleted,
-                  ),
-                  const SizedBox(width: 6),
-                  // ΓפאΓפא ╫ó╫₧╫ץ╫ף╫¬ ╫₧╫ף╫ש╫פ (╫נ╫ש╫ש╫º╫ץ╫ƒ ╫í╫ñ╫¿) ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
-                  _BookGridMediaColumn(book: book, showTopics: showTopics),
-                  const SizedBox(width: 18),
-                  // ΓפאΓפא ╫ó╫₧╫ץ╫ף╫¬ ╫ר╫º╫í╫ר (╫ש╫₧╫ש╫ƒ) ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: isSelected
+                ? cs.secondaryContainer.withValues(alpha: 0.3)
+                : null,
+          ),
+          child: InkWell(
+            focusNode: focusNode,
+            mouseCursor: SystemMouseCursors.click,
+            borderRadius: BorderRadius.circular(AppTokens.radiusXL),
+            hoverColor: cs.primary.withValues(alpha: 0.06),
+            onTap: () => onBookClickCallback(),
+            hoverDuration: Durations.medium1,
+            child: SizedBox.expand(
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  textDirection: TextDirection.rtl,
+                  children: [
+                    Expanded(
                       child: _BookGridTextColumn(
                         book: book,
                         showTopics: showTopics,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 18),
+                    _BookGridMediaColumn(book: book, showTopics: showTopics),
+                    const SizedBox(width: 6),
+                    _BookGridActionColumn(
+                      book: book,
+                      onBookDeleted: onBookDeleted,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -384,7 +380,7 @@ class _BookGridMediaColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    // ╫נ╫ש╫ש╫º╫ץ╫ƒ ╫º╫ר╫ƒ ╫ש╫ץ╫¬╫¿: 32├ק32 container, 16px icon Γאפ ╫ñ╫¿╫ץ╫ñ╫ץ╫¿╫ª╫ש╫פ ╫ר╫ץ╫ס╫פ ╫£╫ª╫ף ╫ר╫º╫í╫ר
+    // אייקונים מעוצבים: 32×32 container, 16px icon או קונטיינר רחוק שיותר
     const double iconBoxSize = 32.0;
     const double iconSize = 16.0;
 
@@ -395,14 +391,14 @@ class _BookGridMediaColumn extends StatelessWidget {
           width: iconBoxSize,
           height: iconBoxSize,
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest,
+            color: cs.secondaryContainer,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Center(
             child: (book is PdfBook || book.fileType == 'pdf')
                 ? Icon(
                     FluentIcons.document_pdf_24_regular,
-                    color: cs.onSurfaceVariant,
+                    color: cs.onSecondaryContainer,
                     size: iconSize,
                   )
                 : book is ExternalLibraryBook
@@ -421,22 +417,11 @@ class _BookGridMediaColumn extends StatelessWidget {
                         book.fileType == 'docx'
                             ? FluentIcons.document_one_page_24_regular
                             : FluentIcons.document_text_24_regular,
-                        color: cs.onSurfaceVariant,
+                        color: cs.onSecondaryContainer,
                         size: iconSize,
                       ),
           ),
         ),
-        if (kDebugMode && book is TextBook) ...[
-          const SizedBox(height: 4),
-          DataSourceIndicatorAsync(
-            sourceFuture: FileSystemData.instance.getBookDataSource(
-              book.title,
-              categoryId: book.categoryId,
-              fileType: book.fileType,
-            ),
-            size: 14,
-          ),
-        ],
       ],
     );
   }
@@ -454,16 +439,16 @@ class _BookGridTextColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // ╫¢╫ץ╫¬╫¿╫¬: onSurface Γאפ ╫º╫¿╫ש╫נ ╫ס╫⌐╫á╫ש ╫פ╫₧╫ª╫ס╫ש╫¥ (╫£╫נ primary ╫⌐╫ש╫¢╫ץ╫£ ╫£╫פ╫ש╫ץ╫¬ ╫ס╫ץ╫פ╫º ╫ס╫¢╫פ╫פ)
+    // כותרת: onSurface כדי מבנה מאוחד ומסודר (ולא primary שיכול להיות מדי בולט)
     final titleStyle = theme.textTheme.titleMedium?.copyWith(
       fontWeight: FontWeight.w700,
       color: theme.colorScheme.onSurface,
     );
     final authorStyle = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
+      color: theme.colorScheme.onSecondaryContainer,
     );
     final topicsStyle = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.primary.withValues(alpha: 0.85),
+      color: theme.colorScheme.secondary.withValues(alpha: 0.85),
     );
 
     return LayoutBuilder(
@@ -493,13 +478,13 @@ class _BookGridTextColumn extends StatelessWidget {
                     : 3;
 
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.max,
           children: [
             LibraryOverflowTooltipText(
               text: book.title,
               maxLines: 2,
-              textAlign: TextAlign.justify,
+              textAlign: TextAlign.right,
               textDirection: TextDirection.rtl,
               style: titleStyle,
             ),
@@ -508,7 +493,7 @@ class _BookGridTextColumn extends StatelessWidget {
               LibraryOverflowTooltipText(
                 text: book.author!,
                 maxLines: authorMaxLines,
-                textAlign: TextAlign.justify,
+                textAlign: TextAlign.right,
                 textDirection: TextDirection.rtl,
                 style: authorStyle,
               ),
@@ -518,7 +503,7 @@ class _BookGridTextColumn extends StatelessWidget {
               LibraryOverflowTooltipText(
                 text: book.topics,
                 maxLines: topicsMaxLines,
-                textAlign: TextAlign.justify,
+                textAlign: TextAlign.right,
                 textDirection: TextDirection.rtl,
                 style: topicsStyle,
               ),
@@ -595,11 +580,11 @@ class _BookGridActionColumn extends StatelessWidget {
   }
 }
 
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+// ─────────────────────────────────────────────────────────────────────────────
 //  MyGridView
-//  Γאó ╫¿╫ש╫ñ╫ץ╫ף top: 8 Γאפ ╫¿╫ש╫ק╫ץ╫ú ╫₧╫פ╫í╫¿╫ע╫£
-//  Γאó FocusTraversalGroup Γאפ ╫á╫ש╫ץ╫ץ╫ר Tab ╫ס╫¬╫ץ╫ת ╫פ╫ע╫¿╫ש╫ף ╫ס╫£╫ס╫ף (╫£╫נ ╫º╫ץ╫ñ╫Ñ ╫£╫⌐╫ץ╫¿╫¬ ╫ק╫ש╫ñ╫ץ╫⌐)
-// ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
+//  • ריווח top: 8 או מרווח מתאים
+//  • FocusTraversalGroup כדי לנווט Tab בסדר קריאה (ולא קפיצה ציגזג)
+// ─────────────────────────────────────────────────────────────────────────────
 
 class MyGridView extends StatelessWidget {
   final List<Widget> items;
@@ -626,7 +611,7 @@ class MyGridView extends StatelessWidget {
         return FocusTraversalGroup(
           policy: ReadingOrderTraversalPolicy(),
           child: Padding(
-            // top: 8 Γאפ ╫¿╫ש╫ק╫ץ╫ú ╫₧╫פ╫í╫¿╫ע╫£; horizontal: 45 Γאפ ╫⌐╫ץ╫£╫ש ╫ª╫ף
+            // top: 8 או מרווח מתאים; horizontal: 45 או רוחב אף
             padding:
                 const EdgeInsets.only(top: 8, left: 45, right: 45, bottom: 0),
             child: GridView.builder(
@@ -647,9 +632,6 @@ class MyGridView extends StatelessWidget {
     );
   }
 }
-
-
-
 
 Future<void> _showDeleteBookDialog(
     BuildContext context, Book book, VoidCallback? onBookDeleted) async {
@@ -679,11 +661,11 @@ Future<void> _deleteBook(Book book) async {
     );
 
     if (!success) {
-      throw Exception('╫פ╫₧╫ק╫ש╫º╫פ ╫á╫¢╫⌐╫£╫פ');
+      throw Exception('המחיקה נכשלה');
     }
 
-    UiSnack.show('╫פ╫í╫ñ╫¿ "${book.title}" ╫á╫₧╫ק╫º ╫ס╫פ╫ª╫£╫ק╫פ');
+    UiSnack.show('הספר "${book.title}" נמחק בהצלחה ממסד הנתונים');
   } catch (e) {
-    UiSnack.showError('╫⌐╫ע╫ש╫נ╫פ ╫ס╫₧╫ק╫ש╫º╫¬ ╫פ╫í╫ñ╫¿: $e');
+    UiSnack.showError('שגיאה במחיקת הספר: $e');
   }
 }
