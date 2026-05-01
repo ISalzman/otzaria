@@ -19,7 +19,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/empty_library/empty_library_screen.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/find_ref/find_ref_bloc.dart';
-import 'package:otzaria/find_ref/find_ref_dialog.dart';
+import 'package:otzaria/find_ref/view/find_ref_dialog.dart';
 import 'package:otzaria/find_ref/find_ref_event.dart';
 import 'package:otzaria/find_ref/find_ref_state.dart';
 import 'package:otzaria/library/models/library.dart' as library_model;
