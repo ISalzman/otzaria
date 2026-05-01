@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
+import 'package:otzaria/pdf_book/view/pdf_scrollbar.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 // ─── fake controllers ─────────────────────────────────────────────────────────
