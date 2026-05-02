@@ -960,7 +960,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           children: [
             if (isExpanded)
               AppContextMenuRegion(
-                menuBuilder: (menuCtx) =>
+                menuBuilder: (menuCtx, _) =>
                     _buildCommentaryContextMenuEntries(menuCtx, link),
                 child: GestureDetector(
                   onTap: () {
@@ -1317,7 +1317,7 @@ class _CollapsibleCommentaryGroupState
                   ),
                   const SizedBox(height: 4),
                   AppContextMenuRegion(
-                    menuBuilder: (menuCtx) =>
+                    menuBuilder: (menuCtx, _) =>
                         widget.buildContextMenu(menuCtx, link),
                     child: PdfCommentaryContent(
                       key: ValueKey(

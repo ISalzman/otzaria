@@ -643,7 +643,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   List<AppContextMenuEntry> _buildPdfContextMenuEntries(
-      BuildContext menuContext) {
+      BuildContext menuContext, Offset _) {
     final (commentators: relevantCommentators, links: relevantLinks) =
         _getRelevantContent();
 

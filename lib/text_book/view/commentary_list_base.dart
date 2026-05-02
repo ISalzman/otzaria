@@ -1296,7 +1296,7 @@ class _CollapsibleCommentaryGroupState
                               ? widget.getItemSearchIndex(link)
                               : 0;
                           return AppContextMenuRegion(
-                            menuBuilder: (menuCtx) =>
+                            menuBuilder: (menuCtx, _) =>
                                 ContextMenuUtils.buildCommentaryContextMenu(
                               context: menuCtx,
                               link: link,

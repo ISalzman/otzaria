@@ -1751,6 +1751,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
             return SafeArea(
               child: KeyboardShortcuts(
+                onFindRefRequested: () => _handleFindRefOpen(context),
                 child: MyUpdatWidget(
                   child: Scaffold(
                     resizeToAvoidBottomInset: false,
@@ -2005,7 +2006,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   void _handleFindRefOpen(
     BuildContext context, {
     bool closeIfOpen = true,
-    bool transparentBarrier = false,
+    bool transparentBarrier = true,
   }) {
     if (_isFindRefOpen) {
       if (closeIfOpen) {
