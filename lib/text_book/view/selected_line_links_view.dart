@@ -453,7 +453,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
         }
       },
       child: AppContextMenuRegion(
-        menuBuilder: (menuCtx) => ContextMenuUtils.buildCommentaryContextMenu(
+        menuBuilder: (menuCtx, _) => ContextMenuUtils.buildCommentaryContextMenu(
           context: menuCtx,
           link: link,
           openBookCallback: widget.openBookCallback,

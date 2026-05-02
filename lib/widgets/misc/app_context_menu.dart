@@ -26,7 +26,7 @@ import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 
 class AppContextMenuRegion extends StatefulWidget {
   final Widget child;
-  final List<AppContextMenuEntry> Function(BuildContext) menuBuilder;
+  final List<AppContextMenuEntry> Function(BuildContext, Offset) menuBuilder;
   final Map<String, GlobalKey>? menuItemKeysByLabel;
 
   const AppContextMenuRegion({
@@ -186,7 +186,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
   }
 
   Future<void> _openContextMenu(Offset globalPosition) async {
-    final entries = _normalizeEntries(widget.menuBuilder(context));
+    final entries = _normalizeEntries(widget.menuBuilder(context, globalPosition));
     if (entries.isEmpty) return;
 
     final overlay = Overlay.of(context, rootOverlay: true);
