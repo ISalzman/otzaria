@@ -42,6 +42,7 @@ void main() {
           child: MaterialApp(
             home: Scaffold(
               body: KeyboardShortcuts(
+                onFindRefRequested: () {},
                 child: const TextField(),
               ),
             ),

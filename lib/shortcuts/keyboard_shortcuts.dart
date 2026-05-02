@@ -9,7 +9,6 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/find_ref/view/find_ref_dialog.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/history/view/history_screen.dart';
@@ -21,8 +20,13 @@ import 'package:otzaria/settings/settings_exports.dart';
 
 class KeyboardShortcuts extends StatefulWidget {
   final Widget child;
+  final VoidCallback onFindRefRequested;
 
-  const KeyboardShortcuts({super.key, required this.child});
+  const KeyboardShortcuts({
+    super.key,
+    required this.child,
+    required this.onFindRefRequested,
+  });
 
   @override
   State<KeyboardShortcuts> createState() => _KeyboardShortcutsState();
@@ -115,7 +119,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
 
     // איתור
     if (ShortcutHelper.matchesShortcut(event, findRefShortcut)) {
-      showDialog(context: context, builder: (context) => FindRefDialog());
+      widget.onFindRefRequested();
       return KeyEventResult.handled;
     }
 
