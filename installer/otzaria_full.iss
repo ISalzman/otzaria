@@ -642,6 +642,34 @@ begin
   // But maybe it's cleaner to handle this in a separate procedure if needed.
 end;
 
+// מוחק תוכן תיקייה רקורסיבית, אך מדלג על תת-תיקיית books (שמכילה את מסדי הנתונים)
+procedure SafeDelTreeExceptBooks(const BasePath: string);
+var
+  FindRec: TFindRec;
+  SubDir: string;
+begin
+  if FindFirst(BasePath + '\*', FindRec) then
+  try
+    repeat
+      if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
+      begin
+        SubDir := BasePath + '\' + FindRec.Name;
+        if (FindRec.Attributes and faDirectory) = faDirectory then
+        begin
+          if LowerCase(FindRec.Name) = 'books' then
+            Continue;
+          SafeDelTreeExceptBooks(SubDir);
+          RemoveDir(SubDir);
+        end
+        else
+          DeleteFile(SubDir);
+      end;
+    until not FindNext(FindRec);
+  finally
+    FindClose(FindRec);
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ZstdPath, SevenZipPath: String;
@@ -662,24 +690,24 @@ begin
     begin
       AppDataPath := GetDataDir('');
       if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
+        SafeDelTreeExceptBooks(AppDataPath);
 
       AppDataPath := ExpandConstant('{userappdata}\otzaria');
       if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
+        SafeDelTreeExceptBooks(AppDataPath);
 
       AppDataPath := ExpandConstant('{commonappdata}\otzaria');
       if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
+        SafeDelTreeExceptBooks(AppDataPath);
 
       AppDataPath := ExpandConstant('{localappdata}\otzaria');
       if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
-        
+        SafeDelTreeExceptBooks(AppDataPath);
+
       // Delete old settings and personal notes (in AppData/Roaming)
       AppDataPath := ExpandConstant('{userappdata}\com.example');
       if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
+        SafeDelTreeExceptBooks(AppDataPath);
     end;
   end;
 
