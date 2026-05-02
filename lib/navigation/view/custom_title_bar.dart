@@ -721,7 +721,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
       },
       child: AppContextMenuRegion(
         key: isSelected ? tourTabContextMenuTargetKey : null,
-        menuBuilder: (menuCtx) =>
+        menuBuilder: (menuCtx, _) =>
             _buildTabContextMenuEntries(menuCtx, tab, state),
         menuItemKeysByLabel:
             isSelected ? {'הצג לצד': tourTabSideBySideMenuItemTargetKey} : null,
