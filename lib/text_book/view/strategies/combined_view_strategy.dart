@@ -20,7 +20,6 @@ class CombinedViewStrategyImpl extends TextBookViewStrategy {
       tab: config.tab,
       initialTabIndex: config.initialSidebarTabIndex,
       showSplitView: false, // Combined view - commentaries below
-      commentaryPaneHeaderNotifier: config.commentaryPaneHeaderNotifier,
     );
   }
 }
