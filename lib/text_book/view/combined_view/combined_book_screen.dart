@@ -38,6 +38,7 @@ import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
+import 'package:otzaria/utils/text/word_at_position.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
@@ -126,7 +127,6 @@ class _CombinedViewState extends State<CombinedView> {
       ValueNotifier<String?>(null);
   // שמירת האינדקס של השורה שממנה הטקסט הודגש
   final ValueNotifier<int?> _savedSelectedIndex = ValueNotifier<int?>(null);
-
   // שמירת reference ל-BLoC לשימוש ב-listeners
   late final TextBookBloc _textBookBloc;
 
@@ -358,7 +358,7 @@ class _CombinedViewState extends State<CombinedView> {
 
   // בניית תפריט קונטקסט לאינדקס ספציפי של פסקה
   List<AppContextMenuEntry> _buildContextMenuForIndex(TextBookLoaded state,
-      int paragraphIndex, BuildContext menuContext, String? selectedText) {
+      int paragraphIndex, BuildContext menuContext, String? selectedText, Offset tapPosition) {
     // מצב תצוגה מקדימה — תפריט מינימלי
     if (widget.isPreviewMode) {
       return [
@@ -510,9 +510,12 @@ class _CombinedViewState extends State<CombinedView> {
         childrenBuilder: buildLinkChildren,
       ),
       ...(() {
+        final dictionaryText = (selectedText?.trim().isNotEmpty == true)
+            ? selectedText
+            : wordAtGlobalPosition(tapPosition);
         final dictionaryEntries = buildDictionaryContextMenuEntries(
           context: context,
-          selectedText: selectedText,
+          selectedText: dictionaryText,
           repository: _dictionaryLookupRepository,
         );
         if (dictionaryEntries.isEmpty) {
@@ -875,8 +878,9 @@ class _CombinedViewState extends State<CombinedView> {
               onSelectionChanged: (selection) {
                 final plain = selection?.plainText;
                 if (!shouldPersistSelectedText(plain)) {
-                  // אם הבחירה נוקתה, יוצאים ממצב בחירה
+                  // אם הבחירה נוקתה, יוצאים ממצב בחירה ומנקים את הטקסט השמור
                   _selectionManager.exitSelectionMode();
+                  _savedSelectedText.value = null;
                   return;
                 }
                 // כניסה למצב בחירה כשיש טקסט נבחר
@@ -1331,8 +1335,8 @@ class _CombinedViewState extends State<CombinedView> {
               ),
               builder: (context, selectedText, child) {
                 return AppContextMenuRegion(
-                  menuBuilder: (menuCtx) => _buildContextMenuForIndex(
-                      state, index, menuCtx, selectedText),
+                  menuBuilder: (menuCtx, tapPos) => _buildContextMenuForIndex(
+                      state, index, menuCtx, selectedText, tapPos),
                   child: child!,
                 );
               },

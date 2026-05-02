@@ -34,6 +34,7 @@ import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
+import 'package:otzaria/utils/text/word_at_position.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
@@ -442,6 +443,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     );
 
     if (!shouldPersistSelectedText(plainText)) {
+      if (mounted) setState(() => _savedSelectedText = null);
       return;
     }
 
@@ -628,7 +630,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
   /// תפריט הקשר
   List<AppContextMenuEntry> _buildContextMenu(
-      TextBookLoaded state, int index, BuildContext menuContext) {
+      TextBookLoaded state, int index, BuildContext menuContext, Offset tapPosition) {
     List<AppContextMenuEntry> commentatorItems = [];
     if (!widget.isMainText && widget.bookTitle != null) {
       commentatorItems = _buildCommentatorSwitchMenu(state);
@@ -699,9 +701,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       ));
     }
 
+    final dictionaryText = (_savedSelectedText?.trim().isNotEmpty == true)
+        ? _savedSelectedText
+        : wordAtGlobalPosition(tapPosition);
     final dictionaryEntries = buildDictionaryContextMenuEntries(
       context: context,
-      selectedText: _savedSelectedText,
+      selectedText: dictionaryText,
       repository: _dictionaryLookupRepository,
     );
     if (dictionaryEntries.isNotEmpty) {
@@ -1189,7 +1194,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         });
       },
       child: AppContextMenuRegion(
-        menuBuilder: (menuCtx) => _buildContextMenu(state, index, menuCtx),
+        menuBuilder: (menuCtx, tapPos) => _buildContextMenu(state, index, menuCtx, tapPos),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
