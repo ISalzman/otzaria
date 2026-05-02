@@ -409,17 +409,10 @@ class _SearchDialogState extends State<SearchDialog> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            FluentIcons.globe_24_regular,
-            size: 16,
-            color:
-                isSpecific ? colorScheme.primary : colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 6),
           Text(
             'כל הקטגוריות',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: FontWeight.w500,
               color: isSpecific
                   ? colorScheme.primary
@@ -428,10 +421,13 @@ class _SearchDialogState extends State<SearchDialog> {
             textDirection: TextDirection.rtl,
           ),
           const SizedBox(width: 4),
-          Switch(
-            value: _searchAllCategories,
-            onChanged: _setSearchAllCategories,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          Transform.scale(
+            scale: 0.75,
+            child: Switch(
+              value: _searchAllCategories,
+              onChanged: _setSearchAllCategories,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
           ),
         ],
       ),
