@@ -77,7 +77,7 @@ import 'package:otzaria/plugins/services/plugin_protocol_registration_service.da
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 // Updated automatically by version update scripts - do not edit manually
-const int _latestReleasedBuildNumber = 9900;
+const int _latestReleasedBuildNumber = 90910;
 
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
