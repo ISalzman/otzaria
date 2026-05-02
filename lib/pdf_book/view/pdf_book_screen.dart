@@ -153,6 +153,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   bool _isPageTurnInProgress = false;
   bool _pdfViewerSuspended = false;
   bool _readerFocusAndHideQueued = false;
+  bool _bookHasCommentaryLinks = false;
   _PendingBookPageTurn? _pendingPageTurn;
 
   // Local UI state that syncs with Bloc
@@ -444,11 +445,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final int endLine =
         widget.tab.currentTextLineNumberEnd ?? startLine + _defaultPdfLineRange;
 
-    final linksInRange = widget.tab.links
-        .where((l) => l.index1 >= startLine && l.index1 <= endLine)
-        .length;
-    debugPrint(
-        '🔍 [PDF-DEBUG] _getCurrentPdfLinesRange: currentLine=$currentLine → range $startLine–$endLine, linksInRange=$linksInRange (total links=${widget.tab.links.length})');
     return (startLine: startLine, endLine: endLine);
   }
 
@@ -552,6 +548,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   void _maybeRegisterPdfCommentaryOpportunity() {
     if (_linksLoading) {
+      return;
+    }
+
+    if (!_bookHasCommentaryLinks) {
       return;
     }
 
@@ -1922,6 +1922,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 l.connectionType.toUpperCase() == 'COMMENTARY' ||
                 l.connectionType.toUpperCase() == 'TARGUM')
             .length;
+        _bookHasCommentaryLinks = commentaryCount > 0;
         debugPrint(
             '📚 [PDF-DEBUG] Links loaded: ${loadedLinks.length} total, $commentaryCount commentary/targum');
         if (loadedLinks.isNotEmpty) {
