@@ -1,10 +1,11 @@
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
+#include <initguid.h>
+#include <knownfolders.h>
 #include <shlobj.h>
 #include <windows.h>
 
 #include <chrono>
-#include <fstream>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -43,17 +44,23 @@ static std::string JsonEscape(const std::string& s) {
 
 // Appends a URI string to the external-activation queue file so the already-
 // running instance can pick it up.
+// Path mirrors AppPaths.getDataRootPath() on Windows: %APPDATA%\otzaria
 static void EnqueueUri(const std::string& uri_utf8) {
-  wchar_t app_data[MAX_PATH];
-  if (FAILED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, app_data))) {
+  // Use SHGetKnownFolderPath (Vista+) instead of the deprecated
+  // SHGetFolderPathW / CSIDL_APPDATA.
+  wchar_t* app_data_raw = nullptr;
+  if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_DEFAULT,
+                                   nullptr, &app_data_raw))) {
     return;
   }
+  std::wstring app_data(app_data_raw);
+  CoTaskMemFree(app_data_raw);
 
+  std::wstring dir = app_data + L"\\otzaria";
   std::wstring queue_path =
-      std::wstring(app_data) + L"\\otzaria\\pending_external_activations.jsonl";
+      dir + L"\\pending_external_activations.jsonl";
 
   // Ensure the parent directory exists.
-  std::wstring dir = std::wstring(app_data) + L"\\otzaria";
   CreateDirectoryW(dir.c_str(), nullptr);
 
   // Build ISO-8601 timestamp (UTC).
@@ -65,7 +72,8 @@ static void EnqueueUri(const std::string& uri_utf8) {
   ts << std::put_time(&utc, "%Y-%m-%dT%H:%M:%SZ");
 
   std::string record =
-      "{\"uri\":\"" + JsonEscape(uri_utf8) + "\",\"createdAt\":\"" + ts.str() + "\"}";
+      "{\"uri\":\"" + JsonEscape(uri_utf8) + "\",\"createdAt\":\"" +
+      ts.str() + "\"}";
 
   // Append as a single JSONL line (UTF-8).
   HANDLE fh = CreateFileW(queue_path.c_str(), FILE_APPEND_DATA,
@@ -90,10 +98,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   // Single-instance check: must happen before the Flutter engine starts so
   // that the second instance never acquires any shared resources (DB, etc.).
+  // bInitialOwner = FALSE: we don't need ownership, just existence of the object.
+  // If CreateMutexW fails (returns NULL), treat as first instance so the app
+  // can still start rather than being permanently blocked.
   HANDLE mutex =
-      CreateMutexW(nullptr, TRUE, kSingleInstanceMutexName);
+      CreateMutexW(nullptr, FALSE, kSingleInstanceMutexName);
   bool is_second_instance =
-      (mutex == nullptr || GetLastError() == ERROR_ALREADY_EXISTS);
+      (mutex != nullptr && GetLastError() == ERROR_ALREADY_EXISTS);
 
   if (is_second_instance) {
     // Enqueue any otzaria:// URIs passed on the command line so the first
@@ -105,7 +116,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
         EnqueueUri(arg);
       }
     }
-    if (mutex) CloseHandle(mutex);
+    CloseHandle(mutex);
     return EXIT_SUCCESS;
   }
 
