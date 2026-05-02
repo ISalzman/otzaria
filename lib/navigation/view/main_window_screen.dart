@@ -454,6 +454,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
         return;
       }
 
+      if (!kIsWeb &&
+          (Platform.isWindows ||
+              Platform.isLinux ||
+              Platform.isMacOS)) {
+        await windowManager.show();
+        await windowManager.focus();
+      }
+
+      if (!mounted) return;
       context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
       context.read<PluginSystemBloc>().add(
             InstallRemotePluginRequested(
