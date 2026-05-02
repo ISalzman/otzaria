@@ -429,6 +429,7 @@ jobs:
             clang cmake git pkg-config liblzma-dev rpm patchelf curl xz-utils zstd \
             libcurl4-openssl-dev \
             libwpewebkit-1.0-dev \
+            libwpebackend-fdo-1.0-dev \
             libwebkit2gtk-4.1-dev
           # Fallback אם מסיבה כלשהי cargo לא קיים (למשל כשל זמני ב-rustup)
           if ! command -v cargo >/dev/null 2>&1; then
