@@ -260,7 +260,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                   onOpenLinksPane: () {
                     setState(() {
                       _paneOpen = true;
-                      _setCurrentTab(_linksTabIndex);
+                      _currentTabIndex = _linksTabIndex;
                     });
                   },
                   isPaneOpen: () => _paneOpen,
