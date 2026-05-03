@@ -58,6 +58,7 @@ const double _kWindowCaptionButtonWidth = 46.0;
 final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
   minimumSize: const Size(32, 32),
   padding: EdgeInsets.zero,
+  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
   shape: RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(8),
   ),
