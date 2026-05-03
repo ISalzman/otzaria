@@ -10,7 +10,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:path/path.dart' as p;
+// import 'package:path/path.dart' as p;
+// import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/services/safer_mode/password_verification_dialog.dart';
@@ -29,7 +30,6 @@ import 'package:otzaria/models/direct_error_report.dart';
 import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
-import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/dialogs/error_report_sender_email_dialog.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -942,11 +942,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           title: const Text('גרסת ספרייה', style: kSettingsTitleStyle),
           subtitle:
               Text(_libraryVersion ?? 'טוען...', style: kSettingsSubtitleStyle),
-          trailing: TextButton.icon(
-            icon: const Icon(FluentIcons.history_24_regular, size: 16),
-            label: const Text('יומן שינויים'),
-            onPressed: () => _showLibraryChangelogDialog(context),
-          ),
+          // trailing: TextButton.icon(
+          //   icon: const Icon(FluentIcons.history_24_regular, size: 16),
+          //   label: const Text('יומן שינויים'),
+          //   onPressed: () => _showLibraryChangelogDialog(context),
+          // ),
         ),
         ListTile(
           leading: const Icon(FluentIcons.book_24_regular),
@@ -1512,38 +1512,38 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     );
   }
 
-  Future<void> _showLibraryChangelogDialog(BuildContext context) async {
-    final changelogPath = p.join(DatabaseConstants.getDatabaseDirectoryPath(),
-        'אודות התוכנה', 'עדכוני ספריה.md');
-    final file = File(changelogPath);
-    final changelog = (await file.exists())
-        ? await file.readAsString()
-        : 'קובץ יומן השינויים לא נמצא.';
-    if (!context.mounted) return;
-    showDialog(
-      context: context,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: const Text('יומן שינויים בספרייה'),
-          content: SizedBox(
-            width: 600,
-            height: 400,
-            child: Markdown(
-              data: changelog,
-              onTapLink: (text, href, title) {
-                if (href != null) launchUrl(Uri.parse(href));
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('סגור')),
-          ],
-        ),
-      ),
-    );
-  }
+  // Future<void> _showLibraryChangelogDialog(BuildContext context) async {
+  //   final changelogPath = p.join(DatabaseConstants.getDatabaseDirectoryPath(),
+  //       'אודות התוכנה', 'עדכוני ספריה.md');
+  //   final file = File(changelogPath);
+  //   final changelog = (await file.exists())
+  //       ? await file.readAsString()
+  //       : 'קובץ יומן השינויים לא נמצא.';
+  //   if (!context.mounted) return;
+  //   showDialog(
+  //     context: context,
+  //     builder: (ctx) => Directionality(
+  //       textDirection: TextDirection.rtl,
+  //       child: AlertDialog(
+  //         title: const Text('יומן שינויים בספרייה'),
+  //         content: SizedBox(
+  //           width: 600,
+  //           height: 400,
+  //           child: Markdown(
+  //             data: changelog,
+  //             onTapLink: (text, href, title) {
+  //               if (href != null) launchUrl(Uri.parse(href));
+  //             },
+  //           ),
+  //         ),
+  //         actions: [
+  //           TextButton(
+  //               onPressed: () => Navigator.pop(ctx), child: const Text('סגור')),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
