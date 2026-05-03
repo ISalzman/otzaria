@@ -467,7 +467,6 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
           children: [
             _buildHeader(context),
             const SizedBox(height: 8),
@@ -479,7 +478,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                 child: treeBody,
               )
             else
-              Flexible(child: treeBody),
+              Expanded(child: treeBody),
           ],
         );
       },
@@ -598,35 +597,39 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Text(
-                  'נמצאו ${results.length} תוצאות',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onSurfaceVariant,
+              Text(
+                'נמצאו ${results.length} תוצאות',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                textDirection: TextDirection.rtl,
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  SizedBox(
+                    height: 30,
+                    child: RecommendedActionButton(
+                      text: 'בחר הכל',
+                      icon: FluentIcons.checkbox_checked_24_regular,
+                      onPressed: () => _selectAllSearchResults(results),
+                    ),
                   ),
-                  textDirection: TextDirection.rtl,
-                ),
-              ),
-              SizedBox(
-                height: 30,
-                child: RecommendedActionButton(
-                  text: 'בחר הכל',
-                  icon: FluentIcons.checkbox_checked_24_regular,
-                  onPressed: () => _selectAllSearchResults(results),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                height: 30,
-                child: NeutralActionButton(
-                  text: 'נקה',
-                  icon: FluentIcons.eraser_24_regular,
-                  onPressed: () => _clearSearchResultsSelection(results),
-                ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 30,
+                    child: NeutralActionButton(
+                      text: 'נקה',
+                      icon: FluentIcons.eraser_24_regular,
+                      onPressed: () => _clearSearchResultsSelection(results),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

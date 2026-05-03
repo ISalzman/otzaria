@@ -814,6 +814,8 @@ class _SearchDialogState extends State<SearchDialog> {
                                               child: categoryPanel != null
                                                   ? SizedBox(
                                                       width: 260,
+                                                      height: constraints
+                                                          .maxHeight,
                                                       child: Padding(
                                                         padding:
                                                             const EdgeInsets
