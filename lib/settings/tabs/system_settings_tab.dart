@@ -1459,16 +1459,15 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               );
               if (confirmed == true && context.mounted) {
                 Settings.clearCache();
-                await showSingleActionDialog(
+                final shouldRestart = await showRestartRequiredDialog(
                   context: context,
                   title: 'ההגדרות אופסו',
-                  content: 'יש לסגור ולהפעיל מחדש את התוכנה.',
-                  confirmText: 'סגור את התוכנה',
+                  content: canRestartApplication()
+                      ? 'לחץ על הכפתור להפעלה מחדש של התוכנה.'
+                      : 'לחץ על הכפתור לסגירת האפליקציה, ולאחר מכן פתח אותה מחדש.',
                 );
-                if (Platform.isAndroid || Platform.isIOS) {
-                  SystemNavigator.pop();
-                } else {
-                  windowManager.close();
+                if (shouldRestart == true) {
+                  await restartApplication();
                 }
               }
             },
