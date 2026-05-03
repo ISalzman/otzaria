@@ -342,6 +342,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           }
         }
 
+        add(UpdateVisibleIndecies(visibleIndicesNow));
         _debounceTimer?.cancel();
         _debounceTimer = Timer(_visibleIndicesDebounceDuration, () {
           if (isClosed) {
