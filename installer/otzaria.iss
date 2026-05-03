@@ -137,6 +137,42 @@ begin
     Result := ExpandConstant('{userappdata}\otzaria');
 end;
 
+procedure DelTreeExceptBooks(Path: String);
+var
+  FindRec: TFindRec;
+  ChildPath: String;
+begin
+  if not DirExists(Path) then
+    exit;
+
+  if FindFirst(Path + '\*', FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
+        begin
+          ChildPath := Path + '\' + FindRec.Name;
+
+          if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+          begin
+            if Lowercase(FindRec.Name) <> 'books' then
+            begin
+              DelTreeExceptBooks(ChildPath);
+              RemoveDir(ChildPath);
+            end;
+          end
+          else
+            DeleteFile(ChildPath);
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+
+  RemoveDir(Path);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   AppDataPath: string;
@@ -156,24 +192,24 @@ begin
     begin
       AppDataPath := GetDataDir('');
       if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
+        DelTreeExceptBooks(AppDataPath);
 
       AppDataPath := ExpandConstant('{userappdata}\otzaria');
       if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
+        DelTreeExceptBooks(AppDataPath);
 
       AppDataPath := ExpandConstant('{commonappdata}\otzaria');
       if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
+        DelTreeExceptBooks(AppDataPath);
 
       AppDataPath := ExpandConstant('{localappdata}\otzaria');
       if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
+        DelTreeExceptBooks(AppDataPath);
         
       // Delete old settings and personal notes (in AppData/Roaming)
       AppDataPath := ExpandConstant('{userappdata}\com.example');
       if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
+        DelTreeExceptBooks(AppDataPath);
     end;
   end;
 end;
