@@ -41,6 +41,13 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsBloc, SettingsState>(
+      buildWhen: (previous, current) {
+        return previous.seedColor != current.seedColor ||
+            previous.darkSeedColor != current.darkSeedColor ||
+            previous.compactMenuMode != current.compactMenuMode ||
+            previous.followSystemTheme != current.followSystemTheme ||
+            previous.isDarkMode != current.isDarkMode;
+      },
       builder: (context, settingsState) {
         final state = settingsState;
         final lightColorScheme =
