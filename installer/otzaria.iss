@@ -137,34 +137,6 @@ begin
     Result := ExpandConstant('{userappdata}\otzaria');
 end;
 
-// מוחק תוכן תיקייה רקורסיבית, אך מדלג על תת-תיקיית books (שמכילה את מסדי הנתונים)
-procedure SafeDelTreeExceptBooks(const BasePath: string);
-var
-  FindRec: TFindRec;
-  SubDir: string;
-begin
-  if FindFirst(BasePath + '\*', FindRec) then
-  try
-    repeat
-      if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
-      begin
-        SubDir := BasePath + '\' + FindRec.Name;
-        if (FindRec.Attributes and faDirectory) = faDirectory then
-        begin
-          if LowerCase(FindRec.Name) = 'books' then
-            Continue;
-          SafeDelTreeExceptBooks(SubDir);
-          RemoveDir(SubDir);
-        end
-        else
-          DeleteFile(SubDir);
-      end;
-    until not FindNext(FindRec);
-  finally
-    FindClose(FindRec);
-  end;
-end;
-
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   AppDataPath: string;
@@ -184,24 +156,24 @@ begin
     begin
       AppDataPath := GetDataDir('');
       if DirExists(AppDataPath) then
-        SafeDelTreeExceptBooks(AppDataPath);
+        DelTree(AppDataPath, True, True, True);
 
       AppDataPath := ExpandConstant('{userappdata}\otzaria');
       if DirExists(AppDataPath) then
-        SafeDelTreeExceptBooks(AppDataPath);
+        DelTree(AppDataPath, True, True, True);
 
       AppDataPath := ExpandConstant('{commonappdata}\otzaria');
       if DirExists(AppDataPath) then
-        SafeDelTreeExceptBooks(AppDataPath);
+        DelTree(AppDataPath, True, True, True);
 
       AppDataPath := ExpandConstant('{localappdata}\otzaria');
       if DirExists(AppDataPath) then
-        SafeDelTreeExceptBooks(AppDataPath);
-
+        DelTree(AppDataPath, True, True, True);
+        
       // Delete old settings and personal notes (in AppData/Roaming)
       AppDataPath := ExpandConstant('{userappdata}\com.example');
       if DirExists(AppDataPath) then
-        SafeDelTreeExceptBooks(AppDataPath);
+        DelTree(AppDataPath, True, True, True);
     end;
   end;
 end;
