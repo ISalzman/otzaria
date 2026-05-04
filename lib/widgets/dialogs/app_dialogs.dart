@@ -21,7 +21,6 @@
 // ```
 
 import 'package:flutter/material.dart';
-import 'package:otzaria/core/app_restart.dart';
 import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
 
 // ── SingleActionDialog ────────────────────────────────────────────────────────
@@ -255,27 +254,6 @@ Future<bool?> showWarningDialog({
           subtitle: subtitle,
           cancelText: cancelText,
           confirmText: confirmText),
-    );
-
-Future<bool?> showRestartRequiredDialog({
-  required BuildContext context,
-  String title = 'נדרשת הפעלה מחדש',
-  String? content,
-  String? confirmText,
-  bool barrierDismissible = false,
-}) =>
-    showSingleActionDialog(
-      context: context,
-      title: title,
-      content: content ??
-          (canRestartApplication()
-              ? 'הספרייה נמצאה בהצלחה.\nלחץ על הכפתור להפעלה מחדש של התוכנה.'
-              : 'הספרייה נמצאה בהצלחה.\nלחץ על הכפתור לסגירת האפליקציה, ולאחר מכן פתח אותה מחדש.'),
-      confirmText: confirmText ??
-          (canRestartApplication()
-              ? 'הפעל מחדש את התוכנה'
-              : 'סגור את האפליקציה'),
-      barrierDismissible: barrierDismissible,
     );
 
 Future<bool?> showDbCopyRequiredDialog({
