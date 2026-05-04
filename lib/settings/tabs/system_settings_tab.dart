@@ -402,13 +402,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           bloc: _librarySelectionBloc,
           listener: (context, librarySelectionState) async {
             if (librarySelectionState is EmptyLibraryDirectorySelected) {
-              context.read<LibraryBloc>().add(RefreshLibrary());
-              await Future.delayed(const Duration(milliseconds: 500));
+              await context.read<NavigationBloc>().refreshLibrary();
               if (!context.mounted) {
                 return;
               }
-              context.read<NavigationBloc>().add(const CheckLibrary());
-              await _showLibraryRestartDialog(context);
+              context.read<LibraryBloc>().add(RefreshLibrary());
+              UiSnack.showSuccess('הספרייה נטענה בהצלחה.');
             }
 
             if (librarySelectionState is EmptyLibraryError &&
@@ -960,14 +959,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     );
   }
 
-  Future<void> _showLibraryRestartDialog(BuildContext context) async {
-    final shouldCloseApp = await showRestartRequiredDialog(context: context);
-
-    if (shouldCloseApp == true) {
-      await restartApplication();
-    }
-  }
-
   void _showLibraryDbCopyDialog(
     BuildContext context,
     EmptyLibraryAskingDbCopy state,
@@ -1041,8 +1032,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   }
 
   Future<void> _restoreBackup() async {
-    final result = await FilePicker
-        .pickFiles(type: FileType.custom, allowedExtensions: ['json']);
+    final result = await FilePicker.pickFiles(
+        type: FileType.custom, allowedExtensions: ['json']);
     final filePath = result?.files.single.path;
     if (filePath == null) return;
     if (!mounted) return;
