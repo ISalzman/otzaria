@@ -30,4 +30,23 @@ class WebViewEnvironmentHolder {
       settings: WebViewEnvironmentSettings(userDataFolder: webviewDataFolder),
     );
   }
+
+  /// Disposes the current Windows WebView environment after the old widget
+  /// tree has been torn down during an in-process app restart.
+  static Future<void> disposeForAppRestart() async {
+    if (!Platform.isWindows) return;
+
+    final environment = _environment;
+    _environment = null;
+    if (environment == null) return;
+
+    environment.onNewBrowserVersionAvailable = null;
+    environment.onBrowserProcessExited = null;
+    environment.onProcessInfosChanged = null;
+
+    try {
+      await environment.dispose();
+    } catch (_) {
+    }
+  }
 }

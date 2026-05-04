@@ -13,11 +13,11 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 // import 'package:path/path.dart' as p;
 // import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/services/safer_mode/password_verification_dialog.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
-import 'package:otzaria/core/app_restart.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
@@ -38,6 +38,8 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
+import 'package:otzaria/plugins/view/webview_environment_holder.dart';
+import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// טאב "אוצריא" — גרסאות, נתיב ספרייה, גיבוי, מצב סייפר, איפוס.
@@ -1448,18 +1450,14 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 cancelText: 'ביטול',
                 confirmText: 'אפס',
               );
-              if (confirmed == true && context.mounted) {
+              if (confirmed == true && mounted) {
                 Settings.clearCache();
-                final shouldRestart = await showRestartRequiredDialog(
-                  context: context,
-                  title: 'ההגדרות אופסו',
-                  content: canRestartApplication()
-                      ? 'לחץ על הכפתור להפעלה מחדש של התוכנה.'
-                      : 'לחץ על הכפתור לסגירת האפליקציה, ולאחר מכן פתח אותה מחדש.',
+                await resetRuntimeStateAfterSettingsReset();
+                if (!mounted) return;
+                RestartWidget.restartApp(
+                  this.context,
+                  afterRestart: WebViewEnvironmentHolder.disposeForAppRestart,
                 );
-                if (shouldRestart == true) {
-                  await restartApplication();
-                }
               }
             },
           ),
