@@ -7,7 +7,6 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart'
     hide SettingsGroup, SwitchSettingsTile;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 // import 'package:path/path.dart' as p;
@@ -213,6 +212,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     } else {
       UiSnack.showError(result.message);
     }
+
   }
 
   Future<void> _editPendingReport(DirectErrorReport report) async {
@@ -263,18 +263,18 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     );
   }
 
+  Future<void> _deletePendingReport(DirectErrorReport report) async {
+    await DirectErrorReportService().deletePendingReport(report.id);
+    if (!mounted) return;
+    setState(() {});
+    UiSnack.show('הדיווח הוסר מהתור.');
+  }
+
   Future<void> _deleteSentReport(DirectErrorReport report) async {
     await DirectErrorReportService().deleteSentReport(report.id);
     if (!mounted) return;
     setState(() {});
     UiSnack.show('הדיווח נמחק מההיסטוריה.');
-  }
-
-  Future<void> _deletePendingReport(DirectErrorReport report) async {
-    await DirectErrorReportService().deletePendingReport(report.id);
-    if (!mounted) return;
-    setState(() {});
-    UiSnack.show('הדיווח השמור נמחק.');
   }
 
   Future<void> _clearSentReports() async {
@@ -638,7 +638,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 snapshot.data?.last ?? const <DirectErrorReport>[];
             final pendingCount = pendingReports.length;
             final hasReports = pendingCount > 0;
-            final canSendNow = hasReports && !state.isOfflineMode;
 
             return Column(
               children: [
@@ -678,53 +677,56 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                                   canSend: !state.isOfflineMode,
                                 ),
                               ),
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                right: 16,
-                                left: 16,
-                                bottom: 16,
+                            if (hasReports)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  right: 16,
+                                  left: 16,
+                                  bottom: 16,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildManagedActionButton(
+                                        enabled: !state.isOfflineMode,
+                                        child: RecommendedActionButton(
+                                          text: 'שלח עכשיו',
+                                          icon:
+                                              FluentIcons.arrow_sync_24_regular,
+                                          onPressed: _flushPendingReports,
+                                          isLoading: _isFlushingPendingReports,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildManagedActionButton(
+                                        enabled: hasReports,
+                                        child: NeutralActionButton(
+                                          text: 'נקה דיווחים',
+                                          icon: FluentIcons.delete_24_regular,
+                                          onPressed: _clearPendingReports,
+                                          isLoading: _isClearingPendingReports,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildManagedActionButton(
+                                        enabled: hasReports,
+                                        child: NeutralActionButton(
+                                          text: 'הורד לשליחה במחשב מחובר',
+                                          icon: FluentIcons
+                                              .arrow_download_24_regular,
+                                          onPressed:
+                                              _exportPendingReportsScript,
+                                          isLoading: _isExportingPendingReports,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildManagedActionButton(
-                                      enabled: canSendNow,
-                                      child: RecommendedActionButton(
-                                        text: 'שלח עכשיו',
-                                        icon: FluentIcons.arrow_sync_24_regular,
-                                        onPressed: _flushPendingReports,
-                                        isLoading: _isFlushingPendingReports,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _buildManagedActionButton(
-                                      enabled: hasReports,
-                                      child: NeutralActionButton(
-                                        text: 'נקה דיווחים',
-                                        icon: FluentIcons.delete_24_regular,
-                                        onPressed: _clearPendingReports,
-                                        isLoading: _isClearingPendingReports,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _buildManagedActionButton(
-                                      enabled: hasReports,
-                                      child: NeutralActionButton(
-                                        text: 'הורד לשליחה במחשב מחובר',
-                                        icon: FluentIcons
-                                            .arrow_download_24_regular,
-                                        onPressed: _exportPendingReportsScript,
-                                        isLoading: _isExportingPendingReports,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
                             if (state.isOfflineMode)
                               Padding(
                                 padding: const EdgeInsets.only(
@@ -1054,19 +1056,22 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       final skipped = await BackupService.restoreFromBackup(filePath);
       if (!mounted) return;
       final content = skipped.isEmpty
-          ? 'הנתונים שוחזרו בהצלחה. יש להפעיל מחדש את התוכנה.'
-          : 'שחזור חלקי — חסרים בקובץ הגיבוי: ${skipped.join(", ")}.\nיש להפעיל מחדש את התוכנה.';
+          ? 'הנתונים שוחזרו בהצלחה. האפליקציה תיטען מחדש כעת.'
+          : 'שחזור חלקי — חסרים בקובץ הגיבוי: ${skipped.join(", ")}.'
+              '\nהאפליקציה תיטען מחדש כעת.';
       await showSingleActionDialog(
         context: context,
         title: skipped.isEmpty ? 'השחזור הושלם' : 'שחזור חלקי',
         content: content,
-        confirmText: 'סגור את התוכנה',
+        confirmText: 'טען מחדש',
       );
-      if (Platform.isAndroid || Platform.isIOS) {
-        SystemNavigator.pop();
-      } else {
-        windowManager.close();
-      }
+      if (!mounted) return;
+      await resetRuntimeStateForAppRestart();
+      if (!mounted) return;
+      RestartWidget.restartApp(
+        context,
+        afterRestart: WebViewEnvironmentHolder.disposeForAppRestart,
+      );
     } catch (e) {
       if (!mounted) return;
       UiSnack.showError('שגיאה בשחזור הגיבוי: ${e.toString()}');

@@ -97,8 +97,7 @@ void main() {
     fileSystemProvider.resetForTesting();
   });
 
-  test(
-      'resetRuntimeStateAfterSettingsReset מאפס provider state ומעדכן נתיב ספריה',
+  test('resetRuntimeStateForAppRestart מאפס provider state ומעדכן נתיב ספריה',
       () async {
     const oldLibraryPath = 'C:/old-library';
 
@@ -120,7 +119,7 @@ void main() {
     FileSystemData.instance.libraryPath = oldLibraryPath;
 
     Settings.clearCache();
-    await resetRuntimeStateAfterSettingsReset();
+    await resetRuntimeStateForAppRestart();
 
     expect(providerManager.isInitialized, isFalse);
     expect(fileSystemProvider.isInitialized, isFalse);
@@ -129,5 +128,21 @@ void main() {
       FileSystemData.instance.libraryPath,
       Settings.getValue<String>(SettingsRepository.keyLibraryPath),
     );
+  });
+
+  test('resetRuntimeStateAfterSettingsReset נשאר alias תקין', () async {
+    const oldLibraryPath = 'C:/old-library';
+
+    await Settings.setValue<String>(
+      SettingsRepository.keyLibraryPath,
+      oldLibraryPath,
+    );
+
+    FileSystemData.instance.libraryPath = oldLibraryPath;
+
+    Settings.clearCache();
+    await resetRuntimeStateAfterSettingsReset();
+
+    expect(FileSystemData.instance.libraryPath, isNot(oldLibraryPath));
   });
 }

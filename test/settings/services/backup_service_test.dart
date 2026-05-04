@@ -7,6 +7,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
+import 'package:otzaria/workspaces/workspace_repository.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
@@ -19,6 +20,7 @@ void main() {
     tempDir = await Directory.systemTemp.createTemp('backup_service_test_');
     Hive.init(tempDir.path);
     box = await Hive.openBox<dynamic>(HiveCache.keyName);
+    await Hive.openBox<dynamic>('workspaces');
     await Settings.init(cacheProvider: HiveCache());
     await Settings.setValue<String>(
       SettingsRepository.keyBackupPath,
@@ -87,6 +89,98 @@ void main() {
 
     expect(box.get('sz:future_key'), ['a', 'b']);
     expect(box.get('sz:migration_completed'), isTrue);
+  });
+
+  test('restoreFromBackup משחזר currentWorkspace חדש לפי מזהה', () async {
+    final backupDir = Directory(p.join(tempDir.path, 'workspace_backups'));
+    await backupDir.create(recursive: true);
+    final backupFile = File(p.join(backupDir.path, 'restore_workspace_id.json'));
+
+    const firstWorkspaceId = 'workspace-a';
+    const secondWorkspaceId = 'workspace-b';
+
+    await backupFile.writeAsString(
+      jsonEncode({
+        'version': '1.0',
+        'timestamp': '2026-05-04T00:00:00.000Z',
+        'includes': {
+          'settings': false,
+          'bookmarks': false,
+          'history': false,
+          'notes': false,
+          'workspaces': true,
+          'shamorZachor': false,
+          'userOverrides': false,
+        },
+        'workspaces': [
+          {
+            'id': firstWorkspaceId,
+            'name': 'ראשון',
+            'tabs': [],
+            'currentTab': 0,
+          },
+          {
+            'id': secondWorkspaceId,
+            'name': 'שני',
+            'tabs': [],
+            'currentTab': 0,
+          },
+        ],
+        'currentWorkspace': secondWorkspaceId,
+      }),
+    );
+
+    await BackupService.restoreFromBackup(backupFile.path);
+
+    final (workspaces, currentWorkspaceId) = WorkspaceRepository().loadWorkspaces();
+    expect(workspaces, hasLength(2));
+    expect(currentWorkspaceId, secondWorkspaceId);
+  });
+
+  test('restoreFromBackup תומך ב-currentWorkspace ישן כאינדקס', () async {
+    final backupDir = Directory(p.join(tempDir.path, 'workspace_backups_legacy'));
+    await backupDir.create(recursive: true);
+    final backupFile = File(p.join(backupDir.path, 'restore_workspace_index.json'));
+
+    const firstWorkspaceId = 'workspace-a';
+    const secondWorkspaceId = 'workspace-b';
+
+    await backupFile.writeAsString(
+      jsonEncode({
+        'version': '1.0',
+        'timestamp': '2026-05-04T00:00:00.000Z',
+        'includes': {
+          'settings': false,
+          'bookmarks': false,
+          'history': false,
+          'notes': false,
+          'workspaces': true,
+          'shamorZachor': false,
+          'userOverrides': false,
+        },
+        'workspaces': [
+          {
+            'id': firstWorkspaceId,
+            'name': 'ראשון',
+            'tabs': [],
+            'currentTab': 0,
+          },
+          {
+            'id': secondWorkspaceId,
+            'name': 'שני',
+            'tabs': [],
+            'currentTab': 0,
+          },
+        ],
+        'currentWorkspace': 1,
+      }),
+    );
+
+    await BackupService.restoreFromBackup(backupFile.path);
+
+    final (workspaces, currentWorkspaceId) = WorkspaceRepository().loadWorkspaces();
+    expect(workspaces.map((workspace) => workspace.id), [firstWorkspaceId, secondWorkspaceId]);
+    expect(currentWorkspaceId, secondWorkspaceId);
   });
 
   // ─── shouldPerformAutoBackup ───────────────────────────────────────────────
