@@ -1,12 +1,21 @@
 import 'dart:io';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/data/data_providers/library_provider_manager.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 class NavigationRepository {
+  NavigationRepository({Future<void> Function()? reopenIndex})
+      : _reopenIndex =
+            reopenIndex ?? (() => TantivyDataProvider.instance.reopenIndex());
+
+  final Future<void> Function() _reopenIndex;
+
   /// בודק אם הספרייה ריקה - כלומר אם קובץ seforim.db לא קיים
   bool checkLibraryIsEmpty() {
     final libraryPath =
@@ -53,8 +62,13 @@ class NavigationRepository {
     final libraryPath =
         Settings.getValue<String>(SettingsRepository.keyLibraryPath);
     if (libraryPath != null) {
+      await SqliteDataProvider.instance.dispose();
+      LibraryProviderManager.instance.resetRuntimeState();
+      BooksCache.instance.clear();
+
       // עדכון נתיב הספרייה
       FileSystemData.instance.libraryPath = libraryPath;
+      FileSystemData.instance.clearBookCache();
 
       // טעינת הספרייה מחדש
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
@@ -62,7 +76,7 @@ class NavigationRepository {
 
       // פתיחה מחדש של אינדקס החיפוש
       try {
-        await TantivyDataProvider.instance.reopenIndex();
+        await _reopenIndex();
       } catch (e) {
         // Continue without search index if it fails
       }
