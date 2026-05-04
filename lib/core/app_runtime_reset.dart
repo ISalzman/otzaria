@@ -8,9 +8,8 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 
-/// Resets process-local runtime state so the app can rebuild from cleared
-/// settings without requiring a full process restart.
-Future<void> resetRuntimeStateAfterSettingsReset() async {
+/// מאפס מצב runtime מקומי כדי שהאפליקציה תוכל להיבנות מחדש בלי סגירת תהליך.
+Future<void> resetRuntimeStateForAppRestart() async {
   await PluginRuntimeDispatcher.instance.prepareForAppRestart();
   await SqliteDataProvider.instance.dispose();
 
@@ -24,4 +23,9 @@ Future<void> resetRuntimeStateAfterSettingsReset() async {
   ReferenceBooksCache.instance.clear();
   BooksCache.instance.clear();
   AcronymsCache.instance.clear();
+}
+
+/// תאימות לשם הישן במסלול איפוס הגדרות.
+Future<void> resetRuntimeStateAfterSettingsReset() async {
+  await resetRuntimeStateForAppRestart();
 }
