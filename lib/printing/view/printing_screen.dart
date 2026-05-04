@@ -2051,6 +2051,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                               if (value == null) return;
                                               setState(() {
                                                 fontName = value;
+                                                _refreshPreviewPdf();
                                               });
                                             },
                                           ),
@@ -2128,8 +2129,11 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                             )
                                             .toList(),
                                         onSelected: (PdfPageFormat? value) {
-                                          format = value!;
-                                          setState(_refreshPreviewPdf);
+                                          if (value == null) return;
+                                          setState(() {
+                                            format = value;
+                                            _refreshPreviewPdf();
+                                          });
                                         },
                                       ),
                                     ),
@@ -2152,8 +2156,11 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                         ],
                                         onSelected:
                                             (pw.PageOrientation? value) {
-                                          orientation = value!;
-                                          setState(_refreshPreviewPdf);
+                                          if (value == null) return;
+                                          setState(() {
+                                            orientation = value;
+                                            _refreshPreviewPdf();
+                                          });
                                         },
                                       ),
                                     ),
