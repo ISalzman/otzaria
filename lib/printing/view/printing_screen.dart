@@ -23,6 +23,7 @@ import 'package:otzaria/printing/pdf_text_rasterizer.dart';
 import 'package:otzaria/printing/word_export_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
+import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart' hide PdfDocument;
@@ -323,9 +324,8 @@ class _PrintingScreenState extends State<PrintingScreen> {
   }
 
   void _toggleThumbnails(bool value) {
-    final currentPage = _pdfViewerController.isReady
-        ? _pdfViewerController.pageNumber
-        : null;
+    final currentPage =
+        _pdfViewerController.isReady ? _pdfViewerController.pageNumber : null;
     setState(() {
       _showThumbnails = value;
     });
@@ -394,7 +394,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
   }
 
-PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
+  PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
     return orientation == pw.PageOrientation.landscape
         ? format.landscape
         : format;
@@ -455,10 +455,9 @@ PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
 
     try {
       final scale = dpi / 72.0;
-      final firstIdx =
-          max(0, min(startPage - 1, doc.pages.length - 1));
-      final lastIdx =
-          max(firstIdx, min((endPage ?? doc.pages.length) - 1, doc.pages.length - 1));
+      final firstIdx = max(0, min(startPage - 1, doc.pages.length - 1));
+      final lastIdx = max(firstIdx,
+          min((endPage ?? doc.pages.length) - 1, doc.pages.length - 1));
       for (var i = firstIdx; i <= lastIdx; i++) {
         final page = doc.pages[i];
         final pdfImage = await page.render(
@@ -1322,10 +1321,11 @@ PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
                                 _buildSectionCard(
                                   context: context,
                                   title: 'טווח עמודים',
-                                  icon:
-                                      FluentIcons.document_page_number_24_regular,
+                                  icon: FluentIcons
+                                      .document_page_number_24_regular,
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       _buildDropdownRow(
                                         context: context,
@@ -2064,58 +2064,27 @@ PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
                                           ),
                                         ),
                                         Expanded(
-                                          child: InkWell(
-                                            onTap: () async {
-                                              final fontItems = fontNames
-                                                  .entries
-                                                  .map((entry) =>
-                                                      SelectionItem<String>(
-                                                        label: entry.value,
-                                                        value: entry.key,
-                                                        searchValue:
-                                                            '${entry.value} ${entry.key}',
-                                                      ))
-                                                  .toList();
-
-                                              final result =
-                                                  await showSelectionDialog<
-                                                      String>(
-                                                context: context,
-                                                title: 'בחירת גופן להדפסה',
-                                                items: fontItems,
-                                                initialValue: fontName,
-                                                searchHint: 'חיפוש גופן',
-                                              );
-                                              if (result != null) {
-                                                setState(() {
-                                                  fontName = result;
-                                                  _refreshPreviewPdf();
-                                                });
-                                              }
-                                            },
-                                            child: InputDecorator(
-                                              decoration: InputDecoration(
-                                                contentPadding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 8,
-                                                ),
-                                                border: OutlineInputBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                                suffixIcon: const Icon(FluentIcons
-                                                    .chevron_down_24_regular),
-                                              ),
-                                              child: Text(
-                                                fontNames[fontName] ?? fontName,
-                                                style: TextStyle(
-                                                  fontFamily: fontName,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
+                                          child: AppDropdownField<String>(
+                                            value: fontName,
+                                            enableSearch: true,
+                                            decoration: const InputDecoration(
+                                              border: OutlineInputBorder(),
+                                              hintText: 'חיפוש גופן',
                                             ),
+                                            entries: fontNames.entries
+                                                .map(
+                                                  (entry) => AppMenuEntry(
+                                                    value: entry.key,
+                                                    label: entry.value,
+                                                  ),
+                                                )
+                                                .toList(),
+                                            onSelected: (value) {
+                                              if (value == null) return;
+                                              setState(() {
+                                                fontName = value;
+                                              });
+                                            },
                                           ),
                                         ),
                                       ],
