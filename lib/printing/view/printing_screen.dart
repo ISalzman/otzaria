@@ -12,7 +12,6 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/models/links.dart';
-import 'package:otzaria/navigation/view/custom_title_bar.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/pdf_book/view/pdf_page_number_display.dart';
@@ -1234,36 +1233,46 @@ class _PrintingScreenState extends State<PrintingScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final isCustomPdfMode = widget.createPdfOverride != null;
 
-    return Scaffold(
-      body: Column(
-        children: [
-          const CustomTitleBar(),
-          AppBar(
-            primary: false,
-            title: const Text('הדפסה'),
-            centerTitle: true,
-            actions: [
-              OutlinedButton.icon(
-                onPressed: _exportDocument,
-                icon: const Icon(FluentIcons.arrow_export_ltr_24_regular),
-                label: const Text('ייצא'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: () async {
-                  final printed = await Printing.layoutPdf(
-                    usePrinterSettings: true,
-                    onLayout: _createOutputPdf,
-                    format: format,
-                  );
-                  if (printed && context.mounted) Navigator.of(context).pop(true);
-                },
-                icon: const Icon(FluentIcons.print_24_regular),
-                label: const Text('הדפסה'),
-              ),
-              const SizedBox(width: 16),
-            ],
+    return Dialog(
+      insetPadding: const EdgeInsets.fromLTRB(12, 40, 12, 12),
+      clipBehavior: Clip.antiAlias,
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: Text(
+            'הדפסה — ${widget.book?.title ?? widget.bookId}',
+            textDirection: TextDirection.rtl,
+            overflow: TextOverflow.ellipsis,
           ),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(FluentIcons.dismiss_24_regular),
+            tooltip: 'סגירה',
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          actions: [
+            OutlinedButton.icon(
+              onPressed: _exportDocument,
+              icon: const Icon(FluentIcons.arrow_export_ltr_24_regular),
+              label: const Text('ייצא'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              onPressed: () async {
+                await Printing.layoutPdf(
+                  usePrinterSettings: true,
+                  onLayout: _createOutputPdf,
+                  format: format,
+                );
+              },
+              icon: const Icon(FluentIcons.print_24_regular),
+              label: const Text('הדפסה'),
+            ),
+            const SizedBox(width: 16),
+          ],
+        ),
+        body: Column(
+          children: [
           Expanded(
             child: FutureBuilder(
               future: _dataFuture,
@@ -2324,6 +2333,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 

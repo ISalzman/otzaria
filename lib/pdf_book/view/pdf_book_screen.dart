@@ -3825,7 +3825,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       layoutMode: currentLayoutMode,
     );
     setState(() => _pdfViewerSuspended = true);
-    await Navigator.of(context).push<bool>(MaterialPageRoute(
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
       builder: (_) => PrintingScreen(
         data: Future.value(''),
         bookId: widget.tab.book.title,
@@ -3834,7 +3836,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         isBookView: currentLayoutMode == PdfLayoutMode.bookView,
         pdfOutline: widget.tab.outline.value ?? [],
       ),
-    ));
+    );
     if (mounted) {
       try {
         // Always reset the pdfrx worker when leaving the print screen:
