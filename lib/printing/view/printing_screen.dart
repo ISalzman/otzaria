@@ -1410,9 +1410,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       label: 'גודל דף',
                                       child: AppDropdownField<PdfPageFormat>(
                                         value: format,
-                                        decoration: const InputDecoration(
-                                          border: OutlineInputBorder(),
-                                        ),
                                         entries: const {
                                           'A4': PdfPageFormat.a4,
                                           'Letter': PdfPageFormat.letter,
@@ -1438,9 +1435,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       child:
                                           AppDropdownField<pw.PageOrientation>(
                                         value: orientation,
-                                        decoration: const InputDecoration(
-                                          border: OutlineInputBorder(),
-                                        ),
                                         entries: const [
                                           AppMenuEntry(
                                             value: pw.PageOrientation.portrait,
@@ -1465,9 +1459,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       label: 'עמודים בגליון',
                                       child: AppDropdownField<int>(
                                         value: _pagesPerSheet,
-                                        decoration: const InputDecoration(
-                                          border: OutlineInputBorder(),
-                                        ),
                                         entries: const [
                                           AppMenuEntry(
                                             value: 1,
@@ -1857,9 +1848,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                         child: AppDropdownField<int>(
                                           value: _startHeaderIndex,
                                           enableSearch: true,
-                                          decoration: const InputDecoration(
-                                            border: OutlineInputBorder(),
-                                          ),
                                           entries: _flatHeaders
                                               .asMap()
                                               .entries
@@ -1890,9 +1878,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                         child: AppDropdownField<int>(
                                           value: _endHeaderIndex,
                                           enableSearch: true,
-                                          decoration: const InputDecoration(
-                                            border: OutlineInputBorder(),
-                                          ),
                                           entries: _flatHeaders
                                               .asMap()
                                               .entries
@@ -1937,9 +1922,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                         child: AppDropdownField<int>(
                                           value: _startAltHeaderIndex,
                                           enableSearch: true,
-                                          decoration: const InputDecoration(
-                                            border: OutlineInputBorder(),
-                                          ),
                                           entries: _flatAltHeaders
                                               .asMap()
                                               .entries
@@ -1970,9 +1952,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                         child: AppDropdownField<int>(
                                           value: _endAltHeaderIndex,
                                           enableSearch: true,
-                                          decoration: const InputDecoration(
-                                            border: OutlineInputBorder(),
-                                          ),
                                           entries: _flatAltHeaders
                                               .asMap()
                                               .entries
@@ -2058,7 +2037,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                             value: fontName,
                                             enableSearch: true,
                                             decoration: const InputDecoration(
-                                              border: OutlineInputBorder(),
                                               hintText: 'חיפוש גופן',
                                             ),
                                             entries: fontNames.entries
@@ -2141,9 +2119,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       label: 'גודל עמוד',
                                       child: AppDropdownField<PdfPageFormat>(
                                         value: format,
-                                        decoration: const InputDecoration(
-                                          border: OutlineInputBorder(),
-                                        ),
                                         entries: formats.entries
                                             .map(
                                               (entry) => AppMenuEntry(
@@ -2165,9 +2140,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       child:
                                           AppDropdownField<pw.PageOrientation>(
                                         value: orientation,
-                                        decoration: const InputDecoration(
-                                          border: OutlineInputBorder(),
-                                        ),
                                         entries: const [
                                           AppMenuEntry(
                                             value: pw.PageOrientation.portrait,
@@ -2191,9 +2163,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       label: 'עמודים בגליון',
                                       child: AppDropdownField<int>(
                                         value: _pagesPerSheet,
-                                        decoration: const InputDecoration(
-                                          border: OutlineInputBorder(),
-                                        ),
                                         entries: const [
                                           AppMenuEntry(
                                             value: 1,
@@ -2363,7 +2332,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: colorScheme.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -2473,12 +2441,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
         Expanded(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: colorScheme.outlineVariant,
-              ),
-            ),
             child: child,
           ),
         ),
