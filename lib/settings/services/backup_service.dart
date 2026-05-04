@@ -369,7 +369,7 @@ class BackupService {
         backupData.containsKey('workspaces')) {
       await _restoreWorkspaces(
         (backupData['workspaces'] as List).cast<Map<String, dynamic>>(),
-        backupData['currentWorkspace'] as int? ?? 0,
+        backupData['currentWorkspace'],
       );
     }
 
@@ -504,17 +504,34 @@ class BackupService {
   /// Restore workspaces
   static Future<void> _restoreWorkspaces(
     List<Map<String, dynamic>> workspacesData,
-    int currentWorkspace,
+    Object? currentWorkspace,
   ) async {
     final repo = WorkspaceRepository();
     final workspaces =
         workspacesData.map((data) => Workspace.fromJson(data)).toList();
-    // Get the workspace ID from the index, or use the first workspace's ID
-    final currentId =
-        (currentWorkspace >= 0 && currentWorkspace < workspaces.length)
-            ? workspaces[currentWorkspace].id
-            : (workspaces.isNotEmpty ? workspaces.first.id : null);
+    final currentId = _resolveCurrentWorkspaceId(
+      workspaces: workspaces,
+      currentWorkspace: currentWorkspace,
+    );
     await repo.saveWorkspaces(workspaces, currentId);
+  }
+
+  static String? _resolveCurrentWorkspaceId({
+    required List<Workspace> workspaces,
+    required Object? currentWorkspace,
+  }) {
+    if (currentWorkspace is String &&
+        workspaces.any((w) => w.id == currentWorkspace)) {
+      return currentWorkspace;
+    }
+
+    if (currentWorkspace is int &&
+        currentWorkspace >= 0 &&
+        currentWorkspace < workspaces.length) {
+      return workspaces[currentWorkspace].id;
+    }
+
+    return workspaces.isNotEmpty ? workspaces.first.id : null;
   }
 
   /// Restore Shamor Zachor data - restores ALL backed up keys.
