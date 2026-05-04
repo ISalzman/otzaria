@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 class RestartWidget extends StatefulWidget {
@@ -5,8 +7,13 @@ class RestartWidget extends StatefulWidget {
 
   final Widget child;
 
-  static void restartApp(BuildContext context) {
-    context.findAncestorStateOfType<_RestartWidgetState>()?.restartApp();
+  static void restartApp(
+    BuildContext context, {
+    FutureOr<void> Function()? afterRestart,
+  }) {
+    context.findAncestorStateOfType<_RestartWidgetState>()?.restartApp(
+          afterRestart: afterRestart,
+        );
   }
 
   @override
@@ -16,10 +23,15 @@ class RestartWidget extends StatefulWidget {
 class _RestartWidgetState extends State<RestartWidget> {
   Key key = UniqueKey();
 
-  void restartApp() {
+  void restartApp({FutureOr<void> Function()? afterRestart}) {
     setState(() {
       key = UniqueKey();
     });
+    if (afterRestart != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await afterRestart();
+      });
+    }
   }
 
   @override
