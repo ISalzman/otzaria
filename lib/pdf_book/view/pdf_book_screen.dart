@@ -3420,10 +3420,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
     ));
     if (mounted) {
-      setState(() => _pdfViewerSuspended = false);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _pdfViewFocusNode.requestFocus();
-      });
+      try {
+        // The printing plugin calls FPDF_DestroyLibrary() after each print job,
+        // which destroys the PDFium global state shared with pdfrx.
+        // Stopping the background worker lets pdfrx lazily re-initialize PDFium on next use.
+        await PdfrxEntryFunctions.instance.stopBackgroundWorker();
+      } finally {
+        if (mounted) {
+          setState(() => _pdfViewerSuspended = false);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _pdfViewFocusNode.requestFocus();
+          });
+        }
+      }
     }
   }
 
