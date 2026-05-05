@@ -57,6 +57,12 @@ void main() {
     test('חותך רווחים מהצדדים', () {
       expect(SearchQueryBuilder.sanitizeQuery('  תורה  '), 'תורה');
     });
+
+    test('ממיר מקף עברי (־) לרווח רגיל', () {
+      expect(SearchQueryBuilder.sanitizeQuery('אל־משה'), 'אל משה');
+      expect(SearchQueryBuilder.sanitizeQuery('ויאמר־אלהים'),
+          'ויאמר אלהים');
+    });
   });
 
   group('typo helpers', () {

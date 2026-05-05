@@ -118,8 +118,10 @@ class SearchQueryBuilder {
 
   /// ניקוי שאילתה מתווים מיוחדים שיכולים להפריע לחיפוש
   /// מסירים גם פסיקים וגרשיים/גרש
+  /// המקף העברי (־) מומר לרווח רגיל כדי שיתפצל למילים נפרדות בחיפוש
   static String sanitizeQuery(String query) {
     return query
+        .replaceAll('־', ' ')
         .replaceAll(RegExp(r"""[,!?'"״׳":*\(\)\[\]\{\}\^\$\|\\+.~`]"""), '')
         .trim();
   }
