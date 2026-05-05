@@ -388,17 +388,17 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                                       .onSurface
                                                       .withValues(alpha: 0.7),
                                                 ),
-                                                overflow:
-                                                    TextOverflow.ellipsis,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
                                             const SizedBox(width: 8),
                                             Flexible(
                                               child: ScrollConfiguration(
-                                                behavior: ScrollConfiguration
-                                                        .of(context)
-                                                    .copyWith(
-                                                        scrollbars: false),
+                                                behavior:
+                                                    ScrollConfiguration.of(
+                                                            context)
+                                                        .copyWith(
+                                                            scrollbars: false),
                                                 child: SingleChildScrollView(
                                                   scrollDirection:
                                                       Axis.horizontal,
@@ -456,7 +456,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                         tab: widget.tab,
                                       ),
                                     ),
-                                    NumOfResults(tab: widget.tab),
                                   ],
                                 );
                               },
@@ -526,8 +525,8 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                                       FluentIcons
                                                           .search_24_regular,
                                                       size: 64,
-                                                      color: Colors
-                                                          .grey.shade400,
+                                                      color:
+                                                          Colors.grey.shade400,
                                                     ),
                                                     const SizedBox(height: 16),
                                                     Text(
@@ -566,8 +565,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                             }
                                             return Container(
                                               clipBehavior: Clip.hardEdge,
-                                              decoration:
-                                                  const BoxDecoration(),
+                                              decoration: const BoxDecoration(),
                                               child: TantivySearchResults(
                                                 tab: widget.tab,
                                               ),
