@@ -69,10 +69,6 @@ void main() {
       final searchQuery =
           hasNikudInInput ? removeVolwels(userInput) : userInput;
       expect(searchQuery, 'שלום עולם');
-
-      // אם המשתמש לוחץ על "עם ניקוד" - משתמשים בטקסט המקורי
-      final searchWithNikud = userInput;
-      expect(searchWithNikud, 'שָׁלוֹם עוֹלָם');
     });
 
     test('Search workflow - no nikud in input', () {
@@ -201,19 +197,9 @@ void main() {
       // המערכת מזהה שיש ניקוד
       expect(hasNikud(userInput), true);
 
-      // ברירת מחדל: חיפוש ללא ניקוד
-      var searchWithNikud = false;
-      var query = !searchWithNikud && hasNikud(userInput)
-          ? removeVolwels(userInput)
-          : userInput;
+      // החיפוש בתוך ספר תמיד מסיר ניקוד
+      final query = hasNikud(userInput) ? removeVolwels(userInput) : userInput;
       expect(query, 'תורה');
-
-      // משתמש לוחץ על כפתור "עם ניקוד"
-      searchWithNikud = true;
-      query = !searchWithNikud && hasNikud(userInput)
-          ? removeVolwels(userInput)
-          : userInput;
-      expect(query, 'תּוֹרָה');
     });
 
     test('Scenario 2: User types text without nikud', () {
@@ -238,9 +224,6 @@ void main() {
       // ברירת מחדל: הסרת ניקוד
       final cleanQuery = removeVolwels(pastedText);
       expect(cleanQuery, 'וידבר אלהים אל משה');
-
-      // אם המשתמש רוצה לחפש עם הניקוד המדויק - משתמשים בטקסט המקורי
-      expect(pastedText, 'וַיְדַבֵּר אֱלֹהִים אֶל־מֹשֶׁה');
     });
 
     test('Scenario 4: Mixed content - Hebrew with nikud and English', () {
@@ -254,33 +237,10 @@ void main() {
       expect(cleaned, 'תורה Torah שלום Shalom');
     });
 
-    test('Scenario 5: Toggle nikud button multiple times', () {
+    test('Scenario 5: User input with nikud is always normalized', () {
       const userInput = 'בְּרֵאשִׁית';
-      var searchWithNikud = false;
-
-      // לחיצה ראשונה - הפעלת חיפוש עם ניקוד
-      searchWithNikud = !searchWithNikud;
-      expect(searchWithNikud, true);
-      var query = !searchWithNikud && hasNikud(userInput)
-          ? removeVolwels(userInput)
-          : userInput;
-      expect(query, 'בְּרֵאשִׁית');
-
-      // לחיצה שנייה - חזרה לחיפוש ללא ניקוד
-      searchWithNikud = !searchWithNikud;
-      expect(searchWithNikud, false);
-      query = !searchWithNikud && hasNikud(userInput)
-          ? removeVolwels(userInput)
-          : userInput;
+      final query = hasNikud(userInput) ? removeVolwels(userInput) : userInput;
       expect(query, 'בראשית');
-
-      // לחיצה שלישית - שוב עם ניקוד
-      searchWithNikud = !searchWithNikud;
-      expect(searchWithNikud, true);
-      query = !searchWithNikud && hasNikud(userInput)
-          ? removeVolwels(userInput)
-          : userInput;
-      expect(query, 'בְּרֵאשִׁית');
     });
   });
 }

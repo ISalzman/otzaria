@@ -15,7 +15,6 @@ import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:search_engine/search_engine.dart';
-import 'package:otzaria/widgets/misc/nikud_search_button.dart';
 
 class PdfBookSearchView extends StatefulWidget {
   const PdfBookSearchView({
@@ -79,7 +78,6 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
   Map<String, String> _spacingValues = {};
   SearchMode _searchMode = SearchMode.exact;
   bool _typoToleranceEnabled = false;
-  bool _searchWithNikud = false;
 
   Timer? _pdfHighlightDebounce;
   String _lastPdfHighlightQuery = '';
@@ -211,8 +209,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
       return;
     }
 
-    // הסרת ניקוד כברירת מחדל, אלא אם המשתמש לחץ על כפתור "עם ניקוד"
-    if (!_searchWithNikud && utils.hasNikud(query)) {
+    if (utils.hasNikud(query)) {
       query = utils.removeVolwels(query);
     }
 
@@ -400,23 +397,10 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
           _spacingValues = {};
           _searchMode = SearchMode.exact;
           _typoToleranceEnabled = false;
-          _searchWithNikud = false;
         });
         _schedulePdfHighlight('');
       },
-      additionalActions: utils.hasNikud(widget.searchController.text)
-          ? [
-              NikudSearchButton(
-                isActive: _searchWithNikud,
-                onPressed: () {
-                  setState(() {
-                    _searchWithNikud = !_searchWithNikud;
-                  });
-                  _searchTextUpdated();
-                },
-              ),
-            ]
-          : null,
+      additionalActions: const [],
       hintText: 'חפש כאן..',
       onAdvancedSearch: () {
         final tempTab = SearchingTab('חיפוש', widget.searchController.text);
