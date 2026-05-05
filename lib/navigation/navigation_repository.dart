@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
@@ -7,6 +8,7 @@ import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 class NavigationRepository {
@@ -64,7 +66,9 @@ class NavigationRepository {
     if (libraryPath != null) {
       await SqliteDataProvider.instance.dispose();
       LibraryProviderManager.instance.resetRuntimeState();
+      ReferenceBooksCache.instance.clear();
       BooksCache.instance.clear();
+      AcronymsCache.instance.clear();
 
       // עדכון נתיב הספרייה
       FileSystemData.instance.libraryPath = libraryPath;

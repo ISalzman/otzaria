@@ -109,6 +109,16 @@ bool shouldShowOpenPdfLinksPaneEntry({
   return hasRelevantLinks && !isPaneOpen;
 }
 
+int resolveInitialPdfPrintPage({
+  required int currentPage,
+  required PdfLayoutMode layoutMode,
+}) {
+  if (layoutMode != PdfLayoutMode.bookView || currentPage <= 1) {
+    return currentPage;
+  }
+  return currentPage.isEven ? currentPage : currentPage - 1;
+}
+
 class _PdfBookScreenState extends State<PdfBookScreen>
     with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   static const int _defaultPdfLineRange = 50;
@@ -3417,13 +3427,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       PdfBookLoaded loaded => loaded.layoutMode,
       _ => PdfLayoutMode.regularView,
     };
+    final initialPrintPage = resolveInitialPdfPrintPage(
+      currentPage: currentPage,
+      layoutMode: currentLayoutMode,
+    );
     setState(() => _pdfViewerSuspended = true);
     await Navigator.of(context).push<bool>(MaterialPageRoute(
       builder: (_) => PrintingScreen(
         data: Future.value(''),
         bookId: widget.tab.book.title,
         createPdfOverride: (_) => file.readAsBytes(),
-        initialPage: currentPage,
+        initialPage: initialPrintPage,
         isBookView: currentLayoutMode == PdfLayoutMode.bookView,
         pdfOutline: widget.tab.outline.value ?? [],
       ),

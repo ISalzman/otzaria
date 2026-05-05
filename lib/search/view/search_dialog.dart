@@ -63,6 +63,16 @@ class _SearchDialogState extends State<SearchDialog> {
   Set<String> _selectedCategoryFacets = {'/'}; // ברירת מחדל: הכל
   late final bool _ownsSearchTab;
 
+  void _restoreLegacyTypoToleranceOptions(String query) {
+    final words = SearchQueryBuilder.splitQueryWords(query);
+    for (var i = 0; i < words.length; i++) {
+      final wordKey = SearchQueryBuilder.buildWordKey(words[i], i);
+      _searchTab.searchOptions[wordKey] = {
+        SearchQueryBuilder.typoToleranceOptionKey: true,
+      };
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -76,16 +86,22 @@ class _SearchDialogState extends State<SearchDialog> {
           Settings.getValue<String>('key-last-search-typing') ?? '';
       final lastMode =
           Settings.getValue<String>('key-last-search-mode') ?? 'advanced';
+      final lastTypoTolerance =
+          Settings.getValue<bool>('key-last-search-typo-tolerance') ?? false;
 
       _searchTab = SearchingTab("חיפוש", lastTyping);
 
       final searchMode = switch (lastMode) {
         'fuzzy' => SearchMode.fuzzy,
         'exact' => SearchMode.exact,
+        'levenshtein' => SearchMode.advanced,
         _ => SearchMode.advanced,
       };
 
       _searchTab.searchBloc.add(SetSearchMode(searchMode));
+      if (lastMode == 'levenshtein' || lastTypoTolerance) {
+        _restoreLegacyTypoToleranceOptions(lastTyping);
+      }
     }
 
     final persisted = SearchScopePreferences.load();
@@ -661,17 +677,18 @@ class _SearchDialogState extends State<SearchDialog> {
                                 // ב-LayoutBuilder: אם הרוחב צר — accessories לשורה שנייה
                                 return LayoutBuilder(
                                   builder: (context, constraints) {
-                                  const distanceWidgetWidth = 152.0;
-                                  const categoriesWidgetWidth = 138.0;
-                                  final accessoriesWidth = distanceWidgetWidth +
-                                    (showCategoriesToggleWidget
-                                      ? categoriesWidgetWidth
-                                      : 0);
-                                  final hasAccessories = true;
+                                    const distanceWidgetWidth = 152.0;
+                                    const categoriesWidgetWidth = 138.0;
+                                    final accessoriesWidth =
+                                        distanceWidgetWidth +
+                                            (showCategoriesToggleWidget
+                                                ? categoriesWidgetWidth
+                                                : 0);
+                                    final hasAccessories = true;
                                     // FuzzyDistance=140px, toggle~130px, paddings~20px ≈ 290px
                                     final isNarrow = hasAccessories &&
-                                    constraints.maxWidth <
-                                      accessoriesWidth + 180;
+                                        constraints.maxWidth <
+                                            accessoriesWidth + 180;
 
                                     if (isNarrow) {
                                       return Column(
