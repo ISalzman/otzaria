@@ -1,13 +1,15 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
 
 class ResizableDragHandle extends StatefulWidget {
   const ResizableDragHandle({
     super.key,
     required this.isVertical,
     this.cursor,
-    this.hitSize = 8,
+    this.hitSize,
     this.onDragDelta,
     this.onDragStart,
     this.onDragEnd,
@@ -21,7 +23,8 @@ class ResizableDragHandle extends StatefulWidget {
   final MouseCursor? cursor;
 
   /// Total interactive thickness (width for vertical, height for horizontal).
-  final double hitSize;
+  /// If null, auto-selects 48 when compactMenuMode is off, 36 when on.
+  final double? hitSize;
 
   /// Called with the delta along the resize axis (dx if vertical, dy if horizontal).
   final ValueChanged<double>? onDragDelta;
@@ -53,6 +56,9 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
   @override
   Widget build(BuildContext context) {
     final isEnabled = widget.onDragDelta != null;
+    final isCompact =
+        context.read<SettingsBloc?>()?.state.compactMenuMode ?? false;
+    final effectiveHitSize = widget.hitSize ?? (isCompact ? 36.0 : 48.0);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final dividerColor = theme.dividerColor.withValues(alpha: 0.55);
@@ -102,20 +108,23 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeOut,
           builder: (context, blend, _) {
-            final highlightColor = cs.primary.withValues(alpha: 0.10 * blend);
-            final thickness = lerpDouble(2.0, 4.0, blend) ?? 2.0;
-            final gripLength = lerpDouble(
-                    widget.hitSize * 0.55, widget.hitSize * 0.8, blend) ??
-                widget.hitSize * 0.55;
+            final highlightColor = cs.primary.withValues(alpha: 0.18 + 0.22 * blend);
+            final thickness = lerpDouble(3.0, 5.0, blend) ?? 3.0;
+            final gripLength = lerpDouble(24.0, 32.0, blend) ?? 24.0;
             final showGrip = widget.showDivider || blend > 0;
+            final idleOpacity = lerpDouble(0.35, 1.0, blend) ?? 0.35;
             final lineColor = showGrip
-                ? (Color.lerp(dividerColor, activeColor, blend) ?? dividerColor)
+                ? (Color.lerp(
+                        dividerColor.withValues(alpha: idleOpacity),
+                        activeColor,
+                        blend) ??
+                    dividerColor)
                 : Colors.transparent;
             final dividerThickness = lerpDouble(1.0, 2.0, blend) ?? 1.0;
 
             return SizedBox(
-              width: widget.isVertical ? widget.hitSize : null,
-              height: widget.isVertical ? null : widget.hitSize,
+              width: widget.isVertical ? effectiveHitSize : null,
+              height: widget.isVertical ? null : effectiveHitSize,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final dividerExtent = widget.isVertical
