@@ -30,8 +30,52 @@ class TantivySearchResults extends StatefulWidget {
 
 class _TantivySearchResultsState extends State<TantivySearchResults> {
   static const int _maxUnbrokenWordLength = 12;
+  static const double _loadMoreThreshold = 200;
   final ScrollController _scrollController = ScrollController();
   final Map<String, List<InlineSpan>> _snippetCache = {};
+  bool _isAutoLoadInFlight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_handleScroll);
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    if (_scrollController.position.extentAfter > _loadMoreThreshold) {
+      return;
+    }
+
+    _maybeLoadMore();
+  }
+
+  void _maybeLoadMore() {
+    if (!mounted || _isAutoLoadInFlight) {
+      return;
+    }
+
+    final state = context.read<SearchBloc>().state;
+    final hasMoreResults = state.isTypoToleranceEnabled
+        ? state.hasMoreResults
+        : state.results.length < state.totalResults;
+
+    if (state.isLoading || !hasMoreResults) {
+      return;
+    }
+
+    _isAutoLoadInFlight = true;
+    context.read<SearchBloc>().add(
+          LoadMoreResults(
+            customSpacing: widget.tab.spacingValues,
+            alternativeWords: widget.tab.alternativeWords,
+            searchOptions: widget.tab.searchOptions,
+          ),
+        );
+  }
 
   String _searchResultDedupeKey({
     required String title,
@@ -69,6 +113,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
   }
@@ -76,11 +121,29 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constrains) {
-      return BlocBuilder<SearchBloc, SearchState>(
-        builder: (context, state) {
-          // עכשיו רק מציגים את התוצאות - השורה התחתונה מוצגת במקום אחר
-          return _buildResultsContent(state, constrains);
+      return BlocListener<SearchBloc, SearchState>(
+        listenWhen: (previous, current) =>
+            previous.isLoading != current.isLoading ||
+            previous.results.length != current.results.length ||
+            previous.hasMoreResults != current.hasMoreResults ||
+            previous.totalResults != current.totalResults,
+        listener: (context, state) {
+          if (!state.isLoading) {
+            _isAutoLoadInFlight = false;
+          }
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _handleScroll();
+            }
+          });
         },
+        child: BlocBuilder<SearchBloc, SearchState>(
+          builder: (context, state) {
+            // עכשיו רק מציגים את התוצאות - השורה התחתונה מוצגת במקום אחר
+            return _buildResultsContent(state, constrains);
+          },
+        ),
       );
     });
   }

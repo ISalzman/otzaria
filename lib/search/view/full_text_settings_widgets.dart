@@ -167,42 +167,6 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
   }
 }
 
-class NumOfResults extends StatelessWidget {
-  const NumOfResults({super.key, required this.tab});
-
-  final SearchingTab tab;
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<SearchBloc, SearchState>(
-      builder: (context, state) {
-        return SizedBox(
-          width: 154,
-          height: 52, // גובה קבוע
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-            child: SpinBox(
-              value: state.numResults.toDouble(),
-              onChanged: (value) => context.read<SearchBloc>().add(
-                    UpdateNumResults(value.toInt()),
-                  ),
-              min: 10,
-              max: 10000,
-              decoration: const InputDecoration(
-                labelText: 'מספר תוצאות',
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12.0,
-                  vertical: 8.0,
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
 class SearchTermsDisplay extends StatefulWidget {
   const SearchTermsDisplay({super.key, required this.tab});
 
