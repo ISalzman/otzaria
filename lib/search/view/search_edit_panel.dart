@@ -7,6 +7,7 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/view/advanced_search_controls.dart';
 import 'package:otzaria/search/view/category_tree_selector.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -56,16 +57,24 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
       return;
     }
 
-    final facetsToSearch = _selectedCategoryFacets.toList();
+    final facetsToSearch = _selectedCategoryFacets.isEmpty
+        ? ['/']
+        : _selectedCategoryFacets.toList();
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      widget.tab.searchBloc.state.configuration.searchMode,
+      customSpacing: widget.tab.spacingValues,
+      alternativeWords: widget.tab.alternativeWords,
+      searchOptions: widget.tab.searchOptions,
+    );
 
     widget.tab.updateTitleFromAppliedQuery(query);
     widget.tab.searchBloc.add(SetFacetsWithoutSearch(facetsToSearch));
     widget.tab.searchBloc.add(
       UpdateSearchQuery(
         query,
-        customSpacing: widget.tab.spacingValues,
-        alternativeWords: widget.tab.alternativeWords,
-        searchOptions: widget.tab.searchOptions,
+        customSpacing: normalizedParameters.customSpacing,
+        alternativeWords: normalizedParameters.alternativeWords,
+        searchOptions: normalizedParameters.searchOptions,
       ),
     );
 
@@ -252,9 +261,7 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
                     textDirection: TextDirection.rtl,
                   ),
                   _buildSearchModeToggle(state),
-                  if (widget.tab.spacingValues.isEmpty &&
-                      !state.fuzzy &&
-                      !state.isTypoToleranceEnabled)
+                  if (widget.tab.spacingValues.isEmpty && !state.fuzzy)
                     _buildDistanceField(context, state),
                 ],
               ),

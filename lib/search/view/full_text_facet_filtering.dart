@@ -8,6 +8,7 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:otzaria/models/books.dart';
@@ -88,11 +89,19 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
   }
 
   void _setFacet(BuildContext context, String facet) {
+    final searchMode =
+        context.read<SearchBloc>().state.configuration.searchMode;
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      searchMode,
+      customSpacing: widget.tab.spacingValues,
+      alternativeWords: widget.tab.alternativeWords,
+      searchOptions: widget.tab.searchOptions,
+    );
     context.read<SearchBloc>().add(SetFacet(
           facet,
-          customSpacing: widget.tab.spacingValues,
-          alternativeWords: widget.tab.alternativeWords,
-          searchOptions: widget.tab.searchOptions,
+          customSpacing: normalizedParameters.customSpacing,
+          alternativeWords: normalizedParameters.alternativeWords,
+          searchOptions: normalizedParameters.searchOptions,
         ));
   }
 

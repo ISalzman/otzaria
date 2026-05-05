@@ -15,7 +15,6 @@ class Bookmark {
   final String? workspaceName;
   final List<String>? searchScopeFacets;
   final SearchMode? searchMode;
-  final bool typoToleranceEnabled;
 
   /// A stable key for history management, unique per book title.
   String get historyKey => isSearch ? ref : book.title;
@@ -32,7 +31,6 @@ class Bookmark {
     this.workspaceName,
     this.searchScopeFacets,
     this.searchMode,
-    this.typoToleranceEnabled = false,
   });
 
   factory Bookmark.fromJson(Map<String, dynamic> json) {
@@ -69,13 +67,19 @@ class Bookmark {
           ? List<String>.from(json['searchScopeFacets'] as List)
           : null,
       searchMode: json['searchMode'] != null
-          ? SearchMode.values.firstWhere(
-              (mode) => mode.name == json['searchMode'],
-              orElse: () => SearchMode.advanced,
-            )
+          ? _trySearchModeFromName(json['searchMode'] as String)
           : null,
-      typoToleranceEnabled: json['typoToleranceEnabled'] as bool? ?? false,
     );
+  }
+
+  static SearchMode? _trySearchModeFromName(String rawMode) {
+    for (final mode in SearchMode.values) {
+      if (mode.name == rawMode) {
+        return mode;
+      }
+    }
+
+    return null;
   }
 
   Map<String, dynamic> toJson() {
@@ -92,7 +96,6 @@ class Bookmark {
       'workspaceName': workspaceName,
       'searchScopeFacets': searchScopeFacets,
       'searchMode': searchMode?.name,
-      'typoToleranceEnabled': typoToleranceEnabled,
     };
   }
 }

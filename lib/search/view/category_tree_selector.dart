@@ -43,10 +43,8 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
   void didUpdateWidget(covariant SearchScopeSelector oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_sameFacets(oldWidget.selectedFacets, widget.selectedFacets)) {
-      // Skip if the new selection matches what we already emit — prevents the
-      // "echo" loop where we send {'/'} as a no-selection fallback, the parent
-      // reflects it back, and _applyExternalSelection flips _searchAllCategories.
-      if (!_sameFacets(widget.selectedFacets, _activeSelection)) {
+      // Skip if the new selection matches the explicit selection state we emit.
+      if (!_sameFacets(widget.selectedFacets, _selectionState)) {
         _applyExternalSelection(widget.selectedFacets);
       }
     }
@@ -81,7 +79,7 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
       if (!mounted) {
         return;
       }
-      widget.onSelectionChanged(_activeSelection);
+      widget.onSelectionChanged(_selectionState);
     });
   }
 
@@ -110,10 +108,8 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
     return a.length == b.length && a.containsAll(b);
   }
 
-  Set<String> get _activeSelection =>
-      _searchAllCategories || _manualSelectedFacets.isEmpty
-          ? {'/'}
-          : Set<String>.from(_manualSelectedFacets);
+  Set<String> get _selectionState =>
+      _searchAllCategories ? {'/'} : Set<String>.from(_manualSelectedFacets);
 
   void _setSearchAllCategories(bool value) {
     setState(() {
@@ -123,7 +119,7 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
       searchAllCategories: _searchAllCategories,
       manualFacets: _manualSelectedFacets,
     );
-    widget.onSelectionChanged(_activeSelection);
+    widget.onSelectionChanged(_selectionState);
   }
 
   void _onManualSelectionChanged(Set<String> selection) {
@@ -135,7 +131,20 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
       manualFacets: _manualSelectedFacets,
     );
     if (!_searchAllCategories) {
-      widget.onSelectionChanged(_activeSelection);
+      widget.onSelectionChanged(_selectionState);
+    }
+  }
+
+  void _resetManualSelection() {
+    setState(() {
+      _manualSelectedFacets = {};
+    });
+    SearchScopePreferences.save(
+      searchAllCategories: _searchAllCategories,
+      manualFacets: _manualSelectedFacets,
+    );
+    if (!_searchAllCategories) {
+      widget.onSelectionChanged(_selectionState);
     }
   }
 
@@ -212,6 +221,7 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
             CategoryTreeSelector(
               selectedFacets: _manualSelectedFacets,
               onSelectionChanged: _onManualSelectionChanged,
+              onResetSelection: _resetManualSelection,
               shrinkWrap: true,
             )
           else
@@ -219,6 +229,7 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
               child: CategoryTreeSelector(
                 selectedFacets: _manualSelectedFacets,
                 onSelectionChanged: _onManualSelectionChanged,
+                onResetSelection: _resetManualSelection,
               ),
             ),
         ],
@@ -236,12 +247,16 @@ class CategoryTreeSelector extends StatefulWidget {
   /// קריאה חוזרת כשהבחירה משתנה
   final ValueChanged<Set<String>> onSelectionChanged;
 
+  /// קריאה חוזרת לאיפוס בחירה ידנית בלי לשנות את מצב הסוויץ' בהורה.
+  final VoidCallback? onResetSelection;
+
   final bool shrinkWrap;
 
   const CategoryTreeSelector({
     super.key,
     required this.selectedFacets,
     required this.onSelectionChanged,
+    this.onResetSelection,
     this.shrinkWrap = false,
   });
 
@@ -467,7 +482,6 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
           children: [
             _buildHeader(context),
             const SizedBox(height: 8),
@@ -479,7 +493,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                 child: treeBody,
               )
             else
-              Flexible(child: treeBody),
+              Expanded(child: treeBody),
           ],
         );
       },
@@ -512,7 +526,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
             message: 'איפוס בחירה',
             child: IconButton(
               icon: const Icon(FluentIcons.arrow_reset_24_regular, size: 16),
-              onPressed: () => _toggleAll(false),
+              onPressed: widget.onResetSelection ?? () => _toggleAll(false),
               constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
               padding: const EdgeInsets.all(6),
               style: IconButton.styleFrom(
@@ -598,35 +612,39 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Text(
-                  'נמצאו ${results.length} תוצאות',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onSurfaceVariant,
+              Text(
+                'נמצאו ${results.length} תוצאות',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                textDirection: TextDirection.rtl,
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  SizedBox(
+                    height: 30,
+                    child: RecommendedActionButton(
+                      text: 'בחר הכל',
+                      icon: FluentIcons.checkbox_checked_24_regular,
+                      onPressed: () => _selectAllSearchResults(results),
+                    ),
                   ),
-                  textDirection: TextDirection.rtl,
-                ),
-              ),
-              SizedBox(
-                height: 30,
-                child: RecommendedActionButton(
-                  text: 'בחר הכל',
-                  icon: FluentIcons.checkbox_checked_24_regular,
-                  onPressed: () => _selectAllSearchResults(results),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                height: 30,
-                child: NeutralActionButton(
-                  text: 'נקה',
-                  icon: FluentIcons.eraser_24_regular,
-                  onPressed: () => _clearSearchResultsSelection(results),
-                ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 30,
+                    child: NeutralActionButton(
+                      text: 'נקה',
+                      icon: FluentIcons.eraser_24_regular,
+                      onPressed: () => _clearSearchResultsSelection(results),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

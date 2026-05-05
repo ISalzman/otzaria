@@ -1,7 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/core/app_restart.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
@@ -9,7 +10,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 
 class EmptyLibraryScreen extends StatelessWidget {
-  final VoidCallback onLibraryLoaded;
+  final Future<void> Function() onLibraryLoaded;
   final EmptyLibraryBloc? bloc;
 
   const EmptyLibraryScreen({
@@ -34,7 +35,7 @@ class EmptyLibraryScreen extends StatelessWidget {
 }
 
 class _EmptyLibraryView extends StatefulWidget {
-  final VoidCallback onLibraryLoaded;
+  final Future<void> Function() onLibraryLoaded;
 
   const _EmptyLibraryView({required this.onLibraryLoaded});
 
@@ -43,13 +44,22 @@ class _EmptyLibraryView extends StatefulWidget {
 }
 
 class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
+  Future<void> _handleLibraryLoaded() async {
+    try {
+      await widget.onLibraryLoaded();
+    } catch (error) {
+      UiSnack.showError('שגיאה בטעינת הספרייה. נסה שוב.');
+      debugPrint('Failed to refresh library after selection: $error');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: BlocConsumer<EmptyLibraryBloc, EmptyLibraryState>(
         listener: (context, state) {
           if (state is EmptyLibraryDirectorySelected) {
-            _showRestartDialog(context);
+            unawaited(_handleLibraryLoaded());
           }
           if (state is EmptyLibraryZipExtracted) {
             UiSnack.showSuccess(
@@ -84,14 +94,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
         },
       ),
     );
-  }
-
-  void _showRestartDialog(BuildContext context) {
-    showRestartRequiredDialog(context: context).then((shouldCloseApp) async {
-      if (shouldCloseApp == true) {
-        await restartApplication();
-      }
-    });
   }
 
   /// מציג דיאלוג המסביר למשתמש את מגבלת Android Scoped Storage.

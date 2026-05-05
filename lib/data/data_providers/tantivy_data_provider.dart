@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:search_engine/search_engine.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/core/app_paths.dart';
 
@@ -360,7 +361,8 @@ class TantivyDataProvider {
 
   Future<int> countTexts(String query, List<String> books, List<String> facets,
       {bool fuzzy = false,
-      int distance = 2,
+      int distance = 0,
+      SearchMode searchMode = SearchMode.exact,
       Map<String, String>? customSpacing,
       Map<int, List<String>>? alternativeWords,
       Map<String, Map<String, bool>>? searchOptions}) async {
@@ -392,9 +394,22 @@ class TantivyDataProvider {
     _ongoingCounts.add(cacheKey);
     final index = await engine;
 
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      searchMode,
+      customSpacing: customSpacing,
+      alternativeWords: alternativeWords,
+      searchOptions: searchOptions,
+    );
+
     // המרת החיפוש לפורמט המנוע החדש - בדיוק כמו ב-SearchRepository!
     final params = SearchQueryBuilder.prepareQueryParams(
-        query, fuzzy, distance, customSpacing, alternativeWords, searchOptions);
+      query,
+      fuzzy,
+      distance,
+      normalizedParameters.customSpacing,
+      normalizedParameters.alternativeWords,
+      normalizedParameters.searchOptions,
+    );
     final List<String> regexTerms = params['regexTerms'] as List<String>;
     final int effectiveSlop = params['effectiveSlop'] as int;
     final int maxExpansions = params['maxExpansions'] as int;
@@ -464,15 +479,29 @@ class TantivyDataProvider {
     String query,
     List<String> facets, {
     bool fuzzy = false,
-    int distance = 2,
+    int distance = 0,
+    SearchMode searchMode = SearchMode.exact,
     Map<String, String>? customSpacing,
     Map<int, List<String>>? alternativeWords,
     Map<String, Map<String, bool>>? searchOptions,
   }) async {
     final index = await engine;
 
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      searchMode,
+      customSpacing: customSpacing,
+      alternativeWords: alternativeWords,
+      searchOptions: searchOptions,
+    );
+
     final params = SearchQueryBuilder.prepareQueryParams(
-        query, fuzzy, distance, customSpacing, alternativeWords, searchOptions);
+      query,
+      fuzzy,
+      distance,
+      normalizedParameters.customSpacing,
+      normalizedParameters.alternativeWords,
+      normalizedParameters.searchOptions,
+    );
     final List<String> regexTerms = params['regexTerms'] as List<String>;
     final int effectiveSlop = params['effectiveSlop'] as int;
     final int maxExpansions = params['maxExpansions'] as int;
@@ -512,7 +541,8 @@ class TantivyDataProvider {
   Future<Map<String, int>> countTextsForMultipleFacets(
       String query, List<String> books, List<String> facets,
       {bool fuzzy = false,
-      int distance = 2,
+      int distance = 0,
+      SearchMode searchMode = SearchMode.exact,
       Map<String, String>? customSpacing,
       Map<int, List<String>>? alternativeWords,
       Map<String, Map<String, bool>>? searchOptions,
@@ -524,8 +554,21 @@ class TantivyDataProvider {
     final index = await engine;
     final results = <String, int>{};
 
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      searchMode,
+      customSpacing: customSpacing,
+      alternativeWords: alternativeWords,
+      searchOptions: searchOptions,
+    );
+
     final params = SearchQueryBuilder.prepareQueryParams(
-        query, fuzzy, distance, customSpacing, alternativeWords, searchOptions);
+      query,
+      fuzzy,
+      distance,
+      normalizedParameters.customSpacing,
+      normalizedParameters.alternativeWords,
+      normalizedParameters.searchOptions,
+    );
     final List<String> regexTerms = params['regexTerms'] as List<String>;
     final int effectiveSlop = params['effectiveSlop'] as int;
     final int maxExpansions = params['maxExpansions'] as int;

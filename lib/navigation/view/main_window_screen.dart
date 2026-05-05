@@ -454,6 +454,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
         return;
       }
 
+      if (!kIsWeb &&
+          (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        await windowManager.show();
+        await windowManager.focus();
+      }
+
+      if (!mounted) return;
       context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
       context.read<PluginSystemBloc>().add(
             InstallRemotePluginRequested(
@@ -1719,8 +1726,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 _emptyLibraryBloc ??= EmptyLibraryBloc();
                 _cachedLibraryPage = EmptyLibraryScreen(
                   bloc: _emptyLibraryBloc,
-                  onLibraryLoaded: () {
-                    context.read<NavigationBloc>().refreshLibrary();
+                  onLibraryLoaded: () async {
+                    await context.read<NavigationBloc>().refreshLibrary();
+                    if (!context.mounted) {
+                      return;
+                    }
+                    context.read<LibraryBloc>().add(RefreshLibrary());
                   },
                 );
               } else {

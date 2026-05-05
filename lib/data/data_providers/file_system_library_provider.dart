@@ -396,6 +396,13 @@ class FileSystemLibraryProvider implements LibraryProvider {
     _keyToPath = null;
   }
 
+  /// Resets runtime state so the provider re-reads the active library path.
+  void resetRuntimeState() {
+    _categoryIdToPath.clear();
+    _keyToPath = null;
+    _isInitialized = false;
+  }
+
   @visibleForTesting
   void seedKeyToPathForTesting({
     required Map<String, String> keyToPath,

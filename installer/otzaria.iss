@@ -137,32 +137,40 @@ begin
     Result := ExpandConstant('{userappdata}\otzaria');
 end;
 
-// מוחק תוכן תיקייה רקורסיבית, אך מדלג על תת-תיקיית books (שמכילה את מסדי הנתונים)
-procedure SafeDelTreeExceptBooks(const BasePath: string);
+procedure DelTreeExceptBooks(Path: String);
 var
   FindRec: TFindRec;
-  SubDir: string;
+  ChildPath: String;
 begin
-  if FindFirst(BasePath + '\*', FindRec) then
-  try
-    repeat
-      if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
-      begin
-        SubDir := BasePath + '\' + FindRec.Name;
-        if (FindRec.Attributes and faDirectory) = faDirectory then
+  if not DirExists(Path) then
+    exit;
+
+  if FindFirst(Path + '\*', FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
         begin
-          if LowerCase(FindRec.Name) = 'books' then
-            Continue;
-          SafeDelTreeExceptBooks(SubDir);
-          RemoveDir(SubDir);
-        end
-        else
-          DeleteFile(SubDir);
-      end;
-    until not FindNext(FindRec);
-  finally
-    FindClose(FindRec);
+          ChildPath := Path + '\' + FindRec.Name;
+
+          if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+          begin
+            if Lowercase(FindRec.Name) <> 'books' then
+            begin
+              DelTreeExceptBooks(ChildPath);
+              RemoveDir(ChildPath);
+            end;
+          end
+          else
+            DeleteFile(ChildPath);
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
   end;
+
+  RemoveDir(Path);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -184,24 +192,24 @@ begin
     begin
       AppDataPath := GetDataDir('');
       if DirExists(AppDataPath) then
-        SafeDelTreeExceptBooks(AppDataPath);
+        DelTreeExceptBooks(AppDataPath);
 
       AppDataPath := ExpandConstant('{userappdata}\otzaria');
       if DirExists(AppDataPath) then
-        SafeDelTreeExceptBooks(AppDataPath);
+        DelTreeExceptBooks(AppDataPath);
 
       AppDataPath := ExpandConstant('{commonappdata}\otzaria');
       if DirExists(AppDataPath) then
-        SafeDelTreeExceptBooks(AppDataPath);
+        DelTreeExceptBooks(AppDataPath);
 
       AppDataPath := ExpandConstant('{localappdata}\otzaria');
       if DirExists(AppDataPath) then
-        SafeDelTreeExceptBooks(AppDataPath);
-
+        DelTreeExceptBooks(AppDataPath);
+        
       // Delete old settings and personal notes (in AppData/Roaming)
       AppDataPath := ExpandConstant('{userappdata}\com.example');
       if DirExists(AppDataPath) then
-        SafeDelTreeExceptBooks(AppDataPath);
+        DelTreeExceptBooks(AppDataPath);
     end;
   end;
 end;

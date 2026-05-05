@@ -167,6 +167,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     final Map<int, List<String>> alternativeWords;
     final Map<String, String> spacingValues;
     final SearchMode searchMode;
+    final int searchDistance;
     final PdfLayoutMode layoutMode;
 
     if (current is PdfBookInitial) {
@@ -176,6 +177,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       alternativeWords = current.alternativeWords;
       spacingValues = current.spacingValues;
       searchMode = current.searchMode;
+      searchDistance = current.searchDistance;
       layoutMode = current.layoutMode;
     } else if (current is PdfBookLoading) {
       book = current.book;
@@ -184,6 +186,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       alternativeWords = current.alternativeWords;
       spacingValues = current.spacingValues;
       searchMode = current.searchMode;
+      searchDistance = current.searchDistance;
       layoutMode = current.layoutMode;
     } else if (current is PdfBookLoaded) {
       // Already loaded, just update
@@ -220,6 +223,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       alternativeWords: alternativeWords,
       spacingValues: spacingValues,
       searchMode: searchMode,
+      searchDistance: searchDistance,
       layoutMode: layoutMode,
       isLoading: false, // Document is ready, so no longer loading
       loadSucceeded: true,
@@ -469,6 +473,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
         alternativeWords: current.alternativeWords,
         spacingValues: current.spacingValues,
         searchMode: current.searchMode,
+        searchDistance: current.searchDistance,
         layoutMode: event.layoutMode,
       ));
     }
@@ -601,7 +606,14 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       alternativeWords: event.alternativeWords ?? current.alternativeWords,
       spacingValues: event.spacingValues ?? current.spacingValues,
       searchMode: event.searchMode ?? current.searchMode,
+      searchDistance: event.searchDistance ?? current.searchDistance,
     ));
+
+    tab.searchOptions = event.searchOptions ?? current.searchOptions;
+    tab.alternativeWords = event.alternativeWords ?? current.alternativeWords;
+    tab.spacingValues = event.spacingValues ?? current.spacingValues;
+    tab.searchMode = event.searchMode ?? current.searchMode;
+    tab.searchDistance = event.searchDistance ?? current.searchDistance;
   }
 
   void _onUpdateSearchResults(

@@ -7,6 +7,7 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -30,8 +31,50 @@ class TantivySearchResults extends StatefulWidget {
 
 class _TantivySearchResultsState extends State<TantivySearchResults> {
   static const int _maxUnbrokenWordLength = 12;
+  static const double _loadMoreThreshold = 200;
   final ScrollController _scrollController = ScrollController();
   final Map<String, List<InlineSpan>> _snippetCache = {};
+  bool _isAutoLoadInFlight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_handleScroll);
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    if (_scrollController.position.extentAfter > _loadMoreThreshold) {
+      return;
+    }
+
+    _maybeLoadMore();
+  }
+
+  void _maybeLoadMore() {
+    if (!mounted || _isAutoLoadInFlight) {
+      return;
+    }
+
+    final state = context.read<SearchBloc>().state;
+    final hasMoreResults = state.results.length < state.totalResults;
+
+    if (state.isLoading || !hasMoreResults) {
+      return;
+    }
+
+    _isAutoLoadInFlight = true;
+    context.read<SearchBloc>().add(
+          LoadMoreResults(
+            customSpacing: widget.tab.spacingValues,
+            alternativeWords: widget.tab.alternativeWords,
+            searchOptions: widget.tab.searchOptions,
+          ),
+        );
+  }
 
   String _searchResultDedupeKey({
     required String title,
@@ -69,6 +112,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
   }
@@ -76,11 +120,28 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constrains) {
-      return BlocBuilder<SearchBloc, SearchState>(
-        builder: (context, state) {
-          // עכשיו רק מציגים את התוצאות - השורה התחתונה מוצגת במקום אחר
-          return _buildResultsContent(state, constrains);
+      return BlocListener<SearchBloc, SearchState>(
+        listenWhen: (previous, current) =>
+            previous.isLoading != current.isLoading ||
+            previous.results.length != current.results.length ||
+            previous.totalResults != current.totalResults,
+        listener: (context, state) {
+          if (!state.isLoading) {
+            _isAutoLoadInFlight = false;
+          }
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _handleScroll();
+            }
+          });
         },
+        child: BlocBuilder<SearchBloc, SearchState>(
+          builder: (context, state) {
+            // עכשיו רק מציגים את התוצאות - השורה התחתונה מוצגת במקום אחר
+            return _buildResultsContent(state, constrains);
+          },
+        ),
       );
     });
   }
@@ -103,10 +164,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     }
 
     // תמיד נשתמש ב-ListView גם לתוצאה אחת - כך היא תופיע למעלה
-    // תיקון שגיאות כתיב: totalResults = מה שנטען בפועל, לכן בודקים hasMoreResults
-    final hasMoreResults = state.isTypoToleranceEnabled
-        ? state.hasMoreResults
-        : state.results.length < state.totalResults;
+    final hasMoreResults = state.results.length < state.totalResults;
     final showInlineLoadingIndicator =
         state.isLoading && state.results.isNotEmpty && !hasMoreResults;
     final showLoadMoreButton = hasMoreResults;
@@ -136,11 +194,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             );
           }
 
-          // תיקון שגיאות כתיב: totalResults = נטענו בפועל, לכן אין ספירה מדויקת
-          final isLevenshtein = state.isTypoToleranceEnabled;
-          final remainingText = isLevenshtein
-              ? 'טען תוצאות נוספות'
-              : 'טען תוצאות נוספות (${state.totalResults - state.results.length})';
+          final remainingText =
+              'טען תוצאות נוספות (${state.totalResults - state.results.length})';
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Center(
@@ -187,7 +242,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
               result.segment,
               rawHtml.hashCode,
               state.searchQuery.hashCode,
-              state.isTypoToleranceEnabled,
+              SearchQueryBuilder.hasTypoToleranceEnabled(
+                  widget.tab.searchOptions),
               widget.tab.searchOptionsChanged.value,
               widget.tab.alternativeWordsChanged.value,
               widget.tab.spacingValuesChanged.value,
@@ -225,7 +281,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                   searchOptions: widget.tab.searchOptions,
                   alternativeWords: widget.tab.alternativeWords,
                   customSpacing: widget.tab.spacingValues,
-                  typoToleranceEnabled: state.isTypoToleranceEnabled,
                 );
               },
             );
@@ -254,16 +309,14 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                   final currentMode =
                       widget.tab.searchBloc.state.configuration.searchMode;
 
-                  final shouldUseLegacyInBook = !hasEnabledOptions &&
+                    final shouldUseSimpleInBook = !hasEnabledOptions &&
                       !hasAlternativeWords &&
                       !hasSpacingValues &&
-                      !state.isTypoToleranceEnabled &&
                       !looksLikeRegex &&
-                      currentMode != SearchMode.fuzzy &&
-                      currentMode != SearchMode.levenshtein;
+                      currentMode != SearchMode.fuzzy;
 
                   final inBookMode =
-                      shouldUseLegacyInBook ? SearchMode.exact : currentMode;
+                      shouldUseSimpleInBook ? SearchMode.exact : currentMode;
 
                   if (result.isPdf) {
                     final pageNumber = result.segment.toInt() + 1;
@@ -284,8 +337,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                               alternativeWords: widget.tab.alternativeWords,
                               spacingValues: widget.tab.spacingValues,
                               searchMode: inBookMode,
-                              typoToleranceEnabled:
-                                  state.isTypoToleranceEnabled,
                               openLeftPane:
                                   (Settings.getValue<bool>('key-pin-sidebar') ??
                                           false) ||
@@ -315,8 +366,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                               alternativeWords: widget.tab.alternativeWords,
                               spacingValues: widget.tab.spacingValues,
                               searchMode: inBookMode,
-                              typoToleranceEnabled:
-                                  state.isTypoToleranceEnabled,
                               openLeftPane:
                                   (Settings.getValue<bool>('key-pin-sidebar') ??
                                           false) ||

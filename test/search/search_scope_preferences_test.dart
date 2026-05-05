@@ -41,7 +41,8 @@ void main() {
       expect(loaded.manualFacets, {'/תנך', '/הלכה/שוע'});
     });
 
-    test('לא שומר מצב שבור של תחום חיפוש ידני ריק', () async {
+    test('שומר מצב של תחום חיפוש ידני ריק בלי להדליק את כל הקטגוריות',
+        () async {
       await SearchScopePreferences.save(
         searchAllCategories: false,
         manualFacets: const {},
@@ -49,11 +50,11 @@ void main() {
 
       final loaded = SearchScopePreferences.load();
 
-      expect(loaded.searchAllCategories, isTrue);
+      expect(loaded.searchAllCategories, isFalse);
       expect(loaded.manualFacets, isEmpty);
     });
 
-    test('מתקן מצב persisted ישן של תחום ידני ריק', () async {
+    test('טוען מצב persisted של תחום ידני ריק כפי שנשמר', () async {
       await Settings.setValue<bool>('key-search-all-categories-enabled', false);
       await Settings.setValue<String>(
         'key-search-manual-category-facets',
@@ -62,11 +63,11 @@ void main() {
 
       final loaded = SearchScopePreferences.load();
 
-      expect(loaded.searchAllCategories, isTrue);
+      expect(loaded.searchAllCategories, isFalse);
       expect(loaded.manualFacets, isEmpty);
     });
 
-    test('מתקן payload חוקי שאינו רשימה למצב canonical', () async {
+    test('מטפל ב-payload חוקי שאינו רשימה בלי לשנות את מצב הסוויץ׳', () async {
       await Settings.setValue<bool>('key-search-all-categories-enabled', false);
       await Settings.setValue<String>(
         'key-search-manual-category-facets',
@@ -75,7 +76,7 @@ void main() {
 
       final loaded = SearchScopePreferences.load();
 
-      expect(loaded.searchAllCategories, isTrue);
+      expect(loaded.searchAllCategories, isFalse);
       expect(loaded.manualFacets, isEmpty);
     });
   });

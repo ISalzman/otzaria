@@ -406,6 +406,17 @@ class LibraryProviderManager {
     debugPrint('🔄 All provider caches cleared');
   }
 
+  /// Resets provider initialization so the active library can be reloaded.
+  void resetRuntimeState() {
+    _bookToProvider.clear();
+    _providers.clear();
+    databaseProvider.clearCache();
+    fileSystemProvider.resetRuntimeState();
+    _isInitialized = false;
+    _initializationFuture = null;
+    debugPrint('🔄 LibraryProviderManager runtime state reset');
+  }
+
   @visibleForTesting
   void seedMappingsForTesting({
     required Map<BookCompositeKey, LibraryProvider> mapping,

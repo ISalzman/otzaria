@@ -7,9 +7,8 @@ $targetPaths = @(
 
 foreach ($targetPath in $targetPaths) {
     if (Test-Path -Path $targetPath) {
-        # מחיקת כל התוכן פרט לתיקיית books (שמכילה את מסדי הנתונים)
-        Get-ChildItem -Path $targetPath -Force | Where-Object { $_.Name -ine 'books' } | Remove-Item -Force -Recurse
-        Write-Host "Erased contents of '$targetPath' (books directory preserved)."
+        Remove-Item -Path $targetPath -Force -Recurse
+        Write-Host "Successfully erased contents of '$targetPath'."
     }
     else {
         Write-Host "Directory '$targetPath' not found. Skipping deletion."

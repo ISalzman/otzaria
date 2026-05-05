@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/search/bloc/search_bloc.dart';
-import 'package:otzaria/search/bloc/search_event.dart';
-import 'package:otzaria/search/bloc/search_state.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
@@ -221,8 +218,6 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
             _buildInputColumn(isEnabled),
           ],
           const SizedBox(height: 16),
-          _buildTypoToleranceToggle(),
-          const SizedBox(height: 8),
           _buildCheckboxGrid(isEnabled, compactMode: true),
         ],
       );
@@ -247,75 +242,11 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildTypoToleranceToggle(),
-              const SizedBox(height: 8),
               _buildCheckboxGrid(isEnabled, compactMode: false),
             ],
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildTypoToleranceToggle() {
-    return BlocBuilder<SearchBloc, SearchState>(
-      bloc: widget.tab.searchBloc,
-      builder: (context, state) {
-        final isChecked = state.isTypoToleranceEnabled;
-        final colorScheme = Theme.of(context).colorScheme;
-
-        return InkWell(
-          onTap: () {
-            widget.tab.searchBloc.add(SetTypoTolerance(!isChecked));
-          },
-          borderRadius: BorderRadius.circular(4),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                textDirection: TextDirection.rtl,
-                children: [
-                  Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: isChecked
-                            ? colorScheme.primary
-                            : Colors.grey.shade600,
-                        width: 2,
-                      ),
-                      borderRadius: BorderRadius.circular(3),
-                      color: isChecked
-                          ? colorScheme.primary.withValues(alpha: 0.1)
-                          : Colors.transparent,
-                    ),
-                    child: isChecked
-                        ? Icon(
-                            FluentIcons.checkmark_24_regular,
-                            size: 14,
-                            color: colorScheme.primary,
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'שגיאות כתיב',
-                    textDirection: TextDirection.rtl,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -389,13 +320,15 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     suffixIcon: IconButton(
-                      icon: const Icon(FluentIcons.dismiss_24_regular, size: 20),
+                      icon:
+                          const Icon(FluentIcons.dismiss_24_regular, size: 20),
                       onPressed: isEnabled && _wordIndex != null
                           ? () {
                               final key = '${_wordIndex!}-${_wordIndex! + 1}';
                               widget.tab.spacingValues.remove(key);
                               widget.tab.spacingValuesChanged.value++;
-                              _getSpacingController(_wordIndex!, _wordIndex! + 1)
+                              _getSpacingController(
+                                      _wordIndex!, _wordIndex! + 1)
                                   .clear();
                             }
                           : null,
@@ -533,6 +466,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
 
   Widget _buildCheckboxGrid(bool isEnabled, {required bool compactMode}) {
     const List<String> options = [
+      SearchQueryBuilder.typoToleranceOptionKey,
       'קידומות דקדוקיות',
       'סיומות דקדוקיות',
       'קידומות',
@@ -660,6 +594,12 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                 Expanded(child: buildCheckbox(options[4])),
                 const SizedBox(width: 8),
                 Expanded(child: buildCheckbox(options[5])),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: buildCheckbox(options[6])),
               ],
             ),
           ],

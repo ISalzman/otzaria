@@ -32,6 +32,27 @@ class PluginRuntimeDispatcher {
 
   final Map<String, Future<void> Function()> _reloadCallbacks = {};
 
+  Future<void> prepareForAppRestart() async {
+    final controllerEntries = _controllers.entries.toList(growable: false);
+
+    _controllers.clear();
+    _enabledCache.clear();
+    _permissionCache.clear();
+    _reloadCallbacks.clear();
+
+    for (final entry in controllerEntries) {
+      try {
+        await entry.value.loadUrl(
+          urlRequest: URLRequest(
+            url: WebUri.uri(Uri.parse('about:blank')),
+          ),
+        );
+      } catch (_) {
+        // The underlying WebView may already be tearing down.
+      }
+    }
+  }
+
   void registerReloadCallback(String pluginId, Future<void> Function() callback) {
     _reloadCallbacks[pluginId] = callback;
   }
