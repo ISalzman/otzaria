@@ -368,9 +368,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (_hasCheckedAutoIndex) return;
     _hasCheckedAutoIndex = true;
 
-    // Check if auto-update is enabled
     if (context.read<SettingsBloc>().state.autoUpdateIndex) {
       _startIndexing(context);
+    } else {
+      _checkIndexStatusOnly(context);
     }
   }
 
@@ -378,6 +379,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
     DataRepository.instance.library.then((library) {
       if (!mounted || !context.mounted) return;
       context.read<IndexingBloc>().add(StartIndexing(library));
+    });
+  }
+
+  void _checkIndexStatusOnly(BuildContext context) {
+    DataRepository.instance.library.then((library) {
+      if (!mounted || !context.mounted) return;
+      context.read<IndexingBloc>().add(CheckIndexStatus(library));
     });
   }
 
@@ -1444,6 +1452,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
               if (context.read<SettingsBloc>().state.autoUpdateIndex) {
                 context.read<IndexingBloc>().add(
                     IndexSpecificBooks(state.newBooksToIndex!, state.library!));
+              } else {
+                context
+                    .read<IndexingBloc>()
+                    .add(CheckIndexStatus(state.library!));
               }
             },
           ),
