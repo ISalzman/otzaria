@@ -33,9 +33,17 @@ void main() {
       expect(advanced, isNot(equals(exact)));
     });
 
-    test('changes when typo tolerance changes', () {
-      final withTypoTolerance = _loadedState(typoToleranceEnabled: true);
-      final withoutTypoTolerance = _loadedState();
+    test('changes when typo tolerance option changes', () {
+      final withTypoTolerance = _loadedState(
+        searchOptions: const {
+          'אמר_0': {'שגיאות כתיב': true},
+        },
+      );
+      final withoutTypoTolerance = _loadedState(
+        searchOptions: const {
+          'אמר_0': {'שגיאות כתיב': false},
+        },
+      );
 
       expect(withTypoTolerance, isNot(equals(withoutTypoTolerance)));
     });
@@ -47,7 +55,6 @@ TextBookLoaded _loadedState({
   Map<int, List<String>> alternativeWords = const {},
   Map<String, String> spacingValues = const {},
   SearchMode searchMode = SearchMode.exact,
-  bool typoToleranceEnabled = false,
 }) {
   return TextBookLoaded(
     book: TextBook(title: 'ספר בדיקה'),
@@ -70,7 +77,6 @@ TextBookLoaded _loadedState({
     alternativeWords: alternativeWords,
     spacingValues: spacingValues,
     searchMode: searchMode,
-    typoToleranceEnabled: typoToleranceEnabled,
     scrollController: ItemScrollController(),
     positionsListener: ItemPositionsListener.create(),
   );

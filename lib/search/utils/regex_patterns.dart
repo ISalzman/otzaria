@@ -1,3 +1,5 @@
+import 'package:characters/characters.dart';
+
 /// מרכז רגקסים לחיפוש - כל הרגקסים במקום אחד
 ///
 /// קובץ זה מרכז את כל הרגקסים המשמשים לחיפוש במערכת
@@ -177,6 +179,73 @@ class SearchRegexPatterns {
       }
       variant.write(word.substring(originalCharIndex));
       variations.add(variant.toString());
+    }
+
+    return variations.toList();
+  }
+
+  static const Map<String, List<String>> _commonHebrewTypoSubstitutions = {
+    'א': ['ע', 'ה'],
+    'ע': ['א', 'ה'],
+    'ה': ['א', 'ע', 'ח'],
+    'ח': ['ה'],
+    'ו': ['ב'],
+    'ב': ['ו'],
+    'כ': ['ק'],
+    'ק': ['כ'],
+    'ט': ['ת'],
+    'ת': ['ט'],
+    'ס': ['ש', 'שׁ', 'שׂ'],
+    'ש': ['ס', 'שׁ', 'שׂ'],
+    'שׁ': ['ס', 'ש', 'שׂ'],
+    'שׂ': ['ס', 'ש', 'שׁ'],
+    'צ': ['ז'],
+    'ז': ['צ'],
+  };
+
+  /// יוצר וריאציות עם עד החלפת אות אחת לפי שגיאות עבריות נפוצות.
+  static List<String> generateCommonHebrewTypoVariations(String word) {
+    if (word.isEmpty) return [word];
+
+    final graphemes = word.characters.toList();
+    final variations = <String>{word};
+
+    for (int i = 0; i < graphemes.length; i++) {
+      final substitutes = _commonHebrewTypoSubstitutions[graphemes[i]];
+      if (substitutes == null || substitutes.isEmpty) {
+        continue;
+      }
+
+      for (final substitute in substitutes) {
+        final next = List<String>.from(graphemes);
+        next[i] = substitute;
+        variations.add(next.join());
+      }
+    }
+
+    for (int i = 0; i < graphemes.length - 1; i++) {
+      if (graphemes[i] == graphemes[i + 1]) {
+        continue;
+      }
+
+      final transposed = List<String>.from(graphemes);
+      final current = transposed[i];
+      transposed[i] = transposed[i + 1];
+      transposed[i + 1] = current;
+      variations.add(transposed.join());
+    }
+
+    return variations.toList();
+  }
+
+  /// יוצר את כל וריאציות ה-fuzzy הליטרליות: כתיב מלא/חסר + טעות שכיחה אחת.
+  static List<String> generateFuzzyLiteralVariations(String word) {
+    if (word.isEmpty) return [word];
+
+    final variations = <String>{};
+    for (final spellingVariation
+        in generateFullPartialSpellingVariations(word)) {
+      variations.addAll(generateCommonHebrewTypoVariations(spellingVariation));
     }
 
     return variations.toList();

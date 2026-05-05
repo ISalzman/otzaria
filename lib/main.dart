@@ -444,7 +444,7 @@ Future<void> _runAppBootstrap() async {
 }
 
 /// אתחול כבד שרץ בזמן שה-splash מוצג.
-Future<void> _heavyInitialize() async {
+Future<void> _initializeProcessSingletons() async {
   // השחרור של ה-completer חייב לקרות גם אם אחד משלבי האתחול נכשל.
   try {
     await RustLib.init();
@@ -470,36 +470,6 @@ Future<void> _heavyInitialize() async {
   await createDirs();
   await loadCerts();
 
-  await SqliteDataProvider.instance.initialize();
-
-  try {
-    final cacheDir = await getTemporaryDirectory();
-    Pdfrx.getCacheDirectory = () => cacheDir.path;
-    debugPrint('Pdfrx cache directory set to: ${cacheDir.path}');
-  } catch (error, stackTrace) {
-    _logNonFatalInitializationError('Pdfrx cache directory', error, stackTrace);
-  }
-
-  try {
-    if (await BackupService.shouldPerformAutoBackup()) {
-      await BackupService.performAutoBackup();
-    }
-  } catch (error, stackTrace) {
-    _logNonFatalInitializationError('Automatic backup', error, stackTrace);
-  }
-
-  await initPluginDatabaseSources();
-
-  try {
-    await PluginProtocolRegistrationService().ensureRegistered();
-  } catch (error, stackTrace) {
-    _logNonFatalInitializationError(
-      'Plugin protocol registration',
-      error,
-      stackTrace,
-    );
-  }
-
   try {
     await NotificationService().init();
   } catch (error, stackTrace) {
@@ -512,6 +482,47 @@ Future<void> _heavyInitialize() async {
     _logNonFatalInitializationError(
         'Direct error report queue', error, stackTrace);
   }
+}
+
+Future<void> _initializeRestartableRuntime() async {
+  await initHive();
+  await SqliteDataProvider.instance.initialize();
+
+  try {
+    final cacheDir = await getTemporaryDirectory();
+    Pdfrx.getCacheDirectory = () => cacheDir.path;
+    debugPrint('Pdfrx cache directory set to: ${cacheDir.path}');
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError('Pdfrx cache directory', error, stackTrace);
+  }
+
+  await initPluginDatabaseSources();
+
+  try {
+    if (await BackupService.shouldPerformAutoBackup()) {
+      await BackupService.performAutoBackup();
+    }
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError('Automatic backup', error, stackTrace);
+  }
+
+  try {
+    await PluginProtocolRegistrationService().ensureRegistered();
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError(
+      'Plugin protocol registration',
+      error,
+      stackTrace,
+    );
+  }
+
+}
+
+Future<void>? _processInitializationFuture;
+
+Future<void> _ensureBootstrapInitialized() {
+  return (_processInitializationFuture ??= _initializeProcessSingletons())
+      .then((_) => _initializeRestartableRuntime());
 }
 
 Future<void> _enqueueExternalActivationArgs(List<String> args) async {
@@ -552,7 +563,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
   @override
   void initState() {
     super.initState();
-    _heavyInitialize().then((_) {
+    _ensureBootstrapInitialized().then((_) {
       if (!mounted) return;
       setState(() {
         _historyRepository = HistoryRepository();

@@ -153,6 +153,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   bool _isPageTurnInProgress = false;
   bool _pdfViewerSuspended = false;
   bool _readerFocusAndHideQueued = false;
+  bool _bookHasCommentaryLinks = false;
   _PendingBookPageTurn? _pendingPageTurn;
 
   // Local UI state that syncs with Bloc
@@ -291,7 +292,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         alternativeWords: widget.tab.alternativeWords,
         spacingValues: widget.tab.spacingValues,
         searchMode: widget.tab.searchMode,
-        typoToleranceEnabled: widget.tab.typoToleranceEnabled,
         layoutMode: initialLayoutMode,
       ),
     );
@@ -444,11 +444,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final int endLine =
         widget.tab.currentTextLineNumberEnd ?? startLine + _defaultPdfLineRange;
 
-    final linksInRange = widget.tab.links
-        .where((l) => l.index1 >= startLine && l.index1 <= endLine)
-        .length;
-    debugPrint(
-        '🔍 [PDF-DEBUG] _getCurrentPdfLinesRange: currentLine=$currentLine → range $startLine–$endLine, linksInRange=$linksInRange (total links=${widget.tab.links.length})');
     return (startLine: startLine, endLine: endLine);
   }
 
@@ -527,11 +522,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   void _recordCommentaryOpenedIfNeeded() {
     if (_getRelevantContent().commentators.isNotEmpty) {
       context.read<TourCubit>().recordInteraction(
-        TourInteraction(
-          type: TourInteractionType.commentaryUsed,
-          primaryValue: widget.tab.title,
-        ),
-      );
+            TourInteraction(
+              type: TourInteractionType.commentaryUsed,
+              primaryValue: widget.tab.title,
+            ),
+          );
     }
   }
 
@@ -552,6 +547,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   void _maybeRegisterPdfCommentaryOpportunity() {
     if (_linksLoading) {
+      return;
+    }
+
+    if (!_bookHasCommentaryLinks) {
       return;
     }
 
@@ -1922,6 +1921,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 l.connectionType.toUpperCase() == 'COMMENTARY' ||
                 l.connectionType.toUpperCase() == 'TARGUM')
             .length;
+        _bookHasCommentaryLinks = commentaryCount > 0;
         debugPrint(
             '📚 [PDF-DEBUG] Links loaded: ${loadedLinks.length} total, $commentaryCount commentary/targum');
         if (loadedLinks.isNotEmpty) {
@@ -2544,8 +2544,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                         initialAlternativeWords: widget.tab.alternativeWords,
                         initialSpacingValues: widget.tab.spacingValues,
                         initialSearchMode: widget.tab.searchMode,
-                        initialTypoToleranceEnabled:
-                            widget.tab.typoToleranceEnabled,
+                        initialSearchDistance: widget.tab.searchDistance,
                         onSearchResultNavigated: _ensureSearchTabIsActive,
                       )
                     : const Center(
@@ -3410,19 +3409,45 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Future<void> _handlePrintPress(BuildContext context) async {
     if (!context.mounted) return;
     final file = File(widget.tab.book.path);
+    final currentPage = widget.tab.pdfViewerController.isReady
+        ? (widget.tab.pdfViewerController.pageNumber ?? widget.tab.pageNumber)
+        : widget.tab.pageNumber;
+    final currentLayoutMode = switch (_bloc.state) {
+      PdfBookInitial initial => initial.layoutMode,
+      PdfBookLoaded loaded => loaded.layoutMode,
+      _ => PdfLayoutMode.regularView,
+    };
     setState(() => _pdfViewerSuspended = true);
-    await Navigator.of(context).push(MaterialPageRoute(
+    await Navigator.of(context).push<bool>(MaterialPageRoute(
       builder: (_) => PrintingScreen(
         data: Future.value(''),
         bookId: widget.tab.book.title,
         createPdfOverride: (_) => file.readAsBytes(),
+        initialPage: currentPage,
+        isBookView: currentLayoutMode == PdfLayoutMode.bookView,
+        pdfOutline: widget.tab.outline.value ?? [],
       ),
     ));
     if (mounted) {
-      setState(() => _pdfViewerSuspended = false);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _pdfViewFocusNode.requestFocus();
-      });
+      try {
+        // Always reset the pdfrx worker when leaving the print screen:
+        // - If printing happened: FPDF_DestroyLibrary() was called by the printing plugin,
+        //   corrupting the shared PDFium state that pdfrx depends on.
+        // - If preview loading was stuck: the worker may be blocked on PdfDocument.openData.
+        // A 3-second timeout ensures _pdfViewerSuspended is always cleared even if the
+        // worker is unresponsive.
+        await PdfrxEntryFunctions.instance
+            .stopBackgroundWorker()
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {
+      } finally {
+        if (mounted) {
+          setState(() => _pdfViewerSuspended = false);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _pdfViewFocusNode.requestFocus();
+          });
+        }
+      }
     }
   }
 

@@ -1,5 +1,18 @@
 import 'dart:math' as math;
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
+
+class SearchModeScopedParameters {
+  final Map<String, String> customSpacing;
+  final Map<int, List<String>> alternativeWords;
+  final Map<String, Map<String, bool>> searchOptions;
+
+  const SearchModeScopedParameters({
+    this.customSpacing = const {},
+    this.alternativeWords = const {},
+    this.searchOptions = const {},
+  });
+}
 
 /// מחלקת שירות לריכוז לוגיקת בניית שאילתות החיפוש.
 ///
@@ -8,6 +21,100 @@ import 'package:otzaria/search/utils/regex_patterns.dart';
 /// משמשת הן עבור חיפוש והן עבור ספירת תוצאות.
 class SearchQueryBuilder {
   SearchQueryBuilder._();
+
+  static const String typoToleranceOptionKey = 'שגיאות כתיב';
+
+  static String buildWordKey(String word, int index) => '${word}_$index';
+
+  static List<String> splitQueryWords(String query) {
+    final cleanedQuery = sanitizeQuery(query);
+    return cleanedQuery
+        .trim()
+        .split(SearchRegexPatterns.wordSplitter)
+        .where((w) => w.isNotEmpty)
+        .toList();
+  }
+
+  static bool usesAdvancedParameters(SearchMode searchMode) {
+    return searchMode == SearchMode.advanced;
+  }
+
+  static bool hasEnabledSearchOptions(
+    Map<String, Map<String, bool>>? searchOptions,
+  ) {
+    return searchOptions != null &&
+        searchOptions.isNotEmpty &&
+        searchOptions.values.any(
+          (wordOptions) => wordOptions.values.any((isEnabled) => isEnabled),
+        );
+  }
+
+  static SearchModeScopedParameters normalizeParametersForMode(
+    SearchMode searchMode, {
+    Map<String, String>? customSpacing,
+    Map<int, List<String>>? alternativeWords,
+    Map<String, Map<String, bool>>? searchOptions,
+  }) {
+    if (!usesAdvancedParameters(searchMode)) {
+      return const SearchModeScopedParameters();
+    }
+
+    final normalizedSpacing = <String, String>{};
+    if (customSpacing != null) {
+      for (final entry in customSpacing.entries) {
+        final trimmedValue = entry.value.trim();
+        if (trimmedValue.isNotEmpty) {
+          normalizedSpacing[entry.key] = trimmedValue;
+        }
+      }
+    }
+
+    final normalizedAlternatives = <int, List<String>>{};
+    if (alternativeWords != null) {
+      for (final entry in alternativeWords.entries) {
+        final cleanedWords = entry.value
+            .map((word) => word.trim())
+            .where((word) => word.isNotEmpty)
+            .toList(growable: false);
+        if (cleanedWords.isNotEmpty) {
+          normalizedAlternatives[entry.key] = cleanedWords;
+        }
+      }
+    }
+
+    final normalizedOptions = <String, Map<String, bool>>{};
+    if (searchOptions != null) {
+      for (final entry in searchOptions.entries) {
+        final enabledOptions = <String, bool>{};
+        for (final optionEntry in entry.value.entries) {
+          if (optionEntry.value) {
+            enabledOptions[optionEntry.key] = true;
+          }
+        }
+        if (enabledOptions.isNotEmpty) {
+          normalizedOptions[entry.key] = enabledOptions;
+        }
+      }
+    }
+
+    return SearchModeScopedParameters(
+      customSpacing: normalizedSpacing,
+      alternativeWords: normalizedAlternatives,
+      searchOptions: normalizedOptions,
+    );
+  }
+
+  static bool hasTypoToleranceEnabled(
+    Map<String, Map<String, bool>>? searchOptions,
+  ) {
+    if (!hasEnabledSearchOptions(searchOptions)) {
+      return false;
+    }
+
+    return searchOptions!.values.any(
+      (wordOptions) => wordOptions[typoToleranceOptionKey] == true,
+    );
+  }
 
   /// ניקוי שאילתה מתווים מיוחדים שיכולים להפריע לחיפוש
   /// מסירים גם פסיקים וגרשיים/גרש
@@ -39,12 +146,13 @@ class SearchQueryBuilder {
   static List<String> buildAdvancedQuery(
       List<String> words,
       Map<int, List<String>>? alternativeWords,
-      Map<String, Map<String, bool>>? searchOptions) {
+      Map<String, Map<String, bool>>? searchOptions,
+      {bool fuzzy = false}) {
     List<String> regexTerms = [];
 
     for (int i = 0; i < words.length; i++) {
       final word = words[i];
-      final wordKey = '${word}_$i';
+      final wordKey = buildWordKey(word, i);
 
       // קבלת אפשרויות החיפוש למילה הזו
       final wordOptions = searchOptions?[wordKey] ?? {};
@@ -52,7 +160,10 @@ class SearchQueryBuilder {
       final hasSuffix = wordOptions['סיומות'] == true;
       final hasGrammaticalPrefixes = wordOptions['קידומות דקדוקיות'] == true;
       final hasGrammaticalSuffixes = wordOptions['סיומות דקדוקיות'] == true;
-      final hasFullPartialSpelling = wordOptions['כתיב מלא/חסר'] == true;
+      final hasTypoTolerance =
+          fuzzy || wordOptions[typoToleranceOptionKey] == true;
+      final hasFullPartialSpelling =
+          !fuzzy && wordOptions['כתיב מלא/חסר'] == true;
       final hasPartialWord = wordOptions['חלק ממילה'] == true;
 
       // קבלת מילים חילופיות
@@ -69,26 +180,34 @@ class SearchQueryBuilder {
           allOptions.where((w) => w.trim().isNotEmpty).toList();
 
       if (validOptions.isNotEmpty) {
-        // בניית רשימת כל האפשרויות לכל מילה
+        final maxVariationsPerWord = fuzzy ? 50 : 20;
         final allVariations = <String>{};
 
         for (final option in validOptions) {
-          // השתמש בפונקציה המשולבת החדשה
-          final pattern = SearchRegexPatterns.createSearchPattern(
-            option,
-            hasPrefix: hasPrefix,
-            hasSuffix: hasSuffix,
-            hasGrammaticalPrefixes: hasGrammaticalPrefixes,
-            hasGrammaticalSuffixes: hasGrammaticalSuffixes,
-            hasPartialWord: hasPartialWord,
-            hasFullPartialSpelling: hasFullPartialSpelling,
-          );
-          allVariations.add(pattern);
+          final expandedOptions = fuzzy
+              ? SearchRegexPatterns.generateFuzzyLiteralVariations(option)
+              : hasTypoTolerance
+                  ? SearchRegexPatterns.generateCommonHebrewTypoVariations(
+                      option,
+                    )
+                  : [option];
+
+          for (final expandedOption in expandedOptions) {
+            final pattern = SearchRegexPatterns.createSearchPattern(
+              expandedOption,
+              hasPrefix: hasPrefix,
+              hasSuffix: hasSuffix,
+              hasGrammaticalPrefixes: hasGrammaticalPrefixes,
+              hasGrammaticalSuffixes: hasGrammaticalSuffixes,
+              hasPartialWord: hasPartialWord,
+              hasFullPartialSpelling: hasFullPartialSpelling,
+            );
+            allVariations.add(pattern);
+          }
         }
 
-        // הגבלה על מספר הוריאציות הכולל למילה אחת
-        final limitedVariations = (allVariations.length > 20
-                ? allVariations.take(20)
+        final limitedVariations = (allVariations.length > maxVariationsPerWord
+                ? allVariations.take(maxVariationsPerWord)
                 : allVariations)
             .where((v) => v.trim().isNotEmpty)
             .toList();
@@ -119,38 +238,30 @@ class SearchQueryBuilder {
       Map<int, List<String>>? alternativeWords,
       Map<String, Map<String, bool>>? searchOptions) {
     // ניקוי תווים מיוחדים שלא צריכים להיות בחיפוש
-    final cleanedQuery = sanitizeQuery(query);
-
-    final words = cleanedQuery
-        .trim()
-        .split(SearchRegexPatterns.wordSplitter)
-        .where((w) => w.isNotEmpty)
-        .toList();
+    final words = splitQueryWords(query);
 
     // בדיקה אם יש מרווחים מותאמים אישית, מילים חילופיות או אפשרויות חיפוש
-    final hasCustomSpacing = customSpacing != null && customSpacing.isNotEmpty;
+    final hasCustomSpacing =
+        !fuzzy && customSpacing != null && customSpacing.isNotEmpty;
     final hasAlternativeWords =
         alternativeWords != null && alternativeWords.isNotEmpty;
-    final hasSearchOptions = searchOptions != null &&
-        searchOptions.isNotEmpty &&
-        searchOptions.values.any((wordOptions) =>
-            wordOptions.values.any((isEnabled) => isEnabled == true));
+    final hasSearchOptions = hasEnabledSearchOptions(searchOptions);
 
     // המרת החיפוש לפורמט המנוע החדש
     final List<String> regexTerms;
     final int effectiveSlop;
 
-    if (hasAlternativeWords || hasSearchOptions) {
+    if (fuzzy || hasAlternativeWords || hasSearchOptions) {
       // יש מילים חילופיות או אפשרויות חיפוש - נבנה queries מתקדמים
       regexTerms = SearchQueryBuilder.buildAdvancedQuery(
-          words, alternativeWords, searchOptions);
-      effectiveSlop = hasCustomSpacing
-          ? SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length)
-          : (fuzzy ? distance : 0);
-    } else if (fuzzy) {
-      // חיפוש מקורב - נשתמש במילים בודדות
-      regexTerms = words;
-      effectiveSlop = distance;
+          words, alternativeWords, searchOptions,
+          fuzzy: fuzzy);
+      effectiveSlop = words.length <= 1
+          ? 0
+          : hasCustomSpacing
+              ? SearchQueryBuilder.getMaxCustomSpacing(
+                  customSpacing, words.length)
+              : distance;
     } else if (words.length == 1) {
       // מילה אחת - חיפוש פשוט
       regexTerms = [query];
@@ -161,9 +272,9 @@ class SearchQueryBuilder {
       effectiveSlop =
           SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length);
     } else {
-      // חיפוש מדוייק של כמה מילים - slop=0 כדי לאכוף סדר וצמידות
+      // מרווח כללי בין מילים לכל מצבי החיפוש שאין בהם override ספציפי
       regexTerms = words;
-      effectiveSlop = 0;
+      effectiveSlop = distance;
     }
 
     // חישוב maxExpansions בהתבסס על סוג החיפוש
@@ -188,8 +299,9 @@ class SearchQueryBuilder {
     if (searchOptions != null && words != null) {
       for (int i = 0; i < words.length; i++) {
         final word = words[i];
-        final wordKey = '${word}_$i';
+        final wordKey = buildWordKey(word, i);
         final wordOptions = searchOptions[wordKey] ?? {};
+        final hasTypoTolerance = wordOptions[typoToleranceOptionKey] == true;
 
         if (wordOptions['סיומות'] == true ||
             wordOptions['קידומות'] == true ||
@@ -198,12 +310,16 @@ class SearchQueryBuilder {
             wordOptions['חלק ממילה'] == true) {
           hasSuffixOrPrefix = true;
           shortestWordLength = math.min(shortestWordLength, word.length);
+        } else if (hasTypoTolerance) {
+          shortestWordLength = math.min(shortestWordLength, word.length);
         }
       }
     }
 
     if (fuzzy) {
       return 50; // חיפוש מקורב
+    } else if (hasTypoToleranceEnabled(searchOptions)) {
+      return termCount > 1 ? 100 : 50;
     } else if (hasSuffixOrPrefix) {
       // התאמת המגבלה לפי אורך המילה הקצרה ביותר עם אפשרויות מתקדמות
       if (shortestWordLength <= 1) {

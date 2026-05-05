@@ -51,7 +51,7 @@ class TextBookInitial extends TextBookState {
   final Map<int, List<String>> alternativeWords;
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
-  final bool typoToleranceEnabled;
+  final int searchDistance;
   final bool splitedView;
   final bool showPageShapeView;
 
@@ -62,7 +62,7 @@ class TextBookInitial extends TextBookState {
       this.alternativeWords = const {},
       this.spacingValues = const {},
       this.searchMode = SearchMode.exact,
-      this.typoToleranceEnabled = false,
+      this.searchDistance = 0,
       this.splitedView = true,
       this.showPageShapeView = false]);
 
@@ -77,7 +77,7 @@ class TextBookInitial extends TextBookState {
     this.alternativeWords = const {},
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
-    this.typoToleranceEnabled = false,
+    this.searchDistance = 0,
     bool? splitedView,
     this.showPageShapeView = false,
   }) : splitedView = splitedView ?? false; // ברירת מחדל: מפרשים מתחת
@@ -90,7 +90,7 @@ class TextBookInitial extends TextBookState {
         _alternativeWordsSignature(alternativeWords),
         _spacingValuesSignature(spacingValues),
         searchMode,
-        typoToleranceEnabled,
+        searchDistance,
         splitedView,
         showPageShapeView,
       ];
@@ -139,7 +139,7 @@ class TextBookLoaded extends TextBookState {
   final Map<int, List<String>> alternativeWords;
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
-  final bool typoToleranceEnabled;
+  final int searchDistance;
   final String? currentTitle;
   final String? selectedTextForNote;
   final int? selectedTextStart;
@@ -190,7 +190,7 @@ class TextBookLoaded extends TextBookState {
     this.alternativeWords = const {},
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
-    this.typoToleranceEnabled = false,
+    this.searchDistance = 0,
     required this.scrollController,
     required this.positionsListener,
     this.currentTitle,
@@ -232,7 +232,6 @@ class TextBookLoaded extends TextBookState {
       removeNikud: false,
       pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
       searchText: '',
-      typoToleranceEnabled: false,
       scrollController: ItemScrollController(),
       positionsListener: ItemPositionsListener.create(),
       visibleIndices: [index],
@@ -276,7 +275,7 @@ class TextBookLoaded extends TextBookState {
     Map<int, List<String>>? alternativeWords,
     Map<String, String>? spacingValues,
     SearchMode? searchMode,
-    bool? typoToleranceEnabled,
+    int? searchDistance,
     ItemScrollController? scrollController,
     ItemPositionsListener? positionsListener,
     String? currentTitle,
@@ -321,7 +320,7 @@ class TextBookLoaded extends TextBookState {
       alternativeWords: alternativeWords ?? this.alternativeWords,
       spacingValues: spacingValues ?? this.spacingValues,
       searchMode: searchMode ?? this.searchMode,
-      typoToleranceEnabled: typoToleranceEnabled ?? this.typoToleranceEnabled,
+      searchDistance: searchDistance ?? this.searchDistance,
       scrollController: scrollController ?? this.scrollController,
       positionsListener: positionsListener ?? this.positionsListener,
       currentTitle: currentTitle ?? this.currentTitle,
@@ -368,7 +367,7 @@ class TextBookLoaded extends TextBookState {
         _alternativeWordsSignature(alternativeWords),
         _spacingValuesSignature(spacingValues),
         searchMode,
-        typoToleranceEnabled,
+        searchDistance,
         currentTitle,
         selectedTextForNote,
         selectedTextStart,

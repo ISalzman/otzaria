@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
@@ -12,7 +13,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/models/links.dart';
-import 'package:otzaria/navigation/view/custom_title_bar.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/pdf_book/view/pdf_page_number_display.dart';
@@ -44,6 +45,9 @@ class PrintingScreen extends StatefulWidget {
   final bool removeTaamim;
   final int startLine;
   final List<TocEntry> tableOfContents;
+  final int? initialPage;
+  final bool isBookView;
+  final List<PdfOutlineNode> pdfOutline;
   const PrintingScreen({
     super.key,
     required this.data,
@@ -56,6 +60,9 @@ class PrintingScreen extends StatefulWidget {
     this.removeNikud = false,
     this.removeTaamim = false,
     this.tableOfContents = const [],
+    this.initialPage,
+    this.isBookView = false,
+    this.pdfOutline = const [],
   });
   @override
   State<PrintingScreen> createState() => _PrintingScreenState();
@@ -84,6 +91,26 @@ class _PrintingScreenState extends State<PrintingScreen> {
   int _totalPdfPages = 0;
   int _pdfStartPage = 1;
   int _pdfEndPage = 0; // 0 = כל העמודים
+  int _renderGeneration = 0; // מונה שביטול renders ישנים
+  Map<int, String> _pageLabels = {};
+
+  Map<int, String> _buildPageLabels(List<PdfOutlineNode> outline) {
+    final labels = <int, String>{};
+    void traverse(List<PdfOutlineNode> nodes) {
+      for (final node in nodes) {
+        final page = node.dest?.pageNumber;
+        if (page != null && node.title.isNotEmpty) {
+          labels[page] ??= node.title;
+        }
+        traverse(node.children);
+      }
+    }
+    traverse(outline);
+    return labels;
+  }
+
+  String _labelForPage(int pageNumber) =>
+      _pageLabels[pageNumber] ?? pageNumber.toString();
 
   bool _includeCommentaries = false;
   bool _includePersonalNotes = false;
@@ -115,10 +142,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
     startLine = widget.startLine;
     endLine = startLine;
 
-    // במצב "צורת הדף" (PDF חיצוני), ברירת המחדל היא לרוחב
-    if (widget.createPdfOverride != null) {
-      orientation = pw.PageOrientation.landscape;
-    }
 
     // אתחול הגדרות ניקוד וטעמים לפי תצוגת הספר
     _removeNikud = widget.removeNikud;
@@ -128,6 +151,12 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (widget.createPdfOverride != null) {
       _rangeMode = _PrintRangeMode.lines;
       _flatHeaders = const [];
+      _pageLabels = _buildPageLabels(widget.pdfOutline);
+      if (widget.initialPage != null) {
+        _pdfStartPage = widget.initialPage!;
+        _pdfEndPage =
+            widget.isBookView ? widget.initialPage! + 1 : widget.initialPage!;
+      }
       _previewPdf = _createPreviewPdf(format);
       return;
     }
@@ -295,9 +324,8 @@ class _PrintingScreenState extends State<PrintingScreen> {
   }
 
   void _toggleThumbnails(bool value) {
-    final currentPage = _pdfViewerController.isReady
-        ? _pdfViewerController.pageNumber
-        : null;
+    final currentPage =
+        _pdfViewerController.isReady ? _pdfViewerController.pageNumber : null;
     setState(() {
       _showThumbnails = value;
     });
@@ -314,6 +342,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
   }
 
   void _refreshPreviewPdf({bool immediate = false}) {
+    _renderGeneration++;
     _previewRefreshTimer?.cancel();
     if (immediate) {
       _previewPdf = _createPreviewPdf(format);
@@ -339,7 +368,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     final isPdfMode = widget.createPdfOverride != null;
     final startPage = isPdfMode ? _pdfStartPage : 1;
     final endPage =
-        isPdfMode && _pdfEndPage > 0 && _pdfEndPage < _totalPdfPages
+        isPdfMode && _pdfEndPage > 0 && (_totalPdfPages == 0 || _pdfEndPage <= _totalPdfPages)
             ? _pdfEndPage
             : null;
     final hasPageRange = startPage > 1 || endPage != null;
@@ -365,7 +394,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
   }
 
-PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
+  PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
     return orientation == pw.PageOrientation.landscape
         ? format.landscape
         : format;
@@ -403,28 +432,32 @@ PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
       _ => 120.0,
     };
     final rasterPages = <Uint8List>[];
+    final generation = _renderGeneration;
 
     // Wait for Flutter to rebuild and unmount the previous PdfViewer before using pdfrx
     await Future.delayed(const Duration(milliseconds: 150));
 
+    // If a newer render was requested while waiting, abort to avoid concurrent pdfrx documents
+    if (generation != _renderGeneration || !mounted) return sourcePdf;
+
     final doc = await PdfDocument.openData(sourcePdf,
         sourceName: 'nup_${DateTime.now().millisecondsSinceEpoch}');
 
-    // Update total page count on first open
+    // Update total page count on first open and clamp page range
     if (_totalPdfPages == 0 && widget.createPdfOverride != null && mounted) {
       final count = doc.pages.length;
       setState(() {
         _totalPdfPages = count;
-        if (_pdfEndPage == 0) _pdfEndPage = count;
+        _pdfStartPage = _pdfStartPage.clamp(1, count);
+        _pdfEndPage = _pdfEndPage == 0 ? count : _pdfEndPage.clamp(1, count);
       });
     }
 
     try {
       final scale = dpi / 72.0;
-      final firstIdx =
-          max(0, min(startPage - 1, doc.pages.length - 1));
-      final lastIdx =
-          max(firstIdx, min((endPage ?? doc.pages.length) - 1, doc.pages.length - 1));
+      final firstIdx = max(0, min(startPage - 1, doc.pages.length - 1));
+      final lastIdx = max(firstIdx,
+          min((endPage ?? doc.pages.length) - 1, doc.pages.length - 1));
       for (var i = firstIdx; i <= lastIdx; i++) {
         final page = doc.pages[i];
         final pdfImage = await page.render(
@@ -1204,7 +1237,7 @@ PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
     return Scaffold(
       body: Column(
         children: [
-          const CustomTitleBar(),
+          const _PrintingTitleBar(),
           AppBar(
             primary: false,
             title: const Text('הדפסה'),
@@ -1218,11 +1251,12 @@ PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
               const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: () async {
-                  await Printing.layoutPdf(
+                  final printed = await Printing.layoutPdf(
                     usePrinterSettings: true,
                     onLayout: _createOutputPdf,
                     format: format,
                   );
+                  if (printed && context.mounted) Navigator.of(context).pop(true);
                 },
                 icon: const Icon(FluentIcons.print_24_regular),
                 label: const Text('הדפסה'),
@@ -1287,60 +1321,71 @@ PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
                                 _buildSectionCard(
                                   context: context,
                                   title: 'טווח עמודים',
-                                  icon:
-                                      FluentIcons.document_page_number_24_regular,
+                                  icon: FluentIcons
+                                      .document_page_number_24_regular,
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            'עמוד $_pdfStartPage',
-                                            style: TextStyle(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                              fontSize: 12,
+                                      _buildDropdownRow(
+                                        context: context,
+                                        label: 'מעמוד',
+                                        child: DropdownButton<int>(
+                                          value: _pdfStartPage,
+                                          isExpanded: true,
+                                          underline: const SizedBox(),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          items: List.generate(
+                                            _pdfEndPage,
+                                            (i) => DropdownMenuItem(
+                                              value: i + 1,
+                                              child:
+                                                  Text(_labelForPage(i + 1)),
                                             ),
                                           ),
-                                          Text(
-                                            'עמוד $_pdfEndPage',
-                                            style: TextStyle(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                              fontSize: 12,
+                                          onChanged: (value) {
+                                            if (value == null) return;
+                                            setState(() {
+                                              _pdfStartPage = value;
+                                              if (_pdfEndPage < _pdfStartPage) {
+                                                _pdfEndPage = _pdfStartPage;
+                                              }
+                                              _refreshPreviewPdf();
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      _buildDropdownRow(
+                                        context: context,
+                                        label: 'עד עמוד',
+                                        child: DropdownButton<int>(
+                                          value: _pdfEndPage,
+                                          isExpanded: true,
+                                          underline: const SizedBox(),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          items: List.generate(
+                                            _totalPdfPages -
+                                                _pdfStartPage +
+                                                1,
+                                            (i) => DropdownMenuItem(
+                                              value: _pdfStartPage + i,
+                                              child: Text(_labelForPage(
+                                                  _pdfStartPage + i)),
                                             ),
                                           ),
-                                        ],
+                                          onChanged: (value) {
+                                            if (value == null) return;
+                                            setState(() {
+                                              _pdfEndPage = value;
+                                              _refreshPreviewPdf();
+                                            });
+                                          },
+                                        ),
                                       ),
                                       const SizedBox(height: 4),
-                                      RangeSlider(
-                                        min: 1,
-                                        max: _totalPdfPages.toDouble(),
-                                        divisions: _totalPdfPages > 1
-                                            ? _totalPdfPages - 1
-                                            : 1,
-                                        values: RangeValues(
-                                          _pdfStartPage.toDouble(),
-                                          _pdfEndPage.toDouble(),
-                                        ),
-                                        onChanged: (values) {
-                                          setState(() {
-                                            _pdfStartPage =
-                                                values.start.round();
-                                            _pdfEndPage = values.end.round();
-                                          });
-                                        },
-                                        onChangeEnd: (values) {
-                                          setState(() {
-                                            _pdfStartPage =
-                                                values.start.round();
-                                            _pdfEndPage = values.end.round();
-                                            _refreshPreviewPdf();
-                                          });
-                                        },
-                                      ),
                                       Text(
                                         '${_pdfEndPage - _pdfStartPage + 1} עמודים מתוך $_totalPdfPages',
                                         style: TextStyle(
@@ -1499,11 +1544,11 @@ PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
                                             if (_totalPdfPages == 0 &&
                                                 mounted) {
                                               setState(() {
-                                                _totalPdfPages =
+                                                final total =
                                                     document.pages.length;
+                                                _totalPdfPages = total;
                                                 if (_pdfEndPage == 0) {
-                                                  _pdfEndPage =
-                                                      document.pages.length;
+                                                  _pdfEndPage = total;
                                                 }
                                               });
                                             }
@@ -2507,4 +2552,32 @@ enum _ExportFormat {
 
   final String extension;
   const _ExportFormat(this.extension);
+}
+
+class _PrintingTitleBar extends StatelessWidget {
+  const _PrintingTitleBar();
+
+  @override
+  Widget build(BuildContext context) {
+    if (kIsWeb ||
+        (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS)) {
+      return const SizedBox.shrink();
+    }
+    return SizedBox(
+      height: 40,
+      child: Row(
+        children: [
+          const Expanded(child: DragToMoveArea(child: SizedBox.expand())),
+          SizedBox(
+            width: 138,
+            height: 50,
+            child: WindowCaption(
+              brightness: Theme.of(context).brightness,
+              backgroundColor: Colors.transparent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

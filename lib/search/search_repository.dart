@@ -1,4 +1,5 @@
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:search_engine/search_engine.dart';
 import 'package:flutter/foundation.dart';
@@ -23,21 +24,26 @@ class SearchRepository {
       {int offset = 0,
       ResultsOrder order = ResultsOrder.relevance,
       bool fuzzy = false,
-      int distance = 2,
+      int distance = 0,
+      SearchMode searchMode = SearchMode.exact,
       Map<String, String>? customSpacing,
       Map<int, List<String>>? alternativeWords,
       Map<String, Map<String, bool>>? searchOptions}) async {
     final index = await TantivyDataProvider.instance.engine;
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      searchMode,
+      customSpacing: customSpacing,
+      alternativeWords: alternativeWords,
+      searchOptions: searchOptions,
+    );
 
     // בדיקה אם יש מרווחים מותאמים אישית, מילים חילופיות או אפשרויות חיפוש
-    final hasCustomSpacing = customSpacing != null && customSpacing.isNotEmpty;
+    final hasCustomSpacing = normalizedParameters.customSpacing.isNotEmpty;
     final hasAlternativeWords =
-        alternativeWords != null && alternativeWords.isNotEmpty;
+        normalizedParameters.alternativeWords.isNotEmpty;
     debugPrint('🔍 hasCustomSpacing: $hasCustomSpacing');
-    final hasSearchOptions = searchOptions != null &&
-        searchOptions.isNotEmpty &&
-        searchOptions.values.any((wordOptions) =>
-            wordOptions.values.any((isEnabled) => isEnabled == true));
+    final hasSearchOptions = SearchQueryBuilder.hasEnabledSearchOptions(
+        normalizedParameters.searchOptions);
 
     debugPrint('🔍 hasSearchOptions: $hasSearchOptions');
     debugPrint('🔍 hasAlternativeWords: $hasAlternativeWords');
@@ -45,7 +51,13 @@ class SearchRepository {
     // המרת החיפוש לפורמט המנוע החדש
     debugPrint('🔍 Using prepareQueryParams');
     final params = SearchQueryBuilder.prepareQueryParams(
-        query, fuzzy, distance, customSpacing, alternativeWords, searchOptions);
+      query,
+      fuzzy,
+      distance,
+      normalizedParameters.customSpacing,
+      normalizedParameters.alternativeWords,
+      normalizedParameters.searchOptions,
+    );
     final List<String> regexTerms = params['regexTerms'] as List<String>;
     final int effectiveSlop = params['effectiveSlop'] as int;
     final int maxExpansions = params['maxExpansions'] as int;
@@ -72,48 +84,6 @@ class SearchRepository {
     return results;
   }
 
-  /// Performs a fuzzy (Levenshtein/typo-tolerance) search on plain text terms.
-  /// Unlike searchTexts() which uses regex patterns, this accepts plain words
-  /// and matches within [maxDistance] edits (0=exact, 1=one typo, 2=two typos).
-  ///
-  /// [query] Plain-text query – split into words, no regex
-  /// [facets] List of facets to search within
-  /// [limit] Maximum number of results to return
-  /// [maxDistance] Maximum Levenshtein distance per term (default: 1)
-  ///
-  /// Returns a Future containing a list of search results
-  Future<List<SearchResult>> searchTextsLevenshtein(
-      String query, List<String> facets, int limit,
-      {int offset = 0,
-      int maxDistance = 1,
-      ResultsOrder order = ResultsOrder.relevance}) async {
-    final index = await TantivyDataProvider.instance.engine;
-
-    final terms = query
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((t) => t.isNotEmpty)
-        .toList();
-
-    if (terms.isEmpty) return [];
-
-    debugPrint('🔍 searchTextsLevenshtein:');
-    debugPrint('   terms: $terms, maxDistance: $maxDistance');
-    debugPrint('   facets: $facets, limit: $limit, offset: $offset');
-
-    final results = await index.searchFuzzy(
-      terms: terms,
-      facets: facets,
-      limit: limit,
-      offset: offset,
-      maxDistance: maxDistance,
-      order: order,
-    );
-
-    debugPrint('✅ Levenshtein search: ${results.length} results');
-    return results;
-  }
-
   /// Performs a combined search + count in a single engine pass.
   /// Returns total hit count alongside paged results, without streaming.
   /// Prefer this over separate search() + count() calls when streaming is not needed.
@@ -128,14 +98,27 @@ class SearchRepository {
       {int offset = 0,
       ResultsOrder order = ResultsOrder.relevance,
       bool fuzzy = false,
-      int distance = 2,
+      int distance = 0,
+      SearchMode searchMode = SearchMode.exact,
       Map<String, String>? customSpacing,
       Map<int, List<String>>? alternativeWords,
       Map<String, Map<String, bool>>? searchOptions}) async {
     final index = await TantivyDataProvider.instance.engine;
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      searchMode,
+      customSpacing: customSpacing,
+      alternativeWords: alternativeWords,
+      searchOptions: searchOptions,
+    );
 
     final params = SearchQueryBuilder.prepareQueryParams(
-        query, fuzzy, distance, customSpacing, alternativeWords, searchOptions);
+      query,
+      fuzzy,
+      distance,
+      normalizedParameters.customSpacing,
+      normalizedParameters.alternativeWords,
+      normalizedParameters.searchOptions,
+    );
     final List<String> regexTerms = params['regexTerms'] as List<String>;
     final int effectiveSlop = params['effectiveSlop'] as int;
     final int maxExpansions = params['maxExpansions'] as int;
@@ -180,15 +163,28 @@ class SearchRepository {
       int chunkSize = 50,
       ResultsOrder order = ResultsOrder.relevance,
       bool fuzzy = false,
-      int distance = 2,
+      int distance = 0,
+      SearchMode searchMode = SearchMode.exact,
       Map<String, String>? customSpacing,
       Map<int, List<String>>? alternativeWords,
       Map<String, Map<String, bool>>? searchOptions}) async* {
     final index = await TantivyDataProvider.instance.engine;
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      searchMode,
+      customSpacing: customSpacing,
+      alternativeWords: alternativeWords,
+      searchOptions: searchOptions,
+    );
 
     // המרת החיפוש לפורמט המנוע החדש
     final params = SearchQueryBuilder.prepareQueryParams(
-        query, fuzzy, distance, customSpacing, alternativeWords, searchOptions);
+      query,
+      fuzzy,
+      distance,
+      normalizedParameters.customSpacing,
+      normalizedParameters.alternativeWords,
+      normalizedParameters.searchOptions,
+    );
     final List<String> regexTerms = params['regexTerms'] as List<String>;
     final int effectiveSlop = params['effectiveSlop'] as int;
     final int maxExpansions = params['maxExpansions'] as int;

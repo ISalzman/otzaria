@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/view/tantivy_full_text_search.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -363,14 +364,23 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
         query = utils.removeVolwels(query);
       }
 
+      final searchMode = widget.tab.searchBloc.state.configuration.searchMode;
+      final normalizedParameters =
+          SearchQueryBuilder.normalizeParametersForMode(
+        searchMode,
+        customSpacing: widget.tab.spacingValues,
+        alternativeWords: widget.tab.alternativeWords,
+        searchOptions: widget.tab.searchOptions,
+      );
+
       widget.tab.updateTitleFromAppliedQuery(query);
       context.read<HistoryBloc>().add(AddHistory(widget.tab));
       context.read<SearchBloc>().add(
             UpdateSearchQuery(
               query,
-              customSpacing: widget.tab.spacingValues,
-              alternativeWords: widget.tab.alternativeWords,
-              searchOptions: widget.tab.searchOptions,
+              customSpacing: normalizedParameters.customSpacing,
+              alternativeWords: normalizedParameters.alternativeWords,
+              searchOptions: normalizedParameters.searchOptions,
             ),
           );
       widget.tab.isLeftPaneOpen.value = false;
@@ -491,7 +501,8 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                                 ],
                               )
                             : IconButton(
-                                icon: const Icon(FluentIcons.dismiss_24_regular),
+                                icon:
+                                    const Icon(FluentIcons.dismiss_24_regular),
                                 onPressed: () {
                                   widget.tab.queryController.clear();
                                   widget.tab.searchOptions.clear();

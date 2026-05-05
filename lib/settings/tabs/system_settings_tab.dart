@@ -7,16 +7,16 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart'
     hide SettingsGroup, SwitchSettingsTile;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:path/path.dart' as p;
+// import 'package:path/path.dart' as p;
+// import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/services/safer_mode/password_verification_dialog.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
-import 'package:otzaria/core/app_restart.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
@@ -29,7 +29,6 @@ import 'package:otzaria/models/direct_error_report.dart';
 import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
-import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/dialogs/error_report_sender_email_dialog.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -38,6 +37,8 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
+import 'package:otzaria/plugins/view/webview_environment_holder.dart';
+import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// טאב "אוצריא" — גרסאות, נתיב ספרייה, גיבוי, מצב סייפר, איפוס.
@@ -211,6 +212,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     } else {
       UiSnack.showError(result.message);
     }
+
   }
 
   Future<void> _editPendingReport(DirectErrorReport report) async {
@@ -261,18 +263,18 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     );
   }
 
+  Future<void> _deletePendingReport(DirectErrorReport report) async {
+    await DirectErrorReportService().deletePendingReport(report.id);
+    if (!mounted) return;
+    setState(() {});
+    UiSnack.show('הדיווח הוסר מהתור.');
+  }
+
   Future<void> _deleteSentReport(DirectErrorReport report) async {
     await DirectErrorReportService().deleteSentReport(report.id);
     if (!mounted) return;
     setState(() {});
     UiSnack.show('הדיווח נמחק מההיסטוריה.');
-  }
-
-  Future<void> _deletePendingReport(DirectErrorReport report) async {
-    await DirectErrorReportService().deletePendingReport(report.id);
-    if (!mounted) return;
-    setState(() {});
-    UiSnack.show('הדיווח השמור נמחק.');
   }
 
   Future<void> _clearSentReports() async {
@@ -402,13 +404,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           bloc: _librarySelectionBloc,
           listener: (context, librarySelectionState) async {
             if (librarySelectionState is EmptyLibraryDirectorySelected) {
-              context.read<LibraryBloc>().add(RefreshLibrary());
-              await Future.delayed(const Duration(milliseconds: 500));
+              await context.read<NavigationBloc>().refreshLibrary();
               if (!context.mounted) {
                 return;
               }
-              context.read<NavigationBloc>().add(const CheckLibrary());
-              await _showLibraryRestartDialog(context);
+              context.read<LibraryBloc>().add(RefreshLibrary());
+              UiSnack.showSuccess('הספרייה נטענה בהצלחה.');
             }
 
             if (librarySelectionState is EmptyLibraryError &&
@@ -637,7 +638,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 snapshot.data?.last ?? const <DirectErrorReport>[];
             final pendingCount = pendingReports.length;
             final hasReports = pendingCount > 0;
-            final canSendNow = hasReports && !state.isOfflineMode;
 
             return Column(
               children: [
@@ -677,53 +677,56 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                                   canSend: !state.isOfflineMode,
                                 ),
                               ),
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                right: 16,
-                                left: 16,
-                                bottom: 16,
+                            if (hasReports)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  right: 16,
+                                  left: 16,
+                                  bottom: 16,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildManagedActionButton(
+                                        enabled: !state.isOfflineMode,
+                                        child: RecommendedActionButton(
+                                          text: 'שלח עכשיו',
+                                          icon:
+                                              FluentIcons.arrow_sync_24_regular,
+                                          onPressed: _flushPendingReports,
+                                          isLoading: _isFlushingPendingReports,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildManagedActionButton(
+                                        enabled: hasReports,
+                                        child: NeutralActionButton(
+                                          text: 'נקה דיווחים',
+                                          icon: FluentIcons.delete_24_regular,
+                                          onPressed: _clearPendingReports,
+                                          isLoading: _isClearingPendingReports,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildManagedActionButton(
+                                        enabled: hasReports,
+                                        child: NeutralActionButton(
+                                          text: 'הורד לשליחה במחשב מחובר',
+                                          icon: FluentIcons
+                                              .arrow_download_24_regular,
+                                          onPressed:
+                                              _exportPendingReportsScript,
+                                          isLoading: _isExportingPendingReports,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildManagedActionButton(
-                                      enabled: canSendNow,
-                                      child: RecommendedActionButton(
-                                        text: 'שלח עכשיו',
-                                        icon: FluentIcons.arrow_sync_24_regular,
-                                        onPressed: _flushPendingReports,
-                                        isLoading: _isFlushingPendingReports,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _buildManagedActionButton(
-                                      enabled: hasReports,
-                                      child: NeutralActionButton(
-                                        text: 'נקה דיווחים',
-                                        icon: FluentIcons.delete_24_regular,
-                                        onPressed: _clearPendingReports,
-                                        isLoading: _isClearingPendingReports,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _buildManagedActionButton(
-                                      enabled: hasReports,
-                                      child: NeutralActionButton(
-                                        text: 'הורד לשליחה במחשב מחובר',
-                                        icon: FluentIcons
-                                            .arrow_download_24_regular,
-                                        onPressed: _exportPendingReportsScript,
-                                        isLoading: _isExportingPendingReports,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
                             if (state.isOfflineMode)
                               Padding(
                                 padding: const EdgeInsets.only(
@@ -942,11 +945,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           title: const Text('גרסת ספרייה', style: kSettingsTitleStyle),
           subtitle:
               Text(_libraryVersion ?? 'טוען...', style: kSettingsSubtitleStyle),
-          trailing: TextButton.icon(
-            icon: const Icon(FluentIcons.history_24_regular, size: 16),
-            label: const Text('יומן שינויים'),
-            onPressed: () => _showLibraryChangelogDialog(context),
-          ),
+          // trailing: TextButton.icon(
+          //   icon: const Icon(FluentIcons.history_24_regular, size: 16),
+          //   label: const Text('יומן שינויים'),
+          //   onPressed: () => _showLibraryChangelogDialog(context),
+          // ),
         ),
         ListTile(
           leading: const Icon(FluentIcons.book_24_regular),
@@ -958,14 +961,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
       ],
     );
-  }
-
-  Future<void> _showLibraryRestartDialog(BuildContext context) async {
-    final shouldCloseApp = await showRestartRequiredDialog(context: context);
-
-    if (shouldCloseApp == true) {
-      await restartApplication();
-    }
   }
 
   void _showLibraryDbCopyDialog(
@@ -1041,8 +1036,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   }
 
   Future<void> _restoreBackup() async {
-    final result = await FilePicker
-        .pickFiles(type: FileType.custom, allowedExtensions: ['json']);
+    final result = await FilePicker.pickFiles(
+        type: FileType.custom, allowedExtensions: ['json']);
     final filePath = result?.files.single.path;
     if (filePath == null) return;
     if (!mounted) return;
@@ -1061,19 +1056,22 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       final skipped = await BackupService.restoreFromBackup(filePath);
       if (!mounted) return;
       final content = skipped.isEmpty
-          ? 'הנתונים שוחזרו בהצלחה. יש להפעיל מחדש את התוכנה.'
-          : 'שחזור חלקי — חסרים בקובץ הגיבוי: ${skipped.join(", ")}.\nיש להפעיל מחדש את התוכנה.';
+          ? 'הנתונים שוחזרו בהצלחה. האפליקציה תיטען מחדש כעת.'
+          : 'שחזור חלקי — חסרים בקובץ הגיבוי: ${skipped.join(", ")}.'
+              '\nהאפליקציה תיטען מחדש כעת.';
       await showSingleActionDialog(
         context: context,
         title: skipped.isEmpty ? 'השחזור הושלם' : 'שחזור חלקי',
         content: content,
-        confirmText: 'סגור את התוכנה',
+        confirmText: 'טען מחדש',
       );
-      if (Platform.isAndroid || Platform.isIOS) {
-        SystemNavigator.pop();
-      } else {
-        windowManager.close();
-      }
+      if (!mounted) return;
+      await resetRuntimeStateForAppRestart();
+      if (!mounted) return;
+      RestartWidget.restartApp(
+        context,
+        afterRestart: WebViewEnvironmentHolder.disposeForAppRestart,
+      );
     } catch (e) {
       if (!mounted) return;
       UiSnack.showError('שגיאה בשחזור הגיבוי: ${e.toString()}');
@@ -1457,19 +1455,14 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 cancelText: 'ביטול',
                 confirmText: 'אפס',
               );
-              if (confirmed == true && context.mounted) {
+              if (confirmed == true && mounted) {
                 Settings.clearCache();
-                await showSingleActionDialog(
-                  context: context,
-                  title: 'ההגדרות אופסו',
-                  content: 'יש לסגור ולהפעיל מחדש את התוכנה.',
-                  confirmText: 'סגור את התוכנה',
+                await resetRuntimeStateAfterSettingsReset();
+                if (!mounted) return;
+                RestartWidget.restartApp(
+                  this.context,
+                  afterRestart: WebViewEnvironmentHolder.disposeForAppRestart,
                 );
-                if (Platform.isAndroid || Platform.isIOS) {
-                  SystemNavigator.pop();
-                } else {
-                  windowManager.close();
-                }
               }
             },
           ),
@@ -1513,38 +1506,38 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     );
   }
 
-  Future<void> _showLibraryChangelogDialog(BuildContext context) async {
-    final changelogPath = p.join(DatabaseConstants.getDatabaseDirectoryPath(),
-        'אודות התוכנה', 'עדכוני ספריה.md');
-    final file = File(changelogPath);
-    final changelog = (await file.exists())
-        ? await file.readAsString()
-        : 'קובץ יומן השינויים לא נמצא.';
-    if (!context.mounted) return;
-    showDialog(
-      context: context,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: const Text('יומן שינויים בספרייה'),
-          content: SizedBox(
-            width: 600,
-            height: 400,
-            child: Markdown(
-              data: changelog,
-              onTapLink: (text, href, title) {
-                if (href != null) launchUrl(Uri.parse(href));
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('סגור')),
-          ],
-        ),
-      ),
-    );
-  }
+  // Future<void> _showLibraryChangelogDialog(BuildContext context) async {
+  //   final changelogPath = p.join(DatabaseConstants.getDatabaseDirectoryPath(),
+  //       'אודות התוכנה', 'עדכוני ספריה.md');
+  //   final file = File(changelogPath);
+  //   final changelog = (await file.exists())
+  //       ? await file.readAsString()
+  //       : 'קובץ יומן השינויים לא נמצא.';
+  //   if (!context.mounted) return;
+  //   showDialog(
+  //     context: context,
+  //     builder: (ctx) => Directionality(
+  //       textDirection: TextDirection.rtl,
+  //       child: AlertDialog(
+  //         title: const Text('יומן שינויים בספרייה'),
+  //         content: SizedBox(
+  //           width: 600,
+  //           height: 400,
+  //           child: Markdown(
+  //             data: changelog,
+  //             onTapLink: (text, href, title) {
+  //               if (href != null) launchUrl(Uri.parse(href));
+  //             },
+  //           ),
+  //         ),
+  //         actions: [
+  //           TextButton(
+  //               onPressed: () => Navigator.pop(ctx), child: const Text('סגור')),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
