@@ -2190,7 +2190,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       .add(UpdateCommentaryPaneWidth(current.rightPaneWidth));
                 }
               },
-              minMainContentWidth: 640,
+              minMainContentWidth: 200,
             );
           },
         ),
