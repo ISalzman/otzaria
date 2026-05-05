@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/models/books.dart';
@@ -78,12 +79,7 @@ class SearchingTab extends OpenedTab {
     cloned.isLeftPaneOpen.value = other.isLeftPaneOpen.value;
 
     final state = other.searchBloc.state;
-    cloned.searchBloc.add(
-      SetSearchMode(
-        state.configuration.searchMode,
-        typoToleranceEnabled: state.configuration.isTypoToleranceEnabled,
-      ),
-    );
+    cloned.searchBloc.add(SetSearchMode(state.configuration.searchMode));
     cloned.searchBloc.add(SetFacetsWithoutSearch(state.searchScopeFacets));
 
     if (state.configuration.numResults !=
@@ -141,21 +137,33 @@ class SearchingTab extends OpenedTab {
   }
 
   Future<int> countForFacet(String facet) {
-    return searchBloc.countForFacet(
-      facet,
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      searchBloc.state.configuration.searchMode,
       customSpacing: spacingValues,
       alternativeWords: alternativeWords,
       searchOptions: searchOptions,
+    );
+    return searchBloc.countForFacet(
+      facet,
+      customSpacing: normalizedParameters.customSpacing,
+      alternativeWords: normalizedParameters.alternativeWords,
+      searchOptions: normalizedParameters.searchOptions,
     );
   }
 
   /// ספירה מקבצת של תוצאות עבור מספר facets בבת אחת - לשיפור ביצועים
   Future<Map<String, int>> countForMultipleFacets(List<String> facets) {
-    return searchBloc.countForMultipleFacets(
-      facets,
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      searchBloc.state.configuration.searchMode,
       customSpacing: spacingValues,
       alternativeWords: alternativeWords,
       searchOptions: searchOptions,
+    );
+    return searchBloc.countForMultipleFacets(
+      facets,
+      customSpacing: normalizedParameters.customSpacing,
+      alternativeWords: normalizedParameters.alternativeWords,
+      searchOptions: normalizedParameters.searchOptions,
     );
   }
 

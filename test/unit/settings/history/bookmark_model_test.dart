@@ -32,8 +32,7 @@ void main() {
     expect(restored.searchScopeFacets, ['/root/a', '/root/b']);
   });
 
-  test('Bookmark preserves search mode and typo tolerance in json roundtrip',
-      () {
+  test('Bookmark preserves search mode in json roundtrip', () {
     final bookmark = Bookmark(
       ref: 'query',
       index: 0,
@@ -44,13 +43,11 @@ void main() {
       }).book,
       isSearch: true,
       searchMode: SearchMode.fuzzy,
-      typoToleranceEnabled: true,
     );
 
     final json = bookmark.toJson();
     final restored = Bookmark.fromJson(json);
 
     expect(restored.searchMode, SearchMode.fuzzy);
-    expect(restored.typoToleranceEnabled, isTrue);
   });
 }

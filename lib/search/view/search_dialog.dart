@@ -40,7 +40,7 @@ class SearchDialog extends StatefulWidget {
     Map<int, List<String>> alternativeWords,
     Map<String, String> spacingValues,
     SearchMode searchMode,
-    bool typoToleranceEnabled,
+    int distance,
   )? onSearch;
   final String? bookTitle;
 
@@ -76,27 +76,16 @@ class _SearchDialogState extends State<SearchDialog> {
           Settings.getValue<String>('key-last-search-typing') ?? '';
       final lastMode =
           Settings.getValue<String>('key-last-search-mode') ?? 'advanced';
-      final lastTypoTolerance =
-          Settings.getValue<bool>('key-last-search-typo-tolerance') ?? false;
 
       _searchTab = SearchingTab("חיפוש", lastTyping);
 
       final searchMode = switch (lastMode) {
         'fuzzy' => SearchMode.fuzzy,
         'exact' => SearchMode.exact,
-        'levenshtein' => SearchMode.advanced,
         _ => SearchMode.advanced,
       };
 
-      final typoToleranceEnabled =
-          lastTypoTolerance || lastMode == 'levenshtein';
-
-      _searchTab.searchBloc.add(
-        SetSearchMode(
-          searchMode,
-          typoToleranceEnabled: typoToleranceEnabled,
-        ),
-      );
+      _searchTab.searchBloc.add(SetSearchMode(searchMode));
     }
 
     final persisted = SearchScopePreferences.load();
@@ -294,29 +283,27 @@ class _SearchDialogState extends State<SearchDialog> {
     // שמירת מצב החיפוש האחרון
     final currentState = _searchTab.searchBloc.state;
     final currentMode = currentState.configuration.searchMode;
-    final normalizedMode = currentMode == SearchMode.levenshtein
-        ? SearchMode.advanced
-        : currentMode;
-    final modeString = switch (normalizedMode) {
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      currentMode,
+      customSpacing: _searchTab.spacingValues,
+      alternativeWords: _searchTab.alternativeWords,
+      searchOptions: _searchTab.searchOptions,
+    );
+    final modeString = switch (currentMode) {
       SearchMode.advanced => 'advanced',
       SearchMode.exact => 'exact',
       SearchMode.fuzzy => 'fuzzy',
-      SearchMode.levenshtein => 'advanced',
     };
     Settings.setValue<String>('key-last-search-mode', modeString);
-    Settings.setValue<bool>(
-      'key-last-search-typo-tolerance',
-      currentState.configuration.isTypoToleranceEnabled,
-    );
 
     if (widget.onSearch != null) {
       widget.onSearch!(
         query,
-        _searchTab.searchOptions,
-        _searchTab.alternativeWords,
-        _searchTab.spacingValues,
-        normalizedMode,
-        currentState.configuration.isTypoToleranceEnabled,
+        normalizedParameters.searchOptions,
+        normalizedParameters.alternativeWords,
+        normalizedParameters.customSpacing,
+        currentMode,
+        _searchTab.searchBloc.state.distance,
       );
       Navigator.of(context).pop();
       return;
@@ -327,15 +314,12 @@ class _SearchDialogState extends State<SearchDialog> {
     final newSearchTab = SearchingTab("חיפוש: $query", query);
 
     // העתקת כל ההגדרות מהטאב הנוכחי לטאב החדש
-    newSearchTab.searchOptions.addAll(_searchTab.searchOptions);
-    newSearchTab.alternativeWords.addAll(_searchTab.alternativeWords);
-    newSearchTab.spacingValues.addAll(_searchTab.spacingValues);
-    newSearchTab.searchBloc.add(
-      SetSearchMode(
-        normalizedMode,
-        typoToleranceEnabled: currentState.configuration.isTypoToleranceEnabled,
-      ),
-    );
+    newSearchTab.searchOptions.addAll(normalizedParameters.searchOptions);
+    newSearchTab.alternativeWords.addAll(normalizedParameters.alternativeWords);
+    newSearchTab.spacingValues.addAll(normalizedParameters.customSpacing);
+    newSearchTab.searchBloc.add(SetSearchMode(currentMode));
+    newSearchTab.searchBloc
+        .add(UpdateDistance(_searchTab.searchBloc.state.distance));
 
     // הוספה להיסטוריה
     context.read<HistoryBloc>().add(AddHistory(newSearchTab));
@@ -350,9 +334,9 @@ class _SearchDialogState extends State<SearchDialog> {
     newSearchTab.searchBloc.add(
       UpdateSearchQuery(
         query,
-        customSpacing: newSearchTab.spacingValues,
-        alternativeWords: newSearchTab.alternativeWords,
-        searchOptions: newSearchTab.searchOptions,
+        customSpacing: normalizedParameters.customSpacing,
+        alternativeWords: normalizedParameters.alternativeWords,
+        searchOptions: normalizedParameters.searchOptions,
       ),
     );
 
@@ -662,33 +646,32 @@ class _SearchDialogState extends State<SearchDialog> {
                                   ],
                                 );
 
-                                final fuzzyDistanceWidget = !state.fuzzy
-                                    ? Padding(
-                                        padding:
-                                            const EdgeInsets.only(right: 12.0),
-                                        child: FuzzyDistance(tab: _searchTab),
-                                      )
-                                    : null;
+                                final fuzzyDistanceWidget = Padding(
+                                  padding: const EdgeInsets.only(right: 12.0),
+                                  child: FuzzyDistance(tab: _searchTab),
+                                );
 
-                                final categoriesToggleWidget = widget
-                                            .bookTitle ==
-                                        null
-                                    ? Padding(
-                                        padding:
-                                            const EdgeInsets.only(right: 8.0),
-                                        child: _buildCategoriesToggle(context),
-                                      )
-                                    : null;
+                                final showCategoriesToggleWidget =
+                                    widget.bookTitle == null;
+                                final categoriesToggleWidget = Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: _buildCategoriesToggle(context),
+                                );
 
                                 // ב-LayoutBuilder: אם הרוחב צר — accessories לשורה שנייה
                                 return LayoutBuilder(
                                   builder: (context, constraints) {
-                                    final hasAccessories =
-                                        fuzzyDistanceWidget != null ||
-                                            categoriesToggleWidget != null;
+                                  const distanceWidgetWidth = 152.0;
+                                  const categoriesWidgetWidth = 138.0;
+                                  final accessoriesWidth = distanceWidgetWidth +
+                                    (showCategoriesToggleWidget
+                                      ? categoriesWidgetWidth
+                                      : 0);
+                                  final hasAccessories = true;
                                     // FuzzyDistance=140px, toggle~130px, paddings~20px ≈ 290px
                                     final isNarrow = hasAccessories &&
-                                        constraints.maxWidth < 380;
+                                    constraints.maxWidth <
+                                      accessoriesWidth + 180;
 
                                     if (isNarrow) {
                                       return Column(
@@ -697,13 +680,13 @@ class _SearchDialogState extends State<SearchDialog> {
                                         children: [
                                           searchField,
                                           const SizedBox(height: 8),
-                                          Row(
+                                          Wrap(
+                                            alignment:
+                                                WrapAlignment.spaceBetween,
+                                            runSpacing: 8,
                                             children: [
-                                              if (fuzzyDistanceWidget != null)
-                                                fuzzyDistanceWidget,
-                                              const Spacer(),
-                                              if (categoriesToggleWidget !=
-                                                  null)
+                                              fuzzyDistanceWidget,
+                                              if (showCategoriesToggleWidget)
                                                 categoriesToggleWidget,
                                             ],
                                           ),
@@ -716,9 +699,8 @@ class _SearchDialogState extends State<SearchDialog> {
                                           CrossAxisAlignment.center,
                                       children: [
                                         Expanded(child: searchField),
-                                        if (fuzzyDistanceWidget != null)
-                                          fuzzyDistanceWidget,
-                                        if (categoriesToggleWidget != null)
+                                        fuzzyDistanceWidget,
+                                        if (showCategoriesToggleWidget)
                                           categoriesToggleWidget,
                                       ],
                                     );

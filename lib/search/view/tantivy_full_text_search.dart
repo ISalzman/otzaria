@@ -11,6 +11,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/view/full_text_settings_widgets.dart';
 import 'package:otzaria/search/view/tantivy_search_results.dart';
 import 'package:otzaria/search/view/full_text_facet_filtering.dart';
@@ -99,12 +100,19 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   }
 
   void _resetSearchScope() {
-    widget.tab.searchBloc.add(const SetFacetsWithoutSearch(['/']));
-    widget.tab.searchBloc.add(UpdateSearchQuery(
-      widget.tab.searchBloc.state.searchQuery,
+    final searchMode = widget.tab.searchBloc.state.configuration.searchMode;
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      searchMode,
       customSpacing: widget.tab.spacingValues,
       alternativeWords: widget.tab.alternativeWords,
       searchOptions: widget.tab.searchOptions,
+    );
+    widget.tab.searchBloc.add(const SetFacetsWithoutSearch(['/']));
+    widget.tab.searchBloc.add(UpdateSearchQuery(
+      widget.tab.searchBloc.state.searchQuery,
+      customSpacing: normalizedParameters.customSpacing,
+      alternativeWords: normalizedParameters.alternativeWords,
+      searchOptions: normalizedParameters.searchOptions,
     ));
   }
 
@@ -438,10 +446,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                         horizontal: 16.0,
                                       ),
                                       child: Text(
-                                        // levenshtein: totalResults = מה שנטען, אין total אמיתי
-                                        searchState.hasMoreResults
-                                            ? '${searchState.results.length}+ תוצאות'
-                                            : '${searchState.results.length}/${searchState.totalResults} תוצאות',
+                                        '${searchState.results.length}/${searchState.totalResults} תוצאות',
                                         style: TextStyle(
                                           fontSize: 14,
                                           color: Theme.of(context)

@@ -7,6 +7,7 @@ import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/search/view/tantivy_search_results.dart';
 import 'package:search_engine/search_engine.dart';
@@ -31,9 +32,6 @@ class SearchModeToggle extends StatelessWidget {
             break;
           case SearchMode.fuzzy:
             currentIndex = 2;
-            break;
-          case SearchMode.levenshtein:
-            currentIndex = 0;
             break;
         }
 
@@ -67,24 +65,13 @@ class SearchModeToggle extends StatelessWidget {
                 default:
                   newMode = SearchMode.advanced;
               }
-              context.read<SearchBloc>().add(
-                    SetSearchMode(
-                      newMode,
-                      typoToleranceEnabled:
-                          newMode == SearchMode.advanced ? null : false,
-                    ),
-                  );
+              context.read<SearchBloc>().add(SetSearchMode(newMode));
               final modeString = switch (newMode) {
                 SearchMode.advanced => 'advanced',
                 SearchMode.exact => 'exact',
                 SearchMode.fuzzy => 'fuzzy',
-                SearchMode.levenshtein => 'advanced',
               };
               Settings.setValue<String>('key-last-search-mode', modeString);
-              if (newMode != SearchMode.advanced) {
-                Settings.setValue<bool>(
-                    'key-last-search-typo-tolerance', false);
-              }
             },
           ),
         );
@@ -127,22 +114,22 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
         // בדיקה אם יש מרווחים מותאמים אישית
-        final hasCustomSpacing = widget.tab.spacingValues.isNotEmpty;
-        final isLevenshtein = state.isTypoToleranceEnabled;
-        final isEnabled = !state.fuzzy && !hasCustomSpacing && !isLevenshtein;
+        final hasCustomSpacing =
+            state.isAdvancedSearchEnabled && widget.tab.spacingValues.isNotEmpty;
+        final isEnabled = !hasCustomSpacing;
 
         return SizedBox(
           width: 140,
           child: SpinBox(
             enabled: isEnabled,
             decoration: InputDecoration(
-              labelText: isLevenshtein
-                  ? 'מרווח בין מילים (לא רלוונטי)'
-                  : hasCustomSpacing
-                      ? 'מרווח בין מילים (מושבת)'
-                      : 'מרווח בין מילים',
+              labelText: hasCustomSpacing
+                  ? 'מרווח בין מילים (מושבת)'
+                  : 'מרווח בין מילים',
               labelStyle: TextStyle(
-                color: hasCustomSpacing ? Colors.grey : null,
+                color: hasCustomSpacing
+                    ? Theme.of(context).colorScheme.onSurfaceVariant
+                    : null,
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -261,6 +248,12 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
 
     final words = text.trim().split(RegExp(r'\s+'));
     final List<TextSpan> spans = [];
+    final activeParameters = SearchQueryBuilder.normalizeParametersForMode(
+      widget.tab.searchBloc.state.configuration.searchMode,
+      customSpacing: widget.tab.spacingValues,
+      alternativeWords: widget.tab.alternativeWords,
+      searchOptions: widget.tab.searchOptions,
+    );
 
     // מיפוי אפשרויות לקיצורים
     const Map<String, String> optionAbbreviations = {
@@ -280,7 +273,7 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
       final wordKey = '${word}_$i';
 
       // בדיקה אם יש אפשרויות למילה הזו
-      final wordOptions = widget.tab.searchOptions[wordKey];
+      final wordOptions = activeParameters.searchOptions[wordKey];
       final selectedOptions = wordOptions?.entries
               .where((entry) => entry.value)
               .map((entry) => entry.key)
@@ -288,7 +281,7 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
           [];
 
       // בדיקה אם יש מילים חילופיות למילה הזו
-      final alternativeWords = widget.tab.alternativeWords[i] ?? [];
+      final alternativeWords = activeParameters.alternativeWords[i] ?? [];
 
       // הפרדה בין קידומות לסיומות
       final prefixes = selectedOptions
@@ -378,7 +371,7 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
       if (i < words.length - 1) {
         // בדיקה אם יש מרווח מוגדר בין המילים
         final spacingKey = '$i-${i + 1}';
-        final spacingValue = widget.tab.spacingValues[spacingKey];
+        final spacingValue = activeParameters.customSpacing[spacingKey];
 
         if (spacingValue != null && spacingValue.isNotEmpty) {
           // הצגת + עם המרווח מתחת

@@ -190,7 +190,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     Map<int, List<String>> alternativeWords = {};
     Map<String, String> spacingValues = {};
     SearchMode searchMode = SearchMode.exact;
-    bool typoToleranceEnabled = false;
+    int searchDistance = 0;
     bool showLeftPane;
     List<String> commentators;
     late final List<int> visibleIndices;
@@ -210,7 +210,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       alternativeWords = currentState.alternativeWords;
       spacingValues = currentState.spacingValues;
       searchMode = currentState.searchMode;
-      typoToleranceEnabled = currentState.typoToleranceEnabled;
+      searchDistance = currentState.searchDistance;
       showLeftPane = currentState.showLeftPane;
       commentators = currentState.activeCommentators;
       visibleIndices = currentState.visibleIndices;
@@ -227,7 +227,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       alternativeWords = initial.alternativeWords;
       spacingValues = initial.spacingValues;
       searchMode = initial.searchMode;
-      typoToleranceEnabled = initial.typoToleranceEnabled;
+      searchDistance = initial.searchDistance;
       showLeftPane = initial.showLeftPane;
       commentators = initial.commentators;
       visibleIndices = [initial.index < 0 ? 0 : initial.index];
@@ -400,7 +400,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         alternativeWords: alternativeWords,
         spacingValues: spacingValues,
         searchMode: searchMode,
-        typoToleranceEnabled: typoToleranceEnabled,
+        searchDistance: searchDistance,
         scrollController: scrollController,
         positionsListener: positionsListener,
         currentTitle: currentTitle,
@@ -991,7 +991,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         alternativeWords: event.alternativeWords,
         spacingValues: event.spacingValues,
         searchMode: event.searchMode,
-        typoToleranceEnabled: event.typoToleranceEnabled,
+        searchDistance: event.searchDistance,
         selectedIndex: currentState.selectedIndex,
       ));
     }
@@ -1221,8 +1221,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
-      final autoSelectNotes = currentState.activeCommentators.isEmpty &&
-          event.notesContent != null;
+      final autoSelectNotes =
+          currentState.activeCommentators.isEmpty && event.notesContent != null;
       final activeCommentators = autoSelectNotes
           ? [kNotesCommentatorTitle]
           : currentState.activeCommentators;

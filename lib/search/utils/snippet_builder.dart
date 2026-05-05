@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:html/parser.dart' as html_parser;
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
 
 class _SnippetMatchRange {
@@ -47,7 +48,6 @@ class SnippetBuilder {
     required Map<String, Map<String, bool>> searchOptions,
     required Map<int, List<String>> alternativeWords,
     Map<String, String> customSpacing = const {},
-    bool typoToleranceEnabled = false,
   }) {
     // 1. קבלת הטקסט הנקי מה-HTML
     var plainText =
@@ -123,10 +123,11 @@ class SnippetBuilder {
     // כך שהופעות בודדות-מרוחקות לא מקבלות הדגשה מוטעית
     final exactMatches = _collectPhraseWordMatches(plainText, termsByWord,
         customSpacing: customSpacing);
-    final approxMatches = typoToleranceEnabled
-        ? _collectApproximateMatches(plainText, searchTerms,
-            existingMatches: exactMatches)
-        : const <_ApproximateSnippetMatchCandidate>[];
+    final approxMatches =
+        SearchQueryBuilder.hasTypoToleranceEnabled(searchOptions)
+            ? _collectApproximateMatches(plainText, searchTerms,
+                existingMatches: exactMatches)
+            : const <_ApproximateSnippetMatchCandidate>[];
 
     final selectedApprox = exactMatches.isNotEmpty
         ? _selectApproximateMatchesNearExactMatches(approxMatches, exactMatches)
@@ -307,7 +308,9 @@ class SnippetBuilder {
           if (candidate.start < prevEnd) continue;
           final tokensBetween =
               _countTokensInRange(tokenStarts, prevEnd, candidate.start);
-          if (tokensBetween > maxTokensBetween) break; // רשימה ממוינת, break תקין
+          if (tokensBetween > maxTokensBetween) {
+            break; // רשימה ממוינת, break תקין
+          }
           best = candidate;
           break; // נוצלים את הקרובה ביותר
         }
@@ -529,6 +532,11 @@ class SnippetBuilder {
       return null;
     }
 
+    if (left.length == right.length &&
+        _isSingleAdjacentTransposition(left, right)) {
+      return 1;
+    }
+
     final shorter = left.length <= right.length ? left : right;
     final longer = left.length <= right.length ? right : left;
 
@@ -559,6 +567,27 @@ class SnippetBuilder {
     }
 
     return edits <= 1 ? edits : null;
+  }
+
+  static bool _isSingleAdjacentTransposition(String left, String right) {
+    int mismatchIndex = -1;
+
+    for (int i = 0; i < left.length; i++) {
+      if (left[i] == right[i]) {
+        continue;
+      }
+
+      if (mismatchIndex != -1) {
+        return i == mismatchIndex + 1 &&
+            left[mismatchIndex] == right[i] &&
+            left[i] == right[mismatchIndex] &&
+            left.substring(i + 1) == right.substring(i + 1);
+      }
+
+      mismatchIndex = i;
+    }
+
+    return false;
   }
 
   /// בניית תבנית רגקס שמאפשרת מרכאות אופציונליות בין תווים (כדי למצוא רשב"י כשמחפשים רשבי)

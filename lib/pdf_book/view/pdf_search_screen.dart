@@ -3,9 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
+import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/book_facet.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -31,7 +34,7 @@ class PdfBookSearchView extends StatefulWidget {
     this.initialAlternativeWords = const {},
     this.initialSpacingValues = const {},
     this.initialSearchMode = SearchMode.exact,
-    this.initialTypoToleranceEnabled = false,
+    this.initialSearchDistance = 0,
     this.onSearchResultNavigated,
     super.key,
   });
@@ -55,7 +58,7 @@ class PdfBookSearchView extends StatefulWidget {
   final Map<int, List<String>> initialAlternativeWords;
   final Map<String, String> initialSpacingValues;
   final SearchMode initialSearchMode;
-  final bool initialTypoToleranceEnabled;
+  final int initialSearchDistance;
   final VoidCallback? onSearchResultNavigated;
 
   @override
@@ -77,21 +80,22 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
   Map<int, List<String>> _alternativeWords = {};
   Map<String, String> _spacingValues = {};
   SearchMode _searchMode = SearchMode.exact;
-  bool _typoToleranceEnabled = false;
+  int _searchDistance = 0;
 
   Timer? _pdfHighlightDebounce;
   String _lastPdfHighlightQuery = '';
 
   bool get _isSimpleSearch =>
-      !_forceSearchEngine &&
-      _searchOptions.isEmpty &&
-      _alternativeWords.isEmpty &&
-      _spacingValues.isEmpty &&
-      !_typoToleranceEnabled &&
-      _searchMode == SearchMode.exact;
+      !_forceSearchEngine && _searchMode == SearchMode.exact;
 
-  bool get _usesTypoTolerance =>
-      _typoToleranceEnabled || _searchMode == SearchMode.levenshtein;
+  SearchModeScopedParameters get _activeSearchParameters {
+    return SearchQueryBuilder.normalizeParametersForMode(
+      _searchMode,
+      customSpacing: _spacingValues,
+      alternativeWords: _alternativeWords,
+      searchOptions: _searchOptions,
+    );
+  }
 
   int _getPdfPageNumber(SearchResult result) => result.segment.toInt() + 1;
 
@@ -115,16 +119,13 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
     _searchOptions = widget.initialSearchOptions;
     _alternativeWords = widget.initialAlternativeWords;
     _spacingValues = widget.initialSpacingValues;
-    _typoToleranceEnabled = widget.initialTypoToleranceEnabled ||
-        widget.initialSearchMode == SearchMode.levenshtein;
-    _searchMode = widget.initialSearchMode == SearchMode.levenshtein
-        ? SearchMode.advanced
-        : widget.initialSearchMode;
+    _searchMode = widget.initialSearchMode;
+    _searchDistance = widget.initialSearchDistance;
     _forceSearchEngine = _searchMode != SearchMode.exact ||
-        _searchOptions.isNotEmpty ||
-        _alternativeWords.isNotEmpty ||
-        _spacingValues.isNotEmpty ||
-        _typoToleranceEnabled;
+        _searchDistance > 0 ||
+        _activeSearchParameters.searchOptions.isNotEmpty ||
+        _activeSearchParameters.alternativeWords.isNotEmpty ||
+        _activeSearchParameters.customSpacing.isNotEmpty;
     widget.textSearcher.addListener(_onTextSearcherMatchesChanged);
     widget.searchController.addListener(_searchTextUpdated);
     _initializeBookPath();
@@ -228,26 +229,19 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
     }
 
     try {
-      final List<SearchResult> rawResults;
-      if (_usesTypoTolerance) {
-        // חיפוש Levenshtein בתוך הספר — ללא regex/slop, רק מילים נקיות
-        rawResults = await _searchRepository.searchTextsLevenshtein(
-          query,
-          [_bookPath!],
-          1000,
-          order: ResultsOrder.catalogue,
-        );
-      } else {
-        rawResults = await _searchRepository.searchTexts(
-          query,
-          [_bookPath!],
-          1000,
-          searchOptions: _searchOptions,
-          alternativeWords: _alternativeWords,
-          customSpacing: _spacingValues,
-          fuzzy: _searchMode == SearchMode.fuzzy,
-        );
-      }
+      final activeParameters = _activeSearchParameters;
+      final rawResults = await _searchRepository.searchTexts(
+        query,
+        [_bookPath!],
+        1000,
+        searchOptions: activeParameters.searchOptions,
+        alternativeWords: activeParameters.alternativeWords,
+        customSpacing: activeParameters.customSpacing,
+        fuzzy: _searchMode == SearchMode.fuzzy,
+        distance: _searchDistance,
+        searchMode: _searchMode,
+        order: ResultsOrder.catalogue,
+      );
 
       final pdfPath = widget.pdfFilePath;
       final results = rawResults.where((r) {
@@ -396,8 +390,15 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
           _alternativeWords = {};
           _spacingValues = {};
           _searchMode = SearchMode.exact;
-          _typoToleranceEnabled = false;
+          _searchDistance = 0;
         });
+        context.read<PdfBookBloc>().add(const UpdateSearchOptions(
+              searchOptions: {},
+              alternativeWords: {},
+              spacingValues: {},
+              searchMode: SearchMode.exact,
+              searchDistance: 0,
+            ));
         _schedulePdfHighlight('');
       },
       additionalActions: const [],
@@ -407,12 +408,8 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
         tempTab.searchOptions.addAll(_searchOptions);
         tempTab.alternativeWords.addAll(_alternativeWords);
         tempTab.spacingValues.addAll(_spacingValues);
-        tempTab.searchBloc.add(
-          SetSearchMode(
-            _searchMode,
-            typoToleranceEnabled: _usesTypoTolerance,
-          ),
-        );
+        tempTab.searchBloc.add(SetSearchMode(_searchMode));
+        tempTab.searchBloc.add(UpdateDistance(_searchDistance));
 
         showDialog(
           context: context,
@@ -420,22 +417,34 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
             existingTab: tempTab,
             bookTitle: widget.bookTitle,
             onSearch: (query, searchOptions, alternativeWords, spacingValues,
-                searchMode, typoToleranceEnabled) {
+                searchMode, distance) {
+              final normalizedParameters =
+                  SearchQueryBuilder.normalizeParametersForMode(
+                searchMode,
+                customSpacing: spacingValues,
+                alternativeWords: alternativeWords,
+                searchOptions: searchOptions,
+              );
               widget.searchController.text = query;
               setState(() {
-                _searchOptions = searchOptions;
-                _alternativeWords = alternativeWords;
-                _spacingValues = spacingValues;
-                _searchMode = searchMode == SearchMode.levenshtein
-                    ? SearchMode.advanced
-                    : searchMode;
-                _typoToleranceEnabled = typoToleranceEnabled;
+                _searchOptions = normalizedParameters.searchOptions;
+                _alternativeWords = normalizedParameters.alternativeWords;
+                _spacingValues = normalizedParameters.customSpacing;
+                _searchMode = searchMode;
+                _searchDistance = distance;
                 _forceSearchEngine = _searchMode != SearchMode.exact ||
+                    _searchDistance > 0 ||
                     _searchOptions.isNotEmpty ||
                     _alternativeWords.isNotEmpty ||
-                    _spacingValues.isNotEmpty ||
-                    _typoToleranceEnabled;
+                    _spacingValues.isNotEmpty;
               });
+              context.read<PdfBookBloc>().add(UpdateSearchOptions(
+                    searchOptions: normalizedParameters.searchOptions,
+                    alternativeWords: normalizedParameters.alternativeWords,
+                    spacingValues: normalizedParameters.customSpacing,
+                    searchMode: searchMode,
+                    searchDistance: distance,
+                  ));
               _searchTextUpdated();
             },
           ),
