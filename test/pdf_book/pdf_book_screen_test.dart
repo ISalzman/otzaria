@@ -1,7 +1,40 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/pdf_book/view/pdf_book_screen.dart';
+import 'package:otzaria/settings/services/per_book_settings_service.dart';
 
 void main() {
+  group('resolveInitialPdfPrintPage', () {
+    test('מחזירה את אותו עמוד בתצוגה רגילה', () {
+      expect(
+        resolveInitialPdfPrintPage(
+          currentPage: 5,
+          layoutMode: PdfLayoutMode.regularView,
+        ),
+        5,
+      );
+    });
+
+    test('מנרמלת עמוד אי זוגי לתחילת spread במצב ספר', () {
+      expect(
+        resolveInitialPdfPrintPage(
+          currentPage: 5,
+          layoutMode: PdfLayoutMode.bookView,
+        ),
+        4,
+      );
+    });
+
+    test('משאירה את עמוד 1 ללא שינוי במצב ספר', () {
+      expect(
+        resolveInitialPdfPrintPage(
+          currentPage: 1,
+          layoutMode: PdfLayoutMode.bookView,
+        ),
+        1,
+      );
+    });
+  });
+
   group('shouldShowOpenPdfCommentaryPaneEntry', () {
     test('מחזירה true רק כשיש מפרשים רלוונטיים והחלונית סגורה', () {
       expect(
