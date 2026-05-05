@@ -10,7 +10,7 @@ import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/tools/gematria/gematria_search.dart';
 import 'package:otzaria/tools/gematria/models/gematria_search_result.dart';
 import 'package:otzaria/tools/gematria/widgets/gematria_result_card.dart';
-import 'package:otzaria/tools/gematria/widgets/gematria_settings_panel.dart';
+import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
@@ -350,38 +350,50 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
             ),
           ),
           Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isNarrow = constraints.maxWidth < 800;
-                final panel = GematriaSettingsPanel(
-                  isVisible: _showingSettings,
-                  onToggle: _toggleSettings,
-                );
-                final resultsContent = ToolPanelWrapper(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ToolPanelWrapper(
+                    child: Column(
+                      children: [
+                        if (_lastGematriaValue != null) _buildStatusBar(),
+                        Expanded(child: _buildResultsList()),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: ContextOverlayPanel(
+                  isOpen: _showingSettings,
+                  onClose: _toggleSettings,
+                  width: 360,
                   child: Column(
                     children: [
-                      if (_lastGematriaValue != null) _buildStatusBar(),
-                      Expanded(child: _buildResultsList()),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Text(
+                              'הגדרות',
+                              textDirection: TextDirection.rtl,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Expanded(
+                        child: SingleChildScrollView(
+                          child: GematriaSettingsTab(),
+                        ),
+                      ),
                     ],
                   ),
-                );
-
-                if (isNarrow) {
-                  return Stack(
-                    children: [
-                      Positioned.fill(child: resultsContent),
-                      panel.buildNarrowOverlay(context),
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: resultsContent),
-                    panel,
-                  ],
-                );
-              },
+                ),
+                ),
+              ],
             ),
           ),
         ],
