@@ -3411,21 +3411,37 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Future<void> _handlePrintPress(BuildContext context) async {
     if (!context.mounted) return;
     final file = File(widget.tab.book.path);
+    final currentPage = widget.tab.pdfViewerController.isReady
+        ? (widget.tab.pdfViewerController.pageNumber ?? widget.tab.pageNumber)
+        : widget.tab.pageNumber;
+    final currentLayoutMode = switch (_bloc.state) {
+      PdfBookInitial initial => initial.layoutMode,
+      PdfBookLoaded loaded => loaded.layoutMode,
+      _ => PdfLayoutMode.regularView,
+    };
     setState(() => _pdfViewerSuspended = true);
-    await Navigator.of(context).push(MaterialPageRoute(
+    await Navigator.of(context).push<bool>(MaterialPageRoute(
       builder: (_) => PrintingScreen(
         data: Future.value(''),
         bookId: widget.tab.book.title,
         createPdfOverride: (_) => file.readAsBytes(),
+        initialPage: currentPage,
+        isBookView: currentLayoutMode == PdfLayoutMode.bookView,
+        pdfOutline: widget.tab.outline.value ?? [],
       ),
     ));
     if (mounted) {
       try {
-        // The printing plugin calls FPDF_DestroyLibrary() after each print job,
-        // which destroys the PDFium global state shared with pdfrx.
-        // Stopping the background worker lets pdfrx lazily re-initialize PDFium on next use.
-        await PdfrxEntryFunctions.instance.stopBackgroundWorker();
-      } finally {
+        // Always reset the pdfrx worker when leaving the print screen:
+        // - If printing happened: FPDF_DestroyLibrary() was called by the printing plugin,
+        //   corrupting the shared PDFium state that pdfrx depends on.
+        // - If preview loading was stuck: the worker may be blocked on PdfDocument.openData.
+        // A 3-second timeout ensures _pdfViewerSuspended is always cleared even if the
+        // worker is unresponsive.
+        await PdfrxEntryFunctions.instance.stopBackgroundWorker()
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {}
+      finally {
         if (mounted) {
           setState(() => _pdfViewerSuspended = false);
           WidgetsBinding.instance.addPostFrameCallback((_) {
