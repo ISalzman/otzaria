@@ -265,6 +265,13 @@ class _CombinedViewState extends State<CombinedView> {
     }
   }
 
+  void _addTextBookEventIfOpen(TextBookEvent event) {
+    if (_textBookBloc.isClosed) {
+      return;
+    }
+    _textBookBloc.add(event);
+  }
+
   // פונקציה שתשלח אירוע איפוס ל-selectedIndex אם יש גלילה משמעותית
   void _onScroll() {
     // אנחנו רוצים את הלוגיקה הזו רק בתצוגה המפוצלת (SimpleBookView לשעבר)
@@ -280,7 +287,7 @@ class _CombinedViewState extends State<CombinedView> {
       // אם האינדקס הנבחר כבר לא נראה (האינדקסים הנראים שונו עקב גלילה)
       final visibleIndices = state.visibleIndices;
       if (!visibleIndices.contains(currentSelectedIndex)) {
-        _textBookBloc.add(const UpdateSelectedIndex(null));
+        _addTextBookEventIfOpen(const UpdateSelectedIndex(null));
       }
     }
   }
@@ -357,8 +364,12 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   // בניית תפריט קונטקסט לאינדקס ספציפי של פסקה
-  List<AppContextMenuEntry> _buildContextMenuForIndex(TextBookLoaded state,
-      int paragraphIndex, BuildContext menuContext, String? selectedText, Offset tapPosition) {
+  List<AppContextMenuEntry> _buildContextMenuForIndex(
+      TextBookLoaded state,
+      int paragraphIndex,
+      BuildContext menuContext,
+      String? selectedText,
+      Offset tapPosition) {
     // מצב תצוגה מקדימה — תפריט מינימלי
     if (widget.isPreviewMode) {
       return [
@@ -597,7 +608,7 @@ class _CombinedViewState extends State<CombinedView> {
 
     final state = _textBookBloc.state;
     if (state is TextBookLoaded && state.selectedIndex != paragraphIndex) {
-      _textBookBloc.add(UpdateSelectedIndex(paragraphIndex));
+      _addTextBookEventIfOpen(UpdateSelectedIndex(paragraphIndex));
     }
   }
 
@@ -1142,9 +1153,9 @@ class _CombinedViewState extends State<CombinedView> {
               }
               // פשוט מעדכן את selectedIndex - זה יגרום לבנייה מחדש
               if (isSelected) {
-                _textBookBloc.add(const UpdateSelectedIndex(null));
+                _addTextBookEventIfOpen(const UpdateSelectedIndex(null));
               } else {
-                _textBookBloc.add(UpdateSelectedIndex(index));
+                _addTextBookEventIfOpen(UpdateSelectedIndex(index));
 
                 // גלילה אוטומטית כך שהקטע יהיה בראש העמוד
                 // רק אם יש מפרשים להצגה ואנחנו במצב ExpansionTiles
@@ -1286,12 +1297,16 @@ class _CombinedViewState extends State<CombinedView> {
                           message: note.contentPlain,
                           child: GestureDetector(
                             onTap: () {
-                              _textBookBloc.add(UpdateSelectedIndex(index));
-                              _textBookBloc.add(HighlightLine(index));
+                              _addTextBookEventIfOpen(
+                                UpdateSelectedIndex(index),
+                              );
+                              _addTextBookEventIfOpen(HighlightLine(index));
                               if (widget.onOpenPersonalNotes != null) {
                                 widget.onOpenPersonalNotes!.call();
                               } else {
-                                _textBookBloc.add(const ToggleLeftPane(true));
+                                _addTextBookEventIfOpen(
+                                  const ToggleLeftPane(true),
+                                );
                               }
                             },
                             onLongPress: () {
