@@ -2466,9 +2466,24 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 child: TabBar(
                   controller: _leftPaneTabController,
                   tabs: const [
-                    Tab(text: 'ניווט'),
-                    Tab(text: 'חיפוש'),
-                    Tab(text: 'דפים'),
+                    Tab(
+                      icon: Icon(FluentIcons.navigation_24_regular, size: 16),
+                      iconMargin: EdgeInsets.only(bottom: 1),
+                      height: 44,
+                      child: Text('ניווט', style: TextStyle(fontSize: 11)),
+                    ),
+                    Tab(
+                      icon: Icon(FluentIcons.search_24_regular, size: 16),
+                      iconMargin: EdgeInsets.only(bottom: 1),
+                      height: 44,
+                      child: Text('חיפוש', style: TextStyle(fontSize: 11)),
+                    ),
+                    Tab(
+                      icon: Icon(FluentIcons.document_multiple_24_regular, size: 16),
+                      iconMargin: EdgeInsets.only(bottom: 1),
+                      height: 44,
+                      child: Text('דפים', style: TextStyle(fontSize: 11)),
+                    ),
                   ],
                   labelColor: Theme.of(context).colorScheme.primary,
                   unselectedLabelColor: Theme.of(context)
