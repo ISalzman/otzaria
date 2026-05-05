@@ -56,7 +56,9 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
       return;
     }
 
-    final facetsToSearch = _selectedCategoryFacets.toList();
+    final facetsToSearch = _selectedCategoryFacets.isEmpty
+        ? ['/']
+        : _selectedCategoryFacets.toList();
 
     widget.tab.updateTitleFromAppliedQuery(query);
     widget.tab.searchBloc.add(SetFacetsWithoutSearch(facetsToSearch));
