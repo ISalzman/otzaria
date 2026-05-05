@@ -12,6 +12,7 @@ import 'package:otzaria/text_book/models/search_results.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/book_facet.dart';
 import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
@@ -44,7 +45,7 @@ class TextBookSearchView extends StatefulWidget {
   final Map<int, List<String>> initialAlternativeWords;
   final Map<String, String> initialSpacingValues;
   final SearchMode initialSearchMode;
-  final bool initialTypoToleranceEnabled;
+  final int initialSearchDistance;
 
   const TextBookSearchView({
     super.key,
@@ -57,7 +58,7 @@ class TextBookSearchView extends StatefulWidget {
     this.initialAlternativeWords = const {},
     this.initialSpacingValues = const {},
     this.initialSearchMode = SearchMode.exact,
-    this.initialTypoToleranceEnabled = false,
+    this.initialSearchDistance = 0,
   });
 
   @override
@@ -79,33 +80,16 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   Map<int, List<String>> _alternativeWords = {};
   Map<String, String> _spacingValues = {};
   SearchMode _searchMode = SearchMode.exact;
-  bool _typoToleranceEnabled = false;
+  int _searchDistance = 0;
   int? _selectedSearchResultIndex;
 
   bool get _isSimpleSearch =>
-      !_forceSearchEngine &&
-      _searchOptions.isEmpty &&
-      _alternativeWords.isEmpty &&
-      _spacingValues.isEmpty &&
-      !_typoToleranceEnabled &&
-      _searchMode == SearchMode.exact;
-
-  bool get _usesTypoTolerance =>
-      _typoToleranceEnabled || _searchMode == SearchMode.levenshtein;
+      !_forceSearchEngine && _searchMode == SearchMode.exact;
 
   static const int _maxResultSnippetChars = 220;
 
   SearchMode _normalizedSearchMode(SearchMode searchMode) {
-    return searchMode == SearchMode.levenshtein
-        ? SearchMode.advanced
-        : searchMode;
-  }
-
-  bool _effectiveTypoTolerance(
-    SearchMode searchMode,
-    bool typoToleranceEnabled,
-  ) {
-    return typoToleranceEnabled || searchMode == SearchMode.levenshtein;
+    return searchMode;
   }
 
   bool _searchOptionsEqual(
@@ -142,23 +126,30 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     return true;
   }
 
+  SearchModeScopedParameters get _activeSearchParameters {
+    return SearchQueryBuilder.normalizeParametersForMode(
+      _searchMode,
+      customSpacing: _spacingValues,
+      alternativeWords: _alternativeWords,
+      searchOptions: _searchOptions,
+    );
+  }
+
   void _updateForceSearchEngine() {
+    final activeParameters = _activeSearchParameters;
     _forceSearchEngine = _searchMode != SearchMode.exact ||
-        _searchOptions.isNotEmpty ||
-        _alternativeWords.isNotEmpty ||
-        _spacingValues.isNotEmpty ||
-        _typoToleranceEnabled;
+        _searchDistance > 0 ||
+        activeParameters.searchOptions.isNotEmpty ||
+        activeParameters.alternativeWords.isNotEmpty ||
+        activeParameters.customSpacing.isNotEmpty;
   }
 
   void _syncSearchConfigurationFromWidget() {
     _searchOptions = widget.initialSearchOptions;
     _alternativeWords = widget.initialAlternativeWords;
     _spacingValues = widget.initialSpacingValues;
-    _typoToleranceEnabled = _effectiveTypoTolerance(
-      widget.initialSearchMode,
-      widget.initialTypoToleranceEnabled,
-    );
     _searchMode = _normalizedSearchMode(widget.initialSearchMode);
+    _searchDistance = widget.initialSearchDistance;
     _updateForceSearchEngine();
   }
 
@@ -192,17 +183,13 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         widget.initialQuery != searchTextController.text;
     final normalizedSearchMode =
         _normalizedSearchMode(widget.initialSearchMode);
-    final effectiveTypoTolerance = _effectiveTypoTolerance(
-      widget.initialSearchMode,
-      widget.initialTypoToleranceEnabled,
-    );
     final searchConfigurationChanged =
         !_searchOptionsEqual(_searchOptions, widget.initialSearchOptions) ||
             !_alternativeWordsEqual(
                 _alternativeWords, widget.initialAlternativeWords) ||
             !mapEquals(_spacingValues, widget.initialSpacingValues) ||
             _searchMode != normalizedSearchMode ||
-            _typoToleranceEnabled != effectiveTypoTolerance;
+            _searchDistance != widget.initialSearchDistance;
 
     if (queryChanged && needsControllerSync) {
       syncSearchControllerQuery(searchTextController, widget.initialQuery);
@@ -308,25 +295,19 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       const displayLimit = 1000;
 
       final List<SearchResult> rawResults;
-      if (_usesTypoTolerance) {
-        // חיפוש Levenshtein בתוך הספר — ללא regex/slop, רק מילים נקיות
-        rawResults = await _searchRepository.searchTextsLevenshtein(
-          query,
-          [_bookPath!],
-          rawLimit,
-          order: ResultsOrder.catalogue,
-        );
-      } else {
-        rawResults = await _searchRepository.searchTexts(
-          query,
-          [_bookPath!],
-          rawLimit,
-          searchOptions: _searchOptions,
-          alternativeWords: _alternativeWords,
-          customSpacing: _spacingValues,
-          fuzzy: _searchMode == SearchMode.fuzzy,
-        );
-      }
+      final activeParameters = _activeSearchParameters;
+      rawResults = await _searchRepository.searchTexts(
+        query,
+        [_bookPath!],
+        rawLimit,
+        searchOptions: activeParameters.searchOptions,
+        alternativeWords: activeParameters.alternativeWords,
+        customSpacing: activeParameters.customSpacing,
+        fuzzy: _searchMode == SearchMode.fuzzy,
+        distance: _searchDistance,
+        searchMode: _searchMode,
+        order: ResultsOrder.catalogue,
+      );
 
       final expectedTitle = _bookTitle!.trim();
 
@@ -615,14 +596,15 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           searchTextController.text.isNotEmpty &&
           !_isSearching,
       onSearchTextChanged: (value) {
+        final activeParameters = _activeSearchParameters;
         context.read<TextBookBloc>().add(
               UpdateSearchText(
                 value,
-                searchOptions: _searchOptions,
-                alternativeWords: _alternativeWords,
-                spacingValues: _spacingValues,
+                searchOptions: activeParameters.searchOptions,
+                alternativeWords: activeParameters.alternativeWords,
+                spacingValues: activeParameters.customSpacing,
                 searchMode: _searchMode,
-                typoToleranceEnabled: _typoToleranceEnabled,
+                searchDistance: _searchDistance,
               ),
             );
         _searchTextUpdated();
@@ -635,7 +617,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           _alternativeWords = {};
           _spacingValues = {};
           _searchMode = SearchMode.exact;
-          _typoToleranceEnabled = false;
+          _searchDistance = 0;
         });
         context.read<TextBookBloc>().add(
               const UpdateSearchText(
@@ -644,7 +626,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                 alternativeWords: {},
                 spacingValues: {},
                 searchMode: SearchMode.exact,
-                typoToleranceEnabled: false,
+                searchDistance: 0,
               ),
             );
       },
@@ -656,12 +638,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         tempTab.searchOptions.addAll(_searchOptions);
         tempTab.alternativeWords.addAll(_alternativeWords);
         tempTab.spacingValues.addAll(_spacingValues);
-        tempTab.searchBloc.add(
-          SetSearchMode(
-            _searchMode,
-            typoToleranceEnabled: _usesTypoTolerance,
-          ),
-        );
+        tempTab.searchBloc.add(SetSearchMode(_searchMode));
+        tempTab.searchBloc.add(UpdateDistance(_searchDistance));
 
         final bookTitle =
             (context.read<TextBookBloc>().state as TextBookLoaded).book.title;
@@ -672,10 +650,14 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             existingTab: tempTab,
             bookTitle: bookTitle,
             onSearch: (query, searchOptions, alternativeWords, spacingValues,
-                searchMode, typoToleranceEnabled) {
-              final effectiveSearchMode = searchMode == SearchMode.levenshtein
-                  ? SearchMode.advanced
-                  : searchMode;
+                searchMode, distance) {
+              final normalizedParameters =
+                  SearchQueryBuilder.normalizeParametersForMode(
+                searchMode,
+                customSpacing: spacingValues,
+                alternativeWords: alternativeWords,
+                searchOptions: searchOptions,
+              );
               applyInBookSearchQuery(
                 controller: searchTextController,
                 query: query,
@@ -683,21 +665,22 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                   context.read<TextBookBloc>().add(
                         UpdateSearchText(
                           value,
-                          searchOptions: searchOptions,
-                          alternativeWords: alternativeWords,
-                          spacingValues: spacingValues,
-                          searchMode: effectiveSearchMode,
-                          typoToleranceEnabled: typoToleranceEnabled,
+                          searchOptions: normalizedParameters.searchOptions,
+                          alternativeWords:
+                              normalizedParameters.alternativeWords,
+                          spacingValues: normalizedParameters.customSpacing,
+                          searchMode: searchMode,
+                          searchDistance: distance,
                         ),
                       );
                 },
               );
               setState(() {
-                _searchOptions = searchOptions;
-                _alternativeWords = alternativeWords;
-                _spacingValues = spacingValues;
-                _searchMode = effectiveSearchMode;
-                _typoToleranceEnabled = typoToleranceEnabled;
+                _searchOptions = normalizedParameters.searchOptions;
+                _alternativeWords = normalizedParameters.alternativeWords;
+                _spacingValues = normalizedParameters.customSpacing;
+                _searchMode = searchMode;
+                _searchDistance = distance;
                 _updateForceSearchEngine();
               });
               _searchTextUpdated();

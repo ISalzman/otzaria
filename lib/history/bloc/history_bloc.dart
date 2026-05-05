@@ -13,7 +13,6 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
-import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
@@ -90,10 +89,6 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
       if (text.trim().isEmpty) return null;
 
       final searchState = searchingTab.searchBloc.state;
-      final rawSearchMode = searchState.configuration.searchMode;
-      final normalizedSearchMode = rawSearchMode == SearchMode.levenshtein
-          ? SearchMode.advanced
-          : rawSearchMode;
 
       final formattedQuery = _buildFormattedQuery(searchingTab);
       final scopeFacets = searchState.searchScopeFacets;
@@ -111,8 +106,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
         workspaceName: workspaceName,
         searchScopeFacets:
             nonRootScopeFacets.isNotEmpty ? nonRootScopeFacets : null,
-        searchMode: normalizedSearchMode,
-        typoToleranceEnabled: searchState.isTypoToleranceEnabled,
+        searchMode: searchState.configuration.searchMode,
       );
     }
 

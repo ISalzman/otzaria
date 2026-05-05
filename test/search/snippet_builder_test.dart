@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 
 void main() {
@@ -22,14 +23,17 @@ void main() {
 
   test('SnippetBuilder מדגיש גם התאמה דומה כשהופעלו שגיאות כתיב', () {
     final spans = SnippetBuilder.createSnippetSpans(
-      fullHtml: '<p>שלום לכל העולם</p>',
-      query: 'שלומ',
+      fullHtml: '<p>חכמה לכל העולם</p>',
+      query: 'חמכה',
       defaultStyle: const TextStyle(),
       highlightStyle: const TextStyle(fontWeight: FontWeight.bold),
       availableWidth: 400,
-      searchOptions: const {},
+      searchOptions: {
+        SearchQueryBuilder.buildWordKey('חמכה', 0): const {
+          'שגיאות כתיב': true,
+        },
+      },
       alternativeWords: const {},
-      typoToleranceEnabled: true,
     );
 
     final highlighted = spans
@@ -38,7 +42,7 @@ void main() {
         .map((span) => span.text ?? '')
         .join();
 
-    expect(highlighted, contains('שלום'));
+    expect(highlighted, contains('חכמה'));
   });
 
   test('SnippetBuilder לא מרחיב את הקטע לטוקנים דומים רחוקים', () {
@@ -48,9 +52,12 @@ void main() {
       defaultStyle: const TextStyle(),
       highlightStyle: const TextStyle(fontWeight: FontWeight.bold),
       availableWidth: 220,
-      searchOptions: const {},
+      searchOptions: {
+        SearchQueryBuilder.buildWordKey('שלומ', 0): const {
+          'שגיאות כתיב': true,
+        },
+      },
       alternativeWords: const {},
-      typoToleranceEnabled: true,
     );
 
     final renderedText =
@@ -67,9 +74,12 @@ void main() {
       defaultStyle: const TextStyle(),
       highlightStyle: const TextStyle(fontWeight: FontWeight.bold),
       availableWidth: 220,
-      searchOptions: const {},
+      searchOptions: {
+        SearchQueryBuilder.buildWordKey('שלום', 0): const {
+          'שגיאות כתיב': true,
+        },
+      },
       alternativeWords: const {},
-      typoToleranceEnabled: true,
     );
 
     final renderedText =

@@ -167,7 +167,7 @@ class UpdateSearchText extends TextBookEvent {
   final Map<int, List<String>>? alternativeWords;
   final Map<String, String>? spacingValues;
   final SearchMode? searchMode;
-  final bool? typoToleranceEnabled;
+  final int? searchDistance;
 
   const UpdateSearchText(
     this.text, {
@@ -175,7 +175,7 @@ class UpdateSearchText extends TextBookEvent {
     this.alternativeWords,
     this.spacingValues,
     this.searchMode,
-    this.typoToleranceEnabled,
+    this.searchDistance,
   });
 
   @override
@@ -185,7 +185,7 @@ class UpdateSearchText extends TextBookEvent {
         alternativeWords,
         spacingValues,
         searchMode,
-        typoToleranceEnabled,
+        searchDistance,
       ];
 }
 

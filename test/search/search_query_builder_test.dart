@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 
 void main() {
@@ -27,8 +28,8 @@ void main() {
     });
 
     test('מסיר סוגריים', () {
-      expect(
-          SearchQueryBuilder.sanitizeQuery('(תורה) [ומצוות] {ונביאים}'), 'תורה ומצוות ונביאים');
+      expect(SearchQueryBuilder.sanitizeQuery('(תורה) [ומצוות] {ונביאים}'),
+          'תורה ומצוות ונביאים');
     });
 
     test('מסיר כוכביות ונקודות', () {
@@ -49,7 +50,8 @@ void main() {
     });
 
     test('query טהור עברי נשמר', () {
-      expect(SearchQueryBuilder.sanitizeQuery('בראשית ברא אלהים'), 'בראשית ברא אלהים');
+      expect(SearchQueryBuilder.sanitizeQuery('בראשית ברא אלהים'),
+          'בראשית ברא אלהים');
     });
 
     test('חותך רווחים מהצדדים', () {
@@ -57,10 +59,104 @@ void main() {
     });
   });
 
+  group('typo helpers', () {
+    test('buildWordKey בונה מפתח עקבי לאפשרויות מילה', () {
+      expect(SearchQueryBuilder.buildWordKey('תורה', 2), 'תורה_2');
+    });
+
+    test('hasTypoToleranceEnabled מזהה דגל שגיאות כתיב באפשרויות', () {
+      expect(
+        SearchQueryBuilder.hasTypoToleranceEnabled({
+          'תורה_0': {SearchQueryBuilder.typoToleranceOptionKey: true}
+        }),
+        isTrue,
+      );
+      expect(
+        SearchQueryBuilder.hasTypoToleranceEnabled({
+          'תורה_0': {'כתיב מלא/חסר': true}
+        }),
+        isFalse,
+      );
+    });
+
+    test('normalizeParametersForMode מנקה פרמטרים מתקדמים מחוץ ל-advanced', () {
+      final normalized = SearchQueryBuilder.normalizeParametersForMode(
+        SearchMode.exact,
+        customSpacing: {'0-1': '7'},
+        alternativeWords: {
+          0: ['בינה']
+        },
+        searchOptions: {
+          'חכמה_0': {SearchQueryBuilder.typoToleranceOptionKey: true}
+        },
+      );
+
+      expect(normalized.customSpacing, isEmpty);
+      expect(normalized.alternativeWords, isEmpty);
+      expect(normalized.searchOptions, isEmpty);
+    });
+  });
+
+  group('normalizeParametersForMode', () {
+    final customSpacing = {'0-1': ' 5 ', '1-2': '   '};
+    final alternativeWords = {
+      0: [' חכמה ', ''],
+      1: ['   '],
+    };
+    final searchOptions = {
+      'חכמה_0': {'קידומות': true, 'סיומות': false},
+      'בינה_1': {'סיומות': false},
+    };
+
+    test('advanced שומר רק ערכים פעילים ולא ריקים', () {
+      final params = SearchQueryBuilder.normalizeParametersForMode(
+        SearchMode.advanced,
+        customSpacing: customSpacing,
+        alternativeWords: alternativeWords,
+        searchOptions: searchOptions,
+      );
+
+      expect(params.customSpacing, {'0-1': '5'});
+      expect(params.alternativeWords, {
+        0: ['חכמה']
+      });
+      expect(params.searchOptions, {
+        'חכמה_0': {'קידומות': true}
+      });
+    });
+
+    test('exact מאפס פרמטרים מתקדמים', () {
+      final params = SearchQueryBuilder.normalizeParametersForMode(
+        SearchMode.exact,
+        customSpacing: customSpacing,
+        alternativeWords: alternativeWords,
+        searchOptions: searchOptions,
+      );
+
+      expect(params.customSpacing, isEmpty);
+      expect(params.alternativeWords, isEmpty);
+      expect(params.searchOptions, isEmpty);
+    });
+
+    test('fuzzy מאפס פרמטרים מתקדמים ידניים', () {
+      final params = SearchQueryBuilder.normalizeParametersForMode(
+        SearchMode.fuzzy,
+        customSpacing: customSpacing,
+        alternativeWords: alternativeWords,
+        searchOptions: searchOptions,
+      );
+
+      expect(params.customSpacing, isEmpty);
+      expect(params.alternativeWords, isEmpty);
+      expect(params.searchOptions, isEmpty);
+    });
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
   group('buildAdvancedQuery', () {
     test('מילה בודדת ללא אפשרויות → מחזירה אותה', () {
-      final result = SearchQueryBuilder.buildAdvancedQuery(['תורה'], null, null);
+      final result =
+          SearchQueryBuilder.buildAdvancedQuery(['תורה'], null, null);
       expect(result, ['תורה']);
     });
 
@@ -71,8 +167,8 @@ void main() {
     });
 
     test('מילה ריקה ברשימה מסוננת', () {
-      final result =
-          SearchQueryBuilder.buildAdvancedQuery(['תורה', '', 'ברא'], null, null);
+      final result = SearchQueryBuilder.buildAdvancedQuery(
+          ['תורה', '', 'ברא'], null, null);
       // מילה ריקה עוברת דרך fallback: regexTerms.add(word) - מוסיף מחרוזת ריקה
       // אך לפחות לא קורסת
       expect(result.length, 3);
@@ -81,7 +177,9 @@ void main() {
     test('alternativeWords יוצר regex עם OR', () {
       final result = SearchQueryBuilder.buildAdvancedQuery(
         ['ה'],
-        {0: ['השם', 'אדני']},
+        {
+          0: ['השם', 'אדני']
+        },
         null,
       );
       expect(result.length, 1);
@@ -101,6 +199,21 @@ void main() {
       expect(result.first, isNot(startsWith('(')));
     });
 
+    test('שגיאות כתיב פר-מילה יוצרות וריאציות בלי להפעיל fuzzy מלא', () {
+      final result = SearchQueryBuilder.buildAdvancedQuery(
+        ['חכמה'],
+        null,
+        {
+          'חכמה_0': {SearchQueryBuilder.typoToleranceOptionKey: true}
+        },
+      );
+
+      expect(result.first, contains('חכמה'));
+      expect(result.first, contains('הכמה'));
+      expect(result.first, contains('חמכה'));
+      expect(result.first, isNot(contains('תרה')));
+    });
+
     test('מגביל וריאציות ל-20', () {
       final manyAlternatives = List.generate(25, (i) => 'alt$i');
       final result = SearchQueryBuilder.buildAdvancedQuery(
@@ -116,7 +229,9 @@ void main() {
       // אפשרויות שכולן רווחים - אחרי trim יהיו ריקות
       final result = SearchQueryBuilder.buildAdvancedQuery(
         ['  '],
-        {0: ['   ', '  ']},
+        {
+          0: ['   ', '  ']
+        },
         null,
       );
       // מילה ריקה עם אלטרנטיבות ריקות - validOptions ריק, fallback למילה
@@ -150,10 +265,10 @@ void main() {
       expect(regexTerms, contains('ברא'));
     });
 
-    test('fuzzy=true → effectiveSlop שווה ל-distance', () {
+    test('fuzzy עם מילה בודדת לא צריך slop בפועל', () {
       final params = SearchQueryBuilder.prepareQueryParams(
           'תורה', true, 3, null, null, null);
-      expect(params['effectiveSlop'], 3);
+      expect(params['effectiveSlop'], 0);
     });
 
     test('query עם פסיקים → מנוקה לפני פיצול', () {
@@ -183,7 +298,9 @@ void main() {
         false,
         0,
         null,
-        {0: ['ומצוות']},
+        {
+          0: ['ומצוות']
+        },
         null,
       );
       final regexTerms = params['regexTerms'] as List<String>;
@@ -252,6 +369,47 @@ void main() {
       expect(params['maxExpansions'], 50);
     });
 
+    test('fuzzy משתמש בביטוי מתקדם ולא במילה גולמית', () {
+      final params = SearchQueryBuilder.prepareQueryParams(
+          'חכמה', true, 9, null, null, null);
+      final regexTerms = params['regexTerms'] as List<String>;
+
+      expect(regexTerms, hasLength(1));
+      expect(regexTerms.first, contains('חכמה'));
+      expect(regexTerms.first, contains('הכמה'));
+      expect(regexTerms.first, contains('חקמה'));
+    });
+
+    test('fuzzy מתעלם מ-customSpacing ומשתמש במרווח הכללי', () {
+      final params = SearchQueryBuilder.prepareQueryParams(
+        'חכמה בינה',
+        true,
+        9,
+        {'0-1': '7'},
+        null,
+        null,
+      );
+
+      expect(params['effectiveSlop'], 9);
+    });
+
+    test('fuzzy מוסיף אוטומטית כתיב מלא וחסר', () {
+      final params = SearchQueryBuilder.prepareQueryParams(
+          'תורה', true, 2, null, null, null);
+      final regexTerms = params['regexTerms'] as List<String>;
+
+      expect(regexTerms.first, contains('תורה'));
+      expect(regexTerms.first, contains('תרה'));
+    });
+
+    test('fuzzy מוסיף גם החלפת סדר אותיות סמוכות', () {
+      final params = SearchQueryBuilder.prepareQueryParams(
+          'חכמה', true, 2, null, null, null);
+      final regexTerms = params['regexTerms'] as List<String>;
+
+      expect(regexTerms.first, contains('חמכה'));
+    });
+
     test('עם סיומות ומילה קצרה → maxExpansions גבוה', () {
       final params = SearchQueryBuilder.prepareQueryParams(
         'שם',
@@ -259,9 +417,28 @@ void main() {
         0,
         null,
         null,
-        {'שם_0': {'סיומות': true}},
+        {
+          'שם_0': {'סיומות': true}
+        },
       );
       expect(params['maxExpansions'], greaterThanOrEqualTo(2000));
+    });
+
+    test('שגיאות כתיב פר-מילה מעלות maxExpansions גם בלי fuzzy', () {
+      final params = SearchQueryBuilder.prepareQueryParams(
+        'חכמה',
+        false,
+        0,
+        null,
+        null,
+        {
+          'חכמה_0': {SearchQueryBuilder.typoToleranceOptionKey: true}
+        },
+      );
+
+      expect(params['maxExpansions'], 50);
+      final regexTerms = params['regexTerms'] as List<String>;
+      expect(regexTerms.first, contains('הכמה'));
     });
   });
 
@@ -305,7 +482,9 @@ void main() {
         SearchQueryBuilder.calculateMaxExpansions(
           false,
           1,
-          searchOptions: {'א_0': {'קידומות': true}},
+          searchOptions: {
+            'א_0': {'קידומות': true}
+          },
           words: ['א'],
         ),
         greaterThanOrEqualTo(2000),
@@ -317,7 +496,9 @@ void main() {
         SearchQueryBuilder.calculateMaxExpansions(
           false,
           1,
-          searchOptions: {'אב_0': {'סיומות': true}},
+          searchOptions: {
+            'אב_0': {'סיומות': true}
+          },
           words: ['אב'],
         ),
         greaterThanOrEqualTo(3000),
@@ -329,7 +510,9 @@ void main() {
         SearchQueryBuilder.calculateMaxExpansions(
           false,
           1,
-          searchOptions: {'תור_0': {'חלק ממילה': true}},
+          searchOptions: {
+            'תור_0': {'חלק ממילה': true}
+          },
           words: ['תור'],
         ),
         greaterThanOrEqualTo(4000),
@@ -341,7 +524,9 @@ void main() {
         SearchQueryBuilder.calculateMaxExpansions(
           false,
           1,
-          searchOptions: {'תורה_0': {'סיומות דקדוקיות': true}},
+          searchOptions: {
+            'תורה_0': {'סיומות דקדוקיות': true}
+          },
           words: ['תורה'],
         ),
         5000,
@@ -369,7 +554,9 @@ void main() {
       // אם allVariations מכיל string ריק, הוא אמור להיות מסונן
       final result = SearchQueryBuilder.buildAdvancedQuery(
         ['תורה'],
-        {0: ['', '   ']},
+        {
+          0: ['', '   ']
+        },
         null,
       );
       for (final term in result) {
@@ -379,8 +566,8 @@ void main() {
     });
 
     test('query עם רק נקודה → regexTerms ריק', () {
-      final params =
-          SearchQueryBuilder.prepareQueryParams('.', false, 0, null, null, null);
+      final params = SearchQueryBuilder.prepareQueryParams(
+          '.', false, 0, null, null, null);
       final regexTerms = params['regexTerms'] as List<String>;
       expect(regexTerms, isEmpty);
     });

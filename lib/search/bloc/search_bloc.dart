@@ -20,12 +20,28 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   final SearchRepository _repository = SearchRepository();
   int _searchRequestId = 0;
 
+  static int _defaultDistanceForMode(SearchMode mode) {
+    return mode == SearchMode.fuzzy ? 2 : 0;
+  }
+
+  static int _resolveDistanceForModeChange(
+    SearchMode currentMode,
+    SearchMode newMode,
+    int currentDistance,
+  ) {
+    final currentDefault = _defaultDistanceForMode(currentMode);
+    if (currentDistance != currentDefault) {
+      return currentDistance;
+    }
+
+    return _defaultDistanceForMode(newMode);
+  }
+
   SearchBloc() : super(const SearchState()) {
     on<UpdateSearchQuery>(_onUpdateSearchQuery);
     on<UpdateDistance>(_onUpdateDistance);
     on<ToggleSearchMode>(_onToggleSearchMode);
     on<SetSearchMode>(_onSetSearchMode);
-    on<SetTypoTolerance>(_onSetTypoTolerance);
     on<UpdateBooksToSearch>(_onUpdateBooksToSearch);
     on<AddFacet>(_onAddFacet);
     on<RemoveFacet>(_onRemoveFacet);
@@ -59,7 +75,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         searchQuery: event.query,
         results: [],
         totalResults: 0,
-        hasMoreResults: false,
         facetCounts: const {},
       ));
       return;
@@ -70,7 +85,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         searchQuery: event.query,
         results: [],
         totalResults: 0,
-        hasMoreResults: false,
         isLoading: false,
         facetCounts: const {},
       ));
@@ -87,7 +101,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     emit(state.copyWith(
       searchQuery: query,
       isLoading: true,
-      hasMoreResults: false, // מאפס דגל levenshtein בכל תחילת חיפוש חדש
       facetCounts: shouldPreserveFacetCounts ? state.facetCounts : const {},
     ));
 
@@ -100,28 +113,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
 
     try {
-      // חיפוש עם תיקון שגיאות כתיב - מסלול נפרד לחלוטין.
-      // countByBook פועל עם regex/slop ולא מייצג את query הזה,
-      // לכן לא מפעילים facet refresh ולא streaming.
-      if (state.isTypoToleranceEnabled) {
-        final results = await _repository.searchTextsLevenshtein(
-          SearchQueryBuilder.sanitizeQuery(query),
-          requestedFacets,
-          state.numResults,
-          order: state.sortBy,
-        );
-
-        if (requestId != _searchRequestId) return;
-        emit(state.copyWith(
-          results: results,
-          totalResults: results.length, // המספר האמיתי של התוצאות שנטענו
-          hasMoreResults: results.length == state.numResults, // ייתכן שיש עוד
-          isLoading: false,
-          facetCounts: const {}, // מנקה counts ישנים ממצב/חיפוש קודם
-        ));
-        return;
-      }
-
       // התחל לבנות את עץ ה-facets המלא במקביל כבר מתחילת החיפוש.
       unawaited(_refreshFacetCountsForAllBooks(event, requestId));
 
@@ -133,6 +124,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         chunkSize: 50, // 50 תוצאות בכל chunk
         fuzzy: state.fuzzy,
         distance: state.distance,
+        searchMode: state.configuration.searchMode,
         order: state.sortBy,
         customSpacing: event.customSpacing,
         alternativeWords: event.alternativeWords,
@@ -197,6 +189,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         requestedFacets,
         fuzzy: state.fuzzy,
         distance: state.distance,
+        searchMode: state.configuration.searchMode,
         customSpacing: event.customSpacing,
         alternativeWords: event.alternativeWords,
         searchOptions: event.searchOptions,
@@ -234,6 +227,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       activeFacets,
       fuzzy: state.fuzzy,
       distance: state.distance,
+      searchMode: state.configuration.searchMode,
       customSpacing: event.customSpacing,
       alternativeWords: event.alternativeWords,
       searchOptions: event.searchOptions,
@@ -303,7 +297,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     Emitter<SearchState> emit,
   ) {
     // מעבר בין שלושת המצבים: מתקדם -> מדוייק -> מקורב -> מתקדם
-    // levenshtein נבחר ישירות מה-UI ולא נכנס ל-cycle הזה
     SearchMode newMode;
     switch (state.configuration.searchMode) {
       case SearchMode.advanced:
@@ -313,12 +306,18 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         newMode = SearchMode.fuzzy;
         break;
       case SearchMode.fuzzy:
-      case SearchMode.levenshtein:
         newMode = SearchMode.advanced;
         break;
     }
 
-    final newConfig = state.configuration.copyWith(searchMode: newMode);
+    final newConfig = state.configuration.copyWith(
+      searchMode: newMode,
+      distance: _resolveDistanceForModeChange(
+        state.configuration.searchMode,
+        newMode,
+        state.configuration.distance,
+      ),
+    );
     emit(state.copyWith(configuration: newConfig));
     add(UpdateSearchQuery(state.searchQuery));
   }
@@ -327,30 +326,13 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     SetSearchMode event,
     Emitter<SearchState> emit,
   ) {
-    final newConfig = event.searchMode == SearchMode.levenshtein
-        ? state.configuration.copyWith(
-            searchMode: SearchMode.advanced,
-            typoToleranceEnabled: true,
-          )
-        : state.configuration.copyWith(
-            searchMode: event.searchMode,
-            typoToleranceEnabled: event.typoToleranceEnabled,
-          );
-
-    if (newConfig == state.configuration) {
-      return;
-    }
-
-    emit(state.copyWith(configuration: newConfig));
-    add(UpdateSearchQuery(state.searchQuery));
-  }
-
-  void _onSetTypoTolerance(
-    SetTypoTolerance event,
-    Emitter<SearchState> emit,
-  ) {
     final newConfig = state.configuration.copyWith(
-      typoToleranceEnabled: event.enabled,
+      searchMode: event.searchMode,
+      distance: _resolveDistanceForModeChange(
+        state.configuration.searchMode,
+        event.searchMode,
+        state.configuration.distance,
+      ),
     );
 
     if (newConfig == state.configuration) {
@@ -479,6 +461,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       [facet],
       fuzzy: state.fuzzy,
       distance: state.distance,
+      searchMode: state.configuration.searchMode,
       customSpacing: customSpacing,
       alternativeWords: alternativeWords,
       searchOptions: searchOptions,
@@ -519,6 +502,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         missingFacets,
         fuzzy: state.fuzzy,
         distance: state.distance,
+        searchMode: state.configuration.searchMode,
         customSpacing: customSpacing,
         alternativeWords: alternativeWords,
         searchOptions: searchOptions,
@@ -621,12 +605,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       return;
     }
 
-    // תנאי עצירה לפי mode:
-    // תיקון שגיאות כתיב — לפי hasMoreResults (totalResults = מה שנטען בפועל)
-    // שאר המצבים — לפי totalResults שמייצג total אמיתי מה-engine
-    final canLoadMore = state.isTypoToleranceEnabled
-        ? state.hasMoreResults
-        : state.results.length < state.totalResults;
+    final canLoadMore = state.results.length < state.totalResults;
 
     if (!canLoadMore) {
       return;
@@ -635,26 +614,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     emit(state.copyWith(isLoading: true));
 
     try {
-      if (state.isTypoToleranceEnabled) {
-        // searchFuzzy תומך ב-offset — pagination אמיתי
-        final nextResults = await _repository.searchTextsLevenshtein(
-          SearchQueryBuilder.sanitizeQuery(state.searchQuery),
-          state.currentFacets,
-          state.numResults,
-          offset: state.results.length,
-          order: state.sortBy,
-        );
-
-        final allResults = [...state.results, ...nextResults];
-        emit(state.copyWith(
-          results: allResults,
-          totalResults: allResults.length, // המספר האמיתי שנטען
-          hasMoreResults: nextResults.length == state.numResults,
-          isLoading: false,
-        ));
-        return;
-      }
-
       // מבקשים את כל התוצאות עד עכשיו + עוד numResults תוצאות
       final nextResults = await _repository.searchTexts(
         SearchQueryBuilder.sanitizeQuery(state.searchQuery),
@@ -663,6 +622,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         offset: state.results.length,
         fuzzy: state.fuzzy,
         distance: state.distance,
+        searchMode: state.configuration.searchMode,
         order: state.sortBy,
         customSpacing: event.customSpacing,
         alternativeWords: event.alternativeWords,

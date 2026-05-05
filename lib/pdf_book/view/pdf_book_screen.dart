@@ -292,7 +292,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         alternativeWords: widget.tab.alternativeWords,
         spacingValues: widget.tab.spacingValues,
         searchMode: widget.tab.searchMode,
-        typoToleranceEnabled: widget.tab.typoToleranceEnabled,
         layoutMode: initialLayoutMode,
       ),
     );
@@ -523,11 +522,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   void _recordCommentaryOpenedIfNeeded() {
     if (_getRelevantContent().commentators.isNotEmpty) {
       context.read<TourCubit>().recordInteraction(
-        TourInteraction(
-          type: TourInteractionType.commentaryUsed,
-          primaryValue: widget.tab.title,
-        ),
-      );
+            TourInteraction(
+              type: TourInteractionType.commentaryUsed,
+              primaryValue: widget.tab.title,
+            ),
+          );
     }
   }
 
@@ -2545,8 +2544,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                         initialAlternativeWords: widget.tab.alternativeWords,
                         initialSpacingValues: widget.tab.spacingValues,
                         initialSearchMode: widget.tab.searchMode,
-                        initialTypoToleranceEnabled:
-                            widget.tab.typoToleranceEnabled,
+                        initialSearchDistance: widget.tab.searchDistance,
                         onSearchResultNavigated: _ensureSearchTabIsActive,
                       )
                     : const Center(
@@ -3438,10 +3436,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // - If preview loading was stuck: the worker may be blocked on PdfDocument.openData.
         // A 3-second timeout ensures _pdfViewerSuspended is always cleared even if the
         // worker is unresponsive.
-        await PdfrxEntryFunctions.instance.stopBackgroundWorker()
+        await PdfrxEntryFunctions.instance
+            .stopBackgroundWorker()
             .timeout(const Duration(seconds: 3));
-      } catch (_) {}
-      finally {
+      } catch (_) {
+      } finally {
         if (mounted) {
           setState(() => _pdfViewerSuspended = false);
           WidgetsBinding.instance.addPostFrameCallback((_) {

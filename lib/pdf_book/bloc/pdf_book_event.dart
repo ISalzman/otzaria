@@ -238,12 +238,14 @@ class UpdateSearchOptions extends PdfBookEvent {
   final Map<int, List<String>>? alternativeWords;
   final Map<String, String>? spacingValues;
   final SearchMode? searchMode;
+  final int? searchDistance;
 
   const UpdateSearchOptions({
     this.searchOptions,
     this.alternativeWords,
     this.spacingValues,
     this.searchMode,
+    this.searchDistance,
   });
 
   @override
@@ -252,6 +254,7 @@ class UpdateSearchOptions extends PdfBookEvent {
         alternativeWords,
         spacingValues,
         searchMode,
+        searchDistance,
       ];
 }
 

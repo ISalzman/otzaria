@@ -8,68 +8,98 @@ import 'package:otzaria/search/bloc/search_state.dart';
 void main() {
   group('SearchBloc facet counts', () {
     blocTest<SearchBloc, SearchState>(
-      'SetSearchMode עם levenshtein מנרמל לחיפוש מתקדם עם תיקון שגיאות כתיב',
+      'SetSearchMode מעדכן את מצב החיפוש ומפעיל ריענון שאילתה',
       build: SearchBloc.new,
-      act: (bloc) => bloc.add(SetSearchMode(SearchMode.levenshtein)),
+      act: (bloc) => bloc.add(SetSearchMode(SearchMode.fuzzy)),
       expect: () => [
-        isA<SearchState>()
-            .having((state) => state.configuration.searchMode, 'searchMode',
-                SearchMode.advanced)
-            .having((state) => state.isTypoToleranceEnabled,
-                'isTypoToleranceEnabled', true),
-        isA<SearchState>()
-            .having((state) => state.configuration.searchMode, 'searchMode',
-                SearchMode.advanced)
-            .having((state) => state.isTypoToleranceEnabled,
-                'isTypoToleranceEnabled', true),
+        isA<SearchState>().having((state) => state.configuration.searchMode,
+            'searchMode', SearchMode.fuzzy),
+        isA<SearchState>().having((state) => state.configuration.searchMode,
+            'searchMode', SearchMode.fuzzy),
       ],
     );
 
     blocTest<SearchBloc, SearchState>(
-      'SetTypoTolerance מדליק ומכבה תיקון שגיאות כתיב במצב מתקדם',
+      'ToggleSearchMode מעביר ממתקדם למדויק',
       build: SearchBloc.new,
-      act: (bloc) {
-        bloc.add(SetTypoTolerance(true));
-        bloc.add(SetTypoTolerance(false));
+      act: (bloc) => bloc.add(ToggleSearchMode()),
+      verify: (bloc) {
+        expect(bloc.state.configuration.searchMode, SearchMode.exact);
       },
-      expect: () => [
-        isA<SearchState>().having((state) => state.isTypoToleranceEnabled,
-            'isTypoToleranceEnabled', true),
-        isA<SearchState>()
-            .having((state) => state.searchQuery, 'searchQuery', ''),
-        isA<SearchState>().having((state) => state.isTypoToleranceEnabled,
-            'isTypoToleranceEnabled', false),
-        isA<SearchState>()
-            .having((state) => state.searchQuery, 'searchQuery', ''),
-      ],
     );
 
     blocTest<SearchBloc, SearchState>(
-      'SetSearchMode יכול לכבות typo tolerance באירוע יחיד',
+      'ToggleSearchMode מעביר ממדויק למקורב',
+      build: SearchBloc.new,
+      seed: () => const SearchState(
+        configuration: SearchConfiguration(searchMode: SearchMode.exact),
+      ),
+      act: (bloc) => bloc.add(ToggleSearchMode()),
+      verify: (bloc) {
+        expect(bloc.state.configuration.searchMode, SearchMode.fuzzy);
+        expect(bloc.state.configuration.distance, 2);
+      },
+    );
+
+    blocTest<SearchBloc, SearchState>(
+      'ToggleSearchMode מעביר ממקורב למתקדם',
+      build: SearchBloc.new,
+      seed: () => const SearchState(
+        configuration: SearchConfiguration(searchMode: SearchMode.fuzzy),
+      ),
+      act: (bloc) => bloc.add(ToggleSearchMode()),
+      verify: (bloc) {
+        expect(bloc.state.configuration.searchMode, SearchMode.advanced);
+        expect(bloc.state.configuration.distance, 0);
+      },
+    );
+
+    blocTest<SearchBloc, SearchState>(
+      'SetSearchMode שומר מרחק ידני שהמשתמש בחר',
+      build: SearchBloc.new,
+      seed: () => const SearchState(
+        configuration: SearchConfiguration(
+          searchMode: SearchMode.exact,
+          distance: 6,
+        ),
+      ),
+      act: (bloc) => bloc.add(SetSearchMode(SearchMode.fuzzy)),
+      verify: (bloc) {
+        expect(bloc.state.configuration.searchMode, SearchMode.fuzzy);
+        expect(bloc.state.configuration.distance, 6);
+      },
+    );
+
+    blocTest<SearchBloc, SearchState>(
+      'ToggleSearchMode מחליף לברירת המחדל של fuzzy רק כשלא היה מרחק ידני',
+      build: SearchBloc.new,
+      seed: () => const SearchState(
+        configuration: SearchConfiguration(
+          searchMode: SearchMode.exact,
+          distance: 0,
+        ),
+      ),
+      act: (bloc) => bloc.add(ToggleSearchMode()),
+      verify: (bloc) {
+        expect(bloc.state.configuration.searchMode, SearchMode.fuzzy);
+        expect(bloc.state.configuration.distance, 2);
+      },
+    );
+
+    blocTest<SearchBloc, SearchState>(
+      'SetSearchMode יכול לעבור ממצב מתקדם למדויק באירוע יחיד',
       build: SearchBloc.new,
       seed: () => SearchState(
         configuration: const SearchConfiguration(
           searchMode: SearchMode.advanced,
-          typoToleranceEnabled: true,
         ),
       ),
-      act: (bloc) => bloc.add(
-        SetSearchMode(
-          SearchMode.exact,
-          typoToleranceEnabled: false,
-        ),
-      ),
+      act: (bloc) => bloc.add(SetSearchMode(SearchMode.exact)),
       expect: () => [
-        isA<SearchState>()
-            .having((state) => state.configuration.searchMode, 'searchMode',
-                SearchMode.exact)
-            .having((state) => state.isTypoToleranceEnabled,
-                'isTypoToleranceEnabled', false),
-        isA<SearchState>()
-            .having((state) => state.configuration.searchMode, 'searchMode',
-                SearchMode.exact)
-            .having((state) => state.isTypoToleranceEnabled,
-                'isTypoToleranceEnabled', false),
+        isA<SearchState>().having((state) => state.configuration.searchMode,
+            'searchMode', SearchMode.exact),
+        isA<SearchState>().having((state) => state.configuration.searchMode,
+            'searchMode', SearchMode.exact),
       ],
     );
 

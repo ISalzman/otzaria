@@ -104,10 +104,7 @@ class HistoryView extends StatelessWidget {
               searchTab.spacingValues.clear();
               searchTab.spacingValues.addAll(item.spacingValues ?? {});
               searchTab.searchBloc.add(
-                SetSearchMode(
-                  item.searchMode ?? SearchMode.advanced,
-                  typoToleranceEnabled: item.typoToleranceEnabled,
-                ),
+                SetSearchMode(item.searchMode ?? SearchMode.advanced),
               );
 
               if (item.searchScopeFacets != null &&

@@ -26,7 +26,7 @@ class PdfBookInitial extends PdfBookState {
   final Map<int, List<String>> alternativeWords;
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
-  final bool typoToleranceEnabled;
+  final int searchDistance;
   final PdfLayoutMode layoutMode;
 
   const PdfBookInitial({
@@ -37,7 +37,7 @@ class PdfBookInitial extends PdfBookState {
     this.alternativeWords = const {},
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
-    this.typoToleranceEnabled = false,
+    this.searchDistance = 0,
     this.layoutMode = PdfLayoutMode.regularView,
   });
 
@@ -58,6 +58,7 @@ class PdfBookLoading extends PdfBookState {
   final Map<int, List<String>> alternativeWords;
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
+  final int searchDistance;
   final PdfLayoutMode layoutMode;
 
   const PdfBookLoading({
@@ -67,6 +68,7 @@ class PdfBookLoading extends PdfBookState {
     this.alternativeWords = const {},
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
+    this.searchDistance = 0,
     this.layoutMode = PdfLayoutMode.regularView,
   });
 
@@ -117,6 +119,7 @@ class PdfBookLoaded extends PdfBookState {
   final Map<int, List<String>> alternativeWords;
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
+  final int searchDistance;
   final List<PdfPageTextRange>? searchMatches;
   final int? currentSearchMatchIndex;
 
@@ -152,6 +155,7 @@ class PdfBookLoaded extends PdfBookState {
     this.alternativeWords = const {},
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
+    this.searchDistance = 0,
     this.searchMatches,
     this.currentSearchMatchIndex,
     this.pdfHeadings,
@@ -185,6 +189,7 @@ class PdfBookLoaded extends PdfBookState {
     Map<int, List<String>>? alternativeWords,
     Map<String, String>? spacingValues,
     SearchMode? searchMode,
+    int? searchDistance,
     List<PdfPageTextRange>? searchMatches,
     int? currentSearchMatchIndex,
     PdfHeadings? pdfHeadings,
@@ -224,6 +229,7 @@ class PdfBookLoaded extends PdfBookState {
       alternativeWords: alternativeWords ?? this.alternativeWords,
       spacingValues: spacingValues ?? this.spacingValues,
       searchMode: searchMode ?? this.searchMode,
+      searchDistance: searchDistance ?? this.searchDistance,
       searchMatches:
           clearSearchMatches ? null : (searchMatches ?? this.searchMatches),
       currentSearchMatchIndex: clearCurrentSearchMatchIndex
@@ -257,6 +263,7 @@ class PdfBookLoaded extends PdfBookState {
         rightPaneInitialTabIndex,
         searchText,
         searchMode,
+        searchDistance,
         searchOptions,
         alternativeWords,
         spacingValues,
@@ -268,7 +275,10 @@ class PdfBookLoaded extends PdfBookState {
         isLoading,
         loadSucceeded,
         pdfHeadings,
-        links.map((l) => '${l.index1}|${l.path2}|${l.index2}|${l.connectionType}|${l.heRef}|${l.start}|${l.end}|${l.targetCategoryId}|${l.targetFileType}').toList(growable: false),
+        links
+            .map((l) =>
+                '${l.index1}|${l.path2}|${l.index2}|${l.connectionType}|${l.heRef}|${l.start}|${l.end}|${l.targetCategoryId}|${l.targetFileType}')
+            .toList(growable: false),
         outline?.map(_outlineNodeSignature).toList(growable: false),
         documentRef,
       ];
