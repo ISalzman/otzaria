@@ -85,13 +85,6 @@ class SearchScopePreferences {
     required bool searchAllCategories,
     required Set<String> manualFacets,
   }) {
-    if (!searchAllCategories && manualFacets.isEmpty) {
-      return const SearchScopePreferencesData(
-        searchAllCategories: true,
-        manualFacets: {},
-      );
-    }
-
     return SearchScopePreferencesData(
       searchAllCategories: searchAllCategories,
       manualFacets: manualFacets,

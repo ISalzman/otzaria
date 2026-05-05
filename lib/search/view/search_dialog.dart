@@ -113,9 +113,8 @@ class _SearchDialogState extends State<SearchDialog> {
       _searchAllCategories = persisted.searchAllCategories;
       _manualFacets = Set<String>.from(persisted.manualFacets);
     }
-    _selectedCategoryFacets = _searchAllCategories || _manualFacets.isEmpty
-        ? {'/'}
-        : Set<String>.from(_manualFacets);
+    _selectedCategoryFacets =
+        _searchAllCategories ? {'/'} : Set<String>.from(_manualFacets);
 
     // בדיקה אם האינדקס בתהליך בנייה
     final indexingState = context.read<IndexingBloc>().state;
@@ -342,7 +341,9 @@ class _SearchDialogState extends State<SearchDialog> {
     context.read<HistoryBloc>().add(AddHistory(newSearchTab));
 
     // הגדרת ה-facets שנבחרו לפני ביצוע החיפוש
-    final facetsToSearch = _selectedCategoryFacets.toList();
+    final facetsToSearch = _selectedCategoryFacets.isEmpty
+        ? ['/']
+        : _selectedCategoryFacets.toList();
     newSearchTab.searchBloc.add(SetFacetsWithoutSearch(facetsToSearch));
 
     // ביצוע החיפוש בטאב החדש
@@ -371,9 +372,8 @@ class _SearchDialogState extends State<SearchDialog> {
   void _setSearchAllCategories(bool value) {
     setState(() {
       _searchAllCategories = value;
-      _selectedCategoryFacets = _searchAllCategories || _manualFacets.isEmpty
-          ? {'/'}
-          : Set<String>.from(_manualFacets);
+      _selectedCategoryFacets =
+          _searchAllCategories ? {'/'} : Set<String>.from(_manualFacets);
     });
     SearchScopePreferences.save(
       searchAllCategories: _searchAllCategories,
@@ -385,8 +385,7 @@ class _SearchDialogState extends State<SearchDialog> {
     setState(() {
       _manualFacets = Set<String>.from(selection);
       if (!_searchAllCategories) {
-        _selectedCategoryFacets =
-            _manualFacets.isEmpty ? {'/'} : Set<String>.from(_manualFacets);
+        _selectedCategoryFacets = Set<String>.from(_manualFacets);
       }
     });
     SearchScopePreferences.save(
@@ -814,8 +813,8 @@ class _SearchDialogState extends State<SearchDialog> {
                                               child: categoryPanel != null
                                                   ? SizedBox(
                                                       width: 260,
-                                                      height: constraints
-                                                          .maxHeight,
+                                                      height:
+                                                          constraints.maxHeight,
                                                       child: Padding(
                                                         padding:
                                                             const EdgeInsets
