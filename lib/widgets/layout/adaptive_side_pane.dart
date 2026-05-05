@@ -67,6 +67,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
   static const double _kWideInnerSideGap = 12;
   static const double _kNarrowTopGap = 14;
   static const double _kNarrowBottomGap = 10;
+  static const double _kNarrowHandleInset = 4;
   static const double _kHandleHitSize = 36;
 
   Color _effectivePaneColor(BuildContext context) {
@@ -113,6 +114,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     BuildContext context,
     Widget child, {
     required bool paneOnRight,
+    required bool isWide,
   }) {
     final paneColor = _effectivePaneColor(context);
     const shellRadius = BorderRadius.all(Radius.circular(18));
@@ -141,7 +143,13 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
       return shell;
     }
 
-    const handleOffset = -(_kHandleHitSize / 2);
+    final handleOffset = isWide ? -(_kHandleHitSize / 2) : _kNarrowHandleInset;
+    final left = isWide
+        ? (paneOnRight ? handleOffset : null)
+        : (paneOnRight ? null : handleOffset);
+    final right = isWide
+        ? (paneOnRight ? null : handleOffset)
+        : (paneOnRight ? handleOffset : null);
 
     return Stack(
       clipBehavior: Clip.none,
@@ -150,8 +158,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         Positioned(
           top: 0,
           bottom: 0,
-          left: paneOnRight ? handleOffset : null,
-          right: paneOnRight ? null : handleOffset,
+          left: left,
+          right: right,
           child: ResizableDragHandle(
             isVertical: true,
             hitSize: _kHandleHitSize,
@@ -181,6 +189,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
               child: child,
             ),
       paneOnRight: _isPaneOnRight(context),
+      isWide: false,
     );
   }
 
@@ -210,6 +219,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
               context,
               widePaneContent,
               paneOnRight: paneOnRight,
+              isWide: true,
             ),
           );
 
@@ -270,6 +280,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                 context,
                 narrowPaneContent,
                 paneOnRight: paneOnRight,
+                isWide: false,
               )
             : narrowPaneContent;
 
