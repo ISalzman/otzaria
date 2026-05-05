@@ -652,6 +652,17 @@ class IndexingRepository {
     return List<String>.from(_tantivyDataProvider.booksDone);
   }
 
+  /// Returns true for book types that the indexer actually processes.
+  /// Non-indexable types (ExternalLibraryBook, DocxBook, etc.) are silently
+  /// skipped by indexAllBooks, so they must be excluded from status checks.
+  static bool isIndexableBook(Book book) => book is TextBook || book is PdfBook;
+
+  /// Waits until the underlying data provider is fully initialized
+  /// (booksDone loaded from disk).
+  Future<void> awaitReady() async {
+    await _tantivyDataProvider.engine;
+  }
+
   /// Checks if indexing is currently in progress.
   bool isIndexing() {
     return _tantivyDataProvider.isIndexing.value;
