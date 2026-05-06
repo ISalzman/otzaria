@@ -25,6 +25,7 @@ import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/history_repository.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
+import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
@@ -636,6 +637,11 @@ class _AppBootstrapState extends State<AppBootstrap> {
           ),
           BlocProvider<LibraryBloc>(
             create: (_) => LibraryBloc()..add(LoadLibrary()),
+          ),
+          BlocProvider<CustomFoldersBloc>(
+            create: (context) => CustomFoldersBloc(
+              libraryBloc: context.read<LibraryBloc>(),
+            )..add(const LoadCustomFolders()),
           ),
           BlocProvider<IndexingBloc>(
             create: (_) => IndexingBloc.create(),

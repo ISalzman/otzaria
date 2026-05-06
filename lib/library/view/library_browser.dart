@@ -13,15 +13,11 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart';
-import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_event.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_state.dart';
 import 'package:otzaria/library/view/library_daf_yomi.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/migration/sync/file_sync_service.dart';
-import 'package:otzaria/migration/sync/background_db_sync_worker.dart';
-import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
+import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
 import 'package:otzaria/navigation/view/main_window_screen.dart';
 import 'package:otzaria/library/view/grid_items.dart';
@@ -815,40 +811,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
-  Future<void> _refreshWithPersonalFolders() async {
-    try {
-      final sqliteProvider = SqliteDataProvider.instance;
-      if (!sqliteProvider.isInitialized) {
-        await sqliteProvider.initialize();
-      }
-      if (!sqliteProvider.isInitialized) return;
-
-      final dbPath = sqliteProvider.dbPath;
-      final libraryPath = Settings.getValue<String>('key-library-path');
-      if (libraryPath == null || libraryPath.isEmpty) return;
-
-      final customFoldersJson =
-          Settings.getValue<String>(SettingsRepository.keyCustomFolders);
-      final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
-      final folderName =
-          Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
-              '';
-
-      await runCustomFoldersDbSyncInIsolate(
-        dbPath: dbPath,
-        libraryPath: libraryPath,
-        customFolders: customFolders,
-        folderName: folderName,
-      );
-
-      await FileSyncService.saveCustomFoldersSignature(customFolders);
-    } catch (_) {
-      // גם אם סריקת התיקיות נכשלה, עדיין נרענן את הספרייה.
-    }
-
-    if (mounted) {
-      context.read<LibraryBloc>().add(RefreshLibrary());
-    }
+  void _refreshWithPersonalFolders() {
+    context
+        .read<CustomFoldersBloc>()
+        .add(const RescanCustomFolders(showNoChangesMessage: false));
   }
 
   List<ActionButtonData> _buildOriginalOrderActions(
