@@ -246,7 +246,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     add(ReplaceFacetCounts(aggregated));
   }
 
-  void _onUpdateFilterQuery(
+  Future<void> _onUpdateFilterQuery(
     UpdateFilterQuery event,
     Emitter<SearchState> emit,
   ) async {

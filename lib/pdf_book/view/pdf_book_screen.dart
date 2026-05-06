@@ -3305,7 +3305,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         : 1;
 
     final notesBloc = context.read<PersonalNotesBloc>();
-    final dialogContext = context;
 
     final library = await DataRepository.instance.library;
     final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
@@ -3345,11 +3344,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       lineNumber: currentPage,
     );
 
-    if (!mounted) return;
+    if (!context.mounted) return;
 
     final noteContent = await showDialog<PersonalNoteEditorResult>(
-      // ignore: use_build_context_synchronously
-      context: dialogContext,
+      context: context,
       builder: (context) => PersonalNoteEditorDialog(
         title: dialogTitle,
         bookId: widget.tab.book.title,
