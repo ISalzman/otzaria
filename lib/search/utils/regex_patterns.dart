@@ -96,11 +96,11 @@ class SearchRegexPatterns {
     if (word.isEmpty) return word;
 
     if (word.length <= 1) {
-      return '.{1,5}${RegExp.escape(word)}';
+      return '.{0,5}${RegExp.escape(word)}';
     } else if (word.length <= 2) {
-      return '.{1,4}${RegExp.escape(word)}';
+      return '.{0,4}${RegExp.escape(word)}';
     } else if (word.length <= 3) {
-      return '.{1,3}${RegExp.escape(word)}';
+      return '.{0,3}${RegExp.escape(word)}';
     } else {
       return '.*${RegExp.escape(word)}';
     }
@@ -112,11 +112,11 @@ class SearchRegexPatterns {
     if (word.isEmpty) return word;
 
     if (word.length <= 1) {
-      return '${RegExp.escape(word)}.{1,7}';
+      return '${RegExp.escape(word)}.{0,7}';
     } else if (word.length <= 2) {
-      return '${RegExp.escape(word)}.{1,6}';
+      return '${RegExp.escape(word)}.{0,6}';
     } else if (word.length <= 3) {
-      return '${RegExp.escape(word)}.{1,5}';
+      return '${RegExp.escape(word)}.{0,5}';
     } else {
       return '${RegExp.escape(word)}.*';
     }
