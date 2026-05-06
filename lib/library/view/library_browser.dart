@@ -1005,32 +1005,22 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           child: _buildSearchResultsGrid(books, displayLimit),
         );
       }
-      return FutureBuilder<List<Widget>>(
-        future: _buildCategoryContent(state.currentCategory!),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          if (snapshot.hasData && snapshot.data!.isEmpty) {
-            final repo = context.read<FocusRepository>();
-            return Center(
-              child: Text(
-                repo.librarySearchController.text.isNotEmpty
-                    ? 'אין תוצאות עבור "${repo.librarySearchController.text}"'
-                    : 'אין פריטים להצגה בתיקייה זו',
-                style: Theme.of(context).textTheme.titleMedium,
-                textAlign: TextAlign.center,
-              ),
-            );
-          }
-          return SingleChildScrollView(
-            key: PageStorageKey(state.currentCategory),
-            child: Column(children: snapshot.data!),
-          );
-        },
+      final categoryItems = _buildCategoryContent(state.currentCategory!);
+      if (categoryItems.isEmpty) {
+        final repo = context.read<FocusRepository>();
+        return Center(
+          child: Text(
+            repo.librarySearchController.text.isNotEmpty
+                ? 'אין תוצאות עבור "${repo.librarySearchController.text}"'
+                : 'אין פריטים להצגה בתיקייה זו',
+            style: Theme.of(context).textTheme.titleMedium,
+            textAlign: TextAlign.center,
+          ),
+        );
+      }
+      return SingleChildScrollView(
+        key: PageStorageKey(state.currentCategory),
+        child: Column(children: categoryItems),
       );
     }
     if (state.searchResults != null) {
@@ -1039,7 +1029,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return _buildListView(state.currentCategory!);
   }
 
-  Future<List<Widget>> _buildCategoryContent(Category category) async {
+  List<Widget> _buildCategoryContent(Category category) {
     final List<Widget> items = [];
     final filteredBooks = category.books.toList();
     final filteredSubCategories = category.subCategories.toList();
