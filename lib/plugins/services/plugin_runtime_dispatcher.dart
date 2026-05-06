@@ -47,8 +47,9 @@ class PluginRuntimeDispatcher {
             url: WebUri.uri(Uri.parse('about:blank')),
           ),
         );
-      } catch (_) {
+      } catch (e) {
         // The underlying WebView may already be tearing down.
+        debugPrint('PluginRuntimeDispatcher: error during prepareForAppRestart for ${entry.key}: $e');
       }
     }
   }
