@@ -239,10 +239,9 @@ class AboutDevTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _editorCategory(context, '10 ספרים ומעלה', _topEditors),
+                      _editorCategory('10 ספרים ומעלה', _topEditors),
                       const SizedBox(height: 20),
-                      _editorCategory(
-                          context, 'בין 5 ל-10 ספרים', _regularEditors),
+                      _editorCategory('בין 5 ל-10 ספרים', _regularEditors),
                       const SizedBox(height: 12),
                       _editorsNote(context),
                     ],
@@ -292,8 +291,7 @@ class AboutDevTab extends StatelessWidget {
     );
   }
 
-  Widget _editorCategory(
-      BuildContext context, String label, List<Map<String, String>> editors) {
+  Widget _editorCategory(String label, List<Map<String, String>> editors) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
