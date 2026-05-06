@@ -94,7 +94,10 @@ final GlobalKey<State<LibraryBrowser>> libraryBrowserKey =
 
 class MainWindowScreenState extends State<MainWindowScreen>
     with TickerProviderStateMixin {
-  late final PageController pageController;
+  // לא final: ה-controller נוצר מחדש בעת שינוי אוריינטציה
+  // (ראה _handleOrientationChange) כדי למנוע מצב שבו pixel offset מהציר
+  // הישן (vertical) מתפרש כעמוד שגוי בציר החדש (horizontal).
+  late PageController pageController;
   late final CalendarCubit _calendarCubit;
   late final SettingsScreenController _settingsScreenController;
   final ExternalActivationQueue _externalActivationQueue =
@@ -502,29 +505,35 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 
   void _handleOrientationChange(BuildContext context, Orientation orientation) {
-    if (_previousOrientation != orientation) {
-      _previousOrientation = orientation;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-        final currentScreen =
-            context.read<NavigationBloc>().state.currentScreen;
-        final targetPage = _pageIndexForScreen(currentScreen);
-        if (targetPage == null) {
-          return;
-        }
+    if (_previousOrientation == orientation) return;
 
-        if (_currentPageIndex != targetPage) {
-          setState(() {
-            _currentPageIndex = targetPage;
-          });
-          if (pageController.hasClients) {
-            pageController.jumpToPage(targetPage);
-          }
-        }
-      });
-    }
+    final isFirstDetection = _previousOrientation == null;
+    _previousOrientation = orientation;
+    if (isFirstDetection) return;
+
+    // החלפת ציר ב-PageView (vertical↔horizontal) משבשת את חישוב העמוד
+    // הפנימי של PageController: ה-pixel offset נשמר אבל ה-viewport
+    // dimension משתנה (height→width), ולכן הנוסחה offset/viewport
+    // מקפיצה את העמוד הפעיל. התוצאה: עמוד 1 (מסך עיון) מוצג רגעית מעל
+    // המסך הנוכחי, ושאר המסכים נכפים ל-dispose ואז init מחדש (ראה למשל
+    // ShamorZachorWidget בלוגים).
+    //
+    // הפתרון: יוצרים PageController חדש *סינכרונית* לפני בניית ה-PageView
+    // החדש (בציר החדש). ה-PageView שייבנה מיד אחרי הקריאה הזו ישתמש
+    // ב-controller החדש עם initialPage תקין, בלי offset יורש מהציר הקודם.
+    final currentScreen = context.read<NavigationBloc>().state.currentScreen;
+    final targetPage =
+        _pageIndexForScreen(currentScreen) ?? _currentPageIndex;
+    _currentPageIndex = targetPage;
+
+    final oldController = pageController;
+    pageController = PageController(initialPage: targetPage);
+
+    // dispose נדחה לפוסט-פריים: ה-PageView הישן עדיין מחובר ל-oldController
+    // עד שתסתיים הרקונסיליאציה של עץ הווידג'טים בפריים הזה.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      oldController.dispose();
+    });
   }
 
   void _toggleReadingSettingsPanel() {
