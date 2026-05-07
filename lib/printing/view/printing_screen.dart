@@ -5,7 +5,6 @@ import 'dart:isolate';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +12,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/models/links.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:otzaria/navigation/view/custom_title_bar.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/pdf_book/view/pdf_page_number_display.dart';
@@ -324,8 +323,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
   }
 
   void _toggleThumbnails(bool value) {
-    final currentPage =
-        _pdfViewerController.isReady ? _pdfViewerController.pageNumber : null;
+    final currentPage = _pdfViewerController.isReady
+        ? _pdfViewerController.pageNumber
+        : null;
     setState(() {
       _showThumbnails = value;
     });
@@ -394,7 +394,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
   }
 
-  PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
+PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
     return orientation == pw.PageOrientation.landscape
         ? format.landscape
         : format;
@@ -455,9 +455,10 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
     try {
       final scale = dpi / 72.0;
-      final firstIdx = max(0, min(startPage - 1, doc.pages.length - 1));
-      final lastIdx = max(firstIdx,
-          min((endPage ?? doc.pages.length) - 1, doc.pages.length - 1));
+      final firstIdx =
+          max(0, min(startPage - 1, doc.pages.length - 1));
+      final lastIdx =
+          max(firstIdx, min((endPage ?? doc.pages.length) - 1, doc.pages.length - 1));
       for (var i = firstIdx; i <= lastIdx; i++) {
         final page = doc.pages[i];
         final pdfImage = await page.render(
@@ -1237,7 +1238,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const _PrintingTitleBar(),
+          const CustomTitleBar(),
           AppBar(
             primary: false,
             title: const Text('הדפסה'),
@@ -1321,11 +1322,10 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                 _buildSectionCard(
                                   context: context,
                                   title: 'טווח עמודים',
-                                  icon: FluentIcons
-                                      .document_page_number_24_regular,
+                                  icon:
+                                      FluentIcons.document_page_number_24_regular,
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       _buildDropdownRow(
                                         context: context,
@@ -2552,32 +2552,4 @@ enum _ExportFormat {
 
   final String extension;
   const _ExportFormat(this.extension);
-}
-
-class _PrintingTitleBar extends StatelessWidget {
-  const _PrintingTitleBar();
-
-  @override
-  Widget build(BuildContext context) {
-    if (kIsWeb ||
-        (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS)) {
-      return const SizedBox.shrink();
-    }
-    return SizedBox(
-      height: 40,
-      child: Row(
-        children: [
-          const Expanded(child: DragToMoveArea(child: SizedBox.expand())),
-          SizedBox(
-            width: 138,
-            height: 50,
-            child: WindowCaption(
-              brightness: Theme.of(context).brightness,
-              backgroundColor: Colors.transparent,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
