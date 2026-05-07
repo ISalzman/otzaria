@@ -10,6 +10,11 @@ import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
 /// - תוכן החלונית מקבל שכבת רקע נוספת של חלון (solidPanelBackground).
 /// - מעבר מרוחב רחב למסך צר סוגר אוטומטית את החלונית.
 /// - חלונית ניווט אמורה להיות בצד ימין (`centerEnd`) וחלונית מידע בצד שמאל (`centerStart`).
+///
+/// ## התנהגות גרירה
+/// בזמן גרירת הוו, רוחב הפאנל מנוהל פנימית ב-[ValueNotifier] ולא גורם ל-rebuild
+/// של ה-parent בכל frame. המעבר בין מצב רחב (wide) לצר (narrow) מתרחש רק
+/// ב-[onDragEnd] — לא במהלך הגרירה. כך הגרירה חלקה גם כשחוצים את הסף.
 class AdaptiveSidePane extends StatefulWidget {
   final bool isOpen;
   final Widget mainContent;
@@ -61,7 +66,14 @@ class AdaptiveSidePane extends StatefulWidget {
 
 class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
   bool? _lastHadRoomForSideBySide;
-  bool _isResizing = false;
+
+  // ── Drag state ──────────────────────────────────────────────────────────────
+  // רוחב פנימי בזמן גרירה — מנוהל דרך ValueNotifier כדי לא לגרום ל-parent rebuild
+  late final ValueNotifier<double> _livePaneWidth;
+  bool _isDragging = false;
+  // snapshot של מצב תחילת גרירה
+  bool? _dragStartedInWideMode;
+
   static const BorderRadius _kPanelRadius =
       BorderRadius.all(Radius.circular(AppTokens.radiusPanel));
   static const double _kWideTopGap = 14;
@@ -70,18 +82,35 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
   static const double _kWideInnerSideGap = 12;
   static const double _kNarrowTopGap = 14;
   static const double _kNarrowBottomGap = 10;
+
+  @override
+  void initState() {
+    super.initState();
+    _livePaneWidth = ValueNotifier<double>(widget.paneWidth);
+  }
+
+  @override
+  void didUpdateWidget(AdaptiveSidePane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // עדכון הרוחב הפנימי כשה-parent שולח רוחב חדש — אבל לא בזמן גרירה
+    if (!_isDragging && oldWidget.paneWidth != widget.paneWidth) {
+      _livePaneWidth.value = widget.paneWidth;
+    }
+  }
+
+  @override
+  void dispose() {
+    _livePaneWidth.dispose();
+    super.dispose();
+  }
+
   Color _effectivePaneColor(BuildContext context) {
     return widget.paneColor ?? AppSurfaces.solidPanelBackground(context);
   }
 
   bool _isPaneOnRight(BuildContext context) {
-    if (widget.alignment == AlignmentDirectional.centerEnd) {
-      return true;
-    }
-    if (widget.alignment == AlignmentDirectional.centerStart) {
-      return false;
-    }
-
+    if (widget.alignment == AlignmentDirectional.centerEnd) return true;
+    if (widget.alignment == AlignmentDirectional.centerStart) return false;
     final resolved = widget.alignment.resolve(Directionality.of(context));
     return resolved.x >= 0;
   }
@@ -92,9 +121,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
 
     if (previous == true && !hasRoomForSideBySide && widget.isOpen) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && widget.isOpen) {
-          widget.onClose();
-        }
+        if (mounted && widget.isOpen) widget.onClose();
       });
     }
 
@@ -103,9 +130,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         !widget.isOpen &&
         widget.onOpen != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !widget.isOpen) {
-          widget.onOpen!.call();
-        }
+        if (mounted && !widget.isOpen) widget.onOpen!.call();
       });
     }
   }
@@ -142,28 +167,41 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     );
   }
 
-  Widget _buildResizeHandle(bool paneOnRight) {
+  void _onDragStart(bool currentlyWide) {
+    if (_isDragging) return;
+    setState(() {
+      _dragStartedInWideMode = currentlyWide;
+      _isDragging = true;
+    });
+  }
+
+  void _onDragDelta(double delta, bool paneOnRight) {
+    final effectiveDelta = paneOnRight ? -delta : delta;
+    final nextWidth = (_livePaneWidth.value + effectiveDelta).clamp(
+      widget.minPaneWidth,
+      widget.maxPaneWidth ?? double.infinity,
+    );
+    _livePaneWidth.value = nextWidth;
+    // מעדכן את ה-parent בזמן אמת (עבור מסכים שצריכים זאת), ללא setState
+    widget.onPaneWidthChanged?.call(nextWidth);
+  }
+
+  void _onDragEnd() {
+    widget.onPaneResizeEnd?.call();
+    if (!mounted) return;
+    setState(() {
+      _isDragging = false;
+      _dragStartedInWideMode = null;
+    });
+  }
+
+  Widget _buildResizeHandle(bool paneOnRight, bool currentlyWide) {
     return ResizableDragHandle(
       isVertical: true,
       showDivider: false,
-      onDragStart: () {
-        if (_isResizing) return;
-        setState(() => _isResizing = true);
-      },
-      onDragDelta: (delta) {
-        final effectiveDelta = paneOnRight ? -delta : delta;
-        final nextWidth = (widget.paneWidth + effectiveDelta).clamp(
-          widget.minPaneWidth,
-          widget.maxPaneWidth ?? double.infinity,
-        );
-        widget.onPaneWidthChanged?.call(nextWidth.toDouble());
-      },
-      onDragEnd: () {
-        if (_isResizing) {
-          setState(() => _isResizing = false);
-        }
-        widget.onPaneResizeEnd?.call();
-      },
+      onDragStart: () => _onDragStart(currentlyWide),
+      onDragDelta: (delta) => _onDragDelta(delta, paneOnRight),
+      onDragEnd: _onDragEnd,
     );
   }
 
@@ -172,10 +210,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
       context,
       widget.wrapPaneInFloatingPanel
           ? child
-          : Material(
-              color: _effectivePaneColor(context),
-              child: child,
-            ),
+          : Material(color: _effectivePaneColor(context), child: child),
       paneOnRight: _isPaneOnRight(context),
     );
   }
@@ -185,179 +220,220 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final paneOnRight = _isPaneOnRight(context);
-        final wideOccupiedWidth =
-            widget.paneWidth + _kWideOuterSideGap + _kWideInnerSideGap;
-        final calculatedHasRoomForSideBySide = constraints.maxWidth >=
-            (wideOccupiedWidth + widget.minMainContentWidth);
-        final hasRoomForSideBySide = _isResizing
-            ? (_lastHadRoomForSideBySide ?? calculatedHasRoomForSideBySide)
-            : calculatedHasRoomForSideBySide;
+        final effectivePaneWidth = _livePaneWidth.value;
 
-        if (widget.autoHandleResponsiveVisibility && !_isResizing) {
+        final wideOccupiedWidth =
+            effectivePaneWidth + _kWideOuterSideGap + _kWideInnerSideGap;
+        final calculatedHasRoom = constraints.maxWidth >=
+            (wideOccupiedWidth + widget.minMainContentWidth);
+
+        // הקפאת מצב wide/narrow לאורך כל הגרירה — מעבר רק ב-onDragEnd
+        final bool hasRoomForSideBySide;
+        if (_isDragging) {
+          // שומרים על מצב תחילת הגרירה לאורך כל הגרירה
+          hasRoomForSideBySide =
+              _dragStartedInWideMode ?? (_lastHadRoomForSideBySide ?? calculatedHasRoom);
+        } else {
+          hasRoomForSideBySide = calculatedHasRoom;
+        }
+
+        if (widget.autoHandleResponsiveVisibility && !_isDragging) {
           _handleResponsiveAutoClose(hasRoomForSideBySide);
+        }
+        // עדכון ה-snapshot גם כשלא גוררים
+        if (!_isDragging) {
+          _lastHadRoomForSideBySide = hasRoomForSideBySide;
         }
 
         if (hasRoomForSideBySide) {
-          final widePaneContent = widget.widePaneBuilder != null
-              ? widget.widePaneBuilder!(
-                  context, widget.paneContent, widget.paneWidth)
-              : widget.paneContent;
-
-          final widePane = SizedBox(
-            width: widget.paneWidth,
-            child: _buildPaneShell(
-              context,
-              widePaneContent,
-              paneOnRight: paneOnRight,
-            ),
-          );
-
-          final showHandle = widget.isOpen &&
-              widget.isResizable &&
-              widget.onPaneWidthChanged != null;
-          final overhang = showHandle ? handleHitOverhang(context) : 0.0;
-
-          final paneSlot = Stack(
-            clipBehavior: Clip.none,
-            children: [
-              AnimatedContainer(
-                duration:
-                    _isResizing ? Duration.zero : AppTokens.animPanelSlide,
-                curve: Curves.easeInOut,
-                width: widget.isOpen ? wideOccupiedWidth : 0,
-                child: ClipRect(
-                  child: Align(
-                    alignment: paneOnRight
-                        ? Alignment.centerRight
-                        : Alignment.centerLeft,
-                    child: OverflowBox(
-                      maxWidth: wideOccupiedWidth,
-                      minWidth: 0,
-                      alignment: paneOnRight
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Padding(
-                        padding: EdgeInsetsDirectional.only(
-                          top: _kWideTopGap,
-                          bottom: _kWideBottomGap,
-                          start: paneOnRight
-                              ? _kWideInnerSideGap
-                              : _kWideOuterSideGap,
-                          end: paneOnRight
-                              ? _kWideOuterSideGap
-                              : _kWideInnerSideGap,
-                        ),
-                        child: SizedBox(
-                          width: widget.paneWidth,
-                          child: widePane,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              if (showHandle)
-                Positioned(
-                  top: _kWideTopGap,
-                  bottom: _kWideBottomGap,
-                  // במצב רחב הוו מיושר לגבול הפאנל עצמו, לא לגבול ה-slot.
-                  left: paneOnRight ? _kWideOuterSideGap - overhang : null,
-                  right: paneOnRight ? null : _kWideOuterSideGap - overhang,
-                  child: _buildResizeHandle(paneOnRight),
-                ),
-            ],
-          );
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: paneOnRight
-                ? [paneSlot, Expanded(child: widget.mainContent)]
-                : [Expanded(child: widget.mainContent), paneSlot],
+          return _buildWideLayout(
+            context,
+            paneOnRight: paneOnRight,
           );
         }
 
-        final narrowPaneContent = widget.narrowPaneBuilder != null
-            ? widget.narrowPaneBuilder!(context, widget.paneContent)
-            : _buildNarrowPane(context, SafeArea(child: widget.paneContent));
-        final narrowPane = widget.narrowPaneBuilder != null
-            ? _buildPaneShell(
-                context,
-                narrowPaneContent,
-                paneOnRight: paneOnRight,
-              )
-            : narrowPaneContent;
+        return _buildNarrowLayout(
+          context,
+          paneOnRight: paneOnRight,
+        );
+      },
+    );
+  }
 
-        final showHandle = widget.isResizable &&
-            widget.onPaneWidthChanged != null;
-        final closedOffset =
-            paneOnRight ? const Offset(1, 0) : const Offset(-1, 0);
+  Widget _buildWideLayout(
+    BuildContext context, {
+    required bool paneOnRight,
+  }) {
+    final showHandle = widget.isOpen &&
+        widget.isResizable &&
+        widget.onPaneWidthChanged != null;
+
+    // ה-slot של הפאנל עוטף ב-ValueListenableBuilder כדי לעדכן רק אותו בזמן גרירה
+    final paneSlot = ValueListenableBuilder<double>(
+      valueListenable: _livePaneWidth,
+      builder: (context, liveWidth, _) {
+        final currentWidth = liveWidth;
+        final currentOccupied =
+            currentWidth + _kWideOuterSideGap + _kWideInnerSideGap;
+        final overhang = showHandle ? handleHitOverhang(context) : 0.0;
+        final widePaneContent = widget.widePaneBuilder != null
+            ? widget.widePaneBuilder!(context, widget.paneContent, currentWidth)
+            : widget.paneContent;
+        final widePane = SizedBox(
+          width: currentWidth,
+          child: _buildPaneShell(
+            context,
+            widePaneContent,
+            paneOnRight: paneOnRight,
+          ),
+        );
 
         return Stack(
+          clipBehavior: Clip.none,
           children: [
-            Positioned.fill(child: widget.mainContent),
-            IgnorePointer(
-              ignoring: !widget.isOpen,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: GestureDetector(
-                      onTap: widget.onClose,
-                      child: AnimatedOpacity(
-                        duration: AppTokens.animPanelOpacity,
-                        opacity: widget.isOpen ? 1.0 : 0.0,
-                        child: ColoredBox(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .scrim
-                              .withValues(alpha: 0.30),
-                        ),
+            AnimatedContainer(
+              duration: _isDragging ? Duration.zero : AppTokens.animPanelSlide,
+              curve: Curves.easeInOut,
+              width: widget.isOpen ? currentOccupied : 0,
+              child: ClipRect(
+                child: Align(
+                  alignment: paneOnRight
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                  child: OverflowBox(
+                    maxWidth: currentOccupied,
+                    minWidth: 0,
+                    alignment: paneOnRight
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsetsDirectional.only(
+                        top: _kWideTopGap,
+                        bottom: _kWideBottomGap,
+                        start: paneOnRight
+                            ? _kWideInnerSideGap
+                            : _kWideOuterSideGap,
+                        end: paneOnRight
+                            ? _kWideOuterSideGap
+                            : _kWideInnerSideGap,
+                      ),
+                      child: SizedBox(
+                        width: currentWidth,
+                        child: widePane,
                       ),
                     ),
                   ),
-                  Positioned(
-                    top: _kNarrowTopGap,
-                    bottom: _kNarrowBottomGap,
-                    right: paneOnRight ? 0 : null,
-                    left: paneOnRight ? null : 0,
-                    width: widget.paneWidth,
-                    child: AnimatedOpacity(
-                      duration: AppTokens.animPanelOpacity,
-                      opacity: widget.isOpen ? 1.0 : 0.0,
-                      child: AnimatedSlide(
-                        duration: AppTokens.animPanelSlide,
-                        curve: Curves.easeInOut,
-                        offset: widget.isOpen ? Offset.zero : closedOffset,
-                        child: narrowPane,
-                      ),
-                    ),
-                  ),
-                  if (showHandle)
-                    Positioned(
-                      top: _kNarrowTopGap,
-                      bottom: _kNarrowBottomGap,
-                      right: paneOnRight
-                          ? widget.paneWidth - handleHitOverhang(context)
-                          : null,
-                      left: paneOnRight
-                          ? null
-                          : widget.paneWidth - handleHitOverhang(context),
-                      child: AnimatedOpacity(
-                        duration: AppTokens.animPanelOpacity,
-                        opacity: widget.isOpen ? 1.0 : 0.0,
-                        child: AnimatedSlide(
-                          duration: AppTokens.animPanelSlide,
-                          curve: Curves.easeInOut,
-                          offset: widget.isOpen ? Offset.zero : closedOffset,
-                          child: _buildResizeHandle(paneOnRight),
-                        ),
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
+            if (showHandle)
+              Positioned(
+                top: _kWideTopGap,
+                bottom: _kWideBottomGap,
+                left: paneOnRight ? _kWideOuterSideGap - overhang : null,
+                right: paneOnRight ? null : _kWideOuterSideGap - overhang,
+                child: _buildResizeHandle(paneOnRight, true),
+              ),
           ],
         );
       },
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: paneOnRight
+          ? [paneSlot, Expanded(child: widget.mainContent)]
+          : [Expanded(child: widget.mainContent), paneSlot],
+    );
+  }
+
+  Widget _buildNarrowLayout(
+    BuildContext context, {
+    required bool paneOnRight,
+  }) {
+    final narrowPaneContent = widget.narrowPaneBuilder != null
+        ? widget.narrowPaneBuilder!(context, widget.paneContent)
+        : _buildNarrowPane(context, SafeArea(child: widget.paneContent));
+    final narrowPane = widget.narrowPaneBuilder != null
+        ? _buildPaneShell(context, narrowPaneContent, paneOnRight: paneOnRight)
+        : narrowPaneContent;
+
+    final showHandle = widget.isResizable && widget.onPaneWidthChanged != null;
+    final closedOffset =
+        paneOnRight ? const Offset(1, 0) : const Offset(-1, 0);
+
+    return Stack(
+      children: [
+        Positioned.fill(child: widget.mainContent),
+        IgnorePointer(
+          ignoring: !widget.isOpen,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: widget.onClose,
+                  child: AnimatedOpacity(
+                    duration: AppTokens.animPanelOpacity,
+                    opacity: widget.isOpen ? 1.0 : 0.0,
+                    child: ColoredBox(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .scrim
+                          .withValues(alpha: 0.30),
+                    ),
+                  ),
+                ),
+              ),
+              ValueListenableBuilder<double>(
+                valueListenable: _livePaneWidth,
+                builder: (context, liveWidth, _) {
+                  final currentWidth = liveWidth;
+                  final overhang = showHandle ? handleHitOverhang(context) : 0.0;
+
+                  return Stack(
+                    children: [
+                      Positioned(
+                        top: _kNarrowTopGap,
+                        bottom: _kNarrowBottomGap,
+                        right: paneOnRight ? 0 : null,
+                        left: paneOnRight ? null : 0,
+                        width: currentWidth,
+                        child: AnimatedOpacity(
+                          duration: AppTokens.animPanelOpacity,
+                          opacity: widget.isOpen ? 1.0 : 0.0,
+                          child: AnimatedSlide(
+                            duration: AppTokens.animPanelSlide,
+                            curve: Curves.easeInOut,
+                            offset: widget.isOpen ? Offset.zero : closedOffset,
+                            child: narrowPane,
+                          ),
+                        ),
+                      ),
+                      if (showHandle)
+                        Positioned(
+                          top: _kNarrowTopGap,
+                          bottom: _kNarrowBottomGap,
+                          right: paneOnRight ? currentWidth - overhang : null,
+                          left: paneOnRight ? null : currentWidth - overhang,
+                          child: AnimatedOpacity(
+                            duration: AppTokens.animPanelOpacity,
+                            opacity: widget.isOpen ? 1.0 : 0.0,
+                            child: AnimatedSlide(
+                              duration: AppTokens.animPanelSlide,
+                              curve: Curves.easeInOut,
+                              offset: widget.isOpen ? Offset.zero : closedOffset,
+                              child: _buildResizeHandle(paneOnRight, false),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

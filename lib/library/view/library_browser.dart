@@ -707,9 +707,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           minPaneWidth: previewPaneWidths.minPaneWidth,
           maxPaneWidth: previewPaneWidths.maxPaneWidth,
           onPaneWidthChanged: (nextWidth) {
-            setState(() {
-              _previewPaneWidthOverride = nextWidth;
-            });
+            _previewPaneWidthOverride = nextWidth;
           },
           wrapPaneInFloatingPanel: false,
           narrowPaneBuilder: (context, paneContent) => Material(
