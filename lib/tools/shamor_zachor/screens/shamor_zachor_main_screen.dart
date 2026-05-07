@@ -580,12 +580,6 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
                                           : _selectedCategoryName,
                                 ),
                                 wrapPaneInFloatingPanel: true,
-                                narrowPaneBuilder: (context, paneContent) =>
-                                    Material(
-                                  color:
-                                      AppSurfaces.solidPanelBackground(context),
-                                  child: SafeArea(child: paneContent),
-                                ),
                                 mainContent: _selectedBookName != null &&
                                         _selectedBookDetails != null
                                     ? Builder(

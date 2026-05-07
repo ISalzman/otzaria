@@ -269,10 +269,6 @@ class _PersonalNotesManagerScreenState
                     },
                     paneContent: _buildNotesTree(),
                     wrapPaneInFloatingPanel: true,
-                    narrowPaneBuilder: (context, paneContent) => Material(
-                      color: AppSurfaces.solidPanelBackground(context),
-                      child: SafeArea(child: paneContent),
-                    ),
                   ),
                 ),
               ),

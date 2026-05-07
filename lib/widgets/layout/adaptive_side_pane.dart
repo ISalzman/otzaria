@@ -205,13 +205,12 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     );
   }
 
-  Widget _buildNarrowPane(BuildContext context, Widget child) {
-    return _buildPaneShell(
-      context,
-      widget.wrapPaneInFloatingPanel
-          ? child
-          : Material(color: _effectivePaneColor(context), child: child),
-      paneOnRight: _isPaneOnRight(context),
+  /// ברירת מחדל ל-narrowPaneBuilder: Material + SafeArea עם solidPanelBackground.
+  /// מסכים שרוצים התנהגות שונה יכולים לעקוף דרך [narrowPaneBuilder].
+  Widget _defaultNarrowPaneBuilder(BuildContext context, Widget paneContent) {
+    return Material(
+      color: AppSurfaces.solidPanelBackground(context),
+      child: SafeArea(child: paneContent),
     );
   }
 
@@ -220,10 +219,11 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final paneOnRight = _isPaneOnRight(context);
-        final effectivePaneWidth = _livePaneWidth.value;
 
+        // בזמן גרירה ה-live width מנוהל ב-ValueListenableBuilder — כאן משתמשים
+        // ב-widget.paneWidth רק לחישוב wide/narrow (שממילא מוקפא בגרירה)
         final wideOccupiedWidth =
-            effectivePaneWidth + _kWideOuterSideGap + _kWideInnerSideGap;
+            widget.paneWidth + _kWideOuterSideGap + _kWideInnerSideGap;
         final calculatedHasRoom = constraints.maxWidth >=
             (wideOccupiedWidth + widget.minMainContentWidth);
 
@@ -351,9 +351,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     BuildContext context, {
     required bool paneOnRight,
   }) {
-    final narrowPaneContent = widget.narrowPaneBuilder != null
-        ? widget.narrowPaneBuilder!(context, widget.paneContent)
-        : _buildNarrowPane(context, SafeArea(child: widget.paneContent));
+    final narrowPaneContent = (widget.narrowPaneBuilder ?? _defaultNarrowPaneBuilder)
+        .call(context, widget.paneContent);
     final narrowPane = widget.narrowPaneBuilder != null
         ? _buildPaneShell(context, narrowPaneContent, paneOnRight: paneOnRight)
         : narrowPaneContent;
