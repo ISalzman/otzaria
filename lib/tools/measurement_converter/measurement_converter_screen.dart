@@ -859,9 +859,7 @@ class _MeasurementConverterScreenState
       minPaneWidth: 150,
       maxPaneWidth: 280,
       onPaneWidthChanged: (nextWidth) {
-        setState(() {
-          _categoriesPaneWidth = nextWidth;
-        });
+        _categoriesPaneWidth = nextWidth;
       },
       wrapPaneInFloatingPanel: true,
       mainContent: isWide

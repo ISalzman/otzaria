@@ -509,9 +509,7 @@ class CalendarWidgetState extends State<CalendarWidget> {
           minPaneWidth: 280,
           maxPaneWidth: 520,
           onPaneWidthChanged: (nextWidth) {
-            setState(() {
-              _sidePanelWidth = nextWidth;
-            });
+            _sidePanelWidth = nextWidth;
           },
           narrowPaneBuilder: (context, paneContent) => Material(
             color: AppSurfaces.solidPanelBackground(context),
