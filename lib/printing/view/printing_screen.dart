@@ -91,25 +91,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
   int _pdfStartPage = 1;
   int _pdfEndPage = 0; // 0 = כל העמודים
   int _renderGeneration = 0; // מונה שביטול renders ישנים
-  Map<int, String> _pageLabels = {};
 
-  Map<int, String> _buildPageLabels(List<PdfOutlineNode> outline) {
-    final labels = <int, String>{};
-    void traverse(List<PdfOutlineNode> nodes) {
-      for (final node in nodes) {
-        final page = node.dest?.pageNumber;
-        if (page != null && node.title.isNotEmpty) {
-          labels[page] ??= node.title;
-        }
-        traverse(node.children);
-      }
-    }
-    traverse(outline);
-    return labels;
-  }
-
-  String _labelForPage(int pageNumber) =>
-      _pageLabels[pageNumber] ?? pageNumber.toString();
 
   bool _includeCommentaries = false;
   bool _includePersonalNotes = false;
@@ -150,8 +132,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (widget.createPdfOverride != null) {
       _rangeMode = _PrintRangeMode.lines;
       _flatHeaders = const [];
-      _pageLabels = _buildPageLabels(widget.pdfOutline);
-      if (widget.initialPage != null) {
+if (widget.initialPage != null) {
         _pdfStartPage = widget.initialPage!;
         _pdfEndPage =
             widget.isBookView ? widget.initialPage! + 1 : widget.initialPage!;
