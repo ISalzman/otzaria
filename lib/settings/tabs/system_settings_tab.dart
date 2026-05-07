@@ -669,19 +669,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   child: _isPendingReportsExpanded
                       ? Column(
                           children: [
-                            if (pendingReports.isNotEmpty)
-                              ...pendingReports.map(
-                                (report) => _buildPendingReportTile(
-                                  context,
-                                  report,
-                                  canSend: !state.isOfflineMode,
-                                ),
-                              ),
                             if (hasReports)
                               Padding(
                                 padding: const EdgeInsets.only(
                                   right: 16,
                                   left: 16,
+                                  top: 8,
                                   bottom: 16,
                                 ),
                                 child: Row(
@@ -738,6 +731,14 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                                   'במצב מנותק אי אפשר לשלוח כעת, אך ניתן להוריד סקריפט לשליחה ממחשב מחובר.',
                                   style: kSettingsSubtitleStyle,
                                   textDirection: TextDirection.rtl,
+                                ),
+                              ),
+                            if (pendingReports.isNotEmpty)
+                              ...pendingReports.map(
+                                (report) => _buildPendingReportTile(
+                                  context,
+                                  report,
+                                  canSend: !state.isOfflineMode,
                                 ),
                               ),
                           ],
