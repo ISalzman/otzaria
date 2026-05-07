@@ -68,6 +68,12 @@ class AppWindowListener extends WindowListener {
 
     // Step 3: Storage close, error reporting, and window destruction.
     try {
+      // שמירת מצב החלון חייבת להתבצע לפני Hive.close() כי Settings כותב ל-Hive
+      if (!kIsWeb &&
+          (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        await WindowPersistence.saveNow();
+      }
+
       await Hive.close();
 
       if (flushFailure != null) {
@@ -86,8 +92,6 @@ class AppWindowListener extends WindowListener {
 
       if (!kIsWeb &&
           (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-        // שמירת מצב החלון
-        await WindowPersistence.saveNow();
         // סגירה רגילה דרך ה-WindowManager
         await windowManager.destroy();
       }
