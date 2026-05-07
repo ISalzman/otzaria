@@ -205,13 +205,11 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     );
   }
 
-  /// ברירת מחדל ל-narrowPaneBuilder: Material + SafeArea עם solidPanelBackground.
+  /// ברירת מחדל ל-narrowPaneBuilder: SafeArea בלבד.
+  /// הצבע והפינות המעוגלות מגיעים מ-_buildPaneShell שעוטף תמיד את התוצאה.
   /// מסכים שרוצים התנהגות שונה יכולים לעקוף דרך [narrowPaneBuilder].
   Widget _defaultNarrowPaneBuilder(BuildContext context, Widget paneContent) {
-    return Material(
-      color: AppSurfaces.solidPanelBackground(context),
-      child: SafeArea(child: paneContent),
-    );
+    return SafeArea(child: paneContent);
   }
 
   @override
@@ -220,10 +218,10 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
       builder: (context, constraints) {
         final paneOnRight = _isPaneOnRight(context);
 
-        // בזמן גרירה ה-live width מנוהל ב-ValueListenableBuilder — כאן משתמשים
-        // ב-widget.paneWidth רק לחישוב wide/narrow (שממילא מוקפא בגרירה)
+        // _livePaneWidth הוא ה-source of truth לרוחב: מתעדכן בזמן גרירה,
+        // ומסונכרן מ-widget.paneWidth ב-didUpdateWidget כשאין גרירה.
         final wideOccupiedWidth =
-            widget.paneWidth + _kWideOuterSideGap + _kWideInnerSideGap;
+            _livePaneWidth.value + _kWideOuterSideGap + _kWideInnerSideGap;
         final calculatedHasRoom = constraints.maxWidth >=
             (wideOccupiedWidth + widget.minMainContentWidth);
 
@@ -353,9 +351,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
   }) {
     final narrowPaneContent = (widget.narrowPaneBuilder ?? _defaultNarrowPaneBuilder)
         .call(context, widget.paneContent);
-    final narrowPane = widget.narrowPaneBuilder != null
-        ? _buildPaneShell(context, narrowPaneContent, paneOnRight: paneOnRight)
-        : narrowPaneContent;
+    final narrowPane =
+        _buildPaneShell(context, narrowPaneContent, paneOnRight: paneOnRight);
 
     final showHandle = widget.isResizable && widget.onPaneWidthChanged != null;
     final closedOffset =
