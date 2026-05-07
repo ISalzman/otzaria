@@ -709,6 +709,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           onPaneWidthChanged: (nextWidth) {
             _previewPaneWidthOverride = nextWidth;
           },
+          autoHandleResponsiveVisibility: false,
           wrapPaneInFloatingPanel: false,
           narrowPaneBuilder: (context, paneContent) => Material(
             color: Theme.of(context).colorScheme.surface,
