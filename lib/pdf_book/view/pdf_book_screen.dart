@@ -51,6 +51,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 
 final GlobalKey pdfBookNavigationTourTargetKey = GlobalKey(
   debugLabel: 'pdf_book_navigation_tour_target',
@@ -1090,6 +1091,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           autofocus: false,
           onKeyEvent: (FocusNode node, KeyEvent event) {
             if (event is KeyDownEvent) {
+              final printShortcut =
+                  Settings.getValue<String>('key-shortcut-print') ?? 'ctrl+p';
+              if (ShortcutHelper.matchesShortcut(event, printShortcut)) {
+                _handlePrintPress(context);
+                return KeyEventResult.handled;
+              }
               if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
                 _goNextPage();
                 return KeyEventResult.handled;
