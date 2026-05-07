@@ -3,6 +3,18 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/theme/theme_exports.dart';
+
+/// מחזיר את החצי של hitSize שגולש מחוץ לפאנל (overhang).
+/// 12px במצב רחב, 9px במצב קומפקט.
+double handleHitOverhang(BuildContext context) {
+  final isCompact =
+      context.read<SettingsBloc?>()?.state.compactMenuMode ?? false;
+  final hitSize = isCompact
+      ? AppTokens.dragHandleCompactHitSize
+      : AppTokens.dragHandleRegularHitSize;
+  return hitSize / 2;
+}
 
 class ResizableDragHandle extends StatefulWidget {
   const ResizableDragHandle({
@@ -23,7 +35,7 @@ class ResizableDragHandle extends StatefulWidget {
   final MouseCursor? cursor;
 
   /// Total interactive thickness (width for vertical, height for horizontal).
-  /// If null, auto-selects 48 when compactMenuMode is off, 36 when on.
+  /// If null, auto-selects 24 when compactMenuMode is off, 18 when on.
   final double? hitSize;
 
   /// Called with the delta along the resize axis (dx if vertical, dy if horizontal).
@@ -58,7 +70,10 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
     final isEnabled = widget.onDragDelta != null;
     final isCompact =
         context.read<SettingsBloc?>()?.state.compactMenuMode ?? false;
-    final effectiveHitSize = widget.hitSize ?? (isCompact ? 36.0 : 48.0);
+    final effectiveHitSize = widget.hitSize ??
+        (isCompact
+            ? AppTokens.dragHandleCompactHitSize
+            : AppTokens.dragHandleRegularHitSize);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final dividerColor = theme.dividerColor.withValues(alpha: 0.55);
@@ -105,10 +120,11 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
               },
         child: TweenAnimationBuilder<double>(
           tween: Tween<double>(begin: 0.0, end: targetBlend),
-          duration: const Duration(milliseconds: 150),
+          duration: AppTokens.animFast,
           curve: Curves.easeOut,
           builder: (context, blend, _) {
-            final highlightColor = cs.primary.withValues(alpha: 0.18 + 0.22 * blend);
+            final highlightColor =
+                cs.primary.withValues(alpha: 0.22 * blend);
             final thickness = lerpDouble(3.0, 5.0, blend) ?? 3.0;
             final gripLength = lerpDouble(24.0, 32.0, blend) ?? 24.0;
             final showGrip = widget.showDivider || blend > 0;
@@ -156,7 +172,7 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
                           ),
                         ),
                       AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
+                        duration: AppTokens.animFast,
                         curve: Curves.easeOut,
                         width: widget.isVertical ? thickness + 10 : gripLength,
                         height: widget.isVertical ? gripLength : thickness + 10,
