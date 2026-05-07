@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:collection/collection.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
@@ -64,6 +66,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
@@ -73,8 +76,8 @@ import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart'
     show buildThemePayload;
 import 'package:otzaria/core/external_activation_queue.dart';
 import 'package:otzaria/core/external_activation_channel.dart';
+import 'package:otzaria/core/external_uri_router.dart';
 import 'package:otzaria/plugins/services/reader_location_tracker.dart';
-import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/tour/models/tour_step.dart';
@@ -518,34 +521,96 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     try {
       final uri = Uri.tryParse(uriString);
-      if (uri == null) {
-        return;
-      }
+      if (uri == null) return;
 
-      final installRequest = PluginStoreLinkParser.parseUri(uri);
-      if (installRequest == null) {
-        return;
-      }
+      final action = ExternalUriRouter.parseUri(uri);
+      if (action == null) return;
 
-      if (!kIsWeb &&
-          (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-        await windowManager.show();
-        await windowManager.focus();
-      }
-
+      await _bringWindowToFront();
       if (!mounted) return;
-      context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
-      context.read<PluginSystemBloc>().add(
-            InstallRemotePluginRequested(
-              installRequest.downloadUri.toString(),
-              forceOverwrite: installRequest.forceOverwrite,
-            ),
-          );
+      _dispatchExternalUriAction(action);
     } catch (e, stackTrace) {
       debugPrint(
         'Failed to process external activation "$uriString": $e\n$stackTrace',
       );
     }
+  }
+
+  Future<void> _bringWindowToFront() async {
+    if (!kIsWeb &&
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      await windowManager.show();
+      await windowManager.focus();
+    }
+  }
+
+  void _dispatchExternalUriAction(ExternalUriAction action) {
+    switch (action) {
+      case OpenScreenAction(:final screen):
+        context.read<NavigationBloc>().add(NavigateToScreen(screen));
+      case OpenToolAction(:final toolId):
+        context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
+        // ToolsScreen נבנה lazy בעת המעבר ל־Screen.more, ולכן ייתכן
+        // ש־moreScreenKey.currentState עדיין null בפריים הראשון. ניסיונות חוזרים
+        // עם hop קצר מבטיחים שהלשונית תיפתח גם בפעם הראשונה שנכנסים אליה.
+        _openToolWhenAvailable(toolId);
+      case OpenBookAction(:final bookId, :final index, :final searchQuery):
+        unawaited(_openBookByExternalId(
+          bookId,
+          index: index,
+          searchQuery: searchQuery,
+        ));
+      case InstallPluginAction(:final request):
+        context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
+        context.read<PluginSystemBloc>().add(
+              InstallRemotePluginRequested(
+                request.downloadUri.toString(),
+                forceOverwrite: request.forceOverwrite,
+              ),
+            );
+      case RunSearchAction(:final query):
+        _runExternalSearch(query);
+    }
+  }
+
+  void _runExternalSearch(String query) {
+    final tab = SearchingTab(SearchingTab.titleForQuery(query), query);
+    context.read<HistoryBloc>().add(AddHistory(tab));
+    context.read<TabsBloc>().add(AddTab(tab));
+    context.read<NavigationBloc>().add(const NavigateToScreen(Screen.search));
+    // ה-UpdateSearchQuery נשלח אוטומטית מ-TantivyFullTextSearch.initState
+    // ברגע שהלשונית מוצגת לראשונה. ראה tantivy_full_text_search.dart:130-134.
+  }
+
+  Future<void> _openBookByExternalId(
+    int bookId, {
+    int? index,
+    String? searchQuery,
+  }) async {
+    final library = await DataRepository.instance.library;
+    if (!mounted) return;
+    final book = library.getAllBooks().firstWhereOrNull((b) => b.id == bookId);
+    if (book == null) {
+      UiSnack.showError('הספר עם המזהה $bookId לא נמצא בספרייה');
+      return;
+    }
+    openBook(context, book, index ?? 0, searchQuery ?? '');
+  }
+
+  void _openToolWhenAvailable(String toolId, {int attemptsLeft = 6}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final toolsState = moreScreenKey.currentState;
+      if (toolsState != null) {
+        toolsState.requestOpenTool(toolId);
+        return;
+      }
+      if (attemptsLeft <= 0) return;
+      Future<void>.delayed(const Duration(milliseconds: 50), () {
+        if (!mounted) return;
+        _openToolWhenAvailable(toolId, attemptsLeft: attemptsLeft - 1);
+      });
+    });
   }
 
   @override
@@ -909,7 +974,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      moreScreenKey.currentState?.openToolForTour(toolId);
+      moreScreenKey.currentState?.requestOpenTool(toolId);
       _scheduleTourTargetRebuilds(remainingFrames: 4);
     });
   }
