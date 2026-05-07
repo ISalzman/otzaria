@@ -115,6 +115,14 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     return resolved.x >= 0;
   }
 
+  bool _resolveHasRoomForSideBySide(bool calculatedHasRoomForSideBySide) {
+    if (_isDragging) {
+      return _dragStartedInWideMode ??
+          (_lastHadRoomForSideBySide ?? calculatedHasRoomForSideBySide);
+    }
+    return calculatedHasRoomForSideBySide;
+  }
+
   void _handleResponsiveAutoClose(bool hasRoomForSideBySide) {
     final previous = _lastHadRoomForSideBySide;
     _lastHadRoomForSideBySide = hasRoomForSideBySide;
@@ -222,18 +230,11 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         // ומסונכרן מ-widget.paneWidth ב-didUpdateWidget כשאין גרירה.
         final wideOccupiedWidth =
             _livePaneWidth.value + _kWideOuterSideGap + _kWideInnerSideGap;
-        final calculatedHasRoom = constraints.maxWidth >=
+        final calculatedHasRoomForSideBySide = constraints.maxWidth >=
             (wideOccupiedWidth + widget.minMainContentWidth);
-
-        // הקפאת מצב wide/narrow לאורך כל הגרירה — מעבר רק ב-onDragEnd
-        final bool hasRoomForSideBySide;
-        if (_isDragging) {
-          // שומרים על מצב תחילת הגרירה לאורך כל הגרירה
-          hasRoomForSideBySide =
-              _dragStartedInWideMode ?? (_lastHadRoomForSideBySide ?? calculatedHasRoom);
-        } else {
-          hasRoomForSideBySide = calculatedHasRoom;
-        }
+        final hasRoomForSideBySide = _resolveHasRoomForSideBySide(
+          calculatedHasRoomForSideBySide,
+        );
 
         if (widget.autoHandleResponsiveVisibility && !_isDragging) {
           _handleResponsiveAutoClose(hasRoomForSideBySide);
