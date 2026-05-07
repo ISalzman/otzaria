@@ -111,15 +111,16 @@ class FloatingPanel extends StatelessWidget {
     final content =
         padding != null ? Padding(padding: padding!, child: child) : child;
 
-    return Material(
-      color: panelColor,
-      elevation: elevation,
-      shadowColor: shadowColor ?? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.10),
-      // surfaceTintColor: Colors.transparent → מניעים tinting כחול אוטומטי של M3
-      surfaceTintColor: Colors.transparent,
+    return ClipRRect(
       borderRadius: effectiveBorderRadius,
-      clipBehavior: Clip.antiAlias,
-      child: content,
+      child: Material(
+        color: panelColor,
+        elevation: elevation,
+        shadowColor: shadowColor ?? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.10),
+        surfaceTintColor: Colors.transparent,
+        borderRadius: effectiveBorderRadius,
+        child: content,
+      ),
     );
   }
 }
