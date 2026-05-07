@@ -886,10 +886,6 @@ class _MeasurementConverterScreenState
         bgColor,
         closeOnSelect: !isWide,
       ),
-      narrowPaneBuilder: (context, paneContent) => Material(
-        color: AppSurfaces.solidPanelBackground(context),
-        child: SafeArea(child: paneContent),
-      ),
     );
   }
 
