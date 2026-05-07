@@ -8,9 +8,11 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
+import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -55,6 +57,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_event.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
+import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
 import 'package:otzaria/widgets/navigation/nav_rail_item.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -94,7 +97,10 @@ final GlobalKey<State<LibraryBrowser>> libraryBrowserKey =
 
 class MainWindowScreenState extends State<MainWindowScreen>
     with TickerProviderStateMixin {
-  late final PageController pageController;
+  // לא final: ה-controller נוצר מחדש בעת שינוי אוריינטציה
+  // (ראה _handleOrientationChange) כדי למנוע מצב שבו pixel offset מהציר
+  // הישן (vertical) מתפרש כעמוד שגוי בציר החדש (horizontal).
+  late PageController pageController;
   late final CalendarCubit _calendarCubit;
   late final SettingsScreenController _settingsScreenController;
   final ExternalActivationQueue _externalActivationQueue =
@@ -125,7 +131,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
   bool? _previousLibraryEmptyState;
 
   final StartupWorkGate _startupWorkGate = StartupWorkGate();
+  final IndexingRepository _indexingRepository =
+      IndexingRepository(TantivyDataProvider.instance);
   bool _hasCheckedAutoIndex = false;
+  bool _isShowingStartupManualReindexDialog = false;
   bool _hasRestoredFullscreen = false;
   bool _hasStartedFileSync = false;
   bool _isSearchOpen = false;
@@ -368,9 +377,73 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (_hasCheckedAutoIndex) return;
     _hasCheckedAutoIndex = true;
 
-    // Check if auto-update is enabled
-    if (context.read<SettingsBloc>().state.autoUpdateIndex) {
-      _startIndexing(context);
+    unawaited(_resolveStartupIndexing(context));
+  }
+
+  Future<void> _resolveStartupIndexing(BuildContext context) async {
+    final autoUpdateIndex = context.read<SettingsBloc>().state.autoUpdateIndex;
+    final library = await DataRepository.instance.library;
+    if (!mounted || !context.mounted) {
+      return;
+    }
+
+    final requiresManualReindex =
+        await _indexingRepository.requiresManualReindex(library);
+    if (!mounted || !context.mounted) {
+      return;
+    }
+
+    if (requiresManualReindex) {
+      _startupWorkGate.markIndexingDecisionResolved(expectIndexing: false);
+      _tryStartDeferredStartupWork();
+      await _showStartupManualReindexDialog(context, library);
+      return;
+    }
+
+    _startupWorkGate.markIndexingDecisionResolved(
+      expectIndexing: autoUpdateIndex,
+    );
+    _tryStartDeferredStartupWork();
+
+    if (autoUpdateIndex) {
+      context.read<IndexingBloc>().add(StartIndexing(library));
+    } else {
+      context.read<IndexingBloc>().add(CheckIndexStatus(library));
+    }
+  }
+
+  Future<void> _showStartupManualReindexDialog(
+    BuildContext context,
+    library_model.Library library,
+  ) async {
+    if (_isShowingStartupManualReindexDialog) {
+      return;
+    }
+
+    _isShowingStartupManualReindexDialog = true;
+    final indexingBloc = context.read<IndexingBloc>();
+    try {
+      final result = await showTwoActionsDialog(
+        context: context,
+        title: 'נדרש איפוס אינדקס',
+        content:
+            'האינדקס הקיים אינו מעודכן ביחס לשינויים האחרונים בחיפוש. עד שתבצע איפוס ואינדוקס מחדש, ייתכן שחלק מיכולות החיפוש לא יעבדו כראוי.',
+        cancelText: 'אחר כך',
+        confirmText: 'אפס ועדכן',
+      );
+      if (!mounted || !context.mounted || result != true) {
+        return;
+      }
+
+      await _indexingRepository.prepareForManualReindex(library);
+      if (!mounted || !context.mounted) {
+        return;
+      }
+
+      _startupWorkGate.markIndexingDecisionResolved(expectIndexing: true);
+      indexingBloc.add(StartIndexing(library));
+    } finally {
+      _isShowingStartupManualReindexDialog = false;
     }
   }
 
@@ -494,29 +567,34 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 
   void _handleOrientationChange(BuildContext context, Orientation orientation) {
-    if (_previousOrientation != orientation) {
-      _previousOrientation = orientation;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-        final currentScreen =
-            context.read<NavigationBloc>().state.currentScreen;
-        final targetPage = _pageIndexForScreen(currentScreen);
-        if (targetPage == null) {
-          return;
-        }
+    if (_previousOrientation == orientation) return;
 
-        if (_currentPageIndex != targetPage) {
-          setState(() {
-            _currentPageIndex = targetPage;
-          });
-          if (pageController.hasClients) {
-            pageController.jumpToPage(targetPage);
-          }
-        }
-      });
-    }
+    final isFirstDetection = _previousOrientation == null;
+    _previousOrientation = orientation;
+    if (isFirstDetection) return;
+
+    // החלפת ציר ב-PageView (vertical↔horizontal) משבשת את חישוב העמוד
+    // הפנימי של PageController: ה-pixel offset נשמר אבל ה-viewport
+    // dimension משתנה (height→width), ולכן הנוסחה offset/viewport
+    // מקפיצה את העמוד הפעיל. התוצאה: עמוד 1 (מסך עיון) מוצג רגעית מעל
+    // המסך הנוכחי, ושאר המסכים נכפים ל-dispose ואז init מחדש (ראה למשל
+    // ShamorZachorWidget בלוגים).
+    //
+    // הפתרון: יוצרים PageController חדש *סינכרונית* לפני בניית ה-PageView
+    // החדש (בציר החדש). ה-PageView שייבנה מיד אחרי הקריאה הזו ישתמש
+    // ב-controller החדש עם initialPage תקין, בלי offset יורש מהציר הקודם.
+    final currentScreen = context.read<NavigationBloc>().state.currentScreen;
+    final targetPage = _pageIndexForScreen(currentScreen) ?? _currentPageIndex;
+    _currentPageIndex = targetPage;
+
+    final oldController = pageController;
+    pageController = PageController(initialPage: targetPage);
+
+    // dispose נדחה לפוסט-פריים: ה-PageView הישן עדיין מחובר ל-oldController
+    // עד שתסתיים הרקונסיליאציה של עץ הווידג'טים בפריים הזה.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      oldController.dispose();
+    });
   }
 
   void _toggleReadingSettingsPanel() {
@@ -1444,6 +1522,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
               if (context.read<SettingsBloc>().state.autoUpdateIndex) {
                 context.read<IndexingBloc>().add(
                     IndexSpecificBooks(state.newBooksToIndex!, state.library!));
+              } else {
+                context
+                    .read<IndexingBloc>()
+                    .add(CheckIndexStatus(state.library!));
               }
             },
           ),
@@ -1606,10 +1688,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
               if (!previous.autoUpdateIndex && current.autoUpdateIndex) {
                 _startIndexing(context);
               }
-              _startupWorkGate.markIndexingDecisionResolved(
-                expectIndexing: current.autoUpdateIndex,
-              );
-              _tryStartDeferredStartupWork();
               _restoreFullscreenState(context);
             },
           ),
