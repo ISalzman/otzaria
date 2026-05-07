@@ -317,9 +317,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
             minPaneWidth: 200,
             maxPaneWidth: 800,
             onPaneWidthChanged: (nextWidth) {
-              setState(() {
-                _leftPaneWidth = nextWidth;
-              });
+              _leftPaneWidth = nextWidth;
             },
             onPaneResizeEnd: () {
               context
