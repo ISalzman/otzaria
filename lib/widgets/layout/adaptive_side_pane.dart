@@ -162,16 +162,14 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
       );
     }
 
-    return ClipRRect(
+    return Material(
+      color: paneColor,
+      elevation: 4,
+      shadowColor: shadowColor,
+      surfaceTintColor: Colors.transparent,
       borderRadius: _kPanelRadius,
-      child: Material(
-        color: paneColor,
-        elevation: 4,
-        shadowColor: shadowColor,
-        surfaceTintColor: Colors.transparent,
-        borderRadius: _kPanelRadius,
-        child: child,
-      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
     );
   }
 
