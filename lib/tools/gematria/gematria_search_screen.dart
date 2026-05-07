@@ -26,6 +26,8 @@ class GematriaSearchScreen extends StatefulWidget {
 }
 
 class GematriaSearchScreenState extends State<GematriaSearchScreen> {
+  static const double _settingsPanelWidth = 360;
+
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   List<GematriaSearchResult> _searchResults = [];
@@ -103,6 +105,14 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
     if (_searchController.text.trim().isNotEmpty && _hasSearched) {
       _performSearch();
     }
+  }
+
+  void _clearResults() {
+    setState(() {
+      _searchResults = [];
+      _lastGematriaValue = null;
+      _hasSearched = false;
+    });
   }
 
   Future<void> _performSearch() async {
@@ -325,11 +335,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
                 hintText: 'חפש גימטריה...',
                 autofocus: true,
                 onSubmitted: (_) => _performSearch(),
-                onClear: () => setState(() {
-                  _searchResults = [];
-                  _lastGematriaValue = null;
-                  _hasSearched = false;
-                }),
+                onClear: _clearResults,
                 leading: IconButton(
                   icon: const Icon(FluentIcons.search_24_regular),
                   onPressed: _performSearch,
@@ -352,46 +358,9 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
           Expanded(
             child: Stack(
               children: [
+                Positioned.fill(child: _buildResultsContent()),
                 Positioned.fill(
-                  child: ToolPanelWrapper(
-                    child: Column(
-                      children: [
-                        if (_lastGematriaValue != null) _buildStatusBar(),
-                        Expanded(child: _buildResultsList()),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: ContextOverlayPanel(
-                  isOpen: _showingSettings,
-                  onClose: _toggleSettings,
-                  width: 360,
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          children: [
-                            Text(
-                              'הגדרות',
-                              textDirection: TextDirection.rtl,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Expanded(
-                        child: SingleChildScrollView(
-                          child: GematriaSettingsTab(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                  child: _buildSettingsOverlay(),
                 ),
               ],
             ),
@@ -430,6 +399,49 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultsContent() {
+    return ToolPanelWrapper(
+      child: Column(
+        children: [
+          if (_lastGematriaValue != null) _buildStatusBar(),
+          Expanded(child: _buildResultsList()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsOverlay() {
+    return ContextOverlayPanel(
+      isOpen: _showingSettings,
+      onClose: _toggleSettings,
+      width: _settingsPanelWidth,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Text(
+                  'הגדרות',
+                  textDirection: TextDirection.rtl,
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          const Expanded(
+            child: SingleChildScrollView(
+              child: GematriaSettingsTab(),
             ),
           ),
         ],
