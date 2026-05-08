@@ -62,5 +62,16 @@ void main() {
 
       expect(shouldPrompt, isTrue);
     });
+
+    test('מחזיר false כשרק חתימת הקטלוג השתנתה והגרסה תואמת', () {
+      final shouldPrompt = TantivyDataProvider.shouldPromptForManualReindex(
+        indexExistedBeforeInit: true,
+        storedIndexStateVersion: TantivyDataProvider.currentIndexStateVersion,
+        storedCatalogueOrderSignature: 'old-signature',
+        currentCatalogueOrderSignature: 'new-signature',
+      );
+
+      expect(shouldPrompt, isFalse);
+    });
   });
 }
