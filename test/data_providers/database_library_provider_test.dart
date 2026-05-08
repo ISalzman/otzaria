@@ -5,10 +5,10 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
+import 'package:otzaria/library/models/library.dart' as library_models;
 import 'package:otzaria/migration/models/author.dart';
 import 'package:otzaria/migration/models/book.dart' as migration_models;
-import 'package:otzaria/migration/models/category.dart'
-    as migration_models;
+import 'package:otzaria/migration/models/category.dart' as migration_models;
 import 'package:otzaria/migration/database/daos/database.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/models/links.dart';
@@ -310,7 +310,7 @@ void main() {
       final database = MyDatabase.withPath(dbPath);
       final repository = SeforimRepository(database);
       final provider = DatabaseLibraryProvider.instance;
-        final previousLibraryPath =
+      final previousLibraryPath =
           Settings.getValue<String>(SettingsRepository.keyLibraryPath);
       final previousFolderName =
           Settings.getValue<String>(SettingsRepository.keyLibraryFolderName);
@@ -420,6 +420,90 @@ void main() {
         database.close();
         await tempDir.delete(recursive: true);
       }
+    });
+
+    test(
+        'populateUserBooksCategoryForTesting ממלא קטגוריה קיימת בלי לשבור parent ו-category',
+        () {
+      final provider = DatabaseLibraryProvider.instance;
+      provider.clearCache();
+
+      final library = library_models.Library(categories: []);
+      final personalCategory = library_models.Category(
+        title: 'ספרים אישיים',
+        description: '',
+        shortDescription: '',
+        order: 1,
+        subCategories: [],
+        books: [],
+        parent: library,
+      );
+      library.subCategories.add(personalCategory);
+
+      final existingCategory = library_models.Category(
+        title: 'תיקייה קיימת',
+        description: '',
+        shortDescription: '',
+        order: 1,
+        subCategories: [],
+        books: [],
+        parent: personalCategory,
+      );
+      personalCategory.subCategories.add(existingCategory);
+
+      provider.populateUserBooksCategoryForTesting(
+        targetCategory: existingCategory,
+        dbCategory: const migration_models.Category(
+          id: 10,
+          parentId: 1,
+          title: 'תיקייה קיימת',
+          level: 1,
+          orderIndex: 1,
+        ),
+        booksByCategory: {
+          10: [
+            {
+              'id': 100,
+              'title': 'ספר קיים בעץ',
+              'categoryId': 10,
+              'orderIndex': 1,
+              'fileType': 'txt',
+            },
+          ],
+          11: [
+            {
+              'id': 101,
+              'title': 'ספר פנימי',
+              'categoryId': 11,
+              'orderIndex': 1,
+              'fileType': 'txt',
+            },
+          ],
+        },
+        categoriesByParent: {
+          10: const [
+            migration_models.Category(
+              id: 11,
+              parentId: 10,
+              title: 'תת קטגוריה',
+              level: 2,
+              orderIndex: 1,
+            ),
+          ],
+        },
+        authorsByBookId: const {},
+        metadata: const {},
+      );
+
+      expect(existingCategory.books, hasLength(1));
+      expect(existingCategory.books.single.category, same(existingCategory));
+
+      expect(existingCategory.subCategories, hasLength(1));
+      final nestedCategory = existingCategory.subCategories.single;
+      expect(nestedCategory.parent, same(existingCategory));
+      expect(nestedCategory.path, '/ספרים אישיים/תיקייה קיימת/תת קטגוריה');
+      expect(nestedCategory.books, hasLength(1));
+      expect(nestedCategory.books.single.category, same(nestedCategory));
     });
 
     test('mergeLinksForTesting ממזג קישורים בלי כפילויות ושומר קישורים קודמים',

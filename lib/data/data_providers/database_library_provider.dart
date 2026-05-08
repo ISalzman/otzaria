@@ -1770,31 +1770,57 @@ class DatabaseLibraryProvider implements LibraryProvider {
       }
 
       // תתי-קטגוריות (תיקייה לכל folder מותאם אישית).
-      final children = (categoriesByParent[personalRootInUserDb.id] ?? [])
-        ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      final children = [
+        ...?categoriesByParent[personalRootInUserDb.id],
+      ]..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
       for (final child in children) {
         final existing = personalCategoryInLibrary.subCategories
             .where((c) => c.title == child.title)
             .firstOrNull;
-        final builtSubCategory = _buildUserBooksCatalogCategoryRecursive(
-          child,
-          booksByCategory,
-          categoriesByParent,
-          userAuthors,
-          personalCategoryInLibrary,
-          metadata,
-        );
         if (existing == null) {
+          final builtSubCategory = _buildUserBooksCatalogCategoryRecursive(
+            child,
+            booksByCategory,
+            categoriesByParent,
+            userAuthors,
+            personalCategoryInLibrary,
+            metadata,
+          );
           personalCategoryInLibrary.subCategories.add(builtSubCategory);
         } else {
-          // מיזוג: מעבירים books ו-subCategories של ה-built לתוך הקיים.
-          existing.books.addAll(builtSubCategory.books);
-          existing.subCategories.addAll(builtSubCategory.subCategories);
+          existing.parent = personalCategoryInLibrary;
+          _appendUserBooksContentToCategoryRecursive(
+            existing,
+            child,
+            booksByCategory,
+            categoriesByParent,
+            userAuthors,
+            metadata,
+          );
         }
       }
     } catch (e) {
       debugPrint('⚠️ Error appending user books to library: $e');
     }
+  }
+
+  @visibleForTesting
+  void populateUserBooksCategoryForTesting({
+    required Category targetCategory,
+    required db_models.Category dbCategory,
+    required Map<int, List<Map<String, dynamic>>> booksByCategory,
+    required Map<int?, List<db_models.Category>> categoriesByParent,
+    required Map<int, String> authorsByBookId,
+    required Map<String, Map<String, dynamic>> metadata,
+  }) {
+    _appendUserBooksContentToCategoryRecursive(
+      targetCategory,
+      dbCategory,
+      booksByCategory,
+      categoriesByParent,
+      authorsByBookId,
+      metadata,
+    );
   }
 
   /// וריאנט של [_buildCatalogCategoryRecursiveOptimized] שכותב את ה-IDs
@@ -1808,9 +1834,6 @@ class DatabaseLibraryProvider implements LibraryProvider {
     Category parent,
     Map<String, Map<String, dynamic>> metadata,
   ) {
-    final appCategoryId = UserBooksDatabaseIds.toAppCategoryId(dbCategory.id);
-    _userBooksCategoryIds.add(appCategoryId);
-
     final category = Category(
       title: dbCategory.title,
       description: metadata[dbCategory.title]?['heDesc'] ?? '',
@@ -1821,8 +1844,32 @@ class DatabaseLibraryProvider implements LibraryProvider {
       parent: parent,
     );
 
-    final dbBooks = (booksByCategory[dbCategory.id] ?? [])
-      ..sort((a, b) {
+    _appendUserBooksContentToCategoryRecursive(
+      category,
+      dbCategory,
+      booksByCategory,
+      categoriesByParent,
+      authorsByBookId,
+      metadata,
+    );
+
+    return category;
+  }
+
+  void _appendUserBooksContentToCategoryRecursive(
+    Category category,
+    db_models.Category dbCategory,
+    Map<int, List<Map<String, dynamic>>> booksByCategory,
+    Map<int?, List<db_models.Category>> categoriesByParent,
+    Map<int, String> authorsByBookId,
+    Map<String, Map<String, dynamic>> metadata,
+  ) {
+    final appCategoryId = UserBooksDatabaseIds.toAppCategoryId(dbCategory.id);
+    _userBooksCategoryIds.add(appCategoryId);
+
+    final dbBooks = [
+      ...?booksByCategory[dbCategory.id],
+    ]..sort((a, b) {
         final orderA = (a['orderIndex'] as num?)?.toDouble() ?? 999.0;
         final orderB = (b['orderIndex'] as num?)?.toDouble() ?? 999.0;
         return orderA.compareTo(orderB);
@@ -1834,8 +1881,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         metadata,
         authorFromDatabase: authorsByBookId[dbBook['id'] as int? ?? 0],
         isUserBook: true,
-        idOverride:
-            UserBooksDatabaseIds.toAppBookId(dbBook['id'] as int? ?? 0),
+        idOverride: UserBooksDatabaseIds.toAppBookId(dbBook['id'] as int? ?? 0),
         categoryIdOverride: appCategoryId,
       );
       if (book == null) continue;
@@ -1847,21 +1893,35 @@ class DatabaseLibraryProvider implements LibraryProvider {
       ));
     }
 
-    final children = (categoriesByParent[dbCategory.id] ?? [])
-      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    final children = [
+      ...?categoriesByParent[dbCategory.id],
+    ]..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     for (final child in children) {
-      final subCategory = _buildUserBooksCatalogCategoryRecursive(
-        child,
-        booksByCategory,
-        categoriesByParent,
-        authorsByBookId,
-        category,
-        metadata,
-      );
-      category.subCategories.add(subCategory);
+      final existingSubCategory = category.subCategories
+          .where((subCategory) => subCategory.title == child.title)
+          .firstOrNull;
+      if (existingSubCategory == null) {
+        final subCategory = _buildUserBooksCatalogCategoryRecursive(
+          child,
+          booksByCategory,
+          categoriesByParent,
+          authorsByBookId,
+          category,
+          metadata,
+        );
+        category.subCategories.add(subCategory);
+      } else {
+        existingSubCategory.parent = category;
+        _appendUserBooksContentToCategoryRecursive(
+          existingSubCategory,
+          child,
+          booksByCategory,
+          categoriesByParent,
+          authorsByBookId,
+          metadata,
+        );
+      }
     }
-
-    return category;
   }
 
   /// Converts a minimal book map (from getAllBooksMinimal) to the app's Book model.
