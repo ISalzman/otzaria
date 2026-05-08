@@ -265,14 +265,26 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         widget.isResizable &&
         widget.onPaneWidthChanged != null;
 
+    final overhang = showHandle ? handleHitOverhang(context) : 0.0;
+
+    // ה-handle לא תלוי ברוחב — מוגדר מחוץ ל-ValueListenableBuilder
+    final handleWidget = showHandle
+        ? Positioned(
+            top: _kWideTopGap,
+            bottom: _kWideBottomGap,
+            left: paneOnRight ? _kWideOuterSideGap - overhang : null,
+            right: paneOnRight ? null : _kWideOuterSideGap - overhang,
+            child: _buildResizeHandle(paneOnRight, true),
+          )
+        : null;
+
     // ה-slot של הפאנל עוטף ב-ValueListenableBuilder כדי לעדכן רק אותו בזמן גרירה
     final paneSlot = ValueListenableBuilder<double>(
       valueListenable: _livePaneWidth,
-      builder: (context, liveWidth, _) {
+      builder: (context, liveWidth, child) {
         final currentWidth = liveWidth;
         final currentOccupied =
             currentWidth + _kWideOuterSideGap + _kWideInnerSideGap;
-        final overhang = showHandle ? handleHitOverhang(context) : 0.0;
         final widePaneContent = widget.widePaneBuilder != null
             ? widget.widePaneBuilder!(context, widget.paneContent, currentWidth)
             : widget.paneContent;
@@ -323,14 +335,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                 ),
               ),
             ),
-            if (showHandle)
-              Positioned(
-                top: _kWideTopGap,
-                bottom: _kWideBottomGap,
-                left: paneOnRight ? _kWideOuterSideGap - overhang : null,
-                right: paneOnRight ? null : _kWideOuterSideGap - overhang,
-                child: _buildResizeHandle(paneOnRight, true),
-              ),
+            if (handleWidget != null) handleWidget,
           ],
         );
       },

@@ -120,7 +120,7 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
               },
         child: TweenAnimationBuilder<double>(
           tween: Tween<double>(begin: 0.0, end: targetBlend),
-          duration: AppTokens.animFast,
+          duration: _isDragging ? Duration.zero : AppTokens.animFast,
           curve: Curves.easeOut,
           builder: (context, blend, _) {
             final highlightColor =
