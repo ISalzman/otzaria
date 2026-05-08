@@ -15,6 +15,8 @@ import 'package:otzaria/tools/aramaic_dictionary/aramaic_dictionary_screen.dart'
 import 'package:otzaria/tools/shamor_zachor/shamor_zachor.dart';
 import 'package:otzaria/tools/calendar/calendar_screen.dart';
 import 'package:otzaria/widgets/navigation/keyboard_navigator.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
+import 'package:otzaria/widgets/navigation/sidebar_nav_item.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
@@ -553,6 +555,25 @@ class ToolsScreenState extends State<ToolsScreen>
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         title: const Text('כלים', textDirection: TextDirection.rtl),
+        actions: [
+          IconButton(
+            icon: const Icon(FluentIcons.puzzle_piece_24_regular),
+            tooltip: 'תוספים',
+            onPressed: () => showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              builder: (_) => SizedBox(
+                height: MediaQuery.of(context).size.height * 0.6,
+                child: PluginSidePanel(
+                  onPluginSelected: (plugin) {
+                    Navigator.of(context).pop();
+                    _openPluginTransiently(plugin);
+                  },
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppTokens.spaceMD),
@@ -578,7 +599,8 @@ class ToolsScreenState extends State<ToolsScreen>
                       descriptor.label,
                       textDirection: TextDirection.rtl,
                     ),
-                    trailing: const Icon(FluentIcons.chevron_left_24_regular),
+                    trailing:
+                        const RtlIcon(FluentIcons.chevron_left_24_regular),
                     onTap: () {
                       final index = _descriptors.indexOf(descriptor);
                       if (index != -1) _changeTab(index);
@@ -615,9 +637,9 @@ class ToolsScreenState extends State<ToolsScreen>
             textDirection: TextDirection.rtl,
           ),
           leading: Tooltip(
-            message: 'חזור (Backspace)',
+            message: 'חזור (Esc)',
             child: IconButton(
-              icon: const Icon(FluentIcons.arrow_right_24_regular),
+              icon: const RtlIcon(FluentIcons.arrow_right_24_regular),
               onPressed: () => setState(() => _showMobileMenu = true),
             ),
           ),
@@ -682,7 +704,7 @@ class ToolsScreenState extends State<ToolsScreen>
                                 child: IgnorePointer(
                                   ignoring: !_canTabScrollLeft,
                                   child: IconButton(
-                                    icon: const Icon(
+                                    icon: const RtlIcon(
                                         FluentIcons.chevron_right_24_regular),
                                     iconSize: 18,
                                     onPressed: () => _tabScrollBy(-150),
@@ -720,7 +742,7 @@ class ToolsScreenState extends State<ToolsScreen>
                                           for (int index = 0;
                                               index < _descriptors.length;
                                               index++) ...[
-                                            _DesktopTopNavItem(
+                                            TopNavItem(
                                               key: tourToolTabTargetKeys[
                                                   _descriptors[index].toolId],
                                               icon: _descriptors[index]
@@ -769,7 +791,7 @@ class ToolsScreenState extends State<ToolsScreen>
                                 child: IgnorePointer(
                                   ignoring: !_canTabScrollRight,
                                   child: IconButton(
-                                    icon: const Icon(
+                                    icon: const RtlIcon(
                                         FluentIcons.chevron_left_24_regular),
                                     iconSize: 18,
                                     onPressed: () => _tabScrollBy(150),
@@ -907,79 +929,6 @@ class ToolsScreenState extends State<ToolsScreen>
             // וזו שורש הקריסות ואיבודי הפוקוס ב-Windows בזמן resize.
             return content;
           },
-        ),
-      ),
-    );
-  }
-}
-
-class _DesktopTopNavItem extends StatelessWidget {
-  final IconData? icon;
-  final IconData? iconFilled;
-  final String? imageAsset;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _DesktopTopNavItem({
-    super.key,
-    required this.icon,
-    required this.iconFilled,
-    required this.imageAsset,
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final fg = isSelected ? cs.onSecondaryContainer : cs.onSurfaceVariant;
-
-    final iconWidget = imageAsset != null
-        ? ImageIcon(AssetImage(imageAsset!), size: 20, color: fg)
-        : Icon(
-            isSelected && iconFilled != null ? iconFilled : icon,
-            size: 20,
-            color: fg,
-          );
-
-    return Material(
-      color: isSelected ? cs.secondaryContainer : Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        overlayColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.hovered)) {
-            return cs.primary.withValues(alpha: 0.08);
-          }
-          if (states.contains(WidgetState.pressed)) {
-            return cs.primary.withValues(alpha: 0.12);
-          }
-          return null;
-        }),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.spaceMD,
-            vertical: AppTokens.spaceSM,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              iconWidget,
-              const SizedBox(width: AppTokens.spaceXS),
-              Text(
-                label,
-                textDirection: TextDirection.rtl,
-                style: TextStyle(
-                  fontSize: AppTokens.fontSM,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: fg,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

@@ -16,6 +16,7 @@ import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
+import 'package:otzaria/widgets/navigation/sidebar_nav_item.dart';
 
 /// רוחב מקסימלי לתוכן ההגדרות — מרכוז על מסכים רחבים
 // kSettingsContentMaxWidth הוסר — משתמשים ב-LayoutConstraints.panelContentMaxWidth מ-layout_tokens.dart
@@ -363,7 +364,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                       elevation: 0,
                       title: Text(_tabsData[_selectedIndex].label),
                       leading: Tooltip(
-                        message: 'חזור (Backspace)',
+                        message: 'חזור (Esc)',
                         child: IconButton(
                           icon:
                               const RtlIcon(FluentIcons.arrow_right_24_regular),
@@ -447,61 +448,15 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                               Expanded(
                                 child: ListView.builder(
                                   itemCount: _tabsData.length,
-                                  itemBuilder: (context, index) {
-                                    final isSelected = _selectedIndex == index;
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 2),
-                                      child: Material(
-                                        key: tourSettingsTabTargetKeys[index],
-                                        color: isSelected
-                                            ? colorScheme.secondaryContainer
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(28),
-                                        child: InkWell(
-                                          onTap: () => _changeTab(index),
-                                          borderRadius:
-                                              BorderRadius.circular(28),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 14, vertical: 10),
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  isSelected
-                                                      ? _tabsData[index]
-                                                          .iconFilled
-                                                      : _tabsData[index].icon,
-                                                  size: 20,
-                                                  color: isSelected
-                                                      ? colorScheme.primary
-                                                      : colorScheme
-                                                          .onSurfaceVariant,
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: Text(
-                                                    _tabsData[index].label,
-                                                    style: TextStyle(
-                                                      fontSize: 14,
-                                                      fontWeight: isSelected
-                                                          ? FontWeight.bold
-                                                          : FontWeight.normal,
-                                                      color: isSelected
-                                                          ? colorScheme
-                                                              .onSecondaryContainer
-                                                          : colorScheme
-                                                              .onSurfaceVariant,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
+                                  itemBuilder: (context, index) =>
+                                      SidebarNavItem(
+                                    key: tourSettingsTabTargetKeys[index],
+                                    icon: _tabsData[index].icon,
+                                    iconFilled: _tabsData[index].iconFilled,
+                                    label: _tabsData[index].label,
+                                    isSelected: _selectedIndex == index,
+                                    onTap: () => _changeTab(index),
+                                  ),
                                 ),
                               ),
                             ],
