@@ -1450,7 +1450,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
   /// user_books או seforim, תלוי בזרימה הקוראת).
   Future<int> _getOrCreateCategoryInDb(
     List<String> categoryPath,
-    dynamic repository,
+    SeforimRepository repository,
   ) async {
     if (categoryPath.isEmpty) {
       // Return default category
