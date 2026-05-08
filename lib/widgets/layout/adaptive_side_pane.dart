@@ -38,6 +38,10 @@ class AdaptiveSidePane extends StatefulWidget {
       narrowPaneBuilder;
   final bool autoHandleResponsiveVisibility;
 
+  /// רווח עליון ל-scrollbar thumb — null = ברירת מחדל (_kWideTopGap).
+  /// העבר 0 כשיש כותרת קבועה בראש הפאנל שכבר יוצרת הפרדה ויזואלית.
+  final double? scrollbarTopMargin;
+
   const AdaptiveSidePane({
     super.key,
     required this.isOpen,
@@ -58,6 +62,7 @@ class AdaptiveSidePane extends StatefulWidget {
     this.widePaneBuilder,
     this.narrowPaneBuilder,
     this.autoHandleResponsiveVisibility = true,
+    this.scrollbarTopMargin,
   });
 
   @override
@@ -152,13 +157,21 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     final shadowColor =
         Theme.of(context).colorScheme.shadow.withValues(alpha: 0.22);
 
+    final scrollbarWrapped = ScrollbarTheme(
+      data: ScrollbarThemeData(
+        crossAxisMargin: 2,
+        mainAxisMargin: widget.scrollbarTopMargin ?? _kWideTopGap,
+      ),
+      child: child,
+    );
+
     if (widget.wrapPaneInFloatingPanel) {
       return FloatingPanel(
         color: paneColor,
         elevation: 8,
         shadowColor: shadowColor,
         borderRadius: _kPanelRadius,
-        child: child,
+        child: scrollbarWrapped,
       );
     }
 
@@ -168,8 +181,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
       shadowColor: shadowColor,
       surfaceTintColor: Colors.transparent,
       borderRadius: _kPanelRadius,
-      clipBehavior: Clip.antiAlias,
-      child: child,
+      clipBehavior: Clip.hardEdge,
+      child: scrollbarWrapped,
     );
   }
 
