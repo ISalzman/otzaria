@@ -2284,6 +2284,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         bookTitle,
         categoryId: categoryId,
         filePath: filePath,
+        preferUserBooks: widget.tab.book.isUserBook,
       );
       if (headings != null) {
         widget.tab.pdfHeadings = headings;

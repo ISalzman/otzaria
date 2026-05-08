@@ -157,6 +157,7 @@ class TextBook extends Book {
       title,
       categoryId: categoryId,
       fileType: fileType ?? 'txt',
+      preferUserBooks: isUserBook,
     );
     return toc ?? [];
   }
@@ -183,6 +184,7 @@ class TextBook extends Book {
       title,
       categoryId: categoryId,
       fileType: fileType ?? 'txt',
+      preferUserBooks: isUserBook,
     );
     return bookText ?? '';
   }

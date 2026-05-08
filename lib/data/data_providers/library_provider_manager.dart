@@ -3,6 +3,7 @@ import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
+import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -145,6 +146,7 @@ class LibraryProviderManager {
     String title, {
     int? categoryId,
     String? fileType,
+    bool preferUserBooks = false,
   }) {
     final normalizedFileType = BookCompositeKey.normalizeFileType(fileType);
 
@@ -156,6 +158,22 @@ class LibraryProviderManager {
       );
       if (_bookToProvider.containsKey(exactKey)) {
         return exactKey;
+      }
+    }
+
+    if (preferUserBooks) {
+      for (final key in _bookToProvider.keys) {
+        if (!UserBooksDatabaseIds.isAppCategoryId(key.categoryId)) continue;
+        if (key.matches(title, otherFileType: normalizedFileType)) {
+          return key;
+        }
+      }
+
+      for (final key in _bookToProvider.keys) {
+        if (!UserBooksDatabaseIds.isAppCategoryId(key.categoryId)) continue;
+        if (key.matchesTitle(title)) {
+          return key;
+        }
       }
     }
 
@@ -178,9 +196,23 @@ class LibraryProviderManager {
     LibraryProvider provider,
     String title, {
     String? fileType,
+    bool preferUserBooks = false,
   }) async {
     final normalizedFileType = BookCompositeKey.normalizeFileType(fileType);
     final rawKeys = await provider.getAvailableBookTitles();
+
+    if (preferUserBooks) {
+      for (final rawKey in rawKeys) {
+        final parsed = BookCompositeKey.tryParse(rawKey);
+        if (parsed == null ||
+            !UserBooksDatabaseIds.isAppCategoryId(parsed.categoryId)) {
+          continue;
+        }
+        if (parsed.matches(title, otherFileType: normalizedFileType)) {
+          return parsed;
+        }
+      }
+    }
 
     for (final rawKey in rawKeys) {
       final parsed = BookCompositeKey.tryParse(rawKey);
@@ -203,9 +235,10 @@ class LibraryProviderManager {
 
   Future<({BookCompositeKey key, LibraryProvider provider})?>
       _locateBookInProviders(
-    String title, {
+      String title, {
     int? categoryId,
     String? fileType,
+    bool preferUserBooks = false,
   }) async {
     final normalizedFileType = BookCompositeKey.normalizeFileType(fileType);
 
@@ -232,6 +265,7 @@ class LibraryProviderManager {
         provider,
         title,
         fileType: normalizedFileType,
+        preferUserBooks: preferUserBooks,
       );
       if (providerKey != null) {
         return (key: providerKey, provider: provider);
@@ -289,6 +323,7 @@ class LibraryProviderManager {
     String title, {
     int? categoryId,
     String? fileType,
+    bool preferUserBooks = false,
   }) async {
     if (!_isInitialized) await initialize();
 
@@ -296,6 +331,7 @@ class LibraryProviderManager {
       title,
       categoryId: categoryId,
       fileType: fileType,
+      preferUserBooks: preferUserBooks,
     );
     if (mappedKey != null) {
       final provider = _bookToProvider[mappedKey];
@@ -304,6 +340,7 @@ class LibraryProviderManager {
           title,
           mappedKey.categoryId,
           mappedKey.fileType,
+          preferUserBooks: preferUserBooks,
         );
       }
     }
@@ -313,6 +350,7 @@ class LibraryProviderManager {
       title,
       categoryId: categoryId,
       fileType: fileType,
+      preferUserBooks: preferUserBooks,
     );
     if (located == null) {
       debugPrint('❌ Book "$title" not found in any provider');
@@ -323,6 +361,7 @@ class LibraryProviderManager {
       title,
       located.key.categoryId,
       located.key.fileType,
+      preferUserBooks: preferUserBooks,
     );
     if (text != null) {
       _bookToProvider[located.key] = located.provider;
@@ -335,12 +374,14 @@ class LibraryProviderManager {
     String title, {
     int? categoryId,
     String? fileType,
+    bool preferUserBooks = false,
   }) async {
     if (!_isInitialized) await initialize();
     final mappedKey = _resolveBookKey(
       title,
       categoryId: categoryId,
       fileType: fileType,
+      preferUserBooks: preferUserBooks,
     );
     if (mappedKey != null) {
       final provider = _bookToProvider[mappedKey];
@@ -349,6 +390,7 @@ class LibraryProviderManager {
           title,
           mappedKey.categoryId,
           mappedKey.fileType,
+          preferUserBooks: preferUserBooks,
         );
       }
     }
@@ -357,6 +399,7 @@ class LibraryProviderManager {
       title,
       categoryId: categoryId,
       fileType: fileType,
+      preferUserBooks: preferUserBooks,
     );
     if (located == null) return null;
 
@@ -364,6 +407,7 @@ class LibraryProviderManager {
       title,
       located.key.categoryId,
       located.key.fileType,
+      preferUserBooks: preferUserBooks,
     );
     if (toc != null) {
       _bookToProvider[located.key] = located.provider;

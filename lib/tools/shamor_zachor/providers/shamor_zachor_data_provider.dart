@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'dart:convert';
+import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/models/category.dart' as db_models;
@@ -534,17 +535,19 @@ class ShamorZachorDataProvider with ChangeNotifier {
     required String bookName,
     int? categoryId,
   }) async {
-    final repository = _sqliteDataProvider?.repository;
-    if (repository == null) {
+    if (_sqliteDataProvider?.repository == null) {
       _logger.warning("Repository not initialized");
       throw Exception('מסד הנתונים לא מאותחל');
     }
 
     try {
       // 1. Check if book exists in DB
-      final existing = categoryId != null
-          ? await repository.getBookByTitleAndCategory(bookName, categoryId)
-          : await repository.getBookByTitle(bookName);
+      final existing = (await BookDatabaseResolver.resolveBook(
+        title: bookName,
+        categoryId: categoryId,
+        preferUserBooks: true,
+      ))
+          ?.book;
       if (existing == null) {
         _logger.warning("Book '$bookName' not found in database");
         throw Exception(
@@ -573,18 +576,24 @@ class ShamorZachorDataProvider with ChangeNotifier {
     int? bookId,
     int? categoryId,
   }) async {
-    final repository = _sqliteDataProvider?.repository;
-    if (repository == null) {
+    if (_sqliteDataProvider?.repository == null) {
       _logger.warning("Repository not initialized");
       return;
     }
 
     try {
       final existing = bookId != null
-          ? await repository.getBook(bookId)
-          : categoryId != null
-              ? await repository.getBookByTitleAndCategory(bookName, categoryId)
-              : await repository.getBookByTitle(bookName);
+          ? (await BookDatabaseResolver.resolveBookById(
+              bookId,
+              preferUserBooks: true,
+            ))
+              ?.book
+          : (await BookDatabaseResolver.resolveBook(
+              title: bookName,
+              categoryId: categoryId,
+              preferUserBooks: true,
+            ))
+              ?.book;
       if (existing == null) {
         _logger.warning(
             "Book '$bookName'${bookId != null ? ' (ID: $bookId)' : ''} not found in database");
