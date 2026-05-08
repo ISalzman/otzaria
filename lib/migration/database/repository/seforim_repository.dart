@@ -37,9 +37,6 @@ class SeforimRepository {
   /// Returns the next available negative book ID.
   Future<int> getNextNegativeBookId() => getNextNegativeId('book');
 
-  /// Returns the next available negative line ID.
-  Future<int> getNextNegativeLineId() => getNextNegativeId('line');
-
   /// Returns the next available negative link ID.
   Future<int> getNextNegativeLinkId() => getNextNegativeId('link');
 
@@ -55,6 +52,15 @@ class SeforimRepository {
   MyDatabase get database => _database;
 
   bool _initialized = false;
+
+  /// כשנכון, הכנסת ספרים/קטגוריות חדשים תשתמש ב-AUTOINCREMENT חיובי של
+  /// SQLite במקום בהקצאת ID שלילי ידנית. רלוונטי ל-`user_books.db`
+  /// שאין בו תוכן רשמי עם IDs קבועים מראש שעלולים להתנגש.
+  ///
+  /// ברירת מחדל: false — שומר על ההתנהגות הקיימת של `seforim.db` שבה
+  /// תוכן רשמי מקבל IDs חיוביים מתוך הנתונים, ותוכן שמוסף בריצה מקבל
+  /// IDs שליליים כדי לא להתנגש.
+  bool useAutoIncrementIds = false;
 
   SeforimRepository(this._database);
 
@@ -318,25 +324,25 @@ class SeforimRepository {
         return existingCategory.id;
       }
 
-      // אם לא קיימת, צור מזהה שלילי חדש
-      final newNegativeId = await getNextNegativeCategoryId();
-      final categoryToInsert = Category(
-        id: newNegativeId,
-        title: category.title,
-        parentId: category.parentId,
-        level: category.level,
-      );
-
-      // הכנס את הקטגוריה עם מזהה שלילי
-      final insertedId = await _database.categoryDao.insertCategoryWithId(
-          categoryToInsert.id,
-          categoryToInsert.parentId,
-          categoryToInsert.title,
-          categoryToInsert.level);
-
-      // עדכון אינקרמנטלי של category_closure — מונע rebuild גלובלי בעלייה.
-      await _insertClosureForCategory(
-          categoryToInsert.id, categoryToInsert.parentId);
+      // אם לא קיימת — מקצים מזהה. ב-user_books.db (כש-useAutoIncrementIds
+      // מופעל) משתמשים ב-AUTOINCREMENT חיובי של SQLite; ב-seforim.db
+      // משתמשים ב-ID שלילי כדי לא להתנגש עם תוכן רשמי שיש לו IDs קבועים.
+      final int insertedId;
+      if (useAutoIncrementIds) {
+        insertedId = await _database.categoryDao.insertCategory(
+          category.parentId,
+          category.title,
+          category.level,
+        );
+      } else {
+        final newNegativeId = await getNextNegativeCategoryId();
+        insertedId = await _database.categoryDao.insertCategoryWithId(
+          newNegativeId,
+          category.parentId,
+          category.title,
+          category.level,
+        );
+      }
 
       // ודא שההכנסה הצליחה
       if (insertedId == 0) {
@@ -348,12 +354,17 @@ class SeforimRepository {
           orElse: () => Category(id: 0, title: '', parentId: null, level: 0),
         );
         if (newCategory.id != 0) {
+          // עדכון אינקרמנטלי של category_closure — מונע rebuild גלובלי בעלייה.
+          await _insertClosureForCategory(
+              newCategory.id, category.parentId);
           return newCategory.id;
         }
         throw Exception(
             'Failed to insert category \'${category.title}\' with parent ${category.parentId}');
       }
-      return categoryToInsert.id;
+      // עדכון אינקרמנטלי של category_closure — מונע rebuild גלובלי בעלייה.
+      await _insertClosureForCategory(insertedId, category.parentId);
+      return insertedId;
     } catch (e) {
       _logger.warning(
           'Repository: Error inserting category \'${category.title}\': ${e.toString()}');
@@ -704,6 +715,55 @@ class SeforimRepository {
   /// @param book The book to insert
   /// @return The ID of the inserted book
   Future<int> insertBook(Book book) async {
+    // ב-user_books.db (useAutoIncrementIds) — נותנים ל-AUTOINCREMENT של
+    // SQLite להחזיר ID חיובי, ומשתמשים בו לקישורי authors/topics/וכו'.
+    // ב-seforim.db — משתמשים ב-ID השלילי שכבר הוקצה ב-book.id.
+    final int finalBookId;
+    if (useAutoIncrementIds) {
+      finalBookId = await _database.bookDao.insertBook(
+        book.categoryId,
+        book.sourceId,
+        book.title,
+        book.heShortDesc,
+        book.order,
+        book.totalLines,
+        book.isBaseBook,
+        hasTargumConnection: book.hasTargumConnection,
+        hasReferenceConnection: book.hasReferenceConnection,
+        hasSourceConnection: book.hasSourceConnection,
+        hasCommentaryConnection: book.hasCommentaryConnection,
+        hasOtherConnection: book.hasOtherConnection,
+        hasAltStructures: book.hasAltStructures,
+        hasTeamim: book.hasTeamim,
+        hasNekudot: book.hasNekudot,
+        isPersonal: book.isPersonal,
+        filePath: book.filePath,
+        fileType: book.fileType,
+        fileSize: book.fileSize,
+        lastModified: book.lastModified,
+        pages: book.pages,
+        volume: book.volume,
+      );
+
+      for (final author in book.authors) {
+        final authorId = await insertAuthor(author.name);
+        await linkAuthorToBook(authorId, finalBookId);
+      }
+      for (final topic in book.topics) {
+        final topicId = await insertTopic(topic.name);
+        await linkTopicToBook(topicId, finalBookId);
+      }
+      for (final pubPlace in book.pubPlaces) {
+        final pubPlaceId = await insertPubPlace(pubPlace.name);
+        await linkPubPlaceToBook(pubPlaceId, finalBookId);
+      }
+      for (final pubDate in book.pubDates) {
+        final pubDateId = await insertPubDate(pubDate.date);
+        await linkPubDateToBook(pubDateId, finalBookId);
+      }
+      return finalBookId;
+    }
+
     // Use the ID from the book object if it's greater than 0
     if (book.id != 0) {
       await _database.bookDao.insertBookWithId(
@@ -907,23 +967,44 @@ class SeforimRepository {
   }) async {
     // Get or create a source for external content books
     final sourceId = await insertSource('external', -1);
-    final bookId = await getNextNegativeBookId();
 
-    await _database.bookDao.insertBookWithId(
-      bookId,
-      categoryId,
-      sourceId,
-      title,
-      heShortDesc,
-      orderIndex,
-      0,
-      false,
-      isPersonal: isPersonal,
-      filePath: filePath,
-      fileType: fileType,
-      fileSize: fileSize,
-      lastModified: lastModified,
-    );
+    // הקצאת ID: ב-user_books.db (useAutoIncrementIds) משאירים ל-SQLite להקצות
+    // ID חיובי דרך AUTOINCREMENT; ב-seforim.db מקצים ID שלילי כדי לא להתנגש
+    // עם תוכן רשמי שיש לו IDs קבועים.
+    final int bookId;
+    if (useAutoIncrementIds) {
+      bookId = await _database.bookDao.insertBook(
+        categoryId,
+        sourceId,
+        title,
+        heShortDesc,
+        orderIndex,
+        0,
+        false,
+        isPersonal: isPersonal,
+        filePath: filePath,
+        fileType: fileType,
+        fileSize: fileSize,
+        lastModified: lastModified,
+      );
+    } else {
+      bookId = await getNextNegativeBookId();
+      await _database.bookDao.insertBookWithId(
+        bookId,
+        categoryId,
+        sourceId,
+        title,
+        heShortDesc,
+        orderIndex,
+        0,
+        false,
+        isPersonal: isPersonal,
+        filePath: filePath,
+        fileType: fileType,
+        fileSize: fileSize,
+        lastModified: lastModified,
+      );
+    }
 
     // Insert TOC entries if provided
     if (tocEntries != null && tocEntries.isNotEmpty) {
@@ -961,15 +1042,6 @@ class SeforimRepository {
     );
   }
 
-  Future<bool> hasPersonalBooksWithSourceId(int sourceId) async {
-    final db = await _database.database;
-    final result = db.select(
-      'SELECT 1 FROM book WHERE isPersonal = 1 AND sourceId = ? LIMIT 1',
-      [sourceId],
-    );
-    return result.isNotEmpty;
-  }
-
   /// Gets an external book by its file path.
   Future<Book?> getExternalBookByFilePath(String filePath) async {
     return await _database.bookDao.getBookByFilePath(filePath);
@@ -988,7 +1060,10 @@ class SeforimRepository {
     _logger.fine(
         'Inserting ${entries.length} TOC entries for external book $bookId');
     final localToActualIds = <int, int>{};
-    var nextNegativeTocId = await getNextNegativeTocEntryId();
+    // ב-seforim.db מקצים IDs שליליים יורדים; ב-user_books.db נותנים
+    // ל-AUTOINCREMENT של SQLite להחזיר ID חיובי לכל insert.
+    var nextNegativeTocId =
+        useAutoIncrementIds ? 0 : await getNextNegativeTocEntryId();
 
     for (final entry in entries) {
       // Create toc_text entry
@@ -1002,13 +1077,10 @@ class SeforimRepository {
         );
       }
 
-      final actualTocId = nextNegativeTocId;
-      nextNegativeTocId--;
-
       // Create toc_entry with the book ID
       // For external books, use lineIndex (not lineId) to store the line number
       final tocEntry = TocEntry(
-        id: actualTocId,
+        id: useAutoIncrementIds ? 0 : nextNegativeTocId,
         bookId: bookId,
         parentId: actualParentId,
         textId: textId,
@@ -1019,7 +1091,14 @@ class SeforimRepository {
         hasChildren: entry.hasChildren,
       );
 
-      await _database.tocDao.insertWithId(tocEntry);
+      final int actualTocId;
+      if (useAutoIncrementIds) {
+        actualTocId = await _database.tocDao.insertTocEntry(tocEntry);
+      } else {
+        actualTocId = nextNegativeTocId;
+        nextNegativeTocId--;
+        await _database.tocDao.insertWithId(tocEntry);
+      }
 
       if (entry.id != 0) {
         localToActualIds[entry.id] = actualTocId;
@@ -1207,13 +1286,10 @@ class SeforimRepository {
   }
 
   Future<int> insertTocEntry(TocEntry entry) async {
-    // Get or create the tocText entry
     final textId = entry.textId ?? await _getOrCreateTocText(entry.text);
-    final tocEntryId =
-        entry.id > 0 ? entry.id : await getNextNegativeTocEntryId();
 
     final entryWithTextId = TocEntry(
-      id: tocEntryId,
+      id: useAutoIncrementIds ? 0 : (entry.id > 0 ? entry.id : await getNextNegativeTocEntryId()),
       bookId: entry.bookId,
       parentId: entry.parentId,
       textId: textId,
@@ -1225,8 +1301,11 @@ class SeforimRepository {
       hasChildren: entry.hasChildren,
     );
 
+    if (useAutoIncrementIds) {
+      return await _database.tocDao.insertTocEntry(entryWithTextId);
+    }
     await _database.tocDao.insertWithId(entryWithTextId);
-    return tocEntryId;
+    return entryWithTextId.id;
   }
 
   // Nouvelle méthode pour mettre à jour hasChildren
@@ -2079,13 +2158,6 @@ class SeforimRepository {
   Future<Book?> checkBookExists(String title) async {
     _logger.fine('Checking if book exists: $title');
     return await _database.bookDao.getBookByTitle(title);
-  }
-
-  /// Checks if a book with the given title and category already exists in the database.
-  /// Returns the book if found, null otherwise.
-  Future<Book?> checkBookExistsInCategory(String title, int categoryId) async {
-    //_logger.fine('Checking if book exists in category: $title (categoryId: $categoryId)');
-    return await _database.bookDao.getBookByTitleAndCategory(title, categoryId);
   }
 
   /// Checks if a book with the given title, category and file type already exists in the database.

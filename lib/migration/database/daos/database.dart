@@ -19,8 +19,10 @@ import 'topic_dao.dart';
 import '../sql/query_loader.dart';
 
 class MyDatabase {
-  static sqlite3.Database? _database;
-  static String? _customPath;
+  // הקובץ מוחזק ברמת המופע, לא static. זה מאפשר ליצור כמה מופעים
+  // (למשל seforim.db לצד user_books.db) שלא יתנגשו זה בזה.
+  sqlite3.Database? _database;
+  String? _customPath;
 
   // (no platform initialization required – sqlite3 handles all platforms natively)
 
@@ -130,13 +132,13 @@ class MyDatabase {
     return _instance;
   }
 
-  /// Creates a new MyDatabase instance with a custom database path.
-  /// This is useful when you need to specify the exact database file.
+  /// יוצרת מופע MyDatabase חדש שמצביע על נתיב DB ספציפי.
+  ///
+  /// כל מופע מחזיק את ה-connection וה-DAOs שלו, כך שניתן להריץ
+  /// בו-זמנית את seforim.db ואת user_books.db ללא התנגשויות.
   factory MyDatabase.withPath(String path) {
-    _customPath = path;
-    // Create a new instance to avoid conflicts with the singleton
     final instance = MyDatabase._privateConstructor();
-    // DAOs will be initialized in _onCreate when the database is first opened
+    instance._customPath = path;
     return instance;
   }
 

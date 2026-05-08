@@ -170,6 +170,15 @@ class AppPaths {
     return p.join(dbDir.path, fileName);
   }
 
+  /// מחזיר את הנתיב של ה-DB של ספרי המשתמש (תיקיות מותאמות אישית).
+  ///
+  /// מאוחסן באותה תיקייה כמו DBs אחרים של נתוני משתמש, נפרד מ-`seforim.db`
+  /// של הספרייה הרשמית. כך שינויים ב-DB הרשמי לא משפיעים על ספרי המשתמש,
+  /// ולהפך.
+  static Future<String> resolveUserBooksDbPath() async {
+    return resolveNotesDbPath('user_books.db');
+  }
+
   /// Creates startup directories when eagerly required.
   static Future<void> createNecessaryDirectories() async {
     // Directories are created lazily by the services that actually use them.

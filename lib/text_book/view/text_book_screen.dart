@@ -23,6 +23,7 @@ import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 // [EDITING DISABLED] import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
@@ -197,14 +198,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // בדיקה אם יש ID לספר - אם לא, נחפש לפי כותרת
       int? bookId = state.book.id;
       if (bookId == null) {
-        final dbProvider = SqliteDataProvider.instance;
-        if (dbProvider.isInitialized && dbProvider.repository != null) {
-          final dbBook = state.book.categoryId != null
-              ? await dbProvider.repository!
-                  .getBookByTitleAndCategory(bookTitle, state.book.categoryId!)
-              : await dbProvider.repository!.getBookByTitle(bookTitle);
-          bookId = dbBook?.id;
-        }
+        final resolvedBook = await BookDatabaseResolver.resolveBook(
+          title: bookTitle,
+          categoryId: state.book.categoryId,
+          fileType: state.book.fileType,
+          filePath: state.book.filePath,
+          preferUserBooks: BookDatabaseResolver.isLikelyUserBook(
+            isUserBook: state.book.isUserBook,
+            categoryPath: state.book.categoryPath,
+          ),
+        );
+        bookId = resolvedBook?.book.id;
       }
 
       if (bookId == null) {
@@ -2110,30 +2114,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           final dbProvider = SqliteDataProvider.instance;
           if (await dbProvider.databaseExists() && dbProvider.isInitialized) {
             try {
-              final repository = dbProvider.repository;
-              if (repository != null) {
-                final dbBook = book.categoryId != null
-                    ? await repository.getBookByTitleAndCategory(
-                        bookTitle, book.categoryId!)
-                    : await repository.getBookByTitle(bookTitle);
-                if (dbBook != null) {
-                  final category =
-                      await repository.getCategory(dbBook.categoryId);
-                  if (category != null) {
-                    final categoryParts = <String>[];
-                    dynamic currentCategory = category;
-                    while (currentCategory != null) {
-                      categoryParts.insert(0, currentCategory.title);
-                      if (currentCategory.parentId != null) {
-                        currentCategory = await repository
-                            .getCategory(currentCategory.parentId!);
-                      } else {
-                        break;
-                      }
-                    }
-                    categoryPath = categoryParts.join('/');
-                  }
-                }
+              final resolvedBook = await BookDatabaseResolver.resolveBook(
+                title: bookTitle,
+                categoryId: book.categoryId,
+                fileType: book.fileType,
+                filePath: book.filePath,
+                preferUserBooks: BookDatabaseResolver.isLikelyUserBook(
+                  isUserBook: book.isUserBook,
+                  categoryPath: book.categoryPath,
+                ),
+              );
+              if (resolvedBook != null) {
+                categoryPath = await BookDatabaseResolver.buildCategoryPath(
+                  resolvedBook.repository,
+                  resolvedBook.book.categoryId,
+                );
+                categoryPath = categoryPath.replaceAll(', ', '/');
               }
             } catch (e) {
               debugPrint('Error getting category from DB: $e');

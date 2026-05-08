@@ -11,6 +11,7 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:otzaria/utils/file/zip_extractor_service.dart';
@@ -142,7 +143,14 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         Settings.getValue<String>(SettingsRepository.keyCustomFolders);
     final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
 
-    final syncService = await FileSyncService.getInstance(repository);
+    // התיקיות המותאמות אישית חיות ב-user_books.db. ה-FileSyncService
+    // צריך גישה לשני ה-DBs (seforim ל-links, user_books ל-prune).
+    final userBooksRepository =
+        await UserBooksDatabaseHolder.instance.repository;
+    final syncService = await FileSyncService.getInstance(
+      repository,
+      userBooksRepository: userBooksRepository,
+    );
     if (syncService == null) {
       return;
     }

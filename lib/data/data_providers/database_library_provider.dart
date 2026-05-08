@@ -3,9 +3,12 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart'
     show ValueNotifier, debugPrint, visibleForTesting;
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
+import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/database/sql/sqlite3_utils.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
@@ -484,6 +487,39 @@ class DatabaseLibraryProvider implements LibraryProvider {
   String? _bundledTalmudBavliPathCache;
   bool? _bundledTalmudBavliExistsCache;
 
+  /// IDs של קטגוריות ב-`user_books.db` שצורפו ל-Library. שימושי כדי לדעת
+  /// לאיזה DB לפנות בקריאות `getBookText`/`getBookToc`/`hasBook`.
+  ///
+  /// IDs בשני ה-DBs יכולים להיות חופפים (שניהם מתחילים מ-1 ב-AUTOINCREMENT
+  /// או מ--1 לאחור), אז סט נפרד הוא הדרך היחידה לזהות מקור.
+  final Set<int> _userBooksCategoryIds = {};
+
+  /// מיפוי `(title, categoryId, fileType) → BookCompositeKey` עבור ספרים
+  /// שמקורם ב-`user_books.db`. נפרד מ-`_cachedKeys` כדי שהמטמון של seforim
+  /// לא ייפגע.
+  final Set<BookCompositeKey> _userBooksCachedKeys = {};
+
+  bool _isUserBooksCategoryId(int categoryId) =>
+      _userBooksCategoryIds.contains(categoryId) ||
+      UserBooksDatabaseIds.isAppCategoryId(categoryId);
+
+  bool _shouldUseUserBooks({
+    required String title,
+    required int categoryId,
+    required String fileType,
+    required bool preferUserBooks,
+  }) {
+    if (preferUserBooks) return true;
+    if (_isUserBooksCategoryId(categoryId)) return true;
+
+    final key = BookCompositeKey.create(
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+    );
+    return _userBooksCachedKeys.contains(key);
+  }
+
   /// תור פעולות יחיד לכל כתיבות ה-DB של ספרים אישיים.
   /// ה-static מאפשר גישה ישירה ב-DatabaseLibraryProvider.operationQueue
   /// גם ממסכים אחרים, בלי להצמד ל-instance.
@@ -834,8 +870,20 @@ class DatabaseLibraryProvider implements LibraryProvider {
       categoryId: categoryId,
       fileType: fileType,
     );
-    if (_cachedKeys.contains(key)) {
+    if (_cachedKeys.contains(key) || _userBooksCachedKeys.contains(key)) {
       return true;
+    }
+
+    // אם ה-categoryId שייך ל-user_books, נבדוק שם עם ID ה-DB האמיתי.
+    if (_isUserBooksCategoryId(categoryId)) {
+      final repo = await UserBooksDatabaseHolder.instance.repository;
+      final dbCategoryId = UserBooksDatabaseIds.toDbCategoryId(categoryId);
+      final book = await repo.getBookByTitleCategoryAndFileType(
+        title,
+        dbCategoryId,
+        key.fileType,
+      );
+      return book != null;
     }
 
     final repository = _sqliteProvider.repository;
@@ -861,29 +909,12 @@ class DatabaseLibraryProvider implements LibraryProvider {
     final normalizedFileType = BookCompositeKey.normalizeFileType(fileType);
 
     if (_titlesCached) {
-      BookCompositeKey? matchedKey;
-
-      if (categoryId != null) {
-        final exact = BookCompositeKey.create(
-          title: title,
-          categoryId: categoryId,
-          fileType: normalizedFileType,
-        );
-        if (_cachedKeys.contains(exact)) {
-          matchedKey = exact;
-        }
-      }
-
-      if (matchedKey == null) {
-        for (final key in _cachedKeys) {
-          if (!key.matchesTitle(title)) continue;
-          if (fileType != null && key.fileType != normalizedFileType) {
-            continue;
-          }
-          matchedKey = key;
-          break;
-        }
-      }
+      final matchedKey = _findMatchingCachedKey(
+        title,
+        categoryId: categoryId,
+        normalizedFileType: normalizedFileType,
+        includeUserBooks: true,
+      );
 
       if (matchedKey != null) {
         final path = await _getPathForCategoryId(matchedKey.categoryId);
@@ -891,36 +922,19 @@ class DatabaseLibraryProvider implements LibraryProvider {
       }
     }
 
-    final repository = _sqliteProvider.repository;
-    if (repository == null) {
-      return null;
-    }
-
     try {
-      db_models.Book? book;
-
-      if (categoryId != null) {
-        if (fileType != null) {
-          book = await repository.getBookByTitleCategoryAndFileType(
-            title,
-            categoryId,
-            normalizedFileType,
-          );
-        } else {
-          final booksInCategory =
-              await repository.getBooksByCategory(categoryId);
-          for (final candidate in booksInCategory) {
-            if (candidate.title != title) continue;
-            book = candidate;
-            break;
-          }
-        }
-      } else {
-        book = await repository.getBookByTitle(title);
-      }
-
-      if (book == null) return null;
-      final path = await _getPathForCategoryId(book.categoryId);
+      final resolvedBook = await BookDatabaseResolver.resolveBook(
+        title: title,
+        categoryId: categoryId,
+        fileType: normalizedFileType,
+        preferUserBooks:
+            categoryId != null && _isUserBooksCategoryId(categoryId),
+      );
+      if (resolvedBook == null) return null;
+      final categoryIdForPath = resolvedBook.isUserBooks
+          ? UserBooksDatabaseIds.toAppCategoryId(resolvedBook.book.categoryId)
+          : resolvedBook.book.categoryId;
+      final path = await _getPathForCategoryId(categoryIdForPath);
       return path.isEmpty ? null : path;
     } catch (_) {
       return null;
@@ -931,6 +945,21 @@ class DatabaseLibraryProvider implements LibraryProvider {
   Future<String> _getPathForCategoryId(int categoryId) async {
     final cachedPath = _categoryIdToPath[categoryId];
     if (cachedPath != null) return cachedPath;
+
+    if (_isUserBooksCategoryId(categoryId)) {
+      try {
+        final repository = await UserBooksDatabaseHolder.instance.repository;
+        final dbCategoryId = UserBooksDatabaseIds.toDbCategoryId(categoryId);
+        final categoryPath = await BookDatabaseResolver.buildCategoryPath(
+            repository, dbCategoryId);
+        if (categoryPath.isNotEmpty) {
+          _categoryIdToPath[categoryId] = categoryPath;
+        }
+        return categoryPath;
+      } catch (_) {
+        return '';
+      }
+    }
 
     final repository = _sqliteProvider.repository;
     if (repository == null) return '';
@@ -973,12 +1002,86 @@ class DatabaseLibraryProvider implements LibraryProvider {
     for (final key in _cachedKeys) {
       if (key.matchesTitle(title)) return true;
     }
+    for (final key in _userBooksCachedKeys) {
+      if (key.matchesTitle(title)) return true;
+    }
     return false;
+  }
+
+  BookCompositeKey? _findMatchingCachedKey(
+    String title, {
+    int? categoryId,
+    required String normalizedFileType,
+    required bool includeUserBooks,
+  }) {
+    final candidateSets = <Set<BookCompositeKey>>[
+      _cachedKeys,
+      if (includeUserBooks) _userBooksCachedKeys,
+    ];
+
+    if (categoryId != null) {
+      final exact = BookCompositeKey.create(
+        title: title,
+        categoryId: categoryId,
+        fileType: normalizedFileType,
+      );
+      for (final candidateSet in candidateSets) {
+        if (candidateSet.contains(exact)) {
+          return exact;
+        }
+      }
+    }
+
+    for (final candidateSet in candidateSets) {
+      for (final key in candidateSet) {
+        if (!key.matchesTitle(title)) continue;
+        if (normalizedFileType.isNotEmpty &&
+            key.fileType != normalizedFileType) {
+          continue;
+        }
+        return key;
+      }
+    }
+
+    return null;
   }
 
   @override
   Future<String?> getBookText(
-      String title, int categoryId, String fileType) async {
+    String title,
+    int categoryId,
+    String fileType, {
+    bool preferUserBooks = false,
+  }) async {
+    // ספרים מתיקיות מותאמות אישית: לקרוא מ-user_books.db (תוכן מהקובץ
+    // עצמו אם isFileBacked, אחרת משורות ה-line).
+    if (_shouldUseUserBooks(
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+      preferUserBooks: preferUserBooks,
+    )) {
+      try {
+        final repo = await UserBooksDatabaseHolder.instance.repository;
+        final dbCategoryId = UserBooksDatabaseIds.toDbCategoryId(categoryId);
+        final book = await repo.getBookByTitleCategoryAndFileType(
+            title, dbCategoryId, fileType);
+        if (book == null) return null;
+        if (book.isFileBacked && book.filePath != null) {
+          final file = File(book.filePath!);
+          if (await file.exists()) {
+            return await file.readAsString();
+          }
+        }
+        // נופל לטעינה מתוך ה-DB עצמו (טבלת `line`).
+        return await _readBookTextFromUserBooksDb(
+            repo, book.id, book.totalLines);
+      } catch (e) {
+        debugPrint('⚠️ Error reading user book text: $e');
+        return null;
+      }
+    }
+
     if (_sqliteProvider.repository != null) {
       try {
         final book = await _sqliteProvider.repository!
@@ -997,7 +1100,11 @@ class DatabaseLibraryProvider implements LibraryProvider {
         // If not external or file not found, try DB text
         if (book != null) {
           return await _sqliteProvider.getBookTextFromDb(
-              title, categoryId, fileType);
+            title,
+            categoryId,
+            fileType,
+            preferUserBooks,
+          );
         }
       } catch (e) {
         debugPrint('⚠️ Error reading external book text: $e');
@@ -1006,16 +1113,91 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return null;
   }
 
+  /// קורא את תוכן הספר משורות ה-`line` של `user_books.db` ומחזיר טקסט מאוחד.
+  Future<String?> _readBookTextFromUserBooksDb(
+      SeforimRepository repo, int bookId, int totalLines) async {
+    try {
+      if (totalLines <= 0) return null;
+      final lines = await repo.getLines(bookId, 0, totalLines - 1);
+      if (lines.isEmpty) return null;
+      return lines.map((l) => l.content).join('\n');
+    } catch (e) {
+      debugPrint('⚠️ Error loading user_books lines for book $bookId: $e');
+      return null;
+    }
+  }
+
   @override
   Future<List<TocEntry>?> getBookToc(
-      String title, int categoryId, String fileType) async {
-    return await _sqliteProvider.getBookTocFromDb(title, categoryId, fileType);
+    String title,
+    int categoryId,
+    String fileType, {
+    bool preferUserBooks = false,
+  }) async {
+    if (_shouldUseUserBooks(
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+      preferUserBooks: preferUserBooks,
+    )) {
+      try {
+        final repo = await UserBooksDatabaseHolder.instance.repository;
+        final dbCategoryId = UserBooksDatabaseIds.toDbCategoryId(categoryId);
+        final book = await repo.getBookByTitleCategoryAndFileType(
+            title, dbCategoryId, fileType);
+        if (book == null) return null;
+        return await _loadTocFromUserBooksRepo(repo, book.id);
+      } catch (e) {
+        debugPrint('⚠️ Error reading user book TOC: $e');
+        return null;
+      }
+    }
+    return await _sqliteProvider.getBookTocFromDb(
+      title,
+      categoryId,
+      fileType,
+      preferUserBooks,
+    );
+  }
+
+  /// טוען TOC של ספר מ-`user_books.db` ומחזיר עץ TocEntry של מודל ה-app.
+  /// משתמש ב-`getBookTocs` של ה-repository (שכבר עושה JOIN ל-tocText
+  /// ומחזיר רשומות migration עם `text` מאוכלס).
+  Future<List<TocEntry>?> _loadTocFromUserBooksRepo(
+      SeforimRepository repo, int bookId) async {
+    final tocEntries = await repo.getBookTocs(bookId);
+    if (tocEntries.isEmpty) return null;
+    final idToEntry = <int, TocEntry>{};
+    final roots = <TocEntry>[];
+    for (final migrationToc in tocEntries) {
+      final parent = migrationToc.parentId != null
+          ? idToEntry[migrationToc.parentId]
+          : null;
+      final entry = TocEntry(
+        text: migrationToc.text,
+        index: migrationToc.lineIndex ?? 0,
+        level: migrationToc.level,
+        parent: parent,
+      );
+      idToEntry[migrationToc.id] = entry;
+      if (parent != null) {
+        parent.children.add(entry);
+      } else {
+        roots.add(entry);
+      }
+    }
+    return roots;
   }
 
   @override
   Future<Set<String>> getAvailableBookTitles() async {
     // Return only books that are actually in the database
-    return await getDatabaseOnlyBookTitles();
+    final base = await getDatabaseOnlyBookTitles();
+    if (_userBooksCachedKeys.isEmpty) return base;
+    return {
+      ...base,
+      ..._userBooksCachedKeys.map((key) => key.toStorageKey()),
+    };
   }
 
   /// Gets book titles that are ONLY in the database
@@ -1077,6 +1259,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
     _cachedKeys.clear();
     _categoryIdToPath.clear();
     _categoriesById.clear();
+    _userBooksCachedKeys.clear();
+    _userBooksCategoryIds.clear();
     _titlesCached = false;
     _bundledTalmudBavliPathCache = null;
     _bundledTalmudBavliExistsCache = null;
@@ -1238,6 +1422,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
       );
     }
 
+    // צירוף ספרים מתיקיות מותאמות אישית מ-user_books.db תחת קטגוריית
+    // "ספרים אישיים" באותו עץ.
+    await _appendUserBooksToLibrary(library, metadata);
+
     // NOTE: Sorting is now done during build (like Kotlin), no need for post-sort
     // _sortLibraryRecursive(library); // Removed - sorting happens in _buildCatalogCategoryRecursiveOptimized
 
@@ -1257,13 +1445,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
   /// Gets or creates a category in the database for the given path.
   /// Returns the category ID.
   /// Implements the logic from CATEGORY_SYNC_PLAN.md - Step 3
-  Future<int> _getOrCreateCategoryInDb(List<String> categoryPath) async {
-    final repository = _sqliteProvider.repository;
-    if (repository == null) {
-      throw Exception(
-          'Repository is not initialized - cannot create categories');
-    }
-
+  ///
+  /// [repository] — ה-repository שאליו רושמים את הקטגוריות (יכול להיות
+  /// user_books או seforim, תלוי בזרימה הקוראת).
+  Future<int> _getOrCreateCategoryInDb(
+    List<String> categoryPath,
+    dynamic repository,
+  ) async {
     if (categoryPath.isEmpty) {
       // Return default category
       final defaultCategory =
@@ -1477,6 +1665,205 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return category;
   }
 
+  /// מצרף את עץ הקטגוריות והספרים מ-`user_books.db` אל תוך [library]
+  /// תחת הקטגוריה "ספרים אישיים". אם הקטגוריה כבר קיימת ב-[library]
+  /// (למשל מ-seforim.db legacy שלא נוקה עדיין), היא מתמזגת תוכן הספרים
+  /// וה-subCategories.
+  Future<void> _appendUserBooksToLibrary(
+    Library library,
+    Map<String, Map<String, dynamic>> metadata,
+  ) async {
+    _userBooksCategoryIds.clear();
+    _userBooksCachedKeys.clear();
+
+    try {
+      final repo = await UserBooksDatabaseHolder.instance.repository;
+
+      late final List<Map<String, dynamic>> userBooks;
+      late final List<Map<String, dynamic>> userCats;
+      late final Map<int, String> userAuthors;
+
+      final db = await repo.database.database;
+      withTransaction(db, () {
+        userBooks = repo.database.bookDao.getAllBooksMinimal(db);
+        userCats = repo.database.categoryDao.getAllCategoryRows(db);
+        userAuthors = repo.database.bookDao.getBookAuthorsMap(db);
+      });
+
+      if (userBooks.isEmpty && userCats.isEmpty) {
+        return;
+      }
+
+      // קיבוץ ספרים לפי categoryId.
+      final booksByCategory = <int, List<Map<String, dynamic>>>{};
+      for (final bookData in userBooks) {
+        final catId = bookData['categoryId'] as int?;
+        if (catId == null) continue;
+        booksByCategory.putIfAbsent(catId, () => []).add(bookData);
+      }
+
+      // קיבוץ קטגוריות לפי parentId.
+      final allUserCategories =
+          userCats.map((row) => db_models.Category.fromJson(row)).toList();
+      final categoriesByParent = <int?, List<db_models.Category>>{};
+      for (final cat in allUserCategories) {
+        categoriesByParent.putIfAbsent(cat.parentId, () => []).add(cat);
+      }
+
+      // חיפוש קטגוריית "ספרים אישיים" ברמת השורש של user_books.db.
+      final rootCats = categoriesByParent[null] ?? [];
+      final personalRootInUserDb =
+          rootCats.where((c) => c.title == 'ספרים אישיים').firstOrNull;
+      if (personalRootInUserDb == null) {
+        return;
+      }
+
+      // איתור / יצירה של קטגוריית "ספרים אישיים" ב-Library.
+      Category? personalCategoryInLibrary = library.subCategories
+          .where((c) => c.title == 'ספרים אישיים')
+          .firstOrNull;
+      personalCategoryInLibrary ??= () {
+        final created = Category(
+          title: 'ספרים אישיים',
+          description: metadata['ספרים אישיים']?['heDesc'] ?? '',
+          shortDescription: metadata['ספרים אישיים']?['heShortDesc'] ?? '',
+          order: personalRootInUserDb.orderIndex,
+          subCategories: [],
+          books: [],
+          parent: library,
+        );
+        library.subCategories.add(created);
+        return created;
+      }();
+
+      // מוסיפים את ה-ID הפנימי של "ספרים אישיים" לסט.
+      final personalRootAppId =
+          UserBooksDatabaseIds.toAppCategoryId(personalRootInUserDb.id);
+      _userBooksCategoryIds.add(personalRootAppId);
+
+      // ספרים שיושבים ישירות תחת "ספרים אישיים" (בד"כ אין כאלה — תיקיות
+      // הן רמה אחת מתחת — אבל מטפלים ליתר ביטחון).
+      final directBooks = (booksByCategory[personalRootInUserDb.id] ?? [])
+        ..sort((a, b) {
+          final orderA = (a['orderIndex'] as num?)?.toDouble() ?? 999.0;
+          final orderB = (b['orderIndex'] as num?)?.toDouble() ?? 999.0;
+          return orderA.compareTo(orderB);
+        });
+      for (final dbBook in directBooks) {
+        final book = _convertMinimalBookMapToBook(
+          dbBook,
+          personalCategoryInLibrary,
+          metadata,
+          authorFromDatabase: userAuthors[dbBook['id'] as int? ?? 0],
+          isUserBook: true,
+          idOverride:
+              UserBooksDatabaseIds.toAppBookId(dbBook['id'] as int? ?? 0),
+          categoryIdOverride: personalRootAppId,
+        );
+        if (book == null) continue;
+        personalCategoryInLibrary.books.add(book);
+        _userBooksCachedKeys.add(BookCompositeKey.create(
+          title: book.title,
+          categoryId: personalRootAppId,
+          fileType: book.fileType,
+        ));
+      }
+
+      // תתי-קטגוריות (תיקייה לכל folder מותאם אישית).
+      final children = (categoriesByParent[personalRootInUserDb.id] ?? [])
+        ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      for (final child in children) {
+        final existing = personalCategoryInLibrary.subCategories
+            .where((c) => c.title == child.title)
+            .firstOrNull;
+        final builtSubCategory = _buildUserBooksCatalogCategoryRecursive(
+          child,
+          booksByCategory,
+          categoriesByParent,
+          userAuthors,
+          personalCategoryInLibrary,
+          metadata,
+        );
+        if (existing == null) {
+          personalCategoryInLibrary.subCategories.add(builtSubCategory);
+        } else {
+          // מיזוג: מעבירים books ו-subCategories של ה-built לתוך הקיים.
+          existing.books.addAll(builtSubCategory.books);
+          existing.subCategories.addAll(builtSubCategory.subCategories);
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error appending user books to library: $e');
+    }
+  }
+
+  /// וריאנט של [_buildCatalogCategoryRecursiveOptimized] שכותב את ה-IDs
+  /// של הקטגוריות והספרים ל-_userBooksCategoryIds/_userBooksCachedKeys
+  /// במקום ל-_categoriesById/_cachedKeys של seforim.
+  Category _buildUserBooksCatalogCategoryRecursive(
+    db_models.Category dbCategory,
+    Map<int, List<Map<String, dynamic>>> booksByCategory,
+    Map<int?, List<db_models.Category>> categoriesByParent,
+    Map<int, String> authorsByBookId,
+    Category parent,
+    Map<String, Map<String, dynamic>> metadata,
+  ) {
+    final appCategoryId = UserBooksDatabaseIds.toAppCategoryId(dbCategory.id);
+    _userBooksCategoryIds.add(appCategoryId);
+
+    final category = Category(
+      title: dbCategory.title,
+      description: metadata[dbCategory.title]?['heDesc'] ?? '',
+      shortDescription: metadata[dbCategory.title]?['heShortDesc'] ?? '',
+      order: dbCategory.orderIndex,
+      subCategories: [],
+      books: [],
+      parent: parent,
+    );
+
+    final dbBooks = (booksByCategory[dbCategory.id] ?? [])
+      ..sort((a, b) {
+        final orderA = (a['orderIndex'] as num?)?.toDouble() ?? 999.0;
+        final orderB = (b['orderIndex'] as num?)?.toDouble() ?? 999.0;
+        return orderA.compareTo(orderB);
+      });
+    for (final dbBook in dbBooks) {
+      final book = _convertMinimalBookMapToBook(
+        dbBook,
+        category,
+        metadata,
+        authorFromDatabase: authorsByBookId[dbBook['id'] as int? ?? 0],
+        isUserBook: true,
+        idOverride:
+            UserBooksDatabaseIds.toAppBookId(dbBook['id'] as int? ?? 0),
+        categoryIdOverride: appCategoryId,
+      );
+      if (book == null) continue;
+      category.books.add(book);
+      _userBooksCachedKeys.add(BookCompositeKey.create(
+        title: book.title,
+        categoryId: appCategoryId,
+        fileType: book.fileType,
+      ));
+    }
+
+    final children = (categoriesByParent[dbCategory.id] ?? [])
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    for (final child in children) {
+      final subCategory = _buildUserBooksCatalogCategoryRecursive(
+        child,
+        booksByCategory,
+        categoriesByParent,
+        authorsByBookId,
+        category,
+        metadata,
+      );
+      category.subCategories.add(subCategory);
+    }
+
+    return category;
+  }
+
   /// Converts a minimal book map (from getAllBooksMinimal) to the app's Book model.
   /// Uses only the columns available: id, title, categoryId, orderIndex,
   /// fileType, filePath, heShortDesc, author.
@@ -1486,15 +1873,19 @@ class DatabaseLibraryProvider implements LibraryProvider {
     Category category,
     Map<String, Map<String, dynamic>> metadata, {
     String? authorFromDatabase,
+    bool isUserBook = false,
+    int? idOverride,
+    int? categoryIdOverride,
   }) {
     final title = bookMap['title'] as String;
-    final id = bookMap['id'] as int? ?? 0;
+    final id = idOverride ?? (bookMap['id'] as int? ?? 0);
     final filePath = bookMap['filePath'] as String?;
     final fileType = bookMap['fileType'] as String?;
     final heShortDesc = bookMap['heShortDesc'] as String?;
     final orderDouble = (bookMap['orderIndex'] as num?)?.toDouble() ?? 999.0;
     final order = orderDouble.toInt();
-    final categoryId = bookMap['categoryId'] as int? ?? 0;
+    final categoryId =
+        categoryIdOverride ?? (bookMap['categoryId'] as int? ?? 0);
 
     final bookMeta = metadata[title];
 
@@ -1550,6 +1941,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         topics: topics,
         categoryPath: categoryPath,
         categoryId: categoryId,
+        isUserBook: isUserBook,
       );
     }
 
@@ -1567,6 +1959,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         topics: topics,
         categoryPath: categoryPath,
         categoryId: categoryId,
+        isUserBook: isUserBook,
       );
     }
 
@@ -1582,6 +1975,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
       topics: topics,
       categoryPath: categoryPath,
       categoryId: categoryId,
+      isUserBook: isUserBook,
     );
   }
 
@@ -1705,11 +2099,14 @@ class DatabaseLibraryProvider implements LibraryProvider {
     if (repository == null) return 'שגיאה: מאגר לא מאותחל';
 
     try {
-      final book = await repository.getBookByTitle(targetTitle);
-      if (book == null) return 'שגיאה: הספר לא נמצא במסד הנתונים';
+      final resolvedBook = await BookDatabaseResolver.resolveBook(
+        title: targetTitle,
+      );
+      if (resolvedBook == null) return 'שגיאה: הספר לא נמצא במסד הנתונים';
 
       // link.index2 is 1-based; lineIndex in DB is 0-based
-      final line = await repository.getLineByIndex(book.id, link.index2 - 1);
+      final line = await resolvedBook.repository
+          .getLineByIndex(resolvedBook.book.id, link.index2 - 1);
       if (line == null) return 'שגיאה: אינדקס מחוץ לטווח';
 
       return line.content;
@@ -1907,7 +2304,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
       // Phase 1 (background isolate): scan directory, check DB existence via a
       // direct sqlite3 read-only connection, and parse TXT/DOCX TOC only for
       // genuinely new books. Unchanged books are filtered out here.
-      final dbPath = SqliteDataProvider.instance.dbPath;
+      //
+      // ה-DB שאליו משווים בסריקה הוא `user_books.db` (לא `seforim.db`),
+      // כי הסריקה הזו טוענת ספרים מתיקיות מותאמות אישית בלבד.
+      final dbPath = await UserBooksDatabaseHolder.resolveDbPath();
       final discovered = await Isolate.run(
         () => _scanExternalFolderInIsolate((folderPath, folderName, dbPath)),
       );
@@ -1945,7 +2345,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
             continue;
           }
 
-          final categoryId = await _getOrCreateCategoryInDb(book.categoryPath);
+          final categoryId =
+              await _getOrCreateCategoryInDb(book.categoryPath, repository);
 
           List<db_models.TocEntry>? tocEntries;
           if (book.tocEntries != null && book.tocEntries!.isNotEmpty) {
