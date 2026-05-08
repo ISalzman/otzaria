@@ -23,6 +23,7 @@ import 'package:otzaria/printing/word_export_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
+import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart' hide PdfDocument;
@@ -92,7 +93,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
   int _pdfEndPage = 0; // 0 = כל העמודים
   int _renderGeneration = 0; // מונה שביטול renders ישנים
 
-
   bool _includeCommentaries = false;
   bool _includePersonalNotes = false;
 
@@ -123,7 +123,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
     startLine = widget.startLine;
     endLine = startLine;
 
-
     // אתחול הגדרות ניקוד וטעמים לפי תצוגת הספר
     _removeNikud = widget.removeNikud;
     _removeTaamim = widget.removeTaamim;
@@ -132,7 +131,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (widget.createPdfOverride != null) {
       _rangeMode = _PrintRangeMode.lines;
       _flatHeaders = const [];
-if (widget.initialPage != null) {
+      if (widget.initialPage != null) {
         _pdfStartPage = widget.initialPage!;
         _pdfEndPage =
             widget.isBookView ? widget.initialPage! + 1 : widget.initialPage!;
@@ -347,10 +346,11 @@ if (widget.initialPage != null) {
 
     final isPdfMode = widget.createPdfOverride != null;
     final startPage = isPdfMode ? _pdfStartPage : 1;
-    final endPage =
-        isPdfMode && _pdfEndPage > 0 && (_totalPdfPages == 0 || _pdfEndPage <= _totalPdfPages)
-            ? _pdfEndPage
-            : null;
+    final endPage = isPdfMode &&
+            _pdfEndPage > 0 &&
+            (_totalPdfPages == 0 || _pdfEndPage <= _totalPdfPages)
+        ? _pdfEndPage
+        : null;
     final hasPageRange = startPage > 1 || endPage != null;
 
     if (_pagesPerSheet <= 1 && !hasPageRange) return base;
@@ -1226,11 +1226,12 @@ if (widget.initialPage != null) {
               onClose: () => Navigator.of(context).pop(),
               onExport: _exportDocument,
               onPrint: () async {
-                await Printing.layoutPdf(
+                final printed = await Printing.layoutPdf(
                   usePrinterSettings: true,
                   onLayout: _createOutputPdf,
                   format: format,
                 );
+                if (printed && context.mounted) Navigator.of(context).pop();
               },
             ),
             Expanded(
@@ -1451,111 +1452,113 @@ if (widget.initialPage != null) {
                               topLeft: Radius.circular(12),
                             ),
                             child: Row(
-                            children: [
-                              Expanded(
-                                child: FutureBuilder(
-                                  future: _previewPdf,
-                                  builder: (context, snapshot) {
-                                    if (snapshot.connectionState ==
-                                            ConnectionState.done &&
-                                        snapshot.hasData) {
-                                      final (pdfBytes, pdfSourceName) =
-                                          snapshot.data!;
-                                      return PdfViewer.data(
-                                        pdfBytes,
-                                        sourceName: pdfSourceName,
-                                        controller: _pdfViewerController,
-                                        params: PdfViewerParams(
-                                          viewerOverlayBuilder:
-                                              (context, size, handleLinkTap) =>
-                                                  [
-                                            PdfScrollbar(
-                                              controller: _pdfViewerController,
-                                              orientation:
-                                                  ScrollbarOrientation.right,
-                                              trackThickness: 16.0,
-                                              thumbMinSize: 50.0,
+                              children: [
+                                Expanded(
+                                  child: FutureBuilder(
+                                    future: _previewPdf,
+                                    builder: (context, snapshot) {
+                                      if (snapshot.connectionState ==
+                                              ConnectionState.done &&
+                                          snapshot.hasData) {
+                                        final (pdfBytes, pdfSourceName) =
+                                            snapshot.data!;
+                                        return PdfViewer.data(
+                                          pdfBytes,
+                                          sourceName: pdfSourceName,
+                                          controller: _pdfViewerController,
+                                          params: PdfViewerParams(
+                                            viewerOverlayBuilder: (context,
+                                                    size, handleLinkTap) =>
+                                                [
+                                              PdfScrollbar(
+                                                controller:
+                                                    _pdfViewerController,
+                                                orientation:
+                                                    ScrollbarOrientation.right,
+                                                trackThickness: 16.0,
+                                                thumbMinSize: 50.0,
+                                              ),
+                                              PdfHorizontalScrollbar(
+                                                controller:
+                                                    _pdfViewerController,
+                                                trackThickness: 10.0,
+                                              ),
+                                            ],
+                                            onDocumentChanged: (document) {
+                                              if (document == null) {
+                                                _documentRef.value = null;
+                                              }
+                                            },
+                                            onViewerReady:
+                                                (document, controller) {
+                                              _documentRef.value =
+                                                  controller.documentRef;
+                                              if (_totalPdfPages == 0 &&
+                                                  mounted) {
+                                                setState(() {
+                                                  final total =
+                                                      document.pages.length;
+                                                  _totalPdfPages = total;
+                                                  if (_pdfEndPage == 0) {
+                                                    _pdfEndPage = total;
+                                                  }
+                                                });
+                                              }
+                                            },
+                                          ),
+                                        );
+                                      }
+                                      if (snapshot.hasError) {
+                                        return Center(
+                                          child: Icon(
+                                            FluentIcons.error_circle_24_regular,
+                                            color: colorScheme.error,
+                                            size: 48,
+                                          ),
+                                        );
+                                      }
+                                      return Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            CircularProgressIndicator(
+                                              color: colorScheme.primary,
                                             ),
-                                            PdfHorizontalScrollbar(
-                                              controller: _pdfViewerController,
-                                              trackThickness: 10.0,
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              'מכין תצוגה מקדימה...',
+                                              style: TextStyle(
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
                                             ),
                                           ],
-                                          onDocumentChanged: (document) {
-                                            if (document == null) {
-                                              _documentRef.value = null;
-                                            }
-                                          },
-                                          onViewerReady:
-                                              (document, controller) {
-                                            _documentRef.value =
-                                                controller.documentRef;
-                                            if (_totalPdfPages == 0 &&
-                                                mounted) {
-                                              setState(() {
-                                                final total =
-                                                    document.pages.length;
-                                                _totalPdfPages = total;
-                                                if (_pdfEndPage == 0) {
-                                                  _pdfEndPage = total;
-                                                }
-                                              });
-                                            }
-                                          },
                                         ),
-                                      );
-                                    }
-                                    if (snapshot.hasError) {
-                                      return Center(
-                                        child: Icon(
-                                          FluentIcons.error_circle_24_regular,
-                                          color: colorScheme.error,
-                                          size: 48,
-                                        ),
-                                      );
-                                    }
-                                    return Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          CircularProgressIndicator(
-                                            color: colorScheme.primary,
-                                          ),
-                                          const SizedBox(height: 16),
-                                          Text(
-                                            'מכין תצוגה מקדימה...',
-                                            style: TextStyle(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              if (_showThumbnails) ...[
-                                VerticalDivider(
-                                  width: 1,
-                                  color: colorScheme.outlineVariant,
-                                ),
-                                SizedBox(
-                                  width: 260,
-                                  child:
-                                      ValueListenableBuilder<PdfDocumentRef?>(
-                                    valueListenable: _documentRef,
-                                    builder: (context, documentRef, _) {
-                                      return ThumbnailsView(
-                                        documentRef: documentRef,
-                                        controller: _pdfViewerController,
                                       );
                                     },
                                   ),
                                 ),
+                                if (_showThumbnails) ...[
+                                  VerticalDivider(
+                                    width: 1,
+                                    color: colorScheme.outlineVariant,
+                                  ),
+                                  SizedBox(
+                                    width: 260,
+                                    child:
+                                        ValueListenableBuilder<PdfDocumentRef?>(
+                                      valueListenable: _documentRef,
+                                      builder: (context, documentRef, _) {
+                                        return ThumbnailsView(
+                                          documentRef: documentRef,
+                                          controller: _pdfViewerController,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ],
-                            ],
-                          ),
+                            ),
                           ),
                         ),
                       ],
@@ -2170,100 +2173,102 @@ if (widget.initialPage != null) {
                               topLeft: Radius.circular(12),
                             ),
                             child: Row(
-                            children: [
-                              Expanded(
-                                child: FutureBuilder(
-                                  future: _previewPdf,
-                                  builder: (context, snapshot) {
-                                    if (snapshot.connectionState ==
-                                            ConnectionState.done &&
-                                        snapshot.hasData) {
-                                      final (pdfBytes, pdfSourceName) =
-                                          snapshot.data!;
-                                      return PdfViewer.data(
-                                        pdfBytes,
-                                        sourceName: pdfSourceName,
-                                        controller: _pdfViewerController,
-                                        params: PdfViewerParams(
-                                          viewerOverlayBuilder:
-                                              (context, size, handleLinkTap) =>
-                                                  [
-                                            PdfScrollbar(
-                                              controller: _pdfViewerController,
-                                              orientation:
-                                                  ScrollbarOrientation.right,
-                                              trackThickness: 16.0,
-                                              thumbMinSize: 50.0,
+                              children: [
+                                Expanded(
+                                  child: FutureBuilder(
+                                    future: _previewPdf,
+                                    builder: (context, snapshot) {
+                                      if (snapshot.connectionState ==
+                                              ConnectionState.done &&
+                                          snapshot.hasData) {
+                                        final (pdfBytes, pdfSourceName) =
+                                            snapshot.data!;
+                                        return PdfViewer.data(
+                                          pdfBytes,
+                                          sourceName: pdfSourceName,
+                                          controller: _pdfViewerController,
+                                          params: PdfViewerParams(
+                                            viewerOverlayBuilder: (context,
+                                                    size, handleLinkTap) =>
+                                                [
+                                              PdfScrollbar(
+                                                controller:
+                                                    _pdfViewerController,
+                                                orientation:
+                                                    ScrollbarOrientation.right,
+                                                trackThickness: 16.0,
+                                                thumbMinSize: 50.0,
+                                              ),
+                                              PdfHorizontalScrollbar(
+                                                controller:
+                                                    _pdfViewerController,
+                                                trackThickness: 10.0,
+                                              ),
+                                            ],
+                                            onDocumentChanged: (document) {
+                                              if (document == null) {
+                                                _documentRef.value = null;
+                                              }
+                                            },
+                                            onViewerReady:
+                                                (document, controller) {
+                                              _documentRef.value =
+                                                  controller.documentRef;
+                                            },
+                                          ),
+                                        );
+                                      }
+                                      if (snapshot.hasError) {
+                                        return Center(
+                                          child: Icon(
+                                            FluentIcons.error_circle_24_regular,
+                                            color: colorScheme.error,
+                                            size: 48,
+                                          ),
+                                        );
+                                      }
+                                      return Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            CircularProgressIndicator(
+                                              color: colorScheme.primary,
                                             ),
-                                            PdfHorizontalScrollbar(
-                                              controller: _pdfViewerController,
-                                              trackThickness: 10.0,
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              'מכין תצוגה מקדימה...',
+                                              style: TextStyle(
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
                                             ),
                                           ],
-                                          onDocumentChanged: (document) {
-                                            if (document == null) {
-                                              _documentRef.value = null;
-                                            }
-                                          },
-                                          onViewerReady:
-                                              (document, controller) {
-                                            _documentRef.value =
-                                                controller.documentRef;
-                                          },
                                         ),
-                                      );
-                                    }
-                                    if (snapshot.hasError) {
-                                      return Center(
-                                        child: Icon(
-                                          FluentIcons.error_circle_24_regular,
-                                          color: colorScheme.error,
-                                          size: 48,
-                                        ),
-                                      );
-                                    }
-                                    return Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          CircularProgressIndicator(
-                                            color: colorScheme.primary,
-                                          ),
-                                          const SizedBox(height: 16),
-                                          Text(
-                                            'מכין תצוגה מקדימה...',
-                                            style: TextStyle(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              if (_showThumbnails) ...[
-                                VerticalDivider(
-                                  width: 1,
-                                  color: colorScheme.outlineVariant,
-                                ),
-                                SizedBox(
-                                  width: 260,
-                                  child:
-                                      ValueListenableBuilder<PdfDocumentRef?>(
-                                    valueListenable: _documentRef,
-                                    builder: (context, documentRef, _) {
-                                      return ThumbnailsView(
-                                        documentRef: documentRef,
-                                        controller: _pdfViewerController,
                                       );
                                     },
                                   ),
                                 ),
+                                if (_showThumbnails) ...[
+                                  VerticalDivider(
+                                    width: 1,
+                                    color: colorScheme.outlineVariant,
+                                  ),
+                                  SizedBox(
+                                    width: 260,
+                                    child:
+                                        ValueListenableBuilder<PdfDocumentRef?>(
+                                      valueListenable: _documentRef,
+                                      builder: (context, documentRef, _) {
+                                        return ThumbnailsView(
+                                          documentRef: documentRef,
+                                          controller: _pdfViewerController,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ],
-                            ],
-                          ),
+                            ),
                           ),
                         ),
                       ],
@@ -2474,16 +2479,16 @@ class _PrintingAppBar extends StatelessWidget {
         final printExportButtons = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            OutlinedButton.icon(
+            NeutralActionButton(
+              text: 'ייצא',
+              icon: FluentIcons.arrow_export_ltr_24_regular,
               onPressed: onExport,
-              icon: const Icon(FluentIcons.arrow_export_ltr_24_regular),
-              label: const Text('ייצא'),
             ),
             const SizedBox(width: 8),
-            FilledButton.icon(
+            RecommendedActionButton(
+              text: 'הדפסה',
+              icon: FluentIcons.print_24_regular,
               onPressed: onPrint,
-              icon: const Icon(FluentIcons.print_24_regular),
-              label: const Text('הדפסה'),
             ),
           ],
         );
@@ -2512,9 +2517,9 @@ class _PrintingAppBar extends StatelessWidget {
                   ),
                   Align(
                     alignment: AlignmentDirectional.centerEnd,
-                    child: TextButton(
+                    child: NeutralActionButton(
+                      text: 'ביטול',
                       onPressed: onClose,
-                      child: const Text('ביטול'),
                     ),
                   ),
                 ],
@@ -2528,8 +2533,7 @@ class _PrintingAppBar extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Row(
                 children: [
                   printExportButtons,
