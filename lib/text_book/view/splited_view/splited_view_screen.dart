@@ -346,6 +346,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                       .add(UpdateCommentaryPaneWidth(_leftPaneWidth));
                 },
                 autoHandleResponsiveVisibility: false,
+                scrollbarTopMargin: 0,
               );
             },
           );
