@@ -18,6 +18,7 @@ import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/navigation/startup_indexing_decision.dart';
 import 'package:otzaria/navigation/view/startup_work_gate.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/empty_library/empty_library_screen.dart';
@@ -396,22 +397,36 @@ class MainWindowScreenState extends State<MainWindowScreen>
       return;
     }
 
-    if (requiresManualReindex) {
-      _startupWorkGate.markIndexingDecisionResolved(expectIndexing: false);
-      _tryStartDeferredStartupWork();
-      await _showStartupManualReindexDialog(context, library);
-      return;
-    }
-
-    _startupWorkGate.markIndexingDecisionResolved(
-      expectIndexing: autoUpdateIndex,
+    final decision = decideStartupIndexing(
+      requiresManualReindex: requiresManualReindex,
+      autoUpdateIndex: autoUpdateIndex,
     );
-    _tryStartDeferredStartupWork();
 
-    if (autoUpdateIndex) {
-      context.read<IndexingBloc>().add(StartIndexing(library));
-    } else {
-      context.read<IndexingBloc>().add(CheckIndexStatus(library));
+    switch (decision) {
+      case StartupIndexingDecision.autoReindexThenStart:
+        await _indexingRepository.prepareForManualReindex(library);
+        if (!mounted || !context.mounted) {
+          return;
+        }
+        _startupWorkGate.markIndexingDecisionResolved(expectIndexing: true);
+        _tryStartDeferredStartupWork();
+        context.read<IndexingBloc>().add(StartIndexing(library));
+        return;
+      case StartupIndexingDecision.promptManualReindex:
+        _startupWorkGate.markIndexingDecisionResolved(expectIndexing: false);
+        _tryStartDeferredStartupWork();
+        await _showStartupManualReindexDialog(context, library);
+        return;
+      case StartupIndexingDecision.startIndexing:
+        _startupWorkGate.markIndexingDecisionResolved(expectIndexing: true);
+        _tryStartDeferredStartupWork();
+        context.read<IndexingBloc>().add(StartIndexing(library));
+        return;
+      case StartupIndexingDecision.checkIndexStatus:
+        _startupWorkGate.markIndexingDecisionResolved(expectIndexing: false);
+        _tryStartDeferredStartupWork();
+        context.read<IndexingBloc>().add(CheckIndexStatus(library));
+        return;
     }
   }
 
