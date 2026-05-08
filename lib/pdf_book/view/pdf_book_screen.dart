@@ -1863,8 +1863,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (currentSpreadRect != null &&
         currentSpreadRect.height > 0 &&
         newSpreadRect.height > 0) {
-      final visibleHeight =
-          min(visibleRect.height, currentSpreadRect.height);
+      final visibleHeight = min(visibleRect.height, currentSpreadRect.height);
       final currentScrollableExtent =
           max(currentSpreadRect.height - visibleHeight, 0.0);
       var relativeScroll = 0.0;
@@ -1887,12 +1886,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     final viewportPixels = viewSize.width * viewSize.height;
     const maxCapturePixels = 1600000.0;
-    final cappedPixelRatio = viewportPixels <= 0
-        ? 1.0
-        : sqrt(maxCapturePixels / viewportPixels);
+    final cappedPixelRatio =
+        viewportPixels <= 0 ? 1.0 : sqrt(maxCapturePixels / viewportPixels);
     final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-    final pixelRatio = min(devicePixelRatio, min(1.35, cappedPixelRatio))
-        .clamp(0.85, 1.35);
+    final pixelRatio =
+        min(devicePixelRatio, min(1.35, cappedPixelRatio)).clamp(0.85, 1.35);
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
@@ -2115,8 +2113,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // queued page-turn (if any) starts from the actual settled spread,
         // not a stale viewer mid-transition. The overlay stays visible (at
         // progress=1) until finally clears it, so the user sees no flash.
-        final navigationFuture = _goToPageWithSpreadLock(targetPage)
-            .catchError((Object _) {});
+        final navigationFuture =
+            _goToPageWithSpreadLock(targetPage).catchError((Object _) {});
 
         await _pageTurnController.forward(from: 0);
         await navigationFuture;
@@ -2378,8 +2376,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // target, the staleness window is closed — clear the override so future
     // clicks read directly from the controller again.
     if (_lastInitiatedTargetPage != null) {
-      final initiatedSpread =
-          _spreadStartPageFor(_lastInitiatedTargetPage!);
+      final initiatedSpread = _spreadStartPageFor(_lastInitiatedTargetPage!);
       final newSpread = _spreadStartPageFor(newPage);
       if (initiatedSpread == newSpread) {
         _lastInitiatedTargetPage = null;
@@ -2847,7 +2844,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       child: Text('חיפוש', style: TextStyle(fontSize: 11)),
                     ),
                     Tab(
-                      icon: Icon(FluentIcons.document_multiple_24_regular, size: 16),
+                      icon: Icon(FluentIcons.document_multiple_24_regular,
+                          size: 16),
                       iconMargin: EdgeInsets.only(bottom: 1),
                       height: 44,
                       child: Text('דפים', style: TextStyle(fontSize: 11)),
