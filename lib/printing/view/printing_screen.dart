@@ -18,6 +18,7 @@ import 'package:otzaria/pdf_book/view/pdf_page_number_display.dart';
 import 'package:otzaria/pdf_book/view/pdf_thumbnails_screen.dart';
 import 'package:otzaria/pdf_book/view/pdf_scrollbar.dart';
 import 'package:otzaria/printing/print_content_models.dart';
+import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:otzaria/printing/pdf_text_rasterizer.dart';
 import 'package:otzaria/printing/word_export_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
@@ -91,7 +92,12 @@ class _PrintingScreenState extends State<PrintingScreen> {
   int _pdfStartPage = 1;
   int _pdfEndPage = 0; // 0 = כל העמודים
   int _renderGeneration = 0; // מונה שביטול renders ישנים
+  // נעילה סדרתית של פעולות pdfrx: שני openData במקביל תוקעים את הספרייה.
+  Future<void> _rasterLock = Future.value();
+  Map<int, String> _pageLabels = {};
 
+  String _labelForPage(int pageNumber) =>
+      labelForPdfPage(_pageLabels, pageNumber);
 
   bool _includeCommentaries = false;
   bool _includePersonalNotes = false;
@@ -132,7 +138,8 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (widget.createPdfOverride != null) {
       _rangeMode = _PrintRangeMode.lines;
       _flatHeaders = const [];
-if (widget.initialPage != null) {
+      _pageLabels = buildPdfPageLabels(widget.pdfOutline);
+      if (widget.initialPage != null) {
         _pdfStartPage = widget.initialPage!;
         _pdfEndPage =
             widget.isBookView ? widget.initialPage! + 1 : widget.initialPage!;
@@ -347,11 +354,13 @@ if (widget.initialPage != null) {
 
     final isPdfMode = widget.createPdfOverride != null;
     final startPage = isPdfMode ? _pdfStartPage : 1;
-    final endPage =
-        isPdfMode && _pdfEndPage > 0 && (_totalPdfPages == 0 || _pdfEndPage <= _totalPdfPages)
-            ? _pdfEndPage
-            : null;
-    final hasPageRange = startPage > 1 || endPage != null;
+    final endPage = computePdfPrintEndPage(
+      isPdfMode: isPdfMode,
+      pdfEndPage: _pdfEndPage,
+      totalPdfPages: _totalPdfPages,
+    );
+    final hasPageRange =
+        hasPdfPageRange(startPage: startPage, endPage: endPage);
 
     if (_pagesPerSheet <= 1 && !hasPageRange) return base;
 
@@ -392,6 +401,36 @@ if (widget.initialPage != null) {
   }
 
   Future<Uint8List> _createNUpPdfFromRaster(
+    Uint8List sourcePdf, {
+    required PdfPageFormat sheetFormat,
+    required int pagesPerSheet,
+    int startPage = 1,
+    int? endPage,
+  }) async {
+    // הסדרה של עבודת pdfrx: רק render אחד בכל רגע נתון.
+    // בלי זה, פתיחת שני PdfDocument במקביל תוקעת את הספרייה.
+    final completer = Completer<Uint8List>();
+    final previousLock = _rasterLock;
+    _rasterLock = completer.future.then((_) => null).catchError((_) => null);
+    await previousLock;
+
+    try {
+      final result = await _rasterizeNUp(
+        sourcePdf,
+        sheetFormat: sheetFormat,
+        pagesPerSheet: pagesPerSheet,
+        startPage: startPage,
+        endPage: endPage,
+      );
+      completer.complete(result);
+      return result;
+    } catch (e) {
+      completer.completeError(e);
+      rethrow;
+    }
+  }
+
+  Future<Uint8List> _rasterizeNUp(
     Uint8List sourcePdf, {
     required PdfPageFormat sheetFormat,
     required int pagesPerSheet,
@@ -439,6 +478,11 @@ if (widget.initialPage != null) {
       final lastIdx = max(firstIdx,
           min((endPage ?? doc.pages.length) - 1, doc.pages.length - 1));
       for (var i = firstIdx; i <= lastIdx; i++) {
+        // אם המשתמש שינה פרמטר באמצע ה-render, זרוק את המסמך מוקדם.
+        // בלי זה שני PdfDocument פעילים בו-זמנית - ופדרקס תקוע.
+        if (generation != _renderGeneration || !mounted) {
+          return sourcePdf;
+        }
         final page = doc.pages[i];
         final pdfImage = await page.render(
           fullWidth: page.width * scale,
@@ -1226,11 +1270,14 @@ if (widget.initialPage != null) {
               onClose: () => Navigator.of(context).pop(),
               onExport: _exportDocument,
               onPrint: () async {
-                await Printing.layoutPdf(
+                final printed = await Printing.layoutPdf(
                   usePrinterSettings: true,
                   onLayout: _createOutputPdf,
                   format: format,
                 );
+                if (printed && context.mounted) {
+                  Navigator.of(context).pop(true);
+                }
               },
             ),
             Expanded(
@@ -1288,55 +1335,59 @@ if (widget.initialPage != null) {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              'עמוד $_pdfStartPage',
-                                              style: TextStyle(
-                                                color: colorScheme
-                                                    .onSurfaceVariant,
-                                                fontSize: 12,
+                                        _buildDropdownRow(
+                                          context: context,
+                                          label: 'מעמוד',
+                                          child: AppDropdownField<int>(
+                                            value: _pdfStartPage,
+                                            enableSearch: true,
+                                            entries: List.generate(
+                                              _pdfEndPage,
+                                              (i) => AppMenuEntry(
+                                                value: i + 1,
+                                                label: _labelForPage(i + 1),
                                               ),
                                             ),
-                                            Text(
-                                              'עמוד $_pdfEndPage',
-                                              style: TextStyle(
-                                                color: colorScheme
-                                                    .onSurfaceVariant,
-                                                fontSize: 12,
+                                            onSelected: (int? value) {
+                                              if (value == null) return;
+                                              setState(() {
+                                                _pdfStartPage = value;
+                                                if (_pdfEndPage <
+                                                    _pdfStartPage) {
+                                                  _pdfEndPage = _pdfStartPage;
+                                                }
+                                                _refreshPreviewPdf();
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        _buildDropdownRow(
+                                          context: context,
+                                          label: 'עד עמוד',
+                                          child: AppDropdownField<int>(
+                                            value: _pdfEndPage,
+                                            enableSearch: true,
+                                            entries: List.generate(
+                                              _totalPdfPages -
+                                                  _pdfStartPage +
+                                                  1,
+                                              (i) => AppMenuEntry(
+                                                value: _pdfStartPage + i,
+                                                label: _labelForPage(
+                                                    _pdfStartPage + i),
                                               ),
                                             ),
-                                          ],
+                                            onSelected: (int? value) {
+                                              if (value == null) return;
+                                              setState(() {
+                                                _pdfEndPage = value;
+                                                _refreshPreviewPdf();
+                                              });
+                                            },
+                                          ),
                                         ),
                                         const SizedBox(height: 4),
-                                        RangeSlider(
-                                          min: 1,
-                                          max: _totalPdfPages.toDouble(),
-                                          divisions: _totalPdfPages > 1
-                                              ? _totalPdfPages - 1
-                                              : 1,
-                                          values: RangeValues(
-                                            _pdfStartPage.toDouble(),
-                                            _pdfEndPage.toDouble(),
-                                          ),
-                                          onChanged: (values) {
-                                            setState(() {
-                                              _pdfStartPage =
-                                                  values.start.round();
-                                              _pdfEndPage = values.end.round();
-                                            });
-                                          },
-                                          onChangeEnd: (values) {
-                                            setState(() {
-                                              _pdfStartPage =
-                                                  values.start.round();
-                                              _pdfEndPage = values.end.round();
-                                              _refreshPreviewPdf();
-                                            });
-                                          },
-                                        ),
                                         Text(
                                           '${_pdfEndPage - _pdfStartPage + 1} עמודים מתוך $_totalPdfPages',
                                           style: TextStyle(
@@ -1803,6 +1854,10 @@ if (widget.initialPage != null) {
                                             entries: _flatHeaders
                                                 .asMap()
                                                 .entries
+                                                .where((entry) =>
+                                                    _endHeaderIndex == null ||
+                                                    entry.key <=
+                                                        _endHeaderIndex!)
                                                 .map(
                                                   (entry) => AppMenuEntry(
                                                     value: entry.key,
@@ -1833,6 +1888,10 @@ if (widget.initialPage != null) {
                                             entries: _flatHeaders
                                                 .asMap()
                                                 .entries
+                                                .where((entry) =>
+                                                    _startHeaderIndex == null ||
+                                                    entry.key >=
+                                                        _startHeaderIndex!)
                                                 .map(
                                                   (entry) => AppMenuEntry(
                                                     value: entry.key,
@@ -1878,6 +1937,11 @@ if (widget.initialPage != null) {
                                             entries: _flatAltHeaders
                                                 .asMap()
                                                 .entries
+                                                .where((entry) =>
+                                                    _endAltHeaderIndex ==
+                                                        null ||
+                                                    entry.key <=
+                                                        _endAltHeaderIndex!)
                                                 .map(
                                                   (entry) => AppMenuEntry(
                                                     value: entry.key,
@@ -1910,6 +1974,11 @@ if (widget.initialPage != null) {
                                             entries: _flatAltHeaders
                                                 .asMap()
                                                 .entries
+                                                .where((entry) =>
+                                                    _startAltHeaderIndex ==
+                                                        null ||
+                                                    entry.key >=
+                                                        _startAltHeaderIndex!)
                                                 .map(
                                                   (entry) => AppMenuEntry(
                                                     value: entry.key,
