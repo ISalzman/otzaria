@@ -2252,6 +2252,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               .add(UpdateSidebarWidth(_sidebarWidth.value));
         },
         autoHandleResponsiveVisibility: false,
+        scrollbarTopMargin: 0,
       ),
     );
   }
