@@ -21,6 +21,8 @@ import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/widgets/misc/app_context_menu.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
+import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
+import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../../test_helpers/memory_cache_provider.dart';
 
@@ -313,8 +315,7 @@ void main() {
     menuItemFocusNode.dispose();
   });
 
-  testWidgets(
-      'אחרי סגירת תת-תפריט הפוקוס חוזר לטקסט הראשי בצורת הדף',
+  testWidgets('אחרי סגירת תת-תפריט הפוקוס חוזר לטקסט הראשי בצורת הדף',
       (tester) async {
     final textBookBloc = _TestTextBookBloc(_loadedState());
     final personalNotesBloc = _TestPersonalNotesBloc(
@@ -473,8 +474,7 @@ void main() {
     );
   });
 
-  testWidgets(
-      'אחרי סגירת תפריט, פוקוס שהמשתמש העביר לכפתור אחר אינו נגנב',
+  testWidgets('אחרי סגירת תפריט, פוקוס שהמשתמש העביר לכפתור אחר אינו נגנב',
       (tester) async {
     final textBookBloc = _TestTextBookBloc(_loadedState());
     final personalNotesBloc = _TestPersonalNotesBloc(
@@ -554,8 +554,7 @@ void main() {
     otherButtonFocusNode.dispose();
   });
 
-  testWidgets(
-      'SelectionArea נבנה מחדש כשאזור אחר נעשה פעיל (key משתנה)',
+  testWidgets('SelectionArea נבנה מחדש כשאזור אחר נעשה פעיל (key משתנה)',
       (tester) async {
     final controller = SelectionSyncController();
     addTearDown(controller.dispose);
@@ -708,6 +707,70 @@ void main() {
     scrollController.dispose();
     focusNode.dispose();
   });
+  test('מצב טקסט רציף מעבד הערות אינלייניות במקום להציג HTML גולמי', () {
+    const rawText = 'פסוק <i class="footnote">*(בספרי תימן בסמ״ך גדולה)</i>';
+    final processed = TextRendererService.processText(
+      rawText,
+      const RenderSettings(fontSize: 20),
+    );
+    final spans = buildInlineHtmlSpans(
+      processed,
+      const TextStyle(fontSize: 20),
+    );
+    final flattened = _flattenText(spans);
+    final styledNote = _flattenTextSpans(spans).firstWhere(
+      (span) => span.text?.contains('בספרי תימן') ?? false,
+    );
+
+    expect(flattened, contains('בספרי תימן'));
+    expect(flattened, isNot(contains('<i')));
+    expect(styledNote.style?.fontStyle, FontStyle.italic);
+    expect(styledNote.style?.fontSize, lessThan(20));
+  });
+
+  test('מצב טקסט רציף משמר big בתוך הערה אינליינית', () {
+    const rawText = 'text <i class="footnote">*(small <big>large</big>)</i>';
+    final processed = TextRendererService.processText(
+      rawText,
+      const RenderSettings(fontSize: 20),
+    );
+    final spans = buildInlineHtmlSpans(
+      processed,
+      const TextStyle(fontSize: 20),
+    );
+    final textSpans = _flattenTextSpans(spans);
+    final regularNote = textSpans.firstWhere(
+      (span) => span.text?.contains('small') ?? false,
+    );
+    final enlargedNote = textSpans.firstWhere(
+      (span) => span.text?.contains('large') ?? false,
+    );
+    final regularFontSize = regularNote.style!.fontSize!;
+    final enlargedFontSize = enlargedNote.style!.fontSize!;
+
+    expect(enlargedFontSize, greaterThan(regularFontSize));
+    expect(enlargedNote.style?.fontStyle, FontStyle.italic);
+  });
+}
+
+String _flattenText(List<InlineSpan> spans) {
+  final buffer = StringBuffer();
+  for (final span in _flattenTextSpans(spans)) {
+    buffer.write(span.text);
+  }
+  return buffer.toString();
+}
+
+List<TextSpan> _flattenTextSpans(List<InlineSpan> spans) {
+  final result = <TextSpan>[];
+  void visit(InlineSpan span) {
+    if (span is! TextSpan) return;
+    result.add(span);
+    span.children?.forEach(visit);
+  }
+
+  spans.forEach(visit);
+  return result;
 }
 
 Key? _findSelectionAreaKey(WidgetTester tester) {
