@@ -635,5 +635,5 @@ zip -r hebrew-calendar-demo.otzplugin \
 
 ## תמיכה
 
-- GitHub Issues: https://github.com/Sivan22/otzaria/issues
+- GitHub Issues: https://github.com/Otzaria/otzaria/issues
 - תג: `plugin-sdk`
