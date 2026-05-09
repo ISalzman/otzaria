@@ -176,6 +176,7 @@ class TextBookLoaded extends TextBookState {
   // Controllers
   final ItemScrollController scrollController;
   final ItemPositionsListener positionsListener;
+  final ScrollOffsetController? scrollOffsetController;
 
   const TextBookLoaded({
     required TextBook book,
@@ -206,6 +207,7 @@ class TextBookLoaded extends TextBookState {
     this.searchDistance = 0,
     required this.scrollController,
     required this.positionsListener,
+    this.scrollOffsetController,
     this.currentTitle,
     this.selectedTextForNote,
     this.selectedTextStart,
@@ -248,6 +250,7 @@ class TextBookLoaded extends TextBookState {
       searchText: '',
       scrollController: ItemScrollController(),
       positionsListener: ItemPositionsListener.create(),
+      scrollOffsetController: null,
       visibleIndices: [index],
       selectedTextForNote: null,
       selectedTextStart: null,
@@ -292,6 +295,7 @@ class TextBookLoaded extends TextBookState {
     int? searchDistance,
     ItemScrollController? scrollController,
     ItemPositionsListener? positionsListener,
+    ScrollOffsetController? scrollOffsetController,
     String? currentTitle,
     String? selectedTextForNote,
     int? selectedTextStart,
@@ -339,6 +343,8 @@ class TextBookLoaded extends TextBookState {
       searchDistance: searchDistance ?? this.searchDistance,
       scrollController: scrollController ?? this.scrollController,
       positionsListener: positionsListener ?? this.positionsListener,
+      scrollOffsetController:
+          scrollOffsetController ?? this.scrollOffsetController,
       currentTitle: currentTitle ?? this.currentTitle,
       selectedTextForNote: selectedTextForNote ?? this.selectedTextForNote,
       selectedTextStart: selectedTextStart ?? this.selectedTextStart,
