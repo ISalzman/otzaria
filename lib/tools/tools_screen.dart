@@ -26,6 +26,7 @@ import 'package:otzaria/plugins/view/plugin_tab_page.dart';
 import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
 import 'package:otzaria/plugins/view/plugin_install_screen.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 
 abstract class ToolDescriptor {
@@ -36,6 +37,8 @@ abstract class ToolDescriptor {
       {required this.toolId, required this.label, required this.order});
   Widget buildTab(BuildContext context);
   Widget buildPage(BuildContext context);
+  TopNavItem buildTopNavItem({required bool isSelected, required VoidCallback onTap, Key? key});
+  SidebarNavItem buildSidebarNavItem({required bool isSelected, required VoidCallback onTap, Key? key});
 }
 
 class BuiltInToolDescriptor extends ToolDescriptor {
@@ -71,6 +74,32 @@ class BuiltInToolDescriptor extends ToolDescriptor {
 
   @override
   Widget buildPage(BuildContext context) => pageBuilder();
+
+  @override
+  TopNavItem buildTopNavItem({required bool isSelected, required VoidCallback onTap, Key? key}) {
+    return TopNavItem(
+      key: key,
+      icon: icon,
+      iconFilled: iconFilled,
+      imageAsset: imageIcon,
+      label: label,
+      isSelected: isSelected,
+      onTap: onTap,
+    );
+  }
+
+  @override
+  SidebarNavItem buildSidebarNavItem({required bool isSelected, required VoidCallback onTap, Key? key}) {
+    return SidebarNavItem(
+      key: key,
+      icon: icon,
+      iconFilled: iconFilled,
+      imageAsset: imageIcon,
+      label: label,
+      isSelected: isSelected,
+      onTap: onTap,
+    );
+  }
 }
 
 class PluginToolDescriptor extends ToolDescriptor {
@@ -110,6 +139,40 @@ class PluginToolDescriptor extends ToolDescriptor {
         key: ValueKey(plugin.pluginId),
         plugin: plugin,
       );
+
+  IconData get _pluginIcon {
+    final codepoint = plugin.manifest.toolTabIconCodepoint;
+    final fontFamily = plugin.manifest.toolTabIconFontFamily;
+    return (codepoint != null && fontFamily != null)
+        ? IconData(codepoint, fontFamily: fontFamily, fontPackage: 'fluentui_system_icons')
+        : FluentIcons.puzzle_piece_24_regular;
+  }
+
+  @override
+  TopNavItem buildTopNavItem({required bool isSelected, required VoidCallback onTap, Key? key}) {
+    final icon = _pluginIcon;
+    return TopNavItem(
+      key: key,
+      icon: icon,
+      iconFilled: icon,
+      label: label,
+      isSelected: isSelected,
+      onTap: onTap,
+    );
+  }
+
+  @override
+  SidebarNavItem buildSidebarNavItem({required bool isSelected, required VoidCallback onTap, Key? key}) {
+    final icon = _pluginIcon;
+    return SidebarNavItem(
+      key: key,
+      icon: icon,
+      iconFilled: icon,
+      label: label,
+      isSelected: isSelected,
+      onTap: onTap,
+    );
+  }
 }
 
 class ToolsScreen extends StatefulWidget {
@@ -550,6 +613,19 @@ class ToolsScreenState extends State<ToolsScreen>
       groupedDescriptors.add((label: 'תוספים', tools: ungroupedPlugins));
     }
 
+    Widget buildIcon(ToolDescriptor descriptor) {
+      if (descriptor is BuiltInToolDescriptor) {
+        if (descriptor.imageIcon != null) {
+          return ImageIcon(AssetImage(descriptor.imageIcon!), size: 22, color: cs.primary);
+        }
+        return Icon(descriptor.icon, color: cs.primary);
+      }
+      if (descriptor is PluginToolDescriptor) {
+        return Icon(descriptor._pluginIcon, color: cs.primary);
+      }
+      return Icon(FluentIcons.puzzle_piece_24_regular, color: cs.primary);
+    }
+
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
@@ -578,31 +654,18 @@ class ToolsScreenState extends State<ToolsScreen>
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(AppTokens.spaceMD),
+        padding: const EdgeInsets.all(12),
         children: [
           for (final group in groupedDescriptors) ...[
-            _MobileGroupCard(
+            SettingsCard(
               title: group.label,
               children: [
                 for (final descriptor in group.tools)
                   ListTile(
                     key: tourToolTabTargetKeys[descriptor.toolId],
-                    leading: descriptor is BuiltInToolDescriptor
-                        ? (descriptor.imageIcon != null
-                            ? ImageIcon(
-                                AssetImage(descriptor.imageIcon!),
-                                size: 22,
-                                color: cs.primary,
-                              )
-                            : Icon(descriptor.icon, color: cs.primary))
-                        : Icon(FluentIcons.puzzle_piece_24_regular,
-                            color: cs.primary),
-                    title: Text(
-                      descriptor.label,
-                      textDirection: TextDirection.rtl,
-                    ),
-                    trailing:
-                        const RtlIcon(FluentIcons.chevron_left_24_regular),
+                    leading: buildIcon(descriptor),
+                    title: Text(descriptor.label),
+                    trailing: const RtlIcon(FluentIcons.chevron_left_24_regular),
                     onTap: () {
                       final index = _descriptors.indexOf(descriptor);
                       if (index != -1) _changeTab(index);
@@ -610,7 +673,7 @@ class ToolsScreenState extends State<ToolsScreen>
                   ),
               ],
             ),
-            const SizedBox(height: AppTokens.spaceSM),
+            const SizedBox(height: 8),
           ],
         ],
       ),
@@ -744,30 +807,9 @@ class ToolsScreenState extends State<ToolsScreen>
                                           for (int index = 0;
                                               index < _descriptors.length;
                                               index++) ...[
-                                            TopNavItem(
+                                            _descriptors[index].buildTopNavItem(
                                               key: tourToolTabTargetKeys[
                                                   _descriptors[index].toolId],
-                                              icon: _descriptors[index]
-                                                      is BuiltInToolDescriptor
-                                                  ? (_descriptors[index]
-                                                          as BuiltInToolDescriptor)
-                                                      .icon
-                                                  : FluentIcons
-                                                      .puzzle_piece_24_regular,
-                                              iconFilled: _descriptors[index]
-                                                      is BuiltInToolDescriptor
-                                                  ? (_descriptors[index]
-                                                          as BuiltInToolDescriptor)
-                                                      .iconFilled
-                                                  : FluentIcons
-                                                      .puzzle_piece_24_regular,
-                                              imageAsset: _descriptors[index]
-                                                      is BuiltInToolDescriptor
-                                                  ? (_descriptors[index]
-                                                          as BuiltInToolDescriptor)
-                                                      .imageIcon
-                                                  : null,
-                                              label: _descriptors[index].label,
                                               isSelected: _selectedToolId ==
                                                   _descriptors[index].toolId,
                                               onTap: () => _changeTab(index),
@@ -937,36 +979,3 @@ class ToolsScreenState extends State<ToolsScreen>
   }
 }
 
-class _MobileGroupCard extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-
-  const _MobileGroupCard({
-    required this.title,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: Theme.of(context).colorScheme.surface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              title,
-              textDirection: TextDirection.rtl,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-            ),
-          ),
-          ...children,
-        ],
-      ),
-    );
-  }
-}
