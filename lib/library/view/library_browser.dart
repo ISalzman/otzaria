@@ -707,10 +707,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           minPaneWidth: previewPaneWidths.minPaneWidth,
           maxPaneWidth: previewPaneWidths.maxPaneWidth,
           onPaneWidthChanged: (nextWidth) {
-            setState(() {
-              _previewPaneWidthOverride = nextWidth;
-            });
+            _previewPaneWidthOverride = nextWidth;
           },
+          autoHandleResponsiveVisibility: false,
           wrapPaneInFloatingPanel: false,
           narrowPaneBuilder: (context, paneContent) => Material(
             color: Theme.of(context).colorScheme.surface,
@@ -824,39 +823,24 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     bool compact,
   ) {
     return [
-      ActionButtonData(
-        widget: ToolbarActionButton(
-          compact: compact,
-          tooltip: 'חזרה לתיקיה הקודמת',
-          icon: FluentIcons.arrow_up_24_regular,
-          onPressed: () => _handleNavigateUp(context, state, settingsState),
-        ),
-        icon: FluentIcons.arrow_up_24_regular,
+      ActionButtonData.simple(
+        compact: compact,
         tooltip: 'חזרה לתיקיה הקודמת',
+        icon: FluentIcons.arrow_up_24_regular,
         onPressed: () => _handleNavigateUp(context, state, settingsState),
       ),
-      ActionButtonData(
-        widget: ToolbarActionButton(
-          compact: compact,
-          tooltip: 'חזרה לתיקיה הראשית',
-          icon: FluentIcons.home_24_regular,
-          onPressed: () => _handleNavigateHome(context, state, settingsState),
-        ),
-        icon: FluentIcons.home_24_regular,
+      ActionButtonData.simple(
+        compact: compact,
         tooltip: 'חזרה לתיקיה הראשית',
+        icon: FluentIcons.home_24_regular,
         onPressed: () => _handleNavigateHome(context, state, settingsState),
       ),
       if (settingsState.canUseSoftwareAndBookUpdates)
         _buildSyncActionButton(compact: compact),
-      ActionButtonData(
-        widget: ToolbarActionButton(
-          compact: compact,
-          tooltip: 'טעינה מחדש',
-          icon: FluentIcons.arrow_clockwise_24_regular,
-          onPressed: _refreshWithPersonalFolders,
-        ),
-        icon: FluentIcons.arrow_clockwise_24_regular,
+      ActionButtonData.simple(
+        compact: compact,
         tooltip: 'טעינה מחדש',
+        icon: FluentIcons.arrow_clockwise_24_regular,
         onPressed: _refreshWithPersonalFolders,
       ),
     ];
@@ -869,39 +853,24 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     bool compact,
   ) {
     return [
-      ActionButtonData(
-        widget: ToolbarActionButton(
-          compact: compact,
-          tooltip: 'חזרה לתיקיה הקודמת',
-          icon: FluentIcons.arrow_up_24_regular,
-          onPressed: () => _handleNavigateUp(context, state, settingsState),
-        ),
-        icon: FluentIcons.arrow_up_24_regular,
+      ActionButtonData.simple(
+        compact: compact,
         tooltip: 'חזרה לתיקיה הקודמת',
+        icon: FluentIcons.arrow_up_24_regular,
         onPressed: () => _handleNavigateUp(context, state, settingsState),
       ),
       if (settingsState.canUseSoftwareAndBookUpdates)
         _buildSyncActionButton(compact: compact),
-      ActionButtonData(
-        widget: ToolbarActionButton(
-          compact: compact,
-          tooltip: 'חזרה לתיקיה הראשית',
-          icon: FluentIcons.home_24_regular,
-          onPressed: () => _handleNavigateHome(context, state, settingsState),
-        ),
-        icon: FluentIcons.home_24_regular,
+      ActionButtonData.simple(
+        compact: compact,
         tooltip: 'חזרה לתיקיה הראשית',
+        icon: FluentIcons.home_24_regular,
         onPressed: () => _handleNavigateHome(context, state, settingsState),
       ),
-      ActionButtonData(
-        widget: ToolbarActionButton(
-          compact: compact,
-          tooltip: 'טעינה מחדש',
-          icon: FluentIcons.arrow_clockwise_24_regular,
-          onPressed: _refreshWithPersonalFolders,
-        ),
-        icon: FluentIcons.arrow_clockwise_24_regular,
+      ActionButtonData.simple(
+        compact: compact,
         tooltip: 'טעינה מחדש',
+        icon: FluentIcons.arrow_clockwise_24_regular,
         onPressed: _refreshWithPersonalFolders,
       ),
     ];
