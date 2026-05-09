@@ -305,7 +305,9 @@ class ToolsScreenState extends State<ToolsScreen>
   }
 
   void _closeTransientPanelsForToolId(String? toolId) {
-    // Reserved for future transient-panel teardown per tool
+    if (toolId == 'builtin.calendar') {
+      _calendarKey.currentState?.closeTransientPanels();
+    }
   }
 
   void closeTransientPanels() {

@@ -85,8 +85,11 @@ class CalendarWidgetState extends State<CalendarWidget> {
   void requestKeyboardFocus() => _requestFocusIfNeeded();
 
   void closeTransientPanels() {
-    if (!_isSettingsPanelOpen) return;
-    setState(() => _isSettingsPanelOpen = false);
+    if (!_isSettingsPanelOpen && !_isJumpToDateSearchOpen) return;
+    setState(() {
+      _isSettingsPanelOpen = false;
+      _isJumpToDateSearchOpen = false;
+    });
   }
 
   @override
