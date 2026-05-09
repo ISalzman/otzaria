@@ -8,6 +8,9 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart'
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
+import 'package:otzaria/settings/search/settings_anchor.dart';
+import 'package:otzaria/settings/search/settings_search_models.dart';
+import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
@@ -28,6 +31,50 @@ import 'package:otzaria/core/ui_snack.dart';
 /// טאב הגדרות ספרייה
 class LibrarySettingsTab extends StatefulWidget {
   const LibrarySettingsTab({super.key});
+
+  /// פריטי חיפוש בהגדרות. נסרק על-ידי tool/generate_search_index.dart.
+  static const List<SettingsSearchEntry> searchEntries = [
+    SettingsSearchEntry(
+      id: 'library.location.path',
+      title: 'מיקום ספריית אוצריא',
+      subtitle: 'התיקייה בה נשמרים ספרי אוצריא',
+      tab: SettingsTab.library,
+      cardId: 'library.repository',
+      keywords: ['נתיב', 'תיקיה', 'מאגר'],
+    ),
+    SettingsSearchEntry(
+      id: 'library.location.hebrewbooks',
+      title: 'מיקום ספרי היברובוקס',
+      subtitle: 'תיקיית ספרי HebrewBooks',
+      tab: SettingsTab.library,
+      cardId: 'library.display',
+      keywords: ['hebrewbooks', 'היברובוקס'],
+    ),
+    SettingsSearchEntry(
+      id: 'library.custom_folders',
+      title: 'תיקיות מותאמות אישית',
+      subtitle: 'הוסף תיקיות ספרים נוספות',
+      tab: SettingsTab.library,
+      cardId: 'library.custom_folders',
+      keywords: ['תיקיות', 'מותאם'],
+    ),
+    SettingsSearchEntry(
+      id: 'library.search.auto_index',
+      title: 'עדכון אינדקס אוטומטי',
+      subtitle: 'אינדקס החיפוש יתעדכן אוטומטית',
+      tab: SettingsTab.library,
+      cardId: 'library.search',
+      keywords: ['חיפוש', 'אינדקס'],
+    ),
+    SettingsSearchEntry(
+      id: 'library.search.index_status',
+      title: 'אינדקס חיפוש',
+      subtitle: 'סטטוס ועדכון אינדקס החיפוש',
+      tab: SettingsTab.library,
+      cardId: 'library.search',
+      keywords: ['חיפוש', 'אינדקס', 'בנייה'],
+    ),
+  ];
 
   @override
   State<LibrarySettingsTab> createState() => _LibrarySettingsTabState();
@@ -254,33 +301,45 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                   children: [
                     // מאגר הספרים (רק בדסקטופ)
                     if (!(Platform.isAndroid || Platform.isIOS)) ...[
-                      SettingsCard(
-                        title: 'מאגר הספרים',
-                        children: [
-                          _buildLibraryLocationWidget(context),
-                        ],
+                      SettingsAnchor(
+                        cardId: 'library.repository',
+                        child: SettingsCard(
+                          title: 'מאגר הספרים',
+                          children: [
+                            _buildLibraryLocationWidget(context),
+                          ],
+                        ),
                       ),
                       kSettingsCardSpacing,
                     ],
 
                     // הפאנל המשותף (תצוגה + ספרים נוספים) - כעת כולל את תיקיית היברובוקס בתוכו!
-                    LibrarySettingsPanel(
-                        hebrewBooksPathWidget: hebrewPathWidget),
+                    SettingsAnchor(
+                      cardId: 'library.display',
+                      child: LibrarySettingsPanel(
+                          hebrewBooksPathWidget: hebrewPathWidget),
+                    ),
 
                     // תיקיות מותאמות אישית (רק בדסקטופ)
                     if (!(Platform.isAndroid || Platform.isIOS)) ...[
                       kSettingsCardSpacing,
-                      SettingsCard(
-                        title: 'תיקיות מותאמות אישית',
-                        children: const [
-                          CustomFoldersTile(),
-                        ],
+                      SettingsAnchor(
+                        cardId: 'library.custom_folders',
+                        child: SettingsCard(
+                          title: 'תיקיות מותאמות אישית',
+                          children: const [
+                            CustomFoldersTile(),
+                          ],
+                        ),
                       ),
                     ],
 
                     // חיפוש ואינדקס
                     kSettingsCardSpacing,
-                    _buildSearchSection(context, state, libraryState),
+                    SettingsAnchor(
+                      cardId: 'library.search',
+                      child: _buildSearchSection(context, state, libraryState),
+                    ),
                   ],
                 ),
               ),

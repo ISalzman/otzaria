@@ -33,7 +33,18 @@ class IndexingRepository {
     return indexExistedBeforeInit && booksDone.isEmpty;
   }
 
+  /// בודקת אם בכלל יש טעם להריץ את בדיקת requiresManualReindex.
+  /// ספרייה ריקה (כולל המקרה של "אין ספרייה") אין טעם לאפס לה אינדקס,
+  /// כי אין מה לאנדקס מחדש.
+  @visibleForTesting
+  static bool shouldSkipManualReindexCheck(Library library) {
+    return library.getAllBooks().isEmpty;
+  }
+
   Future<bool> requiresManualReindex(Library library) async {
+    if (shouldSkipManualReindexCheck(library)) {
+      return false;
+    }
     await _tantivyDataProvider.engine;
     return _tantivyDataProvider.requiresManualReindex(
       currentCatalogueOrderSignature: buildCatalogueOrderSignature(library),
