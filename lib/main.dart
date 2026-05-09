@@ -491,7 +491,7 @@ Future<void> _initializeRestartableRuntime() async {
 
   try {
     final cacheDir = await getTemporaryDirectory();
-    Pdfrx.getCacheDirectory = () => cacheDir.path;
+    Pdfrx.cacheDirectoryPath = cacheDir.path;
     debugPrint('Pdfrx cache directory set to: ${cacheDir.path}');
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Pdfrx cache directory', error, stackTrace);

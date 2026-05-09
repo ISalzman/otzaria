@@ -247,11 +247,7 @@ class TantivyDataProvider {
     required String currentCatalogueOrderSignature,
   }) {
     return indexExistedBeforeInit &&
-        shouldInvalidateStoredIndexState(
-          storedIndexStateVersion: storedIndexStateVersion,
-          storedCatalogueOrderSignature: storedCatalogueOrderSignature,
-          currentCatalogueOrderSignature: currentCatalogueOrderSignature,
-        );
+        storedIndexStateVersion != currentIndexStateVersion;
   }
 
   bool requiresManualReindex({
