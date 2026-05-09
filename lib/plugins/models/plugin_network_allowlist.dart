@@ -29,15 +29,15 @@
 const List<String> pluginNetworkAllowlist = <String>[
   // הוסיפו כאן URLs מאושרים — דוגמה (להסיר/להשאיר לפי הצורך):
   // אתר אוצר החכמה
-  "https://tablet.otzar.org",
+  'https://tablet.otzar.org',
   // אתר היברבוקס
-  "https://hebrewbooks.org",
+  'https://hebrewbooks.org',
   // ספריית על התורה
-  "https://library.alhatorah.org",
-  "https://mg.alhatorah.org",
-  "https://turshulchanarukh.alhatorah.org",
-  "https://rambam.alhatorah.org",
-  "https://shas.alhatorah.org"
+  'https://library.alhatorah.org',
+  'https://mg.alhatorah.org',
+  'https://turshulchanarukh.alhatorah.org',
+  'https://rambam.alhatorah.org',
+  'https://shas.alhatorah.org',
 ];
 
 /// בודקת האם [uri] מורשה לגישה על-ידי תוספים.
