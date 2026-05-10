@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -190,8 +191,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   void _updateLastScrollIndex() {
     final positions = _itemPositionsListener.itemPositions.value;
     if (positions.isNotEmpty) {
-      // שומר את האינדקס של הפריט הראשון הנראה
-      _lastScrollIndex = positions.first.index;
+      _lastScrollIndex = topmostVisibleIndex(positions);
     }
   }
 

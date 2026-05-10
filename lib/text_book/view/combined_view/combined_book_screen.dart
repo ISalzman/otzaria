@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:otzaria/text_book/utils/visible_index.dart';
 
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -259,8 +260,7 @@ class _CombinedViewState extends State<CombinedView> {
   void _updateTabIndex() {
     final positions = widget.tab.positionsListener.itemPositions.value;
     if (positions.isNotEmpty) {
-      // שומר את האינדקס של הפריט הראשון הנראה
-      widget.tab.index = positions.first.index;
+      widget.tab.index = topmostVisibleIndex(positions);
     }
   }
 
@@ -901,12 +901,9 @@ class _CombinedViewState extends State<CombinedView> {
                 }
                 // כניסה למצב בחירה כשיש טקסט נבחר
                 if (!_selectionManager.isInSelectionMode) {
-                  // שימוש באינדקס הראשון הנראה במקום 0
-                  final positions =
-                      widget.tab.positionsListener.itemPositions.value;
-                  final firstVisibleIndex =
-                      positions.isNotEmpty ? positions.first.index : 0;
-                  _selectionManager.setAnchor(firstVisibleIndex);
+                  // שימוש באינדקס העליון הנראה במקום 0
+                  _selectionManager.setAnchor(topmostVisibleIndex(
+                      widget.tab.positionsListener.itemPositions.value));
                 }
 
                 // חשוב: כדי ש-Ctrl+C יעבוד מיד אחרי סימון טקסט עם העכבר
