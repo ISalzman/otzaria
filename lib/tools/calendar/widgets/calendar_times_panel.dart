@@ -854,7 +854,7 @@ class _ZmanCard extends StatelessWidget {
             : entry.name.length > 16
                 ? 13.0
                 : 14.0;
-    return entry.isComposite ? base + 1 : base;
+    return base + 1;
   }
 
   @override
@@ -896,16 +896,12 @@ class _ZmanCard extends StatelessWidget {
                             color: primaryTextColor,
                           );
                   return FittedBox(
-                    alignment: timeData.isComposite
-                        ? Alignment.center
-                        : AlignmentDirectional.centerStart,
+                    alignment: Alignment.center,
                     fit: BoxFit.scaleDown,
                     child: SizedBox(
                       width: constraints.maxWidth,
                       child: Align(
-                        alignment: timeData.isComposite
-                            ? Alignment.center
-                            : AlignmentDirectional.centerStart,
+                        alignment: Alignment.center,
                         child: _OverflowAwareTooltipText(
                           text: timeData.name,
                           style: nameStyle,
@@ -1192,6 +1188,7 @@ class _OverflowAwareTooltipText extends StatelessWidget {
           maxLines: maxLines,
           overflow: TextOverflow.ellipsis,
           textDirection: TextDirection.rtl,
+          textAlign: TextAlign.center,
           style: resolvedStyle,
         );
 
