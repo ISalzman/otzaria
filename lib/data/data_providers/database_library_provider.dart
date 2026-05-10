@@ -1677,6 +1677,11 @@ class DatabaseLibraryProvider implements LibraryProvider {
     _userBooksCachedKeys.clear();
 
     try {
+      final dbPath = await UserBooksDatabaseHolder.resolveDbPath();
+      if (!await File(dbPath).exists()) {
+        return;
+      }
+
       final repo = await UserBooksDatabaseHolder.instance.repository;
 
       late final List<Map<String, dynamic>> userBooks;

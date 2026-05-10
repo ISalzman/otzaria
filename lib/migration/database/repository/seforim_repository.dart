@@ -817,72 +817,9 @@ class SeforimRepository {
       }
 
       return book.id;
-    } else {
-      _logger.warning("\x1B[33m error generat negetive id\x1B[0m");
-      // Fall back to auto-generated ID if book.id is 0
-      // final id = await _database.bookDao.insertBook(
-      //     book.categoryId,
-      //     book.sourceId,
-      //     book.title,
-      //     book.heShortDesc,
-      //     book.order,
-      //     book.totalLines,
-      //     book.isBaseBook,
-      //     hasTargumConnection: book.hasTargumConnection,
-      //     hasReferenceConnection: book.hasReferenceConnection,
-      //     hasSourceConnection: book.hasSourceConnection,
-      //     hasCommentaryConnection: book.hasCommentaryConnection,
-      //     hasOtherConnection: book.hasOtherConnection,
-      //     hasAltStructures: book.hasAltStructures,
-      //     hasTeamim: book.hasTeamim,
-      //     hasNekudot: book.hasNekudot,
-      //     isPersonal: book.isPersonal,
-      //     filePath: book.filePath,
-      //     fileType: book.fileType,
-      //     fileSize: book.fileSize,
-      //     lastModified: book.lastModified,
-      // );
-
-      // Check if insertion failed
     }
-    // Try to find the book by title
-    final existingBook = await _database.bookDao.getBookById(book.id);
-    // if (existingBook != null) {
-    //   return existingBook.id;
-    // }
-
-    // throw Exception(
-    //     'Failed to insert book \'${book.title}\' - insertion returned ID 0. Context: categoryId=${book.categoryId}, authors=${book.authors.map((a) => a.name)}, topics=${book.topics.map((t) => t.name)}, pubPlaces=${book.pubPlaces.map((p) => p.name)}, pubDates=${book.pubDates.map((d) => d.date)}');
-
-    // Process authors
-    if (existingBook == null) {
-      throw Exception(
-          'Failed to insert book and could not find it by title either.');
-    }
-    for (final author in book.authors) {
-      final authorId = await insertAuthor(author.name);
-      await linkAuthorToBook(authorId, existingBook.id);
-    }
-
-    // Process topics
-    for (final topic in book.topics) {
-      final topicId = await insertTopic(topic.name);
-      await linkTopicToBook(topicId, existingBook.id);
-    }
-
-    // Process publication places
-    for (final pubPlace in book.pubPlaces) {
-      final pubPlaceId = await insertPubPlace(pubPlace.name);
-      await linkPubPlaceToBook(pubPlaceId, existingBook.id);
-    }
-
-    // Process publication dates
-    for (final pubDate in book.pubDates) {
-      final pubDateId = await insertPubDate(pubDate.date);
-      await linkPubDateToBook(pubDateId, existingBook.id);
-    }
-
-    return existingBook.id;
+    throw Exception(
+        'insertBook called with id=0 and useAutoIncrementIds=false. Book: ${book.title}');
   }
 
   // --- Sources ---
