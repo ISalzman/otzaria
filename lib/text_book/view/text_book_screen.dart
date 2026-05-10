@@ -1576,6 +1576,42 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       //     onPressed: () => _handleFullFileEditorPress(context, state),
       //   ),
 
+      // העתק קישור ישיר
+      ActionButtonData(
+        widget: const SizedBox.shrink(),
+        icon: FluentIcons.link_24_regular,
+        tooltip: state.book.id != null
+            ? 'העתק קישור ישיר'
+            : 'העתק קישור ישיר (לא זמין לספר זה)',
+        onPressed: null,
+        submenuItems: state.book.id != null
+            ? () {
+                final bookId = state.book.id!;
+                return [
+                  ActionButtonData(
+                    widget: const SizedBox.shrink(),
+                    icon: FluentIcons.link_24_regular,
+                    tooltip: 'העתק קישור ישיר לספר זה',
+                    onPressed: () => copyLinkToClipboard(buildBookLink(bookId)),
+                  ),
+                  ActionButtonData(
+                    widget: const SizedBox.shrink(),
+                    icon: FluentIcons.link_multiple_24_regular,
+                    tooltip: 'העתק קישור ישיר למקטע זה',
+                    onPressed: () {
+                      final index =
+                          state.positionsListener.itemPositions.value.isNotEmpty
+                              ? state.positionsListener.itemPositions.value
+                                  .first.index
+                              : 0;
+                      copyLinkToClipboard(buildSectionLink(bookId, index));
+                    },
+                  ),
+                ];
+              }()
+            : null,
+      ),
+
       // 6) הדפסה - לא בתצוגה משולבת
       if (!widget.isInCombinedView)
         ActionButtonData(
@@ -1601,42 +1637,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           tooltip: 'אודות הספר',
           onPressed: () => showBookSourceDialog(context, state),
         ),
-
-      // העתק קישור ישיר
-      ActionButtonData(
-        widget: const SizedBox.shrink(),
-        icon: FluentIcons.link_24_regular,
-        tooltip: 'העתק קישור ישיר',
-        onPressed: null,
-        submenuItems: () {
-          final bookId = state.book.id;
-          return [
-            ActionButtonData(
-              widget: const SizedBox.shrink(),
-              icon: FluentIcons.link_24_regular,
-              tooltip: 'העתק קישור ישיר לספר זה',
-              onPressed: bookId != null
-                  ? () => copyLinkToClipboard(buildBookLink(bookId))
-                  : null,
-            ),
-            ActionButtonData(
-              widget: const SizedBox.shrink(),
-              icon: FluentIcons.link_multiple_24_regular,
-              tooltip: 'העתק קישור ישיר למקטע זה',
-              onPressed: bookId != null
-                  ? () {
-                      final index = state
-                              .positionsListener.itemPositions.value.isNotEmpty
-                          ? state.positionsListener.itemPositions.value.first
-                              .index
-                          : 0;
-                      copyLinkToClipboard(buildSectionLink(bookId, index));
-                    }
-                  : null,
-            ),
-          ];
-        }(),
-      ),
 
       // תת-תפריט "פעולות נוספות" - רק בתצוגה משולבת
       if (widget.isInCombinedView)
