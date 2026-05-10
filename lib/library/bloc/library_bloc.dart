@@ -375,7 +375,10 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     UpdateSearchQuery event,
     Emitter<LibraryState> emit,
   ) {
-    emit(state.copyWith(searchQuery: event.query));
+    emit(state.copyWith(
+      searchQuery: event.query,
+      searchResults: state.searchResults,
+    ));
   }
 
   Future<void> _onSearchBooks(
@@ -385,6 +388,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     if (state.searchQuery == null || state.searchQuery!.length < 3) {
       emit(state.copyWith(
         searchResults: null,
+        isSearching: false,
       ));
       return;
     }
@@ -396,6 +400,12 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       final topics = List<String>.from(state.selectedTopics ?? const []);
       final includeOtzar = event.showOtzarHachochma ?? false;
       final includeHebrewBooks = event.showHebrewBooks ?? false;
+
+      emit(state.copyWith(
+        isSearching: true,
+        searchResults: state.searchResults,
+      ));
+
       final results = await _repository.findBooks(
         query,
         category,
@@ -408,6 +418,14 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
           state.searchQuery != query ||
           state.currentCategory != category ||
           !_sameStringList(state.selectedTopics ?? const [], topics)) {
+        // אם אין חיפוש חדש שעקף (אותה גנרציה), נאפס את דגל הטעינה
+        // כדי שלא יישאר תקוע (למשל אחרי NavigateToCategory מבלי SearchBooks).
+        if (searchGeneration == _searchGeneration) {
+          emit(state.copyWith(
+            isSearching: false,
+            searchResults: state.searchResults,
+          ));
+        }
         return;
       }
 
@@ -424,11 +442,13 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       emit(state.copyWith(
         searchResults: results,
         previewBook: firstBook,
+        isSearching: false,
       ));
     } catch (e) {
       emit(state.copyWith(
         error: e.toString(),
         searchResults: null,
+        isSearching: false,
       ));
     }
   }
@@ -466,6 +486,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     emit(state.copyWith(
       selectedTopics: event.topics,
       previewBook: firstBook,
+      searchResults: state.searchResults,
     ));
   }
 
