@@ -625,7 +625,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       UiSnack.showError('ספר ה-PDF עם המזהה $bookId לא נמצא בספרייה');
       return;
     }
-    openBook(context, book, page ?? 1, '');
+    openBook(context, book, page ?? 1, '', requiresStableLayout: true);
   }
 
   void _openToolWhenAvailable(String toolId, {int attemptsLeft = 6}) {
