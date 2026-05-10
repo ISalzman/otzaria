@@ -606,10 +606,12 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
                     );
                     if (result == null) return;
                     if (result.cancelAlert) {
-                      unawaited(cubit.cancelZmanAlertPreference(timeId: timeId));
+                      _runZmanAlertOp(
+                        cubit.cancelZmanAlertPreference(timeId: timeId),
+                      );
                       return;
                     }
-                    unawaited(cubit.setZmanAlertPreference(
+                    _runZmanAlertOp(cubit.setZmanAlertPreference(
                       timeId: timeId,
                       displayName: timeName,
                       minutesBefore: result.minutesBefore,
@@ -705,10 +707,12 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
         );
         if (result == null) return;
         if (result.cancelAlert) {
-          unawaited(cubit.cancelZmanAlertPreference(timeId: 'omerCounting'));
+          _runZmanAlertOp(
+            cubit.cancelZmanAlertPreference(timeId: 'omerCounting'),
+          );
           return;
         }
-        unawaited(cubit.setZmanAlertPreference(
+        _runZmanAlertOp(cubit.setZmanAlertPreference(
           timeId: 'omerCounting',
           displayName: 'ספירת העומר',
           minutesBefore: result.minutesBefore,
@@ -749,6 +753,16 @@ class _CityDropdown extends StatelessWidget {
       ),
     );
   }
+}
+
+/// מפעיל פעולת cubit ברקע (fire-and-forget) ומציג שגיאות דרך UiSnack
+/// במקום לבלוע אותן בשקט. נדרש כי await ישיר גורם לקפיאת UI בזמן
+/// שכלול ההתראות (חישוב זמנים יומי + תזמון notifications מערכת).
+void _runZmanAlertOp(Future<void> future) {
+  unawaited(future.catchError((Object error, StackTrace stackTrace) {
+    debugPrint('ZmanAlert op failed: $error\n$stackTrace');
+    UiSnack.showError('שגיאה בעדכון ההתראה');
+  }));
 }
 
 String _formatAlertMinutes(int minutes) {
@@ -1030,10 +1044,10 @@ class _ZmanCard extends StatelessWidget {
     );
     if (result == null) return;
     if (result.cancelAlert) {
-      unawaited(cubit.cancelZmanAlertPreference(timeId: option.id));
+      _runZmanAlertOp(cubit.cancelZmanAlertPreference(timeId: option.id));
       return;
     }
-    unawaited(cubit.setZmanAlertPreference(
+    _runZmanAlertOp(cubit.setZmanAlertPreference(
       timeId: option.id,
       displayName: option.name,
       minutesBefore: result.minutesBefore,
