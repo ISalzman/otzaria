@@ -8,42 +8,37 @@ on:
 
 jobs:
   test:
-    name: Run Tests on ${{ matrix.os }}
+    name: Analyze & Test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
-    # מטריצה להרצה על מערכות הפעלה שונות (אופציונלי)
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest] # אפשר להוסיף macos-latest אם יש טסטים ספציפיים ל-iOS
+        os: [ubuntu-latest]
 
     steps:
-      # 1. שליחת הקוד למכונה
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. התקנת סביבת Flutter
+      # שימוש ב-channel stable + cache, אחיד עם build-and-announce.yml
+      # (לא ננעל גרסה כדי שלא נצטרך לעדכן בשני מקומות).
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.x' # משתמש בגרסה היציבה האחרונה
-          channel: 'stable'
-          cache: true # שומר זיכרון מטמון כדי להריץ מהר יותר בפעמים הבאות
+          channel: stable
+          cache: true
 
-      # 3. התקנת חבילות (Dependencies)
       - name: Install dependencies
         run: flutter pub get
 
-      # 3.1 חילול אינדקס חיפוש בהגדרות (.g.dart) — gitignored, נדרש לפני הטסטים.
+      # חילול אינדקס חיפוש בהגדרות. ה-.g.dart נדחף לרפו, אבל הסקריפט הזה
+      # יוודא שהוא עדכני בכל הרצה (אם searchEntries השתנו במהלך ה-PR).
       - name: Generate settings search index
         run: dart run tool/generate_search_index.dart
 
-      # 4. הרצת הבדיקות (Unit & Widget Tests)
-      - name: Run tests with coverage
-        run: flutter test --coverage
+      # ה-trinity של CLAUDE.md: analyze + test (פורמט נבדק locally בlint).
+      - name: Analyze
+        run: flutter analyze
 
-      # 5. העלאת דו"ח כיסוי קוד (Coverage)
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }} # דורש הגדרה ב-Secrets של GitHub
+      - name: Run tests
+        run: flutter test
