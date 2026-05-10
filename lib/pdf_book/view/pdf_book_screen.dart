@@ -39,7 +39,6 @@ import 'pdf_thumbnails_screen.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
-import 'package:flutter/gestures.dart';
 import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'pdf_zoom_bar.dart';
@@ -119,8 +118,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   static const double _verticalScrollbarGutter = 16.0;
   static const double _horizontalScrollbarGutter = 10.0;
   static const double _scrollbarGutterGap = 4.0;
-  static const Duration _pointerScrollFlushDelay = Duration(milliseconds: 12);
-  static const double _maxPointerScrollBurstDelta = 160.0;
   static const String _connectionTypeCommentary = 'COMMENTARY';
   static const String _connectionTypeTargum = 'TARGUM';
 
@@ -142,12 +139,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   // גלילה רציפה
   Timer? _scrollTimer;
-  Timer? _pointerScrollFlushTimer;
   LogicalKeyboardKey? _currentScrollKey;
   int? _scrollAnchorPage;
-  Matrix4? _panZoomBaseMatrix;
-  double _pendingPointerScrollDx = 0.0;
-  double _pendingPointerScrollDy = 0.0;
   int? _lockedSpreadStartPage;
   ui.Image? _pageTurnSnapshot;
   ui.Image? _pageTurnTargetSnapshot;
@@ -849,7 +842,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           : null,
       enableKeyboardNavigation: false,
       scrollByArrowKey: 25.0,
-      scrollByMouseWheel: 0.0,
+      scrollByMouseWheel: 0.2,
+      interactionDelegateProvider:
+          const PdfViewerScrollInteractionDelegateProviderPhysics(),
       onDocumentLoadFinished: (documentRef, succeeded) {
         if (!mounted) return;
         _bloc.add(pdf_events.SetLoadingState(
@@ -893,7 +888,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         Positioned.fill(
           child: AppContextMenuRegion(
             menuBuilder: _buildPdfContextMenuEntries,
-            child: const ColoredBox(color: Colors.transparent),
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerSignal: (event) {
+                widget.tab.pdfViewerController.handlePointerSignalEvent(event);
+                _scheduleReaderFocusAndHidePaneIfNeeded();
+              },
+              child: const SizedBox.expand(),
+            ),
           ),
         ),
         _buildBookViewViewportMask(size),
@@ -2318,7 +2320,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   @override
   void dispose() {
     _stopContinuousScroll();
-    _pointerScrollFlushTimer?.cancel();
     _disposePageTurnSnapshot();
     _disposeAllSpreadCache();
     _pendingPageTurns.clear();
@@ -2570,146 +2571,109 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             _scheduleReaderFocusAndHidePaneIfNeeded();
             return false;
           },
-          child: Listener(
-            onPointerSignal: (event) {
-              if (event is PointerScrollEvent) {
-                if (HardwareKeyboard.instance.isControlPressed) {
-                  return;
-                }
-
-                _queuePointerScroll(event);
-                _scheduleReaderFocusAndHidePaneIfNeeded();
-              }
-            },
-            onPointerPanZoomStart: (_) {
-              _captureScrollAnchor();
-              if (widget.tab.pdfViewerController.isReady) {
-                _panZoomBaseMatrix =
-                    widget.tab.pdfViewerController.value.clone();
-              }
-            },
-            onPointerPanZoomUpdate: (event) {
-              if (HardwareKeyboard.instance.isControlPressed) {
-                return;
-              }
-
-              _applyPanZoomScroll(event);
-
-              if (!(widget.tab.pinLeftPane.value ||
-                  (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
-                _setLeftPaneVisibility(false);
-                Future.microtask(() {
-                  _pdfViewFocusNode.requestFocus();
-                });
-              }
-            },
-            onPointerPanZoomEnd: (_) {
-              _panZoomBaseMatrix = null;
-            },
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Padding(
-                  padding: readerContentPadding,
-                  child: RepaintBoundary(
-                    key: _pdfViewportBoundaryKey,
-                    child: ColorFiltered(
-                      colorFilter: ColorFilter.mode(
-                        Colors.white,
-                        Provider.of<SettingsBloc>(context, listen: true)
-                                .state
-                                .isDarkMode
-                            ? BlendMode.difference
-                            : BlendMode.dst,
-                      ),
-                      child: Stack(
-                        children: [
-                          _buildPdfViewerFromFile(widget.tab.book.path),
-                          BlocBuilder<PdfBookBloc, PdfBookState>(
-                            buildWhen: (prev, curr) {
-                              if (prev is PdfBookLoaded &&
-                                  curr is PdfBookLoaded) {
-                                return prev.isLoading != curr.isLoading ||
-                                    prev.loadSucceeded != curr.loadSucceeded;
-                              }
-                              return true;
-                            },
-                            builder: (context, state) {
-                              if (state is PdfBookError) {
-                                return const SizedBox.shrink();
-                              }
-                              if (state is! PdfBookLoaded || state.isLoading) {
-                                return const Positioned.fill(
-                                  child: ColoredBox(
-                                    color: Color(0xFFFFFFFF),
-                                    child: Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
-                                  ),
-                                );
-                              }
-                              if (!state.loadSucceeded) {
-                                return const Positioned.fill(
-                                  child:
-                                      Center(child: Text('Failed to load PDF')),
-                                );
-                              }
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Padding(
+                padding: readerContentPadding,
+                child: RepaintBoundary(
+                  key: _pdfViewportBoundaryKey,
+                  child: ColorFiltered(
+                    colorFilter: ColorFilter.mode(
+                      Colors.white,
+                      Provider.of<SettingsBloc>(context, listen: true)
+                              .state
+                              .isDarkMode
+                          ? BlendMode.difference
+                          : BlendMode.dst,
+                    ),
+                    child: Stack(
+                      children: [
+                        _buildPdfViewerFromFile(widget.tab.book.path),
+                        BlocBuilder<PdfBookBloc, PdfBookState>(
+                          buildWhen: (prev, curr) {
+                            if (prev is PdfBookLoaded &&
+                                curr is PdfBookLoaded) {
+                              return prev.isLoading != curr.isLoading ||
+                                  prev.loadSucceeded != curr.loadSucceeded;
+                            }
+                            return true;
+                          },
+                          builder: (context, state) {
+                            if (state is PdfBookError) {
                               return const SizedBox.shrink();
-                            },
-                          ),
-                        ],
-                      ),
+                            }
+                            if (state is! PdfBookLoaded || state.isLoading) {
+                              return const Positioned.fill(
+                                child: ColoredBox(
+                                  color: Color(0xFFFFFFFF),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                ),
+                              );
+                            }
+                            if (!state.loadSucceeded) {
+                              return const Positioned.fill(
+                                child:
+                                    Center(child: Text('Failed to load PDF')),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                // שגיאת טעינה - מחוץ ל-ColorFiltered כדי שהצבעים יהיו נכונים
-                BlocBuilder<PdfBookBloc, PdfBookState>(
-                  buildWhen: (prev, curr) =>
-                      (prev is PdfBookError) != (curr is PdfBookError),
-                  builder: (context, state) {
-                    if (state is! PdfBookError) return const SizedBox.shrink();
-                    return Positioned.fill(
-                      child: Padding(
-                        padding: readerContentPadding,
-                        child: ColoredBox(
-                          color: Theme.of(context).colorScheme.surface,
-                          child: Center(
-                            child: Text(
-                              state.message,
-                              textDirection: TextDirection.rtl,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
+              ),
+              // שגיאת טעינה - מחוץ ל-ColorFiltered כדי שהצבעים יהיו נכונים
+              BlocBuilder<PdfBookBloc, PdfBookState>(
+                buildWhen: (prev, curr) =>
+                    (prev is PdfBookError) != (curr is PdfBookError),
+                builder: (context, state) {
+                  if (state is! PdfBookError) return const SizedBox.shrink();
+                  return Positioned.fill(
+                    child: Padding(
+                      padding: readerContentPadding,
+                      child: ColoredBox(
+                        color: Theme.of(context).colorScheme.surface,
+                        child: Center(
+                          child: Text(
+                            state.message,
+                            textDirection: TextDirection.rtl,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ),
                       ),
-                    );
-                  },
-                ),
-                Padding(
-                  padding: readerContentPadding,
-                  child: _buildPageTurnOverlay(context),
-                ),
-                PdfScrollbar(
+                    ),
+                  );
+                },
+              ),
+              Padding(
+                padding: readerContentPadding,
+                child: _buildPageTurnOverlay(context),
+              ),
+              PdfScrollbar(
+                controller: widget.tab.pdfViewerController,
+                orientation: ScrollbarOrientation.right,
+                trackThickness: _verticalScrollbarGutter,
+                thumbMinSize: 50.0,
+                scrollBoundsBuilder: _currentVerticalScrollbarBounds,
+                freezeThumb: _pageTurnTransition != null,
+              ),
+              Positioned(
+                left: 0,
+                right: readerContentPadding.right,
+                bottom: 0,
+                child: PdfHorizontalScrollbar(
                   controller: widget.tab.pdfViewerController,
-                  orientation: ScrollbarOrientation.right,
-                  trackThickness: _verticalScrollbarGutter,
-                  thumbMinSize: 50.0,
-                  scrollBoundsBuilder: _currentVerticalScrollbarBounds,
-                  freezeThumb: _pageTurnTransition != null,
+                  trackThickness: _horizontalScrollbarGutter,
                 ),
-                Positioned(
-                  left: 0,
-                  right: readerContentPadding.right,
-                  bottom: 0,
-                  child: PdfHorizontalScrollbar(
-                    controller: widget.tab.pdfViewerController,
-                    trackThickness: _horizontalScrollbarGutter,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
         BlocBuilder<PdfBookBloc, PdfBookState>(
@@ -3098,134 +3062,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   void _captureScrollAnchor() {
     if (!widget.tab.pdfViewerController.isReady) return;
     _scrollAnchorPage = widget.tab.pdfViewerController.pageNumber ?? 1;
-  }
-
-  void _queuePointerScroll(PointerScrollEvent event) {
-    if (!widget.tab.pdfViewerController.isReady) {
-      return;
-    }
-
-    if (_pointerScrollFlushTimer == null) {
-      _captureScrollAnchor();
-    }
-
-    _pendingPointerScrollDx += event.scrollDelta.dx;
-    _pendingPointerScrollDy += event.scrollDelta.dy;
-    _pointerScrollFlushTimer ??=
-        Timer(_pointerScrollFlushDelay, _flushQueuedPointerScroll);
-  }
-
-  void _flushQueuedPointerScroll() {
-    _pointerScrollFlushTimer = null;
-
-    var remainingDeltaX = _pendingPointerScrollDx;
-    var remainingDeltaY = _pendingPointerScrollDy;
-    _pendingPointerScrollDx = 0.0;
-    _pendingPointerScrollDy = 0.0;
-
-    if (remainingDeltaX == 0.0 && remainingDeltaY == 0.0) {
-      return;
-    }
-
-    while (remainingDeltaX != 0.0 || remainingDeltaY != 0.0) {
-      final stepDeltaX = remainingDeltaX.clamp(
-        -_maxPointerScrollBurstDelta,
-        _maxPointerScrollBurstDelta,
-      );
-      final stepDeltaY = remainingDeltaY.clamp(
-        -_maxPointerScrollBurstDelta,
-        _maxPointerScrollBurstDelta,
-      );
-
-      _applyPointerScrollDelta(
-        deltaX: stepDeltaX,
-        deltaY: stepDeltaY,
-      );
-
-      remainingDeltaX -= stepDeltaX;
-      remainingDeltaY -= stepDeltaY;
-    }
-  }
-
-  void _applyPointerScrollDelta({
-    required double deltaX,
-    required double deltaY,
-  }) {
-    if (!widget.tab.pdfViewerController.isReady) return;
-
-    final currentMatrix = widget.tab.pdfViewerController.value;
-    final zoom = currentMatrix.zoom;
-    final candidateMatrix = currentMatrix.clone()
-      ..translateByDouble(
-        -deltaX / zoom,
-        -deltaY / zoom,
-        0,
-        1,
-      );
-
-    if (!_isBookViewModeActive()) {
-      widget.tab.pdfViewerController.goTo(candidateMatrix);
-      return;
-    }
-
-    final anchorPage =
-        _scrollAnchorPage ?? (widget.tab.pdfViewerController.pageNumber ?? 1);
-    final clampedMatrix = _clampMatrixToSpread(
-      matrix: candidateMatrix,
-      viewSize: widget.tab.pdfViewerController.viewSize,
-      layout: widget.tab.pdfViewerController.layout,
-      controller: widget.tab.pdfViewerController,
-      spreadStartPage: _spreadStartPageFor(anchorPage),
-    );
-
-    widget.tab.pdfViewerController.goTo(clampedMatrix);
-
-    if (_wasMatrixClamped(
-      original: candidateMatrix,
-      clamped: clampedMatrix,
-      viewSize: widget.tab.pdfViewerController.viewSize,
-    )) {
-      _stopContinuousScroll();
-    }
-  }
-
-  void _applyPanZoomScroll(PointerPanZoomUpdateEvent event) {
-    if (!widget.tab.pdfViewerController.isReady) return;
-    final baseMatrix = _panZoomBaseMatrix;
-    if (baseMatrix == null) return;
-
-    final candidateMatrix = baseMatrix.clone()
-      ..translateByDouble(
-        event.pan.dx,
-        event.pan.dy,
-        0,
-        1,
-      );
-
-    if (!_isBookViewModeActive()) {
-      widget.tab.pdfViewerController.goTo(candidateMatrix);
-      return;
-    }
-
-    final anchorPage =
-        _scrollAnchorPage ?? (widget.tab.pdfViewerController.pageNumber ?? 1);
-    final clampedMatrix = _clampMatrixToSpread(
-      matrix: candidateMatrix,
-      viewSize: widget.tab.pdfViewerController.viewSize,
-      layout: widget.tab.pdfViewerController.layout,
-      controller: widget.tab.pdfViewerController,
-      spreadStartPage: _spreadStartPageFor(anchorPage),
-    );
-
-    widget.tab.pdfViewerController.goTo(clampedMatrix);
-
-    if (_wasMatrixClamped(
-      original: candidateMatrix,
-      clamped: clampedMatrix,
-      viewSize: widget.tab.pdfViewerController.viewSize,
-    )) {
-      _stopContinuousScroll();
-    }
   }
 
   void _applyVerticalScroll(double deltaY) {
