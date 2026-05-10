@@ -844,6 +844,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       enableKeyboardNavigation: false,
       scrollByArrowKey: 25.0,
       scrollByMouseWheel: 0.2,
+      interactionDelegateProvider:
+          const PdfViewerScrollInteractionDelegateProviderPhysics(),
       onDocumentLoadFinished: (documentRef, succeeded) {
         if (!mounted) return;
         _bloc.add(pdf_events.SetLoadingState(
