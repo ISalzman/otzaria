@@ -376,7 +376,7 @@ class _CombinedViewState extends State<CombinedView> {
           label: 'העתק',
           icon: FluentIcons.copy_24_regular,
           enabled: selectedText != null && selectedText.trim().isNotEmpty,
-          onTap: _copyFormattedText,
+          onTap: () => _copyFormattedText(selectedText),
         ),
       ];
     }
@@ -540,7 +540,7 @@ class _CombinedViewState extends State<CombinedView> {
       AppContextMenuEntry(
         label: 'הוסף הערה אישית',
         icon: FluentIcons.note_add_24_regular,
-        onTap: _showNoteEditor,
+        onTap: () => _showNoteEditor(selectedText),
       ),
       AppContextMenuEntry(
         label: 'דווח על טעות בספר',
@@ -555,7 +555,7 @@ class _CombinedViewState extends State<CombinedView> {
         label: 'העתק',
         icon: FluentIcons.copy_24_regular,
         enabled: selectedText != null && selectedText.trim().isNotEmpty,
-        onTap: _copyFormattedText,
+        onTap: () => _copyFormattedText(selectedText),
       ),
       AppContextMenuEntry(
         label: 'העתק את כל הפסקה',
@@ -755,9 +755,8 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   /// העתקת טקסט מעוצב (HTML) ללוח
-  Future<void> _copyFormattedText() async {
-    // משתמש בטקסט השמור שנבחר לפני פתיחת התפריט
-    final plainText = _savedSelectedText.value;
+  Future<void> _copyFormattedText([String? capturedText]) async {
+    final plainText = capturedText ?? _savedSelectedText.value;
 
     debugPrint('_copyFormattedText called with: "$plainText"');
     debugPrint('_currentSelectedIndex: ${_currentSelectedIndex.value}');
@@ -789,13 +788,11 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   /// הצגת עורך ההערות
-  Future<void> _showNoteEditor() async {
-    // שמירת ה-state הנוכחי לפני פתיחת הדיאלוג
+  Future<void> _showNoteEditor([String? capturedText]) async {
     final state = _textBookBloc.state;
     if (state is! TextBookLoaded) return;
 
-    // שמירת הטקסט הנבחר לפני פתיחת הדיאלוג
-    final selectedText = _savedSelectedText.value;
+    final selectedText = capturedText ?? _savedSelectedText.value;
 
     // משתמש בשורה שממנה הודגש טקסט (אם קיים), אחרת בשורה הנבחרת, אחרת בשורה הראשונה הנראית
     final currentIndex = _savedSelectedIndex.value ??
@@ -894,7 +891,6 @@ class _CombinedViewState extends State<CombinedView> {
               onSelectionChanged: (selection) {
                 final plain = selection?.plainText;
                 if (!shouldPersistSelectedText(plain)) {
-                  // אם הבחירה נוקתה, יוצאים ממצב בחירה ומנקים את הטקסט השמור
                   _selectionManager.exitSelectionMode();
                   _savedSelectedText.value = null;
                   return;
