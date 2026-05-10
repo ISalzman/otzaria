@@ -100,7 +100,6 @@ Future<Map<String, Object?>> _syncWorkerEntryPoint(
 
   final userBooksDatabase = MyDatabase.withPath(userBooksDbPath);
   final userBooksRepository = SeforimRepository(userBooksDatabase);
-  userBooksRepository.useAutoIncrementIds = true;
   await userBooksRepository.ensureInitialized();
 
   final service = FileSyncService.createForWorker(
@@ -145,7 +144,6 @@ Future<void> _deleteWorkerEntryPoint(Map<String, Object?> payload) async {
 
   final userBooksDatabase = MyDatabase.withPath(userBooksDbPath);
   final userBooksRepository = SeforimRepository(userBooksDatabase);
-  userBooksRepository.useAutoIncrementIds = true;
   await userBooksRepository.ensureInitialized();
 
   final service = FileSyncService.createForWorker(

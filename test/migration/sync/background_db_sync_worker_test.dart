@@ -33,7 +33,6 @@ void main() {
 
     userBooksDatabase = MyDatabase.withPath(userBooksDbPath);
     userBooksRepository = SeforimRepository(userBooksDatabase);
-    userBooksRepository.useAutoIncrementIds = true;
     await userBooksRepository.ensureInitialized();
   });
 
@@ -167,7 +166,7 @@ void main() {
           await userBooksRepository.insertSource('Personal::test', -1);
       await userBooksRepository.insertBook(
         Book(
-          id: 0, // useAutoIncrementIds → SQLite מקצה
+          id: 0, // SQLite מקצה דרך AUTOINCREMENT
           categoryId: folderCatId,
           sourceId: sourceId,
           title: 'ספר למחיקה',
@@ -202,7 +201,7 @@ void main() {
           await userBooksRepository.insertSource('Personal::sole', -1);
       await userBooksRepository.insertBook(
         Book(
-          id: 0, // useAutoIncrementIds → SQLite מקצה
+          id: 0, // SQLite מקצה דרך AUTOINCREMENT
           categoryId: folderCatId,
           sourceId: sourceId,
           title: 'ספר יחיד',

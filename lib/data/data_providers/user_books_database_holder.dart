@@ -35,9 +35,6 @@ class UserBooksDatabaseHolder {
     debugPrint('📚 [UserBooksDB] Opening user_books.db at $dbPath');
     final db = MyDatabase.withPath(dbPath);
     final repo = SeforimRepository(db);
-    // ב-user_books.db אין תוכן רשמי עם IDs קבועים שעלולים להתנגש,
-    // אז נותנים ל-SQLite להקצות IDs חיוביים אוטומטית.
-    repo.useAutoIncrementIds = true;
     await repo.ensureInitialized();
     _database = db;
     _repository = repo;
