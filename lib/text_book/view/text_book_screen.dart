@@ -2159,7 +2159,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     if (!context.mounted) return;
 
-    openBook(context, _pdfBook!, index ?? 1, '', ignoreHistory: true);
+    openBook(
+      context,
+      _pdfBook!,
+      index ?? 1,
+      '',
+      ignoreHistory: true,
+      requiresStableLayout: true,
+    );
   }
 
   void _handleBookmarkPress(BuildContext context, TextBookLoaded state) async {
@@ -2517,13 +2524,9 @@ bool _handleGlobalKeyEvent(KeyEvent event, BuildContext context,
 
   // חיפוש בספר
   if (ShortcutHelper.matchesShortcut(event, searchInBookShortcut)) {
-    context.read<TextBookBloc>().add(const ToggleLeftPane(true));
-    final tabController = context
+    context
         .findAncestorStateOfType<_TextBookViewerBlocState>()
-        ?.tabController;
-    if (tabController != null) {
-      tabController.index = 1;
-    }
+        ?._openSearchFromToolbar();
     return true;
   }
 
@@ -2855,5 +2858,12 @@ void _togglePdfView(
 
   if (!context.mounted) return;
 
-  openBook(context, book, index ?? 1, '', ignoreHistory: true);
+  openBook(
+    context,
+    book,
+    index ?? 1,
+    '',
+    ignoreHistory: true,
+    requiresStableLayout: true,
+  );
 }
