@@ -122,6 +122,7 @@ class PluginInstallerService {
         iconPath: manifest.icon,
         enabled: existingPlugin?.enabled ?? true,
         pinned: existingPlugin?.pinned ?? manifest.defaultPinned,
+        pinnedToNavRail: existingPlugin?.pinnedToNavRail ?? false,
         manifest: manifest,
         installedAt: existingPlugin?.installedAt ?? DateTime.now(),
         updatedAt: DateTime.now(),

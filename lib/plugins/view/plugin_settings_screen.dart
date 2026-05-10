@@ -82,6 +82,26 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                   },
                   hoverColor: Colors.transparent,
                 ),
+                SwitchListTile(
+                  title: const Text('הצמדה לסרגל הניווט'),
+                  subtitle: const Text(
+                      'הצגת התוסף כפריט קבוע בסרגל הניווט הראשי, בין "כלים" ל"הגדרות"'),
+                  value: currentPlugin.pinnedToNavRail,
+                  onChanged: currentPlugin.enabled
+                      ? (val) {
+                          if (val) {
+                            context.read<PluginSystemBloc>().add(
+                                PinPluginToNavRailRequested(
+                                    currentPlugin.pluginId));
+                          } else {
+                            context.read<PluginSystemBloc>().add(
+                                UnpinPluginFromNavRailRequested(
+                                    currentPlugin.pluginId));
+                          }
+                        }
+                      : null,
+                  hoverColor: Colors.transparent,
+                ),
               ],
             ),
             if (currentPlugin.manifest.permissions.isNotEmpty) ...[
