@@ -344,6 +344,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                       (Settings.getValue<bool>(
                                               'key-default-sidebar-open') ??
                                           false),
+                              requiresStableLayout: true,
                             ),
                             targetTitle: result.reference,
                           ),

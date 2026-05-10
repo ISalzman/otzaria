@@ -45,6 +45,7 @@ abstract class OpenedTab {
         openLeftPane: tab.showLeftPane.value,
         isPinned: tab.isPinned,
         dedupeKey: tab.dedupeKey,
+        requiresStableLayout: tab.requiresStableLayout,
       );
     } else if (tab is CombinedTab) {
       return CombinedTab(
@@ -64,7 +65,8 @@ abstract class OpenedTab {
       List<String>? commentators,
       bool openLeftPane = false,
       bool isPinned = false,
-      bool? showPageShapeView}) {
+      bool? showPageShapeView,
+      bool requiresStableLayout = false}) {
     if (book is PdfBook) {
       return PdfBookTab(
         book: book,
@@ -72,6 +74,7 @@ abstract class OpenedTab {
         openLeftPane: openLeftPane,
         searchText: searchText,
         isPinned: isPinned,
+        requiresStableLayout: requiresStableLayout,
       );
     } else if (book is DocxBook) {
       // DOCX is rendered through the text book flow (converted to HTML-ish text).

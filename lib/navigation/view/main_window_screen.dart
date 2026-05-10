@@ -609,7 +609,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
       UiSnack.showError('הספר עם המזהה $bookId לא נמצא בספרייה');
       return;
     }
-    openBook(context, book, index ?? 0, searchQuery ?? '');
+    openBook(context, book, index ?? 0, searchQuery ?? '',
+        requiresStableLayout: true);
   }
 
   void _openToolWhenAvailable(String toolId, {int attemptsLeft = 6}) {
@@ -1137,7 +1138,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
         .addPostFrameCallback((_) => frameCompleter.complete());
     await frameCompleter.future;
     if (!mounted) return;
-    openBook(context, book, ref.segment.toInt(), '', ignoreHistory: true);
+    openBook(context, book, ref.segment.toInt(), '',
+        ignoreHistory: true, requiresStableLayout: ref.isPdf);
     if (_tourCubit.state.currentStep?.id == 'find_ref') {
       await _tourCubit.next();
     }
