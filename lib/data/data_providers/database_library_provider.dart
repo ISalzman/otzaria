@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 import 'package:flutter/foundation.dart'
     show ValueNotifier, debugPrint, visibleForTesting;
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
@@ -1804,8 +1806,11 @@ class DatabaseLibraryProvider implements LibraryProvider {
           );
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('⚠️ Error appending user books to library: $e');
+      // הספרייה תיטען בלי הספרים האישיים — דווח כדי שלא נחמיץ DB
+      // שבור או הרשאות חסרות.
+      unawaited(Sentry.captureException(e, stackTrace: stackTrace));
     }
   }
 
