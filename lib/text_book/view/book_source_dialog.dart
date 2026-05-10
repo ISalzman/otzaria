@@ -4,11 +4,31 @@ import 'package:otzaria/services/book_details_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// ביטוי רגולרי להסרת תווים מפרידים (מקפים, קווים תחתונים, רווחים)
+final _sourceNormalizationRegex = RegExp(r'[-_\s]');
+
+// מיפוי שמות המקורות לטקסט בעברית וקישורים (ללא כפילויות)
+const _sourceMappings = {
+  'sefaria': {'text': 'ספריא', 'url': 'https://www.sefaria.org/texts'},
+  'benyehuda': {'text': 'פרוייקט בן-יהודה', 'url': 'https://benyehuda.org/'},
+  'dicta': {'text': 'ספריית דיקטה', 'url': 'https://library.dicta.org.il/'},
+  'onyourway': {'text': 'ובלכתך בדרך', 'url': 'https://mobile.tora.ws/'},
+  'orayta': {'text': 'אורייתא', 'url': 'https://github.com/MosheWagner/Orayta-Books'},
+  'tashma': {'text': 'תא שמע', 'url': 'https://tashma.co.il/'},
+  'pninim': {'text': 'פנינים', 'url': 'https://pninim.org/'},
+  'wikisource': {'text': 'ויקיטקסט', 'url': 'https://he.wikisource.org/wiki'},
+  'wikijewishbooks': {'text': 'אוצר הספרים היהודי השיתופי', 'url': 'https://wiki.jewishbooks.org.il/'},
+  'morebooks': {'text': 'ספרים פרטיים או מקורות נוספים', 'url': ''},
+  'tootzaria': {'text': 'מקורות שהועברו לאוצריא', 'url': ''},
+  'toratemet': {'text': 'תורת אמת', 'url': 'http://www.toratemetfreeware.com/index.html?downloads;1;'},
+  'unknown': {'text': 'מקור לא ידוע', 'url': ''},
+};
+
 /// המרת שם המקור לטקסט מתאים עם קישור
 /// תומך בשמות המקורות כפי שהם מאוחסנים ב-DB (case-insensitive)
 Map<String, String> getSourceDisplayInfo(String source) {
   // נרמול המחרוזת: הסרת רווחים, המרה לאותיות קטנות והסרת תווים מפרידים
-  final normalized = source.toLowerCase().replaceAll(RegExp(r'[-_\s]'), '');
+  final normalized = source.toLowerCase().replaceAll(_sourceNormalizationRegex, '');
   
   var key = normalized;
   
@@ -21,25 +41,8 @@ Map<String, String> getSourceDisplayInfo(String source) {
     key = key.substring(0, key.length - 'tootzaria'.length);
   }
   
-  // מיפוי שמות המקורות (ללא כפילויות)
-  const mappings = {
-    'sefaria': {'text': 'ספריא', 'url': 'https://www.sefaria.org/texts'},
-    'benyehuda': {'text': 'פרוייקט בן-יהודה', 'url': 'https://benyehuda.org/'},
-    'dicta': {'text': 'ספריית דיקטה', 'url': 'https://library.dicta.org.il/'},
-    'onyourway': {'text': 'ובלכתך בדרך', 'url': 'https://mobile.tora.ws/'},
-    'orayta': {'text': 'אורייתא', 'url': 'https://github.com/MosheWagner/Orayta-Books'},
-    'tashma': {'text': 'תא שמע', 'url': 'https://tashma.co.il/'},
-    'pninim': {'text': 'פנינים', 'url': 'https://pninim.org/'},
-    'wikisource': {'text': 'ויקיטקסט', 'url': 'https://he.wikisource.org/wiki'},
-    'wikijewishbooks': {'text': 'אוצר הספרים היהודי השיתופי', 'url': 'https://wiki.jewishbooks.org.il/'},
-    'morebooks': {'text': 'ספרים פרטיים או מקורות נוספים', 'url': ''},
-    'tootzaria': {'text': 'מקורות שהועברו לאוצריא', 'url': ''},
-    'toratemet': {'text': 'תורת אמת', 'url': 'http://www.toratemetfreeware.com/index.html?downloads;1;'},
-    'unknown': {'text': 'מקור לא ידוע', 'url': ''},
-  };
-  
   // חיפוש במיפוי, אם לא נמצא - מחזירים את המקור המקורי
-  return mappings[key] ?? {'text': source, 'url': ''};
+  return _sourceMappings[key] ?? {'text': source, 'url': ''};
 }
 
 /// הצגת דיאלוג אודות הספר
