@@ -673,7 +673,7 @@ class ToolsScreenState extends State<ToolsScreen>
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppTokens.spaceSM),
           ],
         ],
       ),

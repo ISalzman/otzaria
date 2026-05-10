@@ -528,9 +528,8 @@ class CalendarCubit extends Cubit<CalendarState> {
     for (int i = 0; i <= _zmanScheduleDaysAhead; i++) {
       final d = today.add(Duration(days: i));
       final id = _zmanNotificationId(timeId, d);
+      // cancelNotification עצמו async (platform channel) — מספיק כדי לא לחסום UI
       await notificationService.cancelNotification(id);
-      // yield לאירוע loop — מאפשר ל-UI לרנדר פריים אחרי כל ביטול
-      await Future.delayed(Duration.zero);
     }
 
     UiSnack.show('ההתראה בוטלה עבור ${existing.displayName}');
