@@ -32,6 +32,82 @@ void main() {
     });
   });
 
+  group('copy-direct-link — buildPdfBookLink', () {
+    test('מחזיר פורמט נכון עבור bookId=1', () {
+      expect(buildPdfBookLink(1), equals('otzaria://open/pdf/1'));
+    });
+
+    test('מחזיר פורמט נכון עבור bookId=999', () {
+      expect(buildPdfBookLink(999), equals('otzaria://open/pdf/999'));
+    });
+
+    test('מחזיר פורמט נכון עבור bookId גדול', () {
+      expect(buildPdfBookLink(123456), equals('otzaria://open/pdf/123456'));
+    });
+
+    test('Property: פורמט קישור PDF — 200 ערכים, ללא ?', () {
+      for (int bookId = 1; bookId <= 200; bookId++) {
+        final link = buildPdfBookLink(bookId);
+        expect(link, equals('otzaria://open/pdf/$bookId'),
+            reason: 'bookId=$bookId');
+        expect(link.contains('?'), isFalse, reason: 'bookId=$bookId');
+        expect(link.startsWith('otzaria://open/pdf/'), isTrue,
+            reason: 'bookId=$bookId');
+      }
+    });
+  });
+
+  group('copy-direct-link — buildPdfPageLink', () {
+    test('מחזיר פורמט נכון עבור bookId=1, page=1 (1-based)', () {
+      expect(buildPdfPageLink(1, 1), equals('otzaria://open/pdf/1?index=1'));
+    });
+
+    test('מחזיר פורמט נכון עבור bookId=42, page=100', () {
+      expect(
+          buildPdfPageLink(42, 100), equals('otzaria://open/pdf/42?index=100'));
+    });
+
+    test('edge case: page=0 מוחלף ב-1 (PDF הוא 1-based)', () {
+      expect(buildPdfPageLink(1, 0), equals('otzaria://open/pdf/1?index=1'));
+    });
+
+    test('edge case: page שלילי מוחלף ב-1', () {
+      expect(buildPdfPageLink(1, -1), equals('otzaria://open/pdf/1?index=1'));
+      expect(buildPdfPageLink(5, -100), equals('otzaria://open/pdf/5?index=1'));
+    });
+
+    test('Property: ערכי page חיוביים', () {
+      for (int bookId = 1; bookId <= 50; bookId++) {
+        for (int page = 1; page <= 100; page += 10) {
+          final link = buildPdfPageLink(bookId, page);
+          expect(link, equals('otzaria://open/pdf/$bookId?index=$page'),
+              reason: 'bookId=$bookId, page=$page');
+        }
+      }
+    });
+
+    test('Property: ערכי page < 1 מוחלפים ב-1', () {
+      for (int bookId = 1; bookId <= 20; bookId++) {
+        for (final badPage in [0, -1, -5, -100, -9999]) {
+          final link = buildPdfPageLink(bookId, badPage);
+          expect(link, equals('otzaria://open/pdf/$bookId?index=1'),
+              reason: 'bookId=$bookId, page=$badPage');
+        }
+      }
+    });
+
+    test('Property: הקישור תמיד מכיל ?index= עם max(1,page)', () {
+      for (int bookId = 1; bookId <= 30; bookId++) {
+        for (int page = -5; page <= 50; page += 5) {
+          final link = buildPdfPageLink(bookId, page);
+          final expectedPage = page < 1 ? 1 : page;
+          expect(link, equals('otzaria://open/pdf/$bookId?index=$expectedPage'),
+              reason: 'bookId=$bookId, page=$page');
+        }
+      }
+    });
+  });
+
   group('copy-direct-link — buildSectionLink', () {
     test('מחזיר פורמט נכון עבור bookId=1, index=0', () {
       expect(buildSectionLink(1, 0), equals('otzaria://open/book/1?index=0'));
@@ -74,8 +150,8 @@ void main() {
         for (int index = -5; index <= 50; index += 5) {
           final link = buildSectionLink(bookId, index);
           final expectedIndex = index < 0 ? 0 : index;
-          expect(link,
-              equals('otzaria://open/book/$bookId?index=$expectedIndex'),
+          expect(
+              link, equals('otzaria://open/book/$bookId?index=$expectedIndex'),
               reason: 'bookId=$bookId, index=$index');
         }
       }
