@@ -25,6 +25,7 @@ import 'package:otzaria/plugins/view/plugin_side_panel.dart';
 import 'package:otzaria/plugins/view/plugin_tab_page.dart';
 import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
 import 'package:otzaria/plugins/view/plugin_install_screen.dart';
+import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
@@ -112,24 +113,12 @@ class PluginToolDescriptor extends ToolDescriptor {
 
   @override
   Widget buildTab(BuildContext context) {
-    Widget? iconWidget;
-    final codepoint = plugin.manifest.toolTabIconCodepoint;
-    final fontFamily = plugin.manifest.toolTabIconFontFamily;
-    if (codepoint != null && fontFamily != null) {
-      iconWidget = Icon(
-        IconData(
-          codepoint,
-          fontFamily: fontFamily,
-          fontPackage: 'fluentui_system_icons',
-        ),
-        size: 20,
-      );
-    }
+    final iconData = fluentIconFromName(plugin.manifest.toolTabIconName);
     return SizedBox(
       width: 100,
       child: Tab(
         text: label,
-        icon: iconWidget,
+        icon: iconData != null ? Icon(iconData, size: 20) : null,
       ),
     );
   }
@@ -140,13 +129,9 @@ class PluginToolDescriptor extends ToolDescriptor {
         plugin: plugin,
       );
 
-  IconData get _pluginIcon {
-    final codepoint = plugin.manifest.toolTabIconCodepoint;
-    final fontFamily = plugin.manifest.toolTabIconFontFamily;
-    return (codepoint != null && fontFamily != null)
-        ? IconData(codepoint, fontFamily: fontFamily, fontPackage: 'fluentui_system_icons')
-        : FluentIcons.puzzle_piece_24_regular;
-  }
+  IconData get _pluginIcon =>
+      fluentIconFromName(plugin.manifest.toolTabIconName) ??
+      FluentIcons.puzzle_piece_24_regular;
 
   @override
   TopNavItem buildTopNavItem({required bool isSelected, required VoidCallback onTap, Key? key}) {
@@ -237,7 +222,7 @@ class ToolsScreenState extends State<ToolsScreen>
   String _descriptorSignature(List<ToolDescriptor> descriptors) {
     return descriptors.map((d) {
       if (d is PluginToolDescriptor) {
-        return '${d.toolId}|${d.label}|${d.order}|${d.plugin.pinned}|${d.plugin.manifest.toolTabIconCodepoint}|${d.plugin.manifest.toolTabIconVariant}|${d.plugin.updatedAt.millisecondsSinceEpoch}';
+        return '${d.toolId}|${d.label}|${d.order}|${d.plugin.pinned}|${d.plugin.manifest.toolTabIconName}|${d.plugin.updatedAt.millisecondsSinceEpoch}';
       }
       return '${d.toolId}|${d.label}|${d.order}';
     }).join('::');
