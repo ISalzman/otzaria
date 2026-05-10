@@ -55,6 +55,12 @@ class TextBookInitial extends TextBookState {
   final bool splitedView;
   final bool showPageShapeView;
 
+  /// אינדקס הסעיף שבו מותר לבצע הדגשה ממוקדת (deep link). null = אין הדגשה כזו.
+  final int? pinpointHighlightIndex;
+
+  /// הטקסט להדגשה ממוקדת בסעיף [pinpointHighlightIndex]. null = אין.
+  final String? pinpointHighlightText;
+
   const TextBookInitial(
       super.book, super.index, super.showLeftPane, super.commentators,
       [this.searchText = '',
@@ -64,7 +70,9 @@ class TextBookInitial extends TextBookState {
       this.searchMode = SearchMode.exact,
       this.searchDistance = 0,
       this.splitedView = true,
-      this.showPageShapeView = false]);
+      this.showPageShapeView = false,
+      this.pinpointHighlightIndex,
+      this.pinpointHighlightText]);
 
   // קונסטרקטור עם פרמטרים בשם
   const TextBookInitial.named(
@@ -80,6 +88,8 @@ class TextBookInitial extends TextBookState {
     this.searchDistance = 0,
     bool? splitedView,
     this.showPageShapeView = false,
+    this.pinpointHighlightIndex,
+    this.pinpointHighlightText,
   }) : splitedView = splitedView ?? false; // ברירת מחדל: מפרשים מתחת
 
   @override
@@ -93,6 +103,8 @@ class TextBookInitial extends TextBookState {
         searchDistance,
         splitedView,
         showPageShapeView,
+        pinpointHighlightIndex,
+        pinpointHighlightText,
       ];
 }
 
@@ -144,6 +156,12 @@ class TextBookLoaded extends TextBookState {
   final int? selectedTextEnd;
   final int? highlightedLine;
 
+  /// אינדקס הסעיף שבו מבוצעת הדגשה ממוקדת (deep link). null = אין.
+  final int? pinpointHighlightIndex;
+
+  /// הטקסט להדגשה ממוקדת באותו סעיף. null = אין.
+  final String? pinpointHighlightText;
+
   // Editor state
   final bool isEditorOpen;
   final int? editorIndex;
@@ -193,6 +211,8 @@ class TextBookLoaded extends TextBookState {
     this.selectedTextStart,
     this.selectedTextEnd,
     this.highlightedLine,
+    this.pinpointHighlightIndex,
+    this.pinpointHighlightText,
     this.isEditorOpen = false,
     this.editorIndex,
     this.editorSectionId,
@@ -278,6 +298,9 @@ class TextBookLoaded extends TextBookState {
     int? selectedTextEnd,
     int? highlightedLine,
     bool clearHighlight = false,
+    int? pinpointHighlightIndex,
+    String? pinpointHighlightText,
+    bool clearPinpointHighlight = false,
     bool? isEditorOpen,
     int? editorIndex,
     String? editorSectionId,
@@ -322,6 +345,12 @@ class TextBookLoaded extends TextBookState {
       selectedTextEnd: selectedTextEnd ?? this.selectedTextEnd,
       highlightedLine:
           clearHighlight ? null : (highlightedLine ?? this.highlightedLine),
+      pinpointHighlightIndex: clearPinpointHighlight
+          ? null
+          : (pinpointHighlightIndex ?? this.pinpointHighlightIndex),
+      pinpointHighlightText: clearPinpointHighlight
+          ? null
+          : (pinpointHighlightText ?? this.pinpointHighlightText),
       isEditorOpen: isEditorOpen ?? this.isEditorOpen,
       editorIndex: editorIndex ?? this.editorIndex,
       editorSectionId: editorSectionId ?? this.editorSectionId,
@@ -363,6 +392,8 @@ class TextBookLoaded extends TextBookState {
         selectedTextStart,
         selectedTextEnd,
         highlightedLine,
+        pinpointHighlightIndex,
+        pinpointHighlightText,
         isEditorOpen,
         editorIndex,
         editorSectionId,

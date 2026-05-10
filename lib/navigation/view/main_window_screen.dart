@@ -571,11 +571,17 @@ class MainWindowScreenState extends State<MainWindowScreen>
         // ש־moreScreenKey.currentState עדיין null בפריים הראשון. ניסיונות חוזרים
         // עם hop קצר מבטיחים שהלשונית תיפתח גם בפעם הראשונה שנכנסים אליה.
         _openToolWhenAvailable(toolId);
-      case OpenBookAction(:final bookId, :final index, :final searchQuery):
+      case OpenBookAction(
+          :final bookId,
+          :final index,
+          :final searchQuery,
+          :final pinpointHighlight
+        ):
         unawaited(_openBookByExternalId(
           bookId,
           index: index,
           searchQuery: searchQuery,
+          pinpointHighlight: pinpointHighlight,
         ));
       case OpenPdfBookAction(:final bookId, :final page):
         unawaited(_openPdfBookByExternalId(bookId, page: page));
@@ -605,6 +611,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     int bookId, {
     int? index,
     String? searchQuery,
+    String? pinpointHighlight,
   }) async {
     final library = await DataRepository.instance.library;
     if (!mounted) return;
@@ -614,7 +621,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       return;
     }
     openBook(context, book, index ?? 0, searchQuery ?? '',
-        requiresStableLayout: true);
+        requiresStableLayout: true, pinpointHighlight: pinpointHighlight);
   }
 
   Future<void> _openPdfBookByExternalId(int bookId, {int? page}) async {
