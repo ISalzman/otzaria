@@ -62,6 +62,31 @@ bool isTextInputFocusNode(FocusNode? focusNode) {
       _hasQuillEditorAncestor(focusContext);
 }
 
+/// בודקת האם הפוקוס הנוכחי נמצא בתוך תפריט (כמו תפריט הקשר/תת-תפריט).
+///
+/// נדרש כדי שלא נחזיר פוקוס לטקסט בזמן שהמשתמש פותח תת-תפריט,
+/// כי גזילת הפוקוס תסגור את התת-תפריט מיד.
+bool isMenuFocusNode(FocusNode? focusNode) {
+  final focusContext = focusNode?.context;
+  if (focusContext == null) {
+    return false;
+  }
+
+  if (_isMenuWidget(focusContext.widget)) {
+    return true;
+  }
+
+  var hasMenuAncestor = false;
+  focusContext.visitAncestorElements((element) {
+    if (_isMenuWidget(element.widget)) {
+      hasMenuAncestor = true;
+      return false;
+    }
+    return true;
+  });
+  return hasMenuAncestor;
+}
+
 bool _hasQuillEditorAncestor(BuildContext context) {
   var hasQuillAncestor = false;
   context.visitAncestorElements((element) {
@@ -85,6 +110,19 @@ bool _isTextInputWidget(Widget widget) {
       runtimeTypeName.contains('QuillRawEditor') ||
       runtimeTypeName.contains('RawEditor') ||
       runtimeTypeName.contains('QuillEditor');
+}
+
+bool _isMenuWidget(Widget widget) {
+  if (widget is MenuItemButton ||
+      widget is SubmenuButton ||
+      widget is MenuAnchor) {
+    return true;
+  }
+
+  final runtimeTypeName = widget.runtimeType.toString();
+  return runtimeTypeName == 'MenuItemButton' ||
+      runtimeTypeName == 'SubmenuButton' ||
+      runtimeTypeName == 'MenuAnchor';
 }
 
 /// קובעת מאיזה אינדקס יתחיל ניווט המקלדת בצורת הדף.
@@ -171,6 +209,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   FocusNode? _keyboardFocusNode;
   bool _shouldPreserveKeyboardFocus = false;
   bool _pendingKeyboardFocusRestore = false;
+  bool _wasMenuFocused = false;
   String? _savedSelectedText;
   int? _savedSelectedIndex;
   int _initialScrollRestoreAttempts = 0;
@@ -182,18 +221,61 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     return isTextInputFocusNode(FocusManager.instance.primaryFocus);
   }
 
+  bool _isMenuFocused() {
+    return isMenuFocusNode(FocusManager.instance.primaryFocus);
+  }
+
+  /// מאזין לשינויי פוקוס גלובליים כדי לזהות סגירת תת-תפריט.
+  ///
+  /// כשהפוקוס יוצא מתפריט הקשר (החלף מפרש / קישורים) ולא חוזר אוטומטית
+  /// לטקסט הראשי, מקשי החיצים מפסיקים לעבוד עד שהמשתמש לוחץ שוב.
+  /// אנחנו מחזירים פוקוס רק אם הפוקוס "מרחף" ב-FocusScope של page-shape
+  /// עצמו - לא אם המשתמש העביר פוקוס במכוון לכפתור / דיאלוג / רכיב אחר.
+  void _handleGlobalFocusChange() {
+    if (!mounted || !widget.isMainText) {
+      return;
+    }
+
+    final isMenuNow = _isMenuFocused();
+    final menuJustClosed = _wasMenuFocused && !isMenuNow;
+    _wasMenuFocused = isMenuNow;
+
+    if (!menuJustClosed) {
+      return;
+    }
+
+    final myFocusNode = _keyboardFocusNode;
+    if (myFocusNode == null || myFocusNode.hasFocus) {
+      return;
+    }
+
+    // הפוקוס נחשב "מרחף" אך ורק אם הוא נמצא על FocusScopeNode העוטף שלנו.
+    // אם הוא על widget מכוון אחר (כפתור, פאנל צד וכו') או על scope של דיאלוג -
+    // המשתמש בחר בו, ואסור לגנוב.
+    final primaryFocus = FocusManager.instance.primaryFocus;
+    if (primaryFocus is! FocusScopeNode) {
+      return;
+    }
+    if (primaryFocus != myFocusNode.enclosingScope) {
+      return;
+    }
+
+    _requestKeyboardFocusAfterFrame('menu-closed');
+  }
+
   void _ensureKeyboardFocusAfterLoss(String reason) {
     if (!widget.isMainText ||
         !_shouldPreserveKeyboardFocus ||
         _pendingKeyboardFocusRestore ||
-        _isTextInputFocused()) {
+        _isTextInputFocused() ||
+        _isMenuFocused()) {
       return;
     }
 
     _pendingKeyboardFocusRestore = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _pendingKeyboardFocusRestore = false;
-      if (!mounted || _isTextInputFocused()) {
+      if (!mounted || _isTextInputFocused() || _isMenuFocused()) {
         return;
       }
       _requestKeyboardFocus(reason);
@@ -218,6 +300,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     // אם המשתמש כותב בשדה חיפוש/קלט אחר - לא לגנוב ממנו פוקוס
     if (_isTextInputFocused()) {
+      return;
+    }
+
+    // אם פתוח תת-תפריט (החלף מפרש / קישורים) - לא לגנוב ממנו פוקוס,
+    // אחרת התת-תפריט ייסגר מיד.
+    if (_isMenuFocused()) {
       return;
     }
 
@@ -252,6 +340,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
+      FocusManager.instance.addListener(_handleGlobalFocusChange);
       _scheduleInitialScrollRestore();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -297,6 +386,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
   @override
   void dispose() {
+    if (widget.isMainText) {
+      FocusManager.instance.removeListener(_handleGlobalFocusChange);
+    }
     if (!widget.isMainText) {
       HardwareKeyboard.instance.removeHandler(_handleCommentaryCopyKeyEvent);
       if (_lastActiveCommentary == this) _lastActiveCommentary = null;
