@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:io';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
@@ -145,6 +146,11 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
 
     // התיקיות המותאמות אישית חיות ב-user_books.db. ה-FileSyncService
     // צריך גישה לשני ה-DBs (seforim ל-links, user_books ל-prune).
+    final userBooksDbPath = await UserBooksDatabaseHolder.resolveDbPath();
+    if (!await File(userBooksDbPath).exists()) {
+      return;
+    }
+
     final userBooksRepository =
         await UserBooksDatabaseHolder.instance.repository;
     final syncService = await FileSyncService.getInstance(
