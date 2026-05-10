@@ -1,12 +1,28 @@
-// קובץ stub בסיסי — מאפשר קומפילציה גם בלי הרצת ה-generator.
-// ה-hook (hook/build.dart) מחליף את התוכן הזה ברשימה המלאה
-// בכל `flutter run` / `flutter build`. ל-CI אפשר להריץ ידנית
-// `dart run tool/generate_search_index.dart`.
+// GENERATED CODE — DO NOT MODIFY BY HAND.
 //
-// לכן: בטוח לדחוף את הגרסה הבסיסית הזו לרפו — היא תיכתב מקומית
-// בכל בנייה ולא תפריע.
+// אינדקס חיפוש מאוחד של ההגדרות. נוצר אוטומטית מתוך
+// הצהרות `static const searchEntries` בקבצים תחת lib/settings/.
 
 import 'package:otzaria/settings/search/settings_search_models.dart';
+import 'package:otzaria/settings/panels/calendar_settings_panel.dart';
+import 'package:otzaria/settings/panels/gematria_settings_panel.dart';
+import 'package:otzaria/settings/panels/library_settings_panel.dart';
+import 'package:otzaria/settings/tabs/about_dev_tab.dart';
+import 'package:otzaria/settings/tabs/design_settings_tab.dart';
+import 'package:otzaria/settings/tabs/library_settings_tab.dart';
+import 'package:otzaria/settings/tabs/shortcuts_settings_tab.dart';
+import 'package:otzaria/settings/tabs/system_settings_tab.dart';
+import 'package:otzaria/settings/tabs/text_settings_tab.dart';
 
-/// כל פריטי החיפוש שנאספו מהטאבים והפנלים. ייכתב על ידי ה-generator.
-const List<SettingsSearchEntry> kGeneratedSettingsSearchEntries = [];
+/// כל פריטי החיפוש שנאספו מהטאבים והפנלים.
+const List<SettingsSearchEntry> kGeneratedSettingsSearchEntries = [
+  ...AboutDevTab.searchEntries,
+  ...DesignSettingsTab.searchEntries,
+  ...LibrarySettingsPanel.searchEntries,
+  ...LibrarySettingsTab.searchEntries,
+  ...ShortcutsSettingsTab.searchEntries,
+  ...SystemSettingsTab.searchEntries,
+  ...TextSettingsTab.searchEntries,
+  ...CalendarSettingsTab.searchEntries,
+  ...GematriaSettingsTab.searchEntries,
+];
