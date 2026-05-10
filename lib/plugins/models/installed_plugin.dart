@@ -10,6 +10,7 @@ class InstalledPlugin {
   final String? iconPath;
   final bool enabled;
   final bool pinned;
+  final bool pinnedToNavRail;
   final PluginManifest manifest;
   final DateTime installedAt;
   final DateTime updatedAt;
@@ -28,6 +29,7 @@ class InstalledPlugin {
     this.iconPath,
     required this.enabled,
     required this.pinned,
+    this.pinnedToNavRail = false,
     required this.manifest,
     required this.installedAt,
     required this.updatedAt,
@@ -45,6 +47,7 @@ class InstalledPlugin {
       iconPath: map['icon_path'] as String?,
       enabled: (map['enabled'] as int) != 0,
       pinned: (map['pinned'] as int) != 0,
+      pinnedToNavRail: ((map['pinned_to_nav_rail'] as int?) ?? 0) != 0,
       manifest: PluginManifest.fromJson(jsonDecode(map['manifest_json'] as String)),
       installedAt: DateTime.parse(map['installed_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
@@ -63,6 +66,7 @@ class InstalledPlugin {
       'icon_path': iconPath,
       'enabled': enabled ? 1 : 0,
       'pinned': pinned ? 1 : 0,
+      'pinned_to_nav_rail': pinnedToNavRail ? 1 : 0,
       'manifest_json': jsonEncode(manifest.toJson()),
       'installed_at': installedAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
@@ -80,6 +84,7 @@ class InstalledPlugin {
     String? iconPath,
     bool? enabled,
     bool? pinned,
+    bool? pinnedToNavRail,
     PluginManifest? manifest,
     DateTime? installedAt,
     DateTime? updatedAt,
@@ -96,6 +101,7 @@ class InstalledPlugin {
       iconPath: iconPath ?? this.iconPath,
       enabled: enabled ?? this.enabled,
       pinned: pinned ?? this.pinned,
+      pinnedToNavRail: pinnedToNavRail ?? this.pinnedToNavRail,
       manifest: manifest ?? this.manifest,
       installedAt: installedAt ?? this.installedAt,
       updatedAt: updatedAt ?? this.updatedAt,

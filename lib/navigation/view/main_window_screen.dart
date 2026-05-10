@@ -73,6 +73,8 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
+import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart'
     show buildThemePayload;
 import 'package:otzaria/core/external_activation_queue.dart';
@@ -713,21 +715,40 @@ class MainWindowScreenState extends State<MainWindowScreen>
     pageController.jumpToPage(targetPage);
   }
 
-  List<NavigationDestination> _buildNavigationDestinations() {
-    return [
-      for (final item in _navData)
-        NavigationDestination(
-          tooltip: '',
-          icon: Tooltip(
-            preferBelow: false,
-            message: (Settings.getValue<String>(item.shortcutKey) ??
-                    item.shortcutDefault)
-                .toUpperCase(),
-            child: Icon(item.icon),
-          ),
-          selectedIcon: Icon(item.iconFilled),
-          label: item.label,
+  List<NavigationDestination> _buildBarDestinations(
+    List<InstalledPlugin> pinnedPlugins,
+  ) {
+    NavigationDestination buildNavDataDestination(int i) {
+      final item = _navData[i];
+      return NavigationDestination(
+        tooltip: '',
+        icon: Tooltip(
+          preferBelow: false,
+          message: (Settings.getValue<String>(item.shortcutKey) ??
+                  item.shortcutDefault)
+              .toUpperCase(),
+          child: Icon(item.icon),
         ),
+        selectedIcon: Icon(item.iconFilled),
+        label: item.label,
+      );
+    }
+
+    NavigationDestination buildPluginDestination(InstalledPlugin plugin) {
+      final IconData icon =
+          fluentIconFromName(plugin.manifest.toolTabIconName) ??
+              FluentIcons.puzzle_piece_24_regular;
+      return NavigationDestination(
+        tooltip: '',
+        icon: Icon(icon),
+        label: plugin.manifest.toolTabTitle,
+      );
+    }
+
+    return [
+      for (int i = 0; i < 5; i++) buildNavDataDestination(i),
+      for (final plugin in pinnedPlugins) buildPluginDestination(plugin),
+      buildNavDataDestination(5),
     ];
   }
 
@@ -1987,66 +2008,141 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                     ),
                                                     surfaceTintColor:
                                                         Colors.transparent,
-                                                    child: LayoutBuilder(
+                                                    child: BlocBuilder<
+                                                        PluginSystemBloc,
+                                                        PluginSystemState>(
+                                                      buildWhen: (prev, curr) {
+                                                        final prevIds = prev
+                                                                is PluginSystemLoaded
+                                                            ? prev
+                                                                .pluginsPinnedToNavRail
+                                                                .map((p) =>
+                                                                    p.pluginId)
+                                                                .toList()
+                                                            : const <String>[];
+                                                        final currIds = curr
+                                                                is PluginSystemLoaded
+                                                            ? curr
+                                                                .pluginsPinnedToNavRail
+                                                                .map((p) =>
+                                                                    p.pluginId)
+                                                                .toList()
+                                                            : const <String>[];
+                                                        return !listEquals(
+                                                            prevIds, currIds);
+                                                      },
                                                       builder: (context,
-                                                          constraints) {
-                                                        const buttonHeight =
-                                                            60.0;
-                                                        final totalButtonsHeight =
-                                                            _navData.length *
-                                                                buttonHeight;
-                                                        final minSpacerHeight =
-                                                            20.0;
-                                                        final needsScroll =
-                                                            totalButtonsHeight +
-                                                                    minSpacerHeight >
-                                                                constraints
-                                                                    .maxHeight;
-
-                                                        if (needsScroll) {
-                                                          return SingleChildScrollView(
-                                                            child: Column(
-                                                              children: [
-                                                                for (int i = 0;
-                                                                    i <
-                                                                        _navData
+                                                          pluginState) {
+                                                        final pinnedPlugins = pluginState
+                                                                is PluginSystemLoaded
+                                                            ? pluginState
+                                                                .pluginsPinnedToNavRail
+                                                            : const <InstalledPlugin>[];
+                                                        return ValueListenableBuilder<
+                                                            String?>(
+                                                          valueListenable:
+                                                              activeToolIdNotifier,
+                                                          builder: (context,
+                                                              activeToolId, _) {
+                                                            final activePinnedIndex = state
+                                                                            .currentScreen ==
+                                                                        Screen
+                                                                            .more &&
+                                                                    activeToolId !=
+                                                                        null
+                                                                ? pinnedPlugins.indexWhere(
+                                                                    (p) =>
+                                                                        p.pluginId ==
+                                                                        activeToolId)
+                                                                : -1;
+                                                            // "כלים" מודגש רק כשאין תוסף-מוצמד-לסרגל פעיל
+                                                            final isToolsSelected = state
+                                                                        .currentScreen ==
+                                                                    Screen
+                                                                        .more &&
+                                                                activePinnedIndex ==
+                                                                    -1;
+                                                            return LayoutBuilder(
+                                                              builder: (context,
+                                                                  constraints) {
+                                                                const buttonHeight =
+                                                                    60.0;
+                                                                const minSpacerHeight =
+                                                                    20.0;
+                                                                final totalItems =
+                                                                    _navData.length +
+                                                                        pinnedPlugins
                                                                             .length;
-                                                                    i++)
+                                                                final needsScroll =
+                                                                    totalItems *
+                                                                                buttonHeight +
+                                                                            minSpacerHeight >
+                                                                        constraints
+                                                                            .maxHeight;
+
+                                                                final topItems =
+                                                                    <Widget>[
+                                                                  for (int i = 0;
+                                                                      i < 4;
+                                                                      i++)
+                                                                    _buildNavRailItem(
+                                                                      context,
+                                                                      i,
+                                                                      state
+                                                                          .currentScreen,
+                                                                    ),
                                                                   _buildNavRailItem(
                                                                     context,
-                                                                    i,
+                                                                    4,
                                                                     state
                                                                         .currentScreen,
+                                                                    selectedOverride:
+                                                                        isToolsSelected,
                                                                   ),
-                                                              ],
-                                                            ),
-                                                          );
-                                                        }
+                                                                  for (int i = 0;
+                                                                      i <
+                                                                          pinnedPlugins
+                                                                              .length;
+                                                                      i++)
+                                                                    _buildPluginNavRailItem(
+                                                                      context,
+                                                                      pinnedPlugins[
+                                                                          i],
+                                                                      isSelected:
+                                                                          activePinnedIndex ==
+                                                                              i,
+                                                                    ),
+                                                                ];
+                                                                final settingsItem =
+                                                                    _buildNavRailItem(
+                                                                  context,
+                                                                  5,
+                                                                  state
+                                                                      .currentScreen,
+                                                                );
 
-                                                        return Column(
-                                                          children: [
-                                                            for (int i = 0;
-                                                                i < 5;
-                                                                i++)
-                                                              _buildNavRailItem(
-                                                                context,
-                                                                i,
-                                                                state
-                                                                    .currentScreen,
-                                                              ),
-                                                            const Spacer(),
-                                                            for (int i = 5;
-                                                                i <
-                                                                    _navData
-                                                                        .length;
-                                                                i++)
-                                                              _buildNavRailItem(
-                                                                context,
-                                                                i,
-                                                                state
-                                                                    .currentScreen,
-                                                              ),
-                                                          ],
+                                                                if (needsScroll) {
+                                                                  return SingleChildScrollView(
+                                                                    child:
+                                                                        Column(
+                                                                      children: [
+                                                                        ...topItems,
+                                                                        settingsItem,
+                                                                      ],
+                                                                    ),
+                                                                  );
+                                                                }
+
+                                                                return Column(
+                                                                  children: [
+                                                                    ...topItems,
+                                                                    const Spacer(),
+                                                                    settingsItem,
+                                                                  ],
+                                                                );
+                                                              },
+                                                            );
+                                                          },
                                                         );
                                                       },
                                                     ),
@@ -2065,23 +2161,63 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                     return Column(
                                       children: [
                                         Expanded(child: pageView),
-                                        NavigationBar(
-                                          backgroundColor:
-                                              AppSurfaces.panelBackground(
-                                            context,
-                                          ),
-                                          surfaceTintColor: Colors.transparent,
-                                          destinations:
-                                              _buildNavigationDestinations(),
-                                          selectedIndex:
-                                              _getActiveNavigationIndex(
-                                            state.currentScreen,
-                                          ),
-                                          onDestinationSelected: (index) async {
-                                            await _onNavTap(
-                                              context,
-                                              index,
-                                              state.currentScreen,
+                                        BlocBuilder<PluginSystemBloc,
+                                            PluginSystemState>(
+                                          buildWhen: (prev, curr) {
+                                            final prevIds = prev
+                                                    is PluginSystemLoaded
+                                                ? prev.pluginsPinnedToNavRail
+                                                    .map((p) => p.pluginId)
+                                                    .toList()
+                                                : const <String>[];
+                                            final currIds = curr
+                                                    is PluginSystemLoaded
+                                                ? curr.pluginsPinnedToNavRail
+                                                    .map((p) => p.pluginId)
+                                                    .toList()
+                                                : const <String>[];
+                                            return !listEquals(
+                                                prevIds, currIds);
+                                          },
+                                          builder: (context, pluginState) {
+                                            final pinnedPlugins = pluginState
+                                                    is PluginSystemLoaded
+                                                ? pluginState
+                                                    .pluginsPinnedToNavRail
+                                                : const <InstalledPlugin>[];
+                                            return ValueListenableBuilder<
+                                                String?>(
+                                              valueListenable:
+                                                  activeToolIdNotifier,
+                                              builder: (context, activeToolId,
+                                                  _) {
+                                                return NavigationBar(
+                                                  backgroundColor: AppSurfaces
+                                                      .panelBackground(
+                                                    context,
+                                                  ),
+                                                  surfaceTintColor:
+                                                      Colors.transparent,
+                                                  destinations:
+                                                      _buildBarDestinations(
+                                                          pinnedPlugins),
+                                                  selectedIndex:
+                                                      _getBarSelectedIndex(
+                                                    state.currentScreen,
+                                                    pinnedPlugins,
+                                                    activeToolId,
+                                                  ),
+                                                  onDestinationSelected:
+                                                      (index) async {
+                                                    await _onBarNavTap(
+                                                      context,
+                                                      index,
+                                                      state.currentScreen,
+                                                      pinnedPlugins,
+                                                    );
+                                                  },
+                                                );
+                                              },
                                             );
                                           },
                                         ),
@@ -2252,6 +2388,61 @@ class MainWindowScreenState extends State<MainWindowScreen>
     return _getSelectedIndex(currentScreen);
   }
 
+  /// אינדקס נבחר ב-NavigationBar בפורטרט. מציין שתוספים מוצמדים-לסרגל
+  /// מוזרקים בין "כלים" (4) ל"הגדרות", ולכן אינדקס "הגדרות" זז ל-`5 + N`.
+  /// אם המשתמש על מסך הכלים ובחר לשונית של תוסף-מוצמד-לסרגל, מודגש
+  /// פריט התוסף ולא "כלים".
+  int _getBarSelectedIndex(
+    Screen currentScreen,
+    List<InstalledPlugin> pinnedPlugins,
+    String? activeToolId,
+  ) {
+    if (_isFindRefOpen) return 1;
+    if (_isSearchOpen) return 3;
+    switch (currentScreen) {
+      case Screen.library:
+        return 0;
+      case Screen.find:
+        return -1;
+      case Screen.reading:
+        return 2;
+      case Screen.search:
+        return 3;
+      case Screen.more:
+        if (activeToolId != null) {
+          final idx = pinnedPlugins
+              .indexWhere((p) => p.pluginId == activeToolId);
+          if (idx >= 0) return 5 + idx;
+        }
+        return 4;
+      case Screen.settings:
+        return 5 + pinnedPlugins.length;
+    }
+  }
+
+  Future<void> _onBarNavTap(
+    BuildContext context,
+    int index,
+    Screen currentScreen,
+    List<InstalledPlugin> pinnedPlugins,
+  ) async {
+    if (index < 5) {
+      await _onNavTap(context, index, currentScreen);
+      return;
+    }
+    final pluginEnd = 5 + pinnedPlugins.length;
+    if (index < pluginEnd) {
+      final plugin = pinnedPlugins[index - 5];
+      context
+          .read<NavigationBloc>()
+          .add(const NavigateToScreen(Screen.more));
+      _openPluginInToolsWhenAvailable(plugin);
+      return;
+    }
+    // האחרון — "הגדרות" שמופה ל-_navData[5]
+    await _onNavTap(context, 5, currentScreen);
+  }
+
   Future<void> _onNavTap(
     BuildContext context,
     int index,
@@ -2286,10 +2477,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
   Widget _buildNavRailItem(
     BuildContext context,
     int index,
-    Screen currentScreen,
-  ) {
+    Screen currentScreen, {
+    bool? selectedOverride,
+  }) {
     final item = _navData[index];
-    final isSelected = _getActiveNavigationIndex(currentScreen) == index;
+    final isSelected =
+        selectedOverride ?? (_getActiveNavigationIndex(currentScreen) == index);
     final tooltip =
         (Settings.getValue<String>(item.shortcutKey) ?? item.shortcutDefault)
             .toUpperCase();
@@ -2311,6 +2504,51 @@ class MainWindowScreenState extends State<MainWindowScreen>
       tourItemKey: tourMainNavigationItemTargetKeys[index],
       isTourHighlighted: isTourHighlighted,
     );
+  }
+
+  Widget _buildPluginNavRailItem(
+    BuildContext context,
+    InstalledPlugin plugin, {
+    bool isSelected = false,
+  }) {
+    final IconData icon =
+        fluentIconFromName(plugin.manifest.toolTabIconName) ??
+            FluentIcons.puzzle_piece_24_regular;
+
+    return NavRailItem(
+      icon: icon,
+      iconFilled: icon,
+      label: plugin.manifest.toolTabTitle,
+      isSelected: isSelected,
+      onTap: () {
+        context
+            .read<NavigationBloc>()
+            .add(const NavigateToScreen(Screen.more));
+        _openPluginInToolsWhenAvailable(plugin);
+      },
+    );
+  }
+
+  void _openPluginInToolsWhenAvailable(
+    InstalledPlugin plugin, {
+    int attemptsLeft = 6,
+  }) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final toolsState = moreScreenKey.currentState;
+      if (toolsState != null) {
+        toolsState.openPluginTransiently(plugin);
+        return;
+      }
+      if (attemptsLeft <= 0) return;
+      Future<void>.delayed(const Duration(milliseconds: 50), () {
+        if (!mounted) return;
+        _openPluginInToolsWhenAvailable(
+          plugin,
+          attemptsLeft: attemptsLeft - 1,
+        );
+      });
+    });
   }
 
   bool _isTourNavigationItemHighlighted(
