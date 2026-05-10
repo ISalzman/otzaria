@@ -939,15 +939,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         textSearcher = PdfTextSearcher(pdfController)
           ..addListener(_onTextSearcherUpdated);
 
-        widget.tab.documentRef.value = controller.documentRef;
-        widget.tab.outline.value = await document.loadOutline();
+        final documentRef = controller.documentRef;
+        widget.tab.documentRef.value = documentRef;
+        final outline = await document.loadOutline();
+        if (!mounted) return;
+        widget.tab.outline.value = outline;
         final totalPages = document.pages.length;
         final initialTargetPage = widget.tab.pageNumber.clamp(1, totalPages);
         widget.tab.pageNumber = initialTargetPage;
 
         _bloc.add(pdf_events.DocumentReady(
-          documentRef: controller.documentRef,
-          outline: widget.tab.outline.value,
+          documentRef: documentRef,
+          outline: outline,
           totalPages: totalPages,
         ));
 
@@ -1157,7 +1160,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                     controller: widget.tab.pdfViewerController,
                     initialPageNumber:
                         widget.tab.pageNumber < 1 ? 1 : widget.tab.pageNumber,
-                    useProgressiveLoading: false,
+                    useProgressiveLoading: !widget.tab.requiresStableLayout,
                     passwordProvider: () => passwordDialog(context),
                     params: _buildPdfViewerParams(layoutMode),
                   ),

@@ -100,7 +100,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
     if (!mounted) return;
     Navigator.of(context).pop();
     openBook(context, book, ref.segment.toInt(), '',
-        ignoreHistory: ref.isPdf);
+        ignoreHistory: ref.isPdf, requiresStableLayout: ref.isPdf);
   }
 
   Book? _findBookInLibrary(Category category, String title) {

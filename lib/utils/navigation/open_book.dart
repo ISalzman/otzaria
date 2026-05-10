@@ -7,7 +7,7 @@ import "package:flutter_bloc/flutter_bloc.dart";
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 
 void openBook(BuildContext context, Book book, int index, String searchQuery,
-    {bool ignoreHistory = false}) {
+    {bool ignoreHistory = false, bool requiresStableLayout = false}) {
   final coordinator = BookOpenCoordinator(
     tabsBloc: context.read<TabsBloc>(),
     historyBloc: context.read<HistoryBloc>(),
@@ -18,5 +18,6 @@ void openBook(BuildContext context, Book book, int index, String searchQuery,
     index,
     searchQuery,
     ignoreHistory: ignoreHistory,
+    requiresStableLayout: requiresStableLayout,
   );
 }

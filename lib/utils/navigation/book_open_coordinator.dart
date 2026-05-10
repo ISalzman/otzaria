@@ -27,6 +27,7 @@ class BookOpenCoordinator {
     int index,
     String searchQuery, {
     bool ignoreHistory = false,
+    bool requiresStableLayout = false,
   }) {
     final tabsState = tabsBloc.state;
     if (tabsState.hasOpenTabs) {
@@ -55,6 +56,7 @@ class BookOpenCoordinator {
       commentators: initialCommentators,
       openLeftPane: shouldOpenLeftPane,
       showPageShapeView: savedViewMode,
+      requiresStableLayout: requiresStableLayout,
     );
     tabsBloc.add(OpenOrFocusTab(tab));
 
