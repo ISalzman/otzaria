@@ -214,6 +214,40 @@ class MainWindowScreenState extends State<MainWindowScreen>
     ),
   ];
 
+  /// אינדקס "כלים" בתוך `_navData`. שימושי כנקודת הקצה התחתונה של ה-"top items"
+  /// בסרגל/בבר, ולחישוב פריט "Tools selected" כשתוסף-מוצמד-לסרגל אינו פעיל.
+  static final int _toolsNavIndex =
+      _navData.indexWhere((d) => d.screen == Screen.more);
+
+  /// אינדקס "הגדרות" בתוך `_navData`. תוספים מוצמדים-לסרגל מוזרקים
+  /// _אחרי_ פריט הכלים ו_לפני_ פריט ההגדרות.
+  static final int _settingsNavIndex =
+      _navData.indexWhere((d) => d.screen == Screen.settings);
+
+  /// `buildWhen` עבור `BlocBuilder<PluginSystemBloc, PluginSystemState>` —
+  /// בנוי מחדש רק כשרשימת מזהי התוספים המוצמדים-לסרגל משתנה (סינון יציב).
+  static bool _pinnedNavRailIdsChanged(
+    PluginSystemState prev,
+    PluginSystemState curr,
+  ) {
+    final prevIds = prev is PluginSystemLoaded
+        ? prev.pluginsPinnedToNavRail.map((p) => p.pluginId).toList()
+        : const <String>[];
+    final currIds = curr is PluginSystemLoaded
+        ? curr.pluginsPinnedToNavRail.map((p) => p.pluginId).toList()
+        : const <String>[];
+    return !listEquals(prevIds, currIds);
+  }
+
+  /// מחזיר את רשימת התוספים המוצמדים-לסרגל מתוך ה-state, או רשימה ריקה כשאין.
+  static List<InstalledPlugin> _pinnedNavRailFromState(
+    PluginSystemState state,
+  ) {
+    return state is PluginSystemLoaded
+        ? state.pluginsPinnedToNavRail
+        : const <InstalledPlugin>[];
+  }
+
   @override
   void initState() {
     super.initState();
@@ -753,9 +787,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
 
     return [
-      for (int i = 0; i < 5; i++) buildNavDataDestination(i),
+      for (int i = 0; i < _settingsNavIndex; i++) buildNavDataDestination(i),
       for (final plugin in pinnedPlugins) buildPluginDestination(plugin),
-      buildNavDataDestination(5),
+      buildNavDataDestination(_settingsNavIndex),
     ];
   }
 
@@ -2018,33 +2052,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                     child: BlocBuilder<
                                                         PluginSystemBloc,
                                                         PluginSystemState>(
-                                                      buildWhen: (prev, curr) {
-                                                        final prevIds = prev
-                                                                is PluginSystemLoaded
-                                                            ? prev
-                                                                .pluginsPinnedToNavRail
-                                                                .map((p) =>
-                                                                    p.pluginId)
-                                                                .toList()
-                                                            : const <String>[];
-                                                        final currIds = curr
-                                                                is PluginSystemLoaded
-                                                            ? curr
-                                                                .pluginsPinnedToNavRail
-                                                                .map((p) =>
-                                                                    p.pluginId)
-                                                                .toList()
-                                                            : const <String>[];
-                                                        return !listEquals(
-                                                            prevIds, currIds);
-                                                      },
+                                                      buildWhen:
+                                                          _pinnedNavRailIdsChanged,
                                                       builder: (context,
                                                           pluginState) {
-                                                        final pinnedPlugins = pluginState
-                                                                is PluginSystemLoaded
-                                                            ? pluginState
-                                                                .pluginsPinnedToNavRail
-                                                            : const <InstalledPlugin>[];
+                                                        final pinnedPlugins =
+                                                            _pinnedNavRailFromState(
+                                                                pluginState);
                                                         return ValueListenableBuilder<
                                                             String?>(
                                                           valueListenable:
@@ -2090,7 +2104,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                 final topItems =
                                                                     <Widget>[
                                                                   for (int i = 0;
-                                                                      i < 4;
+                                                                      i <
+                                                                          _toolsNavIndex;
                                                                       i++)
                                                                     _buildNavRailItem(
                                                                       context,
@@ -2100,7 +2115,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                     ),
                                                                   _buildNavRailItem(
                                                                     context,
-                                                                    4,
+                                                                    _toolsNavIndex,
                                                                     state
                                                                         .currentScreen,
                                                                     selectedOverride:
@@ -2123,7 +2138,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                 final settingsItem =
                                                                     _buildNavRailItem(
                                                                   context,
-                                                                  5,
+                                                                  _settingsNavIndex,
                                                                   state
                                                                       .currentScreen,
                                                                 );
@@ -2170,28 +2185,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                         Expanded(child: pageView),
                                         BlocBuilder<PluginSystemBloc,
                                             PluginSystemState>(
-                                          buildWhen: (prev, curr) {
-                                            final prevIds = prev
-                                                    is PluginSystemLoaded
-                                                ? prev.pluginsPinnedToNavRail
-                                                    .map((p) => p.pluginId)
-                                                    .toList()
-                                                : const <String>[];
-                                            final currIds = curr
-                                                    is PluginSystemLoaded
-                                                ? curr.pluginsPinnedToNavRail
-                                                    .map((p) => p.pluginId)
-                                                    .toList()
-                                                : const <String>[];
-                                            return !listEquals(
-                                                prevIds, currIds);
-                                          },
+                                          buildWhen:
+                                              _pinnedNavRailIdsChanged,
                                           builder: (context, pluginState) {
-                                            final pinnedPlugins = pluginState
-                                                    is PluginSystemLoaded
-                                                ? pluginState
-                                                    .pluginsPinnedToNavRail
-                                                : const <InstalledPlugin>[];
+                                            final pinnedPlugins =
+                                                _pinnedNavRailFromState(
+                                                    pluginState);
                                             return ValueListenableBuilder<
                                                 String?>(
                                               valueListenable:
@@ -2395,8 +2394,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     return _getSelectedIndex(currentScreen);
   }
 
-  /// אינדקס נבחר ב-NavigationBar בפורטרט. מציין שתוספים מוצמדים-לסרגל
-  /// מוזרקים בין "כלים" (4) ל"הגדרות", ולכן אינדקס "הגדרות" זז ל-`5 + N`.
+  /// אינדקס נבחר ב-NavigationBar בפורטרט. תוספים מוצמדים-לסרגל מוזרקים
+  /// בין "כלים" ל"הגדרות", ולכן אינדקס "הגדרות" זז ל-`_settingsNavIndex + N`.
   /// אם המשתמש על מסך הכלים ובחר לשונית של תוסף-מוצמד-לסרגל, מודגש
   /// פריט התוסף ולא "כלים".
   int _getBarSelectedIndex(
@@ -2419,11 +2418,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
         if (activeToolId != null) {
           final idx = pinnedPlugins
               .indexWhere((p) => p.pluginId == activeToolId);
-          if (idx >= 0) return 5 + idx;
+          // התוספים יושבים ישירות אחרי "כלים", ולכן position = settingsIndex + idx
+          if (idx >= 0) return _settingsNavIndex + idx;
         }
-        return 4;
+        return _toolsNavIndex;
       case Screen.settings:
-        return 5 + pinnedPlugins.length;
+        return _settingsNavIndex + pinnedPlugins.length;
     }
   }
 
@@ -2433,21 +2433,21 @@ class MainWindowScreenState extends State<MainWindowScreen>
     Screen currentScreen,
     List<InstalledPlugin> pinnedPlugins,
   ) async {
-    if (index < 5) {
+    if (index < _settingsNavIndex) {
       await _onNavTap(context, index, currentScreen);
       return;
     }
-    final pluginEnd = 5 + pinnedPlugins.length;
+    final pluginEnd = _settingsNavIndex + pinnedPlugins.length;
     if (index < pluginEnd) {
-      final plugin = pinnedPlugins[index - 5];
+      final plugin = pinnedPlugins[index - _settingsNavIndex];
       context
           .read<NavigationBloc>()
           .add(const NavigateToScreen(Screen.more));
       _openPluginInToolsWhenAvailable(plugin);
       return;
     }
-    // האחרון — "הגדרות" שמופה ל-_navData[5]
-    await _onNavTap(context, 5, currentScreen);
+    // האחרון — "הגדרות" שמופה ל-_navData[_settingsNavIndex]
+    await _onNavTap(context, _settingsNavIndex, currentScreen);
   }
 
   Future<void> _onNavTap(
