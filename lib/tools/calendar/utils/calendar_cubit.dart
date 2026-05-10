@@ -529,6 +529,8 @@ class CalendarCubit extends Cubit<CalendarState> {
       final d = today.add(Duration(days: i));
       final id = _zmanNotificationId(timeId, d);
       await notificationService.cancelNotification(id);
+      // yield לאירוע loop — מאפשר ל-UI לרנדר פריים אחרי כל ביטול
+      await Future.delayed(Duration.zero);
     }
 
     UiSnack.show('ההתראה בוטלה עבור ${existing.displayName}');
@@ -567,6 +569,8 @@ class CalendarCubit extends Cubit<CalendarState> {
       final pref = entry.value;
 
       for (int i = 0; i <= _zmanScheduleDaysAhead; i++) {
+        // yield לאירוע loop — מאפשר ל-UI לרנדר פריים בין כל חישוב
+        await Future.delayed(Duration.zero);
         final d = today.add(Duration(days: i));
         final times = _calculateDailyTimes(d, state.selectedCity);
         final timeStr = times[timeId];
