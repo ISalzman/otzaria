@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
-import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
@@ -20,7 +18,6 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/widgets/layout/resizable_facet_filtering.dart';
 import 'package:otzaria/widgets/feedback/indexing_warning.dart';
 import 'package:otzaria/widgets/misc/thin_divider.dart';
-import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 
 class TantivyFullTextSearch extends StatefulWidget {
   final SearchingTab tab;
@@ -37,47 +34,11 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   bool _indexInProgressWarningDismissed = false;
   bool _showEditPanel = false;
 
-  /// מחזיר את מצב אזהרת האינדקס לפי ה-Bloc + רשימת הספרים שאונדקסו.
-  /// אסור להסיק "missing" לפני ש-TantivyDataProvider סיים לטעון את booksDone
-  /// מהדיסק (אחרת תוצג אזהרה שגויה בחלון אתחול האפליקציה).
-  IndexingWarningMode? _resolveIndexingWarningMode(
-    IndexingState state, {
-    required bool providerInitialized,
-  }) {
-    if (providerInitialized &&
-        TantivyDataProvider.instance.booksDone.isEmpty) {
-      return IndexingWarningMode.missing;
-    }
-    if (state is IndexingInProgress && !_indexInProgressWarningDismissed) {
-      return IndexingWarningMode.inProgress;
-    }
-    return null;
-  }
-
   Widget _buildIndexingWarning() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: TantivyDataProvider.instance.isInitialized,
-      builder: (context, providerInitialized, _) {
-        return BlocBuilder<IndexingBloc, IndexingState>(
-          builder: (context, state) {
-            final mode = _resolveIndexingWarningMode(
-              state,
-              providerInitialized: providerInitialized,
-            );
-            if (mode == null) return const SizedBox.shrink();
-            return IndexingWarning(
-              mode: mode,
-              onDismiss: mode == IndexingWarningMode.inProgress
-                  ? () {
-                      setState(() {
-                        _indexInProgressWarningDismissed = true;
-                      });
-                    }
-                  : null,
-            );
-          },
-        );
-      },
+    return IndexingWarningContainer(
+      inProgressDismissed: _indexInProgressWarningDismissed,
+      onDismiss: () =>
+          setState(() => _indexInProgressWarningDismissed = true),
     );
   }
 

@@ -180,57 +180,11 @@ class _SearchDialogState extends State<SearchDialog> {
     });
   }
 
-  /// מחזיר את מצב זמינות האינדקס לפי ה-Bloc + רשימת הספרים שאונדקסו.
-  /// "missing" - הסתיימה האתחול ואין שום ספר באינדקס.
-  /// "inProgress" - אינדוקס פעיל כעת.
-  /// null - אינדקס תקין, או שעוד לא ידוע (האתחול לא הסתיים).
-  ///
-  /// [providerInitialized] = true רק אחרי ש-TantivyDataProvider סיים לטעון את
-  /// booksDone מהדיסק. אסור להסיק "missing" לפני כן.
-  IndexingWarningMode? _resolveWarningMode(
-    IndexingState state, {
-    required bool providerInitialized,
-  }) {
-    if (providerInitialized &&
-        TantivyDataProvider.instance.booksDone.isEmpty) {
-      return IndexingWarningMode.missing;
-    }
-    if (state is IndexingInProgress && _showIndexInProgressWarning) {
-      return IndexingWarningMode.inProgress;
-    }
-    return null;
-  }
-
-  /// האם יש לחסום את אישור החיפוש (אין אינדקס בכלל - אחרי שהטעינה הסתיימה).
-  bool _isSearchBlocked(IndexingState state, {required bool providerInitialized}) {
-    return providerInitialized &&
-        TantivyDataProvider.instance.booksDone.isEmpty;
-  }
-
   Widget _buildIndexWarning() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: TantivyDataProvider.instance.isInitialized,
-      builder: (context, providerInitialized, _) {
-        return BlocBuilder<IndexingBloc, IndexingState>(
-          builder: (context, state) {
-            final mode = _resolveWarningMode(
-              state,
-              providerInitialized: providerInitialized,
-            );
-            if (mode == null) return const SizedBox.shrink();
-            return IndexingWarning(
-              mode: mode,
-              onDismiss: mode == IndexingWarningMode.inProgress
-                  ? () {
-                      setState(() {
-                        _showIndexInProgressWarning = false;
-                      });
-                    }
-                  : null,
-            );
-          },
-        );
-      },
+    return IndexingWarningContainer(
+      inProgressDismissed: !_showIndexInProgressWarning,
+      onDismiss: () =>
+          setState(() => _showIndexInProgressWarning = false),
     );
   }
 
@@ -354,8 +308,7 @@ class _SearchDialogState extends State<SearchDialog> {
   void _performSearch() {
     // חסימת חיפוש כשאין אינדקס - חיפוש שמשתמש באינדקס לא יכול לרוץ.
     // אם ה-provider עוד לא הסתיים לטעון, לא חוסמים (השאילתה תמתין ל-engine).
-    if (_isSearchBlocked(
-      context.read<IndexingBloc>().state,
+    if (isSearchBlockedByMissingIndex(
       providerInitialized:
           TantivyDataProvider.instance.isInitialized.value,
     )) {
@@ -749,44 +702,36 @@ class _SearchDialogState extends State<SearchDialog> {
                                               .instance.isInitialized,
                                           builder: (context,
                                               providerInitialized, _) {
-                                            return BlocBuilder<IndexingBloc,
-                                                IndexingState>(
-                                              builder: (context, indexingState) {
-                                                final blocked = _isSearchBlocked(
-                                                  indexingState,
-                                                  providerInitialized:
-                                                      providerInitialized,
-                                                );
-                                                return IconButton(
-                                                  icon: const Icon(
-                                                    FluentIcons.search_24_filled,
-                                                    size: 20,
-                                                  ),
-                                                  tooltip: blocked
-                                                      ? 'אינדקס לא קיים, לא ניתן לבצע חיפוש זה ללא אינדקס'
-                                                      : 'חפש',
-                                                  onPressed: blocked
-                                                      ? null
-                                                      : _performSearch,
-                                                  style: IconButton.styleFrom(
-                                                    backgroundColor: Theme.of(
-                                                            context)
-                                                        .colorScheme
-                                                        .primaryContainer,
-                                                    foregroundColor: Theme.of(
-                                                            context)
-                                                        .colorScheme
-                                                        .primary,
-                                                    padding:
-                                                        const EdgeInsets.all(6),
-                                                    minimumSize:
-                                                        const Size(32, 32),
-                                                    tapTargetSize:
-                                                        MaterialTapTargetSize
-                                                            .shrinkWrap,
-                                                  ),
-                                                );
-                                              },
+                                            final blocked =
+                                                isSearchBlockedByMissingIndex(
+                                              providerInitialized:
+                                                  providerInitialized,
+                                            );
+                                            return IconButton(
+                                              icon: const Icon(
+                                                FluentIcons.search_24_filled,
+                                                size: 20,
+                                              ),
+                                              tooltip: blocked
+                                                  ? 'אינדקס לא קיים, לא ניתן לבצע חיפוש זה ללא אינדקס'
+                                                  : 'חפש',
+                                              onPressed:
+                                                  blocked ? null : _performSearch,
+                                              style: IconButton.styleFrom(
+                                                backgroundColor: Theme.of(context)
+                                                    .colorScheme
+                                                    .primaryContainer,
+                                                foregroundColor: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary,
+                                                padding:
+                                                    const EdgeInsets.all(6),
+                                                minimumSize:
+                                                    const Size(32, 32),
+                                                tapTargetSize:
+                                                    MaterialTapTargetSize
+                                                        .shrinkWrap,
+                                              ),
                                             );
                                           },
                                         ),
