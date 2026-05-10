@@ -19,6 +19,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
@@ -222,10 +223,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       debugPrint('Book found: $bookName (ID: $bookId)');
 
       // קבלת הפרק הנוכחי
-      final currentIndex =
-          state.positionsListener.itemPositions.value.isNotEmpty
-              ? state.positionsListener.itemPositions.value.first.index
-              : 0;
+      final currentIndex = _topmostVisibleIndex(state);
 
       // קבלת הכותרת הנוכחית
       String currentRef =
@@ -1460,29 +1458,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           widget: _buildPreviousPageButton(state),
           icon: FluentIcons.chevron_left_24_regular,
           tooltip: 'הקטע הקודם',
-          onPressed: () {
-            state.scrollController.scrollTo(
-              duration: const Duration(milliseconds: 300),
-              index: max(
-                0,
-                state.positionsListener.itemPositions.value.first.index - 1,
-              ),
-            );
-          },
+          onPressed: () => _scrollToPreviousSegment(state),
         ),
         ActionButtonData(
           widget: _buildNextPageButton(state),
           icon: FluentIcons.chevron_right_24_regular,
           tooltip: 'הקטע הבא',
-          onPressed: () {
-            state.scrollController.scrollTo(
-              index: max(
-                state.positionsListener.itemPositions.value.first.index + 1,
-                state.positionsListener.itemPositions.value.length - 1,
-              ),
-              duration: const Duration(milliseconds: 300),
-            );
-          },
+          onPressed: () => _scrollToNextSegment(state),
         ),
         ActionButtonData(
           widget: _buildNextTocButton(state),
@@ -1512,29 +1494,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           widget: _buildPreviousPageButton(state),
           icon: FluentIcons.chevron_left_24_regular,
           tooltip: 'הקטע הקודם',
-          onPressed: () {
-            state.scrollController.scrollTo(
-              duration: const Duration(milliseconds: 300),
-              index: max(
-                0,
-                state.positionsListener.itemPositions.value.first.index - 1,
-              ),
-            );
-          },
+          onPressed: () => _scrollToPreviousSegment(state),
         ),
         ActionButtonData(
           widget: _buildNextPageButton(state),
           icon: FluentIcons.chevron_right_24_regular,
           tooltip: 'הקטע הבא',
-          onPressed: () {
-            state.scrollController.scrollTo(
-              index: max(
-                state.positionsListener.itemPositions.value.first.index + 1,
-                state.positionsListener.itemPositions.value.length - 1,
-              ),
-              duration: const Duration(milliseconds: 300),
-            );
-          },
+          onPressed: () => _scrollToNextSegment(state),
         ),
         ActionButtonData(
           widget: _buildNextTocButton(state),
@@ -1812,7 +1778,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         Settings.getValue<String>('key-shortcut-add-bookmark') ?? 'ctrl+b';
     return IconButton(
       onPressed: () async {
-        int index = state.positionsListener.itemPositions.value.first.index;
+        int index = _topmostVisibleIndex(state);
         final toc = state.book.tableOfContents;
         String ref = await refFromIndex(index, toc);
         // הוספת שם הספר לכותרת
@@ -1878,15 +1844,25 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return IconButton(
       icon: const Icon(FluentIcons.chevron_left_24_regular),
       tooltip: 'הקטע הקודם',
-      onPressed: () {
-        state.scrollController.scrollTo(
-          duration: const Duration(milliseconds: 300),
-          index: max(
-            0,
-            state.positionsListener.itemPositions.value.first.index - 1,
-          ),
-        );
-      },
+      onPressed: () => _scrollToPreviousSegment(state),
+    );
+  }
+
+  void _scrollToPreviousSegment(TextBookLoaded state) {
+    final positions = state.positionsListener.itemPositions.value;
+    if (positions.isEmpty) return;
+    state.scrollController.scrollTo(
+      duration: const Duration(milliseconds: 300),
+      index: max(0, _topmostVisibleIndex(state) - 1),
+    );
+  }
+
+  void _scrollToNextSegment(TextBookLoaded state) {
+    final positions = state.positionsListener.itemPositions.value;
+    if (positions.isEmpty) return;
+    state.scrollController.scrollTo(
+      duration: const Duration(milliseconds: 300),
+      index: _bottommostVisibleIndex(state) + 1,
     );
   }
 
@@ -1894,15 +1870,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return IconButton(
       icon: const Icon(FluentIcons.chevron_right_24_regular),
       tooltip: 'הקטע הבא',
-      onPressed: () {
-        state.scrollController.scrollTo(
-          index: max(
-            state.positionsListener.itemPositions.value.first.index + 1,
-            state.positionsListener.itemPositions.value.length - 1,
-          ),
-          duration: const Duration(milliseconds: 300),
-        );
-      },
+      onPressed: () => _scrollToNextSegment(state),
     );
   }
 
@@ -1982,9 +1950,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// ניווט לכותרת הקודמת ב-TOC
   void _navigateToPreviousToc(TextBookLoaded state) {
-    final currentIndex = state.positionsListener.itemPositions.value.isNotEmpty
-        ? state.positionsListener.itemPositions.value.first.index
-        : 0;
+    final currentIndex = _topmostVisibleIndex(state);
     final prevIndex = _findPreviousTocIndex(
         state.tableOfContents, currentIndex, state.book.title);
     if (prevIndex != null) {
@@ -1997,9 +1963,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// ניווט לכותרת הבאה ב-TOC
   void _navigateToNextToc(TextBookLoaded state) {
-    final currentIndex = state.positionsListener.itemPositions.value.isNotEmpty
-        ? state.positionsListener.itemPositions.value.first.index
-        : 0;
+    final currentIndex = _bottommostVisibleIndex(state);
     final nextIndex = _findNextTocIndex(
         state.tableOfContents, currentIndex, state.book.title);
     if (nextIndex != null) {
@@ -2188,9 +2152,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       return;
     }
 
-    final currentIndex = state.positionsListener.itemPositions.value.isNotEmpty
-        ? state.positionsListener.itemPositions.value.first.index
-        : 0;
+    final currentIndex = _topmostVisibleIndex(state);
     widget.tab.index = currentIndex;
 
     final index = await textToPdfPage(state.book, currentIndex);
@@ -2201,7 +2163,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   void _handleBookmarkPress(BuildContext context, TextBookLoaded state) async {
-    final index = state.positionsListener.itemPositions.value.first.index;
+    final index = _topmostVisibleIndex(state);
     final toc = state.book.tableOfContents;
     final bookmarkBloc = context.read<BookmarkBloc>();
     String ref = await refFromIndex(index, toc);
@@ -2488,6 +2450,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 }
 
+int _topmostVisibleIndex(TextBookLoaded state) =>
+    topmostVisibleIndex(state.positionsListener.itemPositions.value);
+
+int _bottommostVisibleIndex(TextBookLoaded state) =>
+    bottommostVisibleIndex(state.positionsListener.itemPositions.value);
+
 // [EDITING DISABLED]
 // // החלף את כל המחלקה הזו בקובץ text_book_screen.TXT
 //
@@ -2748,7 +2716,7 @@ Future<void> _savePerBookSettingsDirectly(
 /// Helper function to add bookmark from keyboard shortcut
 void _addBookmarkFromKeyboard(
     BuildContext context, TextBookLoaded state) async {
-  final index = state.positionsListener.itemPositions.value.first.index;
+  final index = _topmostVisibleIndex(state);
   final toc = state.book.tableOfContents;
   final bookmarkBloc = context.read<BookmarkBloc>();
   String ref = await refFromIndex(index, toc);
@@ -2868,9 +2836,7 @@ Future<void> _addNoteFromKeyboard(
 
 void _togglePdfView(
     BuildContext context, TextBookLoaded state, TextBookTab tab) async {
-  final currentIndex = state.positionsListener.itemPositions.value.isNotEmpty
-      ? state.positionsListener.itemPositions.value.first.index
-      : 0;
+  final currentIndex = _topmostVisibleIndex(state);
   tab.index = currentIndex;
 
   final library = await DataRepository.instance.library;
