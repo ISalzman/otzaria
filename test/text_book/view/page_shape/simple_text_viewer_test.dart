@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -17,6 +18,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
+import 'package:otzaria/widgets/misc/app_context_menu.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../../test_helpers/memory_cache_provider.dart';
@@ -387,6 +389,87 @@ void main() {
     );
 
     menuItemFocusNode.dispose();
+  });
+
+  testWidgets('"העתק" בתפריט ההקשר מנוטרל כשאין טקסט נבחר בעת פתיחת התפריט',
+      (tester) async {
+    // ——————————————————————————————————————————————————————————————————————
+    // מבדק זה מוודא שה-capturedText שנלכד ב-_buildLine (ב-savedTextAtBuild)
+    // הוא null כשאין בחירה, ולכן "העתק" מנוטרל — גם אחרי שתוקן הבאג שגרם
+    // ל-capturedText לקרוא את _savedSelectedText בזמן הקליק ולא בזמן הבנייה.
+    // ——————————————————————————————————————————————————————————————————————
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      PersonalNotesState(
+        isLoading: false,
+        bookId: 'ספר בדיקה',
+        locatedNotes: const [],
+        missingNotes: const [],
+        errorMessage: null,
+        filteredLocatedNotes: const [],
+        filteredMissingNotes: const [],
+      ),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: SimpleTextViewer(
+              content: const ['שורה א'],
+              fontSize: 18,
+              openBookCallback: (_) {},
+              isMainText: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryButton,
+    );
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    // AppContextMenuRegion נמצא בתוך כל item ברשימה — מטרגטים אותו ישירות
+    final regionFinder = find.byType(AppContextMenuRegion);
+    expect(regionFinder, findsWidgets,
+        reason: 'SimpleTextViewer חייב לרנדר AppContextMenuRegion לכל שורה');
+
+    final regionCenter = tester.getCenter(regionFinder.first);
+    await gesture.moveTo(regionCenter);
+    await gesture.down(regionCenter);
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('העתק'), findsOneWidget,
+        reason: 'תפריט הקשר חייב להכיל פריט "העתק"');
+
+    final copyButton = tester.widget<MenuItemButton>(
+      find
+          .ancestor(
+            of: find.text('העתק'),
+            matching: find.byType(MenuItemButton),
+          )
+          .first,
+    );
+    expect(
+      copyButton.onPressed,
+      isNull,
+      reason:
+          '"העתק" חייב להיות מנוטרל כשאין בחירה — capturedText=null בזמן הבנייה',
+    );
   });
 
   testWidgets(

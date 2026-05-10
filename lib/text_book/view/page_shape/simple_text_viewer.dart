@@ -721,7 +721,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
   /// תפריט הקשר
   List<AppContextMenuEntry> _buildContextMenu(
-      TextBookLoaded state, int index, BuildContext menuContext, Offset tapPosition) {
+      TextBookLoaded state, int index, BuildContext menuContext, Offset tapPosition, String? capturedText) {
     List<AppContextMenuEntry> commentatorItems = [];
     if (!widget.isMainText && widget.bookTitle != null) {
       commentatorItems = _buildCommentatorSwitchMenu(state);
@@ -770,7 +770,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         icon: FluentIcons.search_24_regular,
         onTap: () {
           if (widget.onOpenSearch != null) {
-            widget.onOpenSearch!(_savedSelectedText);
+            widget.onOpenSearch!(capturedText);
           } else {
             UiSnack.show('חיפוש לא זמין בתצוגה זו');
           }
@@ -792,8 +792,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       ));
     }
 
-    final dictionaryText = (_savedSelectedText?.trim().isNotEmpty == true)
-        ? _savedSelectedText
+    final dictionaryText = (capturedText?.trim().isNotEmpty == true)
+        ? capturedText
         : wordAtGlobalPosition(tapPosition);
     final dictionaryEntries = buildDictionaryContextMenuEntries(
       context: context,
@@ -810,20 +810,19 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       AppContextMenuEntry(
         label: 'הוסף הערה אישית ',
         icon: FluentIcons.note_add_24_regular,
-        onTap: () => _createNoteForCurrentLine(index),
+        onTap: () => _createNoteForCurrentLine(index, capturedText),
       ),
       AppContextMenuEntry(
         label: 'דווח על טעות בספר',
         icon: FluentIcons.error_circle_24_regular,
-        onTap: () => _openErrorReportDialog(_savedSelectedText ?? ''),
+        onTap: () => _openErrorReportDialog(capturedText ?? ''),
       ),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
         label: 'העתק',
         icon: FluentIcons.copy_24_regular,
-        enabled:
-            _savedSelectedText != null && _savedSelectedText!.trim().isNotEmpty,
-        onTap: _copyFormattedText,
+        enabled: capturedText != null && capturedText.trim().isNotEmpty,
+        onTap: () => _copyFormattedText(capturedText),
       ),
       AppContextMenuEntry(
         label: 'העתק את כל הפסקה',
@@ -849,7 +848,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 'reader.context_menu_item_clicked',
                 {
                   'itemId': item.id,
-                  'selectedText': _savedSelectedText ?? '',
+                  'selectedText': capturedText ?? '',
                   'currentRef': state.currentTitle ?? '',
                   'currentBook': state.book.title,
                   'currentBookId': state.book.title,
@@ -883,11 +882,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   }
 
   /// יצירת הערה לשורה הנוכחית
-  Future<void> _createNoteForCurrentLine(int index) async {
+  Future<void> _createNoteForCurrentLine(int index, [String? capturedText]) async {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
 
-    final selectedText = _savedSelectedText;
+    final selectedText = capturedText ?? _savedSelectedText;
     final referenceText = selectedText?.trim().isNotEmpty == true
         ? utils.removeVolwels(selectedText!.trim())
         : widget.content[index];
@@ -1037,11 +1036,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   }
 
   /// העתקת טקסט מעוצב
-  Future<void> _copyFormattedText() async {
+  Future<void> _copyFormattedText([String? capturedText]) async {
     // מפרש כבר טיפל בהעתקה - לא נדרוס
     if (widget.isMainText && _commentaryCopyHandled) return;
 
-    final plainText = _savedSelectedText;
+    final plainText = capturedText ?? _savedSelectedText;
 
     if (plainText == null || plainText.trim().isEmpty) {
       UiSnack.show('אנא בחר טקסט להעתקה');
@@ -1223,6 +1222,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     BuildContext context,
     Map<int, List<PersonalNote>> noteMap,
   ) {
+    // נתפס בזמן BUILD (כמו selectedText ב-ValueListenableBuilder של Combined),
+    // כך שגם אם onSelectionChanged(null) ירוץ לפני menuBuilder, ה-closure
+    // כבר סגור על הערך הנכון מהבנייה האחרונה.
+    final savedTextAtBuild = _savedSelectedText;
+
     final isSelected = widget.isMainText && state.selectedIndex == index;
     final isHighlighted = widget.isMainText && state.highlightedLine == index;
 
@@ -1285,7 +1289,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         });
       },
       child: AppContextMenuRegion(
-        menuBuilder: (menuCtx, tapPos) => _buildContextMenu(state, index, menuCtx, tapPos),
+        menuBuilder: (menuCtx, tapPos) => _buildContextMenu(state, index, menuCtx, tapPos, savedTextAtBuild),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
