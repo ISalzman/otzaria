@@ -10,17 +10,14 @@ Map<String, String> getSourceDisplayInfo(String source) {
   // נרמול המחרוזת: הסרת רווחים, המרה לאותיות קטנות והסרת תווים מפרידים
   final normalized = source.toLowerCase().replaceAll(RegExp(r'[-_\s]'), '');
   
-  // טיפול מיוחד ב-ToratEmet (בגלל בעיה עם תווים)
-  if (normalized.contains('toratemet')) {
-    return {
-      'text': 'תורת אמת',
-      'url': 'http://www.toratemetfreeware.com/index.html?downloads;1;'
-    };
-  }
-  
-  // טיפול בסיומת 'tootzaria' שנוספה לחלק מהמקורות ב-DB
   var key = normalized;
-  if (key.endsWith('tootzaria') && key != 'tootzaria') {
+  
+  // טיפול מיוחד ב-ToratEmet (בגלל בעיה עם תווים)
+  if (key.contains('toratemet')) {
+    key = 'toratemet';
+  }
+  // טיפול בסיומת 'tootzaria' שנוספה לחלק מהמקורות ב-DB
+  else if (key.endsWith('tootzaria') && key != 'tootzaria') {
     key = key.substring(0, key.length - 'tootzaria'.length);
   }
   
@@ -37,6 +34,7 @@ Map<String, String> getSourceDisplayInfo(String source) {
     'wikijewishbooks': {'text': 'אוצר הספרים היהודי השיתופי', 'url': 'https://wiki.jewishbooks.org.il/'},
     'morebooks': {'text': 'ספרים פרטיים או מקורות נוספים', 'url': ''},
     'tootzaria': {'text': 'מקורות שהועברו לאוצריא', 'url': ''},
+    'toratemet': {'text': 'תורת אמת', 'url': 'http://www.toratemetfreeware.com/index.html?downloads;1;'},
     'unknown': {'text': 'מקור לא ידוע', 'url': ''},
   };
   
