@@ -9,41 +9,32 @@ import 'package:url_launcher/url_launcher.dart';
 Map<String, String> getSourceDisplayInfo(String source) {
   final normalized = source.trim().toLowerCase();
   
-  // השמות המדויקים מה-DB (case-insensitive):
-  // Sefaria, Ben-YehudaToOtzaria, DictaToOtzaria, MoreBooks,
-  // OnYourWayToOtzaria, OraytaToOtzaria, ToratEmetToOtzaria, Unknown,
-  // pninimToOtzaria, sefariaToOtzaria, wikiJewishBooksToOtzaria,
-  // wikisourceToOtzaria, tashmaToOtzaria
+  // מיפוי שמות המקורות (כולל תמיכה לאחור במפתחות ישנים)
+  const mappings = {
+    'sefaria': {'text': 'ספריא', 'url': 'https://www.sefaria.org/texts'},
+    'sefariatootzaria': {'text': 'ספריא', 'url': 'https://www.sefaria.org/texts'},
+    'ben-yehuda': {'text': 'פרוייקט בן-יהודה', 'url': 'https://benyehuda.org/'},
+    'ben-yehudatootzaria': {'text': 'פרוייקט בן-יהודה', 'url': 'https://benyehuda.org/'},
+    'dicta': {'text': 'ספריית דיקטה', 'url': 'https://library.dicta.org.il/'},
+    'dictatootzaria': {'text': 'ספריית דיקטה', 'url': 'https://library.dicta.org.il/'},
+    'onyourway': {'text': 'ובלכתך בדרך', 'url': 'https://mobile.tora.ws/'},
+    'onyourwaytootzaria': {'text': 'ובלכתך בדרך', 'url': 'https://mobile.tora.ws/'},
+    'orayta': {'text': 'אורייתא', 'url': 'https://github.com/MosheWagner/Orayta-Books'},
+    'oraytatootzaria': {'text': 'אורייתא', 'url': 'https://github.com/MosheWagner/Orayta-Books'},
+    'tashma': {'text': 'תא שמע', 'url': 'https://tashma.co.il/'},
+    'tashmatootzaria': {'text': 'תא שמע', 'url': 'https://tashma.co.il/'},
+    'pninim': {'text': 'פנינים', 'url': 'https://pninim.org/'},
+    'pninimtootzaria': {'text': 'פנינים', 'url': 'https://pninim.org/'},
+    'wikisource': {'text': 'ויקיטקסט', 'url': 'https://he.wikisource.org/wiki'},
+    'wikisourcetootzaria': {'text': 'ויקיטקסט', 'url': 'https://he.wikisource.org/wiki'},
+    'wiki_jewish_books': {'text': 'אוצר הספרים היהודי השיתופי', 'url': 'https://wiki.jewishbooks.org.il/'},
+    'wikijewishbookstootzaria': {'text': 'אוצר הספרים היהודי השיתופי', 'url': 'https://wiki.jewishbooks.org.il/'},
+    'morebooks': {'text': 'ספרים פרטיים או מקורות נוספים', 'url': ''},
+    'tootzaria': {'text': 'מקורות שהועברו לאוצריא', 'url': ''},
+    'unknown': {'text': 'מקור לא ידוע', 'url': ''},
+  };
   
-  // ספריא
-  if (normalized == 'sefaria' || normalized == 'sefariatootzaria') {
-    return {'text': 'ספריא', 'url': 'https://www.sefaria.org/texts'};
-  }
-  
-  // פרוייקט בן-יהודה
-  if (normalized == 'ben-yehuda' || normalized == 'ben-yehudatootzaria') {
-    return {'text': 'פרוייקט בן-יהודה', 'url': 'https://benyehuda.org/'};
-  }
-  
-  // ספריית דיקטה
-  if (normalized == 'dictatootzaria') {
-    return {'text': 'ספריית דיקטה', 'url': 'https://library.dicta.org.il/'};
-  }
-  
-  // ובלכתך בדרך
-  if (normalized == 'onyourwaytootzaria') {
-    return {'text': 'ובלכתך בדרך', 'url': 'https://mobile.tora.ws/'};
-  }
-  
-  // אורייתא
-  if (normalized == 'oraytatootzaria') {
-    return {
-      'text': 'אורייתא',
-      'url': 'https://github.com/MosheWagner/Orayta-Books'
-    };
-  }
-  
-  // תורת אמת
+  // טיפול מיוחד ב-ToratEmet (בגלל בעיה עם תווים)
   if (normalized.contains('toratemet')) {
     return {
       'text': 'תורת אמת',
@@ -51,41 +42,8 @@ Map<String, String> getSourceDisplayInfo(String source) {
     };
   }
   
-  // תא שמע
-  if (normalized == 'tashmatootzaria') {
-    return {'text': 'תא שמע', 'url': 'https://tashma.co.il/'};
-  }
-  
-  // פנינים
-  if (normalized == 'pninimtootzaria') {
-    return {'text': 'פנינים', 'url': 'https://pninim.org/'};
-  }
-  
-  // אוצר הספרים היהודי השיתופי
-  if (normalized == 'wikijewishbookstootzaria') {
-    return {
-      'text': 'אוצר הספרים היהודי השיתופי',
-      'url': 'https://wiki.jewishbooks.org.il/'
-    };
-  }
-  
-  // ויקיטקסט
-  if (normalized == 'wikisourcetootzaria') {
-    return {'text': 'ויקיטקסט', 'url': 'https://he.wikisource.org/wiki'};
-  }
-  
-  // ספרים פרטיים או מקורות נוספים
-  if (normalized == 'morebooks') {
-    return {'text': 'ספרים פרטיים או מקורות נוספים', 'url': ''};
-  }
-  
-  // מקור לא ידוע
-  if (normalized == 'unknown') {
-    return {'text': 'מקור לא ידוע', 'url': ''};
-  }
-  
-  // אם לא נמצא התאמה מדויקת, מחזירים את המקור המקורי
-  return {'text': source, 'url': ''};
+  // חיפוש במיפוי, אם לא נמצא - מחזירים את המקור המקורי
+  return mappings[normalized] ?? {'text': source, 'url': ''};
 }
 
 /// הצגת דיאלוג אודות הספר
