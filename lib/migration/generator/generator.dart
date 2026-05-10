@@ -317,14 +317,6 @@ class DatabaseGenerator {
         return;
       }
 
-      // קביעת מזהה לספר: ב-user_books.db נותנים ל-AUTOINCREMENT של SQLite
-      // להחזיר ID חיובי בעת ה-insert (currentBookId=0 → repository.insertBook
-      // יבחר נתיב auto-increment); ב-seforim.db מקצים ID שלילי כדי לא
-      // להתנגש עם תוכן רשמי שיש לו IDs קבועים.
-      int currentBookId = repository.useAutoIncrementIds
-          ? 0
-          : await repository.getNextNegativeBookId();
-
       // For non-txt files (external), get file stats
       int? fileSize;
       int? lastModified;
@@ -338,7 +330,7 @@ class DatabaseGenerator {
       }
 
       final book = Book(
-        id: currentBookId,
+        id: 0,
         categoryId: categoryId,
         sourceId: sourceId,
         title: title,

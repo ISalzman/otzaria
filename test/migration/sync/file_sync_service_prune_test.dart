@@ -118,7 +118,7 @@ void main() {
 
     await repository.insertBook(
       Book(
-        id: await repository.getNextNegativeBookId(),
+        id: 0,
         categoryId: activeCategoryId,
         sourceId: activeSourceId,
         title: 'ספר פעיל',
@@ -129,7 +129,7 @@ void main() {
     );
     await repository.insertBook(
       Book(
-        id: await repository.getNextNegativeBookId(),
+        id: 0,
         categoryId: staleCategoryId,
         sourceId: staleSourceId,
         title: 'ספר ישן',
@@ -191,7 +191,7 @@ void main() {
     );
     await repository.insertBook(
       Book(
-        id: await repository.getNextNegativeBookId(),
+        id: 0,
         categoryId: newCategoryId,
         sourceId: sourceId,
         title: 'ספר חדש',
@@ -246,7 +246,7 @@ void main() {
 
     await repository.insertBook(
       Book(
-        id: await repository.getNextNegativeBookId(),
+        id: 0,
         categoryId: ambiguousCategoryId,
         sourceId: legacySourceId,
         title: 'ספר עמום',
