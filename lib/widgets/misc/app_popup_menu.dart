@@ -552,13 +552,12 @@ class _AnchoredSearchMenuContentState<T>
                             itemCount: filtered.length,
                             itemBuilder: (ctx, i) {
                               final entry = filtered[i];
-                              final isSelected =
-                                  widget.initialValue != null &&
-                                      entry.value == widget.initialValue;
+                              final isSelected = widget.initialValue != null &&
+                                  entry.value == widget.initialValue;
                               return InkWell(
                                 onTap: entry.enabled
-                                    ? () => Navigator.of(context)
-                                        .pop(entry.value)
+                                    ? () =>
+                                        Navigator.of(context).pop(entry.value)
                                     : null,
                                 child: SizedBox(
                                   width: double.infinity,
@@ -845,12 +844,12 @@ PopupMenuEntry<T> buildAppSubmenuPopupMenuItem<T>({
         onTap: onSelected == null
             ? null
             : () async {
-                final renderBox =
-                    innerContext.findRenderObject() as RenderBox?;
+                final renderBox = innerContext.findRenderObject() as RenderBox?;
                 if (renderBox == null) return;
                 final overlayState = Overlay.maybeOf(innerContext);
                 if (overlayState == null) return;
-                final overlay = overlayState.context.findRenderObject() as RenderBox;
+                final overlay =
+                    overlayState.context.findRenderObject() as RenderBox;
                 final overlaySize = overlay.size;
                 final itemRect = MatrixUtils.transformRect(
                   renderBox.getTransformTo(overlay),
@@ -858,10 +857,8 @@ PopupMenuEntry<T> buildAppSubmenuPopupMenuItem<T>({
                 );
                 // חשב את צד הפתיחה לפי מיקום הפריט במסך:
                 // אם הפריט בחצי הימני של המסך — פתח שמאלה, אחרת ימינה
-                final openToRight =
-                    itemRect.center.dx < overlaySize.width / 2;
-                final xPos =
-                    openToRight ? itemRect.right : itemRect.left;
+                final openToRight = itemRect.center.dx < overlaySize.width / 2;
+                final xPos = openToRight ? itemRect.right : itemRect.left;
                 final selected = await showMenu<T>(
                   context: innerContext,
                   position: RelativeRect.fromRect(
@@ -871,10 +868,14 @@ PopupMenuEntry<T> buildAppSubmenuPopupMenuItem<T>({
                   items: menuChildren,
                 );
                 if (selected != null) {
-                  onSelected.call(selected);
+                  // סוגרים קודם את התפריט הראשי, ורק אז מריצים את הפעולה.
+                  // הסדר ההפוך עלול לפוצץ דיאלוגים שה-callback פותח
+                  // (showBookSourceDialog, _handlePrintPress וכד'),
+                  // כי ה-pop היה סוגר את הדיאלוג במקום את התפריט.
                   if (innerContext.mounted) {
                     Navigator.of(innerContext).pop();
                   }
+                  onSelected.call(selected);
                 }
               },
         borderRadius: BorderRadius.circular(metrics.itemBorderRadius),
@@ -915,4 +916,3 @@ Future<T?> showAppMenu<T>({
         .toList(),
   );
 }
-
