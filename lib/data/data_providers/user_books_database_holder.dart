@@ -22,9 +22,16 @@ class UserBooksDatabaseHolder {
   Future<SeforimRepository>? _initFuture;
 
   /// מחזיר את ה-repository של ספרי המשתמש, מאתחל אם צריך.
+  ///
+  /// אם האתחול נכשל (DB נעול, נתיב חסר הרשאות וכו'), ה-Future שנשמר
+  /// מאופס כדי שקריאה חוזרת תנסה לפתוח את ה-DB מחדש במקום להחזיר את
+  /// אותה שגיאה לנצח.
   Future<SeforimRepository> get repository {
     if (_repository != null) return Future.value(_repository!);
-    return _initFuture ??= _initialize();
+    return _initFuture ??= _initialize().onError<Object>((error, stackTrace) {
+      _initFuture = null;
+      throw error;
+    });
   }
 
   /// נתיב ה-DB. שימושי בזרימות isolate שצריכות לפתוח את הקובץ ישירות.
