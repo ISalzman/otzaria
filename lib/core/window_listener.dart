@@ -17,6 +17,10 @@ typedef FullscreenCallback = void Function(bool isFullscreen);
 
 /// Window listener that handles window events properly to prevent crashes
 class AppWindowListener extends WindowListener {
+  static const MethodChannel _processControlChannel = MethodChannel(
+    'otzaria/process_control',
+  );
+
   FullscreenCallback? onFullscreenChanged;
 
   /// נקרא לאחר אירועי מצב חלון דיסקרטיים שעלולים לגרום לאיבוד פוקוס:
@@ -25,6 +29,7 @@ class AppWindowListener extends WindowListener {
 
   /// נקרא בכל אירוע resize רציף — מיועד ל-debounced restore.
   VoidCallback? onWindowResizeOccurred;
+  bool _isClosing = false;
 
   Future<void> _runBestEffortShutdownStep(
     String stepName,
@@ -42,6 +47,16 @@ class AppWindowListener extends WindowListener {
         debugPrint('WebView shutdown step failed ($stepName): $e');
       }
     }
+  }
+
+  Future<void> _armForceExitWatchdog() async {
+    if (kIsWeb || !Platform.isWindows) {
+      return;
+    }
+
+    await _processControlChannel.invokeMethod('armForceExitWatchdog', {
+      'timeoutMs': 15000,
+    });
   }
 
   @override
@@ -64,10 +79,20 @@ class AppWindowListener extends WindowListener {
 
   @override
   void onWindowClose() async {
+    if (_isClosing) {
+      return;
+    }
+    _isClosing = true;
+
     if (kDebugMode) {
       debugPrint('Window close requested');
     }
 
+    await _runBestEffortShutdownStep(
+      'armForceExitWatchdog',
+      _armForceExitWatchdog,
+      timeout: const Duration(seconds: 1),
+    );
     await _runBestEffortShutdownStep(
       'prepareForAppShutdown',
       PluginRuntimeDispatcher.instance.prepareForAppShutdown,
@@ -127,8 +152,12 @@ class AppWindowListener extends WindowListener {
 
       if (!kIsWeb &&
           (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        await windowManager.setPreventClose(false);
         // סגירה רגילה דרך ה-WindowManager
         await windowManager.destroy();
+        if (Platform.isWindows) {
+          exit(0);
+        }
       }
     } catch (e) {
       if (kDebugMode) {
