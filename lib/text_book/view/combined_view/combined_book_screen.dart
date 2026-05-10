@@ -1252,6 +1252,31 @@ class _CombinedViewState extends State<CombinedView> {
                           }
                         }
 
+                        // הדגשה ממוקדת מקישור עומק: רק על הסעיף שצוין, ובלי
+                        // להפעיל את שאר אפשרויות החיפוש (כתיב מלא/חסר וכו').
+                        final isPinpointTarget =
+                            state.pinpointHighlightIndex == index &&
+                                state.pinpointHighlightText != null &&
+                                state.pinpointHighlightText!.isNotEmpty;
+                        final hasPinpoint =
+                            state.pinpointHighlightIndex != null;
+                        final effectiveSearchText = isPinpointTarget
+                            ? state.pinpointHighlightText!
+                            : (hasPinpoint ? '' : state.searchText);
+                        final effectiveSearchMode =
+                            hasPinpoint ? SearchMode.exact : state.searchMode;
+                        final effectiveSearchOptions = hasPinpoint
+                            ? const <String, Map<String, bool>>{}
+                            : state.searchOptions;
+                        final effectiveAlternativeWords = hasPinpoint
+                            ? const <int, List<String>>{}
+                            : state.alternativeWords;
+                        final effectiveSpacingValues = hasPinpoint
+                            ? const <String, String>{}
+                            : state.spacingValues;
+                        final effectiveSearchDistance =
+                            hasPinpoint ? 0 : state.searchDistance;
+
                         final textWidget = SmartTextWidget(
                           text: dataWithLinks,
                           widgetKey:
@@ -1261,13 +1286,14 @@ class _CombinedViewState extends State<CombinedView> {
                             removePunctuation: state.removePunctuation,
                             removeTeamim: !settingsState.showTeamim,
                             replaceHolyNames: settingsState.replaceHolyNames,
-                            searchText: state.searchText,
-                            searchOptions: state.searchOptions,
-                            alternativeWords: state.alternativeWords,
-                            spacingValues: state.spacingValues,
-                            isFuzzySearch: state.searchMode == SearchMode.fuzzy,
-                            searchMode: state.searchMode,
-                            searchDistance: state.searchDistance,
+                            searchText: effectiveSearchText,
+                            searchOptions: effectiveSearchOptions,
+                            alternativeWords: effectiveAlternativeWords,
+                            spacingValues: effectiveSpacingValues,
+                            isFuzzySearch:
+                                effectiveSearchMode == SearchMode.fuzzy,
+                            searchMode: effectiveSearchMode,
+                            searchDistance: effectiveSearchDistance,
                             fontSize: widget.textSize,
                             fontFamily: settingsState.fontFamily,
                             lineHeight: settingsState.lineHeight,

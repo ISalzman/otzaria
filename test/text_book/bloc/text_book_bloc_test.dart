@@ -634,6 +634,110 @@ void main() {
         await bloc.close();
       },
     );
+
+    group('הדגשה ממוקדת מ-deep link', () {
+      test('ApplyPinpointHighlight מגדיר אינדקס וטקסט ומנקה searchText',
+          () async {
+        final repository = _FakeTextBookRepository();
+        final bloc =
+            _createBloc(repository: repository, showPageShapeView: false);
+
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        // קודם נדמה שהיה חיפוש פעיל בטאב
+        bloc.add(const UpdateSearchText(
+          'שאלה ישנה',
+          searchOptions: {},
+          alternativeWords: {},
+          spacingValues: {},
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        bloc.add(const ApplyPinpointHighlight(
+          sectionIndex: 7,
+          text: 'בראשית',
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        final state = bloc.state as TextBookLoaded;
+        expect(state.pinpointHighlightIndex, 7);
+        expect(state.pinpointHighlightText, 'בראשית');
+        // הדגשה ממוקדת מנקה את החיפוש הכללי כדי שלא יתערבב עם ההדגשה הסעיפית.
+        expect(state.searchText, isEmpty);
+        expect(state.searchMode, SearchMode.exact);
+
+        await bloc.close();
+      });
+
+      test('UpdateSearchText מנקה pinpoint קודם', () async {
+        final repository = _FakeTextBookRepository();
+        final bloc =
+            _createBloc(repository: repository, showPageShapeView: false);
+
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        bloc.add(const ApplyPinpointHighlight(
+          sectionIndex: 3,
+          text: 'תורה',
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        bloc.add(const UpdateSearchText(
+          'חיפוש חדש',
+          searchOptions: {},
+          alternativeWords: {},
+          spacingValues: {},
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        final state = bloc.state as TextBookLoaded;
+        expect(state.pinpointHighlightIndex, isNull,
+            reason:
+                'חיפוש ידני חדש חייב לנקות הדגשה ממוקדת קודמת — אחרת ההדגשה תחסום את החיפוש בשאר הסעיפים.');
+        expect(state.pinpointHighlightText, isNull);
+        expect(state.searchText, 'חיפוש חדש');
+
+        await bloc.close();
+      });
+
+      test('ApplyPinpointHighlight מתעלם מטקסט ריק', () async {
+        final repository = _FakeTextBookRepository();
+        final bloc =
+            _createBloc(repository: repository, showPageShapeView: false);
+
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        bloc.add(const ApplyPinpointHighlight(
+          sectionIndex: 5,
+          text: '',
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        final state = bloc.state as TextBookLoaded;
+        expect(state.pinpointHighlightIndex, isNull);
+        expect(state.pinpointHighlightText, isNull);
+
+        await bloc.close();
+      });
+    });
   });
 }
 
