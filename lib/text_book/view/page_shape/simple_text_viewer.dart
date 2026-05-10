@@ -113,16 +113,9 @@ bool _isTextInputWidget(Widget widget) {
 }
 
 bool _isMenuWidget(Widget widget) {
-  if (widget is MenuItemButton ||
+  return widget is MenuItemButton ||
       widget is SubmenuButton ||
-      widget is MenuAnchor) {
-    return true;
-  }
-
-  final runtimeTypeName = widget.runtimeType.toString();
-  return runtimeTypeName == 'MenuItemButton' ||
-      runtimeTypeName == 'SubmenuButton' ||
-      runtimeTypeName == 'MenuAnchor';
+      widget is MenuAnchor;
 }
 
 /// קובעת מאיזה אינדקס יתחיל ניווט המקלדת בצורת הדף.
