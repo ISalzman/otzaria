@@ -63,7 +63,7 @@ class AppFonts {
     final result = <FontInfo>[];
     try {
       final map = SystemFonts().getFontMap(); // name -> path
-      final names = map.keys.toList()..sort();
+      final names = map.keys.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
       for (final name in names) {
         final path = map[name];
         if (path == null || path.isEmpty) continue;
