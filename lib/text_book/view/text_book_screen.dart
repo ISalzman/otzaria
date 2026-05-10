@@ -1626,9 +1626,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             widget: const SizedBox.shrink(),
             icon: FluentIcons.link_24_regular,
             tooltip: 'העתק קישור ישיר לספר זה',
-            onPressed: () => _copyLinkToClipboard(
-              _buildBookLink(state.book.id ?? 0),
-            ),
+            onPressed: state.book.id != null
+                ? () => _copyLinkToClipboard(
+                      _buildBookLink(state.book.id!),
+                    )
+                : null,
           ),
           ActionButtonData(
             widget: const SizedBox.shrink(),
