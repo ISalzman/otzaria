@@ -60,8 +60,7 @@ void main() {
 
     test('ממיר מקף עברי (־) לרווח רגיל', () {
       expect(SearchQueryBuilder.sanitizeQuery('אל־משה'), 'אל משה');
-      expect(SearchQueryBuilder.sanitizeQuery('ויאמר־אלהים'),
-          'ויאמר אלהים');
+      expect(SearchQueryBuilder.sanitizeQuery('ויאמר־אלהים'), 'ויאמר אלהים');
     });
   });
 
@@ -314,11 +313,55 @@ void main() {
     });
 
     test('query עם רק תווים מוסרים → regexTerms ריק', () {
-      // sanitizeQuery מסיר: , ! ? \' " ״ ׳ : * ( ) [ ] { } ^ $ | \\ + . ~ `
+      // sanitizeQuery מסיר: , ! ? : * ( ) [ ] { } ^ $ | \\ + . ~ `
+      // splitQueryWords מפצל גם על: " ' ״ ׳ (גרשיים/גרש)
       final params = SearchQueryBuilder.prepareQueryParams(
           '!?.,*', false, 0, null, null, null);
       final regexTerms = params['regexTerms'] as List<String>;
       expect(regexTerms, isEmpty);
+    });
+
+    test('ראשי תיבות עם גרשיים לועזיים → מתפצלים לטוקנים נפרדים', () {
+      // הטוקנייזר של Tantivy מפצל את `רמב"ם` ל-`רמב`,`ם` באינדוקס,
+      // לכן השאילתה חייבת לשלוח phrase של 2 טוקנים.
+      final params = SearchQueryBuilder.prepareQueryParams(
+          'רמב"ם', false, 0, null, null, null);
+      final regexTerms = params['regexTerms'] as List<String>;
+      expect(regexTerms, ['רמב', 'ם']);
+    });
+
+    test('ראשי תיבות עם גרשיים עבריים → מתפצלים לטוקנים נפרדים', () {
+      final params = SearchQueryBuilder.prepareQueryParams(
+          'ר״ן', false, 0, null, null, null);
+      final regexTerms = params['regexTerms'] as List<String>;
+      expect(regexTerms, ['ר', 'ן']);
+    });
+
+    test('מילה בודדת עם גרש סופי → לא נכלל ברגקס', () {
+      // ה' (קיצור לשם הוי"ה) — הגרש מופרד, נשאר טוקן יחיד `ה`,
+      // ולא `ה'` שלא קיים באינדקס.
+      final params = SearchQueryBuilder.prepareQueryParams(
+          "ה'", false, 0, null, null, null);
+      final regexTerms = params['regexTerms'] as List<String>;
+      expect(regexTerms, ['ה']);
+    });
+
+    test('צירוף ראשי תיבות ומילה רגילה → טוקנים סמוכים', () {
+      final params = SearchQueryBuilder.prepareQueryParams(
+          'רמב"ם משה', false, 0, null, null, null);
+      final regexTerms = params['regexTerms'] as List<String>;
+      expect(regexTerms, ['רמב', 'ם', 'משה']);
+    });
+
+    test("ז\"ל → phrase של ['ז','ל'] (לא מילה אחת ולא 'למה זה')", () {
+      // הטקסט באינדקס: `הרב פלוני ז"ל` ⇒ Tantivy מפצל ל-`הרב`,`פלוני`,`ז`,`ל`.
+      // השאילתה צריכה לבקש שני טוקנים סמוכים, בדיוק `ז` ו-`ל`,
+      // כך שטקסטים כמו `למה זה` (טוקנים `למה`,`זה`) לא יתפסו.
+      final params =
+          SearchQueryBuilder.prepareQueryParams('ז"ל', false, 0, null, null, null);
+      final regexTerms = params['regexTerms'] as List<String>;
+      expect(regexTerms, ['ז', 'ל']);
+      expect(params['effectiveSlop'], 0);
     });
   });
 

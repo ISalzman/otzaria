@@ -26,11 +26,17 @@ class SearchQueryBuilder {
 
   static String buildWordKey(String word, int index) => '${word}_$index';
 
+  /// רגקס לפיצול מילות חיפוש: רווחים, גרשיים וגרש לועזיים.
+  /// גרשיים/גרש מתפרשים כמפריד מילים כי הטוקנייזר של Tantivy מפצל עליהם
+  /// ממילא בעת האינדוקס — כך שהשאילתה תואמת את המבנה באינדקס
+  /// (למשל `רמב"ם` באינדקס נשמר כשני טוקנים: `רמב`, `ם`).
+  static final RegExp _queryWordSplitter = RegExp(r'''[\s"']+''');
+
   static List<String> splitQueryWords(String query) {
     final cleanedQuery = sanitizeQuery(query);
     return cleanedQuery
         .trim()
-        .split(SearchRegexPatterns.wordSplitter)
+        .split(_queryWordSplitter)
         .where((w) => w.isNotEmpty)
         .toList();
   }
@@ -289,8 +295,10 @@ class SearchQueryBuilder {
                   customSpacing, words.length)
               : distance;
     } else if (words.length == 1) {
-      // מילה אחת - חיפוש פשוט
-      regexTerms = [query];
+      // מילה אחת - חיפוש פשוט. משתמשים במילה אחרי sanitize+split
+      // כדי שתווי פיסוק כמו `'`, `"`, `!` שהוסרו במהלך הניקוי לא יזלגו לרגקס
+      // וייצרו טוקן שלא קיים באינדקס.
+      regexTerms = [words.first];
       effectiveSlop = 0;
     } else if (hasCustomSpacing) {
       // מרווחים מותאמים אישית
