@@ -158,11 +158,49 @@ class SqliteDataProvider {
     }
   }
 
+  Future<({int startLine, int endLine, int totalLines, String text})?>
+      getBookTextRangeFromDb(
+    String title, {
+    required int startLine,
+    required int endLine,
+    int? categoryId,
+    String? fileType,
+  }) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+    if (!_isInitialized) return null;
+
+    try {
+      final resolvedBook = await _resolveBookRecord(
+        title,
+        categoryId: categoryId,
+        fileType: fileType,
+      );
+      if (resolvedBook == null || resolvedBook.book.totalLines <= 0) {
+        return null;
+      }
+      final book = resolvedBook.book;
+
+      final normalizedStart = startLine.clamp(0, book.totalLines - 1);
+      final normalizedEnd = endLine.clamp(normalizedStart, book.totalLines - 1);
+      final lines = await resolvedBook.repository
+          .getLines(book.id, normalizedStart, normalizedEnd);
+
+      return (
+        startLine: normalizedStart,
+        endLine: normalizedEnd,
+        totalLines: book.totalLines,
+        text: migrationLinesToText(lines),
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// Retrieves the full text content of a book from the database
   Future<String?> getBookTextFromDb(String title,
-      [int? categoryId,
-      String? fileType,
-      bool preferUserBooks = false]) async {
+      [int? categoryId, String? fileType, bool preferUserBooks = false]) async {
     if (!_isInitialized) {
       await initialize();
     }
@@ -188,9 +226,7 @@ class SqliteDataProvider {
 
   /// Retrieves the table of contents of a book from the database
   Future<List<TocEntry>?> getBookTocFromDb(String title,
-      [int? categoryId,
-      String? fileType,
-      bool preferUserBooks = false]) async {
+      [int? categoryId, String? fileType, bool preferUserBooks = false]) async {
     if (!_isInitialized) {
       await initialize();
     }

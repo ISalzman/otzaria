@@ -563,6 +563,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     // שמירת הגדרות נוכחיות כדי לזהות שינויים
     double previousFontSize = context.read<SettingsBloc>().state.fontSize;
     String previousFontFamily = context.read<SettingsBloc>().state.fontFamily;
+    bool previousContinuousReadingMode =
+        context.read<SettingsBloc>().state.continuousReadingMode;
     SettingsState previousSettingsState = context.read<SettingsBloc>().state;
 
     _settingsSub = context.read<SettingsBloc>().stream.listen((state) {
@@ -577,6 +579,21 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         final currentState = context.read<TextBookBloc>().state;
         if (currentState is TextBookLoaded) {
           context.read<TextBookBloc>().add(UpdateFontSize(state.fontSize));
+        }
+      }
+
+      if (state.continuousReadingMode != previousContinuousReadingMode) {
+        previousContinuousReadingMode = state.continuousReadingMode;
+
+        if (!mounted) return;
+
+        final currentState = context.read<TextBookBloc>().state;
+        if (currentState is TextBookLoaded) {
+          context.read<TextBookBloc>().add(
+                UpdateTextBookContinuousReadingMode(
+                  state.continuousReadingMode,
+                ),
+              );
         }
       }
 
@@ -598,6 +615,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   fontSize: state.fontSize,
                   showSplitView: currentState.showSplitView,
                   removeNikud: state.defaultRemoveNikud,
+                  continuousReadingMode: state.continuousReadingMode,
                   forceCloseLeftPane: widget.isInCombinedView,
                   preserveState: true,
                   // שמירת מצב הניקוד הנוכחי של המשתמש רק כשרק הגופן
@@ -703,6 +721,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ? false
           : (Settings.getValue<bool>('key-splited-view') ?? true),
       removeNikud: settingsBloc.state.defaultRemoveNikud,
+      continuousReadingMode: settingsBloc.state.continuousReadingMode,
       preserveState: true,
       // בתצוגה משולבת, חלונית הצד תמיד סגורה
       forceCloseLeftPane: widget.isInCombinedView,
@@ -917,6 +936,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                               ? false
                               : state.splitedView,
                           removeNikud: settingsState.defaultRemoveNikud,
+                          continuousReadingMode:
+                              settingsState.continuousReadingMode,
                           // בתצוגה משולבת, חלונית הצד תמיד סגורה
                           forceCloseLeftPane: widget.isInCombinedView,
                         ),
