@@ -187,6 +187,9 @@ class _CombinedViewState extends State<CombinedView> {
 
   // שמירת גובה הבלוק בפועל לחישובים דינאמיים
   double _viewportHeight = 0;
+  List<String>? _cachedReadingSegmentContent;
+  bool? _cachedReadingSegmentContinuous;
+  List<ReadingSegment> _cachedReadingSegments = const [];
 
   ScrollController? _previewScrollController;
   final DictionaryLookupRepository _dictionaryLookupRepository =
@@ -339,7 +342,20 @@ class _CombinedViewState extends State<CombinedView> {
 
   List<ReadingSegment> _readingSegmentsForCurrentMode() {
     final continuous = context.read<SettingsBloc>().state.continuousReadingMode;
-    return buildReadingSegments(widget.data, continuous: continuous);
+    return _readingSegmentsForMode(continuous);
+  }
+
+  List<ReadingSegment> _readingSegmentsForMode(bool continuous) {
+    if (!identical(_cachedReadingSegmentContent, widget.data) ||
+        _cachedReadingSegmentContinuous != continuous) {
+      _cachedReadingSegmentContent = widget.data;
+      _cachedReadingSegmentContinuous = continuous;
+      _cachedReadingSegments = buildReadingSegments(
+        widget.data,
+        continuous: continuous,
+      );
+    }
+    return _cachedReadingSegments;
   }
 
   Future<void> _scrollToSourceLine(
@@ -1025,10 +1041,8 @@ class _CombinedViewState extends State<CombinedView> {
             // שומר את גובה הבלוק בפועל לשימוש בחישובי הגלילה
             _viewportHeight = constraints.maxHeight;
             final settingsState = context.watch<SettingsBloc>().state;
-            final readingSegments = buildReadingSegments(
-              widget.data,
-              continuous: settingsState.continuousReadingMode,
-            );
+            final readingSegments =
+                _readingSegmentsForMode(settingsState.continuousReadingMode);
 
             return SelectionArea(
               key: ValueKey('combined_selection_$_selectionAreaRevision'),
@@ -1282,6 +1296,17 @@ class _CombinedViewState extends State<CombinedView> {
     final selectedLineIndex = isSelected && state.selectedIndex != null
         ? state.selectedIndex!
         : primaryLineIndex;
+    int actionLineIndex() {
+      final currentIndex = _currentSelectedIndex.value;
+      if (continuous &&
+          !segment.isHeader &&
+          currentIndex != null &&
+          segment.containsLine(currentIndex)) {
+        return currentIndex;
+      }
+      return selectedLineIndex;
+    }
+
     final isHighlighted = state.highlightedLine != null &&
         segment.containsLine(state.highlightedLine!);
     final notesForLine =
@@ -1314,7 +1339,7 @@ class _CombinedViewState extends State<CombinedView> {
             onDragSelectionStart: () {
               // כניסה למצב בחירה בגלל drag
               if (!_selectionManager.isInSelectionMode) {
-                _selectionManager.setAnchor(primaryLineIndex);
+                _selectionManager.setAnchor(actionLineIndex());
               }
             },
             onSingleTap: () {
@@ -1369,21 +1394,21 @@ class _CombinedViewState extends State<CombinedView> {
               // ברירת המחדל שלו (בחירת מילה). לבחירת פסקה, המשתמש יכול
               // להשתמש ב-Shift+Click או Drag.
               _focusNode.requestFocus();
-              _selectionManager.enterDoubleClickMode(primaryLineIndex);
+              _selectionManager.enterDoubleClickMode(actionLineIndex());
             },
             onShiftClick: () {
               // Shift+Click → בחירת טווח
               _focusNode.requestFocus();
               if (!_selectionManager.hasAnchor()) {
                 // אם אין anchor, קובעים אותו
-                _selectionManager.setAnchor(primaryLineIndex);
+                _selectionManager.setAnchor(actionLineIndex());
               }
               // SelectionArea יטפל בבחירת הטווח
             },
             onSecondaryTapDown: (details) {
               // שומר את האינדקס הנוכחי לשימוש בתפריט ההקשר
               if (mounted) {
-                _currentSelectedIndex.value = primaryLineIndex;
+                _currentSelectedIndex.value = actionLineIndex();
               }
             },
             child: ValueListenableBuilder<String?>(
@@ -1646,13 +1671,16 @@ class _CombinedViewState extends State<CombinedView> {
         _focusNode.requestFocus();
         _savedSelectedText.value = null;
         _savedSelectedIndex.value = null;
-        _currentSelectedIndex.value = null;
+        _currentSelectedIndex.value = lineIndex;
         widget.onSelectedTextChanged?.call(null);
         if (isLineSelected) {
           _addTextBookEventIfOpen(const UpdateSelectedIndex(null));
         } else {
           _addTextBookEventIfOpen(UpdateSelectedIndex(lineIndex));
         }
+      },
+      onLineSecondaryTap: (lineIndex) {
+        _currentSelectedIndex.value = lineIndex;
       },
     );
   }
