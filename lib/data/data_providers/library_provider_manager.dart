@@ -161,35 +161,30 @@ class LibraryProviderManager {
       }
     }
 
+    // עיברה על המפתחות בשני מעברים: קודם התאמה מלאה (כולל fileType),
+    // ואז התאמה לפי כותרת בלבד. ה-`accept` מסנן את אוסף המפתחות
+    // המועמדים — שימושי כדי לחפש קודם רק ב-user_books, ואז רק
+    // בכל השאר, בלי לסרוק את user_books פעמיים.
+    BookCompositeKey? findIn(bool Function(BookCompositeKey) accept) {
+      for (final key in _bookToProvider.keys) {
+        if (!accept(key)) continue;
+        if (key.matches(title, otherFileType: normalizedFileType)) return key;
+      }
+      for (final key in _bookToProvider.keys) {
+        if (!accept(key)) continue;
+        if (key.matchesTitle(title)) return key;
+      }
+      return null;
+    }
+
     if (preferUserBooks) {
-      for (final key in _bookToProvider.keys) {
-        if (!UserBooksDatabaseIds.isAppCategoryId(key.categoryId)) continue;
-        if (key.matches(title, otherFileType: normalizedFileType)) {
-          return key;
-        }
-      }
-
-      for (final key in _bookToProvider.keys) {
-        if (!UserBooksDatabaseIds.isAppCategoryId(key.categoryId)) continue;
-        if (key.matchesTitle(title)) {
-          return key;
-        }
-      }
+      final fromUserBooks =
+          findIn((k) => UserBooksDatabaseIds.isAppCategoryId(k.categoryId));
+      if (fromUserBooks != null) return fromUserBooks;
+      return findIn((k) => !UserBooksDatabaseIds.isAppCategoryId(k.categoryId));
     }
 
-    for (final key in _bookToProvider.keys) {
-      if (key.matches(title, otherFileType: normalizedFileType)) {
-        return key;
-      }
-    }
-
-    for (final key in _bookToProvider.keys) {
-      if (key.matchesTitle(title)) {
-        return key;
-      }
-    }
-
-    return null;
+    return findIn((_) => true);
   }
 
   Future<BookCompositeKey?> _findKeyInProvider(

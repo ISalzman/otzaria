@@ -1675,14 +1675,16 @@ class DatabaseLibraryProvider implements LibraryProvider {
     Library library,
     Map<String, Map<String, dynamic>> metadata,
   ) async {
-    _userBooksCategoryIds.clear();
-    _userBooksCachedKeys.clear();
-
     try {
       final dbPath = await UserBooksDatabaseHolder.resolveDbPath();
       if (!await File(dbPath).exists()) {
         return;
       }
+
+      // ניקוי הקאשים מבוצע רק אחרי שווידאנו שיש user_books.db לטעון.
+      // ככה אם הקובץ נמחק בין קריאות לא נאבד את המצב הקודם בלי החלפה.
+      _userBooksCategoryIds.clear();
+      _userBooksCachedKeys.clear();
 
       final repo = await UserBooksDatabaseHolder.instance.repository;
 

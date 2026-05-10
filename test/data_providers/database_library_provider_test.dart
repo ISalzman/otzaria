@@ -442,28 +442,58 @@ void main() {
           Settings.getValue<String>(SettingsRepository.keyDbEffectivePath);
       final previousDataRootPath = AppPaths.cachedDataRootPath;
 
-      try {
-        await Directory(libraryPath).create(recursive: true);
-        await provider.sqliteProvider.dispose();
-        provider.clearCache();
-        await UserBooksDatabaseHolder.instance.close();
-        AppPaths.debugOverrideDataRootPath(dataRootPath);
-        await repository.ensureInitialized();
-
-        await Settings.setValue<String>(
-          SettingsRepository.keyLibraryPath,
-          libraryPath,
-        );
-        await Settings.setValue<String>(
-          SettingsRepository.keyLibraryFolderName,
-          '',
-        );
+      // ניקיון בעזרת addTearDown במקום try/finally: כל קריאה רצה
+      // בנפרד גם אם הקודמת זורקת, ולכן הטסט לא משאיר Settings מלוכלכים
+      // לטסטים הבאים גם אם רק חלק מהשלבים מצליחים.
+      // addTearDown מבצע ב-LIFO — נרשום בסדר הפוך לרצוי, כדי שתחילה
+      // ייסגרו ה-DBs ואחר כך תימחק התיקייה הזמנית.
+      addTearDown(() => tempDir.delete(recursive: true));
+      addTearDown(() => database.close());
+      addTearDown(() => provider.clearCache());
+      addTearDown(() => provider.sqliteProvider.dispose());
+      addTearDown(
+          () => AppPaths.debugOverrideDataRootPath(previousDataRootPath));
+      addTearDown(() => UserBooksDatabaseHolder.instance.close());
+      addTearDown(() async {
         await Settings.setValue<String>(
           SettingsRepository.keyDbEffectivePath,
-          '',
+          previousEffectiveDbPath ?? '',
         );
+      });
+      addTearDown(() async {
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryFolderName,
+          previousFolderName ?? '',
+        );
+      });
+      addTearDown(() async {
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryPath,
+          previousLibraryPath ?? '',
+        );
+      });
 
-        final sourceId = await repository.insertSource('local-test', -10);
+      await Directory(libraryPath).create(recursive: true);
+      await provider.sqliteProvider.dispose();
+      provider.clearCache();
+      await UserBooksDatabaseHolder.instance.close();
+      AppPaths.debugOverrideDataRootPath(dataRootPath);
+      await repository.ensureInitialized();
+
+      await Settings.setValue<String>(
+        SettingsRepository.keyLibraryPath,
+        libraryPath,
+      );
+      await Settings.setValue<String>(
+        SettingsRepository.keyLibraryFolderName,
+        '',
+      );
+      await Settings.setValue<String>(
+        SettingsRepository.keyDbEffectivePath,
+        '',
+      );
+
+      final sourceId = await repository.insertSource('local-test', -10);
         final personalCategoryId = await repository.insertCategory(
           const migration_models.Category(
             title: 'ספרים אישיים',
@@ -574,28 +604,8 @@ void main() {
         expect(nestedCategory.parent, same(mergedCategory));
         expect(nestedCategory.path, '/ספרים אישיים/תיקייה קיימת/תת קטגוריה');
         expect(nestedCategory.books, hasLength(1));
-        expect(nestedCategory.books.single.title, 'ספר פנימי');
-        expect(nestedCategory.books.single.category, same(nestedCategory));
-      } finally {
-        await Settings.setValue<String>(
-          SettingsRepository.keyLibraryPath,
-          previousLibraryPath ?? '',
-        );
-        await Settings.setValue<String>(
-          SettingsRepository.keyLibraryFolderName,
-          previousFolderName ?? '',
-        );
-        await Settings.setValue<String>(
-          SettingsRepository.keyDbEffectivePath,
-          previousEffectiveDbPath ?? '',
-        );
-        await UserBooksDatabaseHolder.instance.close();
-        AppPaths.debugOverrideDataRootPath(previousDataRootPath);
-        await provider.sqliteProvider.dispose();
-        provider.clearCache();
-        database.close();
-        await tempDir.delete(recursive: true);
-      }
+      expect(nestedCategory.books.single.title, 'ספר פנימי');
+      expect(nestedCategory.books.single.category, same(nestedCategory));
     });
 
     test(
