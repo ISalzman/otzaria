@@ -33,7 +33,10 @@ void main() {
         ),
       );
 
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await _waitFor(
+        () => repository.getBookLinksInRangeCalls >= 1,
+        description: 'getBookLinksInRangeCalls >= 1',
+      );
 
       expect(repository.getBookLinksInRangeCalls, 1);
       expect(repository.lastStartIndex, 0);
@@ -57,7 +60,10 @@ void main() {
         ),
       );
 
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await _waitFor(
+        () => repository.getBookLinksInRangeCalls >= 1,
+        description: 'getBookLinksInRangeCalls >= 1',
+      );
 
       expect(repository.getBookLinksInRangeCalls, 1);
       expect(repository.lastStartIndex, 0);
@@ -82,10 +88,13 @@ void main() {
         ),
       );
 
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await _waitFor(
+        () => repository.getBookLinksInRangeCalls >= 1,
+        description: 'getBookLinksInRangeCalls >= 1',
+      );
 
-  expect(repository.getBookLinksInRangeCalls, 1);
-  expect(repository.lastTargetBookTitles, isEmpty);
+      expect(repository.getBookLinksInRangeCalls, 1);
+      expect(repository.lastTargetBookTitles, isEmpty);
 
       await bloc.close();
     });
@@ -739,6 +748,26 @@ void main() {
       });
     });
   });
+}
+
+/// ממתינה עד שהתנאי מתקיים, או נכשלת ב-timeout עם הודעה ברורה.
+///
+/// קיימים ב-bloc מספר awaits פנימיים (load content → resolve target titles
+/// → repository call), כך ש-`Future.delayed` קבוע לא דטרמיניסטי תחת עומס
+/// (במיוחד בטסט הראשון של הקובץ, לפני JIT warm-up). polling קצר וקצוב
+/// יציב יותר מבלי להאריך את הריצה במקרה הרגיל.
+Future<void> _waitFor(
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 5),
+  String description = 'condition',
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('$description not met within $timeout');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
 }
 
 TextBookBloc _createBloc({
