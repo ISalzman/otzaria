@@ -62,11 +62,17 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
     final facetsToSearch = _selectedCategoryFacets.isEmpty
         ? ['/']
         : _selectedCategoryFacets.toList();
+    final effectiveOptions = SearchQueryBuilder.effectiveSearchOptions(
+      query: query,
+      useGlobalOptions: widget.tab.useGlobalSearchOptions.value,
+      globalOptions: widget.tab.globalSearchOptions,
+      perWordOptions: widget.tab.searchOptions,
+    );
     final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
       widget.tab.searchBloc.state.configuration.searchMode,
       customSpacing: widget.tab.spacingValues,
       alternativeWords: widget.tab.alternativeWords,
-      searchOptions: widget.tab.searchOptions,
+      searchOptions: effectiveOptions,
     );
 
     widget.tab.updateTitleFromAppliedQuery(query);

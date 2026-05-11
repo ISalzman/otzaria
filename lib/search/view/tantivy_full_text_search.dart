@@ -111,7 +111,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
       searchMode,
       customSpacing: widget.tab.spacingValues,
       alternativeWords: widget.tab.alternativeWords,
-      searchOptions: widget.tab.searchOptions,
+      searchOptions: widget.tab.effectiveSearchOptions(
+        query: widget.tab.searchBloc.state.searchQuery,
+      ),
     );
     widget.tab.searchBloc.add(const SetFacetsWithoutSearch(['/']));
     widget.tab.searchBloc.add(UpdateSearchQuery(
