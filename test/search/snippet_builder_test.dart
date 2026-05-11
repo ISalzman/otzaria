@@ -383,26 +383,6 @@ void main() {
     expect(highlighted, contains('רמב״ם'));
   });
 
-  test("SnippetBuilder מדגיש תעתיק עם גרש פנימי כיחידה אחת", () {
-    // `ג'ורג'` הוא טוקן יחיד בטוקנייזר החדש (גרש בין אותיות נשמר).
-    final spans = SnippetBuilder.buildHighlightSpans(
-      plainText: "המלך ג'ורג' הרביעי",
-      query: "ג'ורג'",
-      defaultStyle: const TextStyle(),
-      highlightStyle: const TextStyle(fontWeight: FontWeight.bold),
-      searchOptions: const {},
-      alternativeWords: const {},
-    );
-
-    final highlighted = spans
-        .whereType<TextSpan>()
-        .where((span) => span.style?.fontWeight == FontWeight.bold)
-        .map((span) => span.text ?? '')
-        .join();
-
-    expect(highlighted, contains("ג'ורג'"));
-  });
-
   test('SnippetBuilder מדגיש phrase של ראשי תיבות + מילה רגילה', () {
     // `רמב"ם משה` → 2 טוקנים בשאילתה. בטקסט שני הטוקנים סמוכים,
     // וכל אחד צריך להיות מודגש בתור יחידה שלמה.

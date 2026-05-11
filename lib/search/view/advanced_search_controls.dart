@@ -99,7 +99,11 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
       return;
     }
 
-    final words = text.trim().split(RegExp(r'\s+'));
+    // משתמשים באותה פיצול כמו מנוע החיפוש (`splitQueryWords`),
+    // כך שמפתחות `${_currentWord}_$_wordIndex` ואינדקסי `alternativeWords` /
+    // `spacingValues` שנשמרים פר-מילה יתאימו לחיפוש בפועל.
+    // ללא יישור זה, שאילתות כמו `רמב"ם` מצרות מפתחות שאינם נקראים.
+    final words = SearchQueryBuilder.splitQueryWords(text);
     _words = words;
 
     int currentPos = 0;
@@ -173,6 +177,10 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     int currentPos = 0;
     for (int i = 0; i < newIndex; i++) {
       final wordStart = text.indexOf(_words[i], currentPos);
+      // המילים מגיעות מ-splitQueryWords על raw text שעבר sanitize, ולכן
+      // ייתכן שמילה מסוימת לא תימצא ככל שהיא (למשל אחרי מחיקת `!,;.`).
+      // במקרה כזה נעצור את הניווט במקום לחשב offset שגוי שיקרוס/יקפוץ.
+      if (wordStart == -1) return;
       currentPos = wordStart + _words[i].length;
     }
 
