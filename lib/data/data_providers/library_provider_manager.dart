@@ -3,7 +3,6 @@ import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
-import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -151,13 +150,19 @@ class LibraryProviderManager {
     final normalizedFileType = BookCompositeKey.normalizeFileType(fileType);
 
     if (categoryId != null) {
-      final exactKey = BookCompositeKey.create(
-        title: title,
-        categoryId: categoryId,
-        fileType: normalizedFileType,
-      );
-      if (_bookToProvider.containsKey(exactKey)) {
-        return exactKey;
+      // categoryId לבדו אינו חד-משמעי — `5` יכול להיות גם בseforim וגם
+      // ב-user_books. ננסה את שני הוריאנטים בסדר המתאים להעדפת המשתמש.
+      final order = preferUserBooks ? const [true, false] : const [false, true];
+      for (final isUser in order) {
+        final exactKey = BookCompositeKey.create(
+          title: title,
+          categoryId: categoryId,
+          fileType: normalizedFileType,
+          isUserBook: isUser,
+        );
+        if (_bookToProvider.containsKey(exactKey)) {
+          return exactKey;
+        }
       }
     }
 
@@ -178,10 +183,9 @@ class LibraryProviderManager {
     }
 
     if (preferUserBooks) {
-      final fromUserBooks =
-          findIn((k) => UserBooksDatabaseIds.isAppCategoryId(k.categoryId));
+      final fromUserBooks = findIn((k) => k.isUserBook);
       if (fromUserBooks != null) return fromUserBooks;
-      return findIn((k) => !UserBooksDatabaseIds.isAppCategoryId(k.categoryId));
+      return findIn((k) => !k.isUserBook);
     }
 
     return findIn((_) => true);
@@ -199,8 +203,7 @@ class LibraryProviderManager {
     if (preferUserBooks) {
       for (final rawKey in rawKeys) {
         final parsed = BookCompositeKey.tryParse(rawKey);
-        if (parsed == null ||
-            !UserBooksDatabaseIds.isAppCategoryId(parsed.categoryId)) {
+        if (parsed == null || !parsed.isUserBook) {
           continue;
         }
         if (parsed.matches(title, otherFileType: normalizedFileType)) {
@@ -230,7 +233,7 @@ class LibraryProviderManager {
 
   Future<({BookCompositeKey key, LibraryProvider provider})?>
       _locateBookInProviders(
-      String title, {
+    String title, {
     int? categoryId,
     String? fileType,
     bool preferUserBooks = false,
@@ -249,6 +252,9 @@ class LibraryProviderManager {
               title: title,
               categoryId: categoryId,
               fileType: normalizedFileType,
+              // הינט בלבד — ה-provider לא מחזיר אם זה user_books, ואנחנו
+              // משתמשים בהעדפת הקורא להתאים את המפתח למה שב-cache.
+              isUserBook: preferUserBooks,
             ),
             provider: provider
           );
@@ -500,7 +506,8 @@ class LibraryProviderManager {
           return content;
         }
       } catch (e) {
-        debugPrint('LibraryProviderManager: provider failed for $targetTitle, continuing to fallback: $e');
+        debugPrint(
+            'LibraryProviderManager: provider failed for $targetTitle, continuing to fallback: $e');
       }
     }
 
