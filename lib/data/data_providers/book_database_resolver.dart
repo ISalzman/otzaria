@@ -77,15 +77,23 @@ class BookDatabaseResolver {
     );
   }
 
+  /// מאתר ספר ב-DB לפי `bookId`.
+  ///
+  /// [isUserBook] קובע באיזה DB לחפש. ב-`true` → `user_books.db`,
+  /// אחרת → `seforim.db`. אין יותר זיהוי לפי טווח-ID (offset), ולכן הקורא
+  /// חייב לדעת את המקור (בד"כ מ-`Book.isUserBook`).
+  ///
+  /// [preferUserBooks] משמר את התנהגות ה-fallback ההיסטורית במקרים שבהם
+  /// [isUserBook] לא מסופק או false אבל הספר עשוי להיות ב-user_books.
   static Future<ResolvedDbBookRecord?> resolveBookById(
     int bookId, {
+    bool isUserBook = false,
     bool preferUserBooks = false,
   }) async {
-    if (UserBooksDatabaseIds.isAppBookId(bookId)) {
+    if (isUserBook) {
       final repository = await _loadUserBooksRepositoryIfExists();
       if (repository == null) return null;
-      final book =
-          await repository.getBook(UserBooksDatabaseIds.toDbBookId(bookId));
+      final book = await repository.getBook(bookId);
       if (book == null) return null;
       return ResolvedDbBookRecord(
         book: book,
@@ -147,11 +155,10 @@ class BookDatabaseResolver {
 
     for (final candidate in candidates) {
       final repository = candidate.repository;
-      final candidateCategoryId = categoryId == null
-          ? null
-          : candidate.isUserBooks
-              ? UserBooksDatabaseIds.toDbCategoryId(categoryId)
-              : categoryId;
+      // categoryId טבעי לשני ה-DBs — אין יותר צורך בהמרה. אם הקורא העביר
+      // categoryId שייך ל-seforim ואנחנו ב-candidate של user_books, החיפוש
+      // פשוט יחזיר null וננסה את המועמד הבא.
+      final candidateCategoryId = categoryId;
 
       if (normalizedFilePath != null && normalizedFilePath.isNotEmpty) {
         final bookByPath =
@@ -184,9 +191,8 @@ class BookDatabaseResolver {
       }
 
       if (candidateCategoryId != null) {
-        final bookByCategory =
-            await repository.getBookByTitleAndCategory(
-                title, candidateCategoryId);
+        final bookByCategory = await repository.getBookByTitleAndCategory(
+            title, candidateCategoryId);
         if (bookByCategory != null) {
           return ResolvedDbBookRecord(
             book: bookByCategory,
