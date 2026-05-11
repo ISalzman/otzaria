@@ -30,6 +30,11 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 
+/// מזהה הכלי שפעיל כרגע ב-ToolsScreen, או `null` אם המסך לא מוצג.
+/// משמש את ה-MainWindowScreen כדי להדגיש את התוסף שבחרת בסרגל הניווט/הבר
+/// כשנבחרה לשונית של תוסף-מוצמד-לסרגל.
+final ValueNotifier<String?> activeToolIdNotifier = ValueNotifier<String?>(null);
+
 abstract class ToolDescriptor {
   final String toolId;
   final String label;
@@ -362,6 +367,11 @@ class ToolsScreenState extends State<ToolsScreen>
     _closeTransientPanelsForToolId(_selectedToolId);
   }
 
+  void _setSelectedToolId(String? id) {
+    _selectedToolId = id;
+    activeToolIdNotifier.value = id;
+  }
+
   void _changeTab(int index) {
     if (index < 0 || index >= _descriptors.length) return;
     final toolId = _descriptors[index].toolId;
@@ -371,23 +381,23 @@ class ToolsScreenState extends State<ToolsScreen>
     }
     _closeTransientPanelsForToolId(_selectedToolId);
     setState(() {
-      _selectedToolId = toolId;
+      _setSelectedToolId(toolId);
       _showMobileMenu = false;
     });
     requestActiveTabFocus();
   }
 
-  void _openPluginTransiently(InstalledPlugin plugin) {
+  void openPluginTransiently(InstalledPlugin plugin) {
     if (plugin.pinned) {
-      final index = _descriptors.indexWhere((d) => d.toolId == plugin.pluginId);
-      if (index != -1) {
-        _changeTab(index);
-      }
+      // לתוסף שמוצמד-ללשוניות יש (או יהיה) descriptor רגיל. מנתבים דרך
+      // requestOpenTool כדי לקבל את מנגנון ה-pending/timeout במקרה שה-bloc
+      // עדיין לא טען את הרשימה ברגע הלחיצה.
+      requestOpenTool(plugin.pluginId);
       return;
     }
-    // מגדיר את הפלאגין הזמני ומיד מבצע rebuild — ללא setState נפרד
+    // לתוסף שלא מוצמד ללשוניות — מצב transient (מחושב כאן ולא מחכה ל-bloc)
     _transientPlugin = plugin;
-    _selectedToolId = plugin.pluginId;
+    _setSelectedToolId(plugin.pluginId);
     final blocState = context.read<PluginSystemBloc>().state;
     if (blocState is PluginSystemLoaded) {
       _rebuildTabs(blocState.pinnedPlugins, transient: _transientPlugin);
@@ -424,7 +434,7 @@ class ToolsScreenState extends State<ToolsScreen>
     void applyState() {
       _descriptors = newDescriptors;
       _pages = newDescriptors.map((t) => t.buildPage(context)).toList();
-      _selectedToolId = newToolId;
+      _setSelectedToolId(newToolId);
     }
 
     if (notify) {
@@ -498,7 +508,7 @@ class ToolsScreenState extends State<ToolsScreen>
   void resetToCalendar() {
     if (_selectedToolId != 'builtin.calendar') {
       setState(() {
-        _selectedToolId = 'builtin.calendar';
+        _setSelectedToolId('builtin.calendar');
         _showMobileMenu = false;
       });
       return;
@@ -569,6 +579,7 @@ class ToolsScreenState extends State<ToolsScreen>
     _contentFocusNode.dispose();
     _contentScrollController.dispose();
     _tabScrollController.dispose();
+    activeToolIdNotifier.value = null;
     super.dispose();
   }
 
@@ -630,7 +641,7 @@ class ToolsScreenState extends State<ToolsScreen>
                 child: PluginSidePanel(
                   onPluginSelected: (plugin) {
                     Navigator.of(context).pop();
-                    _openPluginTransiently(plugin);
+                    openPluginTransiently(plugin);
                   },
                 ),
               ),
@@ -871,7 +882,7 @@ class ToolsScreenState extends State<ToolsScreen>
                             width: 300,
                             child: PluginSidePanel(
                               onPluginSelected: (plugin) {
-                                _openPluginTransiently(plugin);
+                                openPluginTransiently(plugin);
                               },
                             ),
                           ),

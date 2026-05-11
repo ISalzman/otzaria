@@ -22,10 +22,17 @@ abstract class OpenedTab {
     if (tab is TextBookTab) {
       bool? splitedView;
       bool? showPageShapeView;
+      // ערכי ברירת מחדל לוקחים את ה‑pinpoint שאיתו נבנה הטאב המקורי. אם
+      // ה‑bloc כבר נטען, נעדיף את הערכים המעודכנים מה‑state — כדי לתפוס שינויים
+      // (למשל ניקוי ה‑pinpoint עם חיפוש ידני חדש).
+      String? pinpointText = tab.pinpointHighlight;
+      int? pinpointSectionIndex = tab.pinpointHighlightSectionIndex;
       final state = tab.bloc.state;
       if (state is TextBookLoaded) {
         splitedView = state.showSplitView;
         showPageShapeView = state.showPageShapeView;
+        pinpointText = state.pinpointHighlightText;
+        pinpointSectionIndex = state.pinpointHighlightIndex;
       }
       return TextBookTab(
         index: tab.index,
@@ -37,6 +44,8 @@ abstract class OpenedTab {
         showPageShapeView: showPageShapeView,
         isPinned: tab.isPinned,
         dedupeKey: tab.dedupeKey,
+        pinpointHighlight: pinpointText,
+        pinpointHighlightSectionIndex: pinpointSectionIndex,
       );
     } else if (tab is PdfBookTab) {
       return PdfBookTab(
@@ -66,7 +75,9 @@ abstract class OpenedTab {
       bool openLeftPane = false,
       bool isPinned = false,
       bool? showPageShapeView,
-      bool requiresStableLayout = false}) {
+      bool requiresStableLayout = false,
+      String? pinpointHighlight,
+      int? pinpointHighlightSectionIndex}) {
     if (book is PdfBook) {
       return PdfBookTab(
         book: book,
@@ -110,6 +121,8 @@ abstract class OpenedTab {
         openLeftPane: openLeftPane,
         isPinned: isPinned,
         showPageShapeView: showPageShapeView,
+        pinpointHighlight: pinpointHighlight,
+        pinpointHighlightSectionIndex: pinpointHighlightSectionIndex,
       );
     } else if (book is TextBook) {
       return TextBookTab(
@@ -120,6 +133,8 @@ abstract class OpenedTab {
         openLeftPane: openLeftPane,
         isPinned: isPinned,
         showPageShapeView: showPageShapeView,
+        pinpointHighlight: pinpointHighlight,
+        pinpointHighlightSectionIndex: pinpointHighlightSectionIndex,
       );
     }
     throw UnsupportedError("Unsupported book type: ${book.runtimeType}");

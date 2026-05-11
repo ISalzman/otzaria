@@ -140,6 +140,7 @@ void main() {
         expect(book.bookId, 1234);
         expect(book.index, isNull);
         expect(book.searchQuery, isNull);
+        expect(book.pinpointHighlight, isNull);
       });
 
       test('מפענח index ו-q בפתיחת ספר', () {
@@ -151,6 +152,51 @@ void main() {
         expect(action.bookId, 1234);
         expect(action.index, 42);
         expect(action.searchQuery, 'בראשית');
+        expect(action.pinpointHighlight, isNull);
+      });
+
+      test('מפענח highlight= בפתיחת ספר עם index', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse(
+            'otzaria://open/book/1234?index=42&highlight=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA',
+          ),
+        ) as OpenBookAction;
+
+        expect(action.bookId, 1234);
+        expect(action.index, 42);
+        expect(action.pinpointHighlight, 'בראשית');
+        expect(action.searchQuery, isNull);
+      });
+
+      test('highlight= בלי index מתעלם', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse(
+            'otzaria://open/book/1234?highlight=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA',
+          ),
+        ) as OpenBookAction;
+
+        expect(action.index, isNull);
+        expect(action.pinpointHighlight, isNull);
+        expect(action.searchQuery, isNull);
+      });
+
+      test('highlight= ריק מתעלם', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/book/1234?index=42&highlight='),
+        ) as OpenBookAction;
+
+        expect(action.pinpointHighlight, isNull);
+      });
+
+      test('highlight= גובר על q= כשסופקו שניהם', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse(
+            'otzaria://open/book/1234?index=42&q=%D7%90%D7%9C%D7%A3&highlight=%D7%91%D7%99%D7%AA',
+          ),
+        ) as OpenBookAction;
+
+        expect(action.pinpointHighlight, 'בית');
+        expect(action.searchQuery, isNull);
       });
 
       test('index שלילי או לא מספרי מתעלם', () {
