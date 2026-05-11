@@ -45,6 +45,39 @@ class SearchQueryBuilder {
     return searchMode == SearchMode.advanced;
   }
 
+  /// בונה מפת אפשרויות חיפוש אפקטיבית מתוך הגדרות גלובליות.
+  /// יוצרת מפתח לכל מילה בשאילתה עם אותן אפשרויות.
+  static Map<String, Map<String, bool>> expandGlobalOptionsToWords(
+    String query,
+    Map<String, bool> globalOptions,
+  ) {
+    if (globalOptions.isEmpty ||
+        !globalOptions.values.any((enabled) => enabled)) {
+      return const {};
+    }
+    final words = splitQueryWords(query);
+    final result = <String, Map<String, bool>>{};
+    for (var i = 0; i < words.length; i++) {
+      result[buildWordKey(words[i], i)] = Map<String, bool>.from(globalOptions);
+    }
+    return result;
+  }
+
+  /// בוחר את מפת אפשרויות החיפוש האפקטיבית לפי המצב.
+  /// במצב גלובלי - מרחיב את ההגדרות הגלובליות לכל מילה בשאילתה.
+  /// במצב פר-מילה - מחזיר את ההגדרות הפר-מיליות כמות שהן.
+  static Map<String, Map<String, bool>> effectiveSearchOptions({
+    required String query,
+    required bool useGlobalOptions,
+    required Map<String, bool> globalOptions,
+    required Map<String, Map<String, bool>> perWordOptions,
+  }) {
+    if (useGlobalOptions) {
+      return expandGlobalOptionsToWords(query, globalOptions);
+    }
+    return perWordOptions;
+  }
+
   static bool hasEnabledSearchOptions(
     Map<String, Map<String, bool>>? searchOptions,
   ) {

@@ -42,6 +42,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     super.initState();
     widget.tab.queryController.addListener(_onQueryChanged);
     widget.tab.searchFieldFocusNode.addListener(_onFocusChanged);
+    widget.tab.useGlobalSearchOptions.addListener(_onGlobalModeChanged);
     _alternativeWordFocusNode.addListener(_updateInputFocusState);
     _analyzeCurrentWord();
   }
@@ -50,6 +51,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
   void dispose() {
     widget.tab.queryController.removeListener(_onQueryChanged);
     widget.tab.searchFieldFocusNode.removeListener(_onFocusChanged);
+    widget.tab.useGlobalSearchOptions.removeListener(_onGlobalModeChanged);
     _alternativeWordFocusNode.removeListener(_updateInputFocusState);
     _alternativeWordController.dispose();
     _alternativeWordFocusNode.dispose();
@@ -60,6 +62,10 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
       focusNode.dispose();
     }
     super.dispose();
+  }
+
+  void _onGlobalModeChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onQueryChanged() {
@@ -180,9 +186,14 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
 
   @override
   Widget build(BuildContext context) {
-    final isEnabled = _currentWord != null && _wordIndex != null;
+    final isWordSelected = _currentWord != null && _wordIndex != null;
+    final useGlobal = widget.tab.useGlobalSearchOptions.value;
+    // הצ'קבוקסים פעילים אם במצב גלובלי או אם נבחרה מילה
+    final checkboxesEnabled = useGlobal || isWordSelected;
+    // ההגדרות הפר-מיליות (מילים חילופיות + מרווח) תמיד פר-מילה
+    final perWordInputsEnabled = isWordSelected;
 
-    if (!isEnabled && !widget.compactMode) {
+    if (!checkboxesEnabled && !widget.compactMode) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32.0),
@@ -208,17 +219,25 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
       );
     }
 
+    // המתג ממוקם לצד שורת הניווט (במקום הריק) כדי לא לתפוס שורה נפרדת
+    final navigationWithToggle = Row(
+      children: [
+        Expanded(child: _buildNavigationRow(perWordInputsEnabled)),
+        _buildScopeToggle(),
+      ],
+    );
+
     if (widget.compactMode) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildNavigationRow(isEnabled),
-          if (isEnabled) ...[
+          navigationWithToggle,
+          if (perWordInputsEnabled) ...[
             const SizedBox(height: 16),
-            _buildInputColumn(isEnabled),
+            _buildInputColumn(perWordInputsEnabled),
           ],
           const SizedBox(height: 16),
-          _buildCheckboxGrid(isEnabled, compactMode: true),
+          _buildCheckboxGrid(checkboxesEnabled, compactMode: true),
         ],
       );
     }
@@ -230,9 +249,9 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
           flex: 2,
           child: Column(
             children: [
-              _buildNavigationRow(isEnabled),
+              navigationWithToggle,
               const SizedBox(height: 16),
-              _buildInputColumn(isEnabled),
+              _buildInputColumn(perWordInputsEnabled),
             ],
           ),
         ),
@@ -242,11 +261,60 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildCheckboxGrid(isEnabled, compactMode: false),
+              _buildCheckboxGrid(checkboxesEnabled, compactMode: false),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  /// מתג קומפקטי לבחירת היקף ההגדרות: גלובלי לכל המילים או פר-מילה.
+  Widget _buildScopeToggle() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final useGlobal = widget.tab.useGlobalSearchOptions.value;
+
+    return Tooltip(
+      message: useGlobal
+          ? 'ההגדרות חלות על כל המילים בשאילתה ולא משתנות בעת שינוי המילים'
+          : 'ההגדרות נשמרות לכל מילה בנפרד',
+      child: Container(
+        decoration: BoxDecoration(
+          color: useGlobal
+              ? colorScheme.primaryContainer.withValues(alpha: 0.6)
+              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'זהה לכל המילים',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: useGlobal
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
+              ),
+              textDirection: TextDirection.rtl,
+            ),
+            const SizedBox(width: 4),
+            Transform.scale(
+              scale: 0.75,
+              child: Switch(
+                value: useGlobal,
+                onChanged: (value) {
+                  widget.tab.useGlobalSearchOptions.value = value;
+                  widget.tab.searchOptionsChanged.value++;
+                },
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -475,11 +543,17 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
       'חלק ממילה',
     ];
 
+    final useGlobal = widget.tab.useGlobalSearchOptions.value;
+
     Widget buildCheckbox(String option) {
       bool isChecked = false;
       if (isEnabled) {
-        final key = '${_currentWord}_$_wordIndex';
-        isChecked = widget.tab.searchOptions[key]?[option] ?? false;
+        if (useGlobal) {
+          isChecked = widget.tab.globalSearchOptions[option] ?? false;
+        } else {
+          final key = '${_currentWord}_$_wordIndex';
+          isChecked = widget.tab.searchOptions[key]?[option] ?? false;
+        }
       }
 
       return Opacity(
@@ -487,10 +561,14 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
         child: InkWell(
           onTap: isEnabled
               ? () {
-                  final key = '${_currentWord}_$_wordIndex';
                   setState(() {
-                    widget.tab.searchOptions.putIfAbsent(key, () => {});
-                    widget.tab.searchOptions[key]![option] = !isChecked;
+                    if (useGlobal) {
+                      widget.tab.globalSearchOptions[option] = !isChecked;
+                    } else {
+                      final key = '${_currentWord}_$_wordIndex';
+                      widget.tab.searchOptions.putIfAbsent(key, () => {});
+                      widget.tab.searchOptions[key]![option] = !isChecked;
+                    }
                   });
                   widget.tab.searchOptionsChanged.value++;
                 }
