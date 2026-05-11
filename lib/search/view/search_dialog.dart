@@ -87,6 +87,13 @@ class _SearchDialogState extends State<SearchDialog> {
   Set<String> _selectedCategoryFacets = {'/'}; // ברירת מחדל: הכל
   late final bool _ownsSearchTab;
 
+  bool get _usesStagedSubmit =>
+      widget.onSearch != null || widget.returnResultOnSubmit;
+
+  /// משחזר טולרנס שגיאות-כתיב למשתמשים שעלו מגרסה בה היה מפתח
+  /// `key-last-search-mode=levenshtein` או `key-last-search-typo-tolerance=true`.
+  /// מורח את האפשרות לכל מילה (כפי שהפורמט הפר-מילה דורש), כדי שהמעבר
+  /// בין הגרסאות לא יפיל למשתמש הקיים את ההגדרה שהוא הסתמך עליה.
   void _restoreLegacyTypoToleranceOptions(String query) {
     final words = SearchQueryBuilder.splitQueryWords(query);
     for (var i = 0; i < words.length; i++) {
@@ -95,10 +102,12 @@ class _SearchDialogState extends State<SearchDialog> {
         SearchQueryBuilder.typoToleranceOptionKey: true,
       };
     }
+    if (words.isNotEmpty) {
+      // ההגדרות הקודמות חלות פר-מילה, לכן עוברים למצב פר-מילה כדי
+      // שיוצגו ויפעלו.
+      _searchTab.useGlobalSearchOptions.value = false;
+    }
   }
-
-  bool get _usesStagedSubmit =>
-      widget.onSearch != null || widget.returnResultOnSubmit;
 
   @override
   void initState() {
@@ -263,9 +272,14 @@ class _SearchDialogState extends State<SearchDialog> {
                     _searchTab.queryController.text = query;
 
                     // שחזור האפשרויות הנוספות
+                    // ההיסטוריה שומרת אפשרויות מורחבות פר-מילה,
+                    // לכן מנקים את האפשרויות הגלובליות הקיימות ועוברים למצב פר-מילה
+                    // כדי שלא יישארו הגדרות חבויות שיופיעו במעבר חזרה למצב גלובלי
                     if (bookmark.searchOptions != null) {
                       _searchTab.searchOptions.clear();
                       _searchTab.searchOptions.addAll(bookmark.searchOptions!);
+                      _searchTab.globalSearchOptions.clear();
+                      _searchTab.useGlobalSearchOptions.value = false;
                     }
                     if (bookmark.alternativeWords != null) {
                       _searchTab.alternativeWords.clear();
@@ -333,11 +347,17 @@ class _SearchDialogState extends State<SearchDialog> {
     // שמירת מצב החיפוש האחרון
     final currentState = _searchTab.searchBloc.state;
     final currentMode = currentState.configuration.searchMode;
+    final effectiveOptions = SearchQueryBuilder.effectiveSearchOptions(
+      query: query,
+      useGlobalOptions: _searchTab.useGlobalSearchOptions.value,
+      globalOptions: _searchTab.globalSearchOptions,
+      perWordOptions: _searchTab.searchOptions,
+    );
     final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
       currentMode,
       customSpacing: _searchTab.spacingValues,
       alternativeWords: _searchTab.alternativeWords,
-      searchOptions: _searchTab.searchOptions,
+      searchOptions: effectiveOptions,
     );
     final modeString = switch (currentMode) {
       SearchMode.advanced => 'advanced',
@@ -386,7 +406,12 @@ class _SearchDialogState extends State<SearchDialog> {
     final newSearchTab = SearchingTab("חיפוש: $query", query);
 
     // העתקת כל ההגדרות מהטאב הנוכחי לטאב החדש
-    newSearchTab.searchOptions.addAll(normalizedParameters.searchOptions);
+    newSearchTab.searchOptions.addAll(_searchTab.searchOptions.map(
+      (key, value) => MapEntry(key, Map<String, bool>.from(value)),
+    ));
+    newSearchTab.globalSearchOptions.addAll(_searchTab.globalSearchOptions);
+    newSearchTab.useGlobalSearchOptions.value =
+        _searchTab.useGlobalSearchOptions.value;
     newSearchTab.alternativeWords.addAll(normalizedParameters.alternativeWords);
     newSearchTab.spacingValues.addAll(normalizedParameters.customSpacing);
     newSearchTab.searchBloc.add(SetSearchMode(currentMode));

@@ -376,7 +376,7 @@ class _CombinedViewState extends State<CombinedView> {
           label: 'העתק',
           icon: FluentIcons.copy_24_regular,
           enabled: selectedText != null && selectedText.trim().isNotEmpty,
-          onTap: _copyFormattedText,
+          onTap: () => _copyFormattedText(selectedText),
         ),
       ];
     }
@@ -540,7 +540,7 @@ class _CombinedViewState extends State<CombinedView> {
       AppContextMenuEntry(
         label: 'הוסף הערה אישית',
         icon: FluentIcons.note_add_24_regular,
-        onTap: _showNoteEditor,
+        onTap: () => _showNoteEditor(selectedText),
       ),
       AppContextMenuEntry(
         label: 'דווח על טעות בספר',
@@ -555,7 +555,7 @@ class _CombinedViewState extends State<CombinedView> {
         label: 'העתק',
         icon: FluentIcons.copy_24_regular,
         enabled: selectedText != null && selectedText.trim().isNotEmpty,
-        onTap: _copyFormattedText,
+        onTap: () => _copyFormattedText(selectedText),
       ),
       AppContextMenuEntry(
         label: 'העתק את כל הפסקה',
@@ -755,9 +755,8 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   /// העתקת טקסט מעוצב (HTML) ללוח
-  Future<void> _copyFormattedText() async {
-    // משתמש בטקסט השמור שנבחר לפני פתיחת התפריט
-    final plainText = _savedSelectedText.value;
+  Future<void> _copyFormattedText([String? capturedText]) async {
+    final plainText = capturedText ?? _savedSelectedText.value;
 
     debugPrint('_copyFormattedText called with: "$plainText"');
     debugPrint('_currentSelectedIndex: ${_currentSelectedIndex.value}');
@@ -789,13 +788,11 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   /// הצגת עורך ההערות
-  Future<void> _showNoteEditor() async {
-    // שמירת ה-state הנוכחי לפני פתיחת הדיאלוג
+  Future<void> _showNoteEditor([String? capturedText]) async {
     final state = _textBookBloc.state;
     if (state is! TextBookLoaded) return;
 
-    // שמירת הטקסט הנבחר לפני פתיחת הדיאלוג
-    final selectedText = _savedSelectedText.value;
+    final selectedText = capturedText ?? _savedSelectedText.value;
 
     // משתמש בשורה שממנה הודגש טקסט (אם קיים), אחרת בשורה הנבחרת, אחרת בשורה הראשונה הנראית
     final currentIndex = _savedSelectedIndex.value ??
@@ -894,7 +891,6 @@ class _CombinedViewState extends State<CombinedView> {
               onSelectionChanged: (selection) {
                 final plain = selection?.plainText;
                 if (!shouldPersistSelectedText(plain)) {
-                  // אם הבחירה נוקתה, יוצאים ממצב בחירה ומנקים את הטקסט השמור
                   _selectionManager.exitSelectionMode();
                   _savedSelectedText.value = null;
                   return;
@@ -1252,6 +1248,31 @@ class _CombinedViewState extends State<CombinedView> {
                           }
                         }
 
+                        // הדגשה ממוקדת מקישור עומק: רק על הסעיף שצוין, ובלי
+                        // להפעיל את שאר אפשרויות החיפוש (כתיב מלא/חסר וכו').
+                        final isPinpointTarget =
+                            state.pinpointHighlightIndex == index &&
+                                state.pinpointHighlightText != null &&
+                                state.pinpointHighlightText!.isNotEmpty;
+                        final hasPinpoint =
+                            state.pinpointHighlightIndex != null;
+                        final effectiveSearchText = isPinpointTarget
+                            ? state.pinpointHighlightText!
+                            : (hasPinpoint ? '' : state.searchText);
+                        final effectiveSearchMode =
+                            hasPinpoint ? SearchMode.exact : state.searchMode;
+                        final effectiveSearchOptions = hasPinpoint
+                            ? const <String, Map<String, bool>>{}
+                            : state.searchOptions;
+                        final effectiveAlternativeWords = hasPinpoint
+                            ? const <int, List<String>>{}
+                            : state.alternativeWords;
+                        final effectiveSpacingValues = hasPinpoint
+                            ? const <String, String>{}
+                            : state.spacingValues;
+                        final effectiveSearchDistance =
+                            hasPinpoint ? 0 : state.searchDistance;
+
                         final textWidget = SmartTextWidget(
                           text: dataWithLinks,
                           widgetKey:
@@ -1261,13 +1282,14 @@ class _CombinedViewState extends State<CombinedView> {
                             removePunctuation: state.removePunctuation,
                             removeTeamim: !settingsState.showTeamim,
                             replaceHolyNames: settingsState.replaceHolyNames,
-                            searchText: state.searchText,
-                            searchOptions: state.searchOptions,
-                            alternativeWords: state.alternativeWords,
-                            spacingValues: state.spacingValues,
-                            isFuzzySearch: state.searchMode == SearchMode.fuzzy,
-                            searchMode: state.searchMode,
-                            searchDistance: state.searchDistance,
+                            searchText: effectiveSearchText,
+                            searchOptions: effectiveSearchOptions,
+                            alternativeWords: effectiveAlternativeWords,
+                            spacingValues: effectiveSpacingValues,
+                            isFuzzySearch:
+                                effectiveSearchMode == SearchMode.fuzzy,
+                            searchMode: effectiveSearchMode,
+                            searchDistance: effectiveSearchDistance,
                             fontSize: widget.textSize,
                             fontFamily: settingsState.fontFamily,
                             lineHeight: settingsState.lineHeight,

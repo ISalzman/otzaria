@@ -62,6 +62,31 @@ bool isTextInputFocusNode(FocusNode? focusNode) {
       _hasQuillEditorAncestor(focusContext);
 }
 
+/// בודקת האם הפוקוס הנוכחי נמצא בתוך תפריט (כמו תפריט הקשר/תת-תפריט).
+///
+/// נדרש כדי שלא נחזיר פוקוס לטקסט בזמן שהמשתמש פותח תת-תפריט,
+/// כי גזילת הפוקוס תסגור את התת-תפריט מיד.
+bool isMenuFocusNode(FocusNode? focusNode) {
+  final focusContext = focusNode?.context;
+  if (focusContext == null) {
+    return false;
+  }
+
+  if (_isMenuWidget(focusContext.widget)) {
+    return true;
+  }
+
+  var hasMenuAncestor = false;
+  focusContext.visitAncestorElements((element) {
+    if (_isMenuWidget(element.widget)) {
+      hasMenuAncestor = true;
+      return false;
+    }
+    return true;
+  });
+  return hasMenuAncestor;
+}
+
 bool _hasQuillEditorAncestor(BuildContext context) {
   var hasQuillAncestor = false;
   context.visitAncestorElements((element) {
@@ -85,6 +110,12 @@ bool _isTextInputWidget(Widget widget) {
       runtimeTypeName.contains('QuillRawEditor') ||
       runtimeTypeName.contains('RawEditor') ||
       runtimeTypeName.contains('QuillEditor');
+}
+
+bool _isMenuWidget(Widget widget) {
+  return widget is MenuItemButton ||
+      widget is SubmenuButton ||
+      widget is MenuAnchor;
 }
 
 /// קובעת מאיזה אינדקס יתחיל ניווט המקלדת בצורת הדף.
@@ -171,6 +202,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   FocusNode? _keyboardFocusNode;
   bool _shouldPreserveKeyboardFocus = false;
   bool _pendingKeyboardFocusRestore = false;
+  bool _wasMenuFocused = false;
   String? _savedSelectedText;
   int? _savedSelectedIndex;
   int _initialScrollRestoreAttempts = 0;
@@ -182,18 +214,61 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     return isTextInputFocusNode(FocusManager.instance.primaryFocus);
   }
 
+  bool _isMenuFocused() {
+    return isMenuFocusNode(FocusManager.instance.primaryFocus);
+  }
+
+  /// מאזין לשינויי פוקוס גלובליים כדי לזהות סגירת תת-תפריט.
+  ///
+  /// כשהפוקוס יוצא מתפריט הקשר (החלף מפרש / קישורים) ולא חוזר אוטומטית
+  /// לטקסט הראשי, מקשי החיצים מפסיקים לעבוד עד שהמשתמש לוחץ שוב.
+  /// אנחנו מחזירים פוקוס רק אם הפוקוס "מרחף" ב-FocusScope של page-shape
+  /// עצמו - לא אם המשתמש העביר פוקוס במכוון לכפתור / דיאלוג / רכיב אחר.
+  void _handleGlobalFocusChange() {
+    if (!mounted || !widget.isMainText) {
+      return;
+    }
+
+    final isMenuNow = _isMenuFocused();
+    final menuJustClosed = _wasMenuFocused && !isMenuNow;
+    _wasMenuFocused = isMenuNow;
+
+    if (!menuJustClosed) {
+      return;
+    }
+
+    final myFocusNode = _keyboardFocusNode;
+    if (myFocusNode == null || myFocusNode.hasFocus) {
+      return;
+    }
+
+    // הפוקוס נחשב "מרחף" אך ורק אם הוא נמצא על FocusScopeNode העוטף שלנו.
+    // אם הוא על widget מכוון אחר (כפתור, פאנל צד וכו') או על scope של דיאלוג -
+    // המשתמש בחר בו, ואסור לגנוב.
+    final primaryFocus = FocusManager.instance.primaryFocus;
+    if (primaryFocus is! FocusScopeNode) {
+      return;
+    }
+    if (primaryFocus != myFocusNode.enclosingScope) {
+      return;
+    }
+
+    _requestKeyboardFocusAfterFrame('menu-closed');
+  }
+
   void _ensureKeyboardFocusAfterLoss(String reason) {
     if (!widget.isMainText ||
         !_shouldPreserveKeyboardFocus ||
         _pendingKeyboardFocusRestore ||
-        _isTextInputFocused()) {
+        _isTextInputFocused() ||
+        _isMenuFocused()) {
       return;
     }
 
     _pendingKeyboardFocusRestore = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _pendingKeyboardFocusRestore = false;
-      if (!mounted || _isTextInputFocused()) {
+      if (!mounted || _isTextInputFocused() || _isMenuFocused()) {
         return;
       }
       _requestKeyboardFocus(reason);
@@ -218,6 +293,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     // אם המשתמש כותב בשדה חיפוש/קלט אחר - לא לגנוב ממנו פוקוס
     if (_isTextInputFocused()) {
+      return;
+    }
+
+    // אם פתוח תת-תפריט (החלף מפרש / קישורים) - לא לגנוב ממנו פוקוס,
+    // אחרת התת-תפריט ייסגר מיד.
+    if (_isMenuFocused()) {
       return;
     }
 
@@ -252,6 +333,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
+      FocusManager.instance.addListener(_handleGlobalFocusChange);
       _scheduleInitialScrollRestore();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -297,6 +379,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
   @override
   void dispose() {
+    if (widget.isMainText) {
+      FocusManager.instance.removeListener(_handleGlobalFocusChange);
+    }
     if (!widget.isMainText) {
       HardwareKeyboard.instance.removeHandler(_handleCommentaryCopyKeyEvent);
       if (_lastActiveCommentary == this) _lastActiveCommentary = null;
@@ -636,7 +721,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
   /// תפריט הקשר
   List<AppContextMenuEntry> _buildContextMenu(
-      TextBookLoaded state, int index, BuildContext menuContext, Offset tapPosition) {
+      TextBookLoaded state, int index, BuildContext menuContext, Offset tapPosition, String? capturedText) {
     List<AppContextMenuEntry> commentatorItems = [];
     if (!widget.isMainText && widget.bookTitle != null) {
       commentatorItems = _buildCommentatorSwitchMenu(state);
@@ -685,7 +770,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         icon: FluentIcons.search_24_regular,
         onTap: () {
           if (widget.onOpenSearch != null) {
-            widget.onOpenSearch!(_savedSelectedText);
+            widget.onOpenSearch!(capturedText);
           } else {
             UiSnack.show('חיפוש לא זמין בתצוגה זו');
           }
@@ -707,8 +792,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       ));
     }
 
-    final dictionaryText = (_savedSelectedText?.trim().isNotEmpty == true)
-        ? _savedSelectedText
+    final dictionaryText = (capturedText?.trim().isNotEmpty == true)
+        ? capturedText
         : wordAtGlobalPosition(tapPosition);
     final dictionaryEntries = buildDictionaryContextMenuEntries(
       context: context,
@@ -725,20 +810,19 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       AppContextMenuEntry(
         label: 'הוסף הערה אישית ',
         icon: FluentIcons.note_add_24_regular,
-        onTap: () => _createNoteForCurrentLine(index),
+        onTap: () => _createNoteForCurrentLine(index, capturedText),
       ),
       AppContextMenuEntry(
         label: 'דווח על טעות בספר',
         icon: FluentIcons.error_circle_24_regular,
-        onTap: () => _openErrorReportDialog(_savedSelectedText ?? ''),
+        onTap: () => _openErrorReportDialog(capturedText ?? ''),
       ),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
         label: 'העתק',
         icon: FluentIcons.copy_24_regular,
-        enabled:
-            _savedSelectedText != null && _savedSelectedText!.trim().isNotEmpty,
-        onTap: _copyFormattedText,
+        enabled: capturedText != null && capturedText.trim().isNotEmpty,
+        onTap: () => _copyFormattedText(capturedText),
       ),
       AppContextMenuEntry(
         label: 'העתק את כל הפסקה',
@@ -764,7 +848,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 'reader.context_menu_item_clicked',
                 {
                   'itemId': item.id,
-                  'selectedText': _savedSelectedText ?? '',
+                  'selectedText': capturedText ?? '',
                   'currentRef': state.currentTitle ?? '',
                   'currentBook': state.book.title,
                   'currentBookId': state.book.title,
@@ -798,11 +882,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   }
 
   /// יצירת הערה לשורה הנוכחית
-  Future<void> _createNoteForCurrentLine(int index) async {
+  Future<void> _createNoteForCurrentLine(int index, [String? capturedText]) async {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
 
-    final selectedText = _savedSelectedText;
+    final selectedText = capturedText ?? _savedSelectedText;
     final referenceText = selectedText?.trim().isNotEmpty == true
         ? utils.removeVolwels(selectedText!.trim())
         : widget.content[index];
@@ -952,11 +1036,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   }
 
   /// העתקת טקסט מעוצב
-  Future<void> _copyFormattedText() async {
+  Future<void> _copyFormattedText([String? capturedText]) async {
     // מפרש כבר טיפל בהעתקה - לא נדרוס
     if (widget.isMainText && _commentaryCopyHandled) return;
 
-    final plainText = _savedSelectedText;
+    final plainText = capturedText ?? _savedSelectedText;
 
     if (plainText == null || plainText.trim().isEmpty) {
       UiSnack.show('אנא בחר טקסט להעתקה');
@@ -1138,6 +1222,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     BuildContext context,
     Map<int, List<PersonalNote>> noteMap,
   ) {
+    // נתפס בזמן BUILD (כמו selectedText ב-ValueListenableBuilder של Combined),
+    // כך שגם אם onSelectionChanged(null) ירוץ לפני menuBuilder, ה-closure
+    // כבר סגור על הערך הנכון מהבנייה האחרונה.
+    final savedTextAtBuild = _savedSelectedText;
+
     final isSelected = widget.isMainText && state.selectedIndex == index;
     final isHighlighted = widget.isMainText && state.highlightedLine == index;
 
@@ -1200,7 +1289,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         });
       },
       child: AppContextMenuRegion(
-        menuBuilder: (menuCtx, tapPos) => _buildContextMenu(state, index, menuCtx, tapPos),
+        menuBuilder: (menuCtx, tapPos) => _buildContextMenu(state, index, menuCtx, tapPos, savedTextAtBuild),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
@@ -1249,8 +1338,23 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                           ),
                         ));
 
-              // הדגשת טקסט חיפוש רק בטקסט המרכזי
-              final searchText = widget.isMainText ? state.searchText : '';
+              // הדגשה ממוקדת מקישור עומק (רק בטקסט המרכזי, רק על הסעיף שצוין)
+              final isPinpointTarget = widget.isMainText &&
+                  state.pinpointHighlightIndex == index &&
+                  state.pinpointHighlightText != null &&
+                  state.pinpointHighlightText!.isNotEmpty;
+              final hasPinpoint =
+                  widget.isMainText && state.pinpointHighlightIndex != null;
+              final searchText = isPinpointTarget
+                  ? state.pinpointHighlightText!
+                  : (hasPinpoint
+                      ? ''
+                      : (widget.isMainText ? state.searchText : ''));
+              final useStateSearchSettings =
+                  widget.isMainText && !hasPinpoint;
+              final effectiveSearchMode = useStateSearchSettings
+                  ? state.searchMode
+                  : SearchMode.exact;
 
               final textWidget = FutureBuilder<bool>(
                 future: removeNikudFuture,
@@ -1265,19 +1369,21 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                       removeTeamim: !settingsState.showTeamim,
                       replaceHolyNames: settingsState.replaceHolyNames,
                       searchText: searchText,
-                      searchOptions:
-                          widget.isMainText ? state.searchOptions : const {},
-                      alternativeWords:
-                          widget.isMainText ? state.alternativeWords : const {},
-                      spacingValues:
-                          widget.isMainText ? state.spacingValues : const {},
-                      isFuzzySearch: widget.isMainText &&
-                          state.searchMode == SearchMode.fuzzy,
-                      searchMode: widget.isMainText
-                          ? state.searchMode
-                          : SearchMode.exact,
-                        searchDistance:
-                          widget.isMainText ? state.searchDistance : 0,
+                      searchOptions: useStateSearchSettings
+                          ? state.searchOptions
+                          : const {},
+                      alternativeWords: useStateSearchSettings
+                          ? state.alternativeWords
+                          : const {},
+                      spacingValues: useStateSearchSettings
+                          ? state.spacingValues
+                          : const {},
+                      isFuzzySearch:
+                          effectiveSearchMode == SearchMode.fuzzy,
+                      searchMode: effectiveSearchMode,
+                      searchDistance: useStateSearchSettings
+                          ? state.searchDistance
+                          : 0,
                       fontSize: widget.fontSize,
                       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
                       lineHeight: settingsState.lineHeight,

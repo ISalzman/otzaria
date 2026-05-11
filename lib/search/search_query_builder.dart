@@ -26,17 +26,56 @@ class SearchQueryBuilder {
 
   static String buildWordKey(String word, int index) => '${word}_$index';
 
+  /// רגקס לפיצול מילות חיפוש: רווחים, גרשיים וגרש לועזיים.
+  /// גרשיים/גרש מתפרשים כמפריד מילים כי הטוקנייזר של Tantivy מפצל עליהם
+  /// ממילא בעת האינדוקס — כך שהשאילתה תואמת את המבנה באינדקס
+  /// (למשל `רמב"ם` באינדקס נשמר כשני טוקנים: `רמב`, `ם`).
+  static final RegExp _queryWordSplitter = RegExp(r'''[\s"']+''');
+
   static List<String> splitQueryWords(String query) {
     final cleanedQuery = sanitizeQuery(query);
     return cleanedQuery
         .trim()
-        .split(SearchRegexPatterns.wordSplitter)
+        .split(_queryWordSplitter)
         .where((w) => w.isNotEmpty)
         .toList();
   }
 
   static bool usesAdvancedParameters(SearchMode searchMode) {
     return searchMode == SearchMode.advanced;
+  }
+
+  /// בונה מפת אפשרויות חיפוש אפקטיבית מתוך הגדרות גלובליות.
+  /// יוצרת מפתח לכל מילה בשאילתה עם אותן אפשרויות.
+  static Map<String, Map<String, bool>> expandGlobalOptionsToWords(
+    String query,
+    Map<String, bool> globalOptions,
+  ) {
+    if (globalOptions.isEmpty ||
+        !globalOptions.values.any((enabled) => enabled)) {
+      return const {};
+    }
+    final words = splitQueryWords(query);
+    final result = <String, Map<String, bool>>{};
+    for (var i = 0; i < words.length; i++) {
+      result[buildWordKey(words[i], i)] = Map<String, bool>.from(globalOptions);
+    }
+    return result;
+  }
+
+  /// בוחר את מפת אפשרויות החיפוש האפקטיבית לפי המצב.
+  /// במצב גלובלי - מרחיב את ההגדרות הגלובליות לכל מילה בשאילתה.
+  /// במצב פר-מילה - מחזיר את ההגדרות הפר-מיליות כמות שהן.
+  static Map<String, Map<String, bool>> effectiveSearchOptions({
+    required String query,
+    required bool useGlobalOptions,
+    required Map<String, bool> globalOptions,
+    required Map<String, Map<String, bool>> perWordOptions,
+  }) {
+    if (useGlobalOptions) {
+      return expandGlobalOptionsToWords(query, globalOptions);
+    }
+    return perWordOptions;
   }
 
   static bool hasEnabledSearchOptions(
@@ -289,8 +328,10 @@ class SearchQueryBuilder {
                   customSpacing, words.length)
               : distance;
     } else if (words.length == 1) {
-      // מילה אחת - חיפוש פשוט
-      regexTerms = [query];
+      // מילה אחת - חיפוש פשוט. משתמשים במילה אחרי sanitize+split
+      // כדי שתווי פיסוק כמו `'`, `"`, `!` שהוסרו במהלך הניקוי לא יזלגו לרגקס
+      // וייצרו טוקן שלא קיים באינדקס.
+      regexTerms = [words.first];
       effectiveSlop = 0;
     } else if (hasCustomSpacing) {
       // מרווחים מותאמים אישית

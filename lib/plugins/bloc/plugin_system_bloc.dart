@@ -40,6 +40,8 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     on<UninstallPluginRequested>(_onUninstallPluginRequested);
     on<PinPluginRequested>(_onPinPluginRequested);
     on<UnpinPluginRequested>(_onUnpinPluginRequested);
+    on<PinPluginToNavRailRequested>(_onPinPluginToNavRailRequested);
+    on<UnpinPluginFromNavRailRequested>(_onUnpinPluginFromNavRailRequested);
     on<EnablePluginRequested>(_onEnablePluginRequested);
     on<DisablePluginRequested>(_onDisablePluginRequested);
     on<SetPluginPermissionRequested>(_onSetPluginPermissionRequested);
@@ -101,6 +103,29 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       add(LoadPlugins());
     } catch (e) {
       UiSnack.showError('שגיאה בהסרת הצמדת התוסף: ${e.toString()}');
+    }
+  }
+
+  Future<void> _onPinPluginToNavRailRequested(
+      PinPluginToNavRailRequested event,
+      Emitter<PluginSystemState> emit) async {
+    try {
+      await repository.updateNavRailPinState(event.pluginId, true);
+      add(LoadPlugins());
+    } catch (e) {
+      UiSnack.showError('שגיאה בהצמדת התוסף לסרגל הניווט: ${e.toString()}');
+    }
+  }
+
+  Future<void> _onUnpinPluginFromNavRailRequested(
+      UnpinPluginFromNavRailRequested event,
+      Emitter<PluginSystemState> emit) async {
+    try {
+      await repository.updateNavRailPinState(event.pluginId, false);
+      add(LoadPlugins());
+    } catch (e) {
+      UiSnack.showError(
+          'שגיאה בהסרת הצמדת התוסף מסרגל הניווט: ${e.toString()}');
     }
   }
 

@@ -28,20 +28,28 @@ class BookOpenCoordinator {
     String searchQuery, {
     bool ignoreHistory = false,
     bool requiresStableLayout = false,
+    String? pinpointHighlight,
   }) {
     final tabsState = tabsBloc.state;
     if (tabsState.hasOpenTabs) {
       historyBloc.add(CaptureStateForHistory(tabsState.currentTab!));
     }
 
+    // deep link עם הדגשה ממוקדת מציין במפורש סעיף יעד; חייבים לכבד אותו במדויק
+    // (גם כש‑index=0) ולא ליפול חזרה להיסטוריית קריאה — אחרת ההדגשה תופיע במקום
+    // הלא נכון ביחס לסעיף שהמשתמש ביקש.
+    final hasPinpoint =
+        pinpointHighlight != null && pinpointHighlight.isNotEmpty;
+
     final historyState = historyBloc.state;
-    final lastOpened = ignoreHistory
+    final lastOpened = (ignoreHistory || hasPinpoint)
         ? null
         : historyState.history
             .firstWhereOrNull((b) => b.book.title == book.title);
 
-    final initialIndex =
-        (ignoreHistory || index != 0) ? index : (lastOpened?.index ?? 0);
+    final initialIndex = (ignoreHistory || hasPinpoint || index != 0)
+        ? index
+        : (lastOpened?.index ?? 0);
     final initialCommentators = lastOpened?.commentatorsToShow;
 
     final shouldOpenLeftPane = shouldAutoOpenReadingLeftPane();
@@ -57,6 +65,11 @@ class BookOpenCoordinator {
       openLeftPane: shouldOpenLeftPane,
       showPageShapeView: savedViewMode,
       requiresStableLayout: requiresStableLayout,
+      pinpointHighlight: pinpointHighlight,
+      // שמירת הסעיף שהמשתמש ביקש בפירוש; משמש את מסלול ה‑reuse של TabsBloc
+      // כדי לדעת על איזה סעיף להחיל את ההדגשה גם אם הטאב הקיים נפתח באינדקס
+      // אחר.
+      pinpointHighlightSectionIndex: hasPinpoint ? initialIndex : null,
     );
     tabsBloc.add(OpenOrFocusTab(tab));
 
