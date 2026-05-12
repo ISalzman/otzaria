@@ -40,6 +40,7 @@ import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
+import 'package:otzaria/widgets/navigation/book_view_actions.dart';
 import 'pdf_zoom_bar.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/pdf_book/view/pdf_scrollbar.dart';
@@ -3261,6 +3262,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   List<ActionButtonData> _buildDisplayOrderPdfActions(BuildContext context) {
+    final navigationActions = _buildNavigationActions();
     return [
       ActionButtonData(
         widget: _buildTextButton(
@@ -3281,136 +3283,36 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         tooltip: 'מצב תצוגה',
         onPressed: null,
       ),
-      ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.zoom_in_24_regular),
-          tooltip: 'הגדל את גודל הטקסט',
-          onPressed: _zoomIn,
-        ),
+      ActionButtonData.simple(
         icon: FluentIcons.zoom_in_24_regular,
         tooltip: 'הגדל את גודל הטקסט',
         onPressed: _zoomIn,
+        compact: false,
+        visual: ActionButtonVisual.iconButton,
       ),
-      ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.zoom_out_24_regular),
-          tooltip: 'הקטן את גודל הטקסט',
-          onPressed: _zoomOut,
-        ),
+      ActionButtonData.simple(
         icon: FluentIcons.zoom_out_24_regular,
         tooltip: 'הקטן את גודל הטקסט',
         onPressed: _zoomOut,
+        compact: false,
+        visual: ActionButtonVisual.iconButton,
       ),
-      ActionButtonData(
-        widget: IconButton(
-          key: widget.enableTourTargets ? pdfBookSearchTourTargetKey : null,
-          icon: const Icon(FluentIcons.search_24_regular),
-          tooltip: 'חיפוש',
-          onPressed: _ensureSearchTabIsActive,
-        ),
+      ActionButtonData.simple(
+        key: widget.enableTourTargets ? pdfBookSearchTourTargetKey : null,
         icon: FluentIcons.search_24_regular,
         tooltip: 'חיפוש',
         onPressed: _ensureSearchTabIsActive,
+        compact: false,
+        visual: ActionButtonVisual.iconButton,
       ),
-      if (!widget.isInCombinedView) ...[
-        ActionButtonData(
-          widget: IconButton(
-            icon: const Icon(FluentIcons.arrow_previous_24_filled),
-            tooltip: 'תחילת הספר (CTRL + HOME)',
-            onPressed: () => _goToPageWithSpreadLock(1),
-          ),
-          icon: FluentIcons.arrow_previous_24_filled,
-          tooltip: 'תחילת הספר (CTRL + HOME)',
-          onPressed: () => _goToPageWithSpreadLock(1),
-        ),
-        ActionButtonData(
-          widget: IconButton(
-            icon: const Icon(FluentIcons.chevron_left_24_regular),
-            tooltip: 'הקודם',
-            onPressed: _goPreviousPage,
-          ),
-          icon: FluentIcons.chevron_left_24_regular,
-          tooltip: 'הקודם',
-          onPressed: _goPreviousPage,
-        ),
-        ActionButtonData(
-          widget: PageNumberDisplay(controller: widget.tab.pdfViewerController),
-          icon: FluentIcons.text_font_24_regular,
-          tooltip: 'מספר עמוד',
-          onPressed: null,
-        ),
-        ActionButtonData(
-          widget: IconButton(
-            onPressed: _goNextPage,
-            icon: const Icon(FluentIcons.chevron_right_24_regular),
-            tooltip: 'הבא',
-          ),
-          icon: FluentIcons.chevron_right_24_regular,
-          tooltip: 'הבא',
-          onPressed: _goNextPage,
-        ),
-        ActionButtonData(
-          widget: IconButton(
-            icon: const Icon(FluentIcons.arrow_next_24_filled),
-            tooltip: 'סוף הספר (CTRL + END)',
-            onPressed: () => _goToPageWithSpreadLock(
-                widget.tab.pdfViewerController.pageCount),
-          ),
-          icon: FluentIcons.arrow_next_24_filled,
-          tooltip: 'סוף הספר (CTRL + END)',
-          onPressed: () =>
-              _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
-        ),
-      ],
+      if (!widget.isInCombinedView) ...navigationActions,
     ];
   }
 
   List<ActionButtonData> _buildAlwaysInMenuPdfActions(BuildContext context) {
+    final navigationActions = _buildNavigationActions();
     return [
-      if (widget.isInCombinedView) ...[
-        ActionButtonData(
-          widget: IconButton(
-            icon: const Icon(FluentIcons.arrow_previous_24_filled),
-            tooltip: 'תחילת הספר (CTRL + HOME)',
-            onPressed: () => _goToPageWithSpreadLock(1),
-          ),
-          icon: FluentIcons.arrow_previous_24_filled,
-          tooltip: 'תחילת הספר (CTRL + HOME)',
-          onPressed: () => _goToPageWithSpreadLock(1),
-        ),
-        ActionButtonData(
-          widget: IconButton(
-            icon: const Icon(FluentIcons.chevron_left_24_regular),
-            tooltip: 'הקודם',
-            onPressed: _goPreviousPage,
-          ),
-          icon: FluentIcons.chevron_left_24_regular,
-          tooltip: 'הקודם',
-          onPressed: _goPreviousPage,
-        ),
-        ActionButtonData(
-          widget: IconButton(
-            onPressed: _goNextPage,
-            icon: const Icon(FluentIcons.chevron_right_24_regular),
-            tooltip: 'הבא',
-          ),
-          icon: FluentIcons.chevron_right_24_regular,
-          tooltip: 'הבא',
-          onPressed: _goNextPage,
-        ),
-        ActionButtonData(
-          widget: IconButton(
-            icon: const Icon(FluentIcons.arrow_next_24_filled),
-            tooltip: 'סוף הספר (CTRL + END)',
-            onPressed: () => _goToPageWithSpreadLock(
-                widget.tab.pdfViewerController.pageCount),
-          ),
-          icon: FluentIcons.arrow_next_24_filled,
-          tooltip: 'סוף הספר (CTRL + END)',
-          onPressed: () =>
-              _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
-        ),
-      ],
+      if (widget.isInCombinedView) ...navigationActions,
       ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.note_24_regular),
@@ -3421,15 +3323,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         tooltip: 'הצג הערות אישיות',
         onPressed: _openPersonalNotesPane,
       ),
-      ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.note_add_24_regular),
-          tooltip: 'הוסף הערה לעמוד זה',
-          onPressed: () => _handleAddNotePress(context),
-        ),
+      ActionButtonData.simple(
         icon: FluentIcons.note_add_24_regular,
         tooltip: 'הוסף הערה לעמוד זה',
         onPressed: () => _handleAddNotePress(context),
+        compact: false,
+        visual: ActionButtonVisual.iconButton,
       ),
       ActionButtonData(
         widget: IconButton(
@@ -3444,27 +3343,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
       if (!widget.isInCombinedView &&
           context.read<SettingsBloc>().state.enablePerBookSettings)
-        ActionButtonData(
-          widget: IconButton(
-            icon: const Icon(FluentIcons.arrow_reset_24_regular),
-            tooltip: 'אפס הגדרות ספר זה',
-            onPressed: () => _resetPerBookSettings(),
-          ),
+        ActionButtonData.simple(
           icon: FluentIcons.arrow_reset_24_regular,
           tooltip: 'אפס הגדרות ספר זה',
-          onPressed: () => _resetPerBookSettings(),
+          onPressed: _resetPerBookSettings,
+          compact: false,
+          visual: ActionButtonVisual.iconButton,
         ),
       if (!widget.isInCombinedView)
-        ActionButtonData(
-          widget: IconButton(
-            key: widget.enableTourTargets ? pdfBookPrintTourTargetKey : null,
-            icon: const Icon(FluentIcons.print_24_regular),
-            tooltip: 'הדפס',
-            onPressed: () => _handlePrintPress(context),
-          ),
+        ActionButtonData.simple(
+          key: widget.enableTourTargets ? pdfBookPrintTourTargetKey : null,
           icon: FluentIcons.print_24_regular,
           tooltip: 'הדפס',
           onPressed: () => _handlePrintPress(context),
+          compact: false,
+          visual: ActionButtonVisual.iconButton,
         ),
       // העתק קישור ישיר
       ActionButtonData(
@@ -3522,6 +3415,55 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           ],
         ),
     ];
+  }
+
+  List<ActionButtonData> _buildNavigationActions() {
+    return buildBookViewNavigationActions(
+      firstAction: buildBookViewFirstNavigationAction(
+        widget: IconButton(
+          icon: const Icon(FluentIcons.arrow_previous_24_filled),
+          tooltip: 'תחילת הספר (CTRL + HOME)',
+          onPressed: () => _goToPageWithSpreadLock(1),
+        ),
+        tooltip: 'תחילת הספר (CTRL + HOME)',
+        onPressed: () => _goToPageWithSpreadLock(1),
+      ),
+      previousAction: buildBookViewPreviousNavigationAction(
+        widget: IconButton(
+          icon: const Icon(FluentIcons.chevron_left_24_regular),
+          tooltip: 'הקודם',
+          onPressed: _goPreviousPage,
+        ),
+        tooltip: 'הקודם',
+        onPressed: _goPreviousPage,
+      ),
+      middleAction: ActionButtonData(
+        widget: PageNumberDisplay(controller: widget.tab.pdfViewerController),
+        icon: FluentIcons.text_font_24_regular,
+        tooltip: 'מספר עמוד',
+        onPressed: null,
+      ),
+      nextAction: buildBookViewNextNavigationAction(
+        widget: IconButton(
+          icon: const Icon(FluentIcons.chevron_right_24_regular),
+          tooltip: 'הבא',
+          onPressed: _goNextPage,
+        ),
+        tooltip: 'הבא',
+        onPressed: _goNextPage,
+      ),
+      lastAction: buildBookViewLastNavigationAction(
+        widget: IconButton(
+          icon: const Icon(FluentIcons.arrow_next_24_filled),
+          tooltip: 'סוף הספר (CTRL + END)',
+          onPressed: () =>
+              _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
+        ),
+        tooltip: 'סוף הספר (CTRL + END)',
+        onPressed: () =>
+            _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
+      ),
+    );
   }
 
   Future<void> _handleTextButtonPress(BuildContext context) async {

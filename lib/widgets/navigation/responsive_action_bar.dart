@@ -240,8 +240,8 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
                           ),
                           menuMetrics,
                           null,
-                          key: widget.menuItemKeysByTooltip?[
-                              subAction.tooltip ?? ''],
+                          key: widget
+                              .menuItemKeysByTooltip?[subAction.tooltip ?? ''],
                         ))
                     .toList();
                 return buildAppSubmenuPopupMenuItem<ActionButtonData>(
@@ -315,6 +315,9 @@ class ActionButtonData {
     this.submenuItems,
   });
 
+  /// אופן הבנייה של כפתור פשוט.
+  static const ActionButtonVisual defaultVisual = ActionButtonVisual.toolbar;
+
   /// Factory constructor לכפתור פשוט — מונע כפילות של icon/tooltip/onPressed
   /// בין הכפתור עצמו לנתוני התפריט.
   factory ActionButtonData.simple({
@@ -323,15 +326,26 @@ class ActionButtonData {
     required VoidCallback onPressed,
     required bool compact,
     bool selected = false,
+    Key? key,
+    ActionButtonVisual visual = defaultVisual,
   }) {
     return ActionButtonData(
-      widget: ToolbarActionButton(
-        compact: compact,
-        tooltip: tooltip,
-        icon: icon,
-        selected: selected,
-        onPressed: onPressed,
-      ),
+      widget: switch (visual) {
+        ActionButtonVisual.toolbar => ToolbarActionButton(
+            key: key,
+            compact: compact,
+            tooltip: tooltip,
+            icon: icon,
+            selected: selected,
+            onPressed: onPressed,
+          ),
+        ActionButtonVisual.iconButton => IconButton(
+            key: key,
+            onPressed: onPressed,
+            icon: Icon(icon),
+            tooltip: tooltip,
+          ),
+      },
       icon: icon,
       tooltip: tooltip,
       onPressed: onPressed,
@@ -347,4 +361,9 @@ class ActionButtonData {
 
   @override
   int get hashCode => tooltip.hashCode;
+}
+
+enum ActionButtonVisual {
+  toolbar,
+  iconButton,
 }
