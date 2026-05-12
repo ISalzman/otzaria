@@ -40,6 +40,20 @@ class HistoryView extends StatefulWidget {
 
 class _HistoryViewState extends State<HistoryView> {
   String? _selectedWorkspace;
+  List<dynamic> _lastHistory = [];
+  List<String> _cachedWorkspaceNames = [];
+
+  List<String> _workspaceNames(List<dynamic> history) {
+    if (identical(history, _lastHistory)) return _cachedWorkspaceNames;
+    _lastHistory = history;
+    _cachedWorkspaceNames = history
+        .map((item) => item.workspaceName)
+        .whereType<String>()
+        .toSet()
+        .toList()
+      ..sort();
+    return _cachedWorkspaceNames;
+  }
 
   void _openBook(
     BuildContext context,
@@ -93,12 +107,7 @@ class _HistoryViewState extends State<HistoryView> {
           return Center(child: Text('Error: ${state.message}'));
         }
 
-        final workspaceNames = state.history
-            .map((item) => item.workspaceName)
-            .whereType<String>()
-            .toSet()
-            .toList()
-          ..sort();
+        final workspaceNames = _workspaceNames(state.history);
 
         return Column(
           children: [
