@@ -432,10 +432,16 @@ class PluginBridgeAdapter {
           };
         });
         if (currentTab == null) {
-          return {'currentBook': null, 'currentIndex': 0, 'currentRef': null, 'openTabs': openTabs};
+          return {
+            'currentBook': null,
+            'currentIndex': 0,
+            'currentRef': null,
+            'openTabs': openTabs
+          };
         }
         final currentTabIndex = tabs.indexOf(currentTab);
-        final currentSnapshot = currentTabIndex >= 0 ? snapshots[currentTabIndex] : null;
+        final currentSnapshot =
+            currentTabIndex >= 0 ? snapshots[currentTabIndex] : null;
         return {
           'currentBook': currentTab.title,
           'currentBookId': currentTab.title,
@@ -469,7 +475,8 @@ class PluginBridgeAdapter {
         }
         ContextMenuRegistry.instance.register(
           plugin.pluginId,
-          PluginContextMenuItem(id: id, label: label, icon: args['icon'] as String?),
+          PluginContextMenuItem(
+              id: id, label: label, icon: args['icon'] as String?),
         );
         return true;
       case 'removeContextMenuItem':
@@ -1392,8 +1399,8 @@ class PluginBridgeAdapter {
       String action, Map<String, dynamic> args) async {
     switch (action) {
       case 'fetch':
-        final granted = await _pluginRepo.getPermission(
-            plugin.pluginId, 'network.access');
+        final granted =
+            await _pluginRepo.getPermission(plugin.pluginId, 'network.access');
         if (granted != true) {
           throw Exception('error.permission_denied: network.access required');
         }
@@ -1405,10 +1412,12 @@ class PluginBridgeAdapter {
         if (uri == null) throw Exception('error.invalid_params: invalid URL');
 
         if (!isUriAllowedForPluginNetwork(uri)) {
-          throw Exception('error.forbidden: URL not in plugin network allowlist');
+          throw Exception(
+              'error.forbidden: URL not in plugin network allowlist');
         }
 
         final request = await _httpClient.getUrl(uri);
+        request.followRedirects = false;
         request.headers.set(HttpHeaders.acceptHeader, 'application/json');
         final response = await request.close();
         final body = await response.transform(utf8.decoder).join();
