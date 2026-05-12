@@ -789,6 +789,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               link.index2 - 1,
               '',
               ignoreHistory: false,
+              insertAdjacent: true,
             ),
           )),
     ];
@@ -2980,7 +2981,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       linksLoading: _linksLoading,
       openBookCallback: (tab) {
         if (tab is TextBookTab) {
-          openBook(context, tab.book, tab.index, '', ignoreHistory: false);
+          openBook(context, tab.book, tab.index, '',
+              ignoreHistory: false, insertAdjacent: true);
         }
       },
       fontSize: 16.0,
@@ -3484,7 +3486,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     if (!context.mounted) return;
 
-    openBook(context, textBook, index ?? 0, '', ignoreHistory: true);
+    openBook(context, textBook, index ?? 0, '',
+        ignoreHistory: true, insertAdjacent: true);
   }
 
   void _handleBookmarkPress(BuildContext context) {
@@ -3651,7 +3654,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 if (!context.mounted) return;
 
                 openBook(context, snapshot.data!, index ?? 0, '',
-                    ignoreHistory: true);
+                    ignoreHistory: true, insertAdjacent: true);
               })
           : const SizedBox.shrink(),
     );

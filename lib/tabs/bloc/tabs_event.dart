@@ -10,21 +10,29 @@ abstract class TabsEvent extends Equatable {
 
 class AddTab extends TabsEvent {
   final OpenedTab tab;
+  // אם true – הטאב נכנס סמוך לטאב הנוכחי (cross-reference מתוך ספר פתוח).
+  // אחרת – נוסף בסוף רשימת הטאבים, כברירת מחדל לפתיחת ספר חדש.
+  final bool insertAdjacent;
 
-  const AddTab(this.tab);
+  const AddTab(this.tab, {this.insertAdjacent = false});
 
   @override
-  List<Object?> get props => [tab];
+  List<Object?> get props => [tab, insertAdjacent];
 }
 
 class OpenOrFocusTab extends TabsEvent {
   final OpenedTab tab;
   final String? targetTitle;
+  final bool insertAdjacent;
 
-  const OpenOrFocusTab(this.tab, {this.targetTitle});
+  const OpenOrFocusTab(
+    this.tab, {
+    this.targetTitle,
+    this.insertAdjacent = false,
+  });
 
   @override
-  List<Object?> get props => [tab, targetTitle];
+  List<Object?> get props => [tab, targetTitle, insertAdjacent];
 }
 
 class ReplaceAllTabs extends TabsEvent {

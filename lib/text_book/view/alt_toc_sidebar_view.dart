@@ -119,6 +119,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
         visit(child);
       }
     }
+
     for (final root in _structureRoots[structureId] ?? []) {
       visit(root);
     }
@@ -366,6 +367,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
                 ),
                 index: link.index2,
               ),
+              insertAdjacent: true,
             ),
           );
       context

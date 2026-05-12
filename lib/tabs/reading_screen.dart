@@ -214,7 +214,9 @@ class _ReadingScreenState extends State<ReadingScreen>
           value: tab.bloc,
           child: TextBookViewerBloc(
             openBookCallback: (tab, {int index = 1}) {
-              context.read<TabsBloc>().add(OpenOrFocusTab(tab));
+              context
+                  .read<TabsBloc>()
+                  .add(OpenOrFocusTab(tab, insertAdjacent: true));
             },
             tab: tab,
             enableTourTargets: enableTourTargets,
@@ -254,7 +256,9 @@ class _ReadingScreenState extends State<ReadingScreen>
           value: tab.bloc,
           child: TextBookViewerBloc(
             openBookCallback: (tab, {int index = 1}) {
-              context.read<TabsBloc>().add(OpenOrFocusTab(tab));
+              context
+                  .read<TabsBloc>()
+                  .add(OpenOrFocusTab(tab, insertAdjacent: true));
             },
             tab: tab,
             isInCombinedView: isInCombinedView,

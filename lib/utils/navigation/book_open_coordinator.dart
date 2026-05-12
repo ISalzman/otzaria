@@ -29,6 +29,7 @@ class BookOpenCoordinator {
     bool ignoreHistory = false,
     bool requiresStableLayout = false,
     String? pinpointHighlight,
+    bool insertAdjacent = false,
   }) {
     final tabsState = tabsBloc.state;
     if (tabsState.hasOpenTabs) {
@@ -71,7 +72,7 @@ class BookOpenCoordinator {
       // אחר.
       pinpointHighlightSectionIndex: hasPinpoint ? initialIndex : null,
     );
-    tabsBloc.add(OpenOrFocusTab(tab));
+    tabsBloc.add(OpenOrFocusTab(tab, insertAdjacent: insertAdjacent));
 
     navigationBloc.add(const NavigateToScreen(Screen.reading));
   }

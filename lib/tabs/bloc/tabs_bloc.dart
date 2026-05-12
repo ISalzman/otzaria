@@ -106,7 +106,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   Future<void> _onAddTab(AddTab event, Emitter<TabsState> emit) async {
     debugPrint('DEBUG: הוספת טאב חדש - ${event.tab.title}');
     final newTabs = List<OpenedTab>.from(state.tabs);
-    final newIndex = min(state.currentTabIndex + 1, newTabs.length);
+    final newIndex = event.insertAdjacent
+        ? min(state.currentTabIndex + 1, newTabs.length)
+        : newTabs.length;
     newTabs.insert(newIndex, event.tab);
 
     // עדכון אינדקסים במצב side-by-side אם קיים
@@ -160,7 +162,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       return;
     }
 
-    await _onAddTab(AddTab(event.tab), emit);
+    await _onAddTab(
+      AddTab(event.tab, insertAdjacent: event.insertAdjacent),
+      emit,
+    );
   }
 
   void _propagatePinpointHighlightToExistingTab({
@@ -511,7 +516,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   void _onCloseCurrentTab(CloseCurrentTab event, Emitter<TabsState> emit) {
-    if (state.tabs.isEmpty || state.currentTabIndex >= state.tabs.length) return;
+    if (state.tabs.isEmpty || state.currentTabIndex >= state.tabs.length) {
+      return;
+    }
     add(RemoveTab(state.tabs[state.currentTabIndex]));
   }
 
@@ -558,7 +565,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   void _onCloneTab(CloneTab event, Emitter<TabsState> emit) {
-    add(AddTab(OpenedTab.from(event.tab)));
+    add(AddTab(OpenedTab.from(event.tab), insertAdjacent: true));
   }
 
   Future<void> _onMoveTab(MoveTab event, Emitter<TabsState> emit) async {
