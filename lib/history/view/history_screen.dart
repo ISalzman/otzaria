@@ -31,8 +31,15 @@ class HistoryDialog extends StatelessWidget {
   }
 }
 
-class HistoryView extends StatelessWidget {
+class HistoryView extends StatefulWidget {
   const HistoryView({super.key});
+
+  @override
+  State<HistoryView> createState() => _HistoryViewState();
+}
+
+class _HistoryViewState extends State<HistoryView> {
+  String? _selectedWorkspace;
 
   void _openBook(
     BuildContext context,
@@ -86,9 +93,67 @@ class HistoryView extends StatelessWidget {
           return Center(child: Text('Error: ${state.message}'));
         }
 
-        return ItemsListView(
-          items: state.history,
-          onItemTap: (ctx, item, originalIndex) {
+        final workspaceNames = state.history
+            .map((item) => item.workspaceName)
+            .whereType<String>()
+            .toSet()
+            .toList()
+          ..sort();
+
+        return Column(
+          children: [
+            if (workspaceNames.length > 1)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                child: Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: Wrap(
+                    spacing: 6,
+                    children: workspaceNames.map((name) {
+                      final selected = _selectedWorkspace == name;
+                      final cs = Theme.of(context).colorScheme;
+                      return FilterChip(
+                        label: Text(
+                          name,
+                          textDirection: TextDirection.rtl,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: selected
+                                ? cs.onPrimary
+                                : cs.onSurfaceVariant,
+                          ),
+                        ),
+                        selected: selected,
+                        onSelected: (_) => setState(() {
+                          _selectedWorkspace =
+                              selected ? null : name;
+                        }),
+                        selectedColor: cs.primary,
+                        backgroundColor: cs.surfaceContainerHighest,
+                        checkmarkColor: cs.onPrimary,
+                        side: BorderSide.none,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 0),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: ItemsListView(
+                items: state.history,
+                additionalFilter: (_selectedWorkspace == null ||
+                        !workspaceNames.contains(_selectedWorkspace))
+                    ? null
+                    : (item) => item.workspaceName == _selectedWorkspace,
+                searchKeyBuilder: (item) {
+                  final parts = [item.ref as String];
+                  final ws = item.workspaceName as String?;
+                  if (ws != null) parts.add(ws);
+                  return parts.join(' ');
+                },
+                onItemTap: (ctx, item, originalIndex) {
             if (item.isSearch) {
               final tabsBloc = ctx.read<TabsBloc>();
               // Always create a new search tab instead of reusing existing one
@@ -176,6 +241,9 @@ class HistoryView extends StatelessWidget {
             if (facets == null || facets.length <= 2) return null;
             return 'חיפוש בקטגוריות: ${_facetDisplayNames(facets).join(', ')}';
           },
+        ),
+            ),
+          ],
         );
       },
     );
