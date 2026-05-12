@@ -17,6 +17,11 @@ import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/history/bloc/history_bloc.dart';
+import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/links.dart';
@@ -535,11 +540,36 @@ class _CombinedViewState extends State<CombinedView> {
         ];
 
     return [
-      AppContextMenuEntry(
-        label: 'חיפוש',
-        icon: FluentIcons.search_24_regular,
-        onTap: () => widget.openLeftPaneTab(1, searchText: selectedText),
-      ),
+      () {
+        // החיפוש עובד תמיד על טקסט ללא ניקוד וטעמים — מנקים פעם אחת
+        // לשימוש גם בתווית התפריט וגם בשאילתת החיפוש בפועל.
+        final rawText = selectedText?.trim() ?? '';
+        final cleanedText = utils.hasNikud(rawText)
+            ? utils.removeVolwels(rawText).trim()
+            : rawText;
+        final hasSelectedText = cleanedText.isNotEmpty;
+        final preview = hasSelectedText ? _previewForLabel(cleanedText) : '';
+        return AppContextMenuEntry(
+          label: 'חיפוש',
+          icon: FluentIcons.search_24_regular,
+          enabled: hasSelectedText,
+          children: hasSelectedText
+              ? [
+                  AppContextMenuEntry(
+                    label: "חפש '$preview' בספר זה",
+                    icon: FluentIcons.book_search_24_regular,
+                    onTap: () =>
+                        widget.openLeftPaneTab(1, searchText: cleanedText),
+                  ),
+                  AppContextMenuEntry(
+                    label: "חפש '$preview' בכל הספרים",
+                    icon: FluentIcons.library_24_regular,
+                    onTap: () => _openGlobalSearch(cleanedText),
+                  ),
+                ]
+              : null,
+        );
+      }(),
       AppContextMenuEntry(
         label: 'מפרשים',
         icon: FluentIcons.book_24_regular,
@@ -642,6 +672,25 @@ class _CombinedViewState extends State<CombinedView> {
     if (state is TextBookLoaded && state.selectedIndex != paragraphIndex) {
       _addTextBookEventIfOpen(UpdateSelectedIndex(paragraphIndex));
     }
+  }
+
+  /// קיצור הטקסט הנבחר להצגה בתווית תפריט (מנרמל רווחים וקוטם לאורך סביר)
+  String _previewForLabel(String text, {int maxLen = 25}) {
+    final cleaned = text.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (cleaned.length <= maxLen) return cleaned;
+    return '${cleaned.substring(0, maxLen)}…';
+  }
+
+  /// פתיחת חיפוש בכל הספרים בכרטיסייה חדשה
+  void _openGlobalSearch(String? selectedText) {
+    final query = selectedText?.trim() ?? '';
+    if (query.isEmpty) {
+      UiSnack.show('לא נבחר טקסט לחיפוש');
+      return;
+    }
+    final tab = SearchingTab(SearchingTab.titleForQuery(query), query);
+    context.read<HistoryBloc>().add(AddHistory(tab));
+    context.read<TabsBloc>().add(AddTab(tab));
   }
 
   /// פתיחת דיאלוג דיווח על טעות בספר
