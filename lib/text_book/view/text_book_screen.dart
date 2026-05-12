@@ -2174,6 +2174,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       '',
       ignoreHistory: true,
       requiresStableLayout: true,
+      insertAdjacent: true,
     );
   }
 
@@ -2870,5 +2871,6 @@ void _togglePdfView(
     '',
     ignoreHistory: true,
     requiresStableLayout: true,
+    insertAdjacent: true,
   );
 }

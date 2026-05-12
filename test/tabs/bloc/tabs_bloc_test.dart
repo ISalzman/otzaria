@@ -310,6 +310,101 @@ void main() {
     });
   });
 
+  group('TabsBloc insert position', () {
+    setUp(() async {
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+    });
+
+    test('AddTab בברירת מחדל מוסיף לסוף הרשימה גם כשהטאב הנוכחי באמצע',
+        () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final first = _createTextTab('ספר א', categoryId: 1);
+      final second = _createTextTab('ספר ב', categoryId: 2);
+      final third = _createTextTab('ספר ג', categoryId: 3);
+
+      bloc.add(AddTab(first));
+      bloc.add(AddTab(second));
+      bloc.add(AddTab(third));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 3);
+
+      // ממקדים את הטאב באמצע (ספר ב) כדי לדמות "פתיחה מהאמצע"
+      bloc.add(const SetCurrentTab(1));
+      await bloc.stream.firstWhere((s) => s.currentTabIndex == 1);
+
+      final libraryTab = _createTextTab('ספר ספרייה', categoryId: 4);
+      bloc.add(AddTab(libraryTab));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 4);
+
+      // ברירת המחדל היא הוספה לסוף הרשימה, לא סמוך לטאב הנוכחי.
+      // זה מונע את הבאג שבו פתיחה מהספרייה אחרי פתיחה מהאמצע נדחפת לאמצע.
+      expect(bloc.state.tabs.last.title, 'ספר ספרייה');
+      expect(bloc.state.currentTabIndex, 3);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('AddTab עם insertAdjacent: true מכניס סמוך לטאב הנוכחי', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final first = _createTextTab('ספר א', categoryId: 1);
+      final second = _createTextTab('ספר ב', categoryId: 2);
+      final third = _createTextTab('ספר ג', categoryId: 3);
+
+      bloc.add(AddTab(first));
+      bloc.add(AddTab(second));
+      bloc.add(AddTab(third));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 3);
+
+      bloc.add(const SetCurrentTab(1));
+      await bloc.stream.firstWhere((s) => s.currentTabIndex == 1);
+
+      final commentator = _createTextTab('מפרש', categoryId: 5);
+      bloc.add(AddTab(commentator, insertAdjacent: true));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 4);
+
+      // cross-reference מתוך ספר פתוח נכנס סמוך לטאב הנוכחי (אינדקס 2)
+      // ולא לסוף הרשימה.
+      expect(bloc.state.tabs[2].title, 'מפרש');
+      expect(bloc.state.currentTabIndex, 2);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('OpenOrFocusTab מעביר את insertAdjacent ל-AddTab כשהטאב חדש',
+        () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final first = _createTextTab('ספר א', categoryId: 1);
+      final second = _createTextTab('ספר ב', categoryId: 2);
+      final third = _createTextTab('ספר ג', categoryId: 3);
+
+      bloc.add(AddTab(first));
+      bloc.add(AddTab(second));
+      bloc.add(AddTab(third));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 3);
+
+      bloc.add(const SetCurrentTab(1));
+      await bloc.stream.firstWhere((s) => s.currentTabIndex == 1);
+
+      // בלי insertAdjacent — ברירת מחדל = הוספה בסוף
+      final fromLibrary = _createTextTab('ספר ד', categoryId: 4);
+      bloc.add(OpenOrFocusTab(fromLibrary));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 4);
+      expect(bloc.state.tabs.last.title, 'ספר ד');
+      expect(bloc.state.currentTabIndex, 3);
+
+      // עם insertAdjacent: true — סמוך לטאב הנוכחי
+      bloc.add(const SetCurrentTab(1));
+      await bloc.stream.firstWhere((s) => s.currentTabIndex == 1);
+
+      final crossRef = _createTextTab('מפרש ה', categoryId: 5);
+      bloc.add(OpenOrFocusTab(crossRef, insertAdjacent: true));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 5);
+      expect(bloc.state.tabs[2].title, 'מפרש ה');
+      expect(bloc.state.currentTabIndex, 2);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+  });
+
   group('TabsBloc deferred dispose', () {
     setUp(() async {
       await Settings.init(cacheProvider: _MemoryCacheProvider());
