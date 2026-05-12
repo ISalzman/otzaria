@@ -47,6 +47,7 @@ import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
+import 'package:otzaria/widgets/navigation/book_view_actions.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/models/book_model.dart';
@@ -1358,6 +1359,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     BuildContext context,
     TextBookLoaded state,
   ) {
+    final navigationActions = _buildNavigationActions(state);
     return [
       // 1) PDF Button (ראשון מימין - יעלם אחרון!)
       if (_hasPdfBook)
@@ -1452,32 +1454,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       ),
 
       // 7) Navigation Buttons - רק אם לא בתצוגה משולבת
-      if (!widget.isInCombinedView) ...[
-        ActionButtonData(
-          widget: _buildPreviousTocButton(state),
-          icon: FluentIcons.arrow_previous_24_filled,
-          tooltip: 'הדף/פרק הקודם',
-          onPressed: () => _navigateToPreviousToc(state),
-        ),
-        ActionButtonData(
-          widget: _buildPreviousPageButton(state),
-          icon: FluentIcons.chevron_left_24_regular,
-          tooltip: 'הקטע הקודם',
-          onPressed: () => _scrollToPreviousSegment(state),
-        ),
-        ActionButtonData(
-          widget: _buildNextPageButton(state),
-          icon: FluentIcons.chevron_right_24_regular,
-          tooltip: 'הקטע הבא',
-          onPressed: () => _scrollToNextSegment(state),
-        ),
-        ActionButtonData(
-          widget: _buildNextTocButton(state),
-          icon: FluentIcons.arrow_next_24_filled,
-          tooltip: 'הדף/פרק הבא',
-          onPressed: () => _navigateToNextToc(state),
-        ),
-      ],
+      if (!widget.isInCombinedView) ...navigationActions,
     ];
   }
 
@@ -1486,34 +1463,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     BuildContext context,
     TextBookLoaded state,
   ) {
+    final navigationActions = _buildNavigationActions(state);
     return [
       // כפתורי ניווט - רק בתצוגה משולבת
-      if (widget.isInCombinedView) ...[
-        ActionButtonData(
-          widget: _buildPreviousTocButton(state),
-          icon: FluentIcons.arrow_previous_24_filled,
-          tooltip: 'הדף/פרק הקודם',
-          onPressed: () => _navigateToPreviousToc(state),
-        ),
-        ActionButtonData(
-          widget: _buildPreviousPageButton(state),
-          icon: FluentIcons.chevron_left_24_regular,
-          tooltip: 'הקטע הקודם',
-          onPressed: () => _scrollToPreviousSegment(state),
-        ),
-        ActionButtonData(
-          widget: _buildNextPageButton(state),
-          icon: FluentIcons.chevron_right_24_regular,
-          tooltip: 'הקטע הבא',
-          onPressed: () => _scrollToNextSegment(state),
-        ),
-        ActionButtonData(
-          widget: _buildNextTocButton(state),
-          icon: FluentIcons.arrow_next_24_filled,
-          tooltip: 'הדף/פרק הבא',
-          onPressed: () => _navigateToNextToc(state),
-        ),
-      ],
+      if (widget.isInCombinedView) ...navigationActions,
 
       // 1) הוספת סימניה
       ActionButtonData(
@@ -1559,15 +1512,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // 4) איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת) - לא בתצוגה משולבת
       if (!widget.isInCombinedView &&
           context.read<SettingsBloc>().state.enablePerBookSettings)
-        ActionButtonData(
-          widget: IconButton(
-            icon: const Icon(FluentIcons.arrow_reset_24_regular),
-            tooltip: 'אפס הגדרות ספר זה',
-            onPressed: () => _resetPerBookSettings(),
-          ),
+        ActionButtonData.simple(
           icon: FluentIcons.arrow_reset_24_regular,
           tooltip: 'אפס הגדרות ספר זה',
-          onPressed: () => _resetPerBookSettings(),
+          onPressed: _resetPerBookSettings,
+          compact: false,
+          visual: ActionButtonVisual.iconButton,
         ),
 
       // [EDITING DISABLED]
@@ -1680,6 +1630,31 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ],
         ),
     ];
+  }
+
+  List<ActionButtonData> _buildNavigationActions(TextBookLoaded state) {
+    return buildBookViewNavigationActions(
+      firstAction: buildBookViewFirstNavigationAction(
+        widget: _buildPreviousTocButton(state),
+        tooltip: 'הדף/פרק הקודם',
+        onPressed: () => _navigateToPreviousToc(state),
+      ),
+      previousAction: buildBookViewPreviousNavigationAction(
+        widget: _buildPreviousPageButton(state),
+        tooltip: 'הקטע הקודם',
+        onPressed: () => _scrollToPreviousSegment(state),
+      ),
+      nextAction: buildBookViewNextNavigationAction(
+        widget: _buildNextPageButton(state),
+        tooltip: 'הקטע הבא',
+        onPressed: () => _scrollToNextSegment(state),
+      ),
+      lastAction: buildBookViewLastNavigationAction(
+        widget: _buildNextTocButton(state),
+        tooltip: 'הדף/פרק הבא',
+        onPressed: () => _navigateToNextToc(state),
+      ),
+    );
   }
 
   /// קבלת האייקון המתאים למצב התצוגה הנוכחי
