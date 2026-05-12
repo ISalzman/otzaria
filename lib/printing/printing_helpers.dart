@@ -1,3 +1,4 @@
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -61,4 +62,18 @@ int resolveInitialPdfPrintPage({
     return currentPage;
   }
   return currentPage.isEven ? currentPage : currentPage - 1;
+}
+
+/// מחזיר את האינדקס של הכותרת האחרונה ברשימה ששורת ההתחלה שלה <= [lineIndex].
+///
+/// משמש לחישוב ברירת מחדל לטווח הדפסה: "מהכותרת האחרונה המוצגת עד הכותרת הבאה".
+/// אם כל הכותרות מתחילות אחרי [lineIndex], או שהרשימה ריקה, מחזיר 0.
+int findLastHeaderIndexAtOrBefore(List<TocEntry> headers, int lineIndex) {
+  int result = 0;
+  for (int i = 0; i < headers.length; i++) {
+    if (headers[i].index <= lineIndex) {
+      result = i;
+    }
+  }
+  return result;
 }
