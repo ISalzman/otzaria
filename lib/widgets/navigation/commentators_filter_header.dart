@@ -15,20 +15,23 @@ class CommentatorsFilterHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: Row(
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          IconButton(
-            icon: const Icon(FluentIcons.arrow_right_24_regular),
-            tooltip: 'חזרה למפרשים',
-            onPressed: onBack,
-          ),
-          const SizedBox(width: 8),
           Text(
             title,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              icon: const Icon(FluentIcons.arrow_left_24_regular),
+              tooltip: 'חזרה למפרשים',
+              onPressed: onBack,
+            ),
           ),
         ],
       ),
