@@ -120,6 +120,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   static const double _scrollbarGutterGap = 4.0;
   static const String _connectionTypeCommentary = 'COMMENTARY';
   static const String _connectionTypeTargum = 'TARGUM';
+  static const int _kCommentaryTabIndex = 0;
+  static const int _kLinksTabIndex = 1;
+  static const int _kPersonalNotesTabIndex = 2;
+  static const double _kRightPaneNarrowWidth = 250;
 
   @override
   bool get wantKeepAlive => true;
@@ -495,8 +499,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final outline = widget.tab.outline.value ?? const <PdfOutlineNode>[];
     final range = _spreadPageRangeFor(pageNumber);
     if (outline.isNotEmpty) {
-      final textIndex =
-          await pdfToTextPage(widget.tab.book, outline, range.startPage, context);
+      final textIndex = await pdfToTextPage(
+          widget.tab.book, outline, range.startPage, context);
       if (textIndex != null) {
         if (!mounted) return (start: textIndex + 1, end: null);
         final nextIndex = await pdfToTextPage(
@@ -511,7 +515,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
 
     final title = resolvedTitle ??
-        await refFromPageNumber(range.startPage, outline, widget.tab.book.title);
+        await refFromPageNumber(
+            range.startPage, outline, widget.tab.book.title);
     debugPrint('📖 [PDF-DEBUG] title for page ${range.startPage} = "$title"');
     if (widget.tab.pdfHeadings != null && title.isNotEmpty) {
       final lineNumber = widget.tab.pdfHeadings!.getLineNumberForHeading(title);
@@ -594,14 +599,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   void _openCommentaryPane() {
     _recordCommentaryOpenedIfNeeded();
     setState(() {
-      _rightPaneInitialTabIndex = 0;
+      _rightPaneInitialTabIndex = _kCommentaryTabIndex;
     });
     _bloc.add(const pdf_events.ToggleRightPane(show: true));
   }
 
   void _openLinksPane() {
     setState(() {
-      _rightPaneInitialTabIndex = 1;
+      _rightPaneInitialTabIndex = _kLinksTabIndex;
     });
     _bloc.add(const pdf_events.ToggleRightPane(show: true));
   }
@@ -613,10 +618,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final current = _bloc.state;
     final isOpen = current is PdfBookLoaded && current.showRightPane;
     setState(() {
-      _rightPaneInitialTabIndex = 2;
+      _rightPaneInitialTabIndex = _kPersonalNotesTabIndex;
     });
     if (!isOpen) {
-      _bloc.add(const pdf_events.UpdateRightPaneWidth(250));
+      _bloc.add(const pdf_events.UpdateRightPaneWidth(_kRightPaneNarrowWidth));
     }
     _bloc.add(const pdf_events.ToggleRightPane(show: true));
   }
@@ -2441,10 +2446,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final token = _lastComputedForPage = newPage;
 
     final immediateRange = _spreadPageRangeFor(newPage);
-    widget.tab.currentTitle.value =
-        immediateRange.endPageExclusive - immediateRange.startPage > 1
-            ? 'עמודים ${immediateRange.startPage}-${immediateRange.endPageExclusive - 1}'
-            : 'עמוד $newPage';
+    widget.tab.currentTitle.value = immediateRange.endPageExclusive -
+                immediateRange.startPage >
+            1
+        ? 'עמודים ${immediateRange.startPage}-${immediateRange.endPageExclusive - 1}'
+        : 'עמוד $newPage';
 
     final titles = await _resolveTitlesForPage(newPage);
     if (!mounted) return;
@@ -3408,21 +3414,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         widget: IconButton(
           icon: const Icon(FluentIcons.note_24_regular),
           tooltip: 'הצג הערות אישיות',
-          onPressed: () {
-            setState(() {
-              _rightPaneInitialTabIndex = 2;
-            });
-            _bloc.add(const pdf_events.ToggleRightPane(show: true));
-          },
+          onPressed: _openPersonalNotesPane,
         ),
         icon: FluentIcons.note_24_regular,
         tooltip: 'הצג הערות אישיות',
-        onPressed: () {
-          setState(() {
-            _rightPaneInitialTabIndex = 2;
-          });
-          _bloc.add(const pdf_events.ToggleRightPane(show: true));
-        },
+        onPressed: _openPersonalNotesPane,
       ),
       ActionButtonData(
         widget: IconButton(
