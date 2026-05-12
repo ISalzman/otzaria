@@ -186,6 +186,129 @@ void main() {
     });
   });
 
+  // קבוצה: עמידות לוגיקת flattenVisibleToc למצבים שמשתמש יכול ליצור.
+  // הסיכון: באג בלוגיקה שובר את הצגת הרשימה הוירטואלית בספרים גדולים.
+  group('flattenVisibleToc - עקביות ויציבות', () {
+    test('כל ערך ייחודי - אין כפילויות גם בעץ עמוק', () {
+      final entries = [
+        _e('A', 0, 1, children: [
+          _e('A1', 1, 2, children: [
+            _e('A1a', 2, 3),
+            _e('A1b', 3, 3),
+          ]),
+          _e('A2', 4, 2, children: [_e('A2a', 5, 3)]),
+        ]),
+        _e('B', 6, 1, children: [_e('B1', 7, 2)]),
+      ];
+      final flat = flattenVisibleToc(entries, const {});
+      final indices = flat.map((f) => f.entry.index).toList();
+      expect(indices.toSet().length, indices.length,
+          reason: 'כל פריט ברשימה השטוחה חייב להופיע פעם אחת בדיוק');
+    });
+
+    test('isExpanded=true → הילדים מופיעים מיד אחרי האב ברשימה', () {
+      // קונטרקט עבור ScrollablePositionedList: הילדים תמיד צמודים להוריהם.
+      final entries = [
+        _e('root', 0, 1, children: [
+          _e('child', 1, 2, children: [_e('grand', 2, 3)]),
+        ]),
+      ];
+      final flat = flattenVisibleToc(entries, const {});
+      // root.expanded → child בא מיד אחריו
+      expect(flat[0].entry.text, 'root');
+      expect(flat[0].isExpanded, isTrue);
+      expect(flat[1].entry.text, 'child');
+      expect(flat[1].isExpanded, isTrue);
+      expect(flat[2].entry.text, 'grand');
+    });
+
+    test('toggle משנה את הפלט בלי קוד צד אחר', () {
+      // הגנה: ה-Map _expanded הוא ה-source-of-truth היחיד.
+      final entries = [
+        _e('a', 0, 1, children: [_e('a1', 1, 2)]),
+        _e('b', 2, 1, children: [_e('b1', 3, 2)]),
+      ];
+      // ברירת מחדל: שניהם מורחבים (רמה 1)
+      final flatOpen = flattenVisibleToc(entries, const {});
+      expect(flatOpen.length, 4);
+
+      // כווץ את a
+      final flatACollapsed = flattenVisibleToc(entries, const {0: false});
+      expect(flatACollapsed.map((f) => f.entry.text).toList(),
+          ['a', 'b', 'b1']);
+
+      // כווץ את שניהם
+      final flatBothCollapsed =
+          flattenVisibleToc(entries, const {0: false, 2: false});
+      expect(flatBothCollapsed.map((f) => f.entry.text).toList(), ['a', 'b']);
+    });
+
+    test('כשכל הערכים מורחבים, אורך הפלט שווה ל-countAllTocEntries', () {
+      // אינווריאנט: ה"כל מורחב" צריך להיות שווה לסך כל הערכים בעץ.
+      final entries = [
+        _e('A', 0, 1, children: [
+          _e('A1', 1, 2, children: [
+            _e('A1a', 2, 3),
+            _e('A1b', 3, 3),
+          ]),
+          _e('A2', 4, 2),
+        ]),
+        _e('B', 5, 1, children: [
+          _e('B1', 6, 2, children: [_e('B1a', 7, 3)]),
+          _e('B2', 8, 2),
+        ]),
+      ];
+      // נכפה הרחבה על כל ערך
+      final allExpanded = <int, bool>{
+        for (final e in [0, 1, 4, 5, 6, 8]) e: true,
+      };
+      final flat = flattenVisibleToc(entries, allExpanded);
+      expect(flat.length, countAllTocEntries(entries));
+    });
+
+    test('הסדר תמיד DFS מקדים, ללא תלות במצב expanded', () {
+      // הגנה: גם אם מישהו ישנה את אופן הירידה לעומק, הסדר חייב להישמר.
+      final entries = [
+        _e('A', 0, 1, children: [
+          _e('A1', 1, 2),
+          _e('A2', 2, 2),
+        ]),
+        _e('B', 3, 1, children: [_e('B1', 4, 2)]),
+      ];
+      // מצב 1: A מורחב, B מכווץ
+      var flat = flattenVisibleToc(entries, const {3: false});
+      expect(flat.map((f) => f.entry.index).toList(), [0, 1, 2, 3]);
+
+      // מצב 2: A מכווץ, B מורחב
+      flat = flattenVisibleToc(entries, const {0: false});
+      expect(flat.map((f) => f.entry.index).toList(), [0, 3, 4]);
+    });
+
+    test('עץ ענק (10000 ערכים, כולם מורחבים) - מסיים ללא overflow', () {
+      // מבטיח שאין רגרסיה לרקורסיה לא-זנבית שתשבור על עצים אמיתיים.
+      final simanim = List.generate(100, (s) {
+        final base = s * 100;
+        return _e('siman$s', base, 1,
+            children: List.generate(
+                99, (i) => _e('seif${s}_$i', base + 1 + i, 2)));
+      });
+      final entries = [_e('book', -1, 0, children: simanim)];
+      // -1 ייחודי כדי לא להתנגש עם ילדים שמתחילים מ-0
+      expect(countAllTocEntries(entries), 1 + 100 + 100 * 99);
+      // כל simanim ברמה 1 מורחבים כברירת מחדל, וגם root ברמה 0
+      // נכריח expanded על root כדי לכלול את הכל
+      final flat = flattenVisibleToc(entries, const {-1: true});
+      // לא נדרשת הוכחה שכל פרי הופיע, רק שהאלגוריתם הסתיים בלי overflow
+      expect(flat.length, greaterThan(0));
+      // וגם: כל ערך מופיע פעם אחת
+      final unique = flat.map((f) => f.entry.index).toSet();
+      expect(unique.length, flat.length, reason: 'אין כפילויות בעץ גדול');
+      // השניות חוסכות tests, אבל החשוב: כל הילדים נמצאים
+      // root + 100 simanim + 100 * 99 seif-im
+      expect(flat.length, 1 + 100 + 100 * 99);
+    });
+  });
+
   // טסטים אינטגרטיביים על השפעת הסף - מוודאים שהלוגיקה הטהורה תומכת
   // בהחלטה "האם להפעיל וירטואליזציה" שבמסך עצמו.
   group('סף וירטואליזציה (countAllTocEntries מול ספרים אמיתיים)', () {
