@@ -15,6 +15,8 @@ class ItemsListView extends StatefulWidget {
   final Widget? Function(dynamic item)? leadingIconBuilder;
   final String? Function(dynamic item)? subtitleBuilder;
   final String? Function(dynamic item)? subtitleTooltipBuilder;
+  final String Function(dynamic item)? searchKeyBuilder;
+  final bool Function(dynamic item)? additionalFilter;
 
   const ItemsListView({
     super.key,
@@ -29,6 +31,8 @@ class ItemsListView extends StatefulWidget {
     this.leadingIconBuilder,
     this.subtitleBuilder,
     this.subtitleTooltipBuilder,
+    this.searchKeyBuilder,
+    this.additionalFilter,
   });
 
   @override
@@ -131,13 +135,16 @@ class _ItemsListViewState extends State<ItemsListView> {
       );
     }
 
-    // Filter items based on search query
-    final filteredItems = _searchQuery.isEmpty
-        ? widget.items
-        : widget.items
-            .where((item) =>
-                item.ref.toLowerCase().contains(_searchQuery.toLowerCase()))
-            .toList();
+    // Filter items based on search query and additionalFilter
+    final filteredItems = widget.items.where((item) {
+      if (widget.additionalFilter != null && !widget.additionalFilter!(item)) {
+        return false;
+      }
+      if (_searchQuery.isEmpty) return true;
+      final searchText =
+          widget.searchKeyBuilder?.call(item) ?? (item.ref as String);
+      return searchText.toLowerCase().contains(_searchQuery.toLowerCase());
+    }).toList();
 
     return Column(
       children: [
