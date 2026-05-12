@@ -69,10 +69,18 @@ int resolveInitialPdfPrintPage({
 /// משמש לחישוב ברירת מחדל לטווח הדפסה: "מהכותרת האחרונה המוצגת עד הכותרת הבאה".
 /// אם כל הכותרות מתחילות אחרי [lineIndex], או שהרשימה ריקה, מחזיר 0.
 int findLastHeaderIndexAtOrBefore(List<TocEntry> headers, int lineIndex) {
+  if (headers.isEmpty) return 0;
+  int low = 0;
+  int high = headers.length - 1;
   int result = 0;
-  for (int i = 0; i < headers.length; i++) {
-    if (headers[i].index <= lineIndex) {
-      result = i;
+
+  while (low <= high) {
+    final mid = low + (high - low) ~/ 2;
+    if (headers[mid].index <= lineIndex) {
+      result = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
     }
   }
   return result;

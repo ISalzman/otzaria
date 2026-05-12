@@ -142,7 +142,7 @@ class _ItemsListViewState extends State<ItemsListView> {
       }
       if (_searchQuery.isEmpty) return true;
       final searchText =
-          widget.searchKeyBuilder?.call(item) ?? (item.ref as String);
+          widget.searchKeyBuilder?.call(item) ?? item.ref?.toString() ?? '';
       return searchText.toLowerCase().contains(_searchQuery.toLowerCase());
     }).toList();
 
