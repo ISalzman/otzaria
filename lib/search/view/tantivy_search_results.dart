@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
@@ -458,6 +460,29 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
+                                ),
+                                IconButton(
+                                  icon: Icon(
+                                    FluentIcons.copy_24_regular,
+                                    size: 16,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                                  tooltip: 'העתק טקסט',
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 28,
+                                    minHeight: 28,
+                                  ),
+                                  onPressed: () {
+                                    final plainText =
+                                        utils.stripHtmlIfNeeded(rawHtml);
+                                    Clipboard.setData(
+                                        ClipboardData(text: plainText));
+                                    UiSnack.show(UiSnack.textCopied);
+                                  },
                                 ),
                               ],
                             ),
