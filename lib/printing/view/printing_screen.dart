@@ -151,10 +151,16 @@ class _PrintingScreenState extends State<PrintingScreen> {
     // יצירת רשימה שטוחה של כל הכותרות
     _flatHeaders = _flattenHeaders(widget.tableOfContents);
 
-    // אם יש כותרות, אתחל את מצב הכותרות
+    // אם יש כותרות, אתחל את מצב הכותרות -
+    // ברירת המחדל היא הכותרת האחרונה שמופיעה לפני השורה הראשונה הנראית
+    // (ועד הכותרת הבאה, באמצעות _applyHeaderRange)
     if (_flatHeaders.isNotEmpty) {
-      _startHeaderIndex = 0;
-      _endHeaderIndex = min(2, _flatHeaders.length - 1);
+      final lastHeader = findLastHeaderIndexAtOrBefore(
+        _flatHeaders,
+        widget.startLine,
+      );
+      _startHeaderIndex = lastHeader;
+      _endHeaderIndex = lastHeader;
     } else {
       // אם אין כותרות, עבור למצב שורות
       _rangeMode = _PrintRangeMode.lines;
@@ -248,10 +254,14 @@ class _PrintingScreenState extends State<PrintingScreen> {
       final altEntries =
           rows.map((r) => TocEntry(text: r.text, index: r.lineIndex)).toList();
 
+      final lastAlt = findLastHeaderIndexAtOrBefore(
+        altEntries,
+        widget.startLine,
+      );
       setState(() {
         _flatAltHeaders = altEntries;
-        _startAltHeaderIndex = 0;
-        _endAltHeaderIndex = min(2, altEntries.length - 1);
+        _startAltHeaderIndex = lastAlt;
+        _endAltHeaderIndex = lastAlt;
         // אם אין ניווט רגיל, עבור אוטומטית למצב כותרות משנה
         if (_flatHeaders.isEmpty) {
           _rangeMode = _PrintRangeMode.altHeaders;

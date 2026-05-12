@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -182,6 +183,43 @@ void main() {
         ),
         36,
       );
+    });
+  });
+
+  group('findLastHeaderIndexAtOrBefore', () {
+    // helper לבניית רשימת כותרות עם שורות בלבד (level/text אינם משנים פה)
+    List<TocEntry> headers(List<int> lineIndices) =>
+        lineIndices.map((i) => TocEntry(text: 'h$i', index: i)).toList();
+
+    test('רשימה ריקה מחזירה 0', () {
+      expect(findLastHeaderIndexAtOrBefore(const [], 50), 0);
+    });
+
+    test('שורה לפני הכותרת הראשונה מחזירה 0', () {
+      // כל הכותרות אחרי השורה - fallback לאינדקס 0
+      final h = headers([10, 20, 30]);
+      expect(findLastHeaderIndexAtOrBefore(h, 5), 0);
+    });
+
+    test('שורה בדיוק על כותרת מחזירה את האינדקס שלה', () {
+      final h = headers([10, 20, 30]);
+      expect(findLastHeaderIndexAtOrBefore(h, 10), 0);
+      expect(findLastHeaderIndexAtOrBefore(h, 20), 1);
+      expect(findLastHeaderIndexAtOrBefore(h, 30), 2);
+    });
+
+    test('שורה באמצע סעיף מחזירה את הכותרת שמעליה', () {
+      final h = headers([10, 20, 30]);
+      expect(findLastHeaderIndexAtOrBefore(h, 15), 0);
+      expect(findLastHeaderIndexAtOrBefore(h, 25), 1);
+      expect(findLastHeaderIndexAtOrBefore(h, 100), 2);
+    });
+
+    test('כותרת יחידה — תמיד מחזירה 0', () {
+      final h = headers([42]);
+      expect(findLastHeaderIndexAtOrBefore(h, 0), 0);
+      expect(findLastHeaderIndexAtOrBefore(h, 42), 0);
+      expect(findLastHeaderIndexAtOrBefore(h, 999), 0);
     });
   });
 
