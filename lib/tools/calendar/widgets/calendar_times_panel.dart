@@ -886,6 +886,7 @@ class _ZmanCard extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               LayoutBuilder(
                 builder: (context, constraints) {
@@ -912,7 +913,6 @@ class _ZmanCard extends StatelessWidget {
                   );
                 },
               ),
-              const Spacer(),
               // כרטיס composite עם 2 אפשרויות התראה — אייקון ליד כל שעה
               if (timeData.isComposite && timeData.alertOptions.length >= 2)
                 Row(
