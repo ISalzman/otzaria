@@ -42,6 +42,39 @@ static std::string JsonEscape(const std::string& s) {
   return out;
 }
 
+// Percent-encodes a UTF-8 string for safe use as a URL query component.
+// Reserves unreserved chars (RFC 3986): A-Z a-z 0-9 - _ . ~
+static std::string UrlEncodeQueryComponent(const std::string& s) {
+  std::string out;
+  out.reserve(s.size() * 3);
+  for (unsigned char c : s) {
+    const bool unreserved =
+        (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+        (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~';
+    if (unreserved) {
+      out += static_cast<char>(c);
+    } else {
+      char buf[4];
+      snprintf(buf, sizeof(buf), "%%%02X", c);
+      out += buf;
+    }
+  }
+  return out;
+}
+
+// Case-insensitive check whether `s` ends with `suffix` (ASCII only).
+static bool EndsWithIgnoreCase(const std::string& s, const std::string& suffix) {
+  if (s.size() < suffix.size()) return false;
+  for (size_t i = 0; i < suffix.size(); ++i) {
+    char a = s[s.size() - suffix.size() + i];
+    char b = suffix[i];
+    if (a >= 'A' && a <= 'Z') a = static_cast<char>(a - 'A' + 'a');
+    if (b >= 'A' && b <= 'Z') b = static_cast<char>(b - 'A' + 'a');
+    if (a != b) return false;
+  }
+  return true;
+}
+
 // Appends a URI string to the external-activation queue file so the already-
 // running instance can pick it up.
 // Path mirrors AppPaths.getDataRootPath() on Windows: %APPDATA%\otzaria
@@ -107,13 +140,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       (mutex != nullptr && GetLastError() == ERROR_ALREADY_EXISTS);
 
   if (is_second_instance) {
-    // Enqueue any otzaria:// URIs passed on the command line so the first
-    // instance can handle them via its file-watcher, then exit immediately.
+    // Enqueue any otzaria:// URIs (and .otzplugin file paths) passed on the
+    // command line so the first instance can handle them via its file-watcher,
+    // then exit immediately.
     std::vector<std::string> args = GetCommandLineArguments();
     for (const auto& arg : args) {
       if (arg.size() >= 8 &&
           _strnicmp(arg.c_str(), "otzaria:", 8) == 0) {
         EnqueueUri(arg);
+      } else if (EndsWithIgnoreCase(arg, ".otzplugin")) {
+        EnqueueUri("otzaria://plugin/install-local?path=" +
+                   UrlEncodeQueryComponent(arg));
       }
     }
     CloseHandle(mutex);

@@ -628,6 +628,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 forceOverwrite: request.forceOverwrite,
               ),
             );
+      case InstallLocalPluginAction(:final archivePath):
+        context
+            .read<PluginSystemBloc>()
+            .add(InstallPluginRequested(archivePath));
       case RunSearchAction(:final query):
         _runExternalSearch(query);
     }
@@ -1945,7 +1949,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
           ),
           BlocListener<PluginSystemBloc, PluginSystemState>(
             listenWhen: (_, current) =>
-                current is PluginSystemInstallRequiresPermissions,
+                current is PluginSystemInstallRequiresPermissions ||
+                current is PluginSystemOverwriteRequired,
             listener: (context, state) {
               if (state is PluginSystemInstallRequiresPermissions) {
                 showDialog(
@@ -1960,6 +1965,24 @@ class MainWindowScreenState extends State<MainWindowScreen>
                     ),
                   ),
                 );
+              } else if (state is PluginSystemOverwriteRequired) {
+                final bloc = context.read<PluginSystemBloc>();
+                showWarningDialog(
+                  context: context,
+                  title: 'התוסף כבר קיים',
+                  content:
+                      'התוסף "${state.pluginName}" בגרסה ${state.version} כבר מותקן.',
+                  subtitle: 'האם ברצונך להתקין מחדש ולדרוס אותו?',
+                  cancelText: 'ביטול',
+                  confirmText: 'התקן מחדש',
+                ).then((value) {
+                  if (value == true) {
+                    bloc.add(InstallPluginRequested(state.archivePath,
+                        forceOverwrite: true));
+                  } else {
+                    bloc.add(LoadPlugins());
+                  }
+                });
               }
             },
           ),
