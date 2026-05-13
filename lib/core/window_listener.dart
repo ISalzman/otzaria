@@ -137,12 +137,15 @@ class AppWindowListener extends WindowListener {
 
       if (!kIsWeb &&
           (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        if (Platform.isWindows) {
+          // window_manager.destroy() posts WM_QUIT on Windows. Awaiting it can
+          // stop the Flutter engine before the Dart continuation reaches exit().
+          exit(0);
+        }
+
         await windowManager.setPreventClose(false);
         // סגירה רגילה דרך ה-WindowManager
         await windowManager.destroy();
-        if (Platform.isWindows) {
-          exit(0);
-        }
       }
     } catch (e) {
       if (kDebugMode) {
