@@ -43,6 +43,7 @@ class CommentaryListBase extends StatefulWidget {
   final String? bookTitleOverride;
   final ValueChanged<List<String>>? onSelectedCommentatorsOverrideChanged;
   final SelectionSyncController? selectionSyncController;
+  final ValueListenable<int>? openFilterRequest;
 
   const CommentaryListBase({
     super.key,
@@ -58,6 +59,7 @@ class CommentaryListBase extends StatefulWidget {
     this.bookTitleOverride,
     this.onSelectedCommentatorsOverrideChanged,
     this.selectionSyncController,
+    this.openFilterRequest,
   });
 
   @override
@@ -94,6 +96,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   bool _filterWasAutoOpened = false; // האם מסך הסינון נפתח אוטומטית (לא ידנית)
   bool _userInteractedWithFilter =
       false; // האם המשתמש בחר בעצמו בתוך פאנל הסינון
+  // ערך הבסיס של counter ה-openFilterRequest שראינו ב-init. רק עליות מעבר
+  // לערך הזה מטריגרות פתיחה — כך counter "ישן" מבקשת קודמת לא ייספג שוב
+  // ביצירה מחודשת של ה-state.
+  int _lastSeenFilterRequest = 0;
   final FocusNode _focusNode = FocusNode();
   final FocusNode _searchFocusNode = FocusNode();
   final Object _selectionOwner = Object();
@@ -166,6 +172,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     // האזנה לשינויים במיקום הגלילה כדי לשמור את המיקום האחרון
     _itemPositionsListener.itemPositions.addListener(_updateLastScrollIndex);
     widget.selectionSyncController?.addListener(_handleExternalSelectionChange);
+    widget.openFilterRequest?.addListener(_handleOpenFilterRequest);
+    _lastSeenFilterRequest = widget.openFilterRequest?.value ?? 0;
   }
 
   @override
@@ -176,6 +184,13 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           ?.removeListener(_handleExternalSelectionChange);
       widget.selectionSyncController
           ?.addListener(_handleExternalSelectionChange);
+    }
+    if (oldWidget.openFilterRequest != widget.openFilterRequest) {
+      oldWidget.openFilterRequest?.removeListener(_handleOpenFilterRequest);
+      widget.openFilterRequest?.addListener(_handleOpenFilterRequest);
+      // איפוס ה-baseline ל-notifier החדש — אחרת ערך גבוה מה-notifier הקודם
+      // עלול לחסום פתיחות עתידיות עד שה-counter החדש "ישיג" אותו.
+      _lastSeenFilterRequest = widget.openFilterRequest?.value ?? 0;
     }
     // סגירה אוטומטית של מסך הסינון כאשר המפרשים עוברים מריק לא-ריק
     // (קורה כאשר המשתמש בוחר "כל המפרשים" מהתפריט הימני)
@@ -215,6 +230,14 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     });
   }
 
+  void _handleOpenFilterRequest() {
+    if (!mounted) return;
+    final newValue = widget.openFilterRequest?.value ?? 0;
+    if (newValue <= _lastSeenFilterRequest) return;
+    _lastSeenFilterRequest = newValue;
+    _openCommentatorsFilter();
+  }
+
   void _closeCommentatorsFilter() {
     setState(() {
       _showCommentatorsFilter = false;
@@ -228,6 +251,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     _itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
     widget.selectionSyncController
         ?.removeListener(_handleExternalSelectionChange);
+    widget.openFilterRequest?.removeListener(_handleOpenFilterRequest);
     _searchController.dispose();
     _savedSelectedText.dispose();
     _lastSelectedLink.dispose();

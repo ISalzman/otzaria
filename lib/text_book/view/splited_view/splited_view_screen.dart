@@ -55,6 +55,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
       ValueNotifier<String?>(null); // טקסט נבחר לתפריט הקשר
   final SelectionSyncController _selectionSyncController =
       SelectionSyncController();
+  final ValueNotifier<int> _openFilterRequest = ValueNotifier<int>(0);
 
   @override
   void initState() {
@@ -182,6 +183,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     _controller.dispose();
     _savedSelectedText.dispose();
     _selectionSyncController.dispose();
+    _openFilterRequest.dispose();
     super.dispose();
   }
 
@@ -241,6 +243,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                       openBookCallback: widget.openBookCallback,
                       showSearch: true,
                       selectionSyncController: _selectionSyncController,
+                      openFilterRequest: _openFilterRequest,
                       onClosePane: _togglePane,
                       initialTabIndex: _currentTabIndex,
                       showSplitView: widget.showSplitView,
@@ -284,6 +287,20 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                         setState(() {
                           _paneOpen = true;
                           _currentTabIndex = 0;
+                        });
+                      },
+                      onOpenCommentatorsPaneWithFilter: () {
+                        setState(() {
+                          _paneOpen = true;
+                          _currentTabIndex = 0;
+                        });
+                        // דחייה לפריים הבא: ה-CommentaryListBaseState נרשם
+                        // ל-listener רק אחרי שהפאנל נבנה (פתיחה ראשונה / טעינת
+                        // טאב). הקפיצה כאן מבטיחה שה-listener קיים בעת
+                        // הירייה של ה-counter, כך שגם פתיחה ראשונה מטופלת.
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          _openFilterRequest.value++;
                         });
                       },
                       onOpenLinksPane: () {

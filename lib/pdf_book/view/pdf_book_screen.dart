@@ -103,6 +103,16 @@ bool shouldShowOpenPdfCommentaryPaneEntry({
   return hasSelectedCommentators && !isCommentatorsTabActive;
 }
 
+/// פריט "פתח בחירת מפרשים" יוצג כל עוד טאב המפרשים אינו פעיל בחלונית הצד.
+/// בניגוד ל-[shouldShowOpenPdfCommentaryPaneEntry], הוא לא תלוי
+/// ב-`hasSelectedCommentators` — מטרתו לאפשר בחירה גם כשהבחירה ריקה.
+@visibleForTesting
+bool shouldShowSelectPdfCommentatorsEntry({
+  required bool isCommentatorsTabActive,
+}) {
+  return !isCommentatorsTabActive;
+}
+
 @visibleForTesting
 bool shouldShowOpenPdfLinksPaneEntry({
   required bool hasRelevantLinks,
@@ -190,6 +200,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   // Local UI state that syncs with Bloc
   int _rightPaneInitialTabIndex = 0;
   int _currentRightPaneTabIndex = 0;
+
+  final ValueNotifier<int> _openFilterRequest = ValueNotifier<int>(0);
 
   // קבוצות מפרשים לסדר בתפריט
   List<CommentatorGroup> _commentatorGroups = [];
@@ -748,14 +760,32 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       isCommentatorsTabActive: isCommentatorsTabActive,
     );
 
+    final shouldShowSelectEntry = shouldShowSelectPdfCommentatorsEntry(
+      isCommentatorsTabActive: isCommentatorsTabActive,
+    );
+
     final commentatorChildren = <AppContextMenuEntry>[
-      if (shouldShowOpenPaneEntry) ...[
+      if (shouldShowOpenPaneEntry)
         AppContextMenuEntry(
           label: 'פתח מפרשים בחלונית צד',
           onTap: () => _openCommentaryPane(),
         ),
+      if (shouldShowSelectEntry)
+        AppContextMenuEntry(
+          label: 'פתח בחירת מפרשים בחלונית צד',
+          onTap: () {
+            _openCommentaryPane();
+            // דחייה לפריים הבא: ה-PdfCommentaryPanelState נרשם
+            // ל-listener רק אחרי שהפאנל נבנה. הקפיצה מבטיחה שה-listener
+            // קיים בעת הירייה — גם בפתיחה ראשונה.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              _openFilterRequest.value++;
+            });
+          },
+        ),
+      if (shouldShowOpenPaneEntry || shouldShowSelectEntry)
         const AppContextMenuEntry.divider(),
-      ],
       AppContextMenuEntry(
         label: 'הצג את כל המפרשים',
         icon: allActive ? FluentIcons.checkmark_24_regular : null,
@@ -809,7 +839,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       AppContextMenuEntry(
         label: 'מפרשים',
         icon: FluentIcons.book_24_regular,
-        enabled: relevantCommentators.isNotEmpty,
+        // התת-תפריט פעיל אם יש בדף מפרשים זמינים, או אם ניתן לפתוח את
+        // חלונית בחירת המפרשים (כדי לאפשר בחירה התחלתית גם בדף ללא מפרשים).
+        enabled: relevantCommentators.isNotEmpty || shouldShowSelectEntry,
         children: commentatorChildren,
       ),
       AppContextMenuEntry(
@@ -2391,6 +2423,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _leftPaneTabController?.removeListener(_leftPaneTabControllerListener);
     widget.tab.showLeftPane.removeListener(_showLeftPaneListener);
     _leftPaneTabController?.dispose();
+    _openFilterRequest.dispose();
     _searchFieldFocusNode.dispose();
     _navigationFieldFocusNode.dispose();
     _pdfViewFocusNode.dispose();
@@ -2982,6 +3015,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   Widget _buildRightPaneContent() {
     return PdfCommentaryPanel(
+      openFilterRequest: _openFilterRequest,
       tab: widget.tab,
       linksCount: widget.tab.links.length,
       linksLoading: _linksLoading,

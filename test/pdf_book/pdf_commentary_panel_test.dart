@@ -248,4 +248,92 @@ void main() {
       expect(find.textContaining('לא נמצאו מפרשים'), findsOneWidget);
     });
   });
+
+  // ── openFilterRequest: התנהגות baseline + counter ─────────────────────────
+
+  group('PdfCommentaryPanel - openFilterRequest', () {
+    PdfCommentaryPanel buildPanel(
+      PdfBookTab tab,
+      ValueNotifier<int> notifier,
+    ) =>
+        PdfCommentaryPanel(
+          tab: tab,
+          linksCount: tab.links.length,
+          linksLoading: false,
+          openBookCallback: (_) {},
+          fontSize: 16.0,
+          initialTabIndex: 0,
+          openFilterRequest: notifier,
+        );
+
+    testWidgets('עליה ב-counter פותחת את חלונית בחירת המפרשים',
+        (tester) async {
+      final tab = _tab(currentLine: 10, links: [_commentaryLink(index1: 10)]);
+      // מסמן מפרש פעיל כדי למנוע auto-open של ה-filter בעת build
+      // (כשאין מפרשים נבחרים והם זמינים, ה-build פותח אותו אוטומטית).
+      tab.activeCommentators.add('rashi');
+      final notifier = ValueNotifier<int>(0);
+      addTearDown(notifier.dispose);
+
+      await tester.pumpWidget(_wrap(buildPanel(tab, notifier)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('בחירת מפרשים'), findsNothing);
+
+      notifier.value++;
+      await tester.pumpAndSettle();
+
+      expect(find.text('בחירת מפרשים'), findsOneWidget);
+    });
+
+    testWidgets(
+        'counter ישן (value>0 בעת init) לא פותח אוטומטית — רק עליה חדשה כן',
+        (tester) async {
+      // מדמה תרחיש שבו ה-counter כבר עלה בעבר (state נוצר מחדש בעקבות
+      // re-creation של הפאנל / החלפת טאב). אם ה-baseline מתאפס כראוי,
+      // הערך הקיים לא צריך לפתוח את הסינון אוטומטית.
+      final tab = _tab(currentLine: 10, links: [_commentaryLink(index1: 10)]);
+      tab.activeCommentators.add('rashi');
+      final notifier = ValueNotifier<int>(5);
+      addTearDown(notifier.dispose);
+
+      await tester.pumpWidget(_wrap(buildPanel(tab, notifier)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('בחירת מפרשים'), findsNothing);
+
+      // עליה חדשה מעבר ל-baseline אכן פותחת.
+      notifier.value = 6;
+      await tester.pumpAndSettle();
+
+      expect(find.text('בחירת מפרשים'), findsOneWidget);
+    });
+
+    testWidgets(
+        'החלפת notifier מאפסת את ה-baseline (counter ישן לא חוסם פתיחות עתידיות)',
+        (tester) async {
+      final tab = _tab(currentLine: 10, links: [_commentaryLink(index1: 10)]);
+      tab.activeCommentators.add('rashi');
+      final notifierA = ValueNotifier<int>(7);
+      final notifierB = ValueNotifier<int>(0);
+      addTearDown(notifierA.dispose);
+      addTearDown(notifierB.dispose);
+
+      await tester.pumpWidget(_wrap(buildPanel(tab, notifierA)));
+      await tester.pumpAndSettle();
+
+      // החלפה ל-notifier חדש עם value=0. בלי איפוס baseline, _lastSeen היה
+      // נשאר על 7 ופתיחות חדשות עד value=7 היו נחסמות.
+      await tester.pumpWidget(_wrap(buildPanel(tab, notifierB)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('בחירת מפרשים'), findsNothing);
+
+      // עליה אחת קטנה ב-notifier החדש אמורה לפתוח — מוכיח שה-baseline אופס.
+      notifierB.value = 1;
+      await tester.pumpAndSettle();
+
+      expect(find.text('בחירת מפרשים'), findsOneWidget);
+    });
+  });
 }

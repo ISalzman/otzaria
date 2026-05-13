@@ -170,6 +170,60 @@ void main() {
     });
   });
 
+  group('shouldShowSelectCommentatorsEntry', () {
+    test('מחזירה true כשיש callback וטאב המפרשים אינו פעיל', () {
+      expect(
+        shouldShowSelectCommentatorsEntry(
+          hasOpenCommentatorsPaneWithFilterCallback: true,
+          isCommentatorsTabActive: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('מחזירה false כשטאב המפרשים פעיל', () {
+      expect(
+        shouldShowSelectCommentatorsEntry(
+          hasOpenCommentatorsPaneWithFilterCallback: true,
+          isCommentatorsTabActive: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('מחזירה false כשאין callback', () {
+      expect(
+        shouldShowSelectCommentatorsEntry(
+          hasOpenCommentatorsPaneWithFilterCallback: false,
+          isCommentatorsTabActive: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+        'בניגוד ל-shouldShowOpenCommentatorsPaneEntry, מציג גם בלי מפרשים נבחרים',
+        () {
+      // הלוגיקה כאן לא תלויה ב-hasSelectedCommentators כלל — היחס בין
+      // שני ה-predicates אמור להישאר עקבי גם כשהבחירה ריקה.
+      expect(
+        shouldShowOpenCommentatorsPaneEntry(
+          hasSelectedCommentators: false,
+          showCommentaryAsExpansionTiles: false,
+          isCommentatorsTabActive: false,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldShowSelectCommentatorsEntry(
+          hasOpenCommentatorsPaneWithFilterCallback: true,
+          isCommentatorsTabActive: false,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('תרחישים חוצי-טאב בחלונית הצד', () {
     test('"פתח מפרשים" מוצגת כשהחלונית פתוחה על טאב הקישורים', () {
       expect(
