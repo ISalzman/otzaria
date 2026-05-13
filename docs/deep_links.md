@@ -225,7 +225,8 @@ _externalActivationWatchSub = queueFile.parent.watch().listen((event) {
 | `OpenToolAction(String toolId)` | `otzaria://open/calendar`, `/tool/<id>`, ... | לשונית כלי |
 | `OpenBookAction(int bookId, {int? index, String? searchQuery, String? pinpointHighlight})` | `otzaria://open/book/<id>?index=<n>&q=<text>` או `?index=<n>&highlight=<text>` | ספר בעיון. `pinpointHighlight` מדגיש רק בסעיף `index`, `searchQuery` מדגיש בכל הספר. שניהם נדחים זה את זה. |
 | `RunSearchAction(String query)` | `otzaria://open/search?q=<text>` | חיפוש מלא בלשונית חדשה |
-| `InstallPluginAction(PluginStoreInstallRequest)` | `otzaria://plugin/install?url=...` | התקנת תוסף |
+| `InstallPluginAction(PluginStoreInstallRequest)` | `otzaria://plugin/install?url=...` | התקנת תוסף מהחנות |
+| `InstallLocalPluginAction(String archivePath)` | `otzaria://plugin/install-local?path=<abs>` | התקנת תוסף מקובץ `.otzplugin` מקומי (לחיצה כפולה על קובץ משויך) |
 
 לפענוח `plugin/install` הראוטר מעביר את ה‑URI ל‑[`PluginStoreLinkParser.parseUri`](../lib/plugins/services/plugin_store_link_parser.dart) (שמרנו אותו עצמאי כדי לא לשבור את הבדיקות הקיימות), ועוטף את התוצאה ב‑`InstallPluginAction`. אין יותר נפילה אחורה בין שני פרסרים — `ExternalUriRouter.parseUri` הוא נקודת הכניסה היחידה.
 
@@ -241,6 +242,7 @@ _externalActivationWatchSub = queueFile.parent.watch().listen((event) {
    - **`OpenBookAction`** — `await DataRepository.instance.library`, מחפש לפי `b.id`. אם נמצא — `openBook(context, book, index ?? 0, searchQuery ?? '')`. אם לא — `UiSnack.showError`.
    - **`RunSearchAction`** — יוצר `SearchingTab` חדש עם הקוורי, מוסיף ל‑`HistoryBloc` ול‑`TabsBloc`, ומנווט ל‑`Screen.search`. ה‑`UpdateSearchQuery` מופעל אוטומטית מ‑`TantivyFullTextSearch.initState` ברגע שהלשונית מוצגת.
    - **`InstallPluginAction`** — `NavigateToScreen(Screen.more)` + `InstallRemotePluginRequested` ל‑PluginSystemBloc.
+   - **`InstallLocalPluginAction`** — `InstallPluginRequested(archivePath)` ל‑PluginSystemBloc. הדיאלוג נפתח אוטומטית דרך `BlocListener` כשמתקבל `PluginSystemInstallRequiresPermissions`.
 
 ## הוספת יעד חדש
 

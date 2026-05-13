@@ -55,6 +55,12 @@ class InstallPluginAction extends ExternalUriAction {
   const InstallPluginAction(this.request);
 }
 
+/// בקשת התקנה של תוסף מקובץ מקומי (לחיצה כפולה על קובץ `.otzplugin`).
+class InstallLocalPluginAction extends ExternalUriAction {
+  final String archivePath;
+  const InstallLocalPluginAction(this.archivePath);
+}
+
 /// פתיחת חיפוש כללי בלשונית חדשה והפעלת החיפוש מיידית עם ברירות המחדל
 /// (כל הקטגוריות, מצב מתקדם).
 class RunSearchAction extends ExternalUriAction {
@@ -84,6 +90,8 @@ class RunSearchAction extends ExternalUriAction {
 ///   - `?index=<n>` קפיצה לעמוד התחלתי (n >= 0)
 /// * `otzaria://plugin/install?url=<download>` – התקנת תוסף
 ///   - `&overwrite=true|false` דריסת תוסף קיים
+/// * `otzaria://plugin/install-local?path=<abs-path>` – התקנת תוסף מקובץ מקומי
+///   (משמש לשיוך קובץ `.otzplugin` במערכת ההפעלה)
 ///
 /// הסכמה, ה-host והתת-נתיב הראשון אינם רגישים לאותיות גדולות/קטנות.
 class ExternalUriRouter {
@@ -110,11 +118,30 @@ class ExternalUriRouter {
       return _parseOpen(uri);
     }
     if (host == 'plugin') {
+      final localPath = _parseLocalInstall(uri);
+      if (localPath != null) {
+        return InstallLocalPluginAction(localPath);
+      }
       final request = PluginStoreLinkParser.parseUri(uri);
       if (request == null) return null;
       return InstallPluginAction(request);
     }
     return null;
+  }
+
+  static String? _parseLocalInstall(Uri uri) {
+    final segments = uri.pathSegments
+        .where((segment) => segment.isNotEmpty)
+        .map((segment) => segment.toLowerCase())
+        .toList();
+    final isLocalInstall =
+        segments.length == 1 && segments.first == 'install-local';
+    if (!isLocalInstall) return null;
+
+    final rawPath = uri.queryParameters['path']?.trim();
+    if (rawPath == null || rawPath.isEmpty) return null;
+
+    return rawPath;
   }
 
   static ExternalUriAction? _parseOpen(Uri uri) {

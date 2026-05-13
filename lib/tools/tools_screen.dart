@@ -17,10 +17,8 @@ import 'package:otzaria/tools/calendar/calendar_screen.dart';
 import 'package:otzaria/widgets/navigation/keyboard_navigator.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/navigation/sidebar_nav_item.dart';
-import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
-import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/view/plugin_side_panel.dart';
 import 'package:otzaria/plugins/view/plugin_tab_page.dart';
 import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
@@ -977,27 +975,9 @@ class ToolsScreenState extends State<ToolsScreen>
                 state.pinnedPlugins.filterForOfflineMode(isOfflineMode),
                 transient: _transientPlugin,
               );
-            } else if (state is PluginSystemOverwriteRequired) {
-              showWarningDialog(
-                context: context,
-                title: 'התוסף כבר קיים',
-                content:
-                    'התוסף "${state.pluginName}" בגרסה ${state.version} כבר מותקן.',
-                subtitle: 'האם ברצונך להתקין מחדש ולדרוס אותו?',
-                cancelText: 'ביטול',
-                confirmText: 'התקן מחדש',
-              ).then((value) {
-                if (!context.mounted) return;
-                if (value == true) {
-                  context.read<PluginSystemBloc>().add(
-                        InstallPluginRequested(state.archivePath,
-                            forceOverwrite: true),
-                      );
-                } else {
-                  context.read<PluginSystemBloc>().add(LoadPlugins());
-                }
-              });
             }
+            // טיפול ב-PluginSystemOverwriteRequired עבר ל-main_window_screen.dart
+            // כדי לעבוד גם כשפותחים קובץ ‎.otzplugin ממסך אחר.
           },
         ),
       ],

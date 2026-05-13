@@ -404,5 +404,41 @@ void main() {
         );
       });
     });
+
+    group('plugin/install-local', () {
+      test('מחזיר InstallLocalPluginAction עבור נתיב מקודד', () {
+        final encodedPath = Uri.encodeQueryComponent(
+          r'C:\Users\Foo\Downloads\my plugin.otzplugin',
+        );
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://plugin/install-local?path=$encodedPath'),
+        );
+
+        expect(action, isA<InstallLocalPluginAction>());
+        final install = action as InstallLocalPluginAction;
+        expect(
+          install.archivePath,
+          r'C:\Users\Foo\Downloads\my plugin.otzplugin',
+        );
+      });
+
+      test('דוחה install-local ללא path', () {
+        expect(
+          ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://plugin/install-local'),
+          ),
+          isNull,
+        );
+      });
+
+      test('דוחה install-local עם path ריק', () {
+        expect(
+          ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://plugin/install-local?path='),
+          ),
+          isNull,
+        );
+      });
+    });
   });
 }

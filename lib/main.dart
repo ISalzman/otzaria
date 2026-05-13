@@ -527,12 +527,27 @@ Future<void> _ensureBootstrapInitialized() {
 }
 
 Future<void> _enqueueExternalActivationArgs(List<String> args) async {
-  final activationArgs = args
-      .map((arg) => arg.trim())
-      .where((arg) => arg.toLowerCase().startsWith('otzaria:'))
-      .toList();
+  final activationUris = <String>[];
 
-  for (final uriString in activationArgs) {
+  for (final raw in args) {
+    final arg = raw.trim();
+    if (arg.isEmpty) continue;
+
+    if (arg.toLowerCase().startsWith('otzaria:')) {
+      activationUris.add(arg);
+      continue;
+    }
+
+    // לחיצה כפולה על קובץ `.otzplugin` משויך — המערכת מעבירה את הנתיב כארגומנט.
+    // ב-Linux/macOS, ה-desktop entry משתמש ב-‎%u (URL), כך שהמערכת מעבירה
+    // ‎file:///abs/path. ממירים ל-נתיב מקומי לפני שמירה בתור.
+    final localPath = _resolveLocalPluginPath(arg);
+    if (localPath != null) {
+      activationUris.add(_buildLocalPluginInstallUri(localPath));
+    }
+  }
+
+  for (final uriString in activationUris) {
     try {
       await _externalActivationQueue.enqueueUriString(uriString);
     } catch (error, stackTrace) {
@@ -546,6 +561,36 @@ Future<void> _enqueueExternalActivationArgs(List<String> args) async {
       );
     }
   }
+}
+
+/// מחזירה נתיב קובץ מקומי `.otzplugin` אם הארגומנט הוא כזה — או null אחרת.
+/// תומך גם ב-`file://` URIs (Linux/macOS) וגם בנתיב גולמי (Windows).
+@visibleForTesting
+String? resolveLocalPluginPathForTesting(String arg) =>
+    _resolveLocalPluginPath(arg);
+
+String? _resolveLocalPluginPath(String arg) {
+  String candidate = arg;
+  if (arg.toLowerCase().startsWith('file:')) {
+    try {
+      final uri = Uri.parse(arg);
+      if (uri.scheme == 'file') {
+        candidate = uri.toFilePath();
+      }
+    } catch (_) {
+      // לא URI תקני — נמשיך עם הערך המקורי.
+    }
+  }
+
+  if (candidate.toLowerCase().endsWith('.otzplugin')) {
+    return candidate;
+  }
+  return null;
+}
+
+String _buildLocalPluginInstallUri(String filePath) {
+  final encoded = Uri.encodeQueryComponent(filePath);
+  return 'otzaria://plugin/install-local?path=$encoded';
 }
 
 class AppBootstrap extends StatefulWidget {
