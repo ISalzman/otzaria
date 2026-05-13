@@ -269,6 +269,32 @@ class CalendarState extends Equatable {
       ];
 }
 
+/// Interface לטעינת אירועי plugin — מאפשר החלפה ב-mock בטסטים.
+abstract class CalendarPluginSource {
+  Future<List<CustomEvent>> loadAndMergePluginEvents(
+    List<CustomEvent> existingEvents, {
+    String? currentWorkspaceId,
+    String? currentBookId,
+  });
+}
+
+/// מימוש ברירת מחדל שמעביר ל-PluginCalendarAdapter האמיתי.
+class _DefaultPluginSource implements CalendarPluginSource {
+  const _DefaultPluginSource();
+
+  @override
+  Future<List<CustomEvent>> loadAndMergePluginEvents(
+    List<CustomEvent> existingEvents, {
+    String? currentWorkspaceId,
+    String? currentBookId,
+  }) =>
+      PluginCalendarAdapter().loadAndMergePluginEvents(
+        existingEvents,
+        currentWorkspaceId: currentWorkspaceId,
+        currentBookId: currentBookId,
+      );
+}
+
 // Calendar Cubit
 class CalendarCubit extends Cubit<CalendarState> {
   static const String _primaryGoogleCalendarId = 'primary';
@@ -277,7 +303,9 @@ class CalendarCubit extends Cubit<CalendarState> {
   final SettingsRepository _settingsRepository;
   final NotificationService _notificationService;
   final GoogleCalendarService _googleCalendarService;
+  final CalendarPluginSource _pluginCalendarAdapter;
   Timer? _todayRefreshTimer;
+  int _pluginRefreshGeneration = 0;
 
   // Getter for accessing notification service from outside
   NotificationService get notificationService => _notificationService;
@@ -286,10 +314,13 @@ class CalendarCubit extends Cubit<CalendarState> {
     SettingsRepository? settingsRepository,
     NotificationService? notificationService,
     GoogleCalendarService? googleCalendarService,
+    CalendarPluginSource? pluginCalendarAdapter,
   })  : _settingsRepository = settingsRepository ?? SettingsRepository(),
         _notificationService = notificationService ?? NotificationService(),
         _googleCalendarService =
             googleCalendarService ?? GoogleCalendarService(),
+        _pluginCalendarAdapter =
+            pluginCalendarAdapter ?? const _DefaultPluginSource(),
         super(CalendarState.initial()) {
     _initializeCalendar(resetSelectedToToday: true);
   }
@@ -359,7 +390,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     if (isClosed) return;
 
     // Add plugin published events via adapter
-    events = await PluginCalendarAdapter().loadAndMergePluginEvents(events);
+    events = await _pluginCalendarAdapter.loadAndMergePluginEvents(events);
 
     if (isClosed) return;
 
@@ -411,16 +442,21 @@ class CalendarCubit extends Cubit<CalendarState> {
     String? currentWorkspaceId,
     String? currentBookId,
   }) async {
-    // שמור אירועי משתמש בלבד (id ללא ':' הם אירועי משתמש)
-    final userEvents = state.events.where((e) => !e.id.contains(':')).toList();
+    // בולע קריאות ישנות: רק הקריאה האחרונה שמסיימת מורשית ל-emit.
+    final generation = ++_pluginRefreshGeneration;
 
-    final merged = await PluginCalendarAdapter().loadAndMergePluginEvents(
-      userEvents,
+    final pluginEvents = await _pluginCalendarAdapter.loadAndMergePluginEvents(
+      [],
       currentWorkspaceId: currentWorkspaceId,
       currentBookId: currentBookId,
     );
 
-    emit(state.copyWith(events: merged));
+    if (isClosed || generation != _pluginRefreshGeneration) return;
+
+    // קריאת אירועי המשתמש מה-state הנוכחי (אחרי ה-await, כדי לא לדרוס אירועים
+    // שנטענו ב-_initializeCalendar בזמן שהמתנו לתשובת ה-DB)
+    final userEvents = state.events.where((e) => !e.id.contains(':')).toList();
+    emit(state.copyWith(events: [...userEvents, ...pluginEvents]));
   }
 
   static Map<String, ZmanAlertPreference> _parseZmanAlertPreferences(
