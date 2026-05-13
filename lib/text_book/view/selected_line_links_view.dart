@@ -127,6 +127,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   void _handleExternalSelectionChange() {
     final controller = widget.selectionSyncController;
     if (controller == null ||
+        controller.activeOwner == null ||
         identical(controller.activeOwner, _selectionOwner)) {
       return;
     }

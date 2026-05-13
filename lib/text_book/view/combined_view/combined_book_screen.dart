@@ -276,6 +276,7 @@ class _CombinedViewState extends State<CombinedView> {
   void _handleExternalSelectionChange() {
     final controller = widget.selectionSyncController;
     if (controller == null ||
+        controller.activeOwner == null ||
         identical(controller.activeOwner, _selectionOwner)) {
       return;
     }
