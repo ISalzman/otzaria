@@ -408,7 +408,7 @@ class DesignSettingsTab extends StatelessWidget {
                         builder: (context, setState) {
                           final splitedView =
                               Settings.getValue<bool>('key-splited-view') ??
-                                  false;
+                                  true;
                           return SwitchSettingsTile(
                             title: const Text('הצגת המפרשים בחלונית בצד',
                                 style: kSettingsTitleStyle),
