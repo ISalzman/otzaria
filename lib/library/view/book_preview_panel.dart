@@ -92,7 +92,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
           index: 0,
           searchText: '',
           openLeftPane: false,
-          splitedView: Settings.getValue<bool>('key-splited-view') ?? false,
+          splitedView: Settings.getValue<bool>('key-splited-view') ?? true,
         );
       });
     } else if (widget.book is PdfBook) {

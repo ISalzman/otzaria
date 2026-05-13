@@ -90,7 +90,7 @@ class TextBookTab extends OpenedTab {
   }) : super(book.title, isPinned: isPinned, dedupeKey: dedupeKey) {
     // קביעת ברירת המחדל של splitedView מההגדרות אם לא סופק
     final bool effectiveSplitedView =
-        splitedView ?? (Settings.getValue<bool>('key-splited-view') ?? false);
+        splitedView ?? (Settings.getValue<bool>('key-splited-view') ?? true);
 
     // מצב צורת הדף הוא פר-ספר - ברירת המחדל היא false (תצוגה רגילה)
     // רק אם הספר כבר היה פתוח במצב צורת הדף, הוא יישאר כך
@@ -165,7 +165,7 @@ class TextBookTab extends OpenedTab {
 
     // שחזור מצב התצוגה המפוצלת מה-JSON
     final bool splitedView = json['splitedView'] ??
-        (Settings.getValue<bool>('key-splited-view') ?? false);
+        (Settings.getValue<bool>('key-splited-view') ?? true);
 
     final TextBook restoredBook = json['book'] != null
         ? Book.fromJson(Map<String, dynamic>.from(json['book'])) as TextBook

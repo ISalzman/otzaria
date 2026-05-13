@@ -701,7 +701,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // בתצוגה משולבת, מפרשים תמיד מתחת
       showSplitView: widget.isInCombinedView
           ? false
-          : (Settings.getValue<bool>('key-splited-view') ?? false),
+          : (Settings.getValue<bool>('key-splited-view') ?? true),
       removeNikud: settingsBloc.state.defaultRemoveNikud,
       preserveState: true,
       // בתצוגה משולבת, חלונית הצד תמיד סגורה
@@ -2672,7 +2672,7 @@ Future<void> _savePerBookSettingsDirectly(
   final defaultFontSize = settingsBloc.state.fontSize;
   final defaultRemoveNikud = settingsBloc.state.defaultRemoveNikud;
   final defaultShowSplitView =
-      Settings.getValue<bool>('key-splited-view') ?? false;
+      Settings.getValue<bool>('key-splited-view') ?? true;
 
   // בניית הגדרות חדשות - רק שדות ששונו מברירת המחדל
   double? newFontSize = existingSettings?.fontSize;
