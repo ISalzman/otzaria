@@ -681,13 +681,67 @@ class TantivyDataProvider {
   }
 
   /// Clears the index and resets the list of indexed books.
+  ///
+  /// מוחק פיזית את תיקיית האינדקס הפעילה וכל תיקיות אינדקס ישנות שנשארו
+  /// בנתיבי ברירת מחדל אחרים, ואז פותח מנוע חדש. כך, אם המשתמש העביר
+  /// את הספרייה לכונן אחר, האינדקס הבא ייבנה ליד הספרייה החדשה.
   Future<void> clear() async {
     isIndexing.value = false;
-    final index = await engine;
-    await index.clear();
     booksDone.clear();
     _storedIndexStateVersion = currentIndexStateVersion;
+
+    // שחרור משאבים לפני מחיקה פיזית של הקבצים (חשוב במיוחד ב-Windows
+    // שבו קבצים פתוחים אינם ניתנים למחיקה).
+    try {
+      await dispose();
+    } catch (e) {
+      debugPrint('⚠️ Engine dispose during clear failed: $e');
+    }
+    try {
+      await _closeBox();
+    } catch (e) {
+      debugPrint('⚠️ Hive box close during clear failed: $e');
+    }
+
+    // מחיקת תיקיית האינדקס הפעילה + כל ברירות המחדל הישנות. בלי זה,
+    // אם נשארת תיקייה ב-APPDATA למשל, getIndexPath בהפעלה הבאה היה
+    // ממשיך לבחור בה במקום בנתיב החדש ליד הספרייה.
+    await _deleteAllKnownIndexDirectories();
+
+    // אחרי המחיקה אין יותר אינדקס קיים על הדיסק.
+    _indexExistedBeforeInit = false;
+
+    // פתיחה מחדש: getIndexPath יחזיר עכשיו את ברירת המחדל הנוכחית
+    // (ליד הספרייה, אם אין הגדרה ידנית ב-keyIndexPath).
+    engine = _initEngine();
+
+    // שמירת המצב הנקי בתיקיית ה-lock של הנתיב החדש.
     await saveBooksDoneToDisk();
+  }
+
+  Future<void> _deleteAllKnownIndexDirectories() async {
+    final paths = <String>{};
+    try {
+      paths.add(await AppPaths.getIndexPath());
+    } catch (e) {
+      debugPrint('⚠️ Failed to resolve active index path: $e');
+    }
+    try {
+      paths.addAll(await AppPaths.getStaleDefaultIndexPaths());
+    } catch (e) {
+      debugPrint('⚠️ Failed to resolve stale index paths: $e');
+    }
+
+    for (final path in paths) {
+      final dir = Directory(path);
+      if (!dir.existsSync()) continue;
+      try {
+        dir.deleteSync(recursive: true);
+        debugPrint('🧹 נמחקה תיקיית אינדקס: $path');
+      } catch (e) {
+        debugPrint('⚠️ כשל במחיקת תיקיית אינדקס $path: $e');
+      }
+    }
   }
 
   /// Dispose of resources and close engines
