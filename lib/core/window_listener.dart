@@ -4,10 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:window_manager/window_manager.dart';
-import '../migration/database/daos/database.dart';
 import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 /// Callback type for fullscreen state changes
@@ -94,8 +94,8 @@ class AppWindowListener extends WindowListener {
 
     // Step 1: Non-critical cleanup — errors here must not block Hive.close().
     try {
-      MyDatabase().close();
-      SqliteDataProvider.instance.dispose();
+      await UserBooksDatabaseHolder.instance.close();
+      await SqliteDataProvider.instance.dispose();
     } catch (e) {
       if (kDebugMode) print('Non-critical cleanup error: $e');
     }
