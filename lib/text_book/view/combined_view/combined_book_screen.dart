@@ -63,7 +63,8 @@ class CombinedView extends StatefulWidget {
     this.onOpenPersonalNotes,
     this.onOpenCommentatorsPane,
     this.onOpenLinksPane,
-    this.isPaneOpen,
+    this.isCommentatorsTabActive,
+    this.isLinksTabActive,
     this.selectionSyncController,
   });
 
@@ -78,7 +79,8 @@ class CombinedView extends StatefulWidget {
   final VoidCallback? onOpenPersonalNotes;
   final VoidCallback? onOpenCommentatorsPane;
   final VoidCallback? onOpenLinksPane;
-  final bool Function()? isPaneOpen;
+  final bool Function()? isCommentatorsTabActive;
+  final bool Function()? isLinksTabActive;
   final SelectionSyncController? selectionSyncController;
 
   @override
@@ -112,21 +114,21 @@ List<Link> buildCombinedViewContextMenuLinksForParagraph({
 
 @visibleForTesting
 bool shouldShowOpenCommentatorsPaneEntry({
-  required bool hasAvailableCommentators,
+  required bool hasSelectedCommentators,
   required bool showCommentaryAsExpansionTiles,
-  required bool isPaneOpen,
+  required bool isCommentatorsTabActive,
 }) {
-  return hasAvailableCommentators &&
+  return hasSelectedCommentators &&
       !showCommentaryAsExpansionTiles &&
-      !isPaneOpen;
+      !isCommentatorsTabActive;
 }
 
 @visibleForTesting
 bool shouldShowOpenLinksPaneEntry({
   required bool hasLinks,
-  required bool isPaneOpen,
+  required bool isLinksTabActive,
 }) {
-  return hasLinks && !isPaneOpen;
+  return hasLinks && !isLinksTabActive;
 }
 
 class _CombinedViewState extends State<CombinedView> {
@@ -436,16 +438,16 @@ class _CombinedViewState extends State<CombinedView> {
       paragraphIndex: paragraphIndex,
     );
     final shouldShowOpenPaneEntry = shouldShowOpenCommentatorsPaneEntry(
-      hasAvailableCommentators: state.availableCommentators.isNotEmpty,
+      hasSelectedCommentators: state.activeCommentators.isNotEmpty,
       showCommentaryAsExpansionTiles: widget.showCommentaryAsExpansionTiles,
-      isPaneOpen: widget.isPaneOpen?.call() ?? false,
+      isCommentatorsTabActive:
+          widget.isCommentatorsTabActive?.call() ?? false,
     );
 
     final commentatorChildren = <AppContextMenuEntry>[
       if (shouldShowOpenPaneEntry) ...[
         AppContextMenuEntry(
-          label: 'פתח את חלונית המפרשים',
-          icon: FluentIcons.panel_right_24_regular,
+          label: 'פתח מפרשים בחלונית צד',
           onTap: () {
             _selectParagraphForContextMenu(paragraphIndex);
             _openCommentatorsPane(isAdding: true);
@@ -504,14 +506,13 @@ class _CombinedViewState extends State<CombinedView> {
 
     final showOpenLinksPaneEntry = shouldShowOpenLinksPaneEntry(
       hasLinks: paragraphLinks.isNotEmpty,
-      isPaneOpen: widget.isPaneOpen?.call() ?? false,
+      isLinksTabActive: widget.isLinksTabActive?.call() ?? false,
     );
 
     List<AppContextMenuEntry> buildLinkChildren() => [
           if (showOpenLinksPaneEntry) ...[
             AppContextMenuEntry(
-              label: 'פתח את חלונית הקישורים',
-              icon: FluentIcons.panel_right_24_regular,
+              label: 'פתח קישורים בחלונית צד',
               onTap: () => widget.onOpenLinksPane?.call(),
             ),
             const AppContextMenuEntry.divider(),

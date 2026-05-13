@@ -97,18 +97,18 @@ class PdfBookScreen extends StatefulWidget {
 
 @visibleForTesting
 bool shouldShowOpenPdfCommentaryPaneEntry({
-  required bool hasRelevantCommentators,
-  required bool isPaneOpen,
+  required bool hasSelectedCommentators,
+  required bool isCommentatorsTabActive,
 }) {
-  return hasRelevantCommentators && !isPaneOpen;
+  return hasSelectedCommentators && !isCommentatorsTabActive;
 }
 
 @visibleForTesting
 bool shouldShowOpenPdfLinksPaneEntry({
   required bool hasRelevantLinks,
-  required bool isPaneOpen,
+  required bool isLinksTabActive,
 }) {
-  return hasRelevantLinks && !isPaneOpen;
+  return hasRelevantLinks && !isLinksTabActive;
 }
 
 class _PdfBookScreenState extends State<PdfBookScreen>
@@ -189,6 +189,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   // Local UI state that syncs with Bloc
   int _rightPaneInitialTabIndex = 0;
+  int _currentRightPaneTabIndex = 0;
 
   // קבוצות מפרשים לסדר בתפריט
   List<CommentatorGroup> _commentatorGroups = [];
@@ -601,6 +602,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _recordCommentaryOpenedIfNeeded();
     setState(() {
       _rightPaneInitialTabIndex = _kCommentaryTabIndex;
+      _currentRightPaneTabIndex = _kCommentaryTabIndex;
     });
     _bloc.add(const pdf_events.ToggleRightPane(show: true));
   }
@@ -608,6 +610,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   void _openLinksPane() {
     setState(() {
       _rightPaneInitialTabIndex = _kLinksTabIndex;
+      _currentRightPaneTabIndex = _kLinksTabIndex;
     });
     _bloc.add(const pdf_events.ToggleRightPane(show: true));
   }
@@ -620,6 +623,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final isOpen = current is PdfBookLoaded && current.showRightPane;
     setState(() {
       _rightPaneInitialTabIndex = _kPersonalNotesTabIndex;
+      _currentRightPaneTabIndex = _kPersonalNotesTabIndex;
     });
     if (!isOpen) {
       _bloc.add(const pdf_events.UpdateRightPaneWidth(_kRightPaneNarrowWidth));
@@ -735,16 +739,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       PdfBookLoaded(showRightPane: final isShown) => !isShown,
       _ => true,
     };
+    final isCommentatorsTabActive = !isRightPaneClosed &&
+        _currentRightPaneTabIndex == _kCommentaryTabIndex;
+    final isLinksTabActive =
+        !isRightPaneClosed && _currentRightPaneTabIndex == _kLinksTabIndex;
     final shouldShowOpenPaneEntry = shouldShowOpenPdfCommentaryPaneEntry(
-      hasRelevantCommentators: relevantCommentators.isNotEmpty,
-      isPaneOpen: !isRightPaneClosed,
+      hasSelectedCommentators: widget.tab.activeCommentators.isNotEmpty,
+      isCommentatorsTabActive: isCommentatorsTabActive,
     );
 
     final commentatorChildren = <AppContextMenuEntry>[
       if (shouldShowOpenPaneEntry) ...[
         AppContextMenuEntry(
-          label: 'פתח את חלונית המפרשים',
-          icon: FluentIcons.panel_right_24_regular,
+          label: 'פתח מפרשים בחלונית צד',
           onTap: () => _openCommentaryPane(),
         ),
         const AppContextMenuEntry.divider(),
@@ -760,14 +767,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     final showOpenLinksPaneEntry = shouldShowOpenPdfLinksPaneEntry(
       hasRelevantLinks: relevantLinks.isNotEmpty,
-      isPaneOpen: !isRightPaneClosed,
+      isLinksTabActive: isLinksTabActive,
     );
 
     final linkChildren = <AppContextMenuEntry>[
       if (showOpenLinksPaneEntry) ...[
         AppContextMenuEntry(
-          label: 'פתח את חלונית הקישורים',
-          icon: FluentIcons.panel_right_24_regular,
+          label: 'פתח קישורים בחלונית צד',
           onTap: () => _openLinksPane(),
         ),
         const AppContextMenuEntry.divider(),
@@ -2990,6 +2996,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         _bloc.add(const pdf_events.ToggleRightPane(show: false));
       },
       initialTabIndex: _rightPaneInitialTabIndex,
+      onTabChanged: (index) {
+        if (_currentRightPaneTabIndex == index) return;
+        setState(() {
+          _currentRightPaneTabIndex = index;
+        });
+      },
     );
   }
 
