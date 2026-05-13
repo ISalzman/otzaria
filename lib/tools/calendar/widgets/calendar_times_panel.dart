@@ -476,7 +476,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
     final theme = Theme.of(context);
     final omerInfo = _buildOmerInfo(widget.state.selectedGregorianDate);
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsetsDirectional.only(top: 8, bottom: 8, end: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

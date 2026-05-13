@@ -77,7 +77,7 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsetsDirectional.only(top: 8, bottom: 8, end: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
