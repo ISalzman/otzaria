@@ -17,6 +17,7 @@ void main() {
 
   late Directory tempDir;
   late String dbPath;
+  late Map<String, int> fixtureBookIds;
 
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('sz_provider_test_');
@@ -24,14 +25,17 @@ void main() {
     final database = MyDatabase.withPath(dbPath);
     final repository = SeforimRepository(database);
     await repository.ensureInitialized();
-    await _insertFixture(repository);
+    fixtureBookIds = await _insertFixture(repository);
     database.close();
 
     await Settings.init(cacheProvider: MemoryCacheProvider());
     await Settings.setValue<String>(SettingsRepository.keyLibraryPath, tempDir.path);
     await Settings.setValue<String>(SettingsRepository.keyLibraryFolderName, '');
     await Settings.setValue<String>(SettingsRepository.keyDbEffectivePath, '');
-    await Settings.setValue<String>('sz:tracked_books', '[11]');
+    await Settings.setValue<String>(
+      'sz:tracked_books',
+      '[${fixtureBookIds['ספר אישי']}]',
+    );
 
     await SqliteDataProvider.instance.dispose();
   });
@@ -51,7 +55,7 @@ void main() {
         required List<int> trackedBookIds,
       }) async {
         expect(dbPath, endsWith('seforim.db'));
-        expect(trackedBookIds, [11]);
+        expect(trackedBookIds, [fixtureBookIds['ספר אישי']]);
         return {
           'categories': [
             {
@@ -131,7 +135,7 @@ void main() {
 
     final details = provider.getBookDetails('תנ"ך', 'בראשית');
     expect(details, isNotNull);
-    expect(details!.id, 10);
+    expect(details!.id, fixtureBookIds['בראשית']);
     expect(details.categoryPath, 'תנ"ך');
 
     expect(provider.getBookDetails('תנ"ך', 'ספר אישי'), isNotNull);
@@ -139,7 +143,7 @@ void main() {
   });
 }
 
-Future<void> _insertFixture(SeforimRepository repository) async {
+Future<Map<String, int>> _insertFixture(SeforimRepository repository) async {
   final tanachCategoryId = await repository.insertCategory(
     const Category(title: 'תנ"ך'),
   );
@@ -152,9 +156,9 @@ Future<void> _insertFixture(SeforimRepository repository) async {
 
   final sourceId = await repository.insertSource('test-source', -1);
 
-  await repository.insertBook(
+  final bereshitId = await repository.insertBook(
     migration.Book(
-      id: 10,
+      id: 0,
       categoryId: chumashCategoryId,
       sourceId: sourceId,
       title: 'בראשית',
@@ -163,9 +167,9 @@ Future<void> _insertFixture(SeforimRepository repository) async {
       fileType: 'txt',
     ),
   );
-  await repository.insertBook(
+  final personalId = await repository.insertBook(
     migration.Book(
-      id: 11,
+      id: 0,
       categoryId: chumashCategoryId,
       sourceId: sourceId,
       title: 'ספר אישי',
@@ -174,9 +178,9 @@ Future<void> _insertFixture(SeforimRepository repository) async {
       fileType: 'txt',
     ),
   );
-  await repository.insertBook(
+  final untrackedId = await repository.insertBook(
     migration.Book(
-      id: 12,
+      id: 0,
       categoryId: chumashCategoryId,
       sourceId: sourceId,
       title: 'לא במעקב',
@@ -187,9 +191,9 @@ Future<void> _insertFixture(SeforimRepository repository) async {
   );
 
   await repository.insertTocEntry(
-    const TocEntry(
+    TocEntry(
       id: 1000,
-      bookId: 10,
+      bookId: bereshitId,
       text: 'פרק א',
       level: 1,
       lineIndex: 0,
@@ -197,4 +201,10 @@ Future<void> _insertFixture(SeforimRepository repository) async {
       hasChildren: false,
     ),
   );
+
+  return {
+    'בראשית': bereshitId,
+    'ספר אישי': personalId,
+    'לא במעקב': untrackedId,
+  };
 }

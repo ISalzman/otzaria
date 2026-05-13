@@ -32,6 +32,7 @@ class TextBookRepository {
       title,
       categoryId: categoryId,
       fileType: fileType,
+      preferUserBooks: book.isUserBook,
     );
     if (providerText != null && providerText.isNotEmpty) {
       return providerText;
@@ -65,6 +66,7 @@ class TextBookRepository {
         title,
         dbBook.categoryId,
         dbBook.fileType,
+        book.isUserBook,
       );
       if (dbText != null && dbText.isNotEmpty) {
         return dbText;
@@ -162,6 +164,7 @@ class TextBookRepository {
       title,
       categoryId: categoryId,
       fileType: fileType,
+      preferUserBooks: book.isUserBook,
     );
     if (providerToc != null && providerToc.isNotEmpty) {
       return providerToc;
@@ -201,6 +204,7 @@ class TextBookRepository {
         title,
         dbBook.categoryId,
         dbBook.fileType,
+        book.isUserBook,
       );
       if (dbToc != null && dbToc.isNotEmpty) {
         return dbToc;
