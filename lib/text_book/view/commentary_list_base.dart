@@ -242,6 +242,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   void _handleExternalSelectionChange() {
     final controller = widget.selectionSyncController;
     if (controller == null ||
+        controller.activeOwner == null ||
         identical(controller.activeOwner, _selectionOwner)) {
       return;
     }

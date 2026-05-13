@@ -418,6 +418,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   void _handleExternalSelectionChange() {
     final controller = widget.selectionSyncController;
     if (controller == null ||
+        controller.activeOwner == null ||
         identical(controller.activeOwner, _selectionOwner)) {
       return;
     }

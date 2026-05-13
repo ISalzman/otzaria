@@ -18,6 +18,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
+import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/widgets/misc/app_context_menu.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -553,6 +554,130 @@ void main() {
     otherButtonFocusNode.dispose();
   });
 
+  testWidgets(
+      'SelectionArea נבנה מחדש כשאזור אחר נעשה פעיל (key משתנה)',
+      (tester) async {
+    final controller = SelectionSyncController();
+    addTearDown(controller.dispose);
+    final otherOwner = Object();
+
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      PersonalNotesState(
+        isLoading: false,
+        bookId: 'ספר בדיקה',
+        locatedNotes: const [],
+        missingNotes: const [],
+        errorMessage: null,
+        filteredLocatedNotes: const [],
+        filteredMissingNotes: const [],
+      ),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: SimpleTextViewer(
+              content: const ['שורה א'],
+              fontSize: 18,
+              openBookCallback: (_) {},
+              isMainText: true,
+              selectionSyncController: controller,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final initialKey = _findSelectionAreaKey(tester);
+    expect(initialKey, isNotNull);
+
+    // אזור אחר נעשה פעיל - האזור שלנו חייב לבנות מחדש את ה-SelectionArea
+    // כדי לשחרר את הבחירה החזותית.
+    controller.activate(otherOwner);
+    await tester.pump();
+
+    final keyAfterExternalActivate = _findSelectionAreaKey(tester);
+    expect(
+      keyAfterExternalActivate,
+      isNot(equals(initialKey)),
+      reason: 'הפעלת אזור חיצוני חייבת להחליף את ה-key כדי לאלץ rebuild',
+    );
+  });
+
+  testWidgets(
+      'SelectionArea לא נבנה מחדש כשהבחירה התנקתה (activeOwner הופך ל-null)',
+      (tester) async {
+    // רגרסיה: לפני התיקון, ניקוי בחירה (לחיצה במקום אחר) גרם להחלפת ה-key
+    // של ה-SelectionArea ולבנייה מחדש של ה-ScrollablePositionedList — והגלילה
+    // קפצה לתחילת הקטע.
+    final controller = SelectionSyncController();
+    addTearDown(controller.dispose);
+    final otherOwner = Object();
+
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      PersonalNotesState(
+        isLoading: false,
+        bookId: 'ספר בדיקה',
+        locatedNotes: const [],
+        missingNotes: const [],
+        errorMessage: null,
+        filteredLocatedNotes: const [],
+        filteredMissingNotes: const [],
+      ),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: SimpleTextViewer(
+              content: const ['שורה א'],
+              fontSize: 18,
+              openBookCallback: (_) {},
+              isMainText: true,
+              selectionSyncController: controller,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // האזור החיצוני מפעיל ומיד מנקה - דמוי משתמש שבחר ושחרר את הבחירה.
+    controller.activate(otherOwner);
+    await tester.pump();
+    final keyAfterActivate = _findSelectionAreaKey(tester);
+
+    controller.clear(otherOwner);
+    await tester.pump();
+    final keyAfterClear = _findSelectionAreaKey(tester);
+
+    expect(
+      keyAfterClear,
+      equals(keyAfterActivate),
+      reason:
+          'ניקוי בחירה (activeOwner=null) אסור שיגרום ל-rebuild — אחרת הגלילה קופצת',
+    );
+  });
+
   testWidgets('פוקוס בתוך עורך Quill מזוהה כשדה קלט', (tester) async {
     final focusNode = FocusNode();
     final scrollController = ScrollController();
@@ -583,6 +708,18 @@ void main() {
     scrollController.dispose();
     focusNode.dispose();
   });
+}
+
+Key? _findSelectionAreaKey(WidgetTester tester) {
+  // SelectionArea היחיד עם ValueKey הוא זה שמסונכרן עם SelectionSyncController.
+  // MaterialApp/Scaffold עוטפים את העץ ב-SelectionContainer אבל לא ב-SelectionArea עם key.
+  final widgets = tester.widgetList<SelectionArea>(find.byType(SelectionArea));
+  for (final widget in widgets) {
+    if (widget.key is ValueKey<String>) {
+      return widget.key;
+    }
+  }
+  return null;
 }
 
 PersonalNote _note() {

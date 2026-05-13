@@ -78,5 +78,25 @@ void main() {
       expect(controller.revision, 2);
       expect(notifications, 2);
     });
+
+    test('אחרי ניקוי בעלות, activeOwner הוא null במופע ההודעה', () {
+      // ההודעה שמתקבלת אחרי clear מגיעה עם activeOwner=null.
+      // צרכנים חייבים להבחין בין "מישהו אחר נעשה פעיל" לבין "אין אף אזור פעיל"
+      // — אחרת ניקוי בחירה גורם לבנייה מחדש מיותרת ולקפיצה בגלילה.
+      final controller = SelectionSyncController();
+      final owner = Object();
+      Object? activeOwnerAtNotification;
+
+      controller.addListener(() {
+        activeOwnerAtNotification = controller.activeOwner;
+      });
+
+      controller.activate(owner);
+      expect(activeOwnerAtNotification, same(owner));
+
+      controller.clear(owner);
+      expect(activeOwnerAtNotification, isNull,
+          reason: 'אחרי clear, ההודעה חייבת לזרום עם activeOwner=null');
+    });
   });
 }
