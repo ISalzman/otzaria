@@ -36,6 +36,7 @@ windows/*
 !windows/runner/
 windows/runner/*
 !windows/runner/Runner.rc
+!windows/runner/resources/
 macos/*
 !macos/Runner/
 macos/Runner/*
