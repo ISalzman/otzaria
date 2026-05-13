@@ -37,31 +37,31 @@ void main() {
   });
 
   group('shouldShowOpenPdfCommentaryPaneEntry', () {
-    test('מחזירה true רק כשיש מפרשים רלוונטיים והחלונית סגורה', () {
+    test('מחזירה true כשיש מפרשים נבחרים וטאב המפרשים אינו פעיל', () {
       expect(
         shouldShowOpenPdfCommentaryPaneEntry(
-          hasRelevantCommentators: true,
-          isPaneOpen: false,
+          hasSelectedCommentators: true,
+          isCommentatorsTabActive: false,
         ),
         isTrue,
       );
     });
 
-    test('מחזירה false כשאין מפרשים רלוונטיים', () {
+    test('מחזירה false כשאין מפרשים נבחרים', () {
       expect(
         shouldShowOpenPdfCommentaryPaneEntry(
-          hasRelevantCommentators: false,
-          isPaneOpen: false,
+          hasSelectedCommentators: false,
+          isCommentatorsTabActive: false,
         ),
         isFalse,
       );
     });
 
-    test('מחזירה false כשהחלונית כבר פתוחה', () {
+    test('מחזירה false כשטאב המפרשים כבר פעיל', () {
       expect(
         shouldShowOpenPdfCommentaryPaneEntry(
-          hasRelevantCommentators: true,
-          isPaneOpen: true,
+          hasSelectedCommentators: true,
+          isCommentatorsTabActive: true,
         ),
         isFalse,
       );
@@ -69,11 +69,11 @@ void main() {
   });
 
   group('shouldShowOpenPdfLinksPaneEntry', () {
-    test('מחזירה true רק כשיש קישורים רלוונטיים והחלונית סגורה', () {
+    test('מחזירה true כשיש קישורים רלוונטיים וטאב הקישורים אינו פעיל', () {
       expect(
         shouldShowOpenPdfLinksPaneEntry(
           hasRelevantLinks: true,
-          isPaneOpen: false,
+          isLinksTabActive: false,
         ),
         isTrue,
       );
@@ -83,17 +83,56 @@ void main() {
       expect(
         shouldShowOpenPdfLinksPaneEntry(
           hasRelevantLinks: false,
-          isPaneOpen: false,
+          isLinksTabActive: false,
         ),
         isFalse,
       );
     });
 
-    test('מחזירה false כשהחלונית כבר פתוחה', () {
+    test('מחזירה false כשטאב הקישורים כבר פעיל', () {
       expect(
         shouldShowOpenPdfLinksPaneEntry(
           hasRelevantLinks: true,
-          isPaneOpen: true,
+          isLinksTabActive: true,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('תרחישים חוצי-טאב בחלונית הצד', () {
+    test('"פתח מפרשים" מוצגת כשהחלונית פתוחה על טאב הקישורים', () {
+      expect(
+        shouldShowOpenPdfCommentaryPaneEntry(
+          hasSelectedCommentators: true,
+          isCommentatorsTabActive: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('"פתח קישורים" מוצגת כשהחלונית פתוחה על טאב המפרשים', () {
+      expect(
+        shouldShowOpenPdfLinksPaneEntry(
+          hasRelevantLinks: true,
+          isLinksTabActive: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('"פתח מפרשים" אינה תלויה ברלוונטיות לעמוד, רק בנבחרים בספר', () {
+      expect(
+        shouldShowOpenPdfCommentaryPaneEntry(
+          hasSelectedCommentators: true,
+          isCommentatorsTabActive: false,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldShowOpenPdfCommentaryPaneEntry(
+          hasSelectedCommentators: false,
+          isCommentatorsTabActive: false,
         ),
         isFalse,
       );

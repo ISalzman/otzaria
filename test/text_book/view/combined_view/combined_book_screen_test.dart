@@ -92,23 +92,24 @@ void main() {
   });
 
   group('shouldShowOpenCommentatorsPaneEntry', () {
-    test('מחזירה true רק כשיש מפרשים, החלונית בצד, והיא סגורה', () {
+    test('מחזירה true כשיש מפרשים נבחרים, החלונית בצד וטאב המפרשים אינו פעיל',
+        () {
       expect(
         shouldShowOpenCommentatorsPaneEntry(
-          hasAvailableCommentators: true,
+          hasSelectedCommentators: true,
           showCommentaryAsExpansionTiles: false,
-          isPaneOpen: false,
+          isCommentatorsTabActive: false,
         ),
         isTrue,
       );
     });
 
-    test('מחזירה false כשאין מפרשים זמינים', () {
+    test('מחזירה false כשאין מפרשים נבחרים', () {
       expect(
         shouldShowOpenCommentatorsPaneEntry(
-          hasAvailableCommentators: false,
+          hasSelectedCommentators: false,
           showCommentaryAsExpansionTiles: false,
-          isPaneOpen: false,
+          isCommentatorsTabActive: false,
         ),
         isFalse,
       );
@@ -117,20 +118,20 @@ void main() {
     test('מחזירה false כשהמפרשים מוצגים כהרחבה מתחת לטקסט', () {
       expect(
         shouldShowOpenCommentatorsPaneEntry(
-          hasAvailableCommentators: true,
+          hasSelectedCommentators: true,
           showCommentaryAsExpansionTiles: true,
-          isPaneOpen: false,
+          isCommentatorsTabActive: false,
         ),
         isFalse,
       );
     });
 
-    test('מחזירה false כשהחלונית כבר פתוחה', () {
+    test('מחזירה false כשטאב המפרשים כבר פעיל', () {
       expect(
         shouldShowOpenCommentatorsPaneEntry(
-          hasAvailableCommentators: true,
+          hasSelectedCommentators: true,
           showCommentaryAsExpansionTiles: false,
-          isPaneOpen: true,
+          isCommentatorsTabActive: true,
         ),
         isFalse,
       );
@@ -138,11 +139,11 @@ void main() {
   });
 
   group('shouldShowOpenLinksPaneEntry', () {
-    test('מחזירה true רק כשיש קישורים והחלונית סגורה', () {
+    test('מחזירה true כשיש קישורים וטאב הקישורים אינו פעיל', () {
       expect(
         shouldShowOpenLinksPaneEntry(
           hasLinks: true,
-          isPaneOpen: false,
+          isLinksTabActive: false,
         ),
         isTrue,
       );
@@ -152,17 +153,51 @@ void main() {
       expect(
         shouldShowOpenLinksPaneEntry(
           hasLinks: false,
-          isPaneOpen: false,
+          isLinksTabActive: false,
         ),
         isFalse,
       );
     });
 
-    test('מחזירה false כשהחלונית כבר פתוחה', () {
+    test('מחזירה false כשטאב הקישורים כבר פעיל', () {
       expect(
         shouldShowOpenLinksPaneEntry(
           hasLinks: true,
-          isPaneOpen: true,
+          isLinksTabActive: true,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('תרחישים חוצי-טאב בחלונית הצד', () {
+    test('"פתח מפרשים" מוצגת כשהחלונית פתוחה על טאב הקישורים', () {
+      expect(
+        shouldShowOpenCommentatorsPaneEntry(
+          hasSelectedCommentators: true,
+          showCommentaryAsExpansionTiles: false,
+          isCommentatorsTabActive: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('"פתח קישורים" מוצגת כשהחלונית פתוחה על טאב המפרשים', () {
+      expect(
+        shouldShowOpenLinksPaneEntry(
+          hasLinks: true,
+          isLinksTabActive: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('"פתח מפרשים" מסתתרת כשאין מפרשים נבחרים אפילו אם זמינים בספר', () {
+      expect(
+        shouldShowOpenCommentatorsPaneEntry(
+          hasSelectedCommentators: false,
+          showCommentaryAsExpansionTiles: false,
+          isCommentatorsTabActive: false,
         ),
         isFalse,
       );

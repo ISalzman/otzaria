@@ -292,7 +292,10 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                           _currentTabIndex = _linksTabIndex;
                         });
                       },
-                      isPaneOpen: () => _paneOpen,
+                      isCommentatorsTabActive: () =>
+                          _paneOpen && _currentTabIndex == 0,
+                      isLinksTabActive: () =>
+                          _paneOpen && _currentTabIndex == _linksTabIndex,
                     ),
                     if (!_paneOpen)
                       Positioned(

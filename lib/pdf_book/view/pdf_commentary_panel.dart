@@ -43,6 +43,7 @@ class PdfCommentaryPanel extends StatefulWidget {
   final double fontSize;
   final VoidCallback? onClose;
   final int? initialTabIndex;
+  final ValueChanged<int>? onTabChanged;
 
   const PdfCommentaryPanel({
     super.key,
@@ -53,6 +54,7 @@ class PdfCommentaryPanel extends StatefulWidget {
     required this.fontSize,
     this.onClose,
     this.initialTabIndex,
+    this.onTabChanged,
   });
 
   @override
@@ -62,6 +64,8 @@ class PdfCommentaryPanel extends StatefulWidget {
 class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late VoidCallback _tabControllerListener;
+  int _lastNotifiedTabIndex = 0;
   bool _showFilterTab = false;
   String? _savedSelectedText;
   final TextEditingController _searchController = TextEditingController();
@@ -147,6 +151,14 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       vsync: this,
       initialIndex: widget.initialTabIndex ?? 0,
     );
+    _lastNotifiedTabIndex = _tabController.index;
+    _tabControllerListener = () {
+      if (_tabController.indexIsChanging) return;
+      if (_tabController.index == _lastNotifiedTabIndex) return;
+      _lastNotifiedTabIndex = _tabController.index;
+      widget.onTabChanged?.call(_tabController.index);
+    };
+    _tabController.addListener(_tabControllerListener);
     _loadCommentatorGroups();
   }
 
@@ -196,6 +208,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     if (oldWidget.initialTabIndex != widget.initialTabIndex &&
         widget.initialTabIndex != null) {
       _tabController.animateTo(widget.initialTabIndex!);
+      _lastNotifiedTabIndex = widget.initialTabIndex!;
     }
 
     if (oldWidget.tab != widget.tab) {
@@ -217,6 +230,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   @override
   void dispose() {
     _searchUpdateDebounce?.cancel();
+    _tabController.removeListener(_tabControllerListener);
     _tabController.dispose();
     super.dispose();
   }
