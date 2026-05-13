@@ -108,7 +108,17 @@ class AppPaths {
       return p.join(systemWideRoot, 'index');
     }
 
-    return p.join(await getDataRootPath(), 'index');
+    // תאימות אחורה: בעבר האינדקס תמיד נוצר תחת dataRoot (APPDATA וכדומה).
+    // אם קיים שם אינדקס – ממשיכים להשתמש בו כדי לא לאבד עבודה.
+    final legacyPath = p.join(await getDataRootPath(), 'index');
+    if (Directory(legacyPath).existsSync()) {
+      return legacyPath;
+    }
+
+    // ברירת מחדל חדשה: האינדקס יושב ליד תיקיית הספרייה. כך אם המשתמש
+    // העביר את הספרייה לכונן אחר (למשל D:), גם האינדקס יישב שם.
+    final libraryPath = await getLibraryPath();
+    return p.join(p.dirname(libraryPath), 'index');
   }
 
   /// Gets the main library path from settings, or gracefully falls back to default paths.
@@ -138,6 +148,30 @@ class AppPaths {
     if (savedIndex != null && savedIndex.isNotEmpty) return savedIndex;
 
     return _getDefaultIndexPath();
+  }
+
+  /// מחזיר רשימת נתיבי ברירת מחדל לאינדקס שאינם הנתיב הפעיל כעת.
+  ///
+  /// משמש בעת איפוס אינדקס: אינדקסים ישנים בנתיבים אלו (למשל אינדקס
+  /// ישן שנותר ב-APPDATA אחרי שהמשתמש העביר את הספרייה לכונן אחר)
+  /// ימחקו כדי שלא "יתפסו" את ברירת המחדל ב-[getIndexPath] בהפעלה הבאה.
+  static Future<List<String>> getStaleDefaultIndexPaths() async {
+    final activePath = p.normalize(await getIndexPath());
+    final candidates = <String>{};
+
+    final systemWideRoot = await _getSystemWideLibraryRootIfNeeded();
+    if (systemWideRoot != null) {
+      candidates.add(p.join(systemWideRoot, 'index'));
+    }
+
+    // ברירת המחדל הישנה: תחת תיקיית הנתונים (APPDATA וכדומה).
+    candidates.add(p.join(await getDataRootPath(), 'index'));
+
+    // ברירת המחדל הנוכחית: ליד הספרייה.
+    final libraryPath = await getLibraryPath();
+    candidates.add(p.join(p.dirname(libraryPath), 'index'));
+
+    return candidates.where((c) => p.normalize(c) != activePath).toList();
   }
 
   /// Returns the backup path inside the writable app data root.
