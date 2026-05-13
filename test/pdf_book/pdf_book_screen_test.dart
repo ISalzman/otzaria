@@ -68,6 +68,45 @@ void main() {
     });
   });
 
+  group('shouldShowSelectPdfCommentatorsEntry', () {
+    test('מחזירה true כשטאב המפרשים אינו פעיל', () {
+      expect(
+        shouldShowSelectPdfCommentatorsEntry(
+          isCommentatorsTabActive: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('מחזירה false כשטאב המפרשים פעיל', () {
+      expect(
+        shouldShowSelectPdfCommentatorsEntry(
+          isCommentatorsTabActive: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('מציגה גם בלי מפרשים נבחרים — בניגוד ל-shouldShowOpenPdfCommentaryPaneEntry',
+        () {
+      // הפריט הזה לא תלוי ב-hasSelectedCommentators, כדי לאפשר בחירה ראשונית
+      // גם כשהבחירה ריקה (תיקון עקביות מול מסך הטקסט).
+      expect(
+        shouldShowOpenPdfCommentaryPaneEntry(
+          hasSelectedCommentators: false,
+          isCommentatorsTabActive: false,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldShowSelectPdfCommentatorsEntry(
+          isCommentatorsTabActive: false,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('shouldShowOpenPdfLinksPaneEntry', () {
     test('מחזירה true כשיש קישורים רלוונטיים וטאב הקישורים אינו פעיל', () {
       expect(

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -44,6 +45,7 @@ class PdfCommentaryPanel extends StatefulWidget {
   final VoidCallback? onClose;
   final int? initialTabIndex;
   final ValueChanged<int>? onTabChanged;
+  final ValueListenable<int>? openFilterRequest;
 
   const PdfCommentaryPanel({
     super.key,
@@ -55,6 +57,7 @@ class PdfCommentaryPanel extends StatefulWidget {
     this.onClose,
     this.initialTabIndex,
     this.onTabChanged,
+    this.openFilterRequest,
   });
 
   @override
@@ -67,6 +70,18 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   late VoidCallback _tabControllerListener;
   int _lastNotifiedTabIndex = 0;
   bool _showFilterTab = false;
+  // ערך בסיס של counter ה-openFilterRequest שראינו ב-init. רק עליות מעבר
+  // לערך הזה מטריגרות פתיחה — counter ישן לא ייספג שוב ביצירה מחודשת.
+  int _lastSeenFilterRequest = 0;
+
+  void _handleOpenFilterRequest() {
+    if (!mounted) return;
+    final newValue = widget.openFilterRequest?.value ?? 0;
+    if (newValue <= _lastSeenFilterRequest) return;
+    _lastSeenFilterRequest = newValue;
+    setState(() => _showFilterTab = true);
+  }
+
   String? _savedSelectedText;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -159,6 +174,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       widget.onTabChanged?.call(_tabController.index);
     };
     _tabController.addListener(_tabControllerListener);
+    widget.openFilterRequest?.addListener(_handleOpenFilterRequest);
+    _lastSeenFilterRequest = widget.openFilterRequest?.value ?? 0;
     _loadCommentatorGroups();
   }
 
@@ -211,6 +228,14 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       _lastNotifiedTabIndex = widget.initialTabIndex!;
     }
 
+    if (oldWidget.openFilterRequest != widget.openFilterRequest) {
+      oldWidget.openFilterRequest?.removeListener(_handleOpenFilterRequest);
+      widget.openFilterRequest?.addListener(_handleOpenFilterRequest);
+      // איפוס ה-baseline ל-notifier החדש — אחרת ערך גבוה מה-notifier הקודם
+      // עלול לחסום פתיחות עתידיות עד שה-counter החדש "ישיג" אותו.
+      _lastSeenFilterRequest = widget.openFilterRequest?.value ?? 0;
+    }
+
     if (oldWidget.tab != widget.tab) {
       _visibleContentCache = null;
       _linkContentCache.clear();
@@ -231,6 +256,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   void dispose() {
     _searchUpdateDebounce?.cancel();
     _tabController.removeListener(_tabControllerListener);
+    widget.openFilterRequest?.removeListener(_handleOpenFilterRequest);
     _tabController.dispose();
     super.dispose();
   }

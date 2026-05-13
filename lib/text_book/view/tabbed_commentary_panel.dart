@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -23,6 +24,7 @@ class TabbedCommentaryPanel extends StatefulWidget {
   final Function(int)? onTabChanged; // callback כשהטאב משתנה
   final bool showSplitView; // האם במצב מפוצל (true) או מפרשים למטה (false)
   final SelectionSyncController? selectionSyncController;
+  final ValueListenable<int>? openFilterRequest;
 
   const TabbedCommentaryPanel({
     super.key,
@@ -34,6 +36,7 @@ class TabbedCommentaryPanel extends StatefulWidget {
     this.onTabChanged,
     this.showSplitView = true,
     this.selectionSyncController,
+    this.openFilterRequest,
   });
 
   @override
@@ -168,6 +171,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                       fontSize: widget.fontSize,
                       showSearch: widget.showSearch,
                       selectionSyncController: widget.selectionSyncController,
+                      openFilterRequest: widget.openFilterRequest,
                       selectedCommentatorsOverride: state.activeCommentators,
                       onSelectedCommentatorsOverrideChanged: (commentators) {
                         context

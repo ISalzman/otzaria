@@ -62,6 +62,7 @@ class CombinedView extends StatefulWidget {
     this.isPreviewMode = false,
     this.onOpenPersonalNotes,
     this.onOpenCommentatorsPane,
+    this.onOpenCommentatorsPaneWithFilter,
     this.onOpenLinksPane,
     this.isCommentatorsTabActive,
     this.isLinksTabActive,
@@ -78,6 +79,7 @@ class CombinedView extends StatefulWidget {
   final bool isPreviewMode;
   final VoidCallback? onOpenPersonalNotes;
   final VoidCallback? onOpenCommentatorsPane;
+  final VoidCallback? onOpenCommentatorsPaneWithFilter;
   final VoidCallback? onOpenLinksPane;
   final bool Function()? isCommentatorsTabActive;
   final bool Function()? isLinksTabActive;
@@ -129,6 +131,20 @@ bool shouldShowOpenLinksPaneEntry({
   required bool isLinksTabActive,
 }) {
   return hasLinks && !isLinksTabActive;
+}
+
+/// פריט "בחר מפרשים מרובים" יוצג כשיש callback `onOpenCommentatorsPaneWithFilter`
+/// וטאב המפרשים אינו פעיל בחלונית הצד. הכלל זהה גם במצב "מפרשים מתחת":
+/// אם המשתמש כבר פתח את חלונית הצד על המפרשים, אין צורך בפריט.
+///
+/// בניגוד ל-[shouldShowOpenCommentatorsPaneEntry], הפריט הזה לא תלוי
+/// ב-`hasSelectedCommentators` — מטרתו לאפשר בחירה גם כשהבחירה ריקה.
+@visibleForTesting
+bool shouldShowSelectCommentatorsEntry({
+  required bool hasOpenCommentatorsPaneWithFilterCallback,
+  required bool isCommentatorsTabActive,
+}) {
+  return hasOpenCommentatorsPaneWithFilterCallback && !isCommentatorsTabActive;
 }
 
 class _CombinedViewState extends State<CombinedView> {
@@ -437,15 +453,21 @@ class _CombinedViewState extends State<CombinedView> {
       linksByLine: state.linksByLine,
       paragraphIndex: paragraphIndex,
     );
+    final isCommentatorsTabActive =
+        widget.isCommentatorsTabActive?.call() ?? false;
     final shouldShowOpenPaneEntry = shouldShowOpenCommentatorsPaneEntry(
       hasSelectedCommentators: state.activeCommentators.isNotEmpty,
       showCommentaryAsExpansionTiles: widget.showCommentaryAsExpansionTiles,
-      isCommentatorsTabActive:
-          widget.isCommentatorsTabActive?.call() ?? false,
+      isCommentatorsTabActive: isCommentatorsTabActive,
+    );
+    final shouldShowSelectEntry = shouldShowSelectCommentatorsEntry(
+      hasOpenCommentatorsPaneWithFilterCallback:
+          widget.onOpenCommentatorsPaneWithFilter != null,
+      isCommentatorsTabActive: isCommentatorsTabActive,
     );
 
     final commentatorChildren = <AppContextMenuEntry>[
-      if (shouldShowOpenPaneEntry) ...[
+      if (shouldShowOpenPaneEntry)
         AppContextMenuEntry(
           label: 'פתח מפרשים בחלונית צד',
           onTap: () {
@@ -453,8 +475,16 @@ class _CombinedViewState extends State<CombinedView> {
             _openCommentatorsPane(isAdding: true);
           },
         ),
+      if (shouldShowSelectEntry)
+        AppContextMenuEntry(
+          label: 'פתח בחירת מפרשים בחלונית צד',
+          onTap: () {
+            _selectParagraphForContextMenu(paragraphIndex);
+            widget.onOpenCommentatorsPaneWithFilter!();
+          },
+        ),
+      if (shouldShowOpenPaneEntry || shouldShowSelectEntry)
         const AppContextMenuEntry.divider(),
-      ],
       AppContextMenuEntry(
         label: 'הצג את כל המפרשים',
         icon: allActive ? FluentIcons.checkmark_24_regular : null,
