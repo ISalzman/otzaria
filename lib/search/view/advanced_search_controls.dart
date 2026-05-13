@@ -542,13 +542,13 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
 
   Widget _buildCheckboxGrid(bool isEnabled, {required bool compactMode}) {
     const List<String> options = [
-      SearchQueryBuilder.typoToleranceOptionKey,
       'קידומות דקדוקיות',
       'סיומות דקדוקיות',
       'קידומות',
       'סיומות',
       'כתיב מלא/חסר',
       'חלק ממילה',
+      SearchQueryBuilder.typoToleranceOptionKey,
     ];
 
     final useGlobal = widget.tab.useGlobalSearchOptions.value;
