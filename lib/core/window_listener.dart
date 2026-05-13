@@ -8,8 +8,6 @@ import '../migration/database/daos/database.dart';
 import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
-import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 /// Callback type for fullscreen state changes
@@ -92,19 +90,6 @@ class AppWindowListener extends WindowListener {
       'armForceExitWatchdog',
       _armForceExitWatchdog,
       timeout: const Duration(seconds: 1),
-    );
-    await _runBestEffortShutdownStep(
-      'prepareForAppShutdown',
-      PluginRuntimeDispatcher.instance.prepareForAppShutdown,
-      timeout: const Duration(seconds: 2),
-    );
-    await Future<void>.delayed(Duration.zero);
-    await _runBestEffortShutdownStep(
-      'shutdownForAppExit',
-      WebViewEnvironmentHolder.shutdownForAppExit,
-      // This step includes the native dispatcher-queue drain, so keep the
-      // timeout looser than the Dart-side pre-close step.
-      timeout: const Duration(seconds: 8),
     );
 
     // Step 1: Non-critical cleanup — errors here must not block Hive.close().
