@@ -66,6 +66,68 @@ void main() {
       expect(selectedDate, initialDate);
     });
 
+    testWidgets('double tap on a date cell calls onConfirm', (tester) async {
+      bool confirmed = false;
+      DateTime? changedTo;
+      final initialDate = DateTime(2026, 4, 3);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: JumpToDatePanel(
+              selectedDate: initialDate,
+              currentDate: initialDate,
+              onDateChanged: (d) => changedTo = d,
+              onCancel: () {},
+              onConfirm: () => confirmed = true,
+            ),
+          ),
+        ),
+      );
+
+      // לחיצה ראשונה — בוחרת את התאריך (מפעילה onDateChanged)
+      await tester.tap(find.text('15'));
+      await tester.pump();
+      // לחיצה שנייה מיידית — אמורה להפעיל onConfirm
+      await tester.tap(find.text('15'));
+      await tester.pumpAndSettle();
+
+      expect(changedTo, equals(DateTime(2026, 4, 15)));
+      expect(confirmed, isTrue);
+    });
+
+    testWidgets('double click on navigation arrows does not call onConfirm',
+        (tester) async {
+      bool confirmed = false;
+      final initialDate = DateTime(2026, 4, 3);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: JumpToDatePanel(
+              selectedDate: initialDate,
+              currentDate: initialDate,
+              onDateChanged: (_) {},
+              onCancel: () {},
+              onConfirm: () => confirmed = true,
+            ),
+          ),
+        ),
+      );
+
+      // חיצי הניווט של CalendarDatePicker (הבא/הקודם)
+      final navButtons = find.byType(IconButton);
+      expect(navButtons, findsWidgets);
+
+      // לחיצה כפולה על חץ ניווט — לא אמורה לאשר
+      await tester.tap(navButtons.first);
+      await tester.pump();
+      await tester.tap(navButtons.first);
+      await tester.pumpAndSettle();
+
+      expect(confirmed, isFalse);
+    });
+
     testWidgets('recurring event requires a positive number of years',
         (tester) async {
       CalendarEventDialogResult? result;
