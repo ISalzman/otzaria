@@ -169,4 +169,80 @@ void main() {
       expect(result, equals('משפט עם נקודה.'));
     });
   });
+
+  group('normalizeForFindRefMatch', () {
+    test('מחרוזת ריקה מחזירה ריקה', () {
+      expect(normalizeForFindRefMatch(''), equals(''));
+    });
+
+    test('רווחים בלבד מחזירים מחרוזת ריקה', () {
+      expect(normalizeForFindRefMatch('   '), equals(''));
+      expect(normalizeForFindRefMatch('\t \n'), equals(''));
+    });
+
+    test('גרשיים כפולים (ASCII) מוסרים ללא הוספת רווח', () {
+      // קריטי: "שו"ע" → "שוע" (לא "שו ע") כדי שראשי-תיבות יעבדו.
+      expect(normalizeForFindRefMatch('שו"ע'), equals('שוע'));
+      expect(normalizeForFindRefMatch('מ"ב'), equals('מב'));
+    });
+
+    test('גרשיים עבריים (״) מוסרים ללא הוספת רווח', () {
+      expect(normalizeForFindRefMatch('שו״ע'), equals('שוע'));
+      expect(normalizeForFindRefMatch('רמב״ם'), equals('רמבם'));
+    });
+
+    test('גרש בודד (\') מוסר ללא הוספת רווח', () {
+      expect(normalizeForFindRefMatch("ה'"), equals('ה'));
+    });
+
+    test('גרש עברי (׳) מוסר ללא הוספת רווח', () {
+      expect(normalizeForFindRefMatch('ה׳'), equals('ה'));
+    });
+
+    test('ניקוד עברי מוסר', () {
+      expect(normalizeForFindRefMatch('בְּרֵאשִׁית'), equals('בראשית'));
+      expect(normalizeForFindRefMatch('שָׁלוֹם'), equals('שלום'));
+    });
+
+    test('טעמי מקרא מוסרים', () {
+      // טעם דרגא (U+05A7) על "בְּ"
+      expect(normalizeForFindRefMatch('בְּ֧רֵאשִׁ֖ית'), equals('בראשית'));
+    });
+
+    test('אותיות אנגלית הופכות לאותיות קטנות', () {
+      expect(normalizeForFindRefMatch('Genesis'), equals('genesis'));
+      expect(normalizeForFindRefMatch('GENESIS'), equals('genesis'));
+    });
+
+    test('רווחים מרובים מתכווצים לרווח אחד', () {
+      expect(normalizeForFindRefMatch('א   ב'), equals('א ב'));
+      expect(normalizeForFindRefMatch('א\t\tב'), equals('א ב'));
+    });
+
+    test('תווים מיוחדים הופכים לרווח', () {
+      expect(normalizeForFindRefMatch('א-ב'), equals('א ב'));
+      expect(normalizeForFindRefMatch('א,ב'), equals('א ב'));
+      expect(normalizeForFindRefMatch('א.ב'), equals('א ב'));
+      expect(normalizeForFindRefMatch('א/ב'), equals('א ב'));
+    });
+
+    test('רווחים מובילים וסוגרים מקוצצים', () {
+      expect(normalizeForFindRefMatch('  שלום  '), equals('שלום'));
+    });
+
+    test('ספרות נשמרות', () {
+      expect(normalizeForFindRefMatch('פרק 1'), equals('פרק 1'));
+      expect(normalizeForFindRefMatch('סימן 42'), equals('סימן 42'));
+    });
+
+    test('אותיות עבריות נשמרות', () {
+      expect(normalizeForFindRefMatch('אבגדהוזחטיכלמנסעפצקרשת'),
+          equals('אבגדהוזחטיכלמנסעפצקרשת'));
+    });
+
+    test('שילוב: ניקוד+גרשיים+טעמים+רווחים', () {
+      // "שוּ״ע - אוֹ״ח" → "שוע אוח"
+      expect(normalizeForFindRefMatch('שוּ״ע - אוֹ״ח'), equals('שוע אוח'));
+    });
+  });
 }

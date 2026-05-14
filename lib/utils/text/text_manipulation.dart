@@ -780,6 +780,24 @@ String removeTeamim(String s) => s
     .replaceAll('׀', '')
     .replaceAll(SearchRegexPatterns.cantillationOnly, '');
 
+/// נורמליזציה לצורך התאמת מקור (FindRef):
+/// מסיר ניקוד, טעמים, גרשיים, סימני פיסוק, ומאחד רווחים.
+/// "שו"ע" → "שוע" ; "בְּרֵאשִׁית" → "בראשית".
+String normalizeForFindRefMatch(String input) {
+  var cleaned = removeTeamim(removeVolwels(input));
+
+  // הסרה מוחלטת של גרשיים — כך מ"ב הופך למב (לא מ ב)
+  cleaned = cleaned
+      .replaceAll('"', '')
+      .replaceAll("'", '')
+      .replaceAll('״', '')
+      .replaceAll('׳', '');
+
+  cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9֐-׿\s]'), ' ');
+  cleaned = cleaned.toLowerCase();
+  return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
 String removeSectionNames(String s) => s
     .replaceAll('פרק', '')
     .replaceAll('פסוק', '')

@@ -85,6 +85,7 @@ class ReferenceBooksCache {
             ReferenceBookHit(
               bookId: -1,
               title: key.title,
+              normalizedTitle: normalizedTitle,
               filePath: entry.value,
               fileType: 'pdf',
               matchRank: 0,
@@ -151,13 +152,11 @@ class ReferenceBooksCache {
       } else if (t.contains(q)) {
         matchRank = 2;
       } else {
-        // acronym match
-        final rawAcronyms = AcronymsCache.instance.getAcronymsForBook(book.id);
-        if (rawAcronyms != null) {
-          for (final rawAcr in rawAcronyms) {
-            final a = _normalizeForMatch(rawAcr);
-            if (a.isEmpty) continue;
-
+        // התאמת ראשי תיבות — המונחים כבר מנורמלים בעת טעינת הקאש.
+        final normalizedAcronyms =
+            AcronymsCache.instance.getAcronymsForBook(book.id);
+        if (normalizedAcronyms != null) {
+          for (final a in normalizedAcronyms) {
             if (a == q) {
               matchRank = 3;
               matchedTerm = a;
@@ -179,6 +178,7 @@ class ReferenceBooksCache {
       final hit = ReferenceBookHit(
         bookId: book.id,
         title: book.title,
+        normalizedTitle: t,
         filePath: book.filePath ?? '',
         fileType: book.fileType,
         matchRank: matchRank,
@@ -208,6 +208,7 @@ class ReferenceBooksCache {
       final hit = ReferenceBookHit(
         bookId: baseHit.bookId,
         title: baseHit.title,
+        normalizedTitle: t,
         filePath: baseHit.filePath,
         fileType: baseHit.fileType,
         matchRank: matchRank,
@@ -237,18 +238,8 @@ class ReferenceBooksCache {
     return merged.length > limit ? merged.take(limit).toList() : merged;
   }
 
-  static String _normalizeForMatch(String input) {
-    var cleaned = removeTeamim(removeVolwels(input));
-
-    // Remove quotes/gershayim completely (don't convert to space)
-    // This way מ"ב becomes מב (not מ ב)
-    cleaned = cleaned.replaceAll('"', '').replaceAll("'", '');
-    cleaned = cleaned.replaceAll('״', '').replaceAll('׳', '');
-
-    cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9֐-׿\s]'), ' ');
-    cleaned = cleaned.toLowerCase();
-    return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
+  static String _normalizeForMatch(String input) =>
+      normalizeForFindRefMatch(input);
 
   static Future<List<(String, String, int)>> _parsePdfOutlineEntries(
       String filePath) async {
@@ -288,6 +279,10 @@ class ReferenceBooksCache {
 class ReferenceBookHit {
   final int bookId;
   final String title;
+
+  /// הכותרת לאחר [normalizeForFindRefMatch], מחושבת מראש במטמון
+  /// כדי לחסוך נורמליזציה חוזרת בצרכן.
+  final String normalizedTitle;
   final String filePath;
   final String fileType;
   final int matchRank;
@@ -297,6 +292,7 @@ class ReferenceBookHit {
   const ReferenceBookHit({
     required this.bookId,
     required this.title,
+    required this.normalizedTitle,
     required this.filePath,
     required this.fileType,
     required this.matchRank,
