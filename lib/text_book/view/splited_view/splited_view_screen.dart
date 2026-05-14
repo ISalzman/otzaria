@@ -25,8 +25,9 @@ class SplitedViewScreen extends StatefulWidget {
     required this.openLeftPaneTab,
     this.onSelectedTextChanged,
     required this.tab,
-    this.initialTabIndex, // אינדקס הכרטיסייה הראשונית
-    required this.showSplitView, // האם להציג בתצוגה מפוצלת
+    this.initialTabIndex,
+    required this.showSplitView,
+    this.onSidebarTabChanged,
   });
 
   final List<String> content;
@@ -37,6 +38,7 @@ class SplitedViewScreen extends StatefulWidget {
   final TextBookTab tab;
   final int? initialTabIndex;
   final bool showSplitView;
+  final ValueChanged<int>? onSidebarTabChanged;
 
   @override
   State<SplitedViewScreen> createState() => _SplitedViewScreenState();
@@ -297,6 +299,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                         setState(() {
                           _currentTabIndex = index;
                         });
+                        widget.onSidebarTabChanged?.call(index);
                         if (!widget.showSplitView) {
                           debugPrint(
                               'DEBUG: Saving tab $index to combined settings');

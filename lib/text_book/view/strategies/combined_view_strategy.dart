@@ -19,7 +19,8 @@ class CombinedViewStrategyImpl extends TextBookViewStrategy {
       onSelectedTextChanged: config.onSelectedTextChanged,
       tab: config.tab,
       initialTabIndex: config.initialSidebarTabIndex,
-      showSplitView: false, // Combined view - commentaries below
+      showSplitView: false,
+      onSidebarTabChanged: config.onSidebarTabChanged,
     );
   }
 }
