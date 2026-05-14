@@ -22,6 +22,9 @@ class ReferenceBooksCache {
   bool _isLoaded = false;
   Future<void>? _loadingFuture;
 
+  /// מונה דורות לזיהוי [clear] שקרה במהלך טעינה.
+  int _generation = 0;
+
   // Normalized titles cache (computed from BooksCache)
   final Map<int, String> _normalizedTitles = <int, String>{};
 
@@ -50,15 +53,27 @@ class ReferenceBooksCache {
   }
 
   Future<void> _loadInternal() async {
+    final myGen = _generation;
     try {
       // Warm up shared caches
       await BooksCache.instance.warmUp();
+      if (myGen != _generation) return;
       await AcronymsCache.instance.warmUp();
+      if (myGen != _generation) return;
 
-      // Pre-compute normalized titles for fast matching
-      _normalizedTitles.clear();
+      // Pre-compute normalized titles for fast matching.
+      // בונים למפה מקומית — ה-cache החי לא נוגע עד ה-swap בסוף.
+      // יציאה ל-event loop כל chunk כדי לא לחסום את ה-UI thread על
+      // ספריות גדולות (~50K ספרים × regex לנורמליזציה).
+      final localNormalizedTitles = <int, String>{};
+      const yieldBatch = 1000;
+      var processed = 0;
       for (final book in BooksCache.instance.books) {
-        _normalizedTitles[book.id] = _normalizeForMatch(book.title);
+        localNormalizedTitles[book.id] = _normalizeForMatch(book.title);
+        if (++processed % yieldBatch == 0) {
+          await Future<void>.delayed(Duration.zero);
+          if (myGen != _generation) return;
+        }
       }
 
       // Collect DB PDF titles to avoid duplicates with file-system PDFs
@@ -69,9 +84,11 @@ class ReferenceBooksCache {
 
       // Load PDF books from file system that are not in the DB.
       // PDF outline parsing is NOT done here — it happens lazily via getPdfOutlineEntries().
-      _fsPdfBooks.clear();
+      final localFsPdfBooks = <(String, ReferenceBookHit)>[];
       if (FileSystemLibraryProvider.instance.isInitialized) {
         final keyToPath = await FileSystemLibraryProvider.instance.keyToPath;
+        if (myGen != _generation) return;
+        var processedPdfs = 0;
         for (final entry in keyToPath.entries) {
           final key = BookCompositeKey.tryParse(entry.key);
           if (key == null || key.fileType != 'pdf') continue;
@@ -80,7 +97,7 @@ class ReferenceBooksCache {
           final normalizedTitle = _normalizeForMatch(key.title);
           if (normalizedTitle.isEmpty) continue;
 
-          _fsPdfBooks.add((
+          localFsPdfBooks.add((
             normalizedTitle,
             ReferenceBookHit(
               bookId: -1,
@@ -92,11 +109,21 @@ class ReferenceBooksCache {
               orderIndex: 999.0,
             ),
           ));
+          if (++processedPdfs % yieldBatch == 0) {
+            await Future<void>.delayed(Duration.zero);
+            if (myGen != _generation) return;
+          }
         }
-        debugPrint(
-            '[ReferenceBooksCache] Added ${_fsPdfBooks.length} FS PDF books');
       }
 
+      // Swap אטומי — רק אם הדור עדיין שלנו.
+      if (myGen != _generation) return;
+      _normalizedTitles
+        ..clear()
+        ..addAll(localNormalizedTitles);
+      _fsPdfBooks
+        ..clear()
+        ..addAll(localFsPdfBooks);
       _isLoaded = true;
       debugPrint(
         '[ReferenceBooksCache] Ready with ${BooksCache.instance.books.length} DB books'
@@ -104,13 +131,16 @@ class ReferenceBooksCache {
       );
     } catch (e) {
       debugPrint('[ReferenceBooksCache] Warmup failed: $e');
-      _normalizedTitles.clear();
-      _fsPdfBooks.clear();
-      _isLoaded = true;
+      if (myGen == _generation) {
+        _normalizedTitles.clear();
+        _fsPdfBooks.clear();
+        _isLoaded = true;
+      }
     }
   }
 
   void clear() {
+    _generation++;
     _normalizedTitles.clear();
     _fsPdfBooks.clear();
     _pdfOutlineCache.clear();

@@ -17,6 +17,9 @@ class AcronymsCache {
   bool _isLoaded = false;
   Future<void>? _loadingFuture;
 
+  /// מונה דורות לזיהוי [clear] שקרה במהלך טעינה.
+  int _generation = 0;
+
   final Map<int, List<String>> _acronymsByBookId = <int, List<String>>{};
 
   bool get isLoaded => _isLoaded;
@@ -39,42 +42,63 @@ class AcronymsCache {
   }
 
   Future<void> _loadInternal() async {
+    final myGen = _generation;
     final repository = SqliteDataProvider.instance.repository;
     if (repository == null) {
       debugPrint('[AcronymsCache] DB not initialized; skipping warmup');
-      _acronymsByBookId.clear();
-      _isLoaded = false;
+      if (myGen == _generation) {
+        _acronymsByBookId.clear();
+        _isLoaded = false;
+      }
       return;
     }
 
     try {
       final db = await repository.database.database;
+      if (myGen != _generation) return; // הופסק על ידי clear()
+
       final acrRows = db.select(
         'SELECT bookId, term FROM book_acronym ORDER BY bookId',
       );
 
-      _acronymsByBookId.clear();
+      // בונים למפה מקומית — ה-cache החי לא נוגע עד ה-swap בסוף.
+      // נורמליזציה של regex היא היקרה כאן (כל ראש-תיבות) — יציאה ל-event
+      // loop כל chunk כדי לא לחסום את ה-UI thread.
+      final local = <int, List<String>>{};
+      const yieldBatch = 1000;
+      var i = 0;
       for (final row in acrRows) {
         final bookId = row['bookId'] as int;
         final term = (row['term'] as String?) ?? '';
         if (term.isEmpty) continue;
         final normalized = normalizeForFindRefMatch(term);
         if (normalized.isEmpty) continue;
-        _acronymsByBookId.putIfAbsent(bookId, () => <String>[]).add(normalized);
+        local.putIfAbsent(bookId, () => <String>[]).add(normalized);
+        if (++i % yieldBatch == 0) {
+          await Future<void>.delayed(Duration.zero);
+          if (myGen != _generation) return; // הופסק על ידי clear()
+        }
       }
 
+      if (myGen != _generation) return;
+      _acronymsByBookId
+        ..clear()
+        ..addAll(local);
       _isLoaded = true;
       debugPrint(
         '[AcronymsCache] Loaded ${acrRows.length} acronyms for ${_acronymsByBookId.length} books',
       );
     } catch (e) {
       debugPrint('[AcronymsCache] Warmup failed: $e');
-      _acronymsByBookId.clear();
-      _isLoaded = true; // Mark as loaded to avoid repeated attempts
+      if (myGen == _generation) {
+        _acronymsByBookId.clear();
+        _isLoaded = true; // Mark as loaded to avoid repeated attempts
+      }
     }
   }
 
   void clear() {
+    _generation++;
     _acronymsByBookId.clear();
     _isLoaded = false;
     _loadingFuture = null;
