@@ -735,8 +735,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     AppContextMenuEntry buildItem(String commentator) => AppContextMenuEntry(
           label: commentator,
-          icon: widget.tab.activeCommentators.contains(commentator)
-              ? FluentIcons.checkmark_24_regular
+          trailing: widget.tab.activeCommentators.contains(commentator)
+              ? const Icon(FluentIcons.checkmark_24_regular)
               : null,
           onTap: () => _toggleCommentator(commentator),
         );
@@ -822,7 +822,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
         label: 'הצג את כל המפרשים',
-        icon: allActive ? FluentIcons.checkmark_24_regular : null,
+        trailing:
+            allActive ? const Icon(FluentIcons.checkmark_24_regular) : null,
         onTap: () => _toggleAllCommentators(relevantCommentators),
       ),
       if (relevantCommentators.isNotEmpty) const AppContextMenuEntry.divider(),

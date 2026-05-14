@@ -383,7 +383,9 @@ class _CombinedViewState extends State<CombinedView> {
     return [
       AppContextMenuEntry(
         label: 'הצג את כל $groupName',
-        icon: groupActive ? FluentIcons.checkmark_24_regular : null,
+        trailing: groupActive
+            ? const Icon(FluentIcons.checkmark_24_regular)
+            : null,
         onTap: () {
           _selectParagraphForContextMenu(paragraphIndex);
           final current = List<String>.from(st.activeCommentators);
@@ -403,7 +405,8 @@ class _CombinedViewState extends State<CombinedView> {
         final bool isActive = st.activeCommentators.contains(title);
         return AppContextMenuEntry(
           label: title,
-          icon: isActive ? FluentIcons.checkmark_24_regular : null,
+          trailing:
+              isActive ? const Icon(FluentIcons.checkmark_24_regular) : null,
           onTap: () {
             _selectParagraphForContextMenu(paragraphIndex);
             final current = List<String>.from(st.activeCommentators);
@@ -487,7 +490,8 @@ class _CombinedViewState extends State<CombinedView> {
         const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
         label: 'הצג את כל המפרשים',
-        icon: allActive ? FluentIcons.checkmark_24_regular : null,
+        trailing:
+            allActive ? const Icon(FluentIcons.checkmark_24_regular) : null,
         onTap: () {
           _selectParagraphForContextMenu(paragraphIndex);
           context.read<TextBookBloc>().add(
