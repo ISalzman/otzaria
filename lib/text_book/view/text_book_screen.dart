@@ -2292,6 +2292,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               searchTextController: TextEditingValue(text: state.searchText),
               tab: widget.tab,
               initialSidebarTabIndex: _sidebarTabIndex,
+              onSidebarTabChanged: (index) {
+                if (_sidebarTabIndex != index) {
+                  setState(() {
+                    _sidebarTabIndex = index;
+                  });
+                }
+              },
               pageShapeKey: _pageShapeKey,
               pageShapePrintBoundaryKey: _pageShapePrintBoundaryKey,
               pageShapeSidebarTabNotifier: _pageShapeSidebarTabNotifier,
@@ -2752,7 +2759,6 @@ Future<void> _addNoteFromKeyboard(
   final currentIndex = state.selectedIndex ??
       (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
   // לא צריך טקסט נבחר - ההערה חלה על כל השורה
-  final textBookBloc = context.read<TextBookBloc>();
 
   // קבלת הטקסט המזהה של השורה (כמו שיוצג ככותרת ההערה)
   final referenceText = extractDisplayTextFromLines(
@@ -2779,17 +2785,9 @@ Future<void> _addNoteFromKeyboard(
         initialFormat: draft?.contentFormat ?? PersonalNoteContentFormat.plain,
       ));
 
-  if (state.showPageShapeView) {
-    final viewerState =
-        context.findAncestorStateOfType<_TextBookViewerBlocState>();
-    viewerState?._pageShapeSidebarTabNotifier.value = 1;
-    return;
-  }
-
-  // פתח את ה-split view אם הוא סגור
-  if (!state.showSplitView) {
-    textBookBloc.add(const ToggleSplitView(true));
-  }
+  final viewerState =
+      context.findAncestorStateOfType<_TextBookViewerBlocState>();
+  viewerState?._openPersonalNotesForCurrentView(state);
 }
 
 // [EDITING DISABLED]

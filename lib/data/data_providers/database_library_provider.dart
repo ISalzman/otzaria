@@ -2155,9 +2155,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
 
     try {
+      final dbPath = _sqliteProvider.dbPath;
       final result = await Isolate.run(
         () => _loadBookLinksRowsInRangeInIsolate(
-          dbPath: _sqliteProvider.dbPath,
+          dbPath: dbPath,
           title: title,
           categoryId: categoryId,
           fileType: fileType,
@@ -2230,9 +2231,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
 
     try {
+      final dbPath = _sqliteProvider.dbPath;
       final results = await Isolate.run(
         () => _loadAlternativeStructuresRowsInIsolate(
-          dbPath: _sqliteProvider.dbPath,
+          dbPath: dbPath,
           bookTitle: bookTitle,
         ),
       );

@@ -19,7 +19,8 @@ class SplitViewStrategyImpl extends TextBookViewStrategy {
       onSelectedTextChanged: config.onSelectedTextChanged,
       tab: config.tab,
       initialTabIndex: config.initialSidebarTabIndex,
-      showSplitView: true, // Split view - panel on the side
+      showSplitView: true,
+      onSidebarTabChanged: config.onSidebarTabChanged,
     );
   }
 }

@@ -424,6 +424,137 @@ void main() {
       }
     });
 
+    test(
+        'getLinksForBookRange מחזיר קישורים דרך Isolate.run ללא קריסת "object is unsendable"',
+        () async {
+      // רגרסיה: הסגירה של Isolate.run לכדה את this (עם FfiDatabase).
+      // התיקון: חילוץ _sqliteProvider.dbPath למשתנה מקומי לפני הסגירה.
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_links_isolate');
+      final dbPath =
+          path.join(tempDir.path, DatabaseConstants.databaseFileName);
+      final database = MyDatabase.withPath(dbPath);
+      final repository = SeforimRepository(database);
+      final provider = DatabaseLibraryProvider.instance;
+      final previousLibraryPath =
+          Settings.getValue<String>(SettingsRepository.keyLibraryPath);
+      final previousEffectiveDbPath =
+          Settings.getValue<String>(SettingsRepository.keyDbEffectivePath);
+
+      try {
+        await provider.sqliteProvider.dispose();
+        provider.clearCache();
+        await repository.ensureInitialized();
+
+        // connection_type נוצר אוטומטית ע"י ensureInitialized — REFERENCE=5
+        final sourceId = await repository.insertSource('local', -10);
+        final catId = await repository.insertCategory(
+          const migration_models.Category(
+              title: 'כללי', parentId: null, level: 0),
+        );
+
+        await Settings.setValue<String>(
+            SettingsRepository.keyLibraryPath, tempDir.path);
+        await Settings.setValue<String>(
+            SettingsRepository.keyLibraryFolderName, '');
+        await Settings.setValue<String>(
+            SettingsRepository.keyDbEffectivePath, '');
+        await provider.initialize();
+
+        final db = await database.database;
+        db.execute(
+            "INSERT INTO book (id, categoryId, sourceId, title, orderIndex, totalLines, filePath, fileType) VALUES (1, $catId, $sourceId, 'בראשית', 1, 10, '/tmp/b.txt', 'txt')");
+        db.execute(
+            "INSERT INTO book (id, categoryId, sourceId, title, orderIndex, totalLines, filePath, fileType) VALUES (2, $catId, $sourceId, 'מפרש', 1, 5, '/tmp/m.txt', 'txt')");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, content, heRef) VALUES (10, 1, 2, 'ב', 'ב')");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, content, heRef) VALUES (20, 2, 0, 'א', 'א')");
+        db.execute(
+            'INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 10, 20, 2, 5)');
+
+        final links = await provider.getLinksForBookRange(
+          'בראשית',
+          1,
+          'txt',
+          startLineIndex: 0,
+          endLineIndex: 5,
+        );
+
+        expect(links, hasLength(1));
+        expect(links.first.path2, 'מפרש');
+      } finally {
+        await Settings.setValue<String>(
+            SettingsRepository.keyLibraryPath, previousLibraryPath ?? '');
+        await Settings.setValue<String>(
+            SettingsRepository.keyDbEffectivePath, previousEffectiveDbPath ?? '');
+        await provider.sqliteProvider.dispose();
+        provider.clearCache();
+        database.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test(
+        'getAlternativeStructuresForBook מחזיר נתונים דרך Isolate.run ללא קריסת "object is unsendable"',
+        () async {
+      // רגרסיה: הסגירה של Isolate.run לכדה את this (עם FfiDatabase).
+      // התיקון: חילוץ _sqliteProvider.dbPath למשתנה מקומי לפני הסגירה.
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_alt_isolate');
+      final dbPath =
+          path.join(tempDir.path, DatabaseConstants.databaseFileName);
+      final database = MyDatabase.withPath(dbPath);
+      final repository = SeforimRepository(database);
+      final provider = DatabaseLibraryProvider.instance;
+      final previousLibraryPath =
+          Settings.getValue<String>(SettingsRepository.keyLibraryPath);
+      final previousEffectiveDbPath =
+          Settings.getValue<String>(SettingsRepository.keyDbEffectivePath);
+
+      try {
+        await provider.sqliteProvider.dispose();
+        provider.clearCache();
+        await repository.ensureInitialized();
+
+        await Settings.setValue<String>(
+            SettingsRepository.keyLibraryPath, tempDir.path);
+        await Settings.setValue<String>(
+            SettingsRepository.keyLibraryFolderName, '');
+        await Settings.setValue<String>(
+            SettingsRepository.keyDbEffectivePath, '');
+
+        final sourceId = await repository.insertSource('local', -10);
+        final catId = await repository.insertCategory(
+          const migration_models.Category(
+              title: 'כללי', parentId: null, level: 0),
+        );
+
+        await provider.initialize();
+
+        final db = await database.database;
+        db.execute(
+            "INSERT INTO book (id, categoryId, sourceId, title, orderIndex, totalLines, filePath, fileType) VALUES (1, $catId, $sourceId, 'בראשית', 1, 10, '/tmp/b.txt', 'txt')");
+        db.execute(
+            "INSERT INTO alt_toc_structure (id, bookId, key, title, heTitle) VALUES (1, 1, 'chapters', 'Chapters', 'פרקים')");
+
+        final structures =
+            await provider.getAlternativeStructuresForBook('בראשית');
+
+        expect(structures, hasLength(1));
+        expect(structures.first.heTitle, 'פרקים');
+      } finally {
+        await Settings.setValue<String>(
+            SettingsRepository.keyLibraryPath, previousLibraryPath ?? '');
+        await Settings.setValue<String>(
+            SettingsRepository.keyDbEffectivePath, previousEffectiveDbPath ?? '');
+        await provider.sqliteProvider.dispose();
+        provider.clearCache();
+        database.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
     test('buildLibraryCatalog ממזג ספרים אישיים קיימים מול user_books',
         () async {
       final tempDir =
