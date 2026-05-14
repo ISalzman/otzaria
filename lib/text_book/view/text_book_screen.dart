@@ -701,7 +701,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // בתצוגה משולבת, מפרשים תמיד מתחת
       showSplitView: widget.isInCombinedView
           ? false
-          : (Settings.getValue<bool>('key-splited-view') ?? true),
+          : (Settings.getValue<bool>('key-splited-view') ?? false),
       removeNikud: settingsBloc.state.defaultRemoveNikud,
       preserveState: true,
       // בתצוגה משולבת, חלונית הצד תמיד סגורה
