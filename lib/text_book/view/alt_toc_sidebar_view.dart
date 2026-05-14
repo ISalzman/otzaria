@@ -16,11 +16,9 @@ import 'package:otzaria/search/utils/find_match_utils.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
-import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -357,10 +355,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
         scrollController: widget.scrollController,
         scrollOffsetController: state.scrollOffsetController,
         positionsListener: state.positionsListener,
-        segments: buildReadingSegments(
-          state.content,
-          continuous: context.read<SettingsBloc>().state.continuousReadingMode,
-        ),
+        segments: state.readingSegments,
         lineIndex: index,
         viewportExtent:
             context.size?.height ?? MediaQuery.sizeOf(context).height,

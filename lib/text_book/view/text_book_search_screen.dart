@@ -23,7 +23,6 @@ import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
-import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/utils/section_search_utils.dart';
 import 'package:otzaria/text_book/utils/search_query_sync.dart';
 
@@ -414,15 +413,11 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     if (loadedState is! TextBookLoaded) {
       return;
     }
-    final settingsState = context.read<SettingsBloc>().state;
     unawaited(scrollToSourceLine(
       scrollController: widget.scrollControler,
       scrollOffsetController: loadedState.scrollOffsetController,
       positionsListener: loadedState.positionsListener,
-      segments: buildReadingSegments(
-        loadedState.content,
-        continuous: settingsState.continuousReadingMode,
-      ),
+      segments: loadedState.readingSegments,
       lineIndex: result.index,
       viewportExtent: context.size?.height ?? MediaQuery.sizeOf(context).height,
       duration: const Duration(milliseconds: 250),

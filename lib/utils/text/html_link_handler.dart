@@ -5,11 +5,9 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
-import 'package:otzaria/text_book/utils/reading_segments.dart';
 
 /// מחלקה לטיפול בקישורי HTML בתוך הטקסט
 class HtmlLinkHandler {
@@ -189,8 +187,6 @@ class HtmlLinkHandler {
       }
 
       // חיפוש הכותרת בתוכן הספציפי
-      final continuousReadingMode =
-          context.read<SettingsBloc>().state.continuousReadingMode;
       final viewportExtent =
           context.size?.height ?? MediaQuery.sizeOf(context).height;
       final index = await _findHeaderIndex(state.book, headerName);
@@ -201,10 +197,7 @@ class HtmlLinkHandler {
           scrollController: state.scrollController,
           scrollOffsetController: state.scrollOffsetController,
           positionsListener: state.positionsListener,
-          segments: buildReadingSegments(
-            state.content,
-            continuous: continuousReadingMode,
-          ),
+          segments: state.readingSegments,
           lineIndex: index,
           viewportExtent: viewportExtent,
           duration: const Duration(milliseconds: 250),

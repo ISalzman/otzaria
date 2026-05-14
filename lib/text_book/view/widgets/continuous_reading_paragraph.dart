@@ -3,26 +3,39 @@ import 'package:flutter/material.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 
+/// תגובה ללחיצה על קישור inline בתוך פסקה של מצב טקסט רציף.
+/// יוחזר `true` אם הטיפול בקישור הסתיים והעיבוד הרגיל (לחיצה על שורה) לא נדרש.
+typedef ContinuousReadingUrlTap = Future<bool> Function(String url);
+
 class ContinuousReadingParagraphLine {
   final int lineIndex;
   final String text;
-  final List<InlineSpan>? inlineSpans;
+  final String? htmlText;
   final TextStyle style;
 
   const ContinuousReadingParagraphLine({
     required this.lineIndex,
     required this.text,
     required this.style,
-    this.inlineSpans,
+    this.htmlText,
   });
 }
 
 List<InlineSpan> buildInlineHtmlSpans(
   String htmlText,
-  TextStyle baseStyle,
-) {
+  TextStyle baseStyle, {
+  ContinuousReadingUrlTap? onTapUrl,
+  TextStyle? linkStyle,
+  List<TapGestureRecognizer>? recognizerSink,
+}) {
   final fragment = html_parser.parseFragment(htmlText);
-  return _nodesToSpans(fragment.nodes, baseStyle);
+  return _nodesToSpans(
+    fragment.nodes,
+    baseStyle,
+    onTapUrl: onTapUrl,
+    linkStyle: linkStyle,
+    recognizerSink: recognizerSink,
+  );
 }
 
 class ContinuousReadingParagraph extends StatefulWidget {
@@ -30,6 +43,8 @@ class ContinuousReadingParagraph extends StatefulWidget {
   final TextStyle baseStyle;
   final ValueChanged<int> onLineTap;
   final ValueChanged<int>? onLineSecondaryTap;
+  final ContinuousReadingUrlTap? onTapUrl;
+  final TextStyle? linkStyle;
   final TextDirection textDirection;
   final TextAlign textAlign;
 
@@ -39,6 +54,8 @@ class ContinuousReadingParagraph extends StatefulWidget {
     required this.baseStyle,
     required this.onLineTap,
     this.onLineSecondaryTap,
+    this.onTapUrl,
+    this.linkStyle,
     this.textDirection = TextDirection.rtl,
     this.textAlign = TextAlign.justify,
   });
@@ -50,37 +67,45 @@ class ContinuousReadingParagraph extends StatefulWidget {
 
 class _ContinuousReadingParagraphState
     extends State<ContinuousReadingParagraph> {
-  final List<TapGestureRecognizer> _recognizers = [];
+  // recognizer-ים של לחיצה על שורה כולה (כדי לבחור/לבטל בחירה של סעיף)
+  final List<TapGestureRecognizer> _lineRecognizers = [];
+  // recognizer-ים של קישורי <a> inline שמתוך הספאנים המפורסרים
+  final List<TapGestureRecognizer> _linkRecognizers = [];
 
   @override
   void initState() {
     super.initState();
-    _rebuildRecognizers();
+    _rebuildLineRecognizers();
   }
 
   @override
   void didUpdateWidget(covariant ContinuousReadingParagraph oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_sameLineOrder(oldWidget.lines, widget.lines)) {
-      _rebuildRecognizers();
+      _rebuildLineRecognizers();
     }
   }
 
   @override
   void dispose() {
-    _disposeRecognizers();
+    _disposeLineRecognizers();
+    _disposeLinkRecognizers();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // הספאנים נבנים מחדש בכל build כי הסגנון/הבחירה עשויים להשתנות.
+    // כדי למנוע דליפת recognizer-ים של קישורים, אנו מנקים את הרשימה כאן.
+    _disposeLinkRecognizers();
+
     final spans = <InlineSpan>[];
     for (var i = 0; i < widget.lines.length; i++) {
       final line = widget.lines[i];
       final hasNext = i < widget.lines.length - 1;
-      final lineSpans = line.inlineSpans ?? [TextSpan(text: line.text)];
+      final lineSpans = _buildLineSpans(line);
       for (final span in lineSpans) {
-        spans.add(_withRecognizer(span, _recognizers[i], line.style));
+        spans.add(_withRecognizer(span, _lineRecognizers[i], line.style));
       }
       if (hasNext) {
         spans.add(TextSpan(text: ' ', style: line.style));
@@ -100,6 +125,21 @@ class _ContinuousReadingParagraphState
           ),
         );
       },
+    );
+  }
+
+  List<InlineSpan> _buildLineSpans(ContinuousReadingParagraphLine line) {
+    final htmlText = line.htmlText;
+    if (htmlText == null) {
+      return [TextSpan(text: line.text, style: line.style)];
+    }
+
+    return buildInlineHtmlSpans(
+      htmlText,
+      line.style,
+      onTapUrl: widget.onTapUrl,
+      linkStyle: widget.linkStyle,
+      recognizerSink: _linkRecognizers,
     );
   }
 
@@ -125,8 +165,8 @@ class _ContinuousReadingParagraphState
     return visualLineCount <= 1 ? TextAlign.start : widget.textAlign;
   }
 
-  void _rebuildRecognizers() {
-    _disposeRecognizers();
+  void _rebuildLineRecognizers() {
+    _disposeLineRecognizers();
     for (var i = 0; i < widget.lines.length; i++) {
       final recognizer = TapGestureRecognizer()
         ..onTap = () => widget.onLineTap(widget.lines[i].lineIndex);
@@ -134,15 +174,22 @@ class _ContinuousReadingParagraphState
         recognizer.onSecondaryTap =
             () => widget.onLineSecondaryTap!(widget.lines[i].lineIndex);
       }
-      _recognizers.add(recognizer);
+      _lineRecognizers.add(recognizer);
     }
   }
 
-  void _disposeRecognizers() {
-    for (final recognizer in _recognizers) {
+  void _disposeLineRecognizers() {
+    for (final recognizer in _lineRecognizers) {
       recognizer.dispose();
     }
-    _recognizers.clear();
+    _lineRecognizers.clear();
+  }
+
+  void _disposeLinkRecognizers() {
+    for (final recognizer in _linkRecognizers) {
+      recognizer.dispose();
+    }
+    _linkRecognizers.clear();
   }
 
   bool _sameLineOrder(
@@ -163,19 +210,31 @@ class _ContinuousReadingParagraphState
 
 List<InlineSpan> _nodesToSpans(
   List<dom.Node> nodes,
-  TextStyle style,
-) {
+  TextStyle style, {
+  ContinuousReadingUrlTap? onTapUrl,
+  TextStyle? linkStyle,
+  List<TapGestureRecognizer>? recognizerSink,
+}) {
   final spans = <InlineSpan>[];
   for (final node in nodes) {
-    spans.addAll(_nodeToSpans(node, style));
+    spans.addAll(_nodeToSpans(
+      node,
+      style,
+      onTapUrl: onTapUrl,
+      linkStyle: linkStyle,
+      recognizerSink: recognizerSink,
+    ));
   }
   return spans;
 }
 
 List<InlineSpan> _nodeToSpans(
   dom.Node node,
-  TextStyle style,
-) {
+  TextStyle style, {
+  ContinuousReadingUrlTap? onTapUrl,
+  TextStyle? linkStyle,
+  List<TapGestureRecognizer>? recognizerSink,
+}) {
   if (node is dom.Text) {
     if (node.text.isEmpty) return const [];
     return [TextSpan(text: node.text, style: style)];
@@ -189,8 +248,47 @@ List<InlineSpan> _nodeToSpans(
     return [TextSpan(text: '\n', style: style)];
   }
 
+  // טיפול בקישורים inline: <a href="...">…</a>
+  if (node.localName == 'a' && onTapUrl != null) {
+    final href = node.attributes['href'];
+    if (href != null && href.isNotEmpty) {
+      final childStyle = _styleForElement(node, style);
+      final effectiveLinkStyle = linkStyle == null
+          ? childStyle.copyWith(
+              color: Colors.blue,
+              decoration: TextDecoration.underline,
+            )
+          : childStyle.merge(linkStyle);
+      final children = _nodesToSpans(
+        node.nodes,
+        effectiveLinkStyle,
+        onTapUrl: onTapUrl,
+        linkStyle: linkStyle,
+        recognizerSink: recognizerSink,
+      );
+      final recognizer = TapGestureRecognizer()
+        ..onTap = () {
+          onTapUrl(href);
+        };
+      recognizerSink?.add(recognizer);
+      return [
+        TextSpan(
+          style: effectiveLinkStyle,
+          recognizer: recognizer,
+          children: children,
+        ),
+      ];
+    }
+  }
+
   final childStyle = _styleForElement(node, style);
-  return _nodesToSpans(node.nodes, childStyle);
+  return _nodesToSpans(
+    node.nodes,
+    childStyle,
+    onTapUrl: onTapUrl,
+    linkStyle: linkStyle,
+    recognizerSink: recognizerSink,
+  );
 }
 
 TextStyle _styleForElement(dom.Element element, TextStyle parentStyle) {
@@ -259,6 +357,13 @@ InlineSpan _withRecognizer(
   TextStyle fallbackStyle,
 ) {
   if (span is! TextSpan) {
+    return span;
+  }
+
+  // אם הספאן עצמו כבר נושא recognizer (למשל קישור inline), משאירים את
+  // כל תת-העץ כמו שהוא: ה-recognizer של ההורה יורש ממילא לכל הצאצאים.
+  // ירידה רקורסיבית כאן הייתה דורסת את הקישור בלחיצת שורה.
+  if (span.recognizer != null) {
     return span;
   }
 

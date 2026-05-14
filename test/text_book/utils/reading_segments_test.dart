@@ -89,5 +89,25 @@ void main() {
       expect(indices.last, lessThan(100));
       expect(indices.length, lessThan(100));
     });
+
+    test('inserts virtual subtitle headings before the matching source line',
+        () {
+      final segments = buildReadingSegments(
+        const ['line a', 'line b'],
+        continuous: true,
+        subtitleHeadingsByLine: const {
+          1: ['כותרת משנה'],
+        },
+      );
+
+      expect(segments, hasLength(3));
+      expect(segments[0].text, 'line a');
+      expect(segments[1].isHeader, isTrue);
+      expect(segments[1].isVirtualHeader, isTrue);
+      expect(segments[1].sourceLineIndices, [1]);
+      expect(segments[1].text, contains('כותרת משנה'));
+      expect(segments[2].text, 'line b');
+      expect(segments[2].sourceLineIndices, [1]);
+    });
   });
 }
