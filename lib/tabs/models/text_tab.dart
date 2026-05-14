@@ -57,6 +57,11 @@ class TextBookTab extends OpenedTab {
   /// הכותרת הנוכחית של המיקום בספר (למשל "בראשית פרק ד")
   final currentTitle = ValueNotifier<String>("");
 
+  /// counter שמתגלגל עם כל בקשה לטוגל חלונית המפרשים מקיצור מקלדת גלובלי.
+  /// המאזין הוא [SplitedViewScreen] בלבד; כל הגדלה = toggle יחיד.
+  final ValueNotifier<int> toggleCommentatorsPaneNotifier =
+      ValueNotifier<int>(0);
+
   List<String>? commentators;
   bool _lastSplitView = false;
   bool _lastShowPageShapeView = false;
@@ -152,6 +157,7 @@ class TextBookTab extends OpenedTab {
   void dispose() {
     _stateSubscription?.cancel();
     currentTitle.dispose();
+    toggleCommentatorsPaneNotifier.dispose();
     bloc.close();
     super.dispose();
   }

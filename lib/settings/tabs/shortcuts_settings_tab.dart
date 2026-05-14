@@ -149,6 +149,22 @@ class ShortcutsSettingsTab extends StatelessWidget {
       cardId: 'shortcuts.main',
       keywords: ['סגור הכל', 'ctrl+shift+w', 'מקלדת'],
     ),
+    SettingsSearchEntry(
+      id: 'shortcuts.book.toggle_nav_pane',
+      title: 'קיצור לפתח/סגור חלונית ניווט',
+      subtitle: 'טוגל לחלונית הניווט הצדדית',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['ניווט', 'חלונית', 'ctrl+shift+l', 'מקלדת'],
+    ),
+    SettingsSearchEntry(
+      id: 'shortcuts.book.toggle_commentators_pane',
+      title: 'קיצור לפתח/סגור חלונית מפרשים',
+      subtitle: 'טוגל לחלונית המפרשים בצד',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['מפרשים', 'חלונית', 'ctrl+shift+c', 'מקלדת'],
+    ),
   ];
 
   static const Map<String, String> _shortcutsList = {
@@ -190,6 +206,8 @@ class ShortcutsSettingsTab extends StatelessWidget {
     'ctrl+9': 'CTRL + 9',
     'ctrl+comma': 'CTRL + ,',
     'ctrl+shift+b': 'CTRL + SHIFT + B',
+    'ctrl+shift+c': 'CTRL + SHIFT + C',
+    'ctrl+shift+l': 'CTRL + SHIFT + L',
     'ctrl+shift+w': 'CTRL + SHIFT + W',
   };
 
@@ -357,6 +375,20 @@ class ShortcutsSettingsTab extends StatelessWidget {
                   label: 'סגור כל הספרים',
                   defaultShortcut: 'ctrl+shift+w',
                   icon: FluentIcons.dismiss_24_regular,
+                  allShortcuts: _shortcutsList,
+                ),
+                _ShortcutTile(
+                  settingKey: 'key-shortcut-toggle-nav-pane',
+                  label: 'פתח/סגור חלונית ניווט',
+                  defaultShortcut: 'ctrl+shift+l',
+                  icon: FluentIcons.panel_left_24_regular,
+                  allShortcuts: _shortcutsList,
+                ),
+                _ShortcutTile(
+                  settingKey: 'key-shortcut-toggle-commentators-pane',
+                  label: 'פתח/סגור חלונית מפרשים',
+                  defaultShortcut: 'ctrl+shift+c',
+                  icon: FluentIcons.book_open_24_regular,
                   allShortcuts: _shortcutsList,
                 ),
               ],

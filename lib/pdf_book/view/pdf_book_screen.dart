@@ -209,6 +209,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   // Named listeners for proper cleanup
   late final VoidCallback _leftPaneTabControllerListener;
   late final VoidCallback _showLeftPaneListener;
+  late final VoidCallback _toggleNavPaneListener;
+  late final VoidCallback _toggleCommentatorsPaneListener;
 
   Future<void> _runInitialSearchIfNeeded() async {
     final controller = widget.tab.searchController;
@@ -449,6 +451,38 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       }
     };
     widget.tab.showLeftPane.addListener(_showLeftPaneListener);
+
+    // קיצור Ctrl+Shift+L: טוגל לחלונית הניווט השמאלית.
+    _toggleNavPaneListener = () {
+      final current = _bloc.state;
+      if (current is PdfBookLoaded) {
+        _setLeftPaneVisibility(!current.showLeftPane);
+      }
+    };
+    widget.tab.toggleNavPaneNotifier.addListener(_toggleNavPaneListener);
+
+    // קיצור Ctrl+Shift+C: טוגל לחלונית המפרשים (פאנל ימני, טאב מפרשים).
+    // אם הפאנל סגור או על טאב אחר — פתח על המפרשים. אם פתוח על המפרשים — סגור.
+    _toggleCommentatorsPaneListener = () {
+      final current = _bloc.state;
+      if (current is! PdfBookLoaded) return;
+      final isOnCommentary =
+          _currentRightPaneTabIndex == _kCommentaryTabIndex;
+      if (current.showRightPane && isOnCommentary) {
+        _bloc.add(const pdf_events.ToggleRightPane(show: false));
+      } else {
+        // בדומה ל-_openCommentaryPane: רישום interaction של TourCubit לפני
+        // הפתיחה, כדי שטור/אונבורדינג ידע שהמשתמש השתמש במפרשים.
+        _recordCommentaryOpenedIfNeeded();
+        setState(() {
+          _rightPaneInitialTabIndex = _kCommentaryTabIndex;
+          _currentRightPaneTabIndex = _kCommentaryTabIndex;
+        });
+        _bloc.add(const pdf_events.ToggleRightPane(show: true));
+      }
+    };
+    widget.tab.toggleCommentatorsPaneNotifier
+        .addListener(_toggleCommentatorsPaneListener);
   }
 
   Future<void> _loadInitialLayoutMode() async {
@@ -2422,6 +2456,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     pdfController.removeListener(_onPdfViewerControllerUpdate);
     _leftPaneTabController?.removeListener(_leftPaneTabControllerListener);
     widget.tab.showLeftPane.removeListener(_showLeftPaneListener);
+    widget.tab.toggleNavPaneNotifier.removeListener(_toggleNavPaneListener);
+    widget.tab.toggleCommentatorsPaneNotifier
+        .removeListener(_toggleCommentatorsPaneListener);
     _leftPaneTabController?.dispose();
     _openFilterRequest.dispose();
     _searchFieldFocusNode.dispose();
