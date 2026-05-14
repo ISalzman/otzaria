@@ -15,6 +15,8 @@
 #include "utils.h"
 
 static const wchar_t* kSingleInstanceMutexName = L"OtzariaAppSingleInstance";
+static const wchar_t* kFlutterWindowClassName = L"FLUTTER_RUNNER_WIN32_WINDOW";
+static const wchar_t* kMainWindowTitle = L"אוצריא";
 
 // Escapes a UTF-8 string for safe embedding inside a JSON string value.
 static std::string JsonEscape(const std::string& s) {
@@ -121,6 +123,15 @@ static void EnqueueUri(const std::string& uri_utf8) {
   }
 }
 
+// Restores a minimized window and brings it to the foreground.
+static void BringWindowToFront(HWND hwnd) {
+  if (hwnd == nullptr) return;
+  if (IsIconic(hwnd)) {
+    ShowWindow(hwnd, SW_RESTORE);
+  }
+  SetForegroundWindow(hwnd);
+}
+
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t* command_line, _In_ int show_command) {
   // Attach to console when present (e.g., 'flutter run') or create a
@@ -153,6 +164,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                    UrlEncodeQueryComponent(arg));
       }
     }
+    BringWindowToFront(FindWindowW(kFlutterWindowClassName, kMainWindowTitle));
     CloseHandle(mutex);
     return EXIT_SUCCESS;
   }
@@ -171,7 +183,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"אוצריא", origin, size)) {
+  if (!window.Create(kMainWindowTitle, origin, size)) {
     if (mutex) CloseHandle(mutex);
     return EXIT_FAILURE;
   }

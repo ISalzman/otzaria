@@ -62,6 +62,10 @@ class TextBookTab extends OpenedTab {
   final ValueNotifier<int> toggleCommentatorsPaneNotifier =
       ValueNotifier<int>(0);
 
+  /// counter שמתגלגל כשיש לפתוח את פאנל ההערות האישיות.
+  /// המאזין הוא [SplitedViewScreen] בלבד; כל הגדלה = פתח על טאב הערות.
+  final ValueNotifier<int> openNotesTabNotifier = ValueNotifier<int>(0);
+
   List<String>? commentators;
   bool _lastSplitView = false;
   bool _lastShowPageShapeView = false;
@@ -158,6 +162,7 @@ class TextBookTab extends OpenedTab {
     _stateSubscription?.cancel();
     currentTitle.dispose();
     toggleCommentatorsPaneNotifier.dispose();
+    openNotesTabNotifier.dispose();
     bloc.close();
     super.dispose();
   }

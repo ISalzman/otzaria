@@ -726,7 +726,7 @@ class _CombinedViewState extends State<CombinedView> {
     }
     final tab = SearchingTab(SearchingTab.titleForQuery(query), query);
     context.read<HistoryBloc>().add(AddHistory(tab));
-    context.read<TabsBloc>().add(AddTab(tab));
+    context.read<TabsBloc>().add(AddTab(tab, insertAdjacent: true));
   }
 
   /// פתיחת דיאלוג דיווח על טעות בספר

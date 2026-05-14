@@ -21,12 +21,13 @@ void main() {
     List<dynamic> testItems = items,
     bool Function(dynamic)? additionalFilter,
     String Function(dynamic)? searchKeyBuilder,
+    void Function(BuildContext, dynamic, int)? onItemTap,
   }) {
     return MaterialApp(
       home: Scaffold(
         body: ItemsListView(
           items: testItems,
-          onItemTap: (_, __, ___) {},
+          onItemTap: onItemTap ?? (_, __, ___) {},
           onDelete: (_, __) {},
           onClearAll: (_) {},
           hintText: 'חיפוש...',
@@ -139,6 +140,29 @@ void main() {
       expect(find.text('שבת עד:'), findsOneWidget);
       expect(find.text('ברכות ב.'), findsNothing);
       expect(find.text('הלכות שבת'), findsNothing);
+    });
+
+    testWidgets('onItemTap מקבל את originalIndex הנכון גם כשאותו אובייקט מופיע פעמיים',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final duplicate = _Item('כפול', workspaceName: 'בדיקה');
+      int? tappedIndex;
+
+      await tester.pumpWidget(buildWidget(
+        testItems: [duplicate, duplicate, const _Item('אחר')],
+        onItemTap: (_, __, originalIndex) => tappedIndex = originalIndex,
+      ));
+      await tester.pump();
+
+      await tester.tap(find.text('כפול').last);
+      await tester.pump();
+
+      expect(tappedIndex, 1,
+          reason:
+              'כאשר אותו מופע מופיע יותר מפעם אחת, indexOf(item) תמיד מחזיר את ההופעה הראשונה. '
+              'הווידג׳ט צריך לשמר את האינדקס המקורי של הרשומה שסוננה.');
     });
   });
 }

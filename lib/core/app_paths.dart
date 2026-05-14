@@ -111,7 +111,7 @@ class AppPaths {
     // תאימות אחורה: בעבר האינדקס תמיד נוצר תחת dataRoot (APPDATA וכדומה).
     // אם קיים שם אינדקס – ממשיכים להשתמש בו כדי לא לאבד עבודה.
     final legacyPath = p.join(await getDataRootPath(), 'index');
-    if (Directory(legacyPath).existsSync()) {
+    if (await Directory(legacyPath).exists()) {
       return legacyPath;
     }
 
@@ -161,17 +161,17 @@ class AppPaths {
 
     final systemWideRoot = await _getSystemWideLibraryRootIfNeeded();
     if (systemWideRoot != null) {
-      candidates.add(p.join(systemWideRoot, 'index'));
+      candidates.add(p.normalize(p.join(systemWideRoot, 'index')));
     }
 
     // ברירת המחדל הישנה: תחת תיקיית הנתונים (APPDATA וכדומה).
-    candidates.add(p.join(await getDataRootPath(), 'index'));
+    candidates.add(p.normalize(p.join(await getDataRootPath(), 'index')));
 
     // ברירת המחדל הנוכחית: ליד הספרייה.
     final libraryPath = await getLibraryPath();
-    candidates.add(p.join(p.dirname(libraryPath), 'index'));
+    candidates.add(p.normalize(p.join(p.dirname(libraryPath), 'index')));
 
-    return candidates.where((c) => p.normalize(c) != activePath).toList();
+    return candidates.where((c) => c != activePath).toList();
   }
 
   /// Returns the backup path inside the writable app data root.
