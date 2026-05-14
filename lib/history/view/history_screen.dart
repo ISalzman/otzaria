@@ -40,19 +40,34 @@ class HistoryView extends StatefulWidget {
 
 class _HistoryViewState extends State<HistoryView> {
   String? _selectedWorkspace;
-  List<dynamic> _lastHistory = [];
-  List<String> _cachedWorkspaceNames = [];
 
   List<String> _workspaceNames(List<dynamic> history) {
-    if (identical(history, _lastHistory)) return _cachedWorkspaceNames;
-    _lastHistory = history;
-    _cachedWorkspaceNames = history
+    return history
         .map((item) => item.workspaceName)
         .whereType<String>()
         .toSet()
         .toList()
       ..sort();
-    return _cachedWorkspaceNames;
+  }
+
+  String? _effectiveSelectedWorkspace(List<String> workspaceNames) {
+    final selectedWorkspace = _selectedWorkspace;
+    if (selectedWorkspace == null) {
+      return null;
+    }
+    if (workspaceNames.contains(selectedWorkspace)) {
+      return selectedWorkspace;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _selectedWorkspace == null) {
+        return;
+      }
+      setState(() {
+        _selectedWorkspace = null;
+      });
+    });
+    return null;
   }
 
   void _openBook(
@@ -108,6 +123,8 @@ class _HistoryViewState extends State<HistoryView> {
         }
 
         final workspaceNames = _workspaceNames(state.history);
+        final effectiveSelectedWorkspace =
+            _effectiveSelectedWorkspace(workspaceNames);
 
         return Column(
           children: [
@@ -120,7 +137,7 @@ class _HistoryViewState extends State<HistoryView> {
                   child: Wrap(
                     spacing: 6,
                     children: workspaceNames.map((name) {
-                      final selected = _selectedWorkspace == name;
+                      final selected = effectiveSelectedWorkspace == name;
                       final cs = Theme.of(context).colorScheme;
                       return FilterChip(
                         label: Text(
@@ -128,15 +145,13 @@ class _HistoryViewState extends State<HistoryView> {
                           textDirection: TextDirection.rtl,
                           style: TextStyle(
                             fontSize: 12,
-                            color: selected
-                                ? cs.onPrimary
-                                : cs.onSurfaceVariant,
+                            color:
+                                selected ? cs.onPrimary : cs.onSurfaceVariant,
                           ),
                         ),
                         selected: selected,
                         onSelected: (_) => setState(() {
-                          _selectedWorkspace =
-                              selected ? null : name;
+                          _selectedWorkspace = selected ? null : name;
                         }),
                         selectedColor: cs.primary,
                         backgroundColor: cs.surfaceContainerHighest,
@@ -152,10 +167,10 @@ class _HistoryViewState extends State<HistoryView> {
             Expanded(
               child: ItemsListView(
                 items: state.history,
-                additionalFilter: (_selectedWorkspace == null ||
-                        !workspaceNames.contains(_selectedWorkspace))
+                additionalFilter: effectiveSelectedWorkspace == null
                     ? null
-                    : (item) => item.workspaceName == _selectedWorkspace,
+                    : (item) =>
+                        item.workspaceName == effectiveSelectedWorkspace,
                 searchKeyBuilder: (item) {
                   final parts = [item.ref as String];
                   final ws = item.workspaceName as String?;
@@ -163,94 +178,95 @@ class _HistoryViewState extends State<HistoryView> {
                   return parts.join(' ');
                 },
                 onItemTap: (ctx, item, originalIndex) {
-            if (item.isSearch) {
-              final tabsBloc = ctx.read<TabsBloc>();
-              // Always create a new search tab instead of reusing existing one
-              final searchTab = SearchingTab('חיפוש', null);
-              tabsBloc.add(AddTab(searchTab));
+                  if (item.isSearch) {
+                    final tabsBloc = ctx.read<TabsBloc>();
+                    // Always create a new search tab instead of reusing existing one
+                    final searchTab = SearchingTab('חיפוש', null);
+                    tabsBloc.add(AddTab(searchTab));
 
-              // Restore search query and options
-              // ההיסטוריה שומרת אפשרויות מורחבות פר-מילה,
-              // לכן עוברים למצב פר-מילה כדי שהן יוצגו ויפעלו בדיוק כפי שנשמרו
-              searchTab.queryController.text = item.book.title;
-              searchTab.searchOptions.clear();
-              searchTab.searchOptions.addAll(item.searchOptions ?? {});
-              searchTab.useGlobalSearchOptions.value = false;
-              searchTab.alternativeWords.clear();
-              searchTab.alternativeWords.addAll(item.alternativeWords ?? {});
-              searchTab.spacingValues.clear();
-              searchTab.spacingValues.addAll(item.spacingValues ?? {});
-              searchTab.searchBloc.add(
-                SetSearchMode(item.searchMode ?? SearchMode.advanced),
-              );
+                    // Restore search query and options
+                    // ההיסטוריה שומרת אפשרויות מורחבות פר-מילה,
+                    // לכן עוברים למצב פר-מילה כדי שהן יוצגו ויפעלו בדיוק כפי שנשמרו
+                    searchTab.queryController.text = item.book.title;
+                    searchTab.searchOptions.clear();
+                    searchTab.searchOptions.addAll(item.searchOptions ?? {});
+                    searchTab.useGlobalSearchOptions.value = false;
+                    searchTab.alternativeWords.clear();
+                    searchTab.alternativeWords
+                        .addAll(item.alternativeWords ?? {});
+                    searchTab.spacingValues.clear();
+                    searchTab.spacingValues.addAll(item.spacingValues ?? {});
+                    searchTab.searchBloc.add(
+                      SetSearchMode(item.searchMode ?? SearchMode.advanced),
+                    );
 
-              if (item.searchScopeFacets != null &&
-                  item.searchScopeFacets!.isNotEmpty) {
-                searchTab.searchBloc
-                    .add(SetFacetsWithoutSearch(item.searchScopeFacets!));
-              }
+                    if (item.searchScopeFacets != null &&
+                        item.searchScopeFacets!.isNotEmpty) {
+                      searchTab.searchBloc
+                          .add(SetFacetsWithoutSearch(item.searchScopeFacets!));
+                    }
 
-              searchTab
-                  .updateTitleFromAppliedQuery(searchTab.queryController.text);
-              searchTab.searchBloc.add(UpdateSearchQuery(
-                searchTab.queryController.text,
-                customSpacing: searchTab.spacingValues,
-                alternativeWords: searchTab.alternativeWords,
-                searchOptions: searchTab.searchOptions,
-              ));
+                    searchTab.updateTitleFromAppliedQuery(
+                        searchTab.queryController.text);
+                    searchTab.searchBloc.add(UpdateSearchQuery(
+                      searchTab.queryController.text,
+                      customSpacing: searchTab.spacingValues,
+                      alternativeWords: searchTab.alternativeWords,
+                      searchOptions: searchTab.searchOptions,
+                    ));
 
-              // Navigate to search screen
-              ctx
-                  .read<NavigationBloc>()
-                  .add(const NavigateToScreen(Screen.search));
-              if (Navigator.of(ctx).canPop()) {
-                Navigator.of(ctx).pop();
-              }
-              return;
-            }
-            _openBook(
-              ctx,
-              item.book,
-              item.index,
-              item.commentatorsToShow,
-              targetTitle: item.ref,
-            );
-          },
-          onDelete: (ctx, originalIndex) {
-            ctx.read<HistoryBloc>().add(RemoveHistory(originalIndex));
-            UiSnack.show('נמחק בהצלחה');
-          },
-          onClearAll: (ctx) {
-            ctx.read<HistoryBloc>().add(ClearHistory());
-            UiSnack.show('כל ההיסטוריה נמחקה');
-          },
-          hintText: 'חפש בהיסטוריה...',
-          emptyText: 'אין היסטוריה',
-          notFoundText: 'לא נמצאו תוצאות',
-          clearAllText: 'מחק את כל ההיסטוריה',
-          leadingIconBuilder: (item) =>
-              _getLeadingIcon(item.book, item.isSearch),
-          subtitleBuilder: (item) {
-            final parts = <String>[];
-            final facets = item.searchScopeFacets;
-            if (facets != null && facets.isNotEmpty) {
-              final allNames = _facetDisplayNames(facets);
-              final displayed = allNames.length > 2
-                  ? '${allNames.take(2).join(', ')}...'
-                  : allNames.join(', ');
-              parts.add('חיפוש בקטגוריות: $displayed');
-            }
-            if (item.workspaceName != null) {
-              parts.add(item.workspaceName!);
-            }
-            return parts.isEmpty ? null : parts.join(' | ');
-          },
-          subtitleTooltipBuilder: (item) {
-            final facets = item.searchScopeFacets;
-            if (facets == null || facets.length <= 2) return null;
-            return 'חיפוש בקטגוריות: ${_facetDisplayNames(facets).join(', ')}';
-          },
-        ),
+                    // Navigate to search screen
+                    ctx
+                        .read<NavigationBloc>()
+                        .add(const NavigateToScreen(Screen.search));
+                    if (Navigator.of(ctx).canPop()) {
+                      Navigator.of(ctx).pop();
+                    }
+                    return;
+                  }
+                  _openBook(
+                    ctx,
+                    item.book,
+                    item.index,
+                    item.commentatorsToShow,
+                    targetTitle: item.ref,
+                  );
+                },
+                onDelete: (ctx, originalIndex) {
+                  ctx.read<HistoryBloc>().add(RemoveHistory(originalIndex));
+                  UiSnack.show('נמחק בהצלחה');
+                },
+                onClearAll: (ctx) {
+                  ctx.read<HistoryBloc>().add(ClearHistory());
+                  UiSnack.show('כל ההיסטוריה נמחקה');
+                },
+                hintText: 'חפש בהיסטוריה...',
+                emptyText: 'אין היסטוריה',
+                notFoundText: 'לא נמצאו תוצאות',
+                clearAllText: 'מחק את כל ההיסטוריה',
+                leadingIconBuilder: (item) =>
+                    _getLeadingIcon(item.book, item.isSearch),
+                subtitleBuilder: (item) {
+                  final parts = <String>[];
+                  final facets = item.searchScopeFacets;
+                  if (facets != null && facets.isNotEmpty) {
+                    final allNames = _facetDisplayNames(facets);
+                    final displayed = allNames.length > 2
+                        ? '${allNames.take(2).join(', ')}...'
+                        : allNames.join(', ');
+                    parts.add('חיפוש בקטגוריות: $displayed');
+                  }
+                  if (item.workspaceName != null) {
+                    parts.add(item.workspaceName!);
+                  }
+                  return parts.isEmpty ? null : parts.join(' | ');
+                },
+                subtitleTooltipBuilder: (item) {
+                  final facets = item.searchScopeFacets;
+                  if (facets == null || facets.length <= 2) return null;
+                  return 'חיפוש בקטגוריות: ${_facetDisplayNames(facets).join(', ')}';
+                },
+              ),
             ),
           ],
         );

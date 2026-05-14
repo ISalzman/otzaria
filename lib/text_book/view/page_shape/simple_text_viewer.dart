@@ -17,15 +17,11 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/tabs/models/tab.dart';
-import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
-import 'package:otzaria/tabs/bloc/tabs_event.dart';
-import 'package:otzaria/history/bloc/history_bloc.dart';
-import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/utils/text/global_search_helper.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -831,7 +827,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           ? utils.removeVolwels(rawText).trim()
           : rawText;
       final hasSelectedText = cleanedText.isNotEmpty;
-      final preview = hasSelectedText ? _previewForLabel(cleanedText) : '';
+      final preview = hasSelectedText ? previewForLabel(cleanedText) : '';
       entries.add(AppContextMenuEntry(
         label: 'חיפוש',
         icon: FluentIcons.search_24_regular,
@@ -852,7 +848,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 AppContextMenuEntry(
                   label: "חפש '$preview' בכל הספרים",
                   icon: FluentIcons.library_24_regular,
-                  onTap: () => _openGlobalSearch(cleanedText),
+                  onTap: () => openGlobalSearch(
+                    context,
+                    cleanedText,
+                    insertAdjacent: true,
+                  ),
                 ),
               ]
             : null,
@@ -992,25 +992,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           initialFormat:
               draft?.contentFormat ?? PersonalNoteContentFormat.plain,
         ));
-  }
-
-  /// קיצור הטקסט הנבחר להצגה בתווית תפריט (מנרמל רווחים וקוטם לאורך סביר)
-  String _previewForLabel(String text, {int maxLen = 25}) {
-    final cleaned = text.trim().replaceAll(RegExp(r'\s+'), ' ');
-    if (cleaned.length <= maxLen) return cleaned;
-    return '${cleaned.substring(0, maxLen)}…';
-  }
-
-  /// פתיחת חיפוש בכל הספרים בכרטיסייה חדשה
-  void _openGlobalSearch(String? selectedText) {
-    final query = selectedText?.trim() ?? '';
-    if (query.isEmpty) {
-      UiSnack.show('לא נבחר טקסט לחיפוש');
-      return;
-    }
-    final tab = SearchingTab(SearchingTab.titleForQuery(query), query);
-    context.read<HistoryBloc>().add(AddHistory(tab));
-    context.read<TabsBloc>().add(AddTab(tab, insertAdjacent: true));
   }
 
   /// פתיחת דיאלוג דיווח על טעות בספר
