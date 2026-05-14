@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 
@@ -19,7 +20,7 @@ bool isJumpToDateInRange(DateTime date) {
       !date.isAfter(kJumpToDateLastDate);
 }
 
-class JumpToDatePanel extends StatelessWidget {
+class JumpToDatePanel extends StatefulWidget {
   final DateTime selectedDate;
   final DateTime currentDate;
   final ValueChanged<DateTime> onDateChanged;
@@ -36,6 +37,38 @@ class JumpToDatePanel extends StatelessWidget {
   });
 
   @override
+  State<JumpToDatePanel> createState() => _JumpToDatePanelState();
+}
+
+class _JumpToDatePanelState extends State<JumpToDatePanel> {
+  // זמן ה-pointer-down האחרון על האזור
+  DateTime? _lastPointerDownTime;
+  // האם CalendarDatePicker קרא ל-onDateChanged מאז הלחיצה הקודמת —
+  // רק אז זוהי לחיצה על תא תאריך (לא על חיצי ניווט)
+  bool _dateSelectedSinceLastDown = false;
+
+  void _handlePointerDown(PointerDownEvent event) {
+    final now = DateTime.now();
+    final last = _lastPointerDownTime;
+    if (last != null &&
+        now.difference(last) < kDoubleTapTimeout &&
+        _dateSelectedSinceLastDown) {
+      _lastPointerDownTime = null;
+      _dateSelectedSinceLastDown = false;
+      widget.onConfirm();
+    } else {
+      _lastPointerDownTime = now;
+      _dateSelectedSinceLastDown = false;
+    }
+  }
+
+  void _onDateChanged(DateTime date) {
+    // מסמן שתא תאריך נבחר — לא ניווט
+    _dateSelectedSinceLastDown = true;
+    widget.onDateChanged(date);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -49,13 +82,16 @@ class JumpToDatePanel extends StatelessWidget {
         const SizedBox(height: 10),
         SizedBox(
           height: 320,
-          child: CalendarDatePicker(
-            key: ValueKey(clampJumpToDate(selectedDate)),
-            initialDate: clampJumpToDate(selectedDate),
-            currentDate: clampJumpToDate(currentDate),
-            firstDate: kJumpToDateFirstDate,
-            lastDate: kJumpToDateLastDate,
-            onDateChanged: onDateChanged,
+          child: Listener(
+            onPointerDown: _handlePointerDown,
+            child: CalendarDatePicker(
+              key: ValueKey(clampJumpToDate(widget.selectedDate)),
+              initialDate: clampJumpToDate(widget.selectedDate),
+              currentDate: clampJumpToDate(widget.currentDate),
+              firstDate: kJumpToDateFirstDate,
+              lastDate: kJumpToDateLastDate,
+              onDateChanged: _onDateChanged,
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -63,12 +99,12 @@ class JumpToDatePanel extends StatelessWidget {
           children: [
             NeutralActionButton(
               text: 'ביטול',
-              onPressed: onCancel,
+              onPressed: widget.onCancel,
             ),
             const SizedBox(width: 8),
             RecommendedActionButton(
               text: 'פתח',
-              onPressed: onConfirm,
+              onPressed: widget.onConfirm,
             ),
           ],
         ),
