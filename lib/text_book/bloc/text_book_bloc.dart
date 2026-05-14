@@ -19,6 +19,7 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_se
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/text_book/utils/link_processing.dart';
 import 'package:otzaria/text_book/utils/he_categories_enricher.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
@@ -98,6 +99,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<TogglePunctuation>(_onTogglePunctuation);
     on<UpdateTextBookContinuousReadingMode>(
         _onUpdateTextBookContinuousReadingMode);
+    on<UpdateTextBookShowSubtitles>(_onUpdateTextBookShowSubtitles);
     on<UpdateVisibleIndecies>(_onUpdateVisibleIndecies);
     on<UpdateSelectedIndex>(_onUpdateSelectedIndex);
     on<HighlightLine>(_onHighlightLine);
@@ -189,6 +191,34 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   void _setAwaitingInitialPageShapeVisibleSync(bool value) {
     _awaitingInitialPageShapeVisibleSync = value;
+  }
+
+  Future<Map<int, List<String>>> _loadSubtitleHeadingsByLine(
+    TextBook book,
+  ) async {
+    try {
+      final structures = await DatabaseLibraryProvider.instance
+          .getAlternativeStructuresForBook(book.title);
+      if (structures.isEmpty) {
+        return const {};
+      }
+
+      final headingsByLine = <int, List<String>>{};
+      for (final structure in structures) {
+        final entries = await DatabaseLibraryProvider.instance
+            .getAltTocLineIndices(structure.id);
+        for (final entry in entries) {
+          headingsByLine
+              .putIfAbsent(entry.lineIndex, () => <String>[])
+              .add(entry.text);
+        }
+      }
+
+      return headingsByLine;
+    } catch (e) {
+      debugPrint('Error loading alternative headings: $e');
+      return const {};
+    }
   }
 
   @visibleForTesting
@@ -341,6 +371,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         categoryId: book.categoryId,
         fileType: book.fileType,
       );
+      final supportsContinuousReading =
+          await FileSystemData.instance.supportsContinuousReadingMode(
+        book.title,
+        categoryId: book.categoryId,
+        fileType: book.fileType,
+      );
       final removeNikud = shouldRemoveNikudForBook(
         defaultRemoveNikud: defaultRemoveNikud,
         removeNikudFromTanach: removeNikudFromTanach,
@@ -349,9 +385,17 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       const List<Link> emptyLinks = [];
       const List<Link> emptyVisibleLinks = [];
+      final subtitleHeadingsByLine = await _loadSubtitleHeadingsByLine(book);
+      final showSubtitles = state is TextBookLoaded
+          ? (state as TextBookLoaded).showSubtitles
+          : true;
+      final effectiveContinuousReading =
+          supportsContinuousReading && event.continuousReadingMode;
       final readingSegments = buildReadingSegments(
         contentLines,
-        continuous: event.continuousReadingMode,
+        continuous: effectiveContinuousReading,
+        subtitleHeadingsByLine:
+            showSubtitles ? subtitleHeadingsByLine : const {},
       );
 
       if (_positionListenerCallback != null) {
@@ -455,7 +499,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             ? preservedRemoveNikud
             : removeNikud,
         isTanach: isTanach,
-        continuousReadingMode: event.continuousReadingMode,
+        supportsContinuousReadingMode: supportsContinuousReading,
+        continuousReadingMode: effectiveContinuousReading,
+        showSubtitles: showSubtitles,
+        subtitleHeadingsByLine: subtitleHeadingsByLine,
         readingSegments: readingSegments,
         visibleIndices: visibleIndices,
         pinLeftPane: preservedPinLeftPane ??
@@ -699,15 +746,44 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     final currentState = state as TextBookLoaded;
-    if (currentState.continuousReadingMode == event.enabled) {
+    final effectiveEnabled =
+        event.enabled && currentState.supportsContinuousReadingMode;
+    if (currentState.continuousReadingMode == effectiveEnabled) {
       return;
     }
 
     emit(currentState.copyWith(
-      continuousReadingMode: event.enabled,
+      continuousReadingMode: effectiveEnabled,
       readingSegments: buildReadingSegments(
         currentState.content,
-        continuous: event.enabled,
+        continuous: effectiveEnabled,
+        subtitleHeadingsByLine: currentState.showSubtitles
+            ? currentState.subtitleHeadingsByLine
+            : const {},
+      ),
+    ));
+  }
+
+  void _onUpdateTextBookShowSubtitles(
+    UpdateTextBookShowSubtitles event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is! TextBookLoaded) {
+      return;
+    }
+
+    final currentState = state as TextBookLoaded;
+    if (currentState.showSubtitles == event.show) {
+      return;
+    }
+
+    emit(currentState.copyWith(
+      showSubtitles: event.show,
+      readingSegments: buildReadingSegments(
+        currentState.content,
+        continuous: currentState.continuousReadingMode,
+        subtitleHeadingsByLine:
+            event.show ? currentState.subtitleHeadingsByLine : const {},
       ),
     ));
   }

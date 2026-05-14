@@ -27,6 +27,7 @@ import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/utils/text/global_search_helper.dart';
+import 'package:otzaria/utils/text/html_link_handler.dart';
 import 'package:otzaria/utils/text/text_with_inline_links.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
@@ -1666,6 +1667,11 @@ class _CombinedViewState extends State<CombinedView> {
     return ContinuousReadingParagraph(
       lines: paragraphLines,
       baseStyle: baseTextStyle,
+      onTapUrl: (url) => HtmlLinkHandler.handleLink(
+        context,
+        url,
+        (tab) => widget.openBookCallback(tab),
+      ),
       onLineTap: (lineIndex) {
         final isLineSelected = state.selectedIndex == lineIndex;
         _focusNode.requestFocus();
@@ -1707,6 +1713,7 @@ class _CombinedViewState extends State<CombinedView> {
           : baseTextStyle.copyWith(backgroundColor: backgroundColor);
       final htmlText = _continuousLineHtml(
         widget.data[lineIndex],
+        lineIndex: lineIndex,
         state: state,
         settingsState: settingsState,
       );
@@ -1715,7 +1722,7 @@ class _CombinedViewState extends State<CombinedView> {
         ContinuousReadingParagraphLine(
           lineIndex: lineIndex,
           text: utils.stripHtmlIfNeeded(htmlText).trim(),
-          inlineSpans: buildInlineHtmlSpans(htmlText, style),
+          htmlText: htmlText,
           style: style,
         ),
       );
@@ -1726,16 +1733,58 @@ class _CombinedViewState extends State<CombinedView> {
 
   String _continuousLineHtml(
     String rawText, {
+    required int lineIndex,
     required TextBookLoaded state,
     required SettingsState settingsState,
   }) {
+    var textWithLinks = rawText;
+    if (settingsState.enableHtmlLinks) {
+      try {
+        final linksForLine = state.links
+            .where((link) =>
+                link.index1 == lineIndex + 1 &&
+                link.start != null &&
+                link.end != null)
+            .toList();
+        if (linksForLine.isNotEmpty) {
+          textWithLinks = addInlineLinksToText(rawText, linksForLine);
+        }
+      } catch (_) {
+        textWithLinks = rawText;
+      }
+    }
+
+    final isPinpointTarget = state.pinpointHighlightIndex == lineIndex &&
+        state.pinpointHighlightText != null &&
+        state.pinpointHighlightText!.isNotEmpty;
+    final hasPinpoint = state.pinpointHighlightIndex != null;
+    final effectiveSearchText = isPinpointTarget
+        ? state.pinpointHighlightText!
+        : (hasPinpoint ? '' : state.searchText);
+    final Map<String, Map<String, bool>> effectiveSearchOptions =
+        hasPinpoint ? const <String, Map<String, bool>>{} : state.searchOptions;
+    final effectiveAlternativeWords =
+        hasPinpoint ? const <int, List<String>>{} : state.alternativeWords;
+    final effectiveSpacingValues =
+        hasPinpoint ? const <String, String>{} : state.spacingValues;
+    final effectiveSearchMode =
+        hasPinpoint ? SearchMode.exact : state.searchMode;
+    final effectiveSearchDistance = hasPinpoint ? 0 : state.searchDistance;
+
     return TextRendererService.processText(
-      rawText.trim(),
+      textWithLinks.trim(),
       RenderSettings(
         removeNikud: state.removeNikud,
         removePunctuation: state.removePunctuation,
         removeTeamim: !settingsState.showTeamim,
         replaceHolyNames: settingsState.replaceHolyNames,
+        searchText: effectiveSearchText,
+        searchOptions: effectiveSearchOptions,
+        alternativeWords: effectiveAlternativeWords,
+        spacingValues: effectiveSpacingValues,
+        isFuzzySearch: effectiveSearchMode == SearchMode.fuzzy,
+        searchMode: effectiveSearchMode,
+        searchDistance: effectiveSearchDistance,
         fontSize: widget.textSize,
         fontFamily: settingsState.fontFamily,
         lineHeight: settingsState.lineHeight,

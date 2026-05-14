@@ -41,6 +41,7 @@ import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
+import 'package:otzaria/utils/text/html_link_handler.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 
@@ -1732,6 +1733,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     return ContinuousReadingParagraph(
       lines: paragraphLines,
       baseStyle: baseStyle,
+      onTapUrl: (url) => HtmlLinkHandler.handleLink(
+        context,
+        url,
+        (tab) => widget.openBookCallback(tab),
+      ),
       onLineTap: (lineIndex) {
         final isLineSelected = state.selectedIndex == lineIndex;
         _requestKeyboardFocus('line-tap-$lineIndex');
@@ -1775,6 +1781,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           : baseTextStyle.copyWith(backgroundColor: backgroundColor);
       final htmlText = _continuousLineHtml(
         widget.content[lineIndex],
+        lineIndex: lineIndex,
         state: state,
         settingsState: settingsState,
       );
@@ -1783,7 +1790,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         ContinuousReadingParagraphLine(
           lineIndex: lineIndex,
           text: utils.stripHtmlIfNeeded(htmlText).trim(),
-          inlineSpans: buildInlineHtmlSpans(htmlText, style),
+          htmlText: htmlText,
           style: style,
         ),
       );
@@ -1794,9 +1801,23 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
   String _continuousLineHtml(
     String rawText, {
+    required int lineIndex,
     required TextBookLoaded state,
     required SettingsState settingsState,
   }) {
+    final isPinpointTarget = widget.isMainText &&
+        state.pinpointHighlightIndex == lineIndex &&
+        state.pinpointHighlightText != null &&
+        state.pinpointHighlightText!.isNotEmpty;
+    final hasPinpoint =
+        widget.isMainText && state.pinpointHighlightIndex != null;
+    final searchText = isPinpointTarget
+        ? state.pinpointHighlightText!
+        : (hasPinpoint ? '' : (widget.isMainText ? state.searchText : ''));
+    final useStateSearchSettings = widget.isMainText && !hasPinpoint;
+    final effectiveSearchMode =
+        useStateSearchSettings ? state.searchMode : SearchMode.exact;
+
     return TextRendererService.processText(
       rawText.trim(),
       RenderSettings(
@@ -1804,6 +1825,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         removePunctuation: state.removePunctuation,
         removeTeamim: !settingsState.showTeamim,
         replaceHolyNames: settingsState.replaceHolyNames,
+        searchText: searchText,
+        searchOptions: useStateSearchSettings ? state.searchOptions : const {},
+        alternativeWords:
+            useStateSearchSettings ? state.alternativeWords : const {},
+        spacingValues: useStateSearchSettings ? state.spacingValues : const {},
+        isFuzzySearch: effectiveSearchMode == SearchMode.fuzzy,
+        searchMode: effectiveSearchMode,
+        searchDistance: useStateSearchSettings ? state.searchDistance : 0,
         fontSize: widget.fontSize,
         fontFamily: widget.fontFamily ?? settingsState.fontFamily,
         lineHeight: settingsState.lineHeight,

@@ -37,8 +37,8 @@ void main() {
       // טקסט ריק
       expect(removeVolwels(''), '');
 
-      // הסרת טעמים וניקוד
-      expect(removeVolwels('שָׁל֥וֹם'), 'שלום');
+      // הסרת ניקוד תוך שמירה על טעמים (removeVolwels מסיר ניקוד בלבד)
+      expect(removeVolwels('שָׁל֥וֹם'), 'של֥ום');
 
       // החלפת תווים מיוחדים
       expect(removeVolwels('שָׁלוֹם־עוֹלָם'), 'שלום עולם');

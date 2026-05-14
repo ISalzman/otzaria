@@ -643,31 +643,86 @@ class FileSystemData {
 
   @visibleForTesting
   static bool isTanachPathForTesting(String path) {
-    if (path.isEmpty || path.startsWith('error:')) {
+    final segments = _normalizeContinuousPathSegments(path);
+    if (segments.isEmpty) {
       return false;
     }
+    return _isTanachSegments(segments);
+  }
 
-    final normalizedSegments = path
+  /// בודק אם הספר תומך במצב טקסט רציף.
+  ///
+  /// מצב זה זמין רק לספרי תנ"ך (תורה/נביאים/כתובים) ולמסכתות
+  /// תלמוד בבלי/ירושלמי בתוך אחד מהסדרים. מפרשים, אחרונים, ראשונים
+  /// ושאר ספרים נלווים אינם נכללים.
+  Future<bool> supportsContinuousReadingMode(String title,
+      {int? categoryId, String? fileType}) async {
+    final categoryPath =
+        await findBookCategoryPath(title, categoryId: categoryId);
+    if (categoryPath != null && categoryPath.isNotEmpty) {
+      return supportsContinuousReadingPathForTesting(categoryPath);
+    }
+
+    final path =
+        await _getBookPath(title, categoryId: categoryId, fileType: fileType);
+    return supportsContinuousReadingPathForTesting(path);
+  }
+
+  @visibleForTesting
+  static bool supportsContinuousReadingPathForTesting(String path) {
+    final segments = _normalizeContinuousPathSegments(path);
+    if (segments.isEmpty) {
+      return false;
+    }
+    return _isTanachSegments(segments) || _isTalmudSegments(segments);
+  }
+
+  static List<String> _normalizeContinuousPathSegments(String path) {
+    if (path.isEmpty || path.startsWith('error:')) {
+      return const [];
+    }
+
+    return path
         .replaceAll('\\', '/')
         .split(RegExp(r'[/,]'))
         .map((segment) => segment.trim())
         .where((segment) => segment.isNotEmpty)
         .map(_normalizeTanachSegment)
         .toList();
+  }
 
-    for (var i = 0; i < normalizedSegments.length; i++) {
-      if (normalizedSegments[i] != 'תנך') {
+  static bool _isTanachSegments(List<String> segments) {
+    for (var i = 0; i < segments.length; i++) {
+      if (segments[i] != 'תנך') {
         continue;
       }
 
-      if (i + 1 >= normalizedSegments.length) {
+      if (i + 1 >= segments.length) {
         return true;
       }
 
-      final nextSegment = normalizedSegments[i + 1];
+      final nextSegment = segments[i + 1];
       if (nextSegment == 'תורה' ||
           nextSegment == 'נביאים' ||
           nextSegment == 'כתובים') {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static bool _isTalmudSegments(List<String> segments) {
+    for (var i = 0; i < segments.length - 1; i++) {
+      final current = segments[i];
+      final isTalmudRoot =
+          current == 'תלמוד בבלי' || current == 'תלמוד ירושלמי';
+      if (!isTalmudRoot) {
+        continue;
+      }
+
+      final next = segments[i + 1];
+      if (next.startsWith('סדר ')) {
         return true;
       }
     }

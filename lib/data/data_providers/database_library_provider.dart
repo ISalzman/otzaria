@@ -420,6 +420,66 @@ List<Map<String, dynamic>> _loadAlternativeStructuresRowsInIsolate({
   }
 }
 
+/// Top-level wrapper שמרכז את כל הלוגיקה של קריאת alt-structures בתוך
+/// `Isolate.run`. חיוני שהקריאה ל-`Isolate.run` תיווצר *כאן* (בפונקציה
+/// ברמת קובץ), ולא בתוך instance method של `DatabaseLibraryProvider` -
+/// אחרת ה-closure של Dart עלול לתפוס את `this` (כולל ה-`FfiDatabase`
+/// שאינו ניתן לשליחה ל-isolate) ולגרום לכשל
+/// "Illegal argument in isolate message".
+Future<List<Map<String, dynamic>>> _runAlternativeStructuresInIsolate({
+  required String dbPath,
+  required String bookTitle,
+}) {
+  return Isolate.run(
+    () => _loadAlternativeStructuresRowsInIsolate(
+      dbPath: dbPath,
+      bookTitle: bookTitle,
+    ),
+  );
+}
+
+/// Top-level wrapper עבור טעינת קישורי ספר ב-isolate.
+/// ראה ההסבר ב-[_runAlternativeStructuresInIsolate].
+Future<List<Map<String, Object?>>> _runBookLinksInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+  required String fileType,
+}) {
+  return Isolate.run(
+    () => _loadBookLinksRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+    ),
+  );
+}
+
+/// Top-level wrapper עבור טעינת קישורי טווח ב-isolate.
+/// ראה ההסבר ב-[_runAlternativeStructuresInIsolate].
+Future<List<Map<String, Object?>>> _runBookLinksInRangeInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+  required String fileType,
+  required int startLineIndex,
+  required int endLineIndex,
+  List<String>? targetBookTitles,
+}) {
+  return Isolate.run(
+    () => _loadBookLinksRowsInRangeInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+      startLineIndex: startLineIndex,
+      endLineIndex: endLineIndex,
+      targetBookTitles: targetBookTitles,
+    ),
+  );
+}
+
 /// מתאם כל פעולות הכתיבה לספרים האישיים: add-folder scan, rescan, toggle, remove.
 ///
 /// תור סריאלי יחיד עם ספירת עסוקות נצפית.
@@ -2099,14 +2159,16 @@ class DatabaseLibraryProvider implements LibraryProvider {
       return [];
     }
 
+    // ראה הערה ב-_runAlternativeStructuresInIsolate: ה-Isolate.run עצמו
+    // חייב להיווצר בתוך פונקציה ברמת קובץ, אחרת `this` עלול להיתפס.
+    final dbPath = _sqliteProvider.dbPath;
+
     try {
-      final result = await Isolate.run(
-        () => _loadBookLinksRowsInIsolate(
-          dbPath: _sqliteProvider.dbPath,
-          title: title,
-          categoryId: categoryId,
-          fileType: fileType,
-        ),
+      final result = await _runBookLinksInIsolate(
+        dbPath: dbPath,
+        title: title,
+        categoryId: categoryId,
+        fileType: fileType,
       );
 
       final links = result.map((row) {
@@ -2154,18 +2216,18 @@ class DatabaseLibraryProvider implements LibraryProvider {
       return [];
     }
 
+    // ראה הערה ב-_runAlternativeStructuresInIsolate.
+    final dbPath = _sqliteProvider.dbPath;
+
     try {
-      final dbPath = _sqliteProvider.dbPath;
-      final result = await Isolate.run(
-        () => _loadBookLinksRowsInRangeInIsolate(
-          dbPath: dbPath,
-          title: title,
-          categoryId: categoryId,
-          fileType: fileType,
-          startLineIndex: startLineIndex,
-          endLineIndex: endLineIndex,
-          targetBookTitles: normalizedTargetBookTitles,
-        ),
+      final result = await _runBookLinksInRangeInIsolate(
+        dbPath: dbPath,
+        title: title,
+        categoryId: categoryId,
+        fileType: fileType,
+        startLineIndex: startLineIndex,
+        endLineIndex: endLineIndex,
+        targetBookTitles: normalizedTargetBookTitles,
       );
 
       final links = result.map((row) {
@@ -2230,13 +2292,17 @@ class DatabaseLibraryProvider implements LibraryProvider {
       return [];
     }
 
+    // לא להעביר ל-Isolate.run closure שנוצר בתוך instance method הזה -
+    // הקומפיילר של Dart עלול לתפוס את `this` בכל זאת (כולל ה-FfiDatabase
+    // הלא-ניתן-לשליחה), והקריאה תיכשל עם "Illegal argument in isolate
+    // message". במקום זאת אנו משתמשים ב-tear-off של פונקציה ברמת קובץ
+    // ומעבירים את הפרמטרים כ-record של ערכים פרימיטיביים.
+    final dbPath = _sqliteProvider.dbPath;
+
     try {
-      final dbPath = _sqliteProvider.dbPath;
-      final results = await Isolate.run(
-        () => _loadAlternativeStructuresRowsInIsolate(
-          dbPath: dbPath,
-          bookTitle: bookTitle,
-        ),
+      final results = await _runAlternativeStructuresInIsolate(
+        dbPath: dbPath,
+        bookTitle: bookTitle,
       );
 
       return results.map((json) => AltTocStructure.fromJson(json)).toList();
@@ -2427,7 +2493,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
       // Phase 1, so no TOC parse or DB read happens here for them.
       for (final book in discovered) {
         if (book.conversionError != null) {
-          debugPrint('⚠️ DOCX conversion failed for ${book.title}: ${book.conversionError}');
+          debugPrint(
+              '⚠️ DOCX conversion failed for ${book.title}: ${book.conversionError}');
           failedDetails.add((book.title, book.conversionError!));
           failed++;
           continue;
