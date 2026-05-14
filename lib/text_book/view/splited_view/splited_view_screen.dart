@@ -73,6 +73,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     _leftPaneWidth = context.read<SettingsBloc>().state.commentaryPaneWidth;
     widget.tab.toggleCommentatorsPaneNotifier
         .addListener(_onToggleCommentatorsPaneRequest);
+    widget.tab.openNotesTabNotifier.addListener(_onOpenNotesTabRequest);
   }
 
   /// טוגל חכם של חלונית המפרשים מקיצור מקלדת:
@@ -80,6 +81,14 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   ///   inline ולכן הקיצור לא פועל.
   /// - פאנל סגור או פתוח על טאב אחר → פתח על המפרשים.
   /// - פאנל פתוח על המפרשים → סגור.
+  void _onOpenNotesTabRequest() {
+    if (!mounted) return;
+    setState(() {
+      _paneOpen = true;
+      _currentTabIndex = _notesTabIndex;
+    });
+  }
+
   void _onToggleCommentatorsPaneRequest() {
     if (!mounted) return;
     // במצב מפרשים מתחת לטקסט הקיצור לא רלוונטי — המפרשים תמיד גלויים inline.
@@ -115,6 +124,8 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
           .removeListener(_onToggleCommentatorsPaneRequest);
       widget.tab.toggleCommentatorsPaneNotifier
           .addListener(_onToggleCommentatorsPaneRequest);
+      oldWidget.tab.openNotesTabNotifier.removeListener(_onOpenNotesTabRequest);
+      widget.tab.openNotesTabNotifier.addListener(_onOpenNotesTabRequest);
     }
     // אם showSplitView השתנה או initialTabIndex השתנה, מעדכן את הטאב
     if (oldWidget.showSplitView != widget.showSplitView ||
@@ -226,6 +237,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   void dispose() {
     widget.tab.toggleCommentatorsPaneNotifier
         .removeListener(_onToggleCommentatorsPaneRequest);
+    widget.tab.openNotesTabNotifier.removeListener(_onOpenNotesTabRequest);
     _controller.dispose();
     _savedSelectedText.dispose();
     _selectionSyncController.dispose();

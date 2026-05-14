@@ -701,7 +701,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // בתצוגה משולבת, מפרשים תמיד מתחת
       showSplitView: widget.isInCombinedView
           ? false
-          : (Settings.getValue<bool>('key-splited-view') ?? false),
+          : (Settings.getValue<bool>('key-splited-view') ?? true),
       removeNikud: settingsBloc.state.defaultRemoveNikud,
       preserveState: true,
       // בתצוגה משולבת, חלונית הצד תמיד סגורה
@@ -739,6 +739,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     setState(() {
       _sidebarTabIndex = 2;
     });
+    // Fire the notifier directly so SplitedViewScreen always opens the panel,
+    // even when showSplitView is already true and the bloc won't emit a new state
+    // (TextBookLoaded uses Equatable, so a no-op ToggleSplitView is swallowed).
+    widget.tab.openNotesTabNotifier.value++;
     context.read<TextBookBloc>().add(const ToggleSplitView(true));
   }
 

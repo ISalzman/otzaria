@@ -109,6 +109,64 @@ void main() {
       expect(find.text('אודות הספר'), findsOneWidget);
     });
 
+    testWidgets(
+        'openNotesTabNotifier פותח פאנל כשסיפליט ויו כבר פעיל והפאנל סגור',
+        (tester) async {
+      // P2 regression: ToggleSplitView(true) is swallowed by the bloc when
+      // showSplitView is already true (Equatable). The fix fires openNotesTabNotifier
+      // directly on the tab so SplitedViewScreen always opens the panel.
+      final book = TextBook(title: 'ספר בדיקה');
+      final bloc = _TestTextBookBloc(
+        _loadedState(book).copyWith(showSplitView: true),
+      );
+      final tab = TextBookTab(
+        book: book,
+        index: 0,
+        blocOverride: bloc,
+      );
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bloc.close();
+        await tabsBloc.close();
+        await settingsBloc.close();
+        tab.dispose();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 900));
+      await _pumpTextBookScreen(
+        tester,
+        tab: tab,
+        textBookBloc: bloc,
+        tabsBloc: tabsBloc,
+        settingsBloc: settingsBloc,
+        focusRepository: focusRepository,
+        shamorZachorDataProvider: shamorZachorDataProvider,
+        shamorZachorProgressProvider: shamorZachorProgressProvider,
+        bookmarkBloc: bookmarkBloc,
+        personalNotesBloc: personalNotesBloc,
+        tourCubit: tourCubit,
+        isInCombinedView: false,
+      );
+
+      // הפאנל סגור — טאב ההערות לא בעץ (AdaptiveSidePane לא בנה תוכן עדיין)
+      expect(find.text('הערות'), findsNothing);
+
+      // הפעלת הנוטיפייר ישירות (מדמה קריאה ל-_openPersonalNotesForCurrentView
+      // כשסיפליט ויו כבר פעיל — ToggleSplitView(true) היה נבלע על ידי הבלוק)
+      tab.openNotesTabNotifier.value++;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // הפאנל נפתח — שלוש הכרטיסיות גלויות
+      expect(find.text('הערות'), findsOneWidget);
+    });
+
     testWidgets('במצב משולב כפתורי הניווט עוברים ל-overflow', (tester) async {
       final book = TextBook(title: 'ספר בדיקה');
       final bloc = _TestTextBookBloc(_loadedState(book));

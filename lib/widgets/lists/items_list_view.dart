@@ -136,7 +136,8 @@ class _ItemsListViewState extends State<ItemsListView> {
     }
 
     // Filter items based on search query and additionalFilter
-    final filteredItems = widget.items.where((item) {
+    final filteredEntries = widget.items.asMap().entries.where((entry) {
+      final item = entry.value;
       if (widget.additionalFilter != null && !widget.additionalFilter!(item)) {
         return false;
       }
@@ -162,7 +163,7 @@ class _ItemsListViewState extends State<ItemsListView> {
           ),
         ),
         Expanded(
-          child: filteredItems.isEmpty
+          child: filteredEntries.isEmpty
               ? Center(
                   child: Text(
                     widget.notFoundText,
@@ -170,10 +171,11 @@ class _ItemsListViewState extends State<ItemsListView> {
                   ),
                 )
               : ListView.builder(
-                  itemCount: filteredItems.length,
+                  itemCount: filteredEntries.length,
                   itemBuilder: (context, index) {
-                    final item = filteredItems[index];
-                    final originalIndex = widget.items.indexOf(item);
+                    final entry = filteredEntries[index];
+                    final item = entry.value;
+                    final originalIndex = entry.key;
                     final centerText = widget.subtitleBuilder?.call(item);
                     final centerTooltip =
                         widget.subtitleTooltipBuilder?.call(item);

@@ -356,6 +356,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                               requiresStableLayout: true,
                             ),
                             targetTitle: result.reference,
+                            insertAdjacent: true,
                           ),
                         );
                   } else {
@@ -385,6 +386,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                           false),
                             ),
                             targetTitle: result.reference,
+                            insertAdjacent: true,
                           ),
                         );
                   }

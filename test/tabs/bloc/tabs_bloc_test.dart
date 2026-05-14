@@ -525,6 +525,22 @@ void main() {
       original.dispose();
       cloned.dispose();
     });
+
+    test('TextBookTab dispose משחרר גם את openNotesTabNotifier', () {
+      final tab = TextBookTab(
+        book: TextBook(title: 'ספר בדיקה'),
+        index: 0,
+      );
+
+      tab.dispose();
+
+      expect(
+        () => tab.openNotesTabNotifier.addListener(() {}),
+        throwsA(isA<FlutterError>()),
+        reason:
+            'ה-notifier נוסף בסטייט של הטאב וחייב להשתחרר יחד איתו כדי לא להשאיר מאזינים דולפים.',
+      );
+    });
   });
 
   group('OpenOrFocusTab עם pinpointHighlight על טאב קיים', () {
