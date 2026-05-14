@@ -1,10 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart';
 
 /// In-memory cache for the `book_acronym` table.
 ///
 /// This cache is used exclusively by the FindRef feature for matching
 /// book acronyms during reference searches.
+///
+/// המונחים נשמרים במצב מנורמל מראש (ללא ניקוד/גרשיים) כדי לחסוך
+/// נורמליזציה חוזרת בכל חיפוש.
 class AcronymsCache {
   AcronymsCache._();
 
@@ -17,7 +21,8 @@ class AcronymsCache {
 
   bool get isLoaded => _isLoaded;
 
-  /// Returns all acronyms for a given book ID
+  /// Returns all normalized acronyms for a given book ID.
+  /// כל ערך כבר עבר [normalizeForFindRefMatch] בעת הטעינה.
   List<String>? getAcronymsForBook(int bookId) => _acronymsByBookId[bookId];
 
   Future<void> warmUp() async {
@@ -53,7 +58,9 @@ class AcronymsCache {
         final bookId = row['bookId'] as int;
         final term = (row['term'] as String?) ?? '';
         if (term.isEmpty) continue;
-        _acronymsByBookId.putIfAbsent(bookId, () => <String>[]).add(term);
+        final normalized = normalizeForFindRefMatch(term);
+        if (normalized.isEmpty) continue;
+        _acronymsByBookId.putIfAbsent(bookId, () => <String>[]).add(normalized);
       }
 
       _isLoaded = true;

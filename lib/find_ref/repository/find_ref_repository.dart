@@ -101,7 +101,8 @@ class FindRefRepository {
       final qualifiedHits = hits.where((hit) {
         if (hit.matchRank >= 3) return true; // acronym match – always accept
         if (hit.matchRank == 2) return false; // contains-only – never accept for n>1
-        final titleTokens = _tokenize(_normalizeForMatch(hit.title));
+        // הכותרת המנורמלת כבר מחושבת מראש בתוך הקאש.
+        final titleTokens = _tokenize(hit.normalizedTitle);
         // Every phrase token at index i must match the start of title token i.
         for (var i = 0; i < phraseTokens.length; i++) {
           if (i >= titleTokens.length) return false;
@@ -157,7 +158,8 @@ class FindRefRepository {
       final title = hit.title;
       final isPdf = hit.fileType == 'pdf';
 
-      final titleTokens = _tokenize(_normalizeForMatch(title));
+      // הכותרת המנורמלת כבר זמינה מהקאש — אין צורך לנרמל מחדש.
+      final titleTokens = _tokenize(hit.normalizedTitle);
       final matchedByAcronym = hit.matchRank >= 3;
       final remainingTokens = _getRemainingTokens(
         queryTokens,
@@ -255,13 +257,8 @@ class FindRefRepository {
     List<String> queryTokens,
     List<String> titleTokens, {
     int stripLeadingTokensCount = 0,
-    bool stripFirstQueryToken = false,
   }) {
     final remaining = List<String>.from(queryTokens);
-
-    if (stripFirstQueryToken && stripLeadingTokensCount == 0) {
-      stripLeadingTokensCount = 1;
-    }
 
     if (stripLeadingTokensCount > 0) {
       final toRemove = stripLeadingTokensCount.clamp(0, remaining.length);
@@ -336,16 +333,7 @@ class FindRefRepository {
   String _normalize(String? s) =>
       (s ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
-  String _normalizeForMatch(String input) {
-    var cleaned = removeTeamim(removeVolwels(input));
-
-    cleaned = cleaned.replaceAll('"', '').replaceAll("'", '');
-    cleaned = cleaned.replaceAll('\u05F4', '').replaceAll('\u05F3', '');
-
-    cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9\u0590-\u05FF\s]'), ' ');
-    cleaned = cleaned.toLowerCase();
-    return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
+  String _normalizeForMatch(String input) => normalizeForFindRefMatch(input);
 
   List<String> _tokenize(String text) => text
       .split(' ')
