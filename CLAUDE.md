@@ -449,6 +449,132 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Changed interface/contract | All affected integration tests |
 | Modified core logic | Full test suite |
 
+### Test File Map — Feature → Test File
+
+**Text Book Viewer**
+| Area | Test File |
+|------|-----------|
+| Screen actions (overflow, layout) | `test/text_book/view/text_book_screen_actions_test.dart` |
+| Search controller sync | `test/text_book_search_query_sync_test.dart` |
+| Search screen | `test/text_book/view/text_book_search_screen_test.dart` |
+| TOC navigator UI | `test/text_book/view/toc_navigator_screen_test.dart` |
+| TOC navigator internals | `test/text_book/view/toc_navigator_internals_test.dart` |
+| Combined view helpers (shouldShow…) | `test/text_book/view/combined_view/combined_book_screen_test.dart` |
+| TabbedCommentaryPanel tab switching / onTabChanged | `test/text_book/view/tabbed_commentary_panel_test.dart` |
+| Page shape commentary selection | `test/text_book/view/page_shape_commentary_selection_test.dart` |
+| LinksNotesSidebar (page shape) | `test/text_book/view/page_shape/links_notes_sidebar_test.dart` |
+| SimpleTextViewer | `test/text_book/view/page_shape/simple_text_viewer_test.dart` |
+| Selected text copy/restore | `test/text_book/view/selection/selected_text_copy_test.dart`, `…restore_test.dart` |
+| SelectionSyncController | `test/text_book/view/selection/selection_sync_controller_test.dart` |
+| Commentary open-filter request | `test/text_book/view/commentary_list_base_open_filter_test.dart` |
+| Commentary search focus | `test/text_book/view/commentary_search_focus_test.dart` |
+| Commentary grouping | `test/text_book/commentary_grouping_test.dart` |
+| Book source dialog | `test/text_book/view/book_source_dialog_test.dart` |
+| Error report dialog | `test/text_book/view/error_report_dialog_test.dart` |
+
+**Text Book BLoC**
+| Area | Test File |
+|------|-----------|
+| BLoC state equality | `test/text_book/bloc/text_book_state_test.dart` |
+| Background content loading | `test/text_book/bloc/background_full_content_loading_test.dart` |
+| Editor BLoC | `test/text_book/editing/bloc/text_book_bloc_editor_test.dart` |
+| Markdown processor | `test/text_book/editing/services/markdown_processor_test.dart` |
+| Local overrides repository | `test/text_book/editing/repository/local_overrides_repository_test.dart` |
+
+**Data / Database**
+| Area | Test File |
+|------|-----------|
+| DatabaseLibraryProvider (links, alt-toc, isolate regressions) | `test/data_providers/database_library_provider_test.dart` |
+| DatabaseLibraryProvider has-book | `test/data_providers/database_library_provider_has_book_test.dart` |
+| UserBooksDB | `test/data_providers/user_books_database_holder_test.dart` |
+| FileSystemLibraryProvider | `test/data_providers/file_system_library_provider_test.dart` |
+| ExternalCatalogMapper | `test/data_providers/external_catalog_mapper_test.dart` |
+| TantivyDataProvider (search index) | `test/data/data_providers/tantivy_data_provider_test.dart` |
+| External books scanner | `test/data/data_providers/scan_external_books_test.dart` |
+
+**Search**
+| Area | Test File |
+|------|-----------|
+| Find-match utils | `test/search/find_match_utils_test.dart` |
+| Catalogue order helper | `test/search/search_catalogue_order_helper_test.dart` |
+| Enhanced search field | `test/search/enhanced_search_field_test.dart` |
+| Book facet | `test/search/book_facet_test.dart` |
+| Facet helper | `test/search/facet_helper_test.dart` |
+| Search BLoC facet counts | `test/search/search_bloc_facet_counts_test.dart` |
+| Search scope preferences | `test/search/search_scope_preferences_test.dart` |
+| Gematria search | `test/gematria_search_test.dart` |
+
+**Personal Notes**
+| Area | Test File |
+|------|-----------|
+| Notes screen | `test/personal_notes/personal_notes_screen_test.dart` |
+| Note tile | `test/personal_notes/widgets/note_tile_test.dart` |
+| Note editor | `test/personal_note_editor_test.dart` |
+| Note draft service | `test/personal_note_draft_service_test.dart` |
+| Note content view | `test/personal_note_content_view_test.dart` |
+| Notes export | `test/personal_notes_export_test.dart` |
+
+**Settings**
+| Area | Test File |
+|------|-----------|
+| Nikud display service | `test/unit/settings/nikud_display_service_test.dart` |
+| Settings repository | `test/unit/settings/settings_repository_test.dart` |
+| Settings screen controller | `test/unit/settings/settings_screen_controller_test.dart` |
+| Bookmark model | `test/unit/settings/history/bookmark_model_test.dart` |
+| Custom folders BLoC | `test/settings/services/custom_folders/custom_folders_bloc_test.dart` |
+| SegmentedSettingsTile | `test/widgets/segmented_settings_tile_test.dart` |
+| SwitchSettingsTile | `test/widgets/switch_settings_tile_test.dart` |
+
+**Widgets (shared)**
+| Area | Test File |
+|------|-----------|
+| App menu | `test/widgets/app_menu_test.dart` |
+| App top bar | `test/widgets/app_top_bar_test.dart` |
+| Context overlay panel | `test/widgets/context_overlay_panel_test.dart` |
+| Dual adaptive reader pane | `test/widgets/dual_adaptive_reader_pane_test.dart` |
+| Nav rail item | `test/widgets/nav_rail_item_test.dart` |
+| Reader side panel shell | `test/widgets/reader_side_panel_shell_test.dart` |
+| Responsive action bar | `test/widgets/responsive_action_bar_test.dart` |
+| Scrollable list scrollbar | `test/widgets/scrollable_positioned_list_scrollbar_test.dart` |
+| Smart text render settings | `test/widgets/smart_text/render_settings_test.dart` |
+| Work/indexing status overlays | `test/widgets/work_status_overlay_test.dart`, `…indexing_status_overlay_test.dart` |
+| App dropdown/search menu | `test/widgets/app_dropdown_field_test.dart`, `…app_search_menu_test.dart` |
+| Search pane base | `test/widgets/search_pane_base_test.dart` |
+
+**Navigation / Startup**
+| Area | Test File |
+|------|-----------|
+| Navigation BLoC | `test/navigation/navigation_bloc_test.dart` |
+| Startup guard / auto-reindex | `test/navigation/startup_work_gate_test.dart`, `…startup_auto_reindex_test.dart`, `…new_books_indexing_guard_test.dart` |
+
+**Other Features**
+| Area | Test File |
+|------|-----------|
+| Bookmarks BLoC | `test/bookmarks/bookmark_bloc_test.dart` |
+| Workspaces BLoC | `test/workspaces/bloc/workspace_bloc_test.dart` |
+| Library browser | `test/library/view/library_browser_preview_width_test.dart`, `…grid_items_test.dart` |
+| Empty library screen | `test/empty_library/empty_library_screen_test.dart` |
+| PDF isolate / rasterizer | `test/pdf_isolate_test.dart`, `test/printing/pdf_text_rasterizer_test.dart` |
+| Printing models | `test/printing/print_content_models_test.dart` |
+| File sync BLoC | `test/file_sync/file_sync_bloc_test.dart`, `…library_diff_sync_worker_test.dart` |
+| File sync asset parsing | `test/file_sync_test.dart` |
+| Background sync initializer | `test/migration/sync/background_sync_initializer_test.dart` |
+| DB migration / generator | `test/migration/generator_create_and_process_book_test.dart`, `…database_locked_test.dart` |
+| Indexing repository/service | `test/indexing/repository/indexing_repository_test.dart`, `…indexing_isolate_service_test.dart` |
+| External catalog | `test/external_catalog/external_catalog_repository_test.dart`, `…settings_helper_test.dart` |
+| Plugins | `test/plugins/utils/reader_location_resolver_test.dart`, `…plugin_store_link_parser_test.dart`, `…plugin_bridge_adapter_test.dart` |
+| Shamor Zachor | `test/shamor_zachor/shamor_zachor_test.dart` (+ 4 more in that dir) |
+| Dictionary lookup | `test/tools/dictionary/dictionary_lookup_repository_test.dart` |
+| Commentary reverse links | `test/commentary_reverse_links_test.dart` |
+| Inline links | `test/inline_links_test.dart` |
+| Dialog navigation | `test/dialog_navigation_test.dart` |
+| Focus restore | `test/focus_restore_test.dart` |
+| Calendar widget | `test/calendar_widget_focus_test.dart` |
+| Models (books, links) | `test/models/books_test.dart`, `…links_test.dart`, `…phone_report_data_test.dart` |
+| Utils (page converter, TOC parser) | `test/utils/page_converter_test.dart`, `…toc_parser_test.dart` |
+| Core (activation queue/channel, error log) | `test/core/` |
+| Error logging | `test/main_error_logging_test.dart`, `test/services/direct_error_report_service_test.dart` |
+
 ### Writing Tests
 - **Bloc**: Use `bloc_test` package
 - **Repository**: Mock dependencies with `mockito`
