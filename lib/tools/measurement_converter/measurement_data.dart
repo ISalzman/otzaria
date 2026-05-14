@@ -409,7 +409,7 @@ const Map<String, Map<String, double>> modernVolumeFactors = {
 const Map<String, Map<String, double>> timeConversionFactors = {
   'הילוך ארבע אמות': {
     'הילוך ארבע אמות': 1,
-    'הילוך אמה': 1 / 4,
+    'הילוך אמה': 4,
     'הילוך מאה אמה': 1 / 25,
     'הילוך שלושה רבעי מיל': 1 / 375,
     'הילוך מיל': 1 / 500,
@@ -418,7 +418,7 @@ const Map<String, Map<String, double>> timeConversionFactors = {
     'הילוך עשרה פרסאות': 1 / 20000,
   },
   'הילוך אמה': {
-    'הילוך ארבע אמות': 4,
+    'הילוך ארבע אמות': 1 / 4,
     'הילוך אמה': 1,
     'הילוך מאה אמה': 1 / 100,
     'הילוך שלושה רבעי מיל': 1 / 1500,
