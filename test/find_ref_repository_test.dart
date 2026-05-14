@@ -631,6 +631,102 @@ void main() {
     });
   });
 
+  // ─── דירוג עם הרבה תוצאות (decorate-sort-undecorate) ───────────────────────
+
+  group('FindRef — דירוג עם הרבה תוצאות', () {
+    test('ערבוב של exact + startsWith + tiebreaker — סדר נשמר', () async {
+      // 5 ספרים שתואמים לשאילתה "רש"י", במצבי matchRank שונים.
+      // הסדר הצפוי:
+      // 1. כותרת זהה לחלוטין ("רשי") — exact
+      // 2. כותרות שמתחילות ב-"רשי" — ממוינות לפי אורך reference (קצר→ארוך)
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'רשי') {
+            return [
+              _hit(
+                bookId: 3,
+                title: 'רשי על שמות',
+                normalizedTitle: 'רשי על שמות',
+                matchRank: 1,
+                orderIndex: 3.0,
+              ),
+              _hit(
+                bookId: 1,
+                title: 'רשי',
+                normalizedTitle: 'רשי',
+                matchRank: 0,
+                orderIndex: 1.0,
+              ),
+              _hit(
+                bookId: 2,
+                title: 'רשי על התורה',
+                normalizedTitle: 'רשי על התורה',
+                matchRank: 1,
+                orderIndex: 2.0,
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+      );
+
+      final results = await repo.findRefs('רשי');
+      final titles = results.map((r) => r.title).toList();
+
+      expect(titles.first, equals('רשי'),
+          reason: 'התאמת כותרת מדויקת חייבת להיות ראשונה');
+      // בין שאר ההתאמות (שתיהן startsWith) — הקצר יותר קודם.
+      final idxShort = titles.indexOf('רשי על שמות');
+      final idxLong = titles.indexOf('רשי על התורה');
+      expect(idxShort, isNonNegative);
+      expect(idxLong, isNonNegative);
+      expect(idxShort, lessThan(idxLong),
+          reason: 'reference קצר יותר קודם בשובר-תיקו');
+    });
+
+    test('שאילתה רב-מילים — דירוג לפי מיקום הטוקן השני', () async {
+      // בשאילתה "רשי בראשית", שני ספרים תואמים — אחד שהטוקן 2 שלו מתחיל
+      // ב-"בראשית", אחר שלא. הראשון אמור להיות לפני השני.
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'רשי בראשית') {
+            return [
+              _hit(
+                bookId: 2,
+                title: 'רשי על שמות',
+                normalizedTitle: 'רשי על שמות',
+                matchRank: 1,
+                orderIndex: 2.0,
+              ),
+              _hit(
+                bookId: 1,
+                title: 'רשי בראשית',
+                normalizedTitle: 'רשי בראשית',
+                matchRank: 1,
+                orderIndex: 1.0,
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+      );
+
+      final results = await repo.findRefs('רשי בראשית');
+      final titles = results.map((r) => r.title).toList();
+
+      expect(titles.first, equals('רשי בראשית'),
+          reason: 'הטוקן השני של "רשי בראשית" תואם לשאילתה — קודם');
+    });
+  });
+
   // ─── דחיית contains-only לרב-מילים ─────────────────────────────────────────
 
   group('FindRef — contains-only נדחה לרב-מילים', () {

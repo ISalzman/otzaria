@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:logging/logging.dart';
 
+import '../../../utils/text/text_manipulation.dart';
 import '../../models/author.dart';
 import '../../models/book.dart';
 import '../../models/category.dart';
@@ -30,7 +31,24 @@ class SeforimRepository {
 
   bool _initialized = false;
 
+  /// קאש בזיכרון לערכי TOC מעובדים לכל ספר.
+  /// המפתח: bookId. הערך: רשימת ערכים מסודרת לפי segment, עם
+  /// טוקנים מנורמלים מראש לסינון מהיר ללא SQL חוזר.
+  final Map<int, List<_CachedTocEntry>> _tocCache = <int, List<_CachedTocEntry>>{};
+
   SeforimRepository(this._database);
+
+  /// מבטל את ערך הקאש של [getTocEntriesForReference].
+  /// אם [bookId] סופק — מבטל רק את הערך של אותו ספר; אחרת מנקה הכול.
+  /// יש לקרוא לפונקציה אחרי כל מוטציה שמשפיעה על תוצאות ה-SQL של
+  /// `getTocEntriesForReference` (insert/update/delete של tocEntry או lineId).
+  void _invalidateTocCache({int? bookId}) {
+    if (bookId != null) {
+      _tocCache.remove(bookId);
+    } else {
+      _tocCache.clear();
+    }
+  }
 
   /// Ensures the database is initialized before use
   Future<void> ensureInitialized() async {
@@ -862,6 +880,7 @@ class SeforimRepository {
   /// Creates toc_text entries and toc_entry entries.
   Future<void> _insertTocEntriesForExternalBook(
       int bookId, List<TocEntry> entries) async {
+    _invalidateTocCache(bookId: bookId);
     _logger.fine(
         'Inserting ${entries.length} TOC entries for external book $bookId');
     final localToActualIds = <int, int>{};
@@ -1055,6 +1074,7 @@ class SeforimRepository {
   }
 
   Future<int> insertTocEntry(TocEntry entry) async {
+    _invalidateTocCache(bookId: entry.bookId);
     final textId = entry.textId ?? await _getOrCreateTocText(entry.text);
 
     final entryWithTextId = TocEntry(
@@ -1076,15 +1096,19 @@ class SeforimRepository {
   // Nouvelle méthode pour mettre à jour hasChildren
   Future<void> updateTocEntryHasChildren(
       int tocEntryId, bool hasChildren) async {
+    // bookId לא ידוע כאן — ניקוי גורף בטוח יותר מ-stale data.
+    _invalidateTocCache();
     await _database.tocDao.updateHasChildren(tocEntryId, hasChildren);
   }
 
   Future<void> updateTocEntryLineId(int tocEntryId, int lineId) async {
+    _invalidateTocCache();
     await _database.tocDao.updateLineId(tocEntryId, lineId);
   }
 
   Future<void> updateTocEntryIsLastChild(
       int tocEntryId, bool isLastChild) async {
+    _invalidateTocCache();
     await _database.tocDao.updateIsLastChild(tocEntryId, isLastChild);
   }
 
@@ -1092,6 +1116,7 @@ class SeforimRepository {
   Future<void> bulkUpdateTocEntryLineIds(
       List<({int tocId, int lineId})> updates) async {
     if (updates.isEmpty) return;
+    _invalidateTocCache();
     final db = await _database.database;
     withTransaction(db, () {
       for (final update in updates) {
@@ -1105,6 +1130,7 @@ class SeforimRepository {
   Future<void> bulkUpdateTocEntryHasChildren(
       List<int> tocEntryIds, bool hasChildren) async {
     if (tocEntryIds.isEmpty) return;
+    _invalidateTocCache();
     final db = await _database.database;
     final placeholders = List.filled(tocEntryIds.length, '?').join(',');
     db.execute(
@@ -1116,6 +1142,7 @@ class SeforimRepository {
   Future<void> bulkUpdateTocEntryIsLastChild(
       List<int> tocEntryIds, bool isLastChild) async {
     if (tocEntryIds.isEmpty) return;
+    _invalidateTocCache();
     final db = await _database.database;
     final placeholders = List.filled(tocEntryIds.length, '?').join(',');
     db.execute(
@@ -1937,6 +1964,7 @@ class SeforimRepository {
   /// Deletes a book and all its related data (lines, TOC entries, links, etc.)
   /// This is useful when replacing an existing book.
   Future<void> deleteBookCompletely(int bookId) async {
+    _invalidateTocCache(bookId: bookId);
     _logger.info('Deleting book completely: $bookId');
 
     final db = await _database.database;
@@ -1990,6 +2018,7 @@ class SeforimRepository {
   /// Updates tocEntry.lineId for all entries in a book by matching lineIndex.
   /// Should be called after lines and tocEntries are inserted for a book (insertContent=true).
   Future<void> updateTocEntryLineIdsByLineIndex(int bookId) async {
+    _invalidateTocCache(bookId: bookId);
     final db = await _database.database;
     db.execute('''
       UPDATE tocEntry SET lineId = (
@@ -2147,6 +2176,7 @@ extension FileSyncRepository on SeforimRepository {
   /// Deletes all TOC entries for a specific book.
   /// Used when updating book content.
   Future<void> deleteBookTocEntries(int bookId) async {
+    _invalidateTocCache(bookId: bookId);
     final db = await database.database;
     db.execute('DELETE FROM tocEntry WHERE bookId = ?', [bookId]);
   }
@@ -2271,9 +2301,63 @@ extension BookAcronymRepository on SeforimRepository {
   /// [bookId] - The book ID
   /// [bookTitle] - The book title (for building full reference)
   /// [queryTokens] - Optional tokens to filter TOC entries
+  ///
+  /// בנייה ראשונית של ערכי ה-TOC (SQL + הרכבת reference + נורמליזציה)
+  /// נשמרת במטמון פר-ספר. שיחות חוזרות (אופייניות בעת הקלדה הדרגתית של
+  /// המשתמש) מסננות in-memory בלבד.
   Future<List<Map<String, dynamic>>> getTocEntriesForReference(
       int bookId, String bookTitle,
       {List<String>? queryTokens}) async {
+    final cached = await _buildTocCacheForBook(bookId, bookTitle);
+
+    if (cached.isEmpty) {
+      // אין TOC בספר → מחזירים רק את הספר עצמו (תאימות לאחור).
+      return [
+        {
+          'reference': bookTitle,
+          'segment': 0,
+          'level': 0,
+        }
+      ];
+    }
+
+    Iterable<_CachedTocEntry> filtered = cached;
+    if (queryTokens != null && queryTokens.isNotEmpty) {
+      filtered = cached.where((entry) {
+        // כל queryToken חייב להופיע כטוקן שלם (לא substring) ברפרנס המנורמל.
+        for (final qt in queryTokens) {
+          if (!entry.tokens.contains(qt)) return false;
+        }
+        return true;
+      });
+    }
+
+    final results = filtered.map((e) => e.toMap()).toList();
+
+    // When filtering by queryTokens, prefer the shallowest matching level.
+    // This prevents verse-level entries (level 2) from flooding results when
+    // chapter-level entries (level 1) already satisfy the query.
+    if (queryTokens != null && queryTokens.isNotEmpty && results.isNotEmpty) {
+      var minLevel = results.first['level'] as int;
+      for (final r in results) {
+        final l = r['level'] as int;
+        if (l < minLevel) minLevel = l;
+      }
+      results.retainWhere((r) => (r['level'] as int) == minLevel);
+    }
+
+    // הרשימה כבר ממוינת לפי segment בקאש — אין צורך למיין שוב.
+    return results;
+  }
+
+  /// בונה (פעם אחת לכל [bookId]) את רשימת ערכי ה-TOC המעובדים.
+  /// כל ערך כולל את ה-reference המלא ואת הטוקנים המנורמלים שלו מראש,
+  /// כך שסינון לפי queryTokens הופך לחיפוש in-memory בלבד.
+  Future<List<_CachedTocEntry>> _buildTocCacheForBook(
+      int bookId, String bookTitle) async {
+    final cached = _tocCache[bookId];
+    if (cached != null) return cached;
+
     final db = await _database.database;
 
     // Get all TOC entries for the book
@@ -2289,19 +2373,11 @@ extension BookAcronymRepository on SeforimRepository {
       ''', [bookId]).toMapList();
 
     if (tocEntries.isEmpty) {
-      // If no TOC, return just the book itself
-      return [
-        {
-          'reference': bookTitle,
-          'segment': 0,
-          'level': 0,
-        }
-      ];
+      _tocCache[bookId] = const <_CachedTocEntry>[];
+      return _tocCache[bookId]!;
     }
 
-    final results = <Map<String, dynamic>>[];
-
-    // Build maps for parent texts and levels
+    // Build maps for parent texts and levels.
     final parentTexts = <int, String>{};
     final parentLevels = <int, int>{};
     for (final entry in tocEntries) {
@@ -2311,6 +2387,7 @@ extension BookAcronymRepository on SeforimRepository {
       parentLevels[id] = level;
     }
 
+    final built = <_CachedTocEntry>[];
     for (final entry in tocEntries) {
       final text = entry['text'] as String;
       final level = entry['level'] as int;
@@ -2319,14 +2396,11 @@ extension BookAcronymRepository on SeforimRepository {
 
       // Skip level 0 entries – they hold the book title itself.
       // (In the DB, h1→level 0 is the book name; chapters start at level 1.)
-      // Previously this skipped level 1, which inadvertently dropped all
-      // chapter headings for books that have only level 0 + level 1 (e.g. בראשית).
       if (level == 0) continue;
 
       // Build full reference path, skipping the book-name level (level 0).
       String fullRef = bookTitle;
       if (text.isNotEmpty) {
-        // Check if parent exists and is NOT the book-name level (level 0)
         if (parentId != null &&
             parentTexts.containsKey(parentId) &&
             parentLevels[parentId] != 0) {
@@ -2336,66 +2410,47 @@ extension BookAcronymRepository on SeforimRepository {
         }
       }
 
-      // Filter by query tokens if provided
-      if (queryTokens != null && queryTokens.isNotEmpty) {
-        // Use the same normalization as FindRef for consistent matching
-        final refNormalized = _normalizeForTocMatch(fullRef);
-        final refTokens =
-            refNormalized.split(' ').where((t) => t.isNotEmpty).toList();
+      // נורמליזציה מראש לטוקנים — חוסכת עבודה בכל סינון עוקב.
+      final refNormalized = normalizeForFindRefMatch(fullRef);
+      final tokens = refNormalized
+          .split(' ')
+          .where((t) => t.isNotEmpty)
+          .toList(growable: false);
 
-        // Check if ALL query tokens match exactly as complete tokens
-        // This prevents "א" from matching "יא", "כא", etc.
-        bool matches = true;
-        for (final queryToken in queryTokens) {
-          // Look for exact token match
-          bool tokenFound = refTokens.contains(queryToken);
+      built.add(_CachedTocEntry(
+        reference: fullRef,
+        segment: lineIndex,
+        level: level,
+        tokens: tokens,
+      ));
+    }
 
-          if (!tokenFound) {
-            matches = false;
-            break;
-          }
-        }
+    // מיון לפי segment פעם אחת — כך הסינון העוקב שומר על הסדר.
+    built.sort((a, b) => a.segment.compareTo(b.segment));
 
-        if (!matches) continue;
-      }
+    _tocCache[bookId] = built;
+    return built;
+  }
+}
 
-      results.add({
-        'reference': fullRef,
-        'segment': lineIndex,
+/// ערך TOC מעובד שנשמר בקאש בזיכרון של [SeforimRepository].
+/// `tokens` הם תוצאת [normalizeForFindRefMatch] על `reference`, מפוצלת לטוקנים.
+class _CachedTocEntry {
+  final String reference;
+  final int segment;
+  final int level;
+  final List<String> tokens;
+
+  const _CachedTocEntry({
+    required this.reference,
+    required this.segment,
+    required this.level,
+    required this.tokens,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'reference': reference,
+        'segment': segment,
         'level': level,
-      });
-    }
-
-    // When filtering by queryTokens, prefer the shallowest matching level.
-    // This prevents verse-level entries (level 2) from flooding results when
-    // chapter-level entries (level 1) already satisfy the query.
-    // Example: "בראשית א" → returns "גור אריה על בראשית פרק א" (level 1)
-    // but NOT "גור אריה על בראשית פרק ב פסוק א" (level 2).
-    if (queryTokens != null && queryTokens.isNotEmpty && results.isNotEmpty) {
-      var minLevel = results.first['level'] as int;
-      for (final r in results) {
-        final l = r['level'] as int;
-        if (l < minLevel) minLevel = l;
-      }
-      results.retainWhere((r) => (r['level'] as int) == minLevel);
-    }
-
-    // Sort results by segment (lineIndex) for logical ordering
-    results
-        .sort((a, b) => (a['segment'] as int).compareTo(b['segment'] as int));
-
-    return results;
-  }
-
-  /// Normalizes text for TOC matching (same as FindRef normalization)
-  String _normalizeForTocMatch(String input) {
-    // Remove nikud and teamim
-    var cleaned = input;
-    // Remove common Hebrew diacritics
-    cleaned = cleaned.replaceAll(RegExp(r'[\u0591-\u05C7]'), '');
-    // Keep only letters, numbers, and spaces
-    cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9\u0590-\u05FF\s]'), ' ');
-    cleaned = cleaned.toLowerCase();
-    return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
+      };
 }
