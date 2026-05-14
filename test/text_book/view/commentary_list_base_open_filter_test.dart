@@ -273,8 +273,8 @@ class _FakeLibraryProvider implements LibraryProvider {
   }
 
   @override
-  Future<String?> getBookText(
-      String title, int categoryId, String fileType) async {
+  Future<String?> getBookText(String title, int categoryId, String fileType,
+      {bool preferUserBooks = false}) async {
     return null;
   }
 
@@ -282,8 +282,9 @@ class _FakeLibraryProvider implements LibraryProvider {
   Future<List<TocEntry>?> getBookToc(
     String title,
     int categoryId,
-    String fileType,
-  ) async {
+    String fileType, {
+    bool preferUserBooks = false,
+  }) async {
     return const [];
   }
 
