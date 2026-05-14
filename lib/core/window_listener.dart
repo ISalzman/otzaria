@@ -133,7 +133,14 @@ class AppWindowListener extends WindowListener {
         }
       }
 
-      await Sentry.close();
+      if (!kIsWeb && Platform.isWindows) {
+        // Sentry.close() calls sentry_close() through synchronous FFI on
+        // Windows and can block while the native worker flushes. This path
+        // exits the process immediately below, so don't delay app shutdown
+        // for telemetry cleanup.
+      } else {
+        await Sentry.close();
+      }
 
       if (!kIsWeb &&
           (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
