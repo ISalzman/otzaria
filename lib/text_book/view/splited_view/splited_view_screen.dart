@@ -12,6 +12,8 @@ import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
+import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 
 class SplitedViewScreen extends StatefulWidget {
@@ -67,11 +69,51 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     }
     // טען את רוחב הפאנל מההגדרות
     _leftPaneWidth = context.read<SettingsBloc>().state.commentaryPaneWidth;
+    widget.tab.toggleCommentatorsPaneNotifier
+        .addListener(_onToggleCommentatorsPaneRequest);
+  }
+
+  /// טוגל חכם של חלונית המפרשים מקיצור מקלדת:
+  /// - רק במצב split view (מפרשים בצד); במצב מפרשים למטה — המפרשים מוצגים
+  ///   inline ולכן הקיצור לא פועל.
+  /// - פאנל סגור או פתוח על טאב אחר → פתח על המפרשים.
+  /// - פאנל פתוח על המפרשים → סגור.
+  void _onToggleCommentatorsPaneRequest() {
+    if (!mounted) return;
+    // במצב מפרשים מתחת לטקסט הקיצור לא רלוונטי — המפרשים תמיד גלויים inline.
+    if (!widget.showSplitView) return;
+    final isOnCommentary =
+        _paneOpen && _currentTabIndex == _commentaryTabIndex;
+    if (isOnCommentary) {
+      setState(() {
+        _paneOpen = false;
+        _isHovering = false;
+      });
+    } else {
+      // רישום interaction של TourCubit לפני הפתיחה — בעקבי עם השאר
+      // המסלולים שפותחים את חלונית המפרשים (ע' text_book_screen).
+      context.read<TourCubit>().recordInteraction(
+            TourInteraction(
+              type: TourInteractionType.commentaryUsed,
+              primaryValue: widget.tab.title,
+            ),
+          );
+      setState(() {
+        _paneOpen = true;
+        _currentTabIndex = _commentaryTabIndex;
+      });
+    }
   }
 
   @override
   void didUpdateWidget(SplitedViewScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.tab != widget.tab) {
+      oldWidget.tab.toggleCommentatorsPaneNotifier
+          .removeListener(_onToggleCommentatorsPaneRequest);
+      widget.tab.toggleCommentatorsPaneNotifier
+          .addListener(_onToggleCommentatorsPaneRequest);
+    }
     // אם showSplitView השתנה או initialTabIndex השתנה, מעדכן את הטאב
     if (oldWidget.showSplitView != widget.showSplitView ||
         oldWidget.initialTabIndex != widget.initialTabIndex) {
@@ -180,6 +222,8 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
 
   @override
   void dispose() {
+    widget.tab.toggleCommentatorsPaneNotifier
+        .removeListener(_onToggleCommentatorsPaneRequest);
     _controller.dispose();
     _savedSelectedText.dispose();
     _selectionSyncController.dispose();

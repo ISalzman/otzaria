@@ -6,6 +6,10 @@ import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/text_book/bloc/text_book_event.dart';
+import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -105,6 +109,45 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
         shortcutSettings['key-shortcut-open-history'] ?? 'ctrl+h';
     final workspaceShortcut =
         shortcutSettings['key-shortcut-switch-workspace'] ?? 'ctrl+k';
+    final toggleNavPaneShortcut =
+        shortcutSettings['key-shortcut-toggle-nav-pane'] ?? 'ctrl+shift+l';
+    final toggleCommentatorsPaneShortcut =
+        shortcutSettings['key-shortcut-toggle-commentators-pane'] ??
+            'ctrl+shift+c';
+
+    // פתח/סגור חלונית ניווט. אם הטאב הפעיל אינו ספר — מחזירים `ignored`
+    // כדי לא לבלוע את הקיצור (כך מנוע ה-shortcut יכול להמשיך הלאה במקום
+    // להציג למשתמש "כלום קרה" שקטה).
+    if (ShortcutHelper.matchesShortcut(event, toggleNavPaneShortcut)) {
+      final tab = context.read<TabsBloc>().state.currentTab;
+      if (tab is TextBookTab) {
+        final state = tab.bloc.state;
+        if (state is TextBookLoaded) {
+          tab.bloc.add(ToggleLeftPane(!state.showLeftPane));
+        }
+        return KeyEventResult.handled;
+      }
+      if (tab is PdfBookTab) {
+        tab.toggleNavPaneNotifier.value++;
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+
+    // פתח/סגור חלונית מפרשים — פועל גם ב-TextBookTab וגם ב-PdfBookTab
+    // (תיקון לבאג שב-PR המקורי שבלע את האירוע ב-PDF בלי השפעה).
+    if (ShortcutHelper.matchesShortcut(event, toggleCommentatorsPaneShortcut)) {
+      final tab = context.read<TabsBloc>().state.currentTab;
+      if (tab is TextBookTab) {
+        tab.toggleCommentatorsPaneNotifier.value++;
+        return KeyEventResult.handled;
+      }
+      if (tab is PdfBookTab) {
+        tab.toggleCommentatorsPaneNotifier.value++;
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
 
     // ספרייה
     if (ShortcutHelper.matchesShortcut(event, libraryShortcut)) {

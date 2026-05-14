@@ -63,6 +63,40 @@ void main() {
       expect(tab.searchController.text, 'תורה');
       expect(tab.searchText, 'תורה');
     });
+
+    test('notifiers של קיצורי המקלדת קיימים ומתחילים ב-0', () {
+      final tab = _tab();
+      expect(tab.toggleNavPaneNotifier.value, 0);
+      expect(tab.toggleCommentatorsPaneNotifier.value, 0);
+    });
+
+    test('הגדלת toggleNavPaneNotifier משדרת ל-listener', () {
+      final tab = _tab();
+      var calls = 0;
+      void listener() => calls++;
+      tab.toggleNavPaneNotifier.addListener(listener);
+      addTearDown(() => tab.toggleNavPaneNotifier.removeListener(listener));
+
+      tab.toggleNavPaneNotifier.value++;
+      tab.toggleNavPaneNotifier.value++;
+
+      expect(calls, 2);
+      expect(tab.toggleNavPaneNotifier.value, 2);
+    });
+
+    test('הגדלת toggleCommentatorsPaneNotifier משדרת ל-listener', () {
+      final tab = _tab();
+      var calls = 0;
+      void listener() => calls++;
+      tab.toggleCommentatorsPaneNotifier.addListener(listener);
+      addTearDown(
+          () => tab.toggleCommentatorsPaneNotifier.removeListener(listener));
+
+      tab.toggleCommentatorsPaneNotifier.value++;
+
+      expect(calls, 1);
+      expect(tab.toggleCommentatorsPaneNotifier.value, 1);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
