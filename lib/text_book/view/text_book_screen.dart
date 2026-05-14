@@ -1136,7 +1136,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     focusNode: _bookContentFocusNode,
                     autofocus: false,
                     onKeyEvent: (event) => _handleGlobalKeyEvent(
-                        event, context, state, widget.tab),
+                      event,
+                      context,
+                      state,
+                      widget.tab,
+                      openSearchFromToolbar: _openSearchFromToolbar,
+                      openNotesForCurrentView: () =>
+                          _openPersonalNotesForCurrentView(state),
+                    ),
                     child: Scaffold(
                       appBar: _buildAppBar(context, state, wideScreen),
                       body: _buildBody(context, state),
@@ -2505,8 +2512,14 @@ int _bottommostVisibleIndex(TextBookLoaded state) =>
 //   context.read<TextBookBloc>().add(OpenFullFileEditor());
 // }
 
-bool _handleGlobalKeyEvent(KeyEvent event, BuildContext context,
-    TextBookLoaded state, TextBookTab tab) {
+bool _handleGlobalKeyEvent(
+  KeyEvent event,
+  BuildContext context,
+  TextBookLoaded state,
+  TextBookTab tab, {
+  required VoidCallback openSearchFromToolbar,
+  required VoidCallback openNotesForCurrentView,
+}) {
   // קריאת קיצורים מההגדרות
   // [EDITING DISABLED]
   // final editSectionShortcut =
@@ -2541,9 +2554,7 @@ bool _handleGlobalKeyEvent(KeyEvent event, BuildContext context,
 
   // חיפוש בספר
   if (ShortcutHelper.matchesShortcut(event, searchInBookShortcut)) {
-    context
-        .findAncestorStateOfType<_TextBookViewerBlocState>()
-        ?._openSearchFromToolbar();
+    openSearchFromToolbar();
     return true;
   }
 
@@ -2576,7 +2587,11 @@ bool _handleGlobalKeyEvent(KeyEvent event, BuildContext context,
 
   // הוספת הערה
   if (ShortcutHelper.matchesShortcut(event, addNoteShortcut)) {
-    _addNoteFromKeyboard(context, state);
+    _addNoteFromKeyboard(
+      context,
+      state,
+      openNotesForCurrentView: openNotesForCurrentView,
+    );
     return true;
   }
 
@@ -2758,7 +2773,10 @@ void _addBookmarkFromKeyboard(
 
 /// Helper function to add note from keyboard shortcut
 Future<void> _addNoteFromKeyboard(
-    BuildContext context, TextBookLoaded state) async {
+  BuildContext context,
+  TextBookLoaded state, {
+  required VoidCallback openNotesForCurrentView,
+}) async {
   // משתמש בשורה הנבחרת אם קיימת, אחרת בשורה הראשונה הנראית
   final currentIndex = state.selectedIndex ??
       (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
@@ -2789,9 +2807,7 @@ Future<void> _addNoteFromKeyboard(
         initialFormat: draft?.contentFormat ?? PersonalNoteContentFormat.plain,
       ));
 
-  final viewerState =
-      context.findAncestorStateOfType<_TextBookViewerBlocState>();
-  viewerState?._openPersonalNotesForCurrentView(state);
+  openNotesForCurrentView();
 }
 
 // [EDITING DISABLED]

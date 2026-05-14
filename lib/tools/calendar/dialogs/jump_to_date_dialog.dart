@@ -43,6 +43,7 @@ class JumpToDatePanel extends StatefulWidget {
 class _JumpToDatePanelState extends State<JumpToDatePanel> {
   // זמן ה-pointer-down האחרון על האזור
   DateTime? _lastPointerDownTime;
+  Offset? _lastPointerDownPosition;
   // האם CalendarDatePicker קרא ל-onDateChanged מאז הלחיצה הקודמת —
   // רק אז זוהי לחיצה על תא תאריך (לא על חיצי ניווט)
   bool _dateSelectedSinceLastDown = false;
@@ -50,14 +51,21 @@ class _JumpToDatePanelState extends State<JumpToDatePanel> {
   void _handlePointerDown(PointerDownEvent event) {
     final now = DateTime.now();
     final last = _lastPointerDownTime;
+    final lastPosition = _lastPointerDownPosition;
+    final isNearLastPointerDown = lastPosition != null &&
+        (event.position - lastPosition).distanceSquared <=
+            kDoubleTapSlop * kDoubleTapSlop;
     if (last != null &&
         now.difference(last) < kDoubleTapTimeout &&
+        isNearLastPointerDown &&
         _dateSelectedSinceLastDown) {
       _lastPointerDownTime = null;
+      _lastPointerDownPosition = null;
       _dateSelectedSinceLastDown = false;
       widget.onConfirm();
     } else {
       _lastPointerDownTime = now;
+      _lastPointerDownPosition = event.position;
       _dateSelectedSinceLastDown = false;
     }
   }

@@ -96,6 +96,35 @@ void main() {
       expect(confirmed, isTrue);
     });
 
+    testWidgets('quick taps on different date cells do not call onConfirm',
+        (tester) async {
+      bool confirmed = false;
+      DateTime? changedTo;
+      final initialDate = DateTime(2026, 4, 3);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: JumpToDatePanel(
+              selectedDate: initialDate,
+              currentDate: initialDate,
+              onDateChanged: (d) => changedTo = d,
+              onCancel: () {},
+              onConfirm: () => confirmed = true,
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('15'));
+      await tester.pump();
+      await tester.tap(find.text('16'));
+      await tester.pumpAndSettle();
+
+      expect(changedTo, equals(DateTime(2026, 4, 16)));
+      expect(confirmed, isFalse);
+    });
+
     testWidgets('double click on navigation arrows does not call onConfirm',
         (tester) async {
       bool confirmed = false;
