@@ -291,43 +291,51 @@ class FindRefRepository {
 
   List<DbReferenceResult> _rankResults(
       List<DbReferenceResult> results, List<String> queryTokens) {
-    results.sort((a, b) {
-      final aTitle = _normalize(a.title);
-      final bTitle = _normalize(b.title);
-      final query = queryTokens.join(' ');
+    if (results.length < 2) return results;
 
+    final query = queryTokens.join(' ');
+    final needsTokenWiseRanking = queryTokens.length >= 2;
+
+    // Decorate: כל מפתחות המיון נדרשים מחושבים פעם אחת לכל תוצאה.
+    // ה-comparator מבצע השוואות שטוחות בלבד.
+    final decorated = List<_RankKey>.generate(results.length, (i) {
+      final r = results[i];
+      final normTitle = _normalize(r.title);
+      return _RankKey(
+        result: r,
+        normTitle: normTitle,
+        exactMatch: normTitle == query,
+        startsWithMatch: normTitle.startsWith(query),
+        titleTokens: needsTokenWiseRanking ? _tokenize(normTitle) : const [],
+      );
+    });
+
+    decorated.sort((a, b) {
       // התאמה מלאה של כל שם הספר
-      if (aTitle == query && bTitle != query) return -1;
-      if (bTitle == query && aTitle != query) return 1;
+      if (a.exactMatch != b.exactMatch) return a.exactMatch ? -1 : 1;
 
       // התאמה של התחלת שם הספר
-      if (aTitle.startsWith(query) && !bTitle.startsWith(query)) return -1;
-      if (bTitle.startsWith(query) && !aTitle.startsWith(query)) return 1;
+      if (a.startsWithMatch != b.startsWithMatch) {
+        return a.startsWithMatch ? -1 : 1;
+      }
 
       // מיון לפי התאמת מילים בודדות (מילה שנייה ואילך)
-      if (queryTokens.length >= 2) {
-        final aTitleTokens = _tokenize(aTitle);
-        final bTitleTokens = _tokenize(bTitle);
-
-        // בדיקת התאמה מילה-במילה החל מהמילה השנייה
+      if (needsTokenWiseRanking) {
         for (int i = 1; i < queryTokens.length; i++) {
           final queryToken = queryTokens[i];
+          final aHasMatch = i < a.titleTokens.length &&
+              a.titleTokens[i].startsWith(queryToken);
+          final bHasMatch = i < b.titleTokens.length &&
+              b.titleTokens[i].startsWith(queryToken);
 
-          // בדיקה אם יש מילה מתאימה בשם הספר שמתחילה עם מילת החיפוש
-          final aHasMatch =
-              i < aTitleTokens.length && aTitleTokens[i].startsWith(queryToken);
-          final bHasMatch =
-              i < bTitleTokens.length && bTitleTokens[i].startsWith(queryToken);
-
-          if (aHasMatch && !bHasMatch) return -1;
-          if (bHasMatch && !aHasMatch) return 1;
+          if (aHasMatch != bHasMatch) return aHasMatch ? -1 : 1;
         }
       }
 
-      return a.reference.length.compareTo(b.reference.length);
+      return a.result.reference.length.compareTo(b.result.reference.length);
     });
 
-    return results;
+    return decorated.map((d) => d.result).toList();
   }
 
   String _normalize(String? s) =>
@@ -339,4 +347,22 @@ class FindRefRepository {
       .split(' ')
       .where((token) => token.isNotEmpty)
       .toList(growable: false);
+}
+
+/// מפתחות מיון מחושבים מראש לדירוג תוצאות (decorate-sort-undecorate).
+/// מאפשר ל-comparator להישאר זול — בלי נורמליזציה/טוקניזציה חוזרת.
+class _RankKey {
+  final DbReferenceResult result;
+  final String normTitle;
+  final bool exactMatch;
+  final bool startsWithMatch;
+  final List<String> titleTokens;
+
+  const _RankKey({
+    required this.result,
+    required this.normTitle,
+    required this.exactMatch,
+    required this.startsWithMatch,
+    required this.titleTokens,
+  });
 }
