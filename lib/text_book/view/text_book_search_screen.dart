@@ -90,6 +90,10 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   SearchMode _searchMode = SearchMode.exact;
   int _searchDistance = 0;
   int? _selectedSearchResultIndex;
+  // מספר השורה בספר של התוצאה הנבחרת — משמש לשמירת הבחירה לפי זהות בין
+  // חיפושים. אינדקס סידורי לבדו אינו אמין כי תוכן הרשימה משתנה כשהשאילתה
+  // משתנה.
+  int? _selectedResultLine;
   int _activeSearchRequestId = 0;
   final ItemScrollController _resultsScrollController = ItemScrollController();
 
@@ -381,25 +385,50 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   }
 
   void _applySearchResults(List<TextSearchResult> results) {
-    int? closestIndex;
+    // שמירת בחירה לפי זהות (שורה בספר), לא לפי אינדקס סידורי.
+    // אינדקס סידורי לא יציב כי תוכן הרשימה משתנה בין חיפושים.
+    int? selectedIndex;
+    final lastSelectedLine = _selectedResultLine;
+    if (lastSelectedLine != null) {
+      final preservedIdx =
+          results.indexWhere((r) => r.index == lastSelectedLine);
+      if (preservedIdx != -1) {
+        selectedIndex = preservedIdx;
+      }
+    }
+
+    // יעד הגלילה: אם זוהתה אותה תוצאה — גלול אליה.
+    // אחרת — חפש את התוצאה הראשונה מהשורה הנוכחית בספר והלאה;
+    // אם כל התוצאות לפני המיקום הנוכחי, גלול לאחרונה (הקרובה ממעל).
+    int? scrollIndex;
     if (results.isNotEmpty) {
-      final state = context.read<TextBookBloc>().state;
-      if (state is TextBookLoaded && state.visibleIndices.isNotEmpty) {
-        final currentLine = state.visibleIndices.first;
-        final idx = results.indexWhere((r) => r.index >= currentLine);
-        if (idx != -1) closestIndex = idx;
+      if (selectedIndex != null) {
+        scrollIndex = selectedIndex;
+      } else {
+        final state = context.read<TextBookBloc>().state;
+        if (state is TextBookLoaded && state.visibleIndices.isNotEmpty) {
+          final currentLine = state.visibleIndices.first;
+          final idx = results.indexWhere((r) => r.index >= currentLine);
+          scrollIndex = idx != -1 ? idx : results.length - 1;
+        } else {
+          scrollIndex = 0;
+        }
+        // התאמת הבחירה הראשונית כך שניווט בחצים יתחיל מהתוצאה הקרובה למיקום.
+        selectedIndex = scrollIndex;
       }
     }
 
     setState(() {
       searchResults = results;
       _isSearching = false;
-      _selectedSearchResultIndex = closestIndex; // null = אין בחירה (תוצאה ריקה)
+      _selectedSearchResultIndex = selectedIndex;
+      _selectedResultLine =
+          selectedIndex != null ? results[selectedIndex].index : null;
     });
 
-    if (closestIndex != null) {
+    if (scrollIndex != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollResultsToIndex(closestIndex!);
+        _scrollResultsToIndex(scrollIndex!);
       });
     }
   }
@@ -426,6 +455,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   /// גולל את רשימת התוצאות לאינדקס הוויזואלי המדויק.
   void _scrollResultsToIndex(int resultListIndex) {
     if (!mounted) return;
+    if (!_resultsScrollController.isAttached) return;
     final visualIdx = _visualIndexForResultListIndex(resultListIndex);
     _resultsScrollController.jumpTo(index: visualIdx, alignment: 0.0);
   }
@@ -441,6 +471,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     final result = searchResults[resultListIndex];
     setState(() {
       _selectedSearchResultIndex = resultListIndex;
+      _selectedResultLine = result.index;
     });
 
     final bloc = context.read<TextBookBloc>();
@@ -710,6 +741,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       resetSearchCallback: () {
         setState(() {
           searchResults = [];
+          _selectedSearchResultIndex = null;
+          _selectedResultLine = null;
           _forceSearchEngine = false;
           _searchOptions = {};
           _alternativeWords = {};

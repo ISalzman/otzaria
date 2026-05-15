@@ -65,6 +65,41 @@ class PdfBookSearchView extends StatefulWidget {
   final int initialSearchDistance;
   final VoidCallback? onSearchResultNavigated;
 
+  /// חישוב האינדקס הוויזואלי ב-ScrollablePositionedList של תוצאות החיפוש,
+  /// שאליו יש לגלול בהתאם לעמוד הנוכחי בספר.
+  ///
+  /// [resultsPageNumbersSorted] — מספרי עמוד לכל תוצאה, ממוינים בסדר עולה.
+  /// [currentPage] — העמוד בו המשתמש נמצא כרגע.
+  ///
+  /// היעד: כותרת העמוד הראשון שגדול או שווה ל-[currentPage]. אם כל
+  /// העמודים בתוצאות לפני המיקום הנוכחי, היעד הוא כותרת העמוד האחרון
+  /// (התוצאה הקרובה ממעל), לא הראשון.
+  @visibleForTesting
+  static int computeTargetVisualIndexForTesting({
+    required List<int> resultsPageNumbersSorted,
+    required int currentPage,
+  }) {
+    if (resultsPageNumbersSorted.isEmpty) return 0;
+    final pages = resultsPageNumbersSorted.toSet().toList()..sort();
+    final targetPage = pages.firstWhere(
+      (p) => p >= currentPage,
+      orElse: () => pages.last,
+    );
+
+    int visualIdx = 0;
+    int resultIdx = 0;
+    for (final page in pages) {
+      if (page == targetPage) break;
+      visualIdx++; // כותרת הדף
+      while (resultIdx < resultsPageNumbersSorted.length &&
+          resultsPageNumbersSorted[resultIdx] == page) {
+        visualIdx++;
+        resultIdx++;
+      }
+    }
+    return visualIdx;
+  }
+
   @override
   State<PdfBookSearchView> createState() => _PdfBookSearchViewState();
 }
@@ -88,6 +123,13 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
 
   Timer? _pdfHighlightDebounce;
   String _lastPdfHighlightQuery = '';
+
+  /// השאילתה שעבורה תוזמנה גלילה לעמוד הנוכחי בסיום חיפוש פשוט.
+  /// בחיפוש פשוט התוצאות מגיעות אסינכרונית דרך ה-listener של pdfrx, ולכן
+  /// אי אפשר לגלול ב-_searchTextUpdated. השדה נדלק שם וייושם בסיום החיפוש —
+  /// רק אם השאילתה עדיין תואמת למה שהמשתמש מקליד, כדי למנוע גלילה על
+  /// תוצאות מיושנות (race) של חיפוש קודם.
+  String? _pendingSimpleSearchScrollFor;
 
   bool get _isSimpleSearch =>
       !_forceSearchEngine && _searchMode == SearchMode.exact;
@@ -180,9 +222,26 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
                     isPdf: true,
                     filePath: widget.pdfFilePath ?? '',
                   ))
-              .toList();
+              .toList()
+            ..sort((a, b) => a.segment.compareTo(b.segment));
           _isSearching = widget.textSearcher.isSearching;
         });
+        // גלילה לעמוד הנוכחי בסיום החיפוש — רק אם השאילתה הממתינה עדיין
+        // תואמת למה שמופיע בשדה החיפוש. זה מונע גלילה על תוצאות מיושנות
+        // של חיפוש פשוט קודם שהסתיים אחרי שהמשתמש כבר שינה את השאילתה.
+        final pendingQuery = _pendingSimpleSearchScrollFor;
+        if (pendingQuery != null &&
+            !_isSearching &&
+            _searchResults.isNotEmpty) {
+          var controllerQuery = widget.searchController.text.trim();
+          if (utils.hasNikud(controllerQuery)) {
+            controllerQuery = utils.removeVolwels(controllerQuery);
+          }
+          if (pendingQuery == controllerQuery) {
+            _pendingSimpleSearchScrollFor = null;
+            _scheduleScrollToCurrentPage();
+          }
+        }
       }
     }
   }
@@ -193,33 +252,16 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
 
       final pdfState = context.read<PdfBookBloc>().state;
       if (pdfState is! PdfBookLoaded) return;
-      final currentPage = pdfState.currentPageNumber;
 
-      final pages = _searchResults
-          .map((r) => _getPdfPageNumber(r))
-          .toSet()
-          .toList()
-        ..sort();
-      if (pages.isEmpty) return;
+      final resultsPageNumbers = _searchResults.map(_getPdfPageNumber).toList();
+      if (resultsPageNumbers.isEmpty) return;
 
-      final targetPage = pages.firstWhere(
-        (p) => p >= currentPage,
-        orElse: () => pages.first,
+      final visualIdx = PdfBookSearchView.computeTargetVisualIndexForTesting(
+        resultsPageNumbersSorted: resultsPageNumbers,
+        currentPage: pdfState.currentPageNumber,
       );
 
-      // חישוב אינדקס ויזואלי — O(N+M)
-      int visualIdx = 0;
-      int resultIdx = 0;
-      for (final page in pages) {
-        if (page == targetPage) break;
-        visualIdx++; // כותרת הדף
-        while (resultIdx < _searchResults.length &&
-            _getPdfPageNumber(_searchResults[resultIdx]) == page) {
-          visualIdx++;
-          resultIdx++;
-        }
-      }
-
+      if (!_resultsScrollController.isAttached) return;
       _resultsScrollController.jumpTo(index: visualIdx, alignment: 0.0);
     });
   }
@@ -236,6 +278,9 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
     String query = widget.searchController.text.trim();
 
     if (query.isEmpty || (!_isSimpleSearch && _bookPath == null)) {
+      // איפוס גלילה ממתינה כדי שתוצאות מיושנות לא יגרמו לקפיצה אחרי
+      // ניקוי השדה.
+      _pendingSimpleSearchScrollFor = null;
       if (mounted) {
         setState(() {
           _searchResults = [];
@@ -256,6 +301,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
 
     if (_isSimpleSearch) {
       _pdfHighlightDebounce?.cancel();
+      _pendingSimpleSearchScrollFor = query;
       widget.textSearcher.startTextSearch(query, goToFirstMatch: false);
       return;
     }
@@ -349,7 +395,6 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
           ? 'נמצאו ${_searchResults.length} תוצאות'
           : null,
       resultsWidget: ScrollablePositionedList.builder(
-        key: Key(widget.searchController.text),
         itemScrollController: _resultsScrollController,
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: items.length,
@@ -428,6 +473,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
           !_isSearching,
       onSearchTextChanged: (_) => _searchTextUpdated(),
       resetSearchCallback: () {
+        _pendingSimpleSearchScrollFor = null;
         setState(() {
           _searchResults = [];
           _forceSearchEngine = false;
@@ -493,13 +539,13 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
               _alternativeWords.isNotEmpty ||
               _spacingValues.isNotEmpty;
         });
-          pdfBookBloc.add(UpdateSearchOptions(
-              searchOptions: normalizedParameters.searchOptions,
-              alternativeWords: normalizedParameters.alternativeWords,
-              spacingValues: normalizedParameters.customSpacing,
-              searchMode: result.searchMode,
-              searchDistance: result.distance,
-            ));
+        pdfBookBloc.add(UpdateSearchOptions(
+          searchOptions: normalizedParameters.searchOptions,
+          alternativeWords: normalizedParameters.alternativeWords,
+          spacingValues: normalizedParameters.customSpacing,
+          searchMode: result.searchMode,
+          searchDistance: result.distance,
+        ));
 
         syncSearchControllerQuery(widget.searchController, result.query);
         if (!queryChanged) {
