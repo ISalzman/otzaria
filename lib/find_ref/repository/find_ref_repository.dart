@@ -134,6 +134,7 @@ class FindRefRepository {
           segment: 0,
           isPdf: isPdf,
           filePath: hit.filePath,
+          orderIndex: hit.orderIndex,
         ));
       }
 
@@ -188,6 +189,7 @@ class FindRefRepository {
             segment: pageNumber,
             isPdf: true,
             filePath: hit.filePath,
+            orderIndex: hit.orderIndex,
           );
           break;
         }
@@ -199,6 +201,7 @@ class FindRefRepository {
               segment: 0,
               isPdf: true,
               filePath: hit.filePath,
+              orderIndex: hit.orderIndex,
             ));
         continue;
       }
@@ -212,6 +215,7 @@ class FindRefRepository {
           segment: 0,
           isPdf: isPdf,
           filePath: hit.filePath,
+          orderIndex: hit.orderIndex,
         ));
 
         for (final entry in tocEntries) {
@@ -223,6 +227,7 @@ class FindRefRepository {
               segment: entry['segment'] as int,
               isPdf: isPdf,
               filePath: hit.filePath,
+              orderIndex: hit.orderIndex,
             ));
           }
         }
@@ -240,6 +245,7 @@ class FindRefRepository {
             segment: entry['segment'] as int,
             isPdf: isPdf,
             filePath: hit.filePath,
+            orderIndex: hit.orderIndex,
           ));
         }
       }
@@ -296,46 +302,94 @@ class FindRefRepository {
     final query = queryTokens.join(' ');
     final needsTokenWiseRanking = queryTokens.length >= 2;
 
-    // Decorate: כל מפתחות המיון נדרשים מחושבים פעם אחת לכל תוצאה.
-    // ה-comparator מבצע השוואות שטוחות בלבד.
+    // זיהוי סגנון ציון גמרא: הטוקן האחרון הוא "א" או "ב" + לפחות עוד טוקן.
+    // כשמזוהה — ערכים שה-reference שלהם מכיל "דף" יקבלו עדיפות על פני ערכים
+    // שאינם מכילים "דף" (כגון משנה), כדי ש-"שבת עא ב" יציג גמרא לפני משנה.
+    final isDafCitation = _queryLooksDafCitation(queryTokens);
+
+    // Decorate: כל מפתחות המיון מחושבים פעם אחת לכל תוצאה.
     final decorated = List<_RankKey>.generate(results.length, (i) {
       final r = results[i];
       final normTitle = _normalize(r.title);
+      // citationMatch=true  → מתאים לסגנון הציון שהוזן
+      // citationMatch=false → אינו מתאים (ירד מתחת לספרים שמתאימים)
+      final citationMatch = !isDafCitation || r.reference.contains('דף');
       return _RankKey(
         result: r,
         normTitle: normTitle,
         exactMatch: normTitle == query,
         startsWithMatch: normTitle.startsWith(query),
         titleTokens: needsTokenWiseRanking ? _tokenize(normTitle) : const [],
+        citationMatch: citationMatch,
       );
     });
 
     decorated.sort((a, b) {
-      // התאמה מלאה של כל שם הספר
+      // 1. התאמה מלאה של שם הספר
       if (a.exactMatch != b.exactMatch) return a.exactMatch ? -1 : 1;
 
-      // התאמה של התחלת שם הספר
+      // 2. התאמה של התחלת שם הספר
       if (a.startsWithMatch != b.startsWithMatch) {
         return a.startsWithMatch ? -1 : 1;
       }
 
-      // מיון לפי התאמת מילים בודדות (מילה שנייה ואילך)
+      // 3. התאמת מילים בודדות (מילה שנייה ואילך)
+      // טוקנים שהם אות בודדת (מספר פרק/פסוק/דף) מדולגים — הם אינם חלק משם הספר.
       if (needsTokenWiseRanking) {
         for (int i = 1; i < queryTokens.length; i++) {
           final queryToken = queryTokens[i];
+          if (queryToken.length == 1) continue; // ← skip single-char location tokens
           final aHasMatch = i < a.titleTokens.length &&
               a.titleTokens[i].startsWith(queryToken);
           final bHasMatch = i < b.titleTokens.length &&
               b.titleTokens[i].startsWith(queryToken);
-
           if (aHasMatch != bHasMatch) return aHasMatch ? -1 : 1;
         }
       }
 
+      // 4. התאמה לסגנון הציון (גמרא/משנה/תנ"ך)
+      if (a.citationMatch != b.citationMatch) return a.citationMatch ? -1 : 1;
+
+      // 5. סדר ספר בספרייה — ספרי יסוד ודורות קדומים עולים ראשונים
+      final orderCmp =
+          a.result.orderIndex.compareTo(b.result.orderIndex);
+      if (orderCmp != 0) return orderCmp;
+
+      // 6. ציון קצר יותר עולה קודם (כשאותו ספר מחזיר מספר רמות)
       return a.result.reference.length.compareTo(b.result.reference.length);
     });
 
     return decorated.map((d) => d.result).toList();
+  }
+
+  /// מחזיר true כשהשאילתה נראית כציון בסגנון גמרא (דף + עמוד).
+  ///
+  /// תנאי הזיהוי (כולם נדרשים):
+  ///   1. הטוקן האחרון הוא "א" או "ב" (עמוד א/ב).
+  ///   2. לפחות עוד טוקן קיים לפניו.
+  ///   3. OR:  מופיע "דף" / "עמוד" במפורש בשאילתה
+  ///      OR:  הטוקן לפני האחרון הוא מספר עברי של 2–4 אותיות (כמו "עא", "לט", "קה", "קמד"),
+  ///           ואינו מילת מבנה ("פרק", "משנה", "פסוק", ...).
+  ///           טוקן של אות בודדת או שם ספר ארוך אינם מפעילים את הבוסט.
+  ///
+  /// דוגמות שמפעילות: ["שבת","עא","ב"], ["ברכות","דף","כ","א"], ["נדה","ל","ב"]
+  /// דוגמות שלא מפעילות: ["בראשית","א","ב"], ["ברכות","ב"], ["ברכות","פרק","א","ב"]
+  bool _queryLooksDafCitation(List<String> tokens) {
+    if (tokens.length < 2) return false;
+    final last = tokens.last;
+    if (last != 'א' && last != 'ב') return false;
+    // מפורש — מילת "דף" או "עמוד" בשאילתה
+    if (tokens.contains('דף') || tokens.contains('עמוד')) return true;
+    // מספר דף עברי: 2–4 אותיות עבריות, ואינו מילת מבנה
+    const structureWords = {
+      'פרק', 'משנה', 'פסוק', 'הלכה', 'סעיף', 'סימן', 'חלק', 'שאלה'
+    };
+    final penultimate = tokens[tokens.length - 2];
+    if (structureWords.contains(penultimate)) return false;
+    return penultimate.length >= 2 &&
+        penultimate.length <= 4 &&
+        penultimate.codeUnits
+            .every((c) => c >= 0x05D0 && c <= 0x05EA); // אותיות עבריות בלבד
   }
 
   String _normalize(String? s) =>
@@ -358,11 +412,16 @@ class _RankKey {
   final bool startsWithMatch;
   final List<String> titleTokens;
 
+  /// true = ה-reference מתאים לסגנון הציון שהוזן (למשל: מכיל "דף" כשמדובר
+  /// בציון גמרא). false = אינו מתאים וירד בדירוג.
+  final bool citationMatch;
+
   const _RankKey({
     required this.result,
     required this.normTitle,
     required this.exactMatch,
     required this.startsWithMatch,
     required this.titleTokens,
+    required this.citationMatch,
   });
 }
