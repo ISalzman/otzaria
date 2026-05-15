@@ -29,7 +29,7 @@ List<Map<String, dynamic>> _filterTocHierarchically(
         (e) =>
             (e['level'] as int) == level - 1 &&
             ref.startsWith('${e['reference'] as String} '),
-        orElse: () => {'reference': bookTitle, 'level': 0},
+        orElse: () => <String, dynamic>{'reference': bookTitle, 'level': 0},
       );
       final parentRef = parent['reference'] as String;
       ownPart = ref.startsWith('$parentRef ')
@@ -94,9 +94,16 @@ List<Map<String, dynamic>> _filterTocHierarchically(
       });
     }).toList();
 
-    searchScope = children.isNotEmpty
-        ? [...children, ...allDescendants(children)]
-        : currentMatches;
+    if (children.isNotEmpty) {
+      final includeCurrentLevel = currentMatches.length > 1;
+      searchScope = [
+        if (includeCurrentLevel) ...currentMatches,
+        ...children,
+        ...allDescendants(children),
+      ];
+    } else {
+      searchScope = currentMatches;
+    }
   }
 
   return currentMatches;
@@ -746,7 +753,7 @@ void main() {
                 title: 'רשי על שמות',
                 normalizedTitle: 'רשי על שמות',
                 matchRank: 1,
-                orderIndex: 3.0,
+                orderIndex: 5.0, // שווה ל"רשי על התורה" — אורך reference מכריע
               ),
               _hit(
                 bookId: 1,
@@ -760,7 +767,7 @@ void main() {
                 title: 'רשי על התורה',
                 normalizedTitle: 'רשי על התורה',
                 matchRank: 1,
-                orderIndex: 2.0,
+                orderIndex: 5.0, // שווה ל"רשי על שמות" — אורך reference מכריע
               ),
             ];
           }
@@ -989,6 +996,191 @@ void main() {
         isTrue,
         reason: '"טל" הוא טרנספוזיציה של "לט" — חייב למצוא דף לט עמוד ב',
       );
+    });
+  });
+
+  // ─── מיון לפי דורות + סגנון ציון ──────────────────────────────────────────
+
+  group('FindRef — מיון לפי orderIndex וסגנון ציון', () {
+    // בונה repo עם שני ספרים: גמרא (orderIndex גבוה) ומשנה (orderIndex נמוך)
+    FindRefRepository buildTwoBookRepo({
+      required List<Map<String, dynamic>> Function(String) talmudToc,
+      required List<Map<String, dynamic>> Function(String) mishnaToc,
+    }) {
+      return FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'שבת' || query == 'מסכת שבת') {
+            return [
+              _hit(
+                bookId: 10,
+                title: 'מסכת שבת',
+                normalizedTitle: 'מסכת שבת',
+                matchRank: 0,
+                orderIndex: 3000.0, // תלמוד בבלי — מאוחר יותר בספרייה
+              ),
+              _hit(
+                bookId: 20,
+                title: 'משנה מסכת שבת',
+                normalizedTitle: 'משנה מסכת שבת',
+                matchRank: 1,
+                orderIndex: 1500.0, // משנה — קדומה יותר בספרייה
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (id, title, {queryTokens}) async {
+          final all =
+              id == 10 ? talmudToc(title) : mishnaToc(title);
+          if (queryTokens == null || queryTokens.isEmpty) return all;
+          return _filterTocHierarchically(all, queryTokens, title);
+        },
+      );
+    }
+
+    List<Map<String, dynamic>> talmudShabbatToc(String title) => [
+          {'reference': '$title דף עא', 'segment': 710, 'level': 1},
+          {'reference': '$title דף עא עמוד א', 'segment': 710, 'level': 2},
+          {'reference': '$title דף עא עמוד ב', 'segment': 715, 'level': 2},
+        ];
+
+    List<Map<String, dynamic>> mishnaShabbatToc(String title) => [
+          {'reference': '$title פרק א', 'segment': 1, 'level': 1},
+          {'reference': '$title פרק א משנה א', 'segment': 1, 'level': 2},
+          {'reference': '$title פרק א משנה ב', 'segment': 2, 'level': 2},
+        ];
+
+    test('שבת בלבד — משנה (orderIndex נמוך) עולה לפני גמרא', () async {
+      final repo = buildTwoBookRepo(
+        talmudToc: talmudShabbatToc,
+        mishnaToc: mishnaShabbatToc,
+      );
+
+      final results = await repo.findRefs('שבת');
+      expect(results, isNotEmpty);
+
+      final mishnaIdx =
+          results.indexWhere((r) => r.title.contains('משנה'));
+      final talmudIdx =
+          results.indexWhere((r) => !r.title.contains('משנה'));
+
+      expect(mishnaIdx, isNot(-1), reason: 'משנה חייבת להופיע');
+      expect(talmudIdx, isNot(-1), reason: 'גמרא חייבת להופיע');
+      expect(mishnaIdx, lessThan(talmudIdx),
+          reason: '"שבת" בלבד: משנה (orderIndex נמוך) לפני גמרא');
+    });
+
+    test('שבת עא ב — גמרא (יש "דף") עולה לפני משנה', () async {
+      final repo = buildTwoBookRepo(
+        talmudToc: talmudShabbatToc,
+        mishnaToc: mishnaShabbatToc,
+      );
+
+      final results = await repo.findRefs('שבת עא ב');
+      expect(results, isNotEmpty);
+
+      // הגמרא מחזירה "דף עא עמוד ב"; המשנה לא מחזירה תוצאה עבור "עא ב"
+      // → הגמרא חייבת להיות ראשונה
+      final first = results.first;
+      expect(first.reference.contains('דף'), isTrue,
+          reason: '"שבת עא ב" — ציון גמרא: התוצאה הראשונה חייבת להכיל "דף"');
+    });
+
+    test('"בראשית א ב" — לא מזוהה כגמרא (penultimate תו בודד)', () async {
+      // הוריסטיקה: penultimate = "א" (1 תו) → לא ציון גמרא → citationMatch ניטרלי
+      // → "תנ"ך" עם orderIndex נמוך יותר צריך לעלות ראשון
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'בראשית') {
+            return [
+              _hit(
+                bookId: 1,
+                title: 'ספר בראשית',
+                normalizedTitle: 'ספר בראשית',
+                matchRank: 1,
+                orderIndex: 100.0, // תנ"ך — קדום
+              ),
+              _hit(
+                bookId: 2,
+                title: 'בראשית רבה',
+                normalizedTitle: 'בראשית רבה',
+                matchRank: 1,
+                orderIndex: 5000.0, // מדרש — מאוחר יותר
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (id, title, {queryTokens}) async {
+          if (id == 1) {
+            final all = <Map<String, dynamic>>[
+              {'reference': '$title פרק א', 'segment': 0, 'level': 1},
+              {'reference': '$title פרק א פסוק א', 'segment': 0, 'level': 2},
+              {'reference': '$title פרק א פסוק ב', 'segment': 1, 'level': 2},
+            ];
+            if (queryTokens == null || queryTokens.isEmpty) return all;
+            return _filterTocHierarchically(all, queryTokens, title);
+          }
+          return const [];
+        },
+      );
+
+      final results = await repo.findRefs('בראשית א ב');
+      expect(results, isNotEmpty);
+      // ללא ציון גמרא — citationMatch ניטרלי לכל → orderIndex מכריע
+      // ספר בראשית (100) לפני בראשית רבה (5000)
+      final tanachIdx = results.indexWhere((r) => r.title == 'ספר בראשית');
+      final midrashIdx = results.indexWhere((r) => r.title == 'בראשית רבה');
+      if (tanachIdx != -1 && midrashIdx != -1) {
+        expect(tanachIdx, lessThan(midrashIdx),
+            reason: '"בראשית א ב" לא מוכר כגמרא — תנ"ך (orderIndex 100) לפני מדרש (5000)');
+      }
+    });
+
+    test('orderIndex מבטיח סדר דורות כש-citationMatch שווה', () async {
+      // שני ספרים ל"שבת", שניהם ללא TOC match (remainingTokens ריק)
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'שבת') {
+            return [
+              _hit(
+                bookId: 1,
+                title: 'אחרונים שבת',
+                normalizedTitle: 'אחרונים שבת',
+                matchRank: 1,
+                orderIndex: 8000.0,
+              ),
+              _hit(
+                bookId: 2,
+                title: 'ראשונים שבת',
+                normalizedTitle: 'ראשונים שבת',
+                matchRank: 1,
+                orderIndex: 4000.0,
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+      );
+
+      final results = await repo.findRefs('שבת');
+      final titles = results.map((r) => r.title).toList();
+
+      final rishonimIdx = titles.indexWhere((t) => t.contains('ראשונים'));
+      final acharonimIdx = titles.indexWhere((t) => t.contains('אחרונים'));
+
+      expect(rishonimIdx, lessThan(acharonimIdx),
+          reason: 'ראשונים (orderIndex 4000) לפני אחרונים (orderIndex 8000)');
     });
   });
 

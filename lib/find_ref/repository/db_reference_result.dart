@@ -17,12 +17,17 @@ class DbReferenceResult {
   /// The file path (for PDF files)
   final String filePath;
 
+  /// סדר הספר בספרייה — ספר מוקדם יותר = ערך נמוך יותר = עולה קודם.
+  /// מועתק מ-[ReferenceBookHit.orderIndex] בעת הבנייה.
+  final double orderIndex;
+
   const DbReferenceResult({
     required this.title,
     required this.reference,
     required this.segment,
     this.isPdf = false,
     this.filePath = '',
+    this.orderIndex = 0.0,
   });
 
   @override

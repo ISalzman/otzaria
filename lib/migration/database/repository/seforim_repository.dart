@@ -2457,7 +2457,12 @@ extension BookAcronymRepository on SeforimRepository {
           .toList();
 
       if (directChildren.isNotEmpty) {
+        // כשיש מרובה התאמות (למשל כל הפרקים אחרי "פרק") — כולל את currentMatches
+        // בסקופ הבא כדי שהטוקן הבא יוכל לחדד **באותה רמה** (למשל "כ" → "פרק כ").
+        // כשיש התאמה יחידה — יורדים לילדים בלבד, כי הטוקן הבא נועד להעמיק.
+        final includeCurrentLevel = currentMatches.length > 1;
         searchScope = [
+          if (includeCurrentLevel) ...currentMatches,
           ...directChildren,
           ...directChildren
               .expand((c) => _getAllDescendants(cache, c)),
