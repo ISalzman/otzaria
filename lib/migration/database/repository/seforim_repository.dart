@@ -32,9 +32,8 @@ class SeforimRepository {
   bool _initialized = false;
 
   /// קאש בזיכרון לערכי TOC מעובדים לכל ספר.
-  /// המפתח: bookId. הערך: רשימת ערכים מסודרת לפי segment, עם
-  /// טוקנים מנורמלים מראש לסינון מהיר ללא SQL חוזר.
-  final Map<int, List<_CachedTocEntry>> _tocCache = <int, List<_CachedTocEntry>>{};
+  /// המפתח: bookId. הערך: מבנה הכולל את כל הערכים + מבנה היררכי.
+  final Map<int, _TocBookCache> _tocCache = <int, _TocBookCache>{};
 
   SeforimRepository(this._database);
 
@@ -2308,61 +2307,27 @@ extension BookAcronymRepository on SeforimRepository {
   Future<List<Map<String, dynamic>>> getTocEntriesForReference(
       int bookId, String bookTitle,
       {List<String>? queryTokens}) async {
-    final cached = await _buildTocCacheForBook(bookId, bookTitle);
+    final cache = await _buildTocCacheForBook(bookId, bookTitle);
 
-    if (cached.isEmpty) {
-      // אין TOC בספר → מחזירים רק את הספר עצמו (תאימות לאחור).
-      return [
-        {
-          'reference': bookTitle,
-          'segment': 0,
-          'level': 0,
-        }
-      ];
+    if (cache.all.isEmpty || queryTokens == null || queryTokens.isEmpty) {
+      return cache.all.map((e) => e.toMap()).toList();
     }
 
-    Iterable<_CachedTocEntry> filtered = cached;
-    if (queryTokens != null && queryTokens.isNotEmpty) {
-      filtered = cached.where((entry) {
-        // כל queryToken חייב להופיע כטוקן שלם (לא substring) ברפרנס המנורמל.
-        for (final qt in queryTokens) {
-          if (!entry.tokens.contains(qt)) return false;
-        }
-        return true;
-      });
-    }
-
-    final results = filtered.map((e) => e.toMap()).toList();
-
-    // When filtering by queryTokens, prefer the shallowest matching level.
-    // This prevents verse-level entries (level 2) from flooding results when
-    // chapter-level entries (level 1) already satisfy the query.
-    if (queryTokens != null && queryTokens.isNotEmpty && results.isNotEmpty) {
-      var minLevel = results.first['level'] as int;
-      for (final r in results) {
-        final l = r['level'] as int;
-        if (l < minLevel) minLevel = l;
-      }
-      results.retainWhere((r) => (r['level'] as int) == minLevel);
-    }
-
-    // הרשימה כבר ממוינת לפי segment בקאש — אין צורך למיין שוב.
-    return results;
+    // חיפוש היררכי: יורד רמה-אחר-רמה עם תמיכה בטרנספוזיציית אותיות.
+    final matches = _searchTocHierarchically(cache, queryTokens);
+    return matches.map((e) => e.toMap()).toList();
   }
 
   /// בונה (פעם אחת לכל [bookId]) את רשימת ערכי ה-TOC המעובדים.
-  /// כל ערך כולל את ה-reference המלא ואת הטוקנים המנורמלים שלו מראש,
-  /// כך שסינון לפי queryTokens הופך לחיפוש in-memory בלבד.
-  Future<List<_CachedTocEntry>> _buildTocCacheForBook(
+  /// כל ערך כולל את ה-reference המלא (כולל נתיב אבות שלם) ואת הטוקנים המנורמלים
+  /// שלו מראש. מבנה היררכי (childrenByParentId) מאפשר חיפוש רמה-אחר-רמה.
+  Future<_TocBookCache> _buildTocCacheForBook(
       int bookId, String bookTitle) async {
     final cached = _tocCache[bookId];
     if (cached != null) return cached;
 
     final db = await _database.database;
 
-    // Get all TOC entries for the book
-    // Note: COALESCE(l.lineIndex, t.lineId) is used to support external books
-    // where lineId stores the line/page index directly (no entry in line table)
     final tocEntries = db.select('''
         SELECT t.id, tt.text, t.level, COALESCE(l.lineIndex, t.lineId) as lineIndex, t.parentId
         FROM tocEntry t
@@ -2373,79 +2338,185 @@ extension BookAcronymRepository on SeforimRepository {
       ''', [bookId]).toMapList();
 
     if (tocEntries.isEmpty) {
-      _tocCache[bookId] = const <_CachedTocEntry>[];
-      return _tocCache[bookId]!;
+      _tocCache[bookId] = _TocBookCache.empty;
+      return _TocBookCache.empty;
     }
 
-    // Build maps for parent texts and levels.
-    final parentTexts = <int, String>{};
-    final parentLevels = <int, int>{};
-    for (final entry in tocEntries) {
-      final id = entry['id'] as int;
-      final level = entry['level'] as int;
-      parentTexts[id] = entry['text'] as String;
-      parentLevels[id] = level;
+    // מפות עזר לבניית נתיב אבות ומבנה היררכי.
+    final entryTexts = <int, String>{};
+    final entryLevels = <int, int>{};
+    final entryParentIds = <int, int?>{};
+    for (final e in tocEntries) {
+      final id = e['id'] as int;
+      entryTexts[id] = e['text'] as String;
+      entryLevels[id] = e['level'] as int;
+      entryParentIds[id] = e['parentId'] as int?;
+    }
+
+    // בונה נתיב reference מלא ע"י מעבר רקורסיבי על שרשרת האבות.
+    String buildPath(int? id) {
+      if (id == null) return bookTitle;
+      final lvl = entryLevels[id];
+      if (lvl == null || lvl == 0) return bookTitle;
+      return '${buildPath(entryParentIds[id])} ${entryTexts[id]!}';
     }
 
     final built = <_CachedTocEntry>[];
-    for (final entry in tocEntries) {
-      final text = entry['text'] as String;
-      final level = entry['level'] as int;
-      final lineIndex = entry['lineIndex'] as int? ?? 0;
-      final parentId = entry['parentId'] as int?;
+    final childrenByParentId = <int, List<_CachedTocEntry>>{};
+    final rootEntries = <_CachedTocEntry>[];
 
-      // Skip level 0 entries – they hold the book title itself.
-      // (In the DB, h1→level 0 is the book name; chapters start at level 1.)
+    for (final e in tocEntries) {
+      final id = e['id'] as int;
+      final level = e['level'] as int;
       if (level == 0) continue;
 
-      // Build full reference path, skipping the book-name level (level 0).
-      String fullRef = bookTitle;
-      if (text.isNotEmpty) {
-        if (parentId != null &&
-            parentTexts.containsKey(parentId) &&
-            parentLevels[parentId] != 0) {
-          fullRef = '$bookTitle ${parentTexts[parentId]} $text';
-        } else {
-          fullRef = '$bookTitle $text';
-        }
-      }
+      final text = e['text'] as String;
+      final lineIndex = e['lineIndex'] as int? ?? 0;
+      final parentId = e['parentId'] as int?;
 
-      // נורמליזציה מראש לטוקנים — חוסכת עבודה בכל סינון עוקב.
-      final refNormalized = normalizeForFindRefMatch(fullRef);
-      final tokens = refNormalized
+      final ancestorPath = buildPath(parentId);
+      final fullRef = text.isNotEmpty ? '$ancestorPath $text' : ancestorPath;
+
+      final ownTokens = normalizeForFindRefMatch(text)
           .split(' ')
           .where((t) => t.isNotEmpty)
           .toList(growable: false);
 
-      built.add(_CachedTocEntry(
+      final entry = _CachedTocEntry(
+        id: id,
         reference: fullRef,
         segment: lineIndex,
         level: level,
-        tokens: tokens,
-      ));
+        ownTokens: ownTokens,
+      );
+
+      built.add(entry);
+
+      final parentLevel =
+          parentId == null ? null : entryLevels[parentId];
+      final isRoot =
+          parentId == null || parentLevel == null || parentLevel == 0;
+      if (isRoot) {
+        rootEntries.add(entry);
+      } else {
+        childrenByParentId.putIfAbsent(parentId, () => []).add(entry);
+      }
     }
 
-    // מיון לפי segment פעם אחת — כך הסינון העוקב שומר על הסדר.
+    // מיון לפי segment — כך הסינון העוקב שומר על הסדר.
     built.sort((a, b) => a.segment.compareTo(b.segment));
+    rootEntries.sort((a, b) => a.segment.compareTo(b.segment));
+    for (final children in childrenByParentId.values) {
+      children.sort((a, b) => a.segment.compareTo(b.segment));
+    }
 
-    _tocCache[bookId] = built;
-    return built;
+    final cache = _TocBookCache(
+      all: built,
+      rootEntries: rootEntries,
+      childrenByParentId: childrenByParentId,
+    );
+    _tocCache[bookId] = cache;
+    return cache;
+  }
+
+  /// חיפוש היררכי ב-TOC: יורד רמה-אחר-רמה עבור כל טוקן.
+  /// תומך בטרנספוזיציה של שתי אותיות עבריות ("טל" ↔ "לט").
+  List<_CachedTocEntry> _searchTocHierarchically(
+      _TocBookCache cache, List<String> tokens) {
+    var searchScope = cache.rootEntries;
+    var currentMatches = <_CachedTocEntry>[];
+
+    for (final token in tokens) {
+      final alts = _hebrewTokenAlternatives(token);
+
+      List<_CachedTocEntry> found = const [];
+      for (final alt in alts) {
+        final hits = searchScope.where((e) => e.ownTokens.contains(alt)).toList();
+        if (hits.isNotEmpty) {
+          found = hits;
+          break;
+        }
+      }
+
+      if (found.isEmpty) break;
+
+      // שומר רק את הרמה הרדודה ביותר בין ההתאמות.
+      var minLevel = found.first.level;
+      for (final e in found) {
+        if (e.level < minLevel) minLevel = e.level;
+      }
+      currentMatches =
+          found.where((e) => e.level == minLevel).toList();
+
+      // מכין את מרחב החיפוש לטוקן הבא:
+      // אם יש ילדים ישירים — יורדים אליהם (+ כל צאצאיהם).
+      // אם אין ילדים — נשארים ב-currentMatches לסינון נוסף באותה רמה.
+      final directChildren = currentMatches
+          .expand((m) =>
+              cache.childrenByParentId[m.id] ?? const <_CachedTocEntry>[])
+          .toList();
+
+      if (directChildren.isNotEmpty) {
+        searchScope = [
+          ...directChildren,
+          ...directChildren
+              .expand((c) => _getAllDescendants(cache, c)),
+        ];
+      } else {
+        searchScope = currentMatches;
+      }
+    }
+
+    return currentMatches;
+  }
+
+  /// מחזיר את כל הצאצאים (ילדים, נכדים, ...) של [entry].
+  Iterable<_CachedTocEntry> _getAllDescendants(
+      _TocBookCache cache, _CachedTocEntry entry) sync* {
+    final children =
+        cache.childrenByParentId[entry.id] ?? const <_CachedTocEntry>[];
+    for (final child in children) {
+      yield child;
+      yield* _getAllDescendants(cache, child);
+    }
+  }
+
+  /// מחזיר טוקן + גרסת טרנספוזיציה לאותיות עבריות דו-תווניות.
+  /// לדוגמה: "טל" → ["טל", "לט"] (שתי שיטות מניין עבריות ל-39).
+  List<String> _hebrewTokenAlternatives(String token) {
+    if (token.length == 2) {
+      final c0 = token.codeUnitAt(0);
+      final c1 = token.codeUnitAt(1);
+      // אותיות עבריות U+05D0–U+05EA
+      if (c0 >= 0x05D0 &&
+          c0 <= 0x05EA &&
+          c1 >= 0x05D0 &&
+          c1 <= 0x05EA &&
+          c0 != c1) {
+        return [token, '${token[1]}${token[0]}'];
+      }
+    }
+    return [token];
   }
 }
 
 /// ערך TOC מעובד שנשמר בקאש בזיכרון של [SeforimRepository].
 /// `tokens` הם תוצאת [normalizeForFindRefMatch] על `reference`, מפוצלת לטוקנים.
 class _CachedTocEntry {
+  final int id;
   final String reference;
   final int segment;
   final int level;
-  final List<String> tokens;
+
+  /// טוקנים של הטקסט של ערך זה בלבד (ללא אבות) — לשימוש בחיפוש היררכי.
+  final List<String> ownTokens;
 
   const _CachedTocEntry({
+    required this.id,
     required this.reference,
     required this.segment,
     required this.level,
-    required this.tokens,
+    required this.ownTokens,
   });
 
   Map<String, dynamic> toMap() => {
@@ -2453,4 +2524,28 @@ class _CachedTocEntry {
         'segment': segment,
         'level': level,
       };
+}
+
+/// קאש TOC לספר יחיד: רשימה שטוחה + מבנה היררכי לחיפוש.
+class _TocBookCache {
+  /// כל ערכי ה-TOC (ממוינים לפי segment).
+  final List<_CachedTocEntry> all;
+
+  /// ערכי שורש — ילדים ישירים של entry ברמה 0 (שם הספר).
+  final List<_CachedTocEntry> rootEntries;
+
+  /// מיפוי id → ילדים ישירים (ממוינים לפי segment).
+  final Map<int, List<_CachedTocEntry>> childrenByParentId;
+
+  static const empty = _TocBookCache(
+    all: [],
+    rootEntries: [],
+    childrenByParentId: {},
+  );
+
+  const _TocBookCache({
+    required this.all,
+    required this.rootEntries,
+    required this.childrenByParentId,
+  });
 }
