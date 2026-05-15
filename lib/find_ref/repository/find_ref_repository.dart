@@ -30,6 +30,10 @@ class FindRefRepository {
   final Future<List<({int bookId, String bookTitle})>> Function()?
       getAllBooksWithAltToc;
 
+  /// Injection for testing: returns the category path string for a given bookId.
+  /// In production this calls [ReferenceBooksCache.instance.getCategoryPathForBook].
+  final Future<String> Function(int bookId)? getCategoryPath;
+
   FindRefRepository({
     required this.dataRepository,
     this.warmUpReferenceBooksCache,
@@ -38,6 +42,7 @@ class FindRefRepository {
     this.getTocEntriesForReference,
     this.getAltTocEntriesForReference,
     this.getAllBooksWithAltToc,
+    this.getCategoryPath,
   });
 
   Future<List<DbReferenceResult>> findRefs(String ref) async {
@@ -165,12 +170,14 @@ class FindRefRepository {
           isPdf: isPdf,
           filePath: hit.filePath,
           orderIndex: hit.orderIndex,
+          bookId: hit.bookId,
         ));
       }
 
       final unique = _dedupeRefs(results);
       final ranked = _rankResults(unique, queryTokens);
-      return ranked.length > 15 ? ranked.take(15).toList() : ranked;
+      final limited = ranked.length > 15 ? ranked.take(15).toList() : ranked;
+      return await _enrichWithPaths(limited);
     }
 
     // If the *next* token after the matched book-phrase is an exact book match,
@@ -233,6 +240,7 @@ class FindRefRepository {
               filePath: hit.filePath,
               orderIndex: hit.orderIndex,
             ));
+        // FS PDFs (bookId == -1) have no DB category path — bookPath stays ''.
         continue;
       }
 
@@ -246,6 +254,7 @@ class FindRefRepository {
           isPdf: isPdf,
           filePath: hit.filePath,
           orderIndex: hit.orderIndex,
+          bookId: bookId,
         ));
 
         for (final entry in tocEntries) {
@@ -259,6 +268,7 @@ class FindRefRepository {
               filePath: hit.filePath,
               orderIndex: hit.orderIndex,
               tocLevel: level,
+              bookId: bookId,
             ));
           }
         }
@@ -278,6 +288,7 @@ class FindRefRepository {
             filePath: hit.filePath,
             orderIndex: hit.orderIndex,
             tocLevel: entry['level'] as int,
+            bookId: bookId,
           ));
         }
 
@@ -305,6 +316,7 @@ class FindRefRepository {
             orderIndex: hit.orderIndex,
             tocLevel: entry['level'] as int,
             isAltToc: true,
+            bookId: bookId,
           ));
         }
       }
@@ -343,6 +355,7 @@ class FindRefRepository {
             orderIndex: orderIdx,
             tocLevel: entry['level'] as int,
             isAltToc: true,
+            bookId: bookId,
           ));
         }
       }
@@ -350,10 +363,43 @@ class FindRefRepository {
 
     final unique = _dedupeRefs(results);
     final ranked = _rankResults(unique, queryTokens);
+    final limited = ranked.length > 15 ? ranked.take(15).toList() : ranked;
 
-    debugPrint('[FindRef] Final results: ${ranked.length}');
+    debugPrint('[FindRef] Final results: ${limited.length}');
 
-    return ranked.length > 15 ? ranked.take(15).toList() : ranked;
+    return await _enrichWithPaths(limited);
+  }
+
+  Future<List<DbReferenceResult>> _enrichWithPaths(
+      List<DbReferenceResult> results) async {
+    // Collect unique bookIds (DB books only) and fetch paths in parallel.
+    final uniqueIds =
+        results.map((r) => r.bookId).where((id) => id > 0).toSet();
+    if (uniqueIds.isEmpty) return results;
+
+    final pathFn =
+        getCategoryPath ?? ReferenceBooksCache.instance.getCategoryPathForBook;
+    final pathMap = <int, String>{};
+    await Future.wait(uniqueIds.map((id) async {
+      pathMap[id] = await pathFn(id);
+    }));
+
+    return results.map((r) {
+      final path = r.bookId > 0 ? (pathMap[r.bookId] ?? '') : '';
+      if (path.isEmpty) return r;
+      return DbReferenceResult(
+        title: r.title,
+        reference: r.reference,
+        segment: r.segment,
+        isPdf: r.isPdf,
+        filePath: r.filePath,
+        orderIndex: r.orderIndex,
+        isAltToc: r.isAltToc,
+        tocLevel: r.tocLevel,
+        bookId: r.bookId,
+        bookPath: path,
+      );
+    }).toList();
   }
 
   List<String> _getRemainingTokens(

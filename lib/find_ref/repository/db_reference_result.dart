@@ -29,6 +29,14 @@ class DbReferenceResult {
   /// עבור AltToc, הרמה מתייחסת לפנים מבנה ה-AltToc עצמו (לא לתוצאה הסופית בסדר).
   final int tocLevel;
 
+  /// מזהה הספר ב-DB, נדרש לבניית נתיב הקטגוריה.
+  /// ערך -1 = ספר PDF ממערכת הקבצים (לא ב-DB).
+  final int bookId;
+
+  /// נתיב הקטגוריה המלא (למשל "תנ"ך, תורה, בראשית").
+  /// ריק אם לא נמצא.
+  final String bookPath;
+
   const DbReferenceResult({
     required this.title,
     required this.reference,
@@ -38,6 +46,8 @@ class DbReferenceResult {
     this.orderIndex = 0.0,
     this.isAltToc = false,
     this.tocLevel = 1,
+    this.bookId = -1,
+    this.bookPath = '',
   });
 
   @override
