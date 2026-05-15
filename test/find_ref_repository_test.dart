@@ -1774,5 +1774,128 @@ void main() {
           reason: 'שאילתת מילה בודדת חייבת לקבל bookPath');
     });
   });
+
+  // ─── ספרים אישיים (includePersonalBooks) ─────────────────────────────────────
+
+  final personalBook = (
+    id: 99,
+    title: 'ספר פרטי',
+    filePath: null,
+    fileType: 'txt',
+    orderIndex: 1.0,
+  );
+
+  FindRefRepository buildPersonalRepo({
+    List<Map<String, dynamic>> userToc = const [],
+  }) =>
+      FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (_, {limit = 50}) => const [],
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getAllUserBooks: () async => [personalBook],
+        getUserBookTocEntries: (_, __, {queryTokens}) async => userToc,
+      );
+
+  group('FindRef — ספרים אישיים (includePersonalBooks)', () {
+    test('כשהסוויצ כבוי — ספרים אישיים לא מוחזרים', () async {
+      final repo = buildPersonalRepo();
+      final results = await repo.findRefs('ספר פרטי');
+      expect(results.where((r) => r.bookPath == 'ספרים אישיים'), isEmpty);
+    });
+
+    test('שאילתת מילה בודדת — מחזיר כותרת ספר עם bookPath=ספרים אישיים',
+        () async {
+      final repo = buildPersonalRepo();
+      final results =
+          await repo.findRefs('ספר', includePersonalBooks: true);
+      final personal = results.where((r) => r.bookPath == 'ספרים אישיים');
+      expect(personal, isNotEmpty);
+      expect(personal.first.title, equals('ספר פרטי'));
+      expect(personal.first.segment, equals(0));
+    });
+
+    test('שאילתת שתי מילים ו-remainingTokens ריק — כותרת + TOC רמה 2',
+        () async {
+      final repo = buildPersonalRepo(userToc: [
+        {'reference': 'ספר פרטי פרק א', 'segment': 10, 'level': 2},
+        {'reference': 'ספר פרטי פרק ב', 'segment': 20, 'level': 2},
+      ]);
+      final results =
+          await repo.findRefs('ספר פרטי', includePersonalBooks: true);
+      final refs = results
+          .where((r) => r.bookPath == 'ספרים אישיים')
+          .map((r) => r.reference)
+          .toList();
+      expect(refs, contains('ספר פרטי'));
+      expect(refs, contains('ספר פרטי פרק א'));
+      expect(refs, contains('ספר פרטי פרק ב'));
+    });
+
+    test('שאילתה עם remainingTokens — מחזיר רק TOC תואם', () async {
+      final repo = buildPersonalRepo(userToc: [
+        {'reference': 'ספר פרטי פרק א', 'segment': 10, 'level': 2},
+      ]);
+      final results =
+          await repo.findRefs('ספר פרטי פרק', includePersonalBooks: true);
+      final personal = results
+          .where((r) => r.bookPath == 'ספרים אישיים')
+          .toList();
+      expect(personal, hasLength(1));
+      expect(personal.first.reference, equals('ספר פרטי פרק א'));
+    });
+
+    test('ספר שלא מתאים לשאילתה — לא מוחזר', () async {
+      final repo = buildPersonalRepo();
+      final results =
+          await repo.findRefs('בראשית', includePersonalBooks: true);
+      expect(results.where((r) => r.bookPath == 'ספרים אישיים'), isEmpty);
+    });
+
+    test('bookPath של ספר אישי לא נדרס ע"י getCategoryPath', () async {
+      // ספר אישי עם id=42 לא צריך לקבל את הנתיב של הספר הרשמי 42
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (_, {limit = 50}) => const [],
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getAllUserBooks: () async => [
+          (
+            id: 42,
+            title: 'ספר אישי',
+            filePath: null,
+            fileType: 'txt',
+            orderIndex: 1.0,
+          )
+        ],
+        getUserBookTocEntries: (_, __, {queryTokens}) async => const [],
+        getCategoryPath: (_) async => 'נתיב רשמי שגוי',
+      );
+      final results =
+          await repo.findRefs('ספר אישי', includePersonalBooks: true);
+      final personal =
+          results.where((r) => r.title == 'ספר אישי').toList();
+      expect(personal, isNotEmpty);
+      expect(personal.first.bookPath, equals('ספרים אישיים'),
+          reason: 'bookPath של ספר אישי לא צריך להידרס ע"י getCategoryPath');
+    });
+
+    test('רשימת ספרים אישיים ריקה — אין קריסה', () async {
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (_, {limit = 50}) => const [],
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getAllUserBooks: () async => [],
+        getUserBookTocEntries: (_, __, {queryTokens}) async => const [],
+      );
+      final results =
+          await repo.findRefs('ספר', includePersonalBooks: true);
+      expect(results.where((r) => r.bookPath == 'ספרים אישיים'), isEmpty);
+    });
+  });
 }
 

@@ -22,8 +22,10 @@ class FindRefBloc extends Bloc<FindRefEvent, FindRefState> {
     }
     emit(FindRefLoading());
     try {
-      final List<DbReferenceResult> refs =
-          await findRefRepository.findRefs(event.refText);
+      final List<DbReferenceResult> refs = await findRefRepository.findRefs(
+        event.refText,
+        includePersonalBooks: event.includePersonalBooks,
+      );
       emit(FindRefSuccess(refs));
     } catch (e) {
       emit(FindRefError(e.toString()));

@@ -25,6 +25,7 @@ class FindRefDialog extends StatefulWidget {
 
 class _FindRefDialogState extends State<FindRefDialog> {
   int _selectedIndex = 0;
+  bool _includePersonalBooks = false;
   final Map<int, GlobalKey> _itemKeys = {};
   FocusRestorer? _focusRestorer;
   Timer? _searchDebounce;
@@ -204,8 +205,12 @@ class _FindRefDialogState extends State<FindRefDialog> {
                       _searchDebounce?.cancel();
                       _searchDebounce = Timer(
                         const Duration(milliseconds: 150),
-                        () => BlocProvider.of<FindRefBloc>(context)
-                            .add(SearchRefRequested(ref)),
+                        () => BlocProvider.of<FindRefBloc>(context).add(
+                          SearchRefRequested(
+                            ref,
+                            includePersonalBooks: _includePersonalBooks,
+                          ),
+                        ),
                       );
                     },
                     onSubmitted: (value) {
@@ -218,7 +223,41 @@ class _FindRefDialogState extends State<FindRefDialog> {
                 );
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  'כלול ספרים אישיים',
+                  textDirection: TextDirection.rtl,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Transform.scale(
+                  scale: 0.75,
+                  alignment: Alignment.centerRight,
+                  child: Switch(
+                    value: _includePersonalBooks,
+                    onChanged: (v) {
+                      setState(() => _includePersonalBooks = v);
+                      final text =
+                          focusRepository.findRefSearchController.text;
+                      if (text.length >= 2) {
+                        context.read<FindRefBloc>().add(
+                          SearchRefRequested(
+                            text,
+                            includePersonalBooks: v,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             Expanded(
               child: BlocBuilder<FindRefBloc, FindRefState>(
                 builder: (context, state) {
