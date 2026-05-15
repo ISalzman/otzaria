@@ -887,6 +887,7 @@ void main() {
       required int bookId,
       required String acronym,
       required List<Map<String, dynamic>> Function(String) tocBuilder,
+      List<Map<String, dynamic>> Function(String)? altTocBuilder,
     }) =>
         FindRefRepository(
           dataRepository: MockDataRepository(),
@@ -911,6 +912,18 @@ void main() {
             if (queryTokens == null || queryTokens.isEmpty) return all;
             return _filterTocHierarchically(all, queryTokens, title);
           },
+          getAltTocEntriesForReference: altTocBuilder == null
+              ? null
+              : (id, title, {queryTokens}) async {
+                  if (queryTokens == null || queryTokens.isEmpty) {
+                    return const [];
+                  }
+                  final all = altTocBuilder(title);
+                  return _filterTocHierarchically(all, queryTokens, title);
+                },
+          getAllBooksWithAltToc: altTocBuilder == null
+              ? null
+              : () async => [(bookId: bookId, bookTitle: bookTitle)],
         );
 
     test('שבת עא ב — מוצא דף עא עמוד ב', () async {
@@ -995,6 +1008,264 @@ void main() {
             r.reference.contains('לט') && r.reference.contains('עמוד ב')),
         isTrue,
         reason: '"טל" הוא טרנספוזיציה של "לט" — חייב למצוא דף לט עמוד ב',
+      );
+    });
+
+    // ── AltToc (כותרות-משנה) ──────────────────────────────────────────────────
+
+    group('FindRef — חיפוש בכותרות-משנה (AltToc)', () {
+      // AltToc references אינם כוללים שם הספר (הם יחסיים לספר).
+      //   רמה 1: "פרשת לך לך"           (segment=100)
+      //   רמה 2: "פרשת לך לך עליה א"   (segment=110)
+      //          "פרשת לך לך עליה ו"   (segment=160)
+      List<Map<String, dynamic>> altToc(String bookTitle) => [
+            {'reference': 'פרשת לך לך', 'segment': 100, 'level': 1},
+            {'reference': 'פרשת לך לך עליה א', 'segment': 110, 'level': 2},
+            {'reference': 'פרשת לך לך עליה ו', 'segment': 160, 'level': 2},
+          ];
+
+      // TOC רגיל: פרקים (ללא קשר לעליות)
+      List<Map<String, dynamic>> regularToc(String bookTitle) => [
+            {'reference': '$bookTitle פרק יב', 'segment': 110, 'level': 1},
+            {
+              'reference': '$bookTitle פרק יב פסוק א',
+              'segment': 110,
+              'level': 2
+            },
+          ];
+
+      test('חיפוש "לך ו" מוצא "עליה ו" דרך AltToc', () async {
+        final repo = buildRepo(
+          bookTitle: 'בראשית',
+          bookId: 1,
+          acronym: 'בראשית',
+          tocBuilder: regularToc,
+          altTocBuilder: altToc,
+        );
+
+        final results = await repo.findRefs('בראשית לך ו');
+        final altResult = results.where((r) => r.isAltToc).toList();
+        expect(altResult.any((r) => r.reference.contains('עליה ו')), isTrue,
+            reason: '"בראשית לך ו" חייב למצוא "עליה ו" דרך AltToc');
+        // reference ללא שם הספר
+        expect(altResult.any((r) => r.reference.startsWith('בראשית')), isFalse,
+            reason: 'AltToc reference לא אמור לכלול שם הספר');
+      });
+
+      test('חיפוש "לך א" מוצא "עליה א" דרך AltToc', () async {
+        final repo = buildRepo(
+          bookTitle: 'בראשית',
+          bookId: 1,
+          acronym: 'בראשית',
+          tocBuilder: regularToc,
+          altTocBuilder: altToc,
+        );
+
+        final results = await repo.findRefs('בראשית לך א');
+        expect(
+          results.any((r) => r.isAltToc && r.reference.contains('עליה א')),
+          isTrue,
+          reason: '"בראשית לך א" חייב למצוא "עליה א" דרך AltToc',
+        );
+      });
+
+      test('AltToc מדורג: TOC L2 < AltToc < TOC L3+', () async {
+        // repo מותאם-אישית: getTocEntriesForReference מחזיר L2 + L3 ישירות
+        final repo = FindRefRepository(
+          dataRepository: MockDataRepository(),
+          isReferenceBooksCacheLoaded: () => true,
+          warmUpReferenceBooksCache: () async {},
+          searchReferenceBooks: (query, {int limit = 50}) {
+            if (query == 'בראשית') {
+              return [_hit(bookId: 1, title: 'בראשית')];
+            }
+            return const <ReferenceBookHit>[];
+          },
+          getTocEntriesForReference: (id, title, {queryTokens}) async => [
+            {'reference': 'בראשית פרק א', 'segment': 10, 'level': 2},
+            {'reference': 'בראשית פרק א פסוק א', 'segment': 11, 'level': 3},
+          ],
+          getAltTocEntriesForReference: (id, title, {queryTokens}) async => [
+            {'reference': 'פרשת בראשית עליה א', 'segment': 12, 'level': 2},
+          ],
+        );
+
+        final results = await repo.findRefs('בראשית א');
+        final l2Idx = results.indexWhere((r) => !r.isAltToc && r.tocLevel == 2);
+        final altIdx = results.indexWhere((r) => r.isAltToc);
+        final l3Idx = results.indexWhere((r) => !r.isAltToc && r.tocLevel == 3);
+
+        if (l2Idx != -1 && altIdx != -1) {
+          expect(l2Idx, lessThan(altIdx),
+              reason: 'TOC רמה 2 חייב להקדים AltToc');
+        }
+        if (altIdx != -1 && l3Idx != -1) {
+          expect(altIdx, lessThan(l3Idx),
+              reason: 'AltToc חייב להקדים TOC רמה 3+');
+        }
+      });
+
+      test('חיפוש "לך ו" ללא שם הספר — global AltToc fallback', () async {
+        final repo = buildRepo(
+          bookTitle: 'בראשית',
+          bookId: 1,
+          acronym: 'בראשית',
+          tocBuilder: regularToc,
+          altTocBuilder: altToc,
+        );
+
+        // "לך ו" — ללא "בראשית"; searchReferenceBooks מחזיר ריק עבור "לך".
+        // ה-fallback הגלובלי חייב למצוא "עליה ו" דרך AltToc של בראשית.
+        final results = await repo.findRefs('לך ו');
+        expect(
+          results.any((r) => r.isAltToc && r.reference.contains('עליה ו')),
+          isTrue,
+          reason: '"לך ו" ללא שם הספר חייב למצוא "עליה ו" דרך global AltToc fallback',
+        );
+      });
+
+      test('ללא altTocBuilder — AltToc לא מחזיר תוצאות', () async {
+        final repo = buildRepo(
+          bookTitle: 'בראשית',
+          bookId: 1,
+          acronym: 'בראשית',
+          tocBuilder: regularToc,
+          // altTocBuilder לא מועבר
+        );
+
+        final results = await repo.findRefs('בראשית לך ו');
+        expect(
+          results.any((r) => r.isAltToc),
+          isFalse,
+          reason: 'ללא AltToc — אין תוצאות עם isAltToc=true',
+        );
+      });
+    });
+  });
+
+  // ─── נקודות רגישות ב-AltToc ────────────────────────────────────────────────
+
+  group('FindRef — AltToc נקודות רגישות', () {
+    test(
+        'global fallback מופעל כשספר אחר נמצא אבל AltToc שלו לא מתאים',
+        () async {
+      // "תולדות עליה ב": "תולדות יצחק" נמצא כספר (bookHits לא ריק),
+      // אבל AltToc שלו לא מחזיר תוצאות. ה-fallback חייב לרוץ ולמצוא בבראשית.
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'תולדות') {
+            return [
+              _hit(bookId: 1, title: 'תולדות יצחק', normalizedTitle: 'תולדות יצחק'),
+            ];
+          }
+          if (query == 'בראשית') {
+            return [_hit(bookId: 2, title: 'בראשית', normalizedTitle: 'בראשית')];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (id, title, {queryTokens}) async => const [],
+        getAltTocEntriesForReference: (id, title, {queryTokens}) async {
+          if (title == 'בראשית') {
+            return [{'reference': 'תולדות עליה ב', 'segment': 100, 'level': 2}];
+          }
+          return const [];
+        },
+        getAllBooksWithAltToc: () async => [(bookId: 2, bookTitle: 'בראשית')],
+      );
+
+      final results = await repo.findRefs('תולדות עליה ב');
+      expect(
+        results.any((r) => r.isAltToc && r.reference.contains('עליה ב')),
+        isTrue,
+        reason: 'global fallback חייב לרוץ ולמצוא AltToc של בראשית',
+      );
+    });
+
+    test('dedup: TOC ו-AltToc לאותו segment מחזירים תוצאה אחת', () async {
+      // TOC מחזיר "ספר פרשת א" ו-AltToc מחזיר "פרשת א" — שניהם segment=50.
+      // dedup לפי (title, segment) חייב להשאיר תוצאה אחת בלבד.
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'ספר') {
+            return [_hit(bookId: 1, title: 'ספר', normalizedTitle: 'ספר')];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (id, title, {queryTokens}) async => [
+          {'reference': 'ספר פרשת א', 'segment': 50, 'level': 2},
+        ],
+        getAltTocEntriesForReference: (id, title, {queryTokens}) async => [
+          {'reference': 'פרשת א', 'segment': 50, 'level': 1},
+        ],
+      );
+
+      final results = await repo.findRefs('ספר א');
+      final withSegment50 = results.where((r) => r.segment == 50).toList();
+      expect(
+        withSegment50.length,
+        1,
+        reason: 'TOC ו-AltToc לאותו segment חייבים להתמזג לתוצאה אחת',
+      );
+    });
+
+    test('פילטר AltToc פר-ספר — מאצ\' חלקי של ספר רפוי נחסם', () async {
+      // "נחל שורק" נמצא עבור "נח" כי "נחל".startsWith("נח").
+      // AltToc שלו מחזיר "הפטרת נח" שמתאים רק לטוקן "נח" ולא ל-"עליה" ו-"ב".
+      // הפילטר remainingTokens חייב לחסום את התוצאה.
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'נח') {
+            return [
+              _hit(bookId: 1, title: 'נחל שורק', normalizedTitle: 'נחל שורק', matchRank: 1),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (id, title, {queryTokens}) async => const [],
+        getAltTocEntriesForReference: (id, title, {queryTokens}) async => [
+          {'reference': 'הפטרת נח', 'segment': 10, 'level': 1},
+        ],
+        getAllBooksWithAltToc: () async => const [],
+      );
+
+      final results = await repo.findRefs('נח עליה ב');
+      expect(
+        results.any((r) => r.isAltToc),
+        isFalse,
+        reason: '"הפטרת נח" אינו מכיל "עליה" ו-"ב" — חייב להיחסם על-ידי הפילטר',
+      );
+    });
+
+    test('global fallback — מאצ\' חלקי ב-AltToc נחסם על-ידי token filter', () async {
+      // bookHits ריק; getAllBooksWithAltToc מחזיר "נחל שורק".
+      // AltToc שלו מחזיר "הפטרת נח" (מתאים רק ל-"נח" מתוך ["נח","עליה","ב"]).
+      // queryTokens filter חייב לחסום — "עליה" ו-"ב" לא ב-reference.
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) => const <ReferenceBookHit>[],
+        getTocEntriesForReference: (id, title, {queryTokens}) async => const [],
+        getAltTocEntriesForReference: (id, title, {queryTokens}) async => [
+          {'reference': 'הפטרת נח', 'segment': 10, 'level': 1},
+        ],
+        getAllBooksWithAltToc: () async => [(bookId: 99, bookTitle: 'נחל שורק')],
+      );
+
+      final results = await repo.findRefs('נח עליה ב');
+      expect(
+        results.any((r) => r.isAltToc),
+        isFalse,
+        reason: 'global fallback — "הפטרת נח" חסר "עליה" ו-"ב" ונחסם',
       );
     });
   });
