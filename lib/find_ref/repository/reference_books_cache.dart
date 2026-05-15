@@ -84,6 +84,17 @@ class ReferenceBooksCache {
           .map((b) => b.title)
           .toSet();
 
+      // מפה מכותרת → orderIndex הנמוך ביותר מקרב כל ספרי ה-DB (כולל טקסט).
+      // FS PDF בעל אותה כותרת כספר DB יירש את ה-orderIndex שלו, כדי שלא
+      // ידחק לסוף הרשימה (999.0 קבוע).
+      final titleToDbOrderIndex = <String, double>{};
+      for (final book in BooksCache.instance.books) {
+        final existing = titleToDbOrderIndex[book.title];
+        if (existing == null || book.orderIndex < existing) {
+          titleToDbOrderIndex[book.title] = book.orderIndex;
+        }
+      }
+
       // Load PDF books from file system that are not in the DB.
       // PDF outline parsing is NOT done here — it happens lazily via getPdfOutlineEntries().
       final localFsPdfBooks = <(String, ReferenceBookHit)>[];
@@ -99,6 +110,10 @@ class ReferenceBooksCache {
           final normalizedTitle = _normalizeForMatch(key.title);
           if (normalizedTitle.isEmpty) continue;
 
+          // FS PDF inherits the DB book's orderIndex when one exists with the same title,
+          // preventing it from being pushed behind all text books (default 999.0).
+          final orderIdx = titleToDbOrderIndex[key.title] ?? 999.0;
+
           localFsPdfBooks.add((
             normalizedTitle,
             ReferenceBookHit(
@@ -108,7 +123,7 @@ class ReferenceBooksCache {
               filePath: entry.value,
               fileType: 'pdf',
               matchRank: 0,
-              orderIndex: 999.0,
+              orderIndex: orderIdx,
             ),
           ));
           if (++processedPdfs % yieldBatch == 0) {

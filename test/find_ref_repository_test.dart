@@ -1495,6 +1495,120 @@ void main() {
     });
   });
 
+  // ─── FS PDF (bookId=-1) ──────────────────────────────────────────────────────
+
+  group('FindRef — FS PDF (bookId=-1)', () {
+    // ספר PDF עם כותרת דו-מילית "ספר אטלס" כדי שניתן לקבל remainingTokens ריק.
+    // שאילתה "ספר אטלס" → שתי המילים נצרכות ע"י הכותרת → remainingTokens=[].
+    // שאילתה "ספר אטלס פרק" → remainingTokens=['פרק'].
+
+    // outline entries: (normalizedTitle, originalTitle, pageNumber)
+    final outline = [
+      ('פרק א', 'פרק א', 10),
+      ('פרק ב', 'פרק ב', 20),
+      ('פרק ג', 'פרק ג', 30),
+    ];
+
+    FindRefRepository buildPdfRepo({
+      List<(String, String, int)> Function(String)? outlineBuilder,
+    }) =>
+        FindRefRepository(
+          dataRepository: MockDataRepository(),
+          isReferenceBooksCacheLoaded: () => true,
+          warmUpReferenceBooksCache: () async {},
+          searchReferenceBooks: (query, {int limit = 50}) {
+            if (query == 'ספר אטלס') {
+              return [
+                _hit(
+                  bookId: -1,
+                  title: 'ספר אטלס',
+                  normalizedTitle: 'ספר אטלס',
+                  fileType: 'pdf',
+                  filePath: '/books/atlas.pdf',
+                ),
+              ];
+            }
+            return const <ReferenceBookHit>[];
+          },
+          getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+          getPdfOutlineEntries: outlineBuilder == null
+              ? null
+              : (path) async => outlineBuilder(path),
+          getCategoryPath: (_) async => '',
+        );
+
+    test(
+        'remainingTokens ריק — מחזיר כותרת הספר + כל פרקי ה-outline',
+        () async {
+      final repo = buildPdfRepo(outlineBuilder: (_) => outline);
+
+      // "ספר אטלס" → שתי המילים ב-title → remainingTokens=[]
+      final results = await repo.findRefs('ספר אטלס');
+      final refs = results.map((r) => r.reference).toList();
+
+      expect(refs, contains('ספר אטלס'),
+          reason: 'כותרת הספר חייבת להיכלל');
+      expect(refs, contains('ספר אטלס פרק א'));
+      expect(refs, contains('ספר אטלס פרק ב'));
+      expect(refs, contains('ספר אטלס פרק ג'));
+    });
+
+    test('remainingTokens לא ריק — מחזיר כל הפרקים התואמים (לא רק ראשון)',
+        () async {
+      // "ספר אטלס פרק" → remainingTokens=['פרק'] → כל שלושת הפרקים תואמים.
+      final repo = buildPdfRepo(outlineBuilder: (_) => outline);
+
+      final results = await repo.findRefs('ספר אטלס פרק');
+      final refs = results.map((r) => r.reference).toList();
+
+      expect(refs.where((r) => r.startsWith('ספר אטלס פרק')).length, equals(3),
+          reason: 'כל שלושת הפרקים חייבים להיות בתוצאות (לא רק הראשון)');
+    });
+
+    test('remainingTokens לא ריק — מסנן פרקים לא תואמים', () async {
+      // "ספר אטלס ב" → remainingTokens=['ב'] → רק "פרק ב" תואם
+      final repo = buildPdfRepo(outlineBuilder: (_) => outline);
+
+      final results = await repo.findRefs('ספר אטלס ב');
+      final refs = results.map((r) => r.reference).toList();
+
+      expect(refs, contains('ספר אטלס פרק ב'),
+          reason: '"פרק ב" תואם ל-remainingToken "ב"');
+      expect(refs.any((r) => r.contains('פרק א') || r.contains('פרק ג')),
+          isFalse,
+          reason: 'פרק א ו-פרק ג לא מכילים את הטוקן "ב"');
+    });
+
+    test('outline ריק + remainingTokens ריק — מחזיר כותרת בלבד', () async {
+      final repo = buildPdfRepo(outlineBuilder: (_) => []);
+
+      final results = await repo.findRefs('ספר אטלס');
+      expect(results, hasLength(1));
+      expect(results.single.reference, equals('ספר אטלס'));
+    });
+
+    test(
+        'outline ריק + remainingTokens לא ריק — מחזיר ריק (כמו ספר DB ללא TOC match)',
+        () async {
+      final repo = buildPdfRepo(outlineBuilder: (_) => []);
+
+      final results = await repo.findRefs('ספר אטלס פרק');
+      expect(results, isEmpty,
+          reason: 'outline ריק ללא התאמה — כמו ספר DB שה-TOC שלו לא מחזיר תוצאות');
+    });
+
+    test('outline entries מקבלים tocLevel=2', () async {
+      final repo = buildPdfRepo(outlineBuilder: (_) => outline);
+
+      final results = await repo.findRefs('ספר אטלס');
+      final chapterResults =
+          results.where((r) => r.reference != 'ספר אטלס').toList();
+
+      expect(chapterResults.every((r) => r.tocLevel == 2), isTrue,
+          reason: 'פרקי outline מטופלים כ-TOC רמה 2');
+    });
+  });
+
   // ─── bookId ו-bookPath ───────────────────────────────────────────────────────
 
   group('FindRef — bookId ו-bookPath', () {
