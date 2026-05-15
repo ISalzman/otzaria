@@ -168,9 +168,301 @@ void main() {
     expect(find.text('חדש'), findsOneWidget);
     expect(find.text('ישן'), findsNothing);
   });
+
+  Future<void> pumpSearchWithResults({
+    required WidgetTester tester,
+    required List<int> visibleIndices,
+    required List<TextSearchResult> results,
+  }) async {
+    final textBookBloc =
+        _TestTextBookBloc(_loadedState(visibleIndices: visibleIndices));
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+    final focusNode = FocusNode();
+
+    addTearDown(textBookBloc.close);
+    addTearDown(settingsBloc.close);
+    addTearDown(focusNode.dispose);
+    addTearDown(resetSectionSearchWorkerForTesting);
+
+    Future<List<TextSearchResult>> simpleSearchRunner(
+      List<String> content,
+      String query,
+    ) async {
+      if (query.isEmpty) return const [];
+      return results;
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: TextBookSearchView(
+              data: 'שורה',
+              scrollControler: ItemScrollController(),
+              focusNode: focusNode,
+              closeLeftPaneCallback: () {},
+              initialQuery: '',
+              simpleSearchRunner: simpleSearchRunner,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'x');
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+
+  testWidgets(
+    'גלילה לתוצאה האחרונה כשהמיקום הנוכחי אחרי כל התוצאות',
+    (tester) async {
+      // visibleIndices = [1000] — אחרי כל התוצאות (0, 5, 10).
+      // לפני התיקון: לא הייתה גלילה בכלל ו-_selectedSearchResultIndex
+      // נשאר null. הציפייה: התוצאה האחרונה (index 2) נבחרת.
+      await pumpSearchWithResults(
+        tester: tester,
+        visibleIndices: const [1000],
+        results: [
+          TextSearchResult(
+              snippet: 'מוקדם', index: 0, query: 'x', address: 'א'),
+          TextSearchResult(snippet: 'אמצע', index: 5, query: 'x', address: 'ב'),
+          TextSearchResult(
+              snippet: 'מאוחר', index: 10, query: 'x', address: 'ג'),
+        ],
+      );
+
+      // אימות שכפתור "התוצאה הבאה" מנוטרל — כלומר _selectedSearchResultIndex
+      // מצביע על התוצאה האחרונה.
+      final nextInkWell = tester.widget<InkWell>(
+        find.descendant(
+          of: find.byTooltip('התוצאה הבאה'),
+          matching: find.byType(InkWell),
+        ),
+      );
+      expect(nextInkWell.onTap, isNull,
+          reason: 'התוצאה הנבחרת אמורה להיות האחרונה');
+
+      final prevInkWell = tester.widget<InkWell>(
+        find.descendant(
+          of: find.byTooltip('התוצאה הקודמת'),
+          matching: find.byType(InkWell),
+        ),
+      );
+      expect(prevInkWell.onTap, isNotNull,
+          reason: 'אמורות להיות לפחות 2 תוצאות לפני הנבחרת');
+    },
+  );
+
+  testWidgets(
+    'גלילה לתוצאה הראשונה מהמיקום הנוכחי והלאה',
+    (tester) async {
+      // visibleIndices = [6] — באמצע. התוצאה ב-index 10 היא הראשונה
+      // מהשורה הנוכחית והלאה. כלומר _selectedSearchResultIndex == 2.
+      await pumpSearchWithResults(
+        tester: tester,
+        visibleIndices: const [6],
+        results: [
+          TextSearchResult(snippet: 'a', index: 0, query: 'x', address: 'א'),
+          TextSearchResult(snippet: 'b', index: 5, query: 'x', address: 'ב'),
+          TextSearchResult(snippet: 'c', index: 10, query: 'x', address: 'ג'),
+        ],
+      );
+
+      final nextInkWell = tester.widget<InkWell>(
+        find.descendant(
+          of: find.byTooltip('התוצאה הבאה'),
+          matching: find.byType(InkWell),
+        ),
+      );
+      expect(nextInkWell.onTap, isNull,
+          reason: 'התוצאה הנבחרת היא האחרונה (index 10 >= currentLine 6)');
+    },
+  );
+
+  testWidgets(
+    'שמירת בחירה לפי שורה בספר כשהשאילתה משתנה',
+    (tester) async {
+      // משתמש בוחר תוצאה ב-line=50. לאחר עידכון שאילתה, התוצאות החדשות
+      // מכילות תוצאה אחרת ב-line=50. הציפייה: הבחירה תועבר לאינדקס
+      // החדש של אותה שורה (לפי זהות), לא תיתקע על האינדקס הסידורי הישן.
+      final textBookBloc =
+          _TestTextBookBloc(_loadedState(visibleIndices: const [0]));
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+      final focusNode = FocusNode();
+
+      addTearDown(textBookBloc.close);
+      addTearDown(settingsBloc.close);
+      addTearDown(focusNode.dispose);
+      addTearDown(resetSectionSearchWorkerForTesting);
+
+      Future<List<TextSearchResult>> simpleSearchRunner(
+        List<String> content,
+        String query,
+      ) async {
+        if (query == 'x') {
+          // 3 תוצאות, line=50 באינדקס 1.
+          return [
+            TextSearchResult(snippet: 'a', index: 10, query: 'x', address: 'א'),
+            TextSearchResult(snippet: 'b', index: 50, query: 'x', address: 'ב'),
+            TextSearchResult(
+                snippet: 'c', index: 100, query: 'x', address: 'ג'),
+          ];
+        }
+        if (query == 'xy') {
+          // 2 תוצאות, line=50 באינדקס 0 — אותה שורה במיקום סידורי אחר.
+          return [
+            TextSearchResult(
+                snippet: 'b', index: 50, query: 'xy', address: 'ב'),
+            TextSearchResult(
+                snippet: 'd', index: 200, query: 'xy', address: 'ד'),
+          ];
+        }
+        return const [];
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MultiBlocProvider(
+            providers: [
+              BlocProvider<TextBookBloc>.value(value: textBookBloc),
+              BlocProvider<SettingsBloc>.value(value: settingsBloc),
+            ],
+            child: Scaffold(
+              body: TextBookSearchView(
+                data: 'שורה',
+                scrollControler: ItemScrollController(),
+                focusNode: focusNode,
+                closeLeftPaneCallback: () {},
+                initialQuery: '',
+                simpleSearchRunner: simpleSearchRunner,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), 'x');
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // ניווט לתוצאה האמצעית (index 1, line=50) דרך כפתור החץ למטה.
+      await tester.tap(find.byTooltip('התוצאה הבאה'));
+      await tester.pump();
+      // ה-ItemScrollController של הספר אינו מחובר לרשימה אמיתית בטסט;
+      // ה-assertion שזורק scrollControler.scrollTo מנוטרל כאן בכוונה.
+      tester.takeException();
+
+      // עידכון השאילתה ל-'xy' — תוצאות חדשות שבהן line=50 נמצא ב-index 0.
+      await tester.enterText(find.byType(TextField), 'xy');
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // התוצאה הנבחרת היא הראשונה (line=50 שנשמרה). כפתור "הקודם" מנוטרל,
+      // כפתור "הבא" מאופשר.
+      final prevInkWell = tester.widget<InkWell>(
+        find.descendant(
+          of: find.byTooltip('התוצאה הקודמת'),
+          matching: find.byType(InkWell),
+        ),
+      );
+      expect(prevInkWell.onTap, isNull,
+          reason: 'הבחירה אמורה לעבור לאינדקס 0 של תוצאות xy (line=50)');
+    },
+  );
+
+  testWidgets(
+    'נפילה ל-closestIndex כשהשורה הנבחרת לא קיימת בתוצאות החדשות',
+    (tester) async {
+      // line=50 נבחר. שאילתה חדשה לא מכילה line=50 — נפילה ל-closestIndex.
+      final textBookBloc =
+          _TestTextBookBloc(_loadedState(visibleIndices: const [1000]));
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+      final focusNode = FocusNode();
+
+      addTearDown(textBookBloc.close);
+      addTearDown(settingsBloc.close);
+      addTearDown(focusNode.dispose);
+      addTearDown(resetSectionSearchWorkerForTesting);
+
+      Future<List<TextSearchResult>> simpleSearchRunner(
+        List<String> content,
+        String query,
+      ) async {
+        if (query == 'x') {
+          return [
+            TextSearchResult(snippet: 'a', index: 10, query: 'x', address: 'א'),
+            TextSearchResult(snippet: 'b', index: 50, query: 'x', address: 'ב'),
+          ];
+        }
+        if (query == 'xy') {
+          // אין line=50. visibleIndices=[1000] → fallback לאחרון.
+          return [
+            TextSearchResult(
+                snippet: 'p', index: 20, query: 'xy', address: 'א'),
+            TextSearchResult(
+                snippet: 'q', index: 80, query: 'xy', address: 'ב'),
+          ];
+        }
+        return const [];
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MultiBlocProvider(
+            providers: [
+              BlocProvider<TextBookBloc>.value(value: textBookBloc),
+              BlocProvider<SettingsBloc>.value(value: settingsBloc),
+            ],
+            child: Scaffold(
+              body: TextBookSearchView(
+                data: 'שורה',
+                scrollControler: ItemScrollController(),
+                focusNode: focusNode,
+                closeLeftPaneCallback: () {},
+                initialQuery: '',
+                simpleSearchRunner: simpleSearchRunner,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), 'x');
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // ניווט ל-line=50 (אינדקס 1).
+      await tester.tap(find.byTooltip('התוצאה הבאה'));
+      await tester.pump();
+      tester.takeException();
+
+      await tester.enterText(find.byType(TextField), 'xy');
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // line=50 לא קיים בתוצאות xy. visibleIndices=[1000] → fallback
+      // לאחרון (אינדקס 1, line=80). "הבא" מנוטרל, "הקודם" מאופשר.
+      final nextInkWell = tester.widget<InkWell>(
+        find.descendant(
+          of: find.byTooltip('התוצאה הבאה'),
+          matching: find.byType(InkWell),
+        ),
+      );
+      expect(nextInkWell.onTap, isNull,
+          reason: 'הבחירה נפלה ל-closestIndex (אחרון) כי line=50 לא קיים');
+    },
+  );
 }
 
-TextBookLoaded _loadedState() {
+TextBookLoaded _loadedState({List<int> visibleIndices = const [0]}) {
   return TextBookLoaded(
     book: TextBook(title: 'ספר בדיקה'),
     showLeftPane: false,
@@ -185,7 +477,7 @@ TextBookLoaded _loadedState() {
     linksByLine: const {},
     tableOfContents: const [],
     removeNikud: false,
-    visibleIndices: const [0],
+    visibleIndices: visibleIndices,
     selectedIndex: 0,
     pinLeftPane: false,
     searchText: '',
