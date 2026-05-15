@@ -35,17 +35,20 @@ class SeforimRepository {
   /// המפתח: bookId. הערך: מבנה הכולל את כל הערכים + מבנה היררכי.
   final Map<int, _TocBookCache> _tocCache = <int, _TocBookCache>{};
 
+  /// קאש בזיכרון לערכי AltToc (כותרות-משנה) לכל ספר.
+  final Map<int, _TocBookCache> _altTocCache = <int, _TocBookCache>{};
+
   SeforimRepository(this._database);
 
-  /// מבטל את ערך הקאש של [getTocEntriesForReference].
+  /// מבטל את ערך הקאש של [getTocEntriesForReference] ו-[getAltTocEntriesForReference].
   /// אם [bookId] סופק — מבטל רק את הערך של אותו ספר; אחרת מנקה הכול.
-  /// יש לקרוא לפונקציה אחרי כל מוטציה שמשפיעה על תוצאות ה-SQL של
-  /// `getTocEntriesForReference` (insert/update/delete של tocEntry או lineId).
   void _invalidateTocCache({int? bookId}) {
     if (bookId != null) {
       _tocCache.remove(bookId);
+      _altTocCache.remove(bookId);
     } else {
       _tocCache.clear();
+      _altTocCache.clear();
     }
   }
 
@@ -2484,6 +2487,142 @@ extension BookAcronymRepository on SeforimRepository {
       yield child;
       yield* _getAllDescendants(cache, child);
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // AltToc (כותרות-משנה) — חיפוש במבנים חלופיים (עליות, פרשות, וכד')
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// מחפש בכותרות-משנה (AltToc) של [bookId] לפי [queryTokens].
+  ///
+  /// מחזיר ערכים בפורמט זהה ל-[getTocEntriesForReference]:
+  /// `{'reference': ..., 'segment': ..., 'level': ...}`.
+  /// אם אין מבנים חלופיים לספר, מחזיר רשימה ריקה.
+  Future<List<Map<String, dynamic>>> getAltTocEntriesForReference(
+      int bookId, String bookTitle,
+      {List<String>? queryTokens}) async {
+    if (queryTokens == null || queryTokens.isEmpty) return const [];
+
+    final cache = await _buildAltTocCacheForBook(bookId, bookTitle);
+    if (cache.all.isEmpty) return const [];
+
+    final matches = _searchTocHierarchically(cache, queryTokens);
+    return matches.map((e) => e.toMap()).toList();
+  }
+
+  /// בונה (פעם אחת לכל [bookId]) את קאש ה-AltToc.
+  /// מאחד את כל המבנים החלופיים (structureId) של הספר לתוך קאש יחיד,
+  /// ומבנה עליהם חיפוש היררכי זהה לזה של ה-TOC הרגיל.
+  Future<_TocBookCache> _buildAltTocCacheForBook(
+      int bookId, String bookTitle) async {
+    final cached = _altTocCache[bookId];
+    if (cached != null) return cached;
+
+    final db = await _database.database;
+
+    final entries = db.select('''
+        SELECT e.id, t.text, e.level,
+               COALESCE(l.lineIndex, 0) as lineIndex, e.parentId
+        FROM alt_toc_entry e
+        JOIN tocText t ON e.textId = t.id
+        LEFT JOIN line l ON e.lineId = l.id
+        WHERE e.structureId IN (
+            SELECT id FROM alt_toc_structure WHERE bookId = ?
+        )
+        ORDER BY COALESCE(l.lineIndex, 0), e.level
+      ''', [bookId]).toMapList();
+
+    if (entries.isEmpty) {
+      _altTocCache[bookId] = _TocBookCache.empty;
+      return _TocBookCache.empty;
+    }
+
+    final entryTexts = <int, String>{};
+    final entryParentIds = <int, int?>{};
+    for (final e in entries) {
+      final id = e['id'] as int;
+      entryTexts[id] = e['text'] as String;
+      entryParentIds[id] = e['parentId'] as int?;
+    }
+
+    // בונה נתיב reference **ללא** שם הספר — AltToc references הם יחסיים לספר.
+    // רמה 1: "פרשת לך לך"  (ולא "בראשית פרשת לך לך")
+    // רמה 2: "פרשת לך לך עליה ו"
+    String buildPath(int? id) {
+      if (id == null) return ''; // שורש ריק — ללא שם הספר
+      final parentId = entryParentIds[id];
+      final parent = buildPath(parentId);
+      return parent.isEmpty ? entryTexts[id]! : '$parent ${entryTexts[id]!}';
+    }
+
+    final built = <_CachedTocEntry>[];
+    final childrenByParentId = <int, List<_CachedTocEntry>>{};
+    final rootEntries = <_CachedTocEntry>[];
+
+    for (final e in entries) {
+      final id = e['id'] as int;
+      final level = e['level'] as int;
+      final text = e['text'] as String;
+      final lineIndex = e['lineIndex'] as int? ?? 0;
+      final parentId = e['parentId'] as int?;
+
+      final ancestorPath = buildPath(parentId);
+      final fullRef = text.isNotEmpty
+          ? (ancestorPath.isEmpty ? text : '$ancestorPath $text')
+          : ancestorPath;
+
+      final ownTokens = normalizeForFindRefMatch(text)
+          .split(' ')
+          .where((t) => t.isNotEmpty)
+          .toList(growable: false);
+
+      final entry = _CachedTocEntry(
+        id: id,
+        reference: fullRef,
+        segment: lineIndex,
+        level: level,
+        ownTokens: ownTokens,
+      );
+
+      built.add(entry);
+
+      if (parentId == null) {
+        rootEntries.add(entry);
+      } else {
+        childrenByParentId.putIfAbsent(parentId, () => []).add(entry);
+      }
+    }
+
+    built.sort((a, b) => a.segment.compareTo(b.segment));
+    rootEntries.sort((a, b) => a.segment.compareTo(b.segment));
+    for (final children in childrenByParentId.values) {
+      children.sort((a, b) => a.segment.compareTo(b.segment));
+    }
+
+    final cache = _TocBookCache(
+      all: built,
+      rootEntries: rootEntries,
+      childrenByParentId: childrenByParentId,
+    );
+    _altTocCache[bookId] = cache;
+    return cache;
+  }
+
+  /// מחזיר את כל הספרים שיש להם לפחות מבנה AltToc אחד.
+  /// משמש ל-fallback גלובלי של חיפוש כותרות-משנה ללא שם ספר בשאילתה.
+  Future<List<({int bookId, String bookTitle})>> getAllBooksWithAltToc() async {
+    final db = await _database.database;
+    final rows = db.select(
+      'SELECT DISTINCT s.bookId, b.title '
+      'FROM alt_toc_structure s JOIN book b ON b.id = s.bookId',
+      [],
+    ).toMapList();
+    return rows
+        .map((r) => (
+              bookId: r['bookId'] as int,
+              bookTitle: r['title'] as String,
+            ))
+        .toList();
   }
 
   /// מחזיר טוקן + גרסת טרנספוזיציה לאותיות עבריות דו-תווניות.

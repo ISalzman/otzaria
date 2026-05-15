@@ -19,12 +19,25 @@ class FindRefRepository {
     List<String>? queryTokens,
   })? getTocEntriesForReference;
 
+  final Future<List<Map<String, dynamic>>> Function(
+    int bookId,
+    String bookTitle, {
+    List<String>? queryTokens,
+  })? getAltTocEntriesForReference;
+
+  /// Injection for testing: returns all books that have AltToc structures.
+  /// In production this calls [SeforimRepository.getAllBooksWithAltToc].
+  final Future<List<({int bookId, String bookTitle})>> Function()?
+      getAllBooksWithAltToc;
+
   FindRefRepository({
     required this.dataRepository,
     this.warmUpReferenceBooksCache,
     this.isReferenceBooksCacheLoaded,
     this.searchReferenceBooks,
     this.getTocEntriesForReference,
+    this.getAltTocEntriesForReference,
+    this.getAllBooksWithAltToc,
   });
 
   Future<List<DbReferenceResult>> findRefs(String ref) async {
@@ -59,6 +72,23 @@ class FindRefRepository {
         bookTitle,
         queryTokens: queryTokens,
       );
+    }
+
+    Future<List<Map<String, dynamic>>> fetchAltTocEntries(
+      int bookId,
+      String bookTitle, {
+      List<String>? queryTokens,
+    }) {
+      final injected = getAltTocEntriesForReference;
+      if (injected != null) {
+        return injected(bookId, bookTitle, queryTokens: queryTokens);
+      }
+      return repository?.getAltTocEntriesForReference(
+            bookId,
+            bookTitle,
+            queryTokens: queryTokens,
+          ) ??
+          Future.value(const []);
     }
 
     final cacheLoaded = isReferenceBooksCacheLoaded?.call() ??
@@ -228,6 +258,7 @@ class FindRefRepository {
               isPdf: isPdf,
               filePath: hit.filePath,
               orderIndex: hit.orderIndex,
+              tocLevel: level,
             ));
           }
         }
@@ -246,6 +277,72 @@ class FindRefRepository {
             isPdf: isPdf,
             filePath: hit.filePath,
             orderIndex: hit.orderIndex,
+            tocLevel: entry['level'] as int,
+          ));
+        }
+
+        // חיפוש בכותרות-משנה (AltToc): עליות, פרשות ומבנים חלופיים נוספים.
+        // ה-reference של AltToc אינו כולל שם הספר (הוא יחסי — "פרשת לך לך עליה ו").
+        final altTocEntries = await fetchAltTocEntries(
+          bookId,
+          title,
+          queryTokens: remainingTokens,
+        );
+        for (final entry in altTocEntries) {
+          final ref = entry['reference'] as String;
+          // Require that all remaining tokens appear in the reference.
+          // Prevents partial AltToc matches when the book was loosely matched
+          // (e.g., "נחל שורק" matching "נח" returning "הפטרת נח" for "נח עליה ב").
+          final refTokens = _tokenize(_normalizeForMatch(ref));
+          if (!remainingTokens.every((qt) => refTokens.contains(qt))) continue;
+
+          results.add(DbReferenceResult(
+            title: title,
+            reference: ref,
+            segment: entry['segment'] as int,
+            isPdf: isPdf,
+            filePath: hit.filePath,
+            orderIndex: hit.orderIndex,
+            tocLevel: entry['level'] as int,
+            isAltToc: true,
+          ));
+        }
+      }
+    }
+
+    // Global AltToc fallback: when no AltToc results were found in the per-book
+    // loop, search AltToc across all books. This handles queries like "נח עליה ב"
+    // where the user doesn't type the book name, even if some other book matched
+    // the first token (e.g., "תולדות יצחק" matching "תולדות").
+    if (!results.any((r) => r.isAltToc) && queryTokens.length >= 2) {
+      final fetchAllBooks = getAllBooksWithAltToc;
+      final altTocBooks = fetchAllBooks != null
+          ? await fetchAllBooks()
+          : (await repository?.getAllBooksWithAltToc() ?? const []);
+
+      for (final (:bookId, :bookTitle) in altTocBooks) {
+        final bookHit = searchBooks(bookTitle, limit: 1).firstOrNull;
+        final orderIdx = bookHit?.orderIndex ?? 0.0;
+        final altTocEntries = await fetchAltTocEntries(
+          bookId,
+          bookTitle,
+          queryTokens: queryTokens,
+        );
+        for (final entry in altTocEntries) {
+          final ref = entry['reference'] as String;
+          // Require that ALL query tokens appear in the matched reference.
+          // Prevents partial matches from unrelated books (e.g., "הפטרת נח"
+          // matching only "נח" when the query is "נח עליה ב").
+          final refTokens = _tokenize(_normalizeForMatch(ref));
+          if (!queryTokens.every((qt) => refTokens.contains(qt))) continue;
+
+          results.add(DbReferenceResult(
+            title: bookTitle,
+            reference: ref,
+            segment: entry['segment'] as int,
+            orderIndex: orderIdx,
+            tocLevel: entry['level'] as int,
+            isAltToc: true,
           ));
         }
       }
@@ -286,7 +383,10 @@ class FindRefRepository {
     final out = <DbReferenceResult>[];
 
     for (final r in results) {
-      final key = '${_normalize(r.reference)}|${r.title}|${r.segment}|${r.isPdf}';
+      // Deduplicate by (title, segment, isPdf): two entries that navigate to the
+      // same line in the same book are duplicates regardless of reference format
+      // (e.g., "בראשית תולדות עליה ב" vs "תולדות עליה ב" from TOC vs AltToc).
+      final key = '${r.title}|${r.segment}|${r.isPdf}';
       if (seen.add(key)) {
         out.add(r);
       }
@@ -355,7 +455,17 @@ class FindRefRepository {
           a.result.orderIndex.compareTo(b.result.orderIndex);
       if (orderCmp != 0) return orderCmp;
 
-      // 6. ציון קצר יותר עולה קודם (כשאותו ספר מחזיר מספר רמות)
+      // 6. סדר: TOC L1 < TOC L2 < AltToc < TOC L3+
+      // AltToc (כותרות-משנה) מופיע אחרי הכותרות הבסיסיות (רמה 2) אך לפני הכותרות הפנימיות (רמה 3+).
+      final aRank = a.result.isAltToc
+          ? 3
+          : (a.result.tocLevel <= 2 ? a.result.tocLevel : a.result.tocLevel + 1);
+      final bRank = b.result.isAltToc
+          ? 3
+          : (b.result.tocLevel <= 2 ? b.result.tocLevel : b.result.tocLevel + 1);
+      if (aRank != bRank) return aRank.compareTo(bRank);
+
+      // 7. ציון קצר יותר עולה קודם (כשאותו ספר מחזיר מספר רמות)
       return a.result.reference.length.compareTo(b.result.reference.length);
     });
 
