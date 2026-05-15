@@ -2,7 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
+import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -144,9 +146,43 @@ class ReferenceBooksCache {
     _normalizedTitles.clear();
     _fsPdfBooks.clear();
     _pdfOutlineCache.clear();
+    _categoryPaths.clear();
     _isLoaded = false;
     _loadingFuture = null;
     // Note: We don't clear the shared caches here as they may be used by other components
+  }
+
+  // Lazy category-path cache: bookId → category path string (e.g., "תנ"ך, תורה, בראשית")
+  final Map<int, String> _categoryPaths = <int, String>{};
+
+  /// מחזיר את נתיב הקטגוריה עבור ספר לפי מזההו.
+  /// הנתיב נבנה בפעם הראשונה בלבד ונשמר בזיכרון.
+  Future<String> getCategoryPathForBook(int bookId) async {
+    if (bookId < 0) return '';
+    if (_categoryPaths.containsKey(bookId)) return _categoryPaths[bookId]!;
+
+    final book = BooksCache.instance.getBookById(bookId);
+    if (book == null) {
+      _categoryPaths[bookId] = '';
+      return '';
+    }
+
+    final repository = SqliteDataProvider.instance.repository;
+    if (repository == null) {
+      _categoryPaths[bookId] = '';
+      return '';
+    }
+
+    try {
+      final path = await BookDatabaseResolver.buildCategoryPath(
+          repository, book.categoryId);
+      _categoryPaths[bookId] = path;
+      return path;
+    } catch (e) {
+      debugPrint('[ReferenceBooksCache] getCategoryPathForBook error: $e');
+      _categoryPaths[bookId] = '';
+      return '';
+    }
   }
 
   /// Returns outline entries for a file-system PDF, parsed lazily and cached.

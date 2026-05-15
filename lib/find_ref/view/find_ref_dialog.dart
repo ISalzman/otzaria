@@ -13,6 +13,7 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
+import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 class FindRefDialog extends StatefulWidget {
@@ -265,6 +266,20 @@ class _FindRefDialogState extends State<FindRefDialog> {
                                       : FontWeight.normal,
                                 ),
                               ),
+                              subtitle: state.refs[index].bookPath.isEmpty
+                                  ? null
+                                  : LibraryOverflowTooltipText(
+                                      text: state.refs[index].bookPath,
+                                      maxLines: 1,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                    ),
                               onTap: () {
                                 _openRef(state.refs[index]);
                               }),

@@ -1494,5 +1494,171 @@ void main() {
       );
     });
   });
+
+  // ─── bookId ו-bookPath ───────────────────────────────────────────────────────
+
+  group('FindRef — bookId ו-bookPath', () {
+    test('bookId מועבר נכון לתוצאות ממאגר נתונים', () async {
+      // ודא ש-bookId=7 של הספר נשמר בתוצאה.
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'בראשית') {
+            return [_hit(bookId: 7, title: 'בראשית', orderIndex: 1.0)];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getCategoryPath: (_) async => '',
+      );
+
+      final results = await repo.findRefs('בראשית א');
+      expect(
+        results.every((r) => r.bookId == 7),
+        isTrue,
+        reason: 'כל תוצאה לספר bookId=7 חייבת לשאת bookId=7',
+      );
+    });
+
+    test('bookPath מולא מ-getCategoryPath בתוצאות DB', () async {
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'בראשית') {
+            return [
+              _hit(bookId: 5, title: 'בראשית', normalizedTitle: 'בראשית'),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (id, title, {queryTokens}) async => [
+          {'reference': 'בראשית פרק א', 'segment': 10, 'level': 2},
+        ],
+        getCategoryPath: (id) async => id == 5 ? 'תנך, תורה, בראשית' : '',
+      );
+
+      final results = await repo.findRefs('בראשית פרק');
+      expect(
+        results.every((r) => r.bookPath == 'תנך, תורה, בראשית'),
+        isTrue,
+        reason: 'bookPath חייב להיות מולא מ-getCategoryPath',
+      );
+    });
+
+    test('bookId מועבר לתוצאות AltToc של global fallback', () async {
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (_, {int limit = 50}) =>
+            const <ReferenceBookHit>[],
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getAltTocEntriesForReference: (id, title, {queryTokens}) async => [
+          {'reference': 'נח עליה ב', 'segment': 200, 'level': 2},
+        ],
+        getAllBooksWithAltToc: () async => [(bookId: 42, bookTitle: 'בראשית')],
+        getCategoryPath: (id) async => id == 42 ? 'תנך, תורה' : '',
+      );
+
+      final results = await repo.findRefs('נח עליה ב');
+      final altResult =
+          results.where((r) => r.isAltToc).toList();
+
+      expect(altResult, isNotEmpty,
+          reason: 'global fallback חייב להחזיר תוצאת AltToc');
+      expect(
+        altResult.every((r) => r.bookId == 42),
+        isTrue,
+        reason: 'bookId חייב להיות 42 (מ-getAllBooksWithAltToc)',
+      );
+      expect(
+        altResult.every((r) => r.bookPath == 'תנך, תורה'),
+        isTrue,
+        reason: 'bookPath חייב להיות מולא מ-getCategoryPath',
+      );
+    });
+
+    test('FS PDF (bookId=-1) — bookPath נשאר ריק', () async {
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'אטלס') {
+            return [
+              _hit(
+                bookId: -1,
+                title: 'אטלס',
+                fileType: 'pdf',
+                filePath: '/books/atlas.pdf',
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getCategoryPath: (_) async => 'לא אמור להיקרא',
+      );
+
+      final results = await repo.findRefs('אטלס מפה');
+      expect(
+        results.every((r) => r.bookPath.isEmpty),
+        isTrue,
+        reason: 'FS PDF עם bookId=-1 לא יכול לקבל bookPath',
+      );
+    });
+
+    test('bookPath ריק כשספר לא נמצא (getCategoryPath מחזיר ריק)', () async {
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'ספר') {
+            return [_hit(bookId: 99, title: 'ספר', orderIndex: 1.0)];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (_, __, {queryTokens}) async => [
+          {'reference': 'ספר פרק א', 'segment': 1, 'level': 2},
+        ],
+        getCategoryPath: (_) async => '',
+      );
+
+      final results = await repo.findRefs('ספר פרק');
+      expect(
+        results.every((r) => r.bookPath.isEmpty),
+        isTrue,
+        reason: 'כשהנתיב ריק, bookPath חייב להישאר ריק',
+      );
+    });
+
+    test('bookId מועבר בשאילתת מילה בודדת', () async {
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'שמות') {
+            return [_hit(bookId: 11, title: 'שמות', orderIndex: 2.0)];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getCategoryPath: (id) async => id == 11 ? 'תנך, תורה, שמות' : '',
+      );
+
+      final results = await repo.findRefs('שמות');
+      expect(results, hasLength(1));
+      expect(results.single.bookId, equals(11),
+          reason: 'שאילתת מילה בודדת חייבת לשמור bookId');
+      expect(results.single.bookPath, equals('תנך, תורה, שמות'),
+          reason: 'שאילתת מילה בודדת חייבת לקבל bookPath');
+    });
+  });
 }
 
