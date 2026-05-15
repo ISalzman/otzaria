@@ -34,6 +34,11 @@ class FindRefRepository {
   /// In production this calls [ReferenceBooksCache.instance.getCategoryPathForBook].
   final Future<String> Function(int bookId)? getCategoryPath;
 
+  /// Injection for testing: returns outline entries for a FS PDF file.
+  /// In production this calls [ReferenceBooksCache.instance.getPdfOutlineEntries].
+  final Future<List<(String, String, int)>> Function(String filePath)?
+      getPdfOutlineEntries;
+
   FindRefRepository({
     required this.dataRepository,
     this.warmUpReferenceBooksCache,
@@ -43,6 +48,7 @@ class FindRefRepository {
     this.getAltTocEntriesForReference,
     this.getAllBooksWithAltToc,
     this.getCategoryPath,
+    this.getPdfOutlineEntries,
   });
 
   Future<List<DbReferenceResult>> findRefs(String ref) async {
@@ -205,42 +211,57 @@ class FindRefRepository {
         stripLeadingTokensCount: matchedByAcronym ? bookQueryTokenCount : 0,
       );
 
-      // bookId == -1: file-system PDF — show exactly one result: best chapter match or book title
+      // bookId == -1: file-system PDF not in DB — use PDF outline as TOC,
+      // mirroring the regular book flow as closely as possible.
       if (bookId == -1) {
-        final outlineEntries =
-            await ReferenceBooksCache.instance.getPdfOutlineEntries(hit.filePath);
+        final outlineFn = getPdfOutlineEntries ??
+            ReferenceBooksCache.instance.getPdfOutlineEntries;
+        final outlineEntries = await outlineFn(hit.filePath);
         final normalizedBookTitle = _normalizeForMatch(title);
 
-        DbReferenceResult? bestChapter;
-        for (final (normChapter, origChapter, pageNumber) in outlineEntries) {
-          if (normChapter == normalizedBookTitle) continue;
-          final chapterWords = _tokenize(normChapter);
-          final matches = remainingTokens.isEmpty ||
-              remainingTokens.every(
-                (t) => chapterWords.any((w) => w.startsWith(t)),
-              );
-          if (!matches) continue;
-          bestChapter = DbReferenceResult(
+        if (remainingTokens.isEmpty) {
+          // Mirror regular book: add the book title + all top-level outline entries.
+          results.add(DbReferenceResult(
             title: title,
-            reference: '$title $origChapter',
-            segment: pageNumber,
+            reference: title,
+            segment: 0,
             isPdf: true,
             filePath: hit.filePath,
             orderIndex: hit.orderIndex,
-          );
-          break;
-        }
-
-        results.add(bestChapter ??
-            DbReferenceResult(
+          ));
+          for (final (normChapter, origChapter, pageNumber) in outlineEntries) {
+            if (normChapter == normalizedBookTitle) continue;
+            results.add(DbReferenceResult(
               title: title,
-              reference: title,
-              segment: 0,
+              reference: '$title $origChapter',
+              segment: pageNumber,
               isPdf: true,
               filePath: hit.filePath,
               orderIndex: hit.orderIndex,
+              tocLevel: 2,
             ));
-        // FS PDFs (bookId == -1) have no DB category path — bookPath stays ''.
+          }
+        } else if (!hasExactNextTokenMatch) {
+          // Mirror regular book: add ALL matching outline entries (not just first).
+          for (final (normChapter, origChapter, pageNumber) in outlineEntries) {
+            if (normChapter == normalizedBookTitle) continue;
+            final chapterWords = _tokenize(normChapter);
+            final matches = remainingTokens.every(
+              (t) => chapterWords.any((w) => w.startsWith(t)),
+            );
+            if (!matches) continue;
+            results.add(DbReferenceResult(
+              title: title,
+              reference: '$title $origChapter',
+              segment: pageNumber,
+              isPdf: true,
+              filePath: hit.filePath,
+              orderIndex: hit.orderIndex,
+              tocLevel: 2,
+            ));
+          }
+        }
+        // FS PDFs have no DB category path — bookPath stays ''.
         continue;
       }
 
@@ -533,7 +554,9 @@ class FindRefRepository {
   bool _queryLooksDafCitation(List<String> tokens) {
     if (tokens.length < 2) return false;
     final last = tokens.last;
-    if (last != 'א' && last != 'ב') return false;
+    if (last != 'א' && last != 'ב') {
+      return false;
+    }
     // מפורש — מילת "דף" או "עמוד" בשאילתה
     if (tokens.contains('דף') || tokens.contains('עמוד')) return true;
     // מספר דף עברי: 2–4 אותיות עבריות, ואינו מילת מבנה

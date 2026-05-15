@@ -244,5 +244,41 @@ void main() {
       // "שוּ״ע - אוֹ״ח" → "שוע אוח"
       expect(normalizeForFindRefMatch('שוּ״ע - אוֹ״ח'), equals('שוע אוח'));
     });
+
+    group('סימון עמוד גמרא (ב. / ב:)', () {
+      test('נקודה אחרי 1–3 אותיות עבריות בסוף מחרוזת → עמוד א', () {
+        expect(normalizeForFindRefMatch('ב.'), equals('ב א'));
+        expect(normalizeForFindRefMatch('לט.'), equals('לט א'));
+        expect(normalizeForFindRefMatch('קמד.'), equals('קמד א'));
+      });
+
+      test('נקודתיים אחרי 1–3 אותיות עבריות בסוף מחרוזת → עמוד ב', () {
+        expect(normalizeForFindRefMatch('ב:'), equals('ב ב'));
+        expect(normalizeForFindRefMatch('לט:'), equals('לט ב'));
+      });
+
+      test('נקודה/נקודתיים בסוף טוקן (לפני רווח) → עמוד', () {
+        expect(normalizeForFindRefMatch('שבת ב.'), equals('שבת ב א'));
+        expect(normalizeForFindRefMatch('שבת ב:'), equals('שבת ב ב'));
+        expect(normalizeForFindRefMatch('ברכות לט.'), equals('ברכות לט א'));
+      });
+
+      test('נקודה בין אותיות (לא סוף טוקן) — לא מורחבת', () {
+        // "א.ב" — נקודה שאינה בגבול מילה → נותרת ריווח רגיל
+        expect(normalizeForFindRefMatch('א.ב'), equals('א ב'));
+      });
+
+      test('נקודה אחרי יותר מ-3 אותיות — לא מורחבת (לא מספר דף)', () {
+        // "ראשי." — 4 אותיות, לא מספר דף
+        expect(normalizeForFindRefMatch('ראשי.'), equals('ראשי'));
+      });
+
+      test('קיצור עם גרש לפני הנקודה — לא מורחב (פ"א. / רמ"א.)', () {
+        // "פ"א." ← גרש לפני האות; לא ציון דף אלא קיצור
+        expect(normalizeForFindRefMatch('פ"א.'), equals('פא'));
+        expect(normalizeForFindRefMatch('רמ"א.'), equals('רמא'));
+        expect(normalizeForFindRefMatch('מ"ב.'), equals('מב'));
+      });
+    });
   });
 }
