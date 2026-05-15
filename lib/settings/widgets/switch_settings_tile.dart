@@ -1,7 +1,7 @@
 // lib/settings/widgets/switch_settings_tile.dart
 //
 // מכיל:
-//  • [CustomSwitch]       — Switch תואם M3 עם hover מדויק
+//  • [CustomSwitch]       — Switch תואם M3
 //  • [SwitchSettingsTile] — ListTile עם CustomSwitch
 //
 // **שימוש:**
@@ -18,11 +18,8 @@ import 'package:flutter/services.dart';
 
 // ── CustomSwitch ───────────────────────────────────────────────────────────────
 
-/// [Switch] תואם M3 — thumb/track/overlay מוגדרים לפי:
+/// [Switch] תואם M3 — thumb/track מוגדרים לפי:
 /// https://m3.material.io/components/switch/specs
-///
-/// תיקון hover במצב כהה: ברירת המחדל של Flutter משתמשת ב-primary חזק מדי.
-/// overlayColor מינימלי — 8% שקיפות דינמי לפי מצב המתג.
 class CustomSwitch extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
@@ -51,7 +48,6 @@ class CustomSwitch extends StatelessWidget {
           return cs.onSurface.withValues(alpha: 0.38);
         }
         if (s.contains(WidgetState.selected)) return cs.onPrimary;
-        if (s.contains(WidgetState.hovered)) return cs.onSurfaceVariant;
         return cs.outline;
       }),
       trackColor: WidgetStateProperty.resolveWith((s) {
@@ -64,12 +60,6 @@ class CustomSwitch extends StatelessWidget {
       trackOutlineColor: WidgetStateProperty.resolveWith((s) {
         if (s.contains(WidgetState.selected)) return Colors.transparent;
         return cs.outline;
-      }),
-      overlayColor: WidgetStateProperty.resolveWith((s) {
-        if (s.contains(WidgetState.hovered)) {
-          return (value ? cs.primary : cs.onSurface).withValues(alpha: 0.12);
-        }
-        return null;
       }),
     );
   }
@@ -156,9 +146,8 @@ class _SwitchSettingsTileState extends State<SwitchSettingsTile> {
                 : null,
           ),
         ),
-        onTap: widget.enabled && widget.onChanged != null
-            ? () => _toggle()
-            : null,
+        onTap:
+            widget.enabled && widget.onChanged != null ? () => _toggle() : null,
       ),
     );
   }

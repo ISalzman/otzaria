@@ -888,7 +888,6 @@ class _PersonalNotesManagerScreenState
       child: InkWell(
         onTap: isMissing ? () => _repositionMissing(note) : null,
         borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-        hoverColor: cs.surfaceContainerHighest.withValues(alpha: 0.35),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(

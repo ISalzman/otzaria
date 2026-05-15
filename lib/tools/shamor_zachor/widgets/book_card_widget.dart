@@ -200,10 +200,6 @@ class _BookCardWidgetState extends State<BookCardWidget> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => _onCardTap(context),
-          hoverColor: Theme.of(context)
-              .colorScheme
-              .surfaceContainerHighest
-              .withValues(alpha: 0.35),
           child: SingleChildScrollView(
             child: Padding(
               padding: const EdgeInsets.all(12.0),
@@ -259,7 +255,7 @@ class _BookCardWidgetState extends State<BookCardWidget> {
                                         Theme.of(context).colorScheme.primary,
                                     foregroundColor:
                                         Theme.of(context).colorScheme.onPrimary,
-                                ),
+                                  ),
                               ],
                             ),
                           ],
