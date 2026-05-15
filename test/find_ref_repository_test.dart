@@ -7,6 +7,101 @@ import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 
 class MockDataRepository extends Mock implements DataRepository {}
 
+/// מסנן TOC בצורה היררכית — מדמה את הלוגיקה של [SeforimRepository._searchTocHierarchically].
+/// משמש את המוק ב-buildRepo כדי שיחזיר תוצאות מסוננות כמו ב-production.
+List<Map<String, dynamic>> _filterTocHierarchically(
+  List<Map<String, dynamic>> entries,
+  List<String> queryTokens,
+  String bookTitle,
+) {
+  if (entries.isEmpty || queryTokens.isEmpty) return entries;
+
+  // מחשב את הטקסט העצמי של כל ערך (ללא הורים)
+  List<String> ownTokensOf(Map<String, dynamic> entry) {
+    final ref = entry['reference'] as String;
+    final level = entry['level'] as int;
+    String ownPart;
+    if (level <= 1) {
+      ownPart =
+          ref.startsWith('$bookTitle ') ? ref.substring(bookTitle.length + 1) : ref;
+    } else {
+      final parent = entries.firstWhere(
+        (e) =>
+            (e['level'] as int) == level - 1 &&
+            ref.startsWith('${e['reference'] as String} '),
+        orElse: () => {'reference': bookTitle, 'level': 0},
+      );
+      final parentRef = parent['reference'] as String;
+      ownPart = ref.startsWith('$parentRef ')
+          ? ref.substring(parentRef.length + 1)
+          : ref;
+    }
+    return ownPart.split(' ').where((t) => t.isNotEmpty).toList();
+  }
+
+  // כל הצאצאים (רקורסיבי)
+  List<Map<String, dynamic>> allDescendants(List<Map<String, dynamic>> parents) {
+    final result = <Map<String, dynamic>>[];
+    for (final parent in parents) {
+      final parentRef = parent['reference'] as String;
+      final parentLevel = parent['level'] as int;
+      final children = entries.where((e) {
+        final eRef = e['reference'] as String;
+        final eLevel = e['level'] as int;
+        return eLevel == parentLevel + 1 && eRef.startsWith('$parentRef ');
+      }).toList();
+      result.addAll(children);
+      result.addAll(allDescendants(children));
+    }
+    return result;
+  }
+
+  // מחזיר את הטוקן + טרנספוזיציה (כמו _hebrewTokenAlternatives ב-seforim_repository)
+  List<String> alts(String token) {
+    if (token.length == 2) {
+      final c0 = token.codeUnitAt(0);
+      final c1 = token.codeUnitAt(1);
+      if (c0 >= 0x05D0 && c0 <= 0x05EA && c1 >= 0x05D0 && c1 <= 0x05EA && c0 != c1) {
+        return [token, '${token[1]}${token[0]}'];
+      }
+    }
+    return [token];
+  }
+
+  var searchScope =
+      entries.where((e) => (e['level'] as int) == 1).toList();
+  var currentMatches = <Map<String, dynamic>>[];
+
+  for (final token in queryTokens) {
+    final tokenAlts = alts(token);
+    final found = searchScope
+        .where((e) => tokenAlts.any((alt) => ownTokensOf(e).contains(alt)))
+        .toList();
+    if (found.isEmpty) break;
+
+    var minLevel = found.fold(
+        (found.first['level'] as int), (m, e) => (e['level'] as int) < m ? (e['level'] as int) : m);
+    currentMatches =
+        found.where((e) => (e['level'] as int) == minLevel).toList();
+
+    final children = currentMatches.expand((m) {
+      final mRef = m['reference'] as String;
+      final mLevel = m['level'] as int;
+      return entries.where((e) {
+        final eRef = e['reference'] as String;
+        final eLevel = e['level'] as int;
+        return eLevel == mLevel + 1 && eRef.startsWith('$mRef ');
+      });
+    }).toList();
+
+    searchScope = children.isNotEmpty
+        ? [...children, ...allDescendants(children)]
+        : currentMatches;
+  }
+
+  return currentMatches;
+}
+
 /// בונה [ReferenceBookHit] עם defaults הגיוניים לקיצור הבדיקות.
 ReferenceBookHit _hit({
   required int bookId,
@@ -724,6 +819,176 @@ void main() {
 
       expect(titles.first, equals('רשי בראשית'),
           reason: 'הטוקן השני של "רשי בראשית" תואם לשאילתה — קודם');
+    });
+  });
+
+  // ─── חיפוש היררכי + טרנספוזיציה ────────────────────────────────────────────
+
+  group('FindRef — חיפוש היררכי (שבת עא ב / מב יב ג / מב יב סק ג)', () {
+    // ── תמצת TOC לגמרא: דף + עמוד ──────────────────────────────────────────
+
+    List<Map<String, dynamic>> tractateToC(String bookTitle) => [
+          // דף לט — שני עמודים
+          {'reference': '$bookTitle דף לט', 'segment': 390, 'level': 1},
+          {'reference': '$bookTitle דף לט עמוד א', 'segment': 390, 'level': 2},
+          {'reference': '$bookTitle דף לט עמוד ב', 'segment': 395, 'level': 2},
+          // דף עא — שני עמודים
+          {'reference': '$bookTitle דף עא', 'segment': 710, 'level': 1},
+          {'reference': '$bookTitle דף עא עמוד א', 'segment': 710, 'level': 2},
+          {'reference': '$bookTitle דף עא עמוד ב', 'segment': 715, 'level': 2},
+        ];
+
+    // ── תמצת TOC לשו"ע: סימן → סעיף → ס"ק ─────────────────────────────────
+
+    List<Map<String, dynamic>> shulchanToC(String bookTitle) => [
+          {'reference': '$bookTitle סימן יב', 'segment': 120, 'level': 1},
+          {
+            'reference': '$bookTitle סימן יב סעיף א',
+            'segment': 120,
+            'level': 2
+          },
+          {
+            'reference': '$bookTitle סימן יב סעיף ב',
+            'segment': 122,
+            'level': 2
+          },
+          {
+            'reference': '$bookTitle סימן יב סעיף ג',
+            'segment': 124,
+            'level': 2
+          },
+          // ס"ק תחת סעיף א
+          {
+            'reference': '$bookTitle סימן יב סעיף א סק א',
+            'segment': 120,
+            'level': 3
+          },
+          {
+            'reference': '$bookTitle סימן יב סעיף א סק ב',
+            'segment': 121,
+            'level': 3
+          },
+          {
+            'reference': '$bookTitle סימן יב סעיף א סק ג',
+            'segment': 121,
+            'level': 3
+          },
+        ];
+
+    FindRefRepository buildRepo({
+      required String bookTitle,
+      required int bookId,
+      required String acronym,
+      required List<Map<String, dynamic>> Function(String) tocBuilder,
+    }) =>
+        FindRefRepository(
+          dataRepository: MockDataRepository(),
+          isReferenceBooksCacheLoaded: () => true,
+          warmUpReferenceBooksCache: () async {},
+          searchReferenceBooks: (query, {int limit = 50}) {
+            if (query == acronym || query == bookTitle) {
+              return [
+                _hit(
+                  bookId: bookId,
+                  title: bookTitle,
+                  normalizedTitle: bookTitle,
+                  matchRank: query == bookTitle ? 0 : 3,
+                  matchedTerm: query,
+                )
+              ];
+            }
+            return const <ReferenceBookHit>[];
+          },
+          getTocEntriesForReference: (id, title, {queryTokens}) async {
+            final all = tocBuilder(title);
+            if (queryTokens == null || queryTokens.isEmpty) return all;
+            return _filterTocHierarchically(all, queryTokens, title);
+          },
+        );
+
+    test('שבת עא ב — מוצא דף עא עמוד ב', () async {
+      final repo = buildRepo(
+        bookTitle: 'שבת',
+        bookId: 1,
+        acronym: 'שבת',
+        tocBuilder: tractateToC,
+      );
+
+      final results = await repo.findRefs('שבת עא ב');
+
+      expect(
+        results.any((r) => r.reference.contains('עמוד ב') &&
+            r.reference.contains('עא')),
+        isTrue,
+        reason: 'חייב למצוא את עמוד ב של דף עא',
+      );
+      expect(
+        results.any((r) =>
+            r.reference.contains('עמוד א') && r.reference.contains('עא')),
+        isFalse,
+        reason: 'עמוד א של עא לא אמור להיות בתוצאות',
+      );
+    });
+
+    test('מב יב ג — מוצא סימן יב סעיף ג', () async {
+      final repo = buildRepo(
+        bookTitle: 'משנה ברורה',
+        bookId: 2,
+        acronym: 'מב',
+        tocBuilder: shulchanToC,
+      );
+
+      final results = await repo.findRefs('מב יב ג');
+      final refs = results.map((r) => r.reference).toList();
+
+      expect(
+        refs.any((r) => r.contains('סימן יב') && r.contains('סעיף ג')),
+        isTrue,
+        reason: 'חייב למצוא סימן יב סעיף ג',
+      );
+      expect(
+        refs.any((r) => r.contains('סעיף א') || r.contains('סעיף ב')),
+        isFalse,
+        reason: 'סעיפים אחרים לא אמורים להופיע',
+      );
+    });
+
+    test('מב יב סק ג — מוצא ס"ק ג (רמה 3)', () async {
+      final repo = buildRepo(
+        bookTitle: 'משנה ברורה',
+        bookId: 2,
+        acronym: 'מב',
+        tocBuilder: shulchanToC,
+      );
+
+      final results = await repo.findRefs('מב יב סק ג');
+      final refs = results.map((r) => r.reference).toList();
+
+      expect(
+        refs.any((r) =>
+            r.contains('סימן יב') &&
+            r.contains('סק ג')),
+        isTrue,
+        reason: 'חייב למצוא ס"ק ג של סימן יב',
+      );
+    });
+
+    test('שבת טל ב — טרנספוזיציה: טל=לט, מוצא דף לט עמוד ב', () async {
+      final repo = buildRepo(
+        bookTitle: 'שבת',
+        bookId: 1,
+        acronym: 'שבת',
+        tocBuilder: tractateToC,
+      );
+
+      final results = await repo.findRefs('שבת טל ב');
+
+      expect(
+        results.any((r) =>
+            r.reference.contains('לט') && r.reference.contains('עמוד ב')),
+        isTrue,
+        reason: '"טל" הוא טרנספוזיציה של "לט" — חייב למצוא דף לט עמוד ב',
+      );
     });
   });
 
