@@ -658,7 +658,6 @@ class _ActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      hoverColor: Colors.transparent,
       leading: Icon(icon),
       title: Text(title, style: kSettingsTitleStyle),
       subtitle: Text(subtitle, style: kSettingsSubtitleStyle),

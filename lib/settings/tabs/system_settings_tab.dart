@@ -443,7 +443,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     } else {
       UiSnack.showError(result.message);
     }
-
   }
 
   Future<void> _editPendingReport(DirectErrorReport report) async {
@@ -831,7 +830,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       subtitle: 'שליחה ישירה לצוות אוצריא, כולל תור אוטומטי במצב אופליין.',
       children: [
         ListTile(
-          hoverColor: Colors.transparent,
           leading: const Icon(FluentIcons.mail_24_regular),
           title: const Text('כתובת מייל לזיהוי', style: kSettingsTitleStyle),
           subtitle: Text(
@@ -891,7 +889,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             return Column(
               children: [
                 ListTile(
-                  hoverColor: Colors.transparent,
                   leading: const Icon(FluentIcons.task_list_ltr_24_regular),
                   title: const Text('ניהול דיווחים שמורים',
                       style: kSettingsTitleStyle),
@@ -995,7 +992,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                       : const SizedBox.shrink(),
                 ),
                 ListTile(
-                  hoverColor: Colors.transparent,
                   leading: const Icon(FluentIcons.checkmark_circle_24_regular),
                   title:
                       const Text('דיווחים שנשלחו', style: kSettingsTitleStyle),
@@ -1069,7 +1065,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     return Column(
       children: [
         ListTile(
-          hoverColor: Colors.transparent,
           leading: const Icon(FluentIcons.document_bullet_list_24_regular),
           title: Text(
             report.bookTitle,
@@ -1120,7 +1115,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     return Column(
       children: [
         ListTile(
-          hoverColor: Colors.transparent,
           leading: const Icon(FluentIcons.checkmark_24_regular),
           title: Text(
             report.bookTitle,
@@ -1644,7 +1638,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       subtitle: 'היכרות מהירה עם החלקים המרכזיים באוצריא.',
       children: [
         ListTile(
-          hoverColor: Colors.transparent,
           leading: const Icon(FluentIcons.sparkle_24_regular),
           title: const Text(
             'הפעל סיור מחדש',
@@ -1682,7 +1675,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       title: 'איפוס',
       children: [
         ListTile(
-          hoverColor: Colors.transparent,
           leading: const Icon(FluentIcons.arrow_reset_24_regular),
           title: const Text('איפוס הגדרות', style: kSettingsTitleStyle),
           subtitle: const Text('מחיקת כל ההגדרות וחזרה למצב ההתחלתי',

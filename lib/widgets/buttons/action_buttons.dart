@@ -166,16 +166,14 @@ class _BalancedText extends StatelessWidget {
 
         if (singleLinePainter.width <= maxWidth) {
           return Text(text,
-              textAlign: textAlign,
-              textDirection: TextDirection.rtl);
+              textAlign: textAlign, textDirection: TextDirection.rtl);
         }
 
         // מצא את נקודת השבירה שנותנת שורות שוות ביותר
         final words = text.split(' ');
         if (words.length <= 1) {
           return Text(text,
-              textAlign: textAlign,
-              textDirection: TextDirection.rtl);
+              textAlign: textAlign, textDirection: TextDirection.rtl);
         }
 
         String bestText = text;
@@ -208,8 +206,7 @@ class _BalancedText extends StatelessWidget {
         }
 
         return Text(bestText,
-            textAlign: textAlign,
-            textDirection: TextDirection.rtl);
+            textAlign: textAlign, textDirection: TextDirection.rtl);
       },
     );
   }
@@ -332,18 +329,6 @@ class ToolbarActionButton extends StatelessWidget {
     };
   }
 
-  Color _overlayColor(ColorScheme cs) {
-    if (selected) {
-      return switch (emphasis) {
-        ToolbarActionButtonEmphasis.prominent =>
-          cs.onPrimary.withValues(alpha: 0.10),
-        ToolbarActionButtonEmphasis.subtle =>
-          cs.onSecondaryContainer.withValues(alpha: 0.10),
-      };
-    }
-    return cs.onSurface.withValues(alpha: 0.08);
-  }
-
   @override
   Widget build(BuildContext context) {
     return compact ? _buildCompact(context) : _buildStandard(context);
@@ -355,7 +340,6 @@ class ToolbarActionButton extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final bg = _bgColor(cs);
     final fg = _fgColor(cs);
-    final overlay = _overlayColor(cs);
 
     Widget button;
     if (label != null) {
@@ -368,8 +352,6 @@ class ToolbarActionButton extends StatelessWidget {
           shape: const StadiumBorder(),
           minimumSize: const Size(0, 40),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ).copyWith(
-          overlayColor: WidgetStatePropertyAll(overlay),
         ),
         icon: iconWidget ?? Icon(icon, size: 20),
         label: Text(label!, style: const TextStyle(fontSize: 14.0)),
@@ -384,7 +366,6 @@ class ToolbarActionButton extends StatelessWidget {
           backgroundColor: bg,
           foregroundColor: fg,
           shape: const CircleBorder(),
-          highlightColor: overlay,
         ),
       );
     }
@@ -398,7 +379,6 @@ class ToolbarActionButton extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final bg = _bgColor(cs);
     final fg = _fgColor(cs);
-    final overlay = _overlayColor(cs);
 
     Widget button;
     if (label != null) {
@@ -411,8 +391,6 @@ class ToolbarActionButton extends StatelessWidget {
           shape: const StadiumBorder(),
           minimumSize: const Size(0, 28),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ).copyWith(
-          overlayColor: WidgetStatePropertyAll(overlay),
         ),
         icon: iconWidget ?? Icon(icon, size: 15),
         label: Text(label!, style: const TextStyle(fontSize: 12.0)),
@@ -427,7 +405,6 @@ class ToolbarActionButton extends StatelessWidget {
           backgroundColor: bg,
           foregroundColor: fg,
           shape: const CircleBorder(),
-          highlightColor: overlay,
         ),
       );
     }

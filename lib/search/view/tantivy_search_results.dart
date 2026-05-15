@@ -392,14 +392,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                   }
                 },
                 borderRadius: BorderRadius.circular(12),
-                hoverColor: Theme.of(context)
-                    .colorScheme
-                    .primaryContainer
-                    .withValues(alpha: 0.3),
-                splashColor: Theme.of(context)
-                    .colorScheme
-                    .primaryContainer
-                    .withValues(alpha: 0.4),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(

@@ -214,7 +214,6 @@ class CategoryGridItem extends StatelessWidget {
         focusNode: focusNode,
         mouseCursor: SystemMouseCursors.click,
         borderRadius: BorderRadius.circular(AppTokens.radiusXL),
-        hoverColor: cs.primary.withValues(alpha: 0.06),
         hoverDuration: Durations.medium1,
         onTap: () => onCategoryClickCallback(),
         // Focus: Enter/Space מפעילים אוטומטית ע"י InkWell
@@ -333,8 +332,7 @@ class BookGridItem extends StatelessWidget {
             focusNode: focusNode,
             mouseCursor: SystemMouseCursors.click,
             borderRadius: BorderRadius.circular(AppTokens.radiusXL),
-            hoverColor: cs.primary.withValues(alpha: 0.06),
-            onTap: () => onBookClickCallback(),
+                onTap: () => onBookClickCallback(),
             hoverDuration: Durations.medium1,
             child: SizedBox.expand(
               child: Padding(

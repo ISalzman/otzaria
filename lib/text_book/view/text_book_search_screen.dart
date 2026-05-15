@@ -729,14 +729,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                     );
                   },
                   borderRadius: BorderRadius.circular(8),
-                  hoverColor: Theme.of(context)
-                      .colorScheme
-                      .primaryContainer
-                      .withValues(alpha: 0.3),
-                  splashColor: Theme.of(context)
-                      .colorScheme
-                      .primaryContainer
-                      .withValues(alpha: 0.4),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,

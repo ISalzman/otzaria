@@ -232,7 +232,6 @@ class ShortcutsSettingsTab extends StatelessWidget {
                 title: 'כללי',
                 children: [
                   ListTile(
-                    hoverColor: Colors.transparent,
                     leading: const Icon(FluentIcons.arrow_reset_24_regular),
                     title: const Text('איפוס קיצורי מקשים',
                         style: kSettingsTitleStyle),

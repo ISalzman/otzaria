@@ -174,7 +174,6 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     final hasPath = pathStr != null;
 
     return ListTile(
-      hoverColor: Colors.transparent,
       leading: const Icon(FluentIcons.folder_24_regular),
       title: const Text('מיקום ספריית אוצריא', style: kSettingsTitleStyle),
       subtitle: Text(
@@ -225,7 +224,6 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     final hasPath = pathStr != null && pathStr.isNotEmpty;
 
     return ListTile(
-      hoverColor: Colors.transparent,
       leading: const Icon(FluentIcons.folder_24_regular),
       title: const Text('מיקום ספרי היברובוקס', style: kSettingsTitleStyle),
       subtitle: Text(
@@ -418,7 +416,6 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                 style: kSettingsSubtitleStyle,
                 textDirection: subtitleDirection,
               ),
-              hoverColor: Colors.transparent,
               trailing: isActive
                   ? NeutralActionButton(
                       text: 'עצור',
@@ -434,65 +431,69 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                         }
                       },
                     )
-                    : isCheckingManualReindex
+                  : isCheckingManualReindex
                       ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                      : _requiresManualReindex == true
-                      ? RecommendedActionButton(
-                          text: 'אפס ועדכן',
-                          onPressed: () async {
-                            if (library == null) {
-                              return;
-                            }
-
-                            final indexingBloc = context.read<IndexingBloc>();
-
-                            await _indexingRepository.prepareForManualReindex(
-                              library,
-                            );
-                            if (!mounted) {
-                              return;
-                            }
-
-                            setState(() {
-                              _requiresManualReindex = false;
-                            });
-                            indexingBloc.add(StartIndexing(library));
-                          },
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : indexingState is IndexingComplete
-                          ? NeutralActionButton(
-                              text: 'איפוס',
+                      : _requiresManualReindex == true
+                          ? RecommendedActionButton(
+                              text: 'אפס ועדכן',
                               onPressed: () async {
-                                final result = await showWarningDialog(
-                                  context: context,
-                                  title: 'איפוס אינדקס',
-                                  content:
-                                      'האם למחוק את אינדקס החיפוש? תצטרך לבנות אותו מחדש כדי להשתמש בחיפוש.',
-                                );
-                                if (!context.mounted) return;
-                                if (result == true) {
-                                  context
-                                      .read<IndexingBloc>()
-                                      .add(ClearIndex());
+                                if (library == null) {
+                                  return;
                                 }
+
+                                final indexingBloc =
+                                    context.read<IndexingBloc>();
+
+                                await _indexingRepository
+                                    .prepareForManualReindex(
+                                  library,
+                                );
+                                if (!mounted) {
+                                  return;
+                                }
+
+                                setState(() {
+                                  _requiresManualReindex = false;
+                                });
+                                indexingBloc.add(StartIndexing(library));
                               },
                             )
-                          : RecommendedActionButton(
-                              text: 'עדכן',
-                              onPressed: () {
-                                final library =
-                                    context.read<LibraryBloc>().state.library;
-                                if (library != null) {
-                                  context
-                                      .read<IndexingBloc>()
-                                      .add(StartIndexing(library));
-                                }
-                              },
-                            ),
+                          : indexingState is IndexingComplete
+                              ? NeutralActionButton(
+                                  text: 'איפוס',
+                                  onPressed: () async {
+                                    final result = await showWarningDialog(
+                                      context: context,
+                                      title: 'איפוס אינדקס',
+                                      content:
+                                          'האם למחוק את אינדקס החיפוש? תצטרך לבנות אותו מחדש כדי להשתמש בחיפוש.',
+                                    );
+                                    if (!context.mounted) return;
+                                    if (result == true) {
+                                      context
+                                          .read<IndexingBloc>()
+                                          .add(ClearIndex());
+                                    }
+                                  },
+                                )
+                              : RecommendedActionButton(
+                                  text: 'עדכן',
+                                  onPressed: () {
+                                    final library = context
+                                        .read<LibraryBloc>()
+                                        .state
+                                        .library;
+                                    if (library != null) {
+                                      context
+                                          .read<IndexingBloc>()
+                                          .add(StartIndexing(library));
+                                    }
+                                  },
+                                ),
             );
           },
         ),

@@ -42,7 +42,6 @@ class ToolResultCardShell extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-          hoverColor: cs.surfaceContainerHighest.withValues(alpha: 0.35),
           focusColor: Colors.transparent,
           child: SelectionArea(
             child: Padding(

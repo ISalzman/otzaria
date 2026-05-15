@@ -886,7 +886,6 @@ class _ViewBtn extends StatelessWidget {
       child: InkWell(
         onTap: onPressed,
         borderRadius: BorderRadius.circular(6),
-        hoverColor: cs.onSurface.withValues(alpha: 0.04),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
