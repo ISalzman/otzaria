@@ -10,10 +10,12 @@ abstract class FindRefEvent extends Equatable {
 
 class SearchRefRequested extends FindRefEvent {
   final String refText;
-  const SearchRefRequested(this.refText);
+  final bool includePersonalBooks;
+
+  const SearchRefRequested(this.refText, {this.includePersonalBooks = false});
 
   @override
-  List<Object> get props => [refText];
+  List<Object> get props => [refText, includePersonalBooks];
 }
 
 class ClearSearchRequested extends FindRefEvent {}

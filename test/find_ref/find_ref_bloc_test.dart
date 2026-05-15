@@ -22,7 +22,10 @@ class _FakeRepository implements FindRefRepository {
         _error = error;
 
   @override
-  Future<List<DbReferenceResult>> findRefs(String ref) async {
+  Future<List<DbReferenceResult>> findRefs(
+    String ref, {
+    bool includePersonalBooks = false,
+  }) async {
     if (_error != null) throw _error;
     return _fn(ref);
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/find_ref/repository/db_reference_result.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
@@ -39,6 +40,20 @@ class FindRefRepository {
   final Future<List<(String, String, int)>> Function(String filePath)?
       getPdfOutlineEntries;
 
+  /// Injection for testing: returns all books from the user personal books DB.
+  /// Each record: (id, title, filePath, fileType, orderIndex).
+  /// In production calls [UserBooksDatabaseHolder.instance.repository].
+  final Future<List<({int id, String title, String? filePath, String fileType, double orderIndex})>>
+      Function()? getAllUserBooks;
+
+  /// Injection for testing: returns TOC entries from the user personal books DB.
+  /// In production calls [UserBooksDatabaseHolder.instance.repository].
+  final Future<List<Map<String, dynamic>>> Function(
+    int bookId,
+    String bookTitle, {
+    List<String>? queryTokens,
+  })? getUserBookTocEntries;
+
   FindRefRepository({
     required this.dataRepository,
     this.warmUpReferenceBooksCache,
@@ -49,9 +64,14 @@ class FindRefRepository {
     this.getAllBooksWithAltToc,
     this.getCategoryPath,
     this.getPdfOutlineEntries,
+    this.getAllUserBooks,
+    this.getUserBookTocEntries,
   });
 
-  Future<List<DbReferenceResult>> findRefs(String ref) async {
+  Future<List<DbReferenceResult>> findRefs(
+    String ref, {
+    bool includePersonalBooks = false,
+  }) async {
     final cleanedQuery = _normalizeForMatch(ref);
     if (cleanedQuery.isEmpty) {
       return const [];
@@ -178,6 +198,10 @@ class FindRefRepository {
           orderIndex: hit.orderIndex,
           bookId: hit.bookId,
         ));
+      }
+
+      if (includePersonalBooks) {
+        results.addAll(await _searchPersonalBooks(queryTokens));
       }
 
       final unique = _dedupeRefs(results);
@@ -382,6 +406,10 @@ class FindRefRepository {
       }
     }
 
+    if (includePersonalBooks) {
+      results.addAll(await _searchPersonalBooks(queryTokens));
+    }
+
     final unique = _dedupeRefs(results);
     final ranked = _rankResults(unique, queryTokens);
     final limited = ranked.length > 15 ? ranked.take(15).toList() : ranked;
@@ -391,11 +419,160 @@ class FindRefRepository {
     return await _enrichWithPaths(limited);
   }
 
+  Future<List<DbReferenceResult>> _searchPersonalBooks(
+    List<String> queryTokens,
+  ) async {
+    final out = <DbReferenceResult>[];
+    try {
+      // Resolve user books list (injection or live DB)
+      final List<({int id, String title, String? filePath, String fileType, double orderIndex})> allBooks;
+      SeforimRepository? userRepo;
+
+      if (getAllUserBooks != null) {
+        allBooks = await getAllUserBooks!();
+      } else {
+        userRepo = await UserBooksDatabaseHolder.instance.repository;
+        final raw = await userRepo.database.bookDao.getAllLocalBooks();
+        allBooks = raw
+            .map((b) => (
+                  id: b.id,
+                  title: b.title,
+                  filePath: b.filePath,
+                  fileType: b.fileType ?? 'txt',
+                  orderIndex: b.order,
+                ))
+            .toList();
+      }
+
+      if (allBooks.isEmpty) return out;
+
+      // Resolve user TOC fetcher (injection or live DB)
+      Future<List<Map<String, dynamic>>> fetchUserToc(
+        int bookId,
+        String bookTitle, {
+        List<String>? qt,
+      }) {
+        final injected = getUserBookTocEntries;
+        if (injected != null) {
+          return injected(bookId, bookTitle, queryTokens: qt);
+        }
+        userRepo ??= UserBooksDatabaseHolder.instance.repository as SeforimRepository;
+        return (userRepo as SeforimRepository).getTocEntriesForReference(
+          bookId,
+          bookTitle,
+          queryTokens: qt,
+        );
+      }
+
+      const personalBookPath = 'ספרים אישיים';
+      final maxN = queryTokens.length >= 3 ? 3 : queryTokens.length;
+
+      for (final book in allBooks) {
+        final normalizedTitle = _normalizeForMatch(book.title);
+        final titleTokens = _tokenize(normalizedTitle);
+
+        // Find the longest leading phrase that matches position-by-position
+        int? matchedN;
+        for (var n = maxN; n >= 1; n--) {
+          final phrase = queryTokens.take(n).toList();
+          if (phrase.length > titleTokens.length) continue;
+          var ok = true;
+          for (var i = 0; i < phrase.length; i++) {
+            if (!titleTokens[i].startsWith(phrase[i])) {
+              ok = false;
+              break;
+            }
+          }
+          if (ok) {
+            matchedN = n;
+            break;
+          }
+        }
+        if (matchedN == null) continue;
+
+        final isPdf = book.fileType == 'pdf';
+        final remainingTokens = _getRemainingTokens(queryTokens, titleTokens);
+
+        if (queryTokens.length == 1) {
+          // Single-word: only the book title, no TOC (mirrors main loop)
+          out.add(DbReferenceResult(
+            title: book.title,
+            reference: book.title,
+            segment: 0,
+            isPdf: isPdf,
+            filePath: book.filePath ?? '',
+            orderIndex: book.orderIndex,
+            bookId: book.id,
+            bookPath: personalBookPath,
+          ));
+        } else if (remainingTokens.isEmpty) {
+          // Book title + all level-2 TOC entries
+          out.add(DbReferenceResult(
+            title: book.title,
+            reference: book.title,
+            segment: 0,
+            isPdf: isPdf,
+            filePath: book.filePath ?? '',
+            orderIndex: book.orderIndex,
+            bookId: book.id,
+            bookPath: personalBookPath,
+          ));
+          final toc = await fetchUserToc(book.id, book.title);
+          for (final entry in toc) {
+            final level = entry['level'] as int;
+            if (level == 2 && entry['reference'] != book.title) {
+              out.add(DbReferenceResult(
+                title: book.title,
+                reference: entry['reference'] as String,
+                segment: entry['segment'] as int,
+                isPdf: isPdf,
+                filePath: book.filePath ?? '',
+                orderIndex: book.orderIndex,
+                tocLevel: level,
+                bookId: book.id,
+                bookPath: personalBookPath,
+              ));
+            }
+          }
+        } else {
+          // Only TOC entries matching remainingTokens
+          final toc = await fetchUserToc(
+            book.id,
+            book.title,
+            qt: remainingTokens,
+          );
+          for (final entry in toc) {
+            out.add(DbReferenceResult(
+              title: book.title,
+              reference: entry['reference'] as String,
+              segment: entry['segment'] as int,
+              isPdf: isPdf,
+              filePath: book.filePath ?? '',
+              orderIndex: book.orderIndex,
+              tocLevel: entry['level'] as int,
+              bookId: book.id,
+              bookPath: personalBookPath,
+            ));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[FindRef] Personal books search failed: $e');
+    }
+    return out;
+  }
+
   Future<List<DbReferenceResult>> _enrichWithPaths(
       List<DbReferenceResult> results) async {
-    // Collect unique bookIds (DB books only) and fetch paths in parallel.
-    final uniqueIds =
-        results.map((r) => r.bookId).where((id) => id > 0).toSet();
+    // Only fetch paths for results that don't already have one set.
+    // Personal books have bookPath='ספרים אישיים' pre-set; enriching them via
+    // the official DB would overwrite that with a colliding official book's path
+    // (user_books.db and seforim.db share no bookId namespace).
+    final uniqueIds = results
+        .where((r) => r.bookPath.isEmpty)
+        .map((r) => r.bookId)
+        .where((id) => id > 0)
+        .toSet();
     if (uniqueIds.isEmpty) return results;
 
     final pathFn =
@@ -406,6 +583,7 @@ class FindRefRepository {
     }));
 
     return results.map((r) {
+      if (r.bookPath.isNotEmpty) return r; // already set — don't overwrite
       final path = r.bookId > 0 ? (pathMap[r.bookId] ?? '') : '';
       if (path.isEmpty) return r;
       return DbReferenceResult(
