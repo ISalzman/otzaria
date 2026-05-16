@@ -714,8 +714,6 @@ class _BookDetailScreenState extends State<BookDetailScreen>
             visualDensity: VisualDensity(horizontal: -4, vertical: -4),
           ),
           dividerColor: Colors.transparent,
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
         ),
         child: ExpansionTile(
           key: ValueKey(section.id),
