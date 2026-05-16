@@ -204,10 +204,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
               'בחר ספר לתצוגה מקדימה',
               style: TextStyle(
                 fontSize: 16,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -243,10 +240,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
               'ספר חיצוני - לחץ פעמיים לפתיחה',
               style: TextStyle(
                 fontSize: 14,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
               textAlign: TextAlign.center,
             ),

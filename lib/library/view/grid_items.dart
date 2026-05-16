@@ -47,7 +47,6 @@ Decoration _libraryTooltipDecoration(BuildContext context) {
   return BoxDecoration(
     color: cs.surfaceContainerHigh,
     borderRadius: BorderRadius.circular(12),
-    border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.65)),
   );
 }
 
