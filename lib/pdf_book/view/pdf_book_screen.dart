@@ -3034,13 +3034,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       child: Text('דפים', style: TextStyle(fontSize: 11)),
                     ),
                   ],
-                  labelColor: Theme.of(context).colorScheme.primary,
-                  unselectedLabelColor: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.6),
-                  indicatorColor: Theme.of(context).colorScheme.primary,
-                  dividerColor: Colors.transparent,
                   splashBorderRadius: BorderRadius.circular(12),
                 ),
               ),
