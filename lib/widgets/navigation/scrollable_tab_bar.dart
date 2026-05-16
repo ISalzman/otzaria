@@ -159,7 +159,6 @@ class _ScrollableTabBarWithArrowsState
               padding: EdgeInsets.zero,
               labelPadding: EdgeInsets.zero,
               indicatorPadding: EdgeInsets.zero,
-              dividerColor: Colors.transparent,
               indicator: const BoxDecoration(),
               splashFactory: NoSplash.splashFactory,
               overlayColor: WidgetStateProperty.all(Colors.transparent),

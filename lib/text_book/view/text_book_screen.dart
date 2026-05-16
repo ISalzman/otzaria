@@ -2437,13 +2437,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                         child: Text('חיפוש', style: TextStyle(fontSize: 11)),
                       ),
                     ],
-                    labelColor: Theme.of(context).colorScheme.primary,
-                    unselectedLabelColor: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
-                    indicatorColor: Theme.of(context).colorScheme.primary,
-                    dividerColor: Colors.transparent,
                     splashBorderRadius: BorderRadius.circular(12),
                   ),
                 ),
