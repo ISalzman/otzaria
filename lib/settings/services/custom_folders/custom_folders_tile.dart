@@ -11,7 +11,6 @@ import 'package:otzaria/widgets/dialogs/confirmation_dialog.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/dialogs/zip_extraction_progress_dialog.dart';
-import 'package:otzaria/widgets/custom_ui_components.dart';
 
 /// Widget להוספה וניהול תיקיות מותאמות אישית
 class CustomFoldersTile extends StatefulWidget {
@@ -169,8 +168,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(FluentIcons.arrow_clockwise_24_regular),
                       onPressed: isSyncing
@@ -242,11 +240,9 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
             ),
             if (_isExpanded && folders.isNotEmpty)
               Container(
-                margin:
-                    const EdgeInsets.only(right: 16, left: 16, bottom: 8),
+                margin: const EdgeInsets.only(right: 16, left: 16, bottom: 8),
                 decoration: BoxDecoration(
-                  color:
-                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
@@ -299,8 +295,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
           ),
           IconButton(
             icon: const Icon(FluentIcons.delete_24_regular, size: 18),
-            onPressed:
-                isSyncing ? null : () => _removeFolder(folder),
+            onPressed: isSyncing ? null : () => _removeFolder(folder),
             tooltip: 'הסר תיקייה',
           ),
         ],
