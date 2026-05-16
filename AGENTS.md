@@ -160,7 +160,7 @@ RtlTextField(
 
 ### 4. Dialogs - ONLY from `custom_ui_components`
 ```dart
-import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 
 // דיאלוג עם כפתור אחד (אישור בלבד)
 showSingleActionDialog(
@@ -208,7 +208,7 @@ showWarningDialog(
 
 ### 5. Action Buttons - ONLY from `custom_ui_components`
 ```dart
-import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 
 // כפתור לפעולה מומלצת (Primary style)
 RecommendedActionButton(
@@ -286,7 +286,7 @@ SettingsCard(
 
 ### 7. Segmented Settings - ONLY `SegmentedSettingsTile`
 ```dart
-import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 
 // הגדרה עם 2-4 אפשרויות
 SegmentedSettingsTile<String>(
