@@ -266,6 +266,24 @@ SettingsCard(
 - Hover should ONLY appear on the action buttons themselves
 - This prevents double-hover effect and improves UX
 
+### 8. Color Overrides — FORBIDDEN outside `lib/theme/`
+
+**NEVER add the following anywhere outside `lib/theme/`:**
+- `hoverColor` on `InkWell` / `ListTile` / any widget (except `Colors.transparent` on ListTile with action buttons)
+- `splashColor` on any widget
+- `overlayColor` on any widget
+- `.withValues(alpha: ...)` — color transparency overrides
+
+**Why:** These were used to work around a dark-mode color bug (fixed in commit f938a1860 via `ColorScheme.fromSeed`). Now the theme computes all interaction colors correctly. Adding them manually breaks theme consistency and will break again when themes change.
+
+**If you need to define a custom interaction color or transparency:**
+→ Define it in `lib/theme/app_theme_data.dart` or `lib/theme/app_surfaces.dart`, not in feature files.
+
+**Exceptions (the only allowed uses outside `lib/theme/`):**
+- `hoverColor: Colors.transparent` on a `ListTile` that contains action buttons in its trailing/leading (prevents double-hover)
+- `BoxShadow` colors with `.withValues(alpha: ...)` — shadows require transparency by nature
+- Loading overlays / semi-transparent backgrounds that are structural (not interaction feedback)
+
 ### 7. Segmented Settings - ONLY `SegmentedSettingsTile`
 ```dart
 import 'package:otzaria/widgets/custom_ui_components.dart';
@@ -498,6 +516,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 8. **Settings cards** - Only `SettingsCard` from `settings_card.dart`
 9. **Color theming** - NEVER use hardcoded colors (Colors.red, Colors.blue, etc.), ALWAYS use `Theme.of(context).colorScheme`
 10. **Hover effects** - Remove from ListTile rows with buttons (`hoverColor: Colors.transparent`)
+11. **No color overrides outside `lib/theme/`** - NEVER add `hoverColor`, `splashColor`, `overlayColor`, or `.withValues(alpha:...)` in feature files — define them in `lib/theme/` only
 11. **Hebrew text** - Always include `textDirection: TextDirection.rtl`
 12. **Test coverage** - Add/update tests for every code change
 13. **Documentation** - Document all public APIs in Hebrew
@@ -517,6 +536,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 - Using `ElevatedButton`/`TextButton` instead of `RecommendedActionButton`/`NeutralActionButton`
 - Using hardcoded colors instead of `Theme.of(context).colorScheme`
 - Not removing hover effects from ListTile rows with action buttons
+- Adding `hoverColor`, `splashColor`, `overlayColor`, or `.withValues(alpha:...)` outside `lib/theme/` — these belong only in the theme layer
 - Forgetting `textDirection: TextDirection.rtl` on Hebrew text
 - Skipping `flutter analyze` before committing
 - Running full test suite instead of relevant tests
