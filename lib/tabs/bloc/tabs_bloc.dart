@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
+import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -154,6 +155,14 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         existingTab: state.tabs[matchingIndex],
         incomingTab: event.tab,
       );
+      // סימניות/היסטוריה: המשתמש בחר מיקום ספציפי בספר, ולא מספיק להעביר
+      // focus לטאב הקיים — צריך לגלול אותו למיקום המבוקש.
+      if (event.navigateToPositionIfReused) {
+        _propagateNavigationToExistingTab(
+          existingTab: state.tabs[matchingIndex],
+          incomingTab: event.tab,
+        );
+      }
       event.tab.dispose();
       final tabsToSave = state.tabs;
       final modeToSave = state.sideBySideMode;
@@ -230,6 +239,90 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       }
     }
     return null;
+  }
+
+  PdfBookTab? _resolvePdfBookTab(
+    OpenedTab existingTab,
+    PdfBookTab incomingTab,
+  ) {
+    if (existingTab is PdfBookTab) {
+      return existingTab;
+    }
+    if (existingTab is CombinedTab) {
+      final right = existingTab.rightTab;
+      if (right is PdfBookTab && _isSameBook(right, incomingTab)) {
+        return right;
+      }
+      final left = existingTab.leftTab;
+      if (left is PdfBookTab && _isSameBook(left, incomingTab)) {
+        return left;
+      }
+    }
+    return null;
+  }
+
+  /// מנווט טאב קיים למיקום של הטאב הנכנס (index ב‑TextBook, pageNumber ב‑PDF).
+  /// משמש כשפתיחת סימניה/היסטוריה ממחזרת טאב קיים — המשתמש בחר מיקום ספציפי
+  /// ולא רק את הספר.
+  void _propagateNavigationToExistingTab({
+    required OpenedTab existingTab,
+    required OpenedTab incomingTab,
+  }) {
+    if (incomingTab is PdfBookTab) {
+      final targetPdf = _resolvePdfBookTab(existingTab, incomingTab);
+      if (targetPdf == null) return;
+      final targetPage = incomingTab.pageNumber;
+      // עדכון pageNumber בטאב כך שיישמר ל-restore עתידי וכך שאם המסך עוד
+      // לא הצטרף ל-controller, הטעינה הבאה תיפתח בעמוד הנכון.
+      targetPdf.pageNumber = targetPage;
+      if (targetPdf.pdfViewerController.isReady) {
+        targetPdf.pdfViewerController.goToPage(pageNumber: targetPage);
+      }
+      return;
+    }
+
+    if (incomingTab is TextBookTab) {
+      final targetText = _resolveTextBookTab(existingTab, incomingTab);
+      if (targetText == null) return;
+      final targetIndex = incomingTab.index;
+      // עדכון אינדקס הטאב מיידית - חשוב משתי סיבות:
+      // 1. saveTabs רץ ב‑finally של ה‑handler ועלול להישמר על המיקום הישן.
+      // 2. אם המסך עוד לא בנה את הרשימה (scrollController לא מחובר), הקריאה
+      //    הבאה ל‑initState/load תפתח באינדקס הזה.
+      targetText.index = targetIndex;
+
+      Future<void> dispatch() async {
+        // ApplyPinpointHighlight (אם קודם) כבר גלל. כאן מטפלים במקרה שאין
+        // pinpoint אבל יש בקשת ניווט. הקונטרולר עשוי להיות לא מחובר גם
+        // כש‑state הוא Loaded (הרשימה עדיין לא קיבלה את הפריימים הראשונים),
+        // לכן מנסים שוב ושוב עד שמחובר או עד timeout סביר.
+        for (var attempt = 0; attempt < 30; attempt++) {
+          if (targetText.bloc.isClosed) return;
+          if (targetText.bloc.scrollController.isAttached) {
+            targetText.bloc.scrollController.scrollTo(
+              index: targetIndex,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+            return;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+      }
+
+      if (targetText.bloc.state is TextBookLoaded) {
+        unawaited(dispatch());
+        return;
+      }
+
+      late StreamSubscription<TextBookState> sub;
+      sub = targetText.bloc.stream.listen((state) {
+        if (state is TextBookLoaded) {
+          unawaited(dispatch());
+          sub.cancel();
+        }
+      });
+    }
   }
 
   Future<int?> _findMatchingTopLevelTabIndex(

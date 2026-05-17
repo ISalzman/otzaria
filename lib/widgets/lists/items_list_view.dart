@@ -126,7 +126,14 @@ class _ItemsListViewState extends State<ItemsListView> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.items.isEmpty) {
+    // מצב ריק: אם אין פריטים בכלל - או שיש additionalFilter שלא משאיר אף
+    // פריט - מציגים את emptyText (למשל "אין סימניות בספר זה") בלי שדה חיפוש
+    // וכפתורים. רק כשיש פריטים שעוברים את הסינון נטפל בחיפוש המשתמש.
+    final additionalFilter = widget.additionalFilter;
+    final hasAnyMatching = additionalFilter == null
+        ? widget.items.isNotEmpty
+        : widget.items.any(additionalFilter);
+    if (!hasAnyMatching) {
       return Center(
         child: Text(
           widget.emptyText,

@@ -2,6 +2,33 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 
+/// מחזירה מזהה יציב לספר לצורך השוואה בין סימניות/טאבים.
+///
+/// מועדף לפי החזק ביותר: db id → externalLibraryId → נתיב קובץ → filePath →
+/// categoryId+title → title בלבד. שתי מהדורות של אותו ספר (אותה כותרת אבל
+/// id/נתיב שונים) יקבלו זהויות שונות, כך שאפשר לסמן בהן סימניות נפרדות באותו
+/// אינדקס בלי שתידחה סימניה.
+String bookIdentity(Book book) {
+  if (book.id != null) {
+    return 'id:${book.id}';
+  }
+  final externalId = book.externalLibraryId;
+  if (externalId != null && externalId.isNotEmpty) {
+    return 'external:$externalId';
+  }
+  if (book is FileBook && book.path.isNotEmpty) {
+    return 'file:${book.path}';
+  }
+  final filePath = book.filePath;
+  if (filePath != null && filePath.isNotEmpty) {
+    return 'filePath:$filePath';
+  }
+  if (book.categoryId != null) {
+    return 'category:${book.categoryId}|title:${book.title}|type:${book.fileType ?? ''}';
+  }
+  return 'title:${book.title}';
+}
+
 /// Represents a bookmark in the application.
 class Bookmark {
   final String ref;

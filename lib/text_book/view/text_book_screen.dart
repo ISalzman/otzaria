@@ -13,6 +13,7 @@ import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
+import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart' hide UpdateFontSize;
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -1511,6 +1512,18 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () => _handleBookmarkPress(context, state),
       ),
 
+      // 1.5) הצגת סימניות הספר הנוכחי
+      ActionButtonData(
+        widget: IconButton(
+          onPressed: () => _showBookmarksForCurrentBook(context, state.book),
+          icon: const Icon(FluentIcons.bookmark_multiple_24_regular),
+          tooltip: 'סימניות בספר זה',
+        ),
+        icon: FluentIcons.bookmark_multiple_24_regular,
+        tooltip: 'סימניות בספר זה',
+        onPressed: () => _showBookmarksForCurrentBook(context, state.book),
+      ),
+
       // 2) הצג הערות אישיות
       ActionButtonData(
         widget: IconButton(
@@ -1844,6 +1857,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       },
       icon: const Icon(FluentIcons.bookmark_add_24_regular),
       tooltip: 'הוסף סימניה (${shortcut.toUpperCase()})',
+    );
+  }
+
+  void _showBookmarksForCurrentBook(BuildContext context, Book book) {
+    showDialog(
+      context: context,
+      builder: (_) => BookmarksDialog(bookFilter: book),
     );
   }
 

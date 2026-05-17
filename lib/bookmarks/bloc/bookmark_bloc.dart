@@ -30,8 +30,16 @@ class BookmarkBloc extends Cubit<BookmarkState> {
         book: book,
         index: index,
         commentatorsToShow: commentatorsToShow ?? []);
-    // check if bookmark already exists
-    if (state.bookmarks.any((b) => b.ref == bookmark.ref)) return false;
+    // כפילות נמדדת לפי זיהוי הספר + המיקום (index), כדי לאפשר מספר סימניות
+    // באותו ספר במיקומים שונים. ref לבדו לא מספיק - ב-PDF כל הסימניות באותו
+    // פרק יקבלו ref זהה (כותרת הפרק), וב-TextBook מספר מיקומים באותו סעיף.
+    // משתמשים בזהות חזקה לספר (id/path/category) ולא בכותרת בלבד, כדי
+    // ששתי מהדורות שונות עם אותה כותרת לא ייחשבו לאותו ספר.
+    final newIdentity = bookIdentity(bookmark.book);
+    if (state.bookmarks.any((b) =>
+        b.index == bookmark.index && bookIdentity(b.book) == newIdentity)) {
+      return false;
+    }
 
     final newBookmarks = [...state.bookmarks, bookmark];
     _repository.saveBookmarks(newBookmarks);
@@ -48,5 +56,21 @@ class BookmarkBloc extends Cubit<BookmarkState> {
   void clearBookmarks() {
     _repository.clearBookmarks();
     emit(state.copyWith(bookmarks: []));
+  }
+
+  /// מוחק את כל הסימניות של ספר ספציפי (לפי זהות חזקה - id/path/category),
+  /// משאיר סימניות של ספרים אחרים על כנן.
+  ///
+  /// מחזיר true אם נמחקה לפחות סימניה אחת, false אם לא היו סימניות תואמות.
+  /// מאפשר ל-UI להימנע מהודעת הצלחה מטעה כשלא בוצעה מחיקה בפועל.
+  bool clearBookmarksForBook(Book book) {
+    final targetIdentity = bookIdentity(book);
+    final remaining = state.bookmarks
+        .where((b) => bookIdentity(b.book) != targetIdentity)
+        .toList();
+    if (remaining.length == state.bookmarks.length) return false;
+    _repository.saveBookmarks(remaining);
+    emit(state.copyWith(bookmarks: remaining));
+    return true;
   }
 }
