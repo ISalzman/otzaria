@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:multi_split_view/multi_split_view.dart';
@@ -15,6 +14,7 @@ import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -54,7 +54,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   bool _paneOpen = false;
   int? _currentTabIndex;
   late double _leftPaneWidth;
-  bool _isHovering = false; // מצב ריחוף על הטאב
   final ValueNotifier<String?> _savedSelectedText =
       ValueNotifier<String?>(null); // טקסט נבחר לתפריט הקשר
   final SelectionSyncController _selectionSyncController =
@@ -102,7 +101,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     if (isOnCommentary) {
       setState(() {
         _paneOpen = false;
-        _isHovering = false;
       });
     } else {
       // רישום interaction של TourCubit לפני הפתיחה — בעקבי עם השאר
@@ -196,7 +194,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
       // סגירת הטור
       setState(() {
         _paneOpen = false;
-        _isHovering = false;
       });
     }
   }
@@ -293,8 +290,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                 onClose: () {
                   setState(() {
                     _paneOpen = false;
-                    _isHovering = false;
-                  });
+                              });
                 },
                 paneContent: ValueListenableBuilder<String?>(
                   valueListenable: _savedSelectedText,
@@ -396,49 +392,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                       Positioned(
                         left: 0,
                         top: MediaQuery.of(context).size.height * 0.10,
-                        child: MouseRegion(
-                          onEnter: (_) => setState(() => _isHovering = true),
-                          onExit: (_) => setState(() => _isHovering = false),
-                          child: GestureDetector(
-                            onTap: _togglePane,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeOut,
-                              width: _isHovering ? 48 : 20,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest
-                                    .withValues(
-                                        alpha: _isHovering ? 0.95 : 0.8),
-                                borderRadius: const BorderRadius.only(
-                                  topRight: Radius.circular(40),
-                                  bottomRight: Radius.circular(40),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.15),
-                                    blurRadius: _isHovering ? 8 : 4,
-                                    offset: const Offset(2, 0),
-                                  ),
-                                ],
-                              ),
-                              child: Center(
-                                child: AnimatedOpacity(
-                                  duration: const Duration(milliseconds: 150),
-                                  opacity: _isHovering ? 1.0 : 0.6,
-                                  child: Icon(
-                                    FluentIcons.chevron_right_24_regular,
-                                    size: _isHovering ? 24 : 18,
-                                    color:
-                                        Theme.of(context).colorScheme.onSurface,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+                        child: PanelOpenHandle(onTap: _togglePane),
                       ),
                   ],
                 ),
