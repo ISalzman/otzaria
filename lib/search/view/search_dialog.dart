@@ -62,7 +62,7 @@ class SearchDialog extends StatefulWidget {
     int distance,
   )? onSearch;
   final String? bookTitle;
-    final bool returnResultOnSubmit;
+  final bool returnResultOnSubmit;
 
   const SearchDialog(
       {super.key,
@@ -86,6 +86,9 @@ class _SearchDialogState extends State<SearchDialog> {
   late final VoidCallback _queryListener;
   Set<String> _selectedCategoryFacets = {'/'}; // ברירת מחדל: הכל
   late final bool _ownsSearchTab;
+  // groupId משותף לכפתור ההיסטוריה ולמגירת ההיסטוריה — מאפשר ל-TapRegion
+  // לזהות לחיצה על הכפתור עצמו כ"בתוך" האזור (כדי שלא תיגרם סגירה+פתיחה מיידית).
+  final Object _historyTapRegionGroupId = Object();
 
   bool get _usesStagedSubmit =>
       widget.onSearch != null || widget.returnResultOnSubmit;
@@ -167,8 +170,7 @@ class _SearchDialogState extends State<SearchDialog> {
   Widget _buildIndexWarning() {
     return IndexingWarningContainer(
       inProgressDismissed: !_showIndexInProgressWarning,
-      onDismiss: () =>
-          setState(() => _showIndexInProgressWarning = false),
+      onDismiss: () => setState(() => _showIndexInProgressWarning = false),
     );
   }
 
@@ -298,11 +300,9 @@ class _SearchDialogState extends State<SearchDialog> {
     // חסימת חיפוש כשאין אינדקס - חיפוש שמשתמש באינדקס לא יכול לרוץ.
     // אם ה-provider עוד לא הסתיים לטעון, לא חוסמים (השאילתה תמתין ל-engine).
     if (isSearchBlockedByMissingIndex(
-      providerInitialized:
-          TantivyDataProvider.instance.isInitialized.value,
+      providerInitialized: TantivyDataProvider.instance.isInitialized.value,
     )) {
-      UiSnack.showError(
-          'אינדקס לא קיים, לא ניתן לבצע חיפוש זה ללא אינדקס.');
+      UiSnack.showError('אינדקס לא קיים, לא ניתן לבצע חיפוש זה ללא אינדקס.');
       return;
     }
 
@@ -501,7 +501,7 @@ class _SearchDialogState extends State<SearchDialog> {
       child: InkWell(
         onTap: () {
           context.read<SearchBloc>().add(
-              !_usesStagedSubmit
+                !_usesStagedSubmit
                     ? SetSearchMode(mode)
                     : SetSearchModeWithoutSearch(mode),
               );
@@ -549,7 +549,7 @@ class _SearchDialogState extends State<SearchDialog> {
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final dialogWidth = (screenSize.width * 0.7).clamp(500.0, 900.0);
-    final dialogHeight = (screenSize.height * 0.65).clamp(450.0, 700.0);
+    final dialogHeight = (screenSize.height * 0.8).clamp(450.0, 700.0);
 
     return BlocProvider.value(
       value: _searchTab.searchBloc,
@@ -670,24 +670,27 @@ class _SearchDialogState extends State<SearchDialog> {
                                         ),
                                         showInlineSearchButton: false,
                                         onSubmit: _performSearch,
-                                        trailingAction: IconButton(
-                                          icon: Icon(
-                                            _showHistoryDropdown
-                                                ? FluentIcons
-                                                    .chevron_up_24_regular
-                                                : FluentIcons
-                                                    .history_24_regular,
-                                            size: 24,
+                                        trailingAction: TapRegion(
+                                          groupId: _historyTapRegionGroupId,
+                                          child: IconButton(
+                                            icon: Icon(
+                                              _showHistoryDropdown
+                                                  ? FluentIcons
+                                                      .chevron_up_24_regular
+                                                  : FluentIcons
+                                                      .history_24_regular,
+                                              size: 24,
+                                            ),
+                                            tooltip: 'היסטוריית חיפושים',
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            onPressed: () {
+                                              setState(() {
+                                                _showHistoryDropdown =
+                                                    !_showHistoryDropdown;
+                                              });
+                                            },
                                           ),
-                                          tooltip: 'היסטוריית חיפושים',
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                          onPressed: () {
-                                            setState(() {
-                                              _showHistoryDropdown =
-                                                  !_showHistoryDropdown;
-                                            });
-                                          },
                                         ),
                                       ),
                                     ),
@@ -715,19 +718,21 @@ class _SearchDialogState extends State<SearchDialog> {
                                               tooltip: blocked
                                                   ? 'אינדקס לא קיים, לא ניתן לבצע חיפוש זה ללא אינדקס'
                                                   : 'חפש',
-                                              onPressed:
-                                                  blocked ? null : _performSearch,
+                                              onPressed: blocked
+                                                  ? null
+                                                  : _performSearch,
                                               style: IconButton.styleFrom(
-                                                backgroundColor: Theme.of(context)
-                                                    .colorScheme
-                                                    .primaryContainer,
-                                                foregroundColor: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary,
+                                                backgroundColor:
+                                                    Theme.of(context)
+                                                        .colorScheme
+                                                        .primaryContainer,
+                                                foregroundColor:
+                                                    Theme.of(context)
+                                                        .colorScheme
+                                                        .primary,
                                                 padding:
                                                     const EdgeInsets.all(6),
-                                                minimumSize:
-                                                    const Size(32, 32),
+                                                minimumSize: const Size(32, 32),
                                                 tapTargetSize:
                                                     MaterialTapTargetSize
                                                         .shrinkWrap,
@@ -809,41 +814,44 @@ class _SearchDialogState extends State<SearchDialog> {
                               },
                             ),
 
-                            // מגירת היסטוריה
-                            if (_showHistoryDropdown) _buildHistoryDropdown(),
-
                             const SizedBox(height: 16),
 
-                            // תוכן תחתון - אפשרויות מתקדמות + חלונית קטגוריות
+                            // תוכן תחתון - אפשרויות מתקדמות + חלונית קטגוריות.
+                            // מגירת ההיסטוריה צפה מעל התוכן הזה כ-overlay (Stack)
+                            // כדי שלא תזיז את ההגדרות למטה כשהיא נפתחת.
                             Expanded(
-                              child: BlocBuilder<SearchBloc, SearchState>(
-                                builder: (context, state) {
-                                  final showCategory = !_searchAllCategories &&
-                                      widget.bookTitle == null;
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  BlocBuilder<SearchBloc, SearchState>(
+                                    builder: (context, state) {
+                                      final showCategory =
+                                          !_searchAllCategories &&
+                                              widget.bookTitle == null;
 
-                                  // מצב לא-מתקדם: עץ קטגוריות בלבד (מלא) או ריק
-                                  if (!state.isAdvancedSearchEnabled) {
-                                    if (!showCategory) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    return CategoryTreeSelector(
-                                      selectedFacets: _manualFacets,
-                                      onSelectionChanged:
-                                          _onManualFacetsChanged,
-                                    );
-                                  }
+                                      // מצב לא-מתקדם: עץ קטגוריות בלבד (מלא) או ריק
+                                      if (!state.isAdvancedSearchEnabled) {
+                                        if (!showCategory) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return CategoryTreeSelector(
+                                          selectedFacets: _manualFacets,
+                                          onSelectionChanged:
+                                              _onManualFacetsChanged,
+                                        );
+                                      }
 
-                                  // מצב מתקדם: אפשרויות + חלונית קטגוריות צד
-                                  final advancedControls =
-                                      AdvancedSearchControls(
-                                    tab: _searchTab,
-                                    compactMode: true,
-                                    onEmptySubmit: _performSearch,
-                                    inputFocusNotifier:
-                                        _advancedControlsHasFocus,
-                                  );
-                                  final categoryPanel =
-                                      showCategory && widget.bookTitle == null
+                                      // מצב מתקדם: אפשרויות + חלונית קטגוריות צד
+                                      final advancedControls =
+                                          AdvancedSearchControls(
+                                        tab: _searchTab,
+                                        compactMode: true,
+                                        onEmptySubmit: _performSearch,
+                                        inputFocusNotifier:
+                                            _advancedControlsHasFocus,
+                                      );
+                                      final categoryPanel = showCategory &&
+                                              widget.bookTitle == null
                                           ? CategoryTreeSelector(
                                               selectedFacets: _manualFacets,
                                               onSelectionChanged:
@@ -851,67 +859,83 @@ class _SearchDialogState extends State<SearchDialog> {
                                             )
                                           : null;
 
-                                  return LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      // כשיש פאנל קטגוריות (260px) + controls,
-                                      // דורש לפחות ~480px — אחרת ערמה אנכית
-                                      final useColumns =
-                                          categoryPanel != null &&
-                                              constraints.maxWidth < 480;
+                                      return LayoutBuilder(
+                                        builder: (context, constraints) {
+                                          // כשיש פאנל קטגוריות (260px) + controls,
+                                          // דורש לפחות ~480px — אחרת ערמה אנכית
+                                          final useColumns =
+                                              categoryPanel != null &&
+                                                  constraints.maxWidth < 480;
 
-                                      if (useColumns) {
-                                        return SingleChildScrollView(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
-                                            children: [
-                                              advancedControls,
-                                              const SizedBox(height: 12),
-                                              ConstrainedBox(
-                                                constraints:
-                                                    const BoxConstraints(
-                                                        maxHeight: 220),
-                                                child: categoryPanel,
+                                          if (useColumns) {
+                                            return SingleChildScrollView(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.stretch,
+                                                children: [
+                                                  advancedControls,
+                                                  const SizedBox(height: 12),
+                                                  ConstrainedBox(
+                                                    constraints:
+                                                        const BoxConstraints(
+                                                            maxHeight: 220),
+                                                    child: categoryPanel,
+                                                  ),
+                                                ],
                                               ),
-                                            ],
-                                          ),
-                                        );
-                                      }
+                                            );
+                                          }
 
-                                      return Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Expanded(
-                                            child: SingleChildScrollView(
-                                              child: advancedControls,
-                                            ),
-                                          ),
-                                          if (widget.bookTitle == null)
-                                            AnimatedSize(
-                                              duration: const Duration(
-                                                  milliseconds: 250),
-                                              curve: Curves.easeInOut,
-                                              child: categoryPanel != null
-                                                  ? SizedBox(
-                                                      width: 260,
-                                                      height:
-                                                          constraints.maxHeight,
-                                                      child: Padding(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .only(
-                                                                right: 12.0),
-                                                        child: categoryPanel,
-                                                      ),
-                                                    )
-                                                  : const SizedBox.shrink(),
-                                            ),
-                                        ],
+                                          return Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Expanded(
+                                                child: SingleChildScrollView(
+                                                  child: advancedControls,
+                                                ),
+                                              ),
+                                              if (widget.bookTitle == null)
+                                                AnimatedSize(
+                                                  duration: const Duration(
+                                                      milliseconds: 250),
+                                                  curve: Curves.easeInOut,
+                                                  child: categoryPanel != null
+                                                      ? SizedBox(
+                                                          width: 260,
+                                                          height: constraints
+                                                              .maxHeight,
+                                                          child: Padding(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .only(
+                                                                    right:
+                                                                        12.0),
+                                                            child:
+                                                                categoryPanel,
+                                                          ),
+                                                        )
+                                                      : const SizedBox.shrink(),
+                                                ),
+                                            ],
+                                          );
+                                        },
                                       );
                                     },
-                                  );
-                                },
+                                  ),
+                                  if (_showHistoryDropdown)
+                                    Positioned(
+                                      top: 0,
+                                      left: 0,
+                                      right: 0,
+                                      child: TapRegion(
+                                        groupId: _historyTapRegionGroupId,
+                                        onTapOutside: (_) => setState(
+                                            () => _showHistoryDropdown = false),
+                                        child: _buildHistoryDropdown(),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ],
