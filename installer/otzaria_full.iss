@@ -188,11 +188,12 @@ end;
 
 // מחלץ את המספר הראשי מתוך version string בפורמט "143.0.3650.139".
 // מחזיר 0 אם הפענוח נכשל (חוסר נתון = נתפס כצריך התקנה).
+// הערה: ב-Inno Setup Pascal Script אין `Val()` של Object Pascal —
+// משתמשים ב-`StrToIntDef` שמחזיר ברירת מחדל בכישלון פענוח.
 function ParseMajorVersion(const Version: String): Integer;
 var
   DotPos: Integer;
   MajorStr: String;
-  ErrCode: Integer;
 begin
   Result := 0;
   if Version = '' then exit;
@@ -201,9 +202,7 @@ begin
     MajorStr := Copy(Version, 1, DotPos - 1)
   else
     MajorStr := Version;
-  Val(MajorStr, Result, ErrCode);
-  if ErrCode <> 0 then
-    Result := 0;
+  Result := StrToIntDef(MajorStr, 0);
 end;
 
 // מצב WebView2 — מאפשר הבחנה בין "חסר", "ישן" ו"עדכני".
