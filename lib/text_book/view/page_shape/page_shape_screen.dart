@@ -43,6 +43,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
+import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 
 /// קבועים לחישוב רוחב חלוניות המפרשים
 const double _kCommentaryPaneWidthFactor = 0.17;
@@ -79,7 +80,6 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   bool _isLoadingConfig = true;
   bool _isLeftSidebarOpen = false;
   int _leftSidebarTabIndex = 0;
-  bool _isHoveringSidebarHandle = false;
   final SelectionSyncController _selectionSyncController =
       SelectionSyncController();
 
@@ -499,9 +499,6 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   void _toggleLeftSidebar() {
     setState(() {
       _isLeftSidebarOpen = !_isLeftSidebarOpen;
-      if (!_isLeftSidebarOpen) {
-        _isHoveringSidebarHandle = false;
-      }
     });
   }
 
@@ -1075,58 +1072,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                           Positioned(
                             left: 0,
                             top: MediaQuery.of(context).size.height * 0.10,
-                            child: MouseRegion(
-                              onEnter: (_) => setState(
-                                  () => _isHoveringSidebarHandle = true),
-                              onExit: (_) => setState(
-                                  () => _isHoveringSidebarHandle = false),
-                              child: GestureDetector(
-                                onTap: () => _openLeftSidebarTab(0),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  curve: Curves.easeOut,
-                                  width: _isHoveringSidebarHandle ? 48 : 20,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHighest
-                                        .withValues(
-                                            alpha: _isHoveringSidebarHandle
-                                                ? 0.95
-                                                : 0.8),
-                                    borderRadius: const BorderRadius.only(
-                                      topRight: Radius.circular(40),
-                                      bottomRight: Radius.circular(40),
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black
-                                            .withValues(alpha: 0.15),
-                                        blurRadius:
-                                            _isHoveringSidebarHandle ? 8 : 4,
-                                        offset: const Offset(2, 0),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: AnimatedOpacity(
-                                      duration:
-                                          const Duration(milliseconds: 150),
-                                      opacity:
-                                          _isHoveringSidebarHandle ? 1.0 : 0.6,
-                                      child: Icon(
-                                        FluentIcons.chevron_right_24_regular,
-                                        size:
-                                            _isHoveringSidebarHandle ? 24 : 18,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
+                            child: PanelOpenHandle(
+                              onTap: () => _openLeftSidebarTab(0),
                             ),
                           ),
                       ],

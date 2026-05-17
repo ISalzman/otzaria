@@ -78,21 +78,13 @@ class _LinksNotesSidebarState extends State<LinksNotesSidebar>
           controller: _tabController,
           onClose: widget.onClosePane,
           tabs: const [
-            Tab(
-              icon: Icon(FluentIcons.link_24_regular, size: 18),
-              iconMargin: EdgeInsets.only(bottom: 2),
-              height: 48,
-              child: Text('קישורים',
-                  style: TextStyle(fontSize: 12),
-                  textDirection: TextDirection.rtl),
+            PanelTab(
+              icon: FluentIcons.link_24_regular,
+              label: 'קישורים',
             ),
-            Tab(
-              icon: Icon(FluentIcons.note_24_regular, size: 18),
-              iconMargin: EdgeInsets.only(bottom: 2),
-              height: 48,
-              child: Text('הערות',
-                  style: TextStyle(fontSize: 12),
-                  textDirection: TextDirection.rtl),
+            PanelTab(
+              icon: FluentIcons.note_24_regular,
+              label: 'הערות',
             ),
           ],
         ),

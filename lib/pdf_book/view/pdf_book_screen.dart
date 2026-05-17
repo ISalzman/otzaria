@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:math';
 import 'dart:async';
 import 'dart:ui' as ui;
@@ -55,6 +55,7 @@ import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/utils/link_helpers.dart';
+import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 
 final GlobalKey pdfBookNavigationTourTargetKey = GlobalKey(
   debugLabel: 'pdf_book_navigation_tour_target',
@@ -2903,8 +2904,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           BlocBuilder<PdfBookBloc, PdfBookState>(
             buildWhen: (prev, curr) {
               if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-                return prev.showRightPane != curr.showRightPane ||
-                    prev.isRightPaneHovering != curr.isRightPaneHovering;
+                return prev.showRightPane != curr.showRightPane;
               }
               return true;
             },
@@ -2912,55 +2912,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               if (state is! PdfBookLoaded || state.showRightPane) {
                 return const SizedBox.shrink();
               }
-
-              final isHovering = state.isRightPaneHovering;
-
               return Positioned(
                 left: 0,
                 top: MediaQuery.of(context).size.height * 0.10,
-                child: MouseRegion(
-                  onEnter: (_) =>
-                      _bloc.add(const pdf_events.SetRightPaneHovering(true)),
-                  onExit: (_) =>
-                      _bloc.add(const pdf_events.SetRightPaneHovering(false)),
-                  child: GestureDetector(
-                    onTap: _openCommentaryPane,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                      width: isHovering ? 48 : 20,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest
-                            .withValues(alpha: isHovering ? 0.95 : 0.8),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(40),
-                          bottomRight: Radius.circular(40),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: isHovering ? 8 : 4,
-                            offset: const Offset(2, 0),
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 150),
-                          opacity: isHovering ? 1.0 : 0.6,
-                          child: Icon(
-                            FluentIcons.chevron_right_24_regular,
-                            size: isHovering ? 24 : 18,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                child: PanelOpenHandle(onTap: _openCommentaryPane),
               );
             },
           ),
