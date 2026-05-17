@@ -62,6 +62,7 @@ import 'package:otzaria/utils/link_helpers.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 
 // קבועים למצבי תצוגה (למניעת magic strings)
 const String _viewModeSplit = 'split';
@@ -2400,69 +2401,26 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     });
     return Column(
       children: [
-        SizedBox(
-          height: 44,
-          child: Row(
-            children: [
-              Expanded(
-                child: TabBar(
-                  controller: tabController,
-                  tabs: [
-                    const Tab(
-                      icon: Icon(FluentIcons.navigation_24_regular, size: 16),
-                      iconMargin: EdgeInsets.only(bottom: 1),
-                      height: 44,
-                      child: Text('ניווט', style: TextStyle(fontSize: 11)),
-                    ),
-                    if (_hasAltTitles)
-                      const Tab(
-                        icon: Icon(FluentIcons.list_24_regular, size: 16),
-                        iconMargin: EdgeInsets.only(bottom: 1),
-                        height: 44,
-                        child: Text('כותרות', style: TextStyle(fontSize: 11)),
-                      ),
-                    const Tab(
-                      icon: Icon(FluentIcons.search_24_regular, size: 16),
-                      iconMargin: EdgeInsets.only(bottom: 1),
-                      height: 44,
-                      child: Text('חיפוש', style: TextStyle(fontSize: 11)),
-                    ),
-                  ],
-                  splashBorderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              if (MediaQuery.of(context).size.width >= 600)
-                IconButton(
-                  onPressed:
-                      (Settings.getValue<bool>('key-pin-sidebar') ?? false)
-                          ? null
-                          : () => context.read<TextBookBloc>().add(
-                                TogglePinLeftPane(!state.pinLeftPane),
-                              ),
-                  icon: AnimatedRotation(
-                    turns: (state.pinLeftPane ||
-                            (Settings.getValue<bool>('key-pin-sidebar') ??
-                                false))
-                        ? -0.125
-                        : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Icon(
-                      (state.pinLeftPane ||
-                              (Settings.getValue<bool>('key-pin-sidebar') ??
-                                  false))
-                          ? FluentIcons.pin_24_filled
-                          : FluentIcons.pin_24_regular,
-                    ),
-                  ),
-                  color: (state.pinLeftPane ||
-                          (Settings.getValue<bool>('key-pin-sidebar') ?? false))
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
-                  isSelected: state.pinLeftPane ||
-                      (Settings.getValue<bool>('key-pin-sidebar') ?? false),
-                ),
-            ],
-          ),
+        SidebarTabHeader(
+          controller: tabController,
+          tabs: [
+            (icon: FluentIcons.navigation_24_regular,
+              iconFilled: FluentIcons.navigation_24_filled,
+              label: 'ניווט'),
+            if (_hasAltTitles)
+              (icon: FluentIcons.list_24_regular,
+                iconFilled: FluentIcons.list_24_filled,
+                label: 'כותרות'),
+            (icon: FluentIcons.search_24_regular,
+              iconFilled: FluentIcons.search_24_filled,
+              label: 'חיפוש'),
+          ],
+          isPinned: state.pinLeftPane,
+          onTogglePin: MediaQuery.of(context).size.width >= 600
+              ? () => context
+                  .read<TextBookBloc>()
+                  .add(TogglePinLeftPane(!state.pinLeftPane))
+              : null,
         ),
         Expanded(
           child: TabBarView(
