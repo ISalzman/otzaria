@@ -2954,71 +2954,29 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Widget _buildLeftPaneContent() {
     return Column(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: TabBar(
-                controller: _leftPaneTabController,
-                tabs: const [
-                    Tab(
-                      icon: Icon(FluentIcons.navigation_24_regular, size: 16),
-                      iconMargin: EdgeInsets.only(bottom: 1),
-                      height: 44,
-                      child: Text('ניווט', style: TextStyle(fontSize: 11)),
-                    ),
-                    Tab(
-                      icon: Icon(FluentIcons.search_24_regular, size: 16),
-                      iconMargin: EdgeInsets.only(bottom: 1),
-                      height: 44,
-                      child: Text('חיפוש', style: TextStyle(fontSize: 11)),
-                    ),
-                    Tab(
-                      icon: Icon(FluentIcons.document_multiple_24_regular,
-                          size: 16),
-                      iconMargin: EdgeInsets.only(bottom: 1),
-                      height: 44,
-                      child: Text('דפים', style: TextStyle(fontSize: 11)),
-                    ),
-                  ],
-                  splashBorderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              if (MediaQuery.of(context).size.width >= 600)
-                ValueListenableBuilder(
-                  valueListenable: widget.tab.pinLeftPane,
-                  builder: (context, pinLeftPanel, child) => IconButton(
-                    onPressed:
-                        (Settings.getValue<bool>('key-pin-sidebar') ?? false)
-                            ? null
-                            : () {
-                                widget.tab.pinLeftPane.value =
-                                    !widget.tab.pinLeftPane.value;
-                              },
-                    icon: AnimatedRotation(
-                      turns: (pinLeftPanel ||
-                              (Settings.getValue<bool>('key-pin-sidebar') ??
-                                  false))
-                          ? -0.125
-                          : 0.0,
-                      duration: const Duration(milliseconds: 200),
-                      child: Icon(
-                        (pinLeftPanel ||
-                                (Settings.getValue<bool>('key-pin-sidebar') ??
-                                    false))
-                            ? FluentIcons.pin_24_filled
-                            : FluentIcons.pin_24_regular,
-                      ),
-                    ),
-                    color: (pinLeftPanel ||
-                            (Settings.getValue<bool>('key-pin-sidebar') ??
-                                false))
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-                    isSelected: pinLeftPanel ||
-                        (Settings.getValue<bool>('key-pin-sidebar') ?? false),
-                  ),
-                ),
-          ],
+        ValueListenableBuilder(
+          valueListenable: widget.tab.pinLeftPane,
+          builder: (context, pinLeftPanel, child) => SidebarTabHeader(
+            controller: _leftPaneTabController!,
+            tabs: const [
+              (icon: FluentIcons.navigation_24_regular,
+                iconFilled: FluentIcons.navigation_24_filled,
+                label: 'ניווט'),
+              (icon: FluentIcons.search_24_regular,
+                iconFilled: FluentIcons.search_24_filled,
+                label: 'חיפוש'),
+              (icon: FluentIcons.document_multiple_24_regular,
+                iconFilled: FluentIcons.document_multiple_24_filled,
+                label: 'דפים'),
+            ],
+            isPinned: pinLeftPanel,
+            onTogglePin: MediaQuery.of(context).size.width >= 600
+                ? () {
+                    widget.tab.pinLeftPane.value =
+                        !widget.tab.pinLeftPane.value;
+                  }
+                : null,
+          ),
         ),
         Expanded(
           child: TabBarView(
