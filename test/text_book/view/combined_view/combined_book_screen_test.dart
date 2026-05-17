@@ -224,6 +224,68 @@ void main() {
     });
   });
 
+  group('shouldRebuildSelectionAreaOnExternalChange', () {
+    test('מחזירה false כש-activeOwner הוא null (ניקוי בעלות)', () {
+      // אחרי clear ה-controller מודיע עם activeOwner=null — אסור לבנות מחדש,
+      // אחרת ניקוי בחירה גורם לקפיצה בגלילה.
+      final selfOwner = Object();
+      expect(
+        shouldRebuildSelectionAreaOnExternalChange(
+          activeOwner: null,
+          selfOwner: selfOwner,
+          hasOwnSelection: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('מחזירה false כש-activeOwner זהה ל-selfOwner', () {
+      final selfOwner = Object();
+      expect(
+        shouldRebuildSelectionAreaOnExternalChange(
+          activeOwner: selfOwner,
+          selfOwner: selfOwner,
+          hasOwnSelection: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+        "מחזירה false כשאזור חיצוני מקבל בעלות אבל אין לנו בחירה משלנו לנקות "
+        "(תרחיש 'מפרשים מתחת': בחירת טקסט במפרש המקונן לא צריכה להרוס את עץ הצאצאים)",
+        () {
+      // הבאג שתוקן: במצב 'מפרשים מתחת' ה-CommentaryListBase מקונן בעץ
+      // ה-SelectionArea של ה-CombinedView. כשהמשתמש מסמן טקסט במפרש,
+      // ה-controller מעביר בעלות לאזור המפרש. לפני התיקון, ה-CombinedView
+      // היה מעלה את revision ובונה את ה-SelectionArea מחדש — מה שהשמיד את
+      // ה-CommentaryListBase וגרם לטעינה מחדש של המפרש.
+      final selfOwner = Object();
+      final commentaryOwner = Object();
+      expect(
+        shouldRebuildSelectionAreaOnExternalChange(
+          activeOwner: commentaryOwner,
+          selfOwner: selfOwner,
+          hasOwnSelection: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('מחזירה true כשאזור חיצוני מקבל בעלות ויש לנו בחירה משלנו לנקות', () {
+      final selfOwner = Object();
+      final externalOwner = Object();
+      expect(
+        shouldRebuildSelectionAreaOnExternalChange(
+          activeOwner: externalOwner,
+          selfOwner: selfOwner,
+          hasOwnSelection: true,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('תרחישים חוצי-טאב בחלונית הצד', () {
     test('"פתח מפרשים" מוצגת כשהחלונית פתוחה על טאב הקישורים', () {
       expect(
