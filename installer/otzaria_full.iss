@@ -28,6 +28,10 @@ DisableProgramGroupPage=yes
 OutputDir=.
 OutputBaseFilename=otzaria-{#MyAppVersion}-windows-full
 SetupIconFile=white_sketch128x128.ico
+; תמונת האשף בעמודי "ברוכים הבאים" ו"סיום" (אנכית, 164x314 + רזולוציות @2x/@3x ל-HiDPI)
+WizardImageFile=wizard_large.bmp,wizard_large@2x.bmp,wizard_large@3x.bmp
+; תמונה קטנה בפינת כל עמוד אחר (55x58 + רזולוציות גבוהות)
+WizardSmallImageFile=wizard_small.bmp,wizard_small@2x.bmp,wizard_small@3x.bmp
 Compression=lzma
 SolidCompression=yes
 ; Disable compression for DLL files to prevent corruption
@@ -62,6 +66,11 @@ const
   // דרך MicrosoftEdgeWebview2Setup.exe (bootstrapper שמוריד את הגרסה החדשה).
   MIN_WEBVIEW2_MAJOR = 144;
 
+  // קבועי פריסה לדף "תכונות עיקריות" - Inno Setup לא תומך ב-const מקומי בתוך פרוצדורה.
+  FEATURES_GAP_X = 14;
+  FEATURES_GAP_Y = 8;
+  FEATURES_LABEL_H = 18;
+
 var
   CompPage: TWizardPage;
   VCCheck, WV2Check: TCheckBox;
@@ -72,6 +81,8 @@ var
   BooksPathEdit: TEdit;
   BooksPathBrowseBtn: TButton;
   SelectedBooksPath: String;
+
+  FeaturesPage: TWizardPage;
 
 function TryGetInstallDirFromRegistry(RootKey: Integer; const SubKey: String; var InstallDir: String): Boolean;
 begin
@@ -601,10 +612,65 @@ begin
   Result := InstallWV2;
 end;
 
+procedure CreateFeaturesPage();
+var
+  i, col, row: Integer;
+  thumbW, thumbH, cellH, x, y, totalH, startY: Integer;
+  img: TBitmapImage;
+  lbl: TNewStaticText;
+  files: array[0..3] of String;
+  captions: array[0..3] of String;
+begin
+  FeaturesPage := CreateCustomPage(wpWelcome,
+    'תכונות עיקריות באוצריא',
+    'הצצה למה שמחכה לכם בתוכנה');
+
+  files[0] := 'feature1.bmp';  captions[0] := 'חיפוש מתקדם';
+  files[1] := 'feature2.bmp';  captions[1] := 'ספר עם מפרשים';
+  files[2] := 'feature3.bmp';  captions[2] := 'סימניות והיסטוריה';
+  files[3] := 'feature4.bmp';  captions[3] := 'הערות אישיות';
+
+  // יחס תמונה 210/400. גודל דינמי לפי שטח העמוד.
+  thumbW := (FeaturesPage.SurfaceWidth - FEATURES_GAP_X) div 2;
+  thumbH := (thumbW * 210) div 400;
+  cellH := thumbH + FEATURES_LABEL_H;
+  totalH := 2 * cellH + FEATURES_GAP_Y;
+  startY := (FeaturesPage.SurfaceHeight - totalH) div 2;
+  if startY < 0 then startY := 0;
+
+  for i := 0 to 3 do
+  begin
+    col := i mod 2;
+    row := i div 2;
+    x := col * (thumbW + FEATURES_GAP_X);
+    y := startY + row * (cellH + FEATURES_GAP_Y);
+
+    ExtractTemporaryFile(files[i]);
+    img := TBitmapImage.Create(FeaturesPage);
+    img.Parent := FeaturesPage.Surface;
+    img.Stretch := True;
+    img.Left := x;
+    img.Top := y;
+    img.Width := thumbW;
+    img.Height := thumbH;
+    img.Bitmap.LoadFromFile(ExpandConstant('{tmp}\' + files[i]));
+
+    lbl := TNewStaticText.Create(FeaturesPage);
+    lbl.Parent := FeaturesPage.Surface;
+    lbl.Left := x;
+    lbl.Top := y + thumbH + 2;
+    lbl.Width := thumbW;
+    lbl.Height := FEATURES_LABEL_H;
+    lbl.Alignment := taCenter;
+    lbl.Caption := captions[i];
+  end;
+end;
+
 procedure InitializeWizard;
 begin
   InstallVC  := VCRedistNeedsInstall;
   InstallWV2 := WebView2NeedsInstall;
+  CreateFeaturesPage;
   CreateComponentsPage;
   CreateBooksPage;
 end;
@@ -814,6 +880,12 @@ Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check:
 ; MicrosoftEdgeWebview2Setup.exe — bootstrapper קטן (~2MB) שמוריד ומתקין WebView2
 ; נדרש על ידי flutter_inappwebview_windows; ב-Win10/11 עם Edge עדכני — כבר קיים
 Source: "MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallWV2
+
+; קבצי הצגה לדף "תכונות עיקריות" - dontcopy = נארזים בתוך המתקין אבל לא מותקנים אצל המשתמש
+Source: "feature1.bmp"; Flags: dontcopy
+Source: "feature2.bmp"; Flags: dontcopy
+Source: "feature3.bmp"; Flags: dontcopy
+Source: "feature4.bmp"; Flags: dontcopy
 
 [INI]
 Filename: "{app}\system_install.marker"; Section: "Install"; Key: "Mode"; String: "Admin"; Check: IsAdminInstallMode
