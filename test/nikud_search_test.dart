@@ -24,7 +24,7 @@ void main() {
       expect(hasNikud('שָׁל֥וֹם'), true);
     });
 
-    test('removeVolwels should remove nikud from text', () {
+    test('removeVolwels should remove nikud and cantillation from text', () {
       // הסרת ניקוד בסיסי
       expect(removeVolwels('שָׁלוֹם'), 'שלום');
       expect(removeVolwels('בְּרֵאשִׁית'), 'בראשית');
@@ -37,8 +37,8 @@ void main() {
       // טקסט ריק
       expect(removeVolwels(''), '');
 
-      // הסרת ניקוד תוך שמירה על טעמים (removeVolwels מסיר ניקוד בלבד)
-      expect(removeVolwels('שָׁל֥וֹם'), 'של֥ום');
+      // הסרת ניקוד וטעמים
+      expect(removeVolwels('שָׁל֥וֹם'), 'שלום');
 
       // החלפת תווים מיוחדים
       expect(removeVolwels('שָׁלוֹם־עוֹלָם'), 'שלום עולם');
