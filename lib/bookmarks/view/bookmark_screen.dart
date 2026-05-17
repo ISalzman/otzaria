@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/dialogs/reusable_items_dialog.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_state.dart';
+import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -16,19 +17,26 @@ import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/lists/items_list_view.dart';
 
 class BookmarksDialog extends StatelessWidget {
-  const BookmarksDialog({super.key});
+  /// אם מסופק, יוצגו רק סימניות של ספר זה (הדיאלוג הופך לתצוגת
+  /// "סימניות בספר הנוכחי").
+  final Book? bookFilter;
+
+  const BookmarksDialog({super.key, this.bookFilter});
 
   @override
   Widget build(BuildContext context) {
-    return const ReusableItemsDialog(
-      title: 'סימניות',
-      child: BookmarkView(),
+    return ReusableItemsDialog(
+      title: bookFilter == null ? 'סימניות' : 'סימניות בספר זה',
+      child: BookmarkView(bookFilter: bookFilter),
     );
   }
 }
 
 class BookmarkView extends StatelessWidget {
-  const BookmarkView({super.key});
+  /// אם מסופק, מסונן לרשימה רק סימניות שזהות הספר שלהן זהה לזו של [bookFilter].
+  final Book? bookFilter;
+
+  const BookmarkView({super.key, this.bookFilter});
 
   void _openBook(
     BuildContext context,
@@ -45,7 +53,13 @@ class BookmarkView extends StatelessWidget {
     );
 
     context.read<TabsBloc>().add(
-          OpenOrFocusTab(tab, targetTitle: targetTitle),
+          OpenOrFocusTab(
+            tab,
+            targetTitle: targetTitle,
+            // סימניה מצביעה על מיקום ספציפי. אם הספר כבר פתוח בטאב אחר,
+            // נרצה לגלול אותו למיקום של הסימניה ולא רק לתת לו focus.
+            navigateToPositionIfReused: true,
+          ),
         );
     context.read<NavigationBloc>().add(const NavigateToScreen(Screen.reading));
     // Close the dialog if this view is displayed inside one
@@ -54,12 +68,24 @@ class BookmarkView extends StatelessWidget {
     }
   }
 
+  String _locationSubtitle(Bookmark bookmark) {
+    if (bookmark.book is PdfBook) {
+      return 'עמוד ${bookmark.index}';
+    }
+    return 'פסקה ${bookmark.index}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final filterIdentity =
+        bookFilter == null ? null : bookIdentity(bookFilter!);
     return BlocBuilder<BookmarkBloc, BookmarkState>(
       builder: (context, state) {
         return ItemsListView(
           items: state.bookmarks,
+          additionalFilter: filterIdentity == null
+              ? null
+              : (item) => bookIdentity(item.book) == filterIdentity,
           onItemTap: (ctx, item, originalIndex) => _openBook(
             ctx,
             item.book,
@@ -72,16 +98,29 @@ class BookmarkView extends StatelessWidget {
             UiSnack.show('הסימניה נמחקה');
           },
           onClearAll: (ctx) {
-            ctx.read<BookmarkBloc>().clearBookmarks();
-            UiSnack.show('כל הסימניות נמחקו');
+            if (bookFilter == null) {
+              ctx.read<BookmarkBloc>().clearBookmarks();
+              UiSnack.show('כל הסימניות נמחקו');
+            } else {
+              // הודעת ההצלחה תוצג רק אם באמת נמחקה סימניה - בלי זה היה
+              // ייתכן שתוצג "סימניות הספר נמחקו" גם כשלא היו לספר סימניות
+              // (לחיצת כפתור בעת מצב ריק).
+              final removed =
+                  ctx.read<BookmarkBloc>().clearBookmarksForBook(bookFilter!);
+              if (removed) {
+                UiSnack.show('סימניות הספר נמחקו');
+              }
+            }
           },
           hintText: 'חפש בסימניות...',
-          emptyText: 'אין סימניות',
+          emptyText: bookFilter == null ? 'אין סימניות' : 'אין סימניות בספר זה',
           notFoundText: 'לא נמצאו תוצאות',
-          clearAllText: 'מחק את כל הסימניות',
+          clearAllText:
+              bookFilter == null ? 'מחק את כל הסימניות' : 'מחק סימניות הספר',
           leadingIconBuilder: (item) => item.book is PdfBook
               ? const Icon(FluentIcons.document_pdf_24_regular)
               : null,
+          subtitleBuilder: (item) => _locationSubtitle(item),
         );
       },
     );
