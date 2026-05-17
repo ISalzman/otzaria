@@ -94,14 +94,17 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
     });
   }
 
+  // ── חיפוש: איפוס שדה החיפוש, השאילתה והתוצאות ────────────────────────────
+  void _clearSearch() {
+    _searchController.clear();
+    _searchQuery = '';
+    _searchResults = const [];
+  }
+
   // ── חיפוש: לחיצה על תוצאה — נווט לטאב + גלול והבזק ───────────────────────
   void _onSearchResultTap(SettingsSearchEntry entry) {
     SettingsSearchRegistry.instance.navigateToEntry(entry);
-    _searchController.clear();
-    setState(() {
-      _searchQuery = '';
-      _searchResults = const [];
-    });
+    setState(_clearSearch);
   }
 
   // ── חיפוש: עיבוד בקשת ניווט מה-registry ──────────────────────────────────
@@ -147,7 +150,10 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
   }
 
   void _changeTab(int index) {
-    setState(() => _selectedIndex = index);
+    setState(() {
+      _selectedIndex = index;
+      _clearSearch();
+    });
     // בטוח רק בdesktop layout — במוד mobile ה-node לא מחובר לעץ הפוקוס
     if (_contentFocusNode.enclosingScope != null) {
       _contentFocusNode.requestFocus();
