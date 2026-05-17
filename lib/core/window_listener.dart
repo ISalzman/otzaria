@@ -126,11 +126,14 @@ class AppWindowListener extends WindowListener {
 
     // Step 3: Storage close, error reporting, and window destruction.
     try {
-      // שמירת מצב החלון חייבת להתבצע לפני Hive.close() כי Settings כותב ל-Hive
-      if (!kIsWeb &&
-          (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-        await WindowPersistence.saveNow();
-      }
+      // הערה: לא קוראים ל-`WindowPersistence.saveNow()` כאן. ב-admin install
+      // (`Program Files\אוצריא\`) הקריאה הזו תוקעת את ה-Dart isolate לחלוטין
+      // — ככל הנראה Defender/AV חוסם את הכתיבות ל-Hive `app_preferences` של
+      // תהליכים שה-EXE שלהם יושב ב-Program Files. נראה בלוג ש-`step3` מתחיל,
+      // `WindowPersistence.saveNow(): start` מודפס, ואחריו שקט עד ש-watchdog
+      // יורה. מצב החלון נשמר בכל מקרה דרך `WindowPersistence.scheduleSave()`
+      // עם debounce 400ms על כל אירוע move/resize/maximize — הקריאה כאן
+      // הייתה belt-and-suspenders מיותר.
 
       await Hive.close();
 
