@@ -88,39 +88,10 @@ abstract class OpenedTab {
         requiresStableLayout: requiresStableLayout,
       );
     } else if (book is DocxBook) {
-      // DOCX is rendered through the text book flow (converted to HTML-ish text).
-      // We wrap it as a TextBook so existing TextBookBloc/Repository can load it.
-      // חשוב לשמר id ו-categoryId — בלעדיהם getBookContent לא מצליח לאתר את
-      // הספר ב-LibraryProviderManager (מפתח ה-cache הוא title+categoryId+fileType)
-      // והתוכן יוצא ריק.
-      final textBook = TextBook(
-        id: book.id,
-        title: book.title,
-        category: book.category,
-        author: book.author,
-        heCategories: book.heCategories,
-        heEra: book.heEra,
-        compDateStringHe: book.compDateStringHe,
-        compPlaceStringHe: book.compPlaceStringHe,
-        pubDateStringHe: book.pubDateStringHe,
-        pubPlaceStringHe: book.pubPlaceStringHe,
-        heShortDesc: book.heShortDesc,
-        heDesc: book.heDesc,
-        pubDate: book.pubDate,
-        pubPlace: book.pubPlace,
-        order: book.order,
-        topics: book.topics,
-        // Prefer filePath if present; otherwise fall back to the actual file path.
-        filePath: book.filePath ?? book.path,
-        fileType: book.fileType ?? 'docx',
-        categoryPath: book.categoryPath,
-        categoryId: book.categoryId,
-        extraTitles: book.extraTitles,
-        isUserBook: book.isUserBook,
-        externalLibraryId: book.externalLibraryId,
-      );
+      // DOCX רץ דרך זרימת TextBook — העטיפה דרך DocxBook.toTextBook
+      // משמרת id/categoryId/externalLibraryId שדרושים ל-LibraryProviderManager.
       return TextBookTab(
-        book: textBook,
+        book: book.toTextBook(),
         index: index,
         searchText: searchText,
         commentators: commentators,
