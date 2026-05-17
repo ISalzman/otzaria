@@ -257,7 +257,28 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
 
     // תצוגת ספר PDF
     if (widget.book is PdfBook && _pdfController != null) {
-      return _buildPdfViewer((widget.book as PdfBook).path);
+      return BlocBuilder<SettingsBloc, SettingsState>(
+        buildWhen: (p, c) => p.compactMenuMode != c.compactMenuMode,
+        builder: (context, settingsState) {
+          final compact = settingsState.compactMenuMode;
+          return Stack(
+            children: [
+              _buildPdfViewer((widget.book as PdfBook).path),
+              Positioned(
+                top: compact ? 6 : 8,
+                left: compact ? 20 : 24,
+                child: _PreviewToolbar(
+                  key: _pdfPreviewToolbarKey,
+                  compact: compact,
+                  onZoomIn: () => _pdfController?.zoomUp(),
+                  onZoomOut: () => _pdfController?.zoomDown(),
+                  onOpen: _openCurrentPreviewInReader,
+                ),
+              ),
+            ],
+          );
+        },
+      );
     }
 
     // תצוגת ספר טקסט
@@ -265,16 +286,19 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return GestureDetector(
-      onDoubleTap: _openCurrentPreviewInReader,
-      child: Stack(
-        children: [
-          // תוכן הספר (מלא את כל השטח)
-          BlocProvider.value(
-            value: _currentTextTab!.bloc,
-            child: BlocBuilder<SettingsBloc, SettingsState>(
-              builder: (context, settingsState) {
-                return BlocBuilder(
+    return BlocBuilder<SettingsBloc, SettingsState>(
+      buildWhen: (p, c) =>
+          p.compactMenuMode != c.compactMenuMode ||
+          p.defaultRemoveNikud != c.defaultRemoveNikud,
+      builder: (context, settingsState) {
+        final compact = settingsState.compactMenuMode;
+        return Stack(
+          children: [
+            GestureDetector(
+              onDoubleTap: _openCurrentPreviewInReader,
+              child: BlocProvider.value(
+                value: _currentTextTab!.bloc,
+                child: BlocBuilder(
                   bloc: _currentTextTab!.bloc,
                   builder: (context, state) {
                     if (state is TextBookInitial) {
@@ -283,23 +307,17 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                           fontSize: _fontSize,
                           showSplitView: false,
                           removeNikud: settingsState.defaultRemoveNikud,
-                          loadCommentators:
-                              false, // אל תטען מפרשים בתצוגה מקדימה
+                          loadCommentators: false,
                         ),
                       );
                       return _buildSkeletonLoading();
                     }
-
                     if (state is TextBookLoading) {
                       return _buildSkeletonLoading();
                     }
-
                     if (state is TextBookError) {
-                      return Center(
-                        child: Text('שגיאה: ${state.message}'),
-                      );
+                      return Center(child: Text('שגיאה: ${state.message}'));
                     }
-
                     if (state is TextBookLoaded) {
                       return CombinedView(
                         data: state.content,
@@ -311,65 +329,35 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                         isPreviewMode: true,
                       );
                     }
-
                     return const SizedBox.shrink();
                   },
-                );
-              },
-            ),
-          ),
-          // כפתורים צפים בפינה השמאלית העליונה — top תואם ל-_kWideTopGap של AdaptiveSidePane
-          Positioned(
-            top: 14,
-            left: 14,
-            child: GestureDetector(
-              onDoubleTap: () {}, // בולע double-tap כדי שלא יפתח את הספר
-              child: Builder(
-                builder: (context) {
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SecondaryIconButton(
-                        tooltip: 'הגדל טקסט',
-                        icon: FluentIcons.zoom_in_24_regular,
-                        onPressed: () {
-                          setState(() {
-                            _fontSize = (_fontSize + 2).clamp(10.0, 50.0);
-                          });
-                          _currentTextTab!.bloc.add(
-                            UpdateFontSize(_fontSize),
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 6),
-                      SecondaryIconButton(
-                        tooltip: 'הקטן את גודל הטקסט',
-                        icon: FluentIcons.zoom_out_24_regular,
-                        onPressed: () {
-                          setState(() {
-                            _fontSize = (_fontSize - 2).clamp(10.0, 50.0);
-                          });
-                          _currentTextTab!.bloc.add(
-                            UpdateFontSize(_fontSize),
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 6),
-                      PrimaryIconButton(
-                        tooltip: 'פתח בעיון (או לחץ פעמיים על הספר)',
-                        onPressed: () {
-                          widget.onOpenInReader
-                              ?.call(_currentTextTab?.index ?? 0);
-                        },
-                      ),
-                    ],
-                  );
-                },
+                ),
               ),
             ),
-          ),
-        ],
-      ),
+            Positioned(
+              top: compact ? 10 : 14,
+              left: compact ? 16 : 20,
+              child: _PreviewToolbar(
+                compact: compact,
+                onZoomIn: () {
+                  setState(() {
+                    _fontSize = (_fontSize + 2).clamp(10.0, 50.0);
+                  });
+                  _currentTextTab!.bloc.add(UpdateFontSize(_fontSize));
+                },
+                onZoomOut: () {
+                  setState(() {
+                    _fontSize = (_fontSize - 2).clamp(10.0, 50.0);
+                  });
+                  _currentTextTab!.bloc.add(UpdateFontSize(_fontSize));
+                },
+                onOpen: () =>
+                    widget.onOpenInReader?.call(_currentTextTab?.index ?? 0),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -377,10 +365,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
   Widget _buildPdfViewer(String filePath) {
     if (!_pdfFileExists) {
       return const Center(
-        child: Text(
-          'הספר איננו קיים',
-          textDirection: TextDirection.rtl,
-        ),
+        child: Text('הספר איננו קיים', textDirection: TextDirection.rtl),
       );
     }
     return Stack(
@@ -395,28 +380,19 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
             backgroundColor: Theme.of(context).colorScheme.surface,
             zoomStepsDelegateProvider:
                 const PdfViewerZoomStepsDelegateProviderSmart(),
-            sizeDelegateProvider: PdfViewerSizeDelegateProviderLegacy(maxScale: 10),
+            sizeDelegateProvider:
+                PdfViewerSizeDelegateProviderLegacy(maxScale: 10),
             horizontalCacheExtent: 0,
             verticalCacheExtent: 1,
             pageAnchor: PdfPageAnchor.top,
             margin: 4,
             onDocumentChanged: (document) {
-              if (document != null || !_isPdfViewerReady || !mounted) {
-                return;
-              }
-
-              setState(() {
-                _isPdfViewerReady = false;
-              });
+              if (document != null || !_isPdfViewerReady || !mounted) return;
+              setState(() => _isPdfViewerReady = false);
             },
             onViewerReady: (document, controller) {
-              if (_isPdfViewerReady || !mounted) {
-                return;
-              }
-
-              setState(() {
-                _isPdfViewerReady = true;
-              });
+              if (_isPdfViewerReady || !mounted) return;
+              setState(() => _isPdfViewerReady = true);
             },
             viewerOverlayBuilder: (context, size, handleLinkTap) => [
               if (_isPdfViewerReady)
@@ -444,36 +420,6 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
           child: Listener(
             behavior: HitTestBehavior.translucent,
             onPointerDown: _handlePdfPreviewPointerDown,
-          ),
-        ),
-        Positioned(
-          top: 8,
-          left: 8,
-          child: Builder(
-            builder: (context) {
-              return Row(
-                key: _pdfPreviewToolbarKey,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SecondaryIconButton(
-                    tooltip: 'הגדל את גודל הטקסט',
-                    icon: FluentIcons.zoom_in_24_regular,
-                    onPressed: () => _pdfController?.zoomUp(),
-                  ),
-                  const SizedBox(width: 6),
-                  SecondaryIconButton(
-                    tooltip: 'הקטן את גודל הטקסט',
-                    icon: FluentIcons.zoom_out_24_regular,
-                    onPressed: () => _pdfController?.zoomDown(),
-                  ),
-                  const SizedBox(width: 6),
-                  PrimaryIconButton(
-                    tooltip: 'פתח בעיון (או לחץ פעמיים על הספר)',
-                    onPressed: _openCurrentPreviewInReader,
-                  ),
-                ],
-              );
-            },
           ),
         ),
       ],
@@ -560,6 +506,54 @@ class _SkeletonLine extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(4),
+      ),
+    );
+  }
+}
+
+class _PreviewToolbar extends StatelessWidget {
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+  final VoidCallback onOpen;
+  final bool compact;
+
+  const _PreviewToolbar({
+    super.key,
+    required this.onZoomIn,
+    required this.onZoomOut,
+    required this.onOpen,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surfaceContainerHigh,
+      shape: const StadiumBorder(),
+      elevation: 2,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ToolbarActionButton(
+            compact: compact,
+            tooltip: 'הגדל טקסט',
+            icon: FluentIcons.zoom_in_24_regular,
+            onPressed: onZoomIn,
+          ),
+          ToolbarActionButton(
+            compact: compact,
+            tooltip: 'הקטן טקסט',
+            icon: FluentIcons.zoom_out_24_regular,
+            onPressed: onZoomOut,
+          ),
+          ToolbarActionButton(
+            compact: compact,
+            tooltip: 'פתח בעיון (או לחץ פעמיים על הספר)',
+            icon: FluentIcons.open_24_regular,
+            onPressed: onOpen,
+          ),
+        ],
       ),
     );
   }
