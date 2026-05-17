@@ -2999,21 +2999,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Widget _buildLeftPaneContent() {
     return Column(
       children: [
-        Container(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 1,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TabBar(
-                  controller: _leftPaneTabController,
-                  tabs: const [
+        Row(
+          children: [
+            Expanded(
+              child: TabBar(
+                controller: _leftPaneTabController,
+                tabs: const [
                     Tab(
                       icon: Icon(FluentIcons.navigation_24_regular, size: 16),
                       iconMargin: EdgeInsets.only(bottom: 1),
@@ -3072,8 +3063,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                         (Settings.getValue<bool>('key-pin-sidebar') ?? false),
                   ),
                 ),
-            ],
-          ),
+          ],
         ),
         Expanded(
           child: TabBarView(
