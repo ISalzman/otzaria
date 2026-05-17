@@ -220,7 +220,8 @@ class CalendarMainPanel extends StatelessWidget {
 
     // ימים מהחודש הבא
     const totalCells = 42;
-    for (int day = 1; day <= totalCells - cells.length; day++) {
+    final daysFromNext = totalCells - cells.length;
+    for (int day = 1; day <= daysFromNext; day++) {
       final d = DateTime(current.year, current.month + 1, day);
       cells.add(_CellData(d, JewishDate.fromDateTime(d), isOtherMonth: true));
     }
@@ -268,7 +269,8 @@ class CalendarMainPanel extends StatelessWidget {
       ..setJewishDate(
           currentJD.getJewishYear(), currentJD.getJewishMonth(), daysInMonth);
     lastDay.forward();
-    for (int day = 1; day <= totalCells - cells.length; day++) {
+    final daysFromNext = totalCells - cells.length;
+    for (int day = 1; day <= daysFromNext; day++) {
       final jd = JewishDate()
         ..setJewishDate(lastDay.getJewishYear(), lastDay.getJewishMonth(), day);
       cells.add(_CellData(jd.getGregorianCalendar(), jd, isOtherMonth: true));
