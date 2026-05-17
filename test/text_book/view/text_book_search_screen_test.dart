@@ -378,6 +378,86 @@ void main() {
   );
 
   testWidgets(
+    'ניווט בחצים גולל את רשימת התוצאות כשהתוצאה הנבחרת יוצאת מהאזור הגלוי',
+    (tester) async {
+      // הרבה תוצאות עם כתובות ייחודיות, כך שתוצאה רחוקה לא תהיה ברנדור
+      // ההתחלתי של ה-ScrollablePositionedList. ללא התיקון לחיצה על "הבא"
+      // הייתה משאירה את הרשימה במקומה והתוצאה הנבחרת הייתה נשארת מחוץ
+      // לאזור הגלוי.
+      final results = List.generate(
+        40,
+        (i) => TextSearchResult(
+          snippet: 'snippet $i',
+          index: i,
+          query: 'x',
+          address: 'קטע_$i',
+        ),
+      );
+
+      await pumpSearchWithResults(
+        tester: tester,
+        visibleIndices: const [0],
+        results: results,
+      );
+
+      // מצב התחלתי: תוצאה מרוחקת לא ברנדור.
+      expect(find.text('קטע_30'), findsNothing,
+          reason: 'תוצאה מרוחקת לא אמורה להיות מורנדרת בתחילה');
+
+      // ניווט קדימה עד שהבחירה מגיעה לתוצאה 30.
+      final nextButton = find.byTooltip('התוצאה הבאה');
+      for (var i = 0; i < 30; i++) {
+        await tester.tap(nextButton);
+        await tester.pump();
+        // ה-ItemScrollController של הספר אינו מחובר לרשימה אמיתית בטסט.
+        tester.takeException();
+      }
+      await tester.pump();
+
+      // אחרי הניווט — הרשימה גוללה ותוצאה 30 גלויה.
+      expect(find.text('קטע_30'), findsOneWidget,
+          reason: 'הרשימה צריכה לגלול כדי שהתוצאה הנבחרת תהיה גלויה');
+    },
+  );
+
+  testWidgets(
+    'ניווט בחצים בין תוצאות סמוכות לא מזיז את הרשימה כשהיעד כבר גלוי',
+    (tester) async {
+      // מעט תוצאות שכולן נכנסות לאזור הגלוי. ניווט קדימה לא אמור לקפוץ —
+      // הכותרת הראשונה צריכה להישאר ברנדור באותו מיקום וויזואלי.
+      final results = List.generate(
+        4,
+        (i) => TextSearchResult(
+          snippet: 'snippet $i',
+          index: i,
+          query: 'x',
+          address: 'כתובת_$i',
+        ),
+      );
+
+      await pumpSearchWithResults(
+        tester: tester,
+        visibleIndices: const [0],
+        results: results,
+      );
+
+      final firstHeader = find.text('כתובת_0');
+      expect(firstHeader, findsOneWidget);
+      final initialTopLeft = tester.getTopLeft(firstHeader);
+
+      await tester.tap(find.byTooltip('התוצאה הבאה'));
+      await tester.pump();
+      tester.takeException();
+      await tester.pump();
+
+      expect(find.text('כתובת_0'), findsOneWidget,
+          reason: 'הכותרת הראשונה אמורה להישאר גלויה כשכל התוצאות בתוך הוויופורט');
+      expect(tester.getTopLeft(find.text('כתובת_0')), initialTopLeft,
+          reason: 'אסור לגלול את רשימת התוצאות אם היעד כבר גלוי');
+    },
+  );
+
+  testWidgets(
     'נפילה ל-closestIndex כשהשורה הנבחרת לא קיימת בתוצאות החדשות',
     (tester) async {
       // line=50 נבחר. שאילתה חדשה לא מכילה line=50 — נפילה ל-closestIndex.
