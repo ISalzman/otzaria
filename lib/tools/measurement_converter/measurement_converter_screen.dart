@@ -547,7 +547,10 @@ class _MeasurementConverterScreenState
                             duration: AppTokens.animFast,
                             child: IgnorePointer(
                               ignoring: !hasResult,
-                              child: ToolCopyButton(onPressed: _copyResult),
+                              child: SecondaryIconButton(
+                                  icon: FluentIcons.copy_24_regular,
+                                  tooltip: 'העתק',
+                                  onPressed: _copyResult),
                             ),
                           ),
                         ],

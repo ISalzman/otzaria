@@ -329,7 +329,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                   return Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _PreviewPanelSecondaryButton(
+                      SecondaryIconButton(
                         tooltip: 'הגדל טקסט',
                         icon: FluentIcons.zoom_in_24_regular,
                         onPressed: () {
@@ -342,7 +342,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                         },
                       ),
                       const SizedBox(width: 6),
-                      _PreviewPanelSecondaryButton(
+                      SecondaryIconButton(
                         tooltip: 'הקטן את גודל הטקסט',
                         icon: FluentIcons.zoom_out_24_regular,
                         onPressed: () {
@@ -355,7 +355,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                         },
                       ),
                       const SizedBox(width: 6),
-                      ToolNavigateButton(
+                      PrimaryIconButton(
                         tooltip: 'פתח בעיון (או לחץ פעמיים על הספר)',
                         onPressed: () {
                           widget.onOpenInReader
@@ -455,19 +455,19 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                 key: _pdfPreviewToolbarKey,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _PreviewPanelSecondaryButton(
+                  SecondaryIconButton(
                     tooltip: 'הגדל את גודל הטקסט',
                     icon: FluentIcons.zoom_in_24_regular,
                     onPressed: () => _pdfController?.zoomUp(),
                   ),
                   const SizedBox(width: 6),
-                  _PreviewPanelSecondaryButton(
+                  SecondaryIconButton(
                     tooltip: 'הקטן את גודל הטקסט',
                     icon: FluentIcons.zoom_out_24_regular,
                     onPressed: () => _pdfController?.zoomDown(),
                   ),
                   const SizedBox(width: 6),
-                  ToolNavigateButton(
+                  PrimaryIconButton(
                     tooltip: 'פתח בעיון (או לחץ פעמיים על הספר)',
                     onPressed: _openCurrentPreviewInReader,
                   ),
@@ -560,38 +560,6 @@ class _SkeletonLine extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(4),
-      ),
-    );
-  }
-}
-
-class _PreviewPanelSecondaryButton extends StatelessWidget {
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  const _PreviewPanelSecondaryButton({
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Tooltip(
-      message: tooltip,
-      child: IconButton(
-        icon: Icon(icon, size: 20),
-        onPressed: onPressed,
-        style: IconButton.styleFrom(
-          backgroundColor: cs.secondaryContainer,
-          foregroundColor: cs.onSecondaryContainer,
-          minimumSize: const Size(36, 36),
-          padding: EdgeInsets.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
       ),
     );
   }
