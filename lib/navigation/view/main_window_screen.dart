@@ -823,11 +823,21 @@ class MainWindowScreenState extends State<MainWindowScreen>
         _currentPageIndex = targetPage;
       });
       if (pageController.hasClients) {
-        pageController.animateToPage(
-          targetPage,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
+        // מעבר שחוצה את עמוד "כלים" (index 2) — מ"הגדרות" אל מסכים שלפניו
+        // או אליהם — לא יעבור ויזואלית דרך "כלים", כדי שמערכת התוספים
+        // (כולל ה-WebView הראשי) לא תיטען לחינם.
+        final currentPage = pageController.page?.round() ?? _currentPageIndex;
+        final crossesTools = (currentPage < 2 && targetPage > 2) ||
+            (currentPage > 2 && targetPage < 2);
+        if (crossesTools) {
+          pageController.jumpToPage(targetPage);
+        } else {
+          pageController.animateToPage(
+            targetPage,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        }
       }
     }
 
