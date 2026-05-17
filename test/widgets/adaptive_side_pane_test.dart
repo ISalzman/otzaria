@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/layout/floating_panel.dart';
 import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
 
 class _CounterPane extends StatefulWidget {
@@ -430,5 +432,170 @@ void main() {
     expect(paneBuildCount - initialBuilds, lessThanOrEqualTo(3),
         reason:
             'שינוי רוחב הפאנל לא אמור לבנות מחדש את paneContent — זה מאבד state בילדים');
+  });
+
+  // ── בדיקות צבע רקע ──────────────────────────────────────────────────────────
+  //
+  // AdaptiveSidePane אחראי לצבע הרקע של החלונית דרך _buildPaneShell.
+  // paneContent **לא** אמור להגדיר צבע רקע משלו (Material/Container עם color,
+  // ColoredBox וכו') — אחרת הוא דורס את הצבע שמגיע מ-AdaptiveSidePane.
+  //
+  // החריג המותר: העברת paneColor מפורשת ל-AdaptiveSidePane עצמו (כמו ב-library_browser).
+
+  Widget buildPaneWithColor({required Color paneContentColor}) {
+    return MaterialApp(
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: SizedBox(
+            width: 1200,
+            height: 700,
+            child: AdaptiveSidePane(
+              isOpen: true,
+              alignment: AlignmentDirectional.centerEnd,
+              paneWidth: 300,
+              minMainContentWidth: 420,
+              onClose: () {},
+              mainContent: const SizedBox.expand(),
+              // paneContent עם צבע רקע פנימי — זה הדפוס האסור
+              paneContent: ColoredBox(
+                color: paneContentColor,
+                child: const SizedBox.expand(),
+              ),
+              autoHandleResponsiveVisibility: false,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  testWidgets(
+      'צבע הרקע של החלונית מגיע מ-AdaptiveSidePane ולא מ-paneContent (wide)',
+      (tester) async {
+    // בודק שה-FloatingPanel (שהוא _buildPaneShell במצב wide) מקבל את
+    // AppSurfaces.solidPanelBackground ולא נדרס על ידי תוכן פנימי.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Builder(
+            builder: (context) {
+              final expectedColor = AppSurfaces.solidPanelBackground(context);
+              return Scaffold(
+                body: SizedBox(
+                  width: 1200,
+                  height: 700,
+                  child: AdaptiveSidePane(
+                    isOpen: true,
+                    alignment: AlignmentDirectional.centerEnd,
+                    paneWidth: 300,
+                    minMainContentWidth: 420,
+                    onClose: () {},
+                    mainContent: const SizedBox.expand(),
+                    paneContent: Builder(builder: (context) {
+                      // מאמת שהצבע שמגיע ל-FloatingPanel תואם את ברירת המחדל
+                      final panel = context
+                          .findAncestorWidgetOfExactType<FloatingPanel>();
+                      expect(
+                        panel?.color,
+                        expectedColor,
+                        reason:
+                            'FloatingPanel צריך לקבל את AppSurfaces.solidPanelBackground',
+                      );
+                      return const SizedBox.shrink();
+                    }),
+                    autoHandleResponsiveVisibility: false,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  });
+
+  testWidgets(
+      'paneColor מפורש מועבר ל-FloatingPanel במקום ברירת המחדל (wide)',
+      (tester) async {
+    // זהו הדפוס המותר: העברת paneColor ל-AdaptiveSidePane עצמו (כמו library_browser).
+    const customColor = Color(0xFFAABBCC);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: SizedBox(
+              width: 1200,
+              height: 700,
+              child: AdaptiveSidePane(
+                isOpen: true,
+                alignment: AlignmentDirectional.centerEnd,
+                paneWidth: 300,
+                minMainContentWidth: 420,
+                onClose: () {},
+                mainContent: const SizedBox.expand(),
+                paneContent: Builder(builder: (context) {
+                  final panel =
+                      context.findAncestorWidgetOfExactType<FloatingPanel>();
+                  expect(
+                    panel?.color,
+                    customColor,
+                    reason:
+                        'paneColor מפורש צריך להגיע ל-FloatingPanel כפי שהוגדר',
+                  );
+                  return const SizedBox.shrink();
+                }),
+                paneColor: customColor,
+                autoHandleResponsiveVisibility: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  });
+
+  testWidgets(
+      'paneContent עם ColoredBox ישיר מכיל ColoredBox בתוך FloatingPanel (רגרסיה: דריסת צבע)',
+      (tester) async {
+    // בודק את מבנה ה-widget tree: אם paneContent מכיל ColoredBox עם צבע,
+    // הוא יופיע בתוך ה-FloatingPanel ויהיה נצפה ב-tree.
+    // זה מתעד את ה-invariant: paneContent לא אמור להכיל ColoredBox/Material עם color.
+    // אם יום אחד FloatingPanel יכלוא את הצבע — הטסט הזה יצביע על כך.
+
+    await tester.pumpWidget(
+      buildPaneWithColor(paneContentColor: Colors.red),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FloatingPanel), findsOneWidget,
+        reason:
+            'AdaptiveSidePane חייב לעטוף את paneContent ב-FloatingPanel במצב wide');
+
+    // ColoredBox עם Colors.red אמור להיות בתוך ה-FloatingPanel —
+    // זה מוכיח שהוא נמצא ב-tree ולא נחסם. אם הטסט יכשל כאן,
+    // FloatingPanel מנע את הוספת ה-ColoredBox לעץ (שינוי ב-_buildPaneShell).
+    final coloredBoxFinder = find.descendant(
+      of: find.byType(FloatingPanel),
+      matching: find.byType(ColoredBox),
+    );
+    expect(coloredBoxFinder, findsOneWidget,
+        reason:
+            'ColoredBox בתוך paneContent צריך להיות נצפה בתוך FloatingPanel — '
+            'הוא דורס את הצבע שהוגדר ב-AdaptiveSidePane');
+
+    // מוודא שהצבע של ה-ColoredBox הפנימי שונה מהצבע שהוגדר ב-FloatingPanel —
+    // זו הוכחה שיש סתירה בין הצבע הפנימי לצבע שמגיע מ-AdaptiveSidePane.
+    final coloredBox =
+        tester.widget<ColoredBox>(coloredBoxFinder);
+    final floatingPanel =
+        tester.widget<FloatingPanel>(find.byType(FloatingPanel));
+    expect(coloredBox.color, isNot(equals(floatingPanel.color)),
+        reason:
+            'הצבע של ColoredBox הפנימי שונה מצבע FloatingPanel — '
+            'זו ראיה לדריסה ויזואלית אסורה');
   });
 }
