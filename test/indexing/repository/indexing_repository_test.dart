@@ -131,11 +131,84 @@ void main() {
     });
   });
 
+  group('IndexingRepository.isIndexableBook', () {
+    test('DocxBook נכלל באינדוקס דרך מיפוי ל-TextBook', () {
+      // רגרסיה: לפני התיקון `isIndexableBook` החזיר false ל-DocxBook,
+      // אז `IndexingBloc` סינן אותו לפני indexAllBooks וקבצי DOCX לא נכנסו
+      // לאינדקס הטנטיווי. עכשיו הוא ממופה ל-TextBook באמצעות `toTextBook()`
+      // ו-`book.text` מחלץ את התוכן דרך docxToText ב-DatabaseLibraryProvider.
+      final docx = DocxBook(
+        id: 1,
+        title: 'בדיקה',
+        path: r'C:\library\בדיקה.docx',
+        categoryId: 10,
+      );
+      expect(IndexingRepository.isIndexableBook(docx), isTrue);
+    });
+
+    test('TextBook ו-PdfBook נשארים אינדוקסיביליים', () {
+      expect(
+        IndexingRepository.isIndexableBook(TextBook(title: 'א')),
+        isTrue,
+      );
+      expect(
+        IndexingRepository.isIndexableBook(
+          PdfBook(title: 'א', path: r'C:\a.pdf'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('ExternalLibraryBook לא אינדוקסיבילי', () {
+      final external = ExternalLibraryBook(
+        title: 'אוצר',
+        id: 999,
+        link: 'https://example.com',
+      );
+      expect(IndexingRepository.isIndexableBook(external), isFalse);
+    });
+  });
+
+  group('DocxBook ↔ TextBook(wrap) — עקביות מפתח קטלוג', () {
+    test('catalogueOrderKey זהה ל-DocxBook ול-TextBook העטוף עם id', () {
+      // קריטי: שני המפתחות חייבים להיות זהים כדי שהבדיקה
+      // `booksDone.contains(indexedBookKey)` תזהה אותו ספר בלי לכפול
+      // את האינדוקס בהפעלות חוזרות.
+      final docx = DocxBook(
+        id: 42,
+        title: 'בדיקה',
+        path: r'C:\library\בדיקה.docx',
+        categoryId: 7,
+      );
+      expect(
+        IndexingRepository.catalogueOrderKey(docx),
+        IndexingRepository.catalogueOrderKey(docx.toTextBook()),
+      );
+    });
+
+    test('catalogueOrderKey זהה גם ללא id (נופל ל-title|category|docx|path)',
+        () {
+      // FileBook משתמש ב-`book.path` ב-pathKey, ו-TextBook (לא FileBook)
+      // משתמש ב-`book.filePath`. `toTextBook()` מעביר `filePath ?? path`,
+      // כך שהמפתח נשאר עקבי גם בלי id.
+      final docx = DocxBook(
+        title: 'בדיקה ללא id',
+        path: r'C:\library\בדיקה.docx',
+        categoryPath: 'ספרים אישיים',
+      );
+      expect(
+        IndexingRepository.catalogueOrderKey(docx),
+        IndexingRepository.catalogueOrderKey(docx.toTextBook()),
+      );
+    });
+  });
+
   group('IndexingRepository.optimizeIndexBestEffort', () {
     test('מחזיר true כש-optimize מצליח', () async {
       var called = false;
 
-      final completed = await IndexingRepository.optimizeIndexBestEffort(() async {
+      final completed =
+          await IndexingRepository.optimizeIndexBestEffort(() async {
         called = true;
       });
 
@@ -146,7 +219,8 @@ void main() {
     test('מחזיר false ולא זורק כש-optimize נכשל אחרי commit', () async {
       Object? reportedError;
 
-      final completed = await IndexingRepository.optimizeIndexBestEffort(() async {
+      final completed =
+          await IndexingRepository.optimizeIndexBestEffort(() async {
         throw StateError('maintenance failed');
       }, onFailure: (error, _) {
         reportedError = error;

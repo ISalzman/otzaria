@@ -116,11 +116,19 @@ class IndexingRepository {
 
         try {
           final indexedBookKey = catalogueOrderKey(book);
-          if (book is TextBook) {
+          // DocxBook עובר אינדוקס דרך זרימת TextBook (העטיפה משמרת
+          // id/categoryId כדי ש-`book.text` יחלץ docx → text).
+          // catalogueOrderKey של DocxBook ו-TextBook העטוף זהה: כשיש id
+          // המפתח הוא 'id:<id>', וכשאין — title+categoryKey+'docx'+path
+          // (העטיפה מעבירה filePath ?? path, ו-fileType נשאר 'docx').
+          final TextBook? textBookForIndex = book is TextBook
+              ? book
+              : (book is DocxBook ? book.toTextBook() : null);
+          if (textBookForIndex != null) {
             if (!_tantivyDataProvider.booksDone.contains(indexedBookKey)) {
               debugPrint('📖 מאנדקס ספר טקסט ב-isolate: ${book.title}');
               await _indexTextBook(
-                book,
+                textBookForIndex,
                 isolateService,
                 catalogueOrderByBookKey: catalogueOrderByBookKey,
                 onActualIndexingStarted: () {
@@ -593,11 +601,15 @@ class IndexingRepository {
 
         try {
           final indexedBookKey = catalogueOrderKey(book);
-          if (book is TextBook) {
+          // DocxBook ממופה ל-TextBook (ראה הסבר ב-indexAllBooks).
+          final TextBook? textBookForIndex = book is TextBook
+              ? book
+              : (book is DocxBook ? book.toTextBook() : null);
+          if (textBookForIndex != null) {
             if (!_tantivyDataProvider.booksDone.contains(indexedBookKey)) {
               debugPrint('📖 מאנדקס ספר טקסט חדש: ${book.title}');
               await _indexTextBook(
-                book,
+                textBookForIndex,
                 isolateService,
                 catalogueOrderByBookKey: catalogueOrderByBookKey,
                 onActualIndexingStarted: () {
@@ -686,9 +698,13 @@ class IndexingRepository {
   }
 
   /// Returns true for book types that the indexer actually processes.
-  /// Non-indexable types (ExternalLibraryBook, DocxBook, etc.) are silently
-  /// skipped by indexAllBooks, so they must be excluded from status checks.
-  static bool isIndexableBook(Book book) => book is TextBook || book is PdfBook;
+  /// Non-indexable types (ExternalLibraryBook וכו') מדולגים בשקט
+  /// ב-indexAllBooks, ולכן חייבים להיות מחוץ לבדיקות הסטטוס.
+  /// DocxBook נכלל — הוא ממופה ל-TextBook ב-indexAllBooks באמצעות
+  /// `DocxBook.toTextBook()`, ו-`book.text` כבר יודע לחלץ את התוכן
+  /// דרך `docxToText` (ראה DatabaseLibraryProvider.getBookText).
+  static bool isIndexableBook(Book book) =>
+      book is TextBook || book is PdfBook || book is DocxBook;
 
   /// Waits until the underlying data provider is fully initialized
   /// (booksDone loaded from disk).
