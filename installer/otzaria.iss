@@ -20,6 +20,7 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DefaultDirName={code:GetDefaultInstallDir}
 DefaultGroupName={#MyAppName}
@@ -27,12 +28,19 @@ DisableProgramGroupPage=yes
 OutputDir=.\
 OutputBaseFilename=otzaria-{#MyAppVersion}-windows
 SetupIconFile=white_sketch128x128.ico
+; תמונת האשף בעמודי "ברוכים הבאים" ו"סיום" (אנכית, 164x314 + רזולוציות @2x/@3x ל-HiDPI)
+WizardImageFile=wizard_large.bmp,wizard_large@2x.bmp,wizard_large@3x.bmp
+; תמונה קטנה בפינת כל עמוד אחר (55x58 + רזולוציות גבוהות)
+WizardSmallImageFile=wizard_small.bmp,wizard_small@2x.bmp,wizard_small@3x.bmp
 Compression=lzma
 SolidCompression=yes
 ; Disable compression for DLL files to prevent corruption
 CompressionThreads=1
 WizardStyle=modern
 DisableDirPage=no
+; ChangesEnvironment=yes נדרש כדי שעדכון ל-PATH (במשימת addtopath) ייכנס
+; לתוקף מיד עבור תהליכים חדשים ללא צורך ב-logoff. שולח WM_SETTINGCHANGE.
+ChangesEnvironment=yes
 
 [InstallDelete]
 ; ניקוי מסד הנתונים הישן של Isar שהוחלף על ידי hive_ce — מחיקה מכוונת בעת שדרוג.
@@ -45,17 +53,27 @@ Name: "{code:GetDataDir}\index"; Permissions: users-modify
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "calendaricon"; Description: "צור קיצור דרך ישירות ללוח שנה"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "resetsettings"; Description: "איפוס הגדרות משתמש והסרת התקנות קודמות (מומלץ למעדכנים מגרסה < 0.9.80, שים לב: זה ימחק הערות אישיות!)"; Flags: unchecked
+Name: "addtopath"; Description: "הוסף את אוצריא ל-PATH של המשתמש (יאפשר להריץ ‎`otzaria pack-plugin`‎ ישירות מהטרמינל)"; Flags: unchecked
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+; קיצור דרך ישיר ללוח השנה — מעביר ל-otzaria.exe deep link כפרמטר; אוצריא מזהה
+; ארגומנט שמתחיל ב-"otzaria:" וממסרת לראוטר הפנימי (ראה docs/deep_links.md לזרימה המלאה).
+Name: "{autodesktop}\לוח שנה - {#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "otzaria://open/calendar"; Tasks: calendaricon
 
 [Registry]
 Root: HKA; Subkey: "Software\Classes\otzaria"; ValueType: string; ValueName: ""; ValueData: "URL:Otzaria Protocol"; Flags: uninsdeletekeyifempty
 Root: HKA; Subkey: "Software\Classes\otzaria"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\otzaria\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName}"; Flags: uninsdeletekeyifempty
 Root: HKA; Subkey: "Software\Classes\otzaria\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekeyifempty
+; הוספת {app} ל-PATH של המשתמש כדי שניתן יהיה להריץ ‎`otzaria pack-plugin`‎
+; ישירות מהטרמינל. ה-Check מונע כפילויות בהתקנה חוזרת; ההסרה מהPATH
+; מתבצעת ב-CurUninstallStepChanged למטה (לא ניתן להשתמש ב-uninsdelete*
+; על expandsz "מצטבר" כי הוא ידרוס את הערך כולו).
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Flags: preservestringtype; Check: NeedsAddPath(ExpandConstant('{app}')); Tasks: addtopath
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Flags: nowait postinstall skipifsilent 
@@ -65,11 +83,84 @@ Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; קבצי הצגה לדף "תכונות עיקריות" - dontcopy = נארזים בתוך המתקין אבל לא מותקנים אצל המשתמש
+Source: "feature1.bmp"; Flags: dontcopy
+Source: "feature2.bmp"; Flags: dontcopy
+Source: "feature3.bmp"; Flags: dontcopy
+Source: "feature4.bmp"; Flags: dontcopy
 
 [INI]
 Filename: "{app}\system_install.marker"; Section: "Install"; Key: "Mode"; String: "Admin"; Check: IsAdminInstallMode
 
 [Code]
+const
+  FEATURES_GAP_X = 14;
+  FEATURES_GAP_Y = 8;
+  FEATURES_LABEL_H = 18;
+
+var
+  FeaturesPage: TWizardPage;
+
+procedure CreateFeaturesPage();
+var
+  i, col, row: Integer;
+  thumbW, thumbH, cellH, x, y, totalH, startY: Integer;
+  img: TBitmapImage;
+  lbl: TNewStaticText;
+  files: array[0..3] of String;
+  captions: array[0..3] of String;
+begin
+  FeaturesPage := CreateCustomPage(wpWelcome,
+    'תכונות עיקריות באוצריא',
+    'הצצה למה שמחכה לכם בתוכנה');
+
+  files[0] := 'feature1.bmp';  captions[0] := 'ספר עם מפרשים';
+  files[1] := 'feature2.bmp';  captions[1] := 'לוח שנה';
+  files[2] := 'feature3.bmp';  captions[2] := 'ספרי PDF';
+  files[3] := 'feature4.bmp';  captions[3] := 'חיפוש מתקדם';
+
+  // חישוב גודל ממוזער דינמי לפי שטח העמוד, כדי שיתאים גם ב-HiDPI.
+  // יחס גובה/רוחב של התמונה: 210/400.
+  thumbW := (FeaturesPage.SurfaceWidth - FEATURES_GAP_X) div 2;
+  thumbH := (thumbW * 210) div 400;
+  cellH := thumbH + FEATURES_LABEL_H;
+  totalH := 2 * cellH + FEATURES_GAP_Y;
+  startY := (FeaturesPage.SurfaceHeight - totalH) div 2;
+  if startY < 0 then startY := 0;
+
+  for i := 0 to 3 do
+  begin
+    col := i mod 2;
+    row := i div 2;
+    x := col * (thumbW + FEATURES_GAP_X);
+    y := startY + row * (cellH + FEATURES_GAP_Y);
+
+    ExtractTemporaryFile(files[i]);
+    img := TBitmapImage.Create(FeaturesPage);
+    img.Parent := FeaturesPage.Surface;
+    img.Stretch := True;
+    img.Left := x;
+    img.Top := y;
+    img.Width := thumbW;
+    img.Height := thumbH;
+    img.Bitmap.LoadFromFile(ExpandConstant('{tmp}\' + files[i]));
+
+    lbl := TNewStaticText.Create(FeaturesPage);
+    lbl.Parent := FeaturesPage.Surface;
+    lbl.Left := x;
+    lbl.Top := y + thumbH + 2;
+    lbl.Width := thumbW;
+    lbl.Height := FEATURES_LABEL_H;
+    lbl.Alignment := taCenter;
+    lbl.Caption := captions[i];
+  end;
+end;
+
+procedure InitializeWizard();
+begin
+  CreateFeaturesPage();
+end;
+
 function TryGetInstallDirFromRegistry(RootKey: Integer; const SubKey: String; var InstallDir: String): Boolean;
 begin
   Result := RegQueryStringValue(RootKey, SubKey, 'Inno Setup: App Path', InstallDir);
@@ -171,6 +262,79 @@ begin
   end;
 
   RemoveDir(Path);
+end;
+
+// בודק האם הנתיב NewPath כבר נמצא ב-PATH של המשתמש. מחזיר True אם
+// יש להוסיף (לא קיים). מטפל גם בגרסה עם backslash סופי. ההשוואה
+// case-insensitive כי Windows מתייחס ל-PATH ככזה.
+function NeedsAddPath(NewPath: String): Boolean;
+var
+  CurrentPath: String;
+  Needle1, Needle2, Haystack: String;
+begin
+  Result := True;
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+    exit;
+
+  Haystack  := ';' + Lowercase(CurrentPath) + ';';
+  Needle1   := ';' + Lowercase(NewPath) + ';';
+  Needle2   := ';' + Lowercase(NewPath) + '\;';
+  if (Pos(Needle1, Haystack) > 0) or (Pos(Needle2, Haystack) > 0) then
+    Result := False;
+end;
+
+// מסיר את PathToRemove מ-PATH של המשתמש (ב-uninstall). שומר את שאר
+// הערך כמו שהוא. מטפל בשני הוריאנטים — עם וללא backslash סופי —
+// **בנפרד**, כדי שכפילות היסטורית (גם 'C:\app' וגם 'C:\app\') תוסר
+// במלואה. גם מסיר כל מופע חוזר, לא רק את הראשון.
+procedure RemoveAppFromUserPath(PathToRemove: String);
+var
+  CurrentPath, LowerCurrent: String;
+  Needles: array[0..1] of String;
+  LowerNeedle: String;
+  P, i: Integer;
+  Changed: Boolean;
+begin
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+    exit;
+
+  Changed := False;
+  // נורמליזציה: עוטפים ב-';...' כדי לטפל גם בקצוות.
+  CurrentPath := ';' + CurrentPath + ';';
+
+  Needles[0] := ';' + Lowercase(PathToRemove) + ';';
+  Needles[1] := ';' + Lowercase(PathToRemove) + '\;';
+
+  for i := 0 to 1 do
+  begin
+    LowerNeedle := Needles[i];
+    LowerCurrent := Lowercase(CurrentPath);
+    P := Pos(LowerNeedle, LowerCurrent);
+    while P > 0 do
+    begin
+      Delete(CurrentPath, P, Length(LowerNeedle) - 1);
+      LowerCurrent := Lowercase(CurrentPath);
+      Changed := True;
+      P := Pos(LowerNeedle, LowerCurrent);
+    end;
+  end;
+
+  if not Changed then
+    exit;
+
+  // הסרה של ה-';' שעטפנו בהתחלה ובסוף.
+  if (Length(CurrentPath) > 0) and (CurrentPath[1] = ';') then
+    Delete(CurrentPath, 1, 1);
+  if (Length(CurrentPath) > 0) and (CurrentPath[Length(CurrentPath)] = ';') then
+    Delete(CurrentPath, Length(CurrentPath), 1);
+
+  RegWriteExpandStringValue(HKCU, 'Environment', 'Path', CurrentPath);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+    RemoveAppFromUserPath(ExpandConstant('{app}'));
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

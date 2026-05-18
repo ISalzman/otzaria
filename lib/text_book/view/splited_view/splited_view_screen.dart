@@ -137,8 +137,13 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
             !_paneOpen) {
           _paneOpen = true;
         }
-        // אם עוברים למצב של מפרשים מתחת הטקסט (showSplitView = false), סוגרים את הפאנל הימני
-        if (!widget.showSplitView && _paneOpen) {
+        // אם המצב באמת עבר ל'מפרשים מתחת' (showSplitView true→false),
+        // סוגרים את החלונית הצדית. חשוב לבדוק שהמצב השתנה — אחרת
+        // שינוי טאב פנימי (initialTabIndex) ב-'מפרשים מתחת' היה גורם
+        // לסגירת החלונית בכל מעבר בין הלשוניות.
+        if (oldWidget.showSplitView &&
+            !widget.showSplitView &&
+            _paneOpen) {
           _paneOpen = false;
         }
       });

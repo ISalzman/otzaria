@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
@@ -93,6 +93,18 @@ class AppWindowListener extends WindowListener {
       _armForceExitWatchdog,
       timeout: const Duration(seconds: 1),
     );
+
+    // סוגרים את כל ה-HTTP clients המתמשכים לפני כל ניקוי אחר. כל socket
+    // פתוח מחזיק handle של kernel + state של TLS; ב-Windows admin install
+    // + ריצה לא-elevated, ניקוי ה-I/O ע"י הקרנל ביציאה לוקח מספר שניות
+    // (Defender real-time scan + מדיניות אמון נמוך). סגירה מקדימה משחררת
+    // את ה-resources בזמן שה-UI thread עוד פעיל, ומונעת "Not Responding".
+    await _runBestEffortShutdownStep(
+      'closeHttpClients',
+      HttpClientRegistry.closeAll,
+      timeout: const Duration(seconds: 1),
+    );
+
     await _runBestEffortShutdownStep(
       'prepareForAppShutdown',
       PluginRuntimeDispatcher.instance.prepareForAppShutdown,
@@ -124,16 +136,22 @@ class AppWindowListener extends WindowListener {
       if (kDebugMode) print('Flush failed at exit: $e');
     }
 
-    // Step 3: Storage close, error reporting, and window destruction.
+    // Step 3: Error reporting and window destruction.
+    //
+    // הוסרו במכוון:
+    //   - `WindowPersistence.saveNow()` — `Settings.setValue` כותב ל-Hive
+    //     `app_preferences`; הקריאה תוקעת את ה-isolate ב-admin install
+    //     (`Program Files\אוצריא\`) כי Defender real-time scan חוסם את
+    //     ה-CloseHandle של הקובץ. מצב החלון נשמר רציף ב-`scheduleSave`
+    //     (debounce 400ms על כל move/resize/maximize), אז ההלך הסופי
+    //     היה belt-and-suspenders מיותר.
+    //   - `await Hive.close()` — סגירת ה-handles של 7 קבצי `.hive` ב-
+    //     `%APPDATA%\otzaria\` נחסמת באותה צורה. כל `box.put()` כבר כותב
+    //     מיד דרך FFI ל-OS file buffer; ה-OS שוטף buffers בעת
+    //     `ExitProcess`/`TerminateProcess` כשהוא סוגר את ה-handles.
+    //     hive_ce שורד dirty shutdown מעיצוב (checksum על כל record).
+    //     `PreCloseRegistry.runAll()` ב-step2 כבר flushed את ההיסטוריה.
     try {
-      // שמירת מצב החלון חייבת להתבצע לפני Hive.close() כי Settings כותב ל-Hive
-      if (!kIsWeb &&
-          (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-        await WindowPersistence.saveNow();
-      }
-
-      await Hive.close();
-
       if (flushFailure != null) {
         // Report BEFORE Sentry.close() so the event can still be sent.
         try {

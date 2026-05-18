@@ -20,6 +20,7 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DefaultDirName={code:GetDefaultInstallDir}
 DefaultGroupName={#MyAppName}
@@ -27,12 +28,19 @@ DisableProgramGroupPage=yes
 OutputDir=.
 OutputBaseFilename=otzaria-{#MyAppVersion}-windows-full
 SetupIconFile=white_sketch128x128.ico
+; תמונת האשף בעמודי "ברוכים הבאים" ו"סיום" (אנכית, 164x314 + רזולוציות @2x/@3x ל-HiDPI)
+WizardImageFile=wizard_large.bmp,wizard_large@2x.bmp,wizard_large@3x.bmp
+; תמונה קטנה בפינת כל עמוד אחר (55x58 + רזולוציות גבוהות)
+WizardSmallImageFile=wizard_small.bmp,wizard_small@2x.bmp,wizard_small@3x.bmp
 Compression=lzma
 SolidCompression=yes
 ; Disable compression for DLL files to prevent corruption
 CompressionThreads=1
 WizardStyle=modern
 DisableDirPage=no
+; ChangesEnvironment=yes נדרש כדי שעדכון ל-PATH (במשימת addtopath) ייכנס
+; לתוקף מיד עבור תהליכים חדשים ללא צורך ב-logoff.
+ChangesEnvironment=yes
 
 [InstallDelete]
 ; מחיקת ספריית נתונים ישנה לפני פריסת מסד הנתונים החדש
@@ -48,11 +56,26 @@ Root: HKA; Subkey: "Software\Classes\otzaria"; ValueType: string; ValueName: "";
 Root: HKA; Subkey: "Software\Classes\otzaria"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\otzaria\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName}"; Flags: uninsdeletekeyifempty
 Root: HKA; Subkey: "Software\Classes\otzaria\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekeyifempty
+; הוספת {app} ל-PATH של המשתמש כדי שניתן יהיה להריץ ‎`otzaria pack-plugin`‎
+; ישירות מהטרמינל. ה-Check מונע כפילויות; ההסרה ב-CurUninstallStepChanged.
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Flags: preservestringtype; Check: NeedsAddPath(ExpandConstant('{app}')); Tasks: addtopath
 
 [Languages]
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Code]
+
+const
+  // הגרסה הראשית המינימלית של Edge WebView2 הנדרשת. v143 ומטה ידועים כקורסים
+  // (native access violation ב-MSVCP140) על Windows 10 build < 19041 בשילוב
+  // עם flutter_inappwebview_windows. אם המשתמש על גרסה ישנה — נבקש עדכון
+  // דרך MicrosoftEdgeWebview2Setup.exe (bootstrapper שמוריד את הגרסה החדשה).
+  MIN_WEBVIEW2_MAJOR = 144;
+
+  // קבועי פריסה לדף "תכונות עיקריות" - Inno Setup לא תומך ב-const מקומי בתוך פרוצדורה.
+  FEATURES_GAP_X = 14;
+  FEATURES_GAP_Y = 8;
+  FEATURES_LABEL_H = 18;
 
 var
   CompPage: TWizardPage;
@@ -64,6 +87,8 @@ var
   BooksPathEdit: TEdit;
   BooksPathBrowseBtn: TButton;
   SelectedBooksPath: String;
+
+  FeaturesPage: TWizardPage;
 
 function TryGetInstallDirFromRegistry(RootKey: Integer; const SubKey: String; var InstallDir: String): Boolean;
 begin
@@ -178,9 +203,52 @@ begin
   Result := GetVCVersion = '';
 end;
 
+// מחלץ את המספר הראשי מתוך version string בפורמט "143.0.3650.139".
+// מחזיר 0 אם הפענוח נכשל (חוסר נתון = נתפס כצריך התקנה).
+// הערה: ב-Inno Setup Pascal Script אין `Val()` של Object Pascal —
+// משתמשים ב-`StrToIntDef` שמחזיר ברירת מחדל בכישלון פענוח.
+function ParseMajorVersion(const Version: String): Integer;
+var
+  DotPos: Integer;
+  MajorStr: String;
+begin
+  Result := 0;
+  if Version = '' then exit;
+  DotPos := Pos('.', Version);
+  if DotPos > 1 then
+    MajorStr := Copy(Version, 1, DotPos - 1)
+  else
+    MajorStr := Version;
+  Result := StrToIntDef(MajorStr, 0);
+end;
+
+// מצב WebView2 — מאפשר הבחנה בין "חסר", "ישן" ו"עדכני".
+//   0 = לא מותקן
+//   1 = מותקן אבל גרסה ישנה מ-MIN_WEBVIEW2_MAJOR (קורס בעבודה עם תוספים)
+//   2 = מותקן בגרסה תואמת
+function GetWebView2State: Integer;
+var
+  Version: String;
+  Major: Integer;
+begin
+  Version := GetWebView2Version;
+  if Version = '' then
+  begin
+    Result := 0;
+    exit;
+  end;
+  Major := ParseMajorVersion(Version);
+  if Major >= MIN_WEBVIEW2_MAJOR then
+    Result := 2
+  else
+    Result := 1;
+end;
+
 function WebView2NeedsInstall: Boolean;
 begin
-  Result := GetWebView2Version = '';
+  // צריך התקנה גם כשחסר וגם כשגרסה ישנה — ה-bootstrapper של Microsoft
+  // יעדכן את הגרסה הקיימת ולא יתקין על גביה גרסה ישנה יותר.
+  Result := GetWebView2State <> 2;
 end;
 
 function InitializeSetup(): Boolean;
@@ -291,7 +359,9 @@ begin
   WV2Check.Height  := ScaleY(20);
   WV2Check.Caption := 'Microsoft WebView2 Runtime';
 
-  // WebView2 אינו חובה — משמש רק למערכת הפלאגינים (לא לקריאה/חיפוש/סימניות)
+  // WebView2 אינו חובה — משמש רק למערכת הפלאגינים (לא לקריאה/חיפוש/סימניות).
+  // גרסה < MIN_WEBVIEW2_MAJOR ידועה כקורסת על Windows 10 ישן עם תוספים,
+  // ולכן מוצעת לעדכון בדיוק כמו מצב שאינה מותקנת.
   if WV2Version = '' then
   begin
     WV2Status := '⚠ חסר — מומלץ להתקין. ללא רכיב זה מערכת הפלאגינים לא תפעל,' +
@@ -300,12 +370,21 @@ begin
     WV2Check.Checked := True;
     WV2Check.Enabled := True;  // אופציונלי — ניתן לבטל
   end
+  else if ParseMajorVersion(WV2Version) < MIN_WEBVIEW2_MAJOR then
+  begin
+    WV2Status := '⚠ גרסה ישנה (' + WV2Version + ') — מומלץ לעדכן.' + #13#10 +
+                 'גרסה זו עלולה לקרוס בעת טעינת תוספים. העדכון יעלה לגרסה ' +
+                 IntToStr(MIN_WEBVIEW2_MAJOR) + ' ומעלה.';
+    WV2Color  := $007FFF;
+    WV2Check.Checked := True;
+    WV2Check.Enabled := True;
+  end
   else
   begin
     WV2Status := '✓ קיים (גרסה: ' + WV2Version + ') — לא נדרשת פעולה.';
     WV2Color  := $006400;
     WV2Check.Checked := False;
-    WV2Check.Enabled := False;  // קיים — נעול כדי למנוע התקנה מיותרת
+    WV2Check.Enabled := False;  // עדכני — נעול כדי למנוע התקנה מיותרת
   end;
 
   WV2Label := TLabel.Create(CompPage);
@@ -317,7 +396,7 @@ begin
   WV2Label.WordWrap := True;
   WV2Label.Caption  := WV2Status;
   WV2Label.Font.Color := WV2Color;
-  WV2Label.Height   := ScaleY(34);
+  WV2Label.Height   := ScaleY(48);  // 3 שורות — תומך גם בהודעת "ישן" הארוכה
 end;
 
 // ─── דף בחירת תיקיית הספרים ─────────────────────────────────────────────────
@@ -539,10 +618,65 @@ begin
   Result := InstallWV2;
 end;
 
+procedure CreateFeaturesPage();
+var
+  i, col, row: Integer;
+  thumbW, thumbH, cellH, x, y, totalH, startY: Integer;
+  img: TBitmapImage;
+  lbl: TNewStaticText;
+  files: array[0..3] of String;
+  captions: array[0..3] of String;
+begin
+  FeaturesPage := CreateCustomPage(wpWelcome,
+    'תכונות עיקריות באוצריא',
+    'הצצה למה שמחכה לכם בתוכנה');
+
+  files[0] := 'feature1.bmp';  captions[0] := 'ספר עם מפרשים';
+  files[1] := 'feature2.bmp';  captions[1] := 'לוח שנה';
+  files[2] := 'feature3.bmp';  captions[2] := 'ספרי PDF';
+  files[3] := 'feature4.bmp';  captions[3] := 'חיפוש מתקדם';
+
+  // יחס תמונה 210/400. גודל דינמי לפי שטח העמוד.
+  thumbW := (FeaturesPage.SurfaceWidth - FEATURES_GAP_X) div 2;
+  thumbH := (thumbW * 210) div 400;
+  cellH := thumbH + FEATURES_LABEL_H;
+  totalH := 2 * cellH + FEATURES_GAP_Y;
+  startY := (FeaturesPage.SurfaceHeight - totalH) div 2;
+  if startY < 0 then startY := 0;
+
+  for i := 0 to 3 do
+  begin
+    col := i mod 2;
+    row := i div 2;
+    x := col * (thumbW + FEATURES_GAP_X);
+    y := startY + row * (cellH + FEATURES_GAP_Y);
+
+    ExtractTemporaryFile(files[i]);
+    img := TBitmapImage.Create(FeaturesPage);
+    img.Parent := FeaturesPage.Surface;
+    img.Stretch := True;
+    img.Left := x;
+    img.Top := y;
+    img.Width := thumbW;
+    img.Height := thumbH;
+    img.Bitmap.LoadFromFile(ExpandConstant('{tmp}\' + files[i]));
+
+    lbl := TNewStaticText.Create(FeaturesPage);
+    lbl.Parent := FeaturesPage.Surface;
+    lbl.Left := x;
+    lbl.Top := y + thumbH + 2;
+    lbl.Width := thumbW;
+    lbl.Height := FEATURES_LABEL_H;
+    lbl.Alignment := taCenter;
+    lbl.Caption := captions[i];
+  end;
+end;
+
 procedure InitializeWizard;
 begin
   InstallVC  := VCRedistNeedsInstall;
   InstallWV2 := WebView2NeedsInstall;
+  CreateFeaturesPage;
   CreateComponentsPage;
   CreateBooksPage;
 end;
@@ -642,6 +776,77 @@ begin
   // But maybe it's cleaner to handle this in a separate procedure if needed.
 end;
 
+// בודק האם הנתיב NewPath כבר נמצא ב-PATH של המשתמש. מחזיר True אם
+// יש להוסיף (לא קיים). מטפל גם בגרסה עם backslash סופי. case-insensitive
+// כי Windows מתייחס ל-PATH ככזה.
+function NeedsAddPath(NewPath: String): Boolean;
+var
+  CurrentPath: String;
+  Needle1, Needle2, Haystack: String;
+begin
+  Result := True;
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+    exit;
+
+  Haystack  := ';' + Lowercase(CurrentPath) + ';';
+  Needle1   := ';' + Lowercase(NewPath) + ';';
+  Needle2   := ';' + Lowercase(NewPath) + '\;';
+  if (Pos(Needle1, Haystack) > 0) or (Pos(Needle2, Haystack) > 0) then
+    Result := False;
+end;
+
+// מסיר את PathToRemove מ-PATH של המשתמש (ב-uninstall). מטפל בשני
+// הוריאנטים — עם וללא backslash סופי — **בנפרד**, כדי שכפילות
+// היסטורית (גם 'C:\app' וגם 'C:\app\') תוסר במלואה. גם מסיר כל
+// מופע חוזר.
+procedure RemoveAppFromUserPath(PathToRemove: String);
+var
+  CurrentPath, LowerCurrent: String;
+  Needles: array[0..1] of String;
+  LowerNeedle: String;
+  P, i: Integer;
+  Changed: Boolean;
+begin
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+    exit;
+
+  Changed := False;
+  CurrentPath := ';' + CurrentPath + ';';
+
+  Needles[0] := ';' + Lowercase(PathToRemove) + ';';
+  Needles[1] := ';' + Lowercase(PathToRemove) + '\;';
+
+  for i := 0 to 1 do
+  begin
+    LowerNeedle := Needles[i];
+    LowerCurrent := Lowercase(CurrentPath);
+    P := Pos(LowerNeedle, LowerCurrent);
+    while P > 0 do
+    begin
+      Delete(CurrentPath, P, Length(LowerNeedle) - 1);
+      LowerCurrent := Lowercase(CurrentPath);
+      Changed := True;
+      P := Pos(LowerNeedle, LowerCurrent);
+    end;
+  end;
+
+  if not Changed then
+    exit;
+
+  if (Length(CurrentPath) > 0) and (CurrentPath[1] = ';') then
+    Delete(CurrentPath, 1, 1);
+  if (Length(CurrentPath) > 0) and (CurrentPath[Length(CurrentPath)] = ';') then
+    Delete(CurrentPath, Length(CurrentPath), 1);
+
+  RegWriteExpandStringValue(HKCU, 'Environment', 'Path', CurrentPath);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+    RemoveAppFromUserPath(ExpandConstant('{app}'));
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ZstdPath, SevenZipPath: String;
@@ -726,10 +931,15 @@ Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Fl
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+; קיצור דרך ישיר ללוח השנה — מעביר ל-otzaria.exe deep link כפרמטר; אוצריא מזהה
+; ארגומנט שמתחיל ב-"otzaria:" וממסרת לראוטר הפנימי (ראה docs/deep_links.md לזרימה המלאה).
+Name: "{autodesktop}\לוח שנה - {#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "otzaria://open/calendar"; Tasks: calendaricon
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "calendaricon"; Description: "צור קיצור דרך ישירות ללוח שנה"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "resetsettings"; Description: "איפוס הגדרות משתמש והסרת התקנות קודמות (מומלץ למעדכנים מגרסה < 0.9.80, שים לב: זה ימחק הערות אישיות!)"; Flags: unchecked
+Name: "addtopath"; Description: "הוסף את אוצריא ל-PATH של המשתמש (יאפשר להריץ ‎`otzaria pack-plugin`‎ ישירות מהטרמינל)"; Flags: unchecked
 
 [Files]
 ; Copy DLL files without compression to prevent corruption
@@ -752,6 +962,12 @@ Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check:
 ; MicrosoftEdgeWebview2Setup.exe — bootstrapper קטן (~2MB) שמוריד ומתקין WebView2
 ; נדרש על ידי flutter_inappwebview_windows; ב-Win10/11 עם Edge עדכני — כבר קיים
 Source: "MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallWV2
+
+; קבצי הצגה לדף "תכונות עיקריות" - dontcopy = נארזים בתוך המתקין אבל לא מותקנים אצל המשתמש
+Source: "feature1.bmp"; Flags: dontcopy
+Source: "feature2.bmp"; Flags: dontcopy
+Source: "feature3.bmp"; Flags: dontcopy
+Source: "feature4.bmp"; Flags: dontcopy
 
 [INI]
 Filename: "{app}\system_install.marker"; Section: "Install"; Key: "Mode"; String: "Admin"; Check: IsAdminInstallMode

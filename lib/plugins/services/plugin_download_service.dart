@@ -1,13 +1,15 @@
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:otzaria/core/http_client_registry.dart';
 import 'package:path/path.dart' as p;
 
 class PluginDownloadService {
   final http.Client _client;
 
-  PluginDownloadService({http.Client? client})
-      : _client = client ?? http.Client();
+  PluginDownloadService({http.Client? client}) : _client = client ?? http.Client() {
+    HttpClientRegistry.register(_client.close);
+  }
 
   Future<String> downloadPluginArchive(Uri downloadUri) async {
     final request = http.Request('GET', downloadUri);

@@ -3,8 +3,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
+class _RecordingItemScrollController extends ItemScrollController {
+  final List<int> jumps = <int>[];
+
+  @override
+  void jumpTo({required int index, double alignment = 0}) {
+    jumps.add(index);
+  }
+}
+
 void main() {
-  testWidgets('פס הגלילה שומר רצועה נפרדת מהתוכן', (tester) async {
+  testWidgets('פס הגלילה שומר רצועה נפרדת מהתוכן כשצריך לגלול', (tester) async {
     final listener = ItemPositionsListener.create();
     final controller = ItemScrollController();
     const contentKey = Key('scroll-content');
@@ -22,7 +31,157 @@ void main() {
       ),
     );
 
+    // מדמה תוכן שדורש גלילה — רק 2 פריטים מתוך 10 גלויים.
+    (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+        const [
+      ItemPosition(index: 0, itemLeadingEdge: 0, itemTrailingEdge: 0.5),
+      ItemPosition(index: 1, itemLeadingEdge: 0.5, itemTrailingEdge: 1.0),
+    ];
+    await tester.pump();
+
     expect(tester.getTopLeft(find.byKey(contentKey)).dx, 12.0);
+  });
+
+  testWidgets('פס הגלילה מוסתר כשכל התוכן נראה במסך', (tester) async {
+    final listener = ItemPositionsListener.create();
+    final controller = ItemScrollController();
+    const contentKey = Key('scroll-content');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 2,
+            child: Container(key: contentKey),
+          ),
+        ),
+      ),
+    );
+
+    // כל הפריטים גלויים בתוך המסך — אין מה לגלול, ולכן ה-12px צריכים להיעלם.
+    (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+        const [
+      ItemPosition(index: 0, itemLeadingEdge: 0, itemTrailingEdge: 0.4),
+      ItemPosition(index: 1, itemLeadingEdge: 0.4, itemTrailingEdge: 0.8),
+    ];
+    await tester.pump();
+
+    expect(tester.getTopLeft(find.byKey(contentKey)).dx, 0.0);
+  });
+
+  testWidgets(
+      'הקלקה על תחתית המסילה מגיעה לסוף הספר גם כשמעט פריטים גלויים '
+      '(מפרש פתוח מתחת)', (tester) async {
+    // רגרסיה: כשמפרש פתוח מתחת ושני סגמנטים גלויים מתוך 100, חישוב היעד
+    // מבוסס על thumb-height שמוקצב מינימום 0.05. לפני התיקון, גרירה לתחתית
+    // עצרה ב-targetIndex = 95 (0.95 * 100) במקום maxScrollableIndex = 98,
+    // ולכן הסגמנטים האחרונים היו בלתי-נגישים דרך הסקרולבר.
+    final listener = ItemPositionsListener.create();
+    final controller = _RecordingItemScrollController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 100,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+        const [
+      ItemPosition(index: 0, itemLeadingEdge: 0, itemTrailingEdge: 0.5),
+      ItemPosition(index: 1, itemLeadingEdge: 0.5, itemTrailingEdge: 1.0),
+    ];
+    await tester.pump();
+
+    final track = find.byType(GestureDetector);
+    final trackBottomRight = tester.getBottomRight(track);
+    final trackTopLeft = tester.getTopLeft(track);
+    final tapPosition = Offset(
+      (trackTopLeft.dx + trackBottomRight.dx) / 2,
+      trackBottomRight.dy - 1,
+    );
+
+    await tester.tapAt(tapPosition);
+    await tester.pump();
+
+    expect(controller.jumps, isNotEmpty);
+    // maxScrollableIndex = 100 - 2 = 98. שולחים tolerance של פריט אחד
+    // למקרה של עיגול בגלל ש-thumb-height clamped (0.05 * 100 = 5 לעומת 2
+    // הפריטים שבאמת גלויים).
+    expect(controller.jumps.last, inInclusiveRange(97, 99));
+  });
+
+  testWidgets(
+      'עדכון maxScrollableIndex אחרי שינוי positions: '
+      'הקלקה שנייה על אותו מיקום מגיעה ליעד מעודכן', (tester) async {
+    // רגרסיה לחלק השני של התיקון: כשהמשתמש מתחיל גרירה כשיש 10 פריטים
+    // גלויים (maxScrollableIndex=90) וקופץ לאזור עם רק 2 גלויים
+    // (maxScrollableIndex=98), _maxScrollableIndex חייב להתעדכן כדי
+    // שגרירה לתחתית באמת תגיע לסוף. הטסט בודק את אותו עיקרון דרך
+    // שתי הקלקות עוקבות עם positions שונות בין הקלקה להקלקה.
+    final listener = ItemPositionsListener.create();
+    final positions =
+        listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>;
+    final controller = _RecordingItemScrollController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 100,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    positions.value = List.generate(
+      10,
+      (i) => ItemPosition(
+        index: i,
+        itemLeadingEdge: i * 0.1,
+        itemTrailingEdge: (i + 1) * 0.1,
+      ),
+    );
+    await tester.pump();
+
+    final track = find.byType(GestureDetector);
+    final trackBottomRight = tester.getBottomRight(track);
+    final trackTopLeft = tester.getTopLeft(track);
+    final tapBottom = Offset(
+      (trackTopLeft.dx + trackBottomRight.dx) / 2,
+      trackBottomRight.dy - 1,
+    );
+
+    // הקלקה ראשונה — עם 10 פריטים גלויים, maxScrollableIndex=90.
+    await tester.tapAt(tapBottom);
+    await tester.pump();
+    final firstJump = controller.jumps.last;
+    expect(firstJump, lessThanOrEqualTo(91));
+
+    // שינוי positions לאזור עם 2 גלויים בלבד (כמו אזור עם מפרש פתוח).
+    positions.value = const [
+      ItemPosition(index: 50, itemLeadingEdge: 0, itemTrailingEdge: 0.5),
+      ItemPosition(index: 51, itemLeadingEdge: 0.5, itemTrailingEdge: 1.0),
+    ];
+    await tester.pump();
+
+    // הקלקה שנייה על אותו מיקום — maxScrollableIndex חייב להיות מעודכן
+    // ל-98, ולכן היעד צריך להיות גבוה משמעותית מ-90.
+    await tester.tapAt(tapBottom);
+    await tester.pump();
+
+    expect(controller.jumps.last, greaterThanOrEqualTo(97));
   });
 
   testWidgets('listener ישן לא מעדכן State אחרי החלפת widget ו-dispose',

@@ -68,8 +68,12 @@ void main() {
       expect(find.text('הלכות שבת'), findsNothing);
     });
 
-    testWidgets('additionalFilter שמחזיר false לכל הפריטים מציג הודעת "לא נמצא"',
-        (tester) async {
+    testWidgets(
+        'additionalFilter שמחזיר false לכל הפריטים מציג את הודעת המצב הריק '
+        '(לא "לא נמצא")', (tester) async {
+      // הסינון לא מטעמי חיפוש המשתמש, אלא בגלל שאין פריטים תואמים. לכן צריך
+      // להציג את emptyText (למשל "אין סימניות בספר זה") ולא את notFoundText
+      // שמיועד לחיפוש שלא הניב תוצאות.
       await tester.binding.setSurfaceSize(const Size(800, 600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -78,11 +82,36 @@ void main() {
       ));
       await tester.pump();
 
-      expect(find.text('לא נמצא'), findsOneWidget);
+      expect(find.text('ריק'), findsOneWidget);
+      expect(find.text('לא נמצא'), findsNothing);
       expect(find.text('שבת עד:'), findsNothing);
+      // ב-empty state אין שדה חיפוש או כפתור "נקה"
+      expect(find.byType(TextField), findsNothing);
+      expect(find.text('נקה'), findsNothing);
     });
 
-    testWidgets('searchKeyBuilder מאפשר חיפוש לפי workspaceName', (tester) async {
+    testWidgets(
+        'additionalFilter משאיר פריטים אבל חיפוש לא מניב תוצאות - מציג "לא נמצא"',
+        (tester) async {
+      // וידוא ש-notFoundText עדיין מופיע כשהמשתמש מקליד חיפוש שאינו תואם, גם
+      // בנוכחות additionalFilter.
+      await tester.binding.setSurfaceSize(const Size(800, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(buildWidget(
+        additionalFilter: (item) => item.workspaceName == 'גמרא',
+      ));
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField).first, 'אין-כזה-טקסט');
+      await tester.pump();
+
+      expect(find.text('לא נמצא'), findsOneWidget);
+      expect(find.text('ריק'), findsNothing);
+    });
+
+    testWidgets('searchKeyBuilder מאפשר חיפוש לפי workspaceName',
+        (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -117,7 +146,8 @@ void main() {
       expect(find.text('ברכות ב.'), findsNothing);
     });
 
-    testWidgets('additionalFilter ו-searchKeyBuilder פועלים יחדיו', (tester) async {
+    testWidgets('additionalFilter ו-searchKeyBuilder פועלים יחדיו',
+        (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -142,7 +172,8 @@ void main() {
       expect(find.text('הלכות שבת'), findsNothing);
     });
 
-    testWidgets('onItemTap מקבל את originalIndex הנכון גם כשאותו אובייקט מופיע פעמיים',
+    testWidgets(
+        'onItemTap מקבל את originalIndex הנכון גם כשאותו אובייקט מופיע פעמיים',
         (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 600));
       addTearDown(() => tester.binding.setSurfaceSize(null));

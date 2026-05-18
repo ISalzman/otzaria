@@ -28,6 +28,14 @@ class _ScrollablePositionedListScrollbarState
   double _thumbPosition = 0.0;
   double _thumbHeight = 0.1; // יחס גובה ברירת מחדל
   bool _isDragging = false;
+  // ברירת מחדל false כדי שלא נציג את ה-track בספרים קטנים שכל תוכנם נכנס במסך.
+  // יתעדכן ל-true ברגע שה-positions מראים שיש פריט מחוץ למסך.
+  bool _canScroll = false;
+  // האינדקס המקסימלי שאפשר לקפוץ אליו (itemCount - visibleItems) — נשמר כדי
+  // שמיפוי הגרירה לאינדקס יישאר עקבי גם כש-_thumbHeight מקובל למינימום
+  // 0.05. בלי זה, כשמפרש פתוח מתחת ומעט סגמנטים גלויים, הגרירה לתחתית לא
+  // הגיעה לסוף הספר.
+  int _maxScrollableIndex = 1;
 
   // להחלקת הקפיצות במיקום
   int _lastFirstIndex = 0;
@@ -58,21 +66,36 @@ class _ScrollablePositionedListScrollbarState
   }
 
   void _updateScrollPosition() {
-    if (!mounted || _isDragging) return;
+    if (!mounted) return;
 
     final positions = widget.itemPositionsListener.itemPositions.value;
     if (positions.isEmpty || widget.itemCount == 0) return;
 
-    // מציאת האינדקסים הראשונים והאחרונים הנראים
+    // מציאת האינדקסים הראשונים והאחרונים הנראים, יחד עם הקצוות שלהם —
+    // הקצוות נחוצים כדי להחליט אם באמת יש מה לגלול (ראה חישוב _canScroll
+    // בהמשך הפונקציה).
     int minIndex = positions.first.index;
     int maxIndex = positions.first.index;
+    double leadingAtMin = positions.first.itemLeadingEdge;
+    double trailingAtMax = positions.first.itemTrailingEdge;
 
     for (var position in positions) {
-      if (position.index < minIndex) minIndex = position.index;
-      if (position.index > maxIndex) maxIndex = position.index;
+      if (position.index < minIndex) {
+        minIndex = position.index;
+        leadingAtMin = position.itemLeadingEdge;
+      }
+      if (position.index > maxIndex) {
+        maxIndex = position.index;
+        trailingAtMax = position.itemTrailingEdge;
+      }
     }
 
-    _lastFirstIndex = minIndex;
+    // בזמן גרירה, _lastFirstIndex מנוהל בתוך _onDragUpdate על פי היעד שאליו
+    // קפצנו. אסור לדרוס אותו פה לפי הפוזיציה הנוכחית של הרשימה אחרת קפיצות
+    // הביניים יפסיקו כי "השינוי קטן מדי".
+    if (!_isDragging) {
+      _lastFirstIndex = minIndex;
+    }
 
     // חישוב גובה הפס ביחס לכמות הפריטים
     // מוסיפים 1 כדי למנוע חילוק ב-0
@@ -94,10 +117,38 @@ class _ScrollablePositionedListScrollbarState
     final newPosition =
         (minIndex / maxScrollableIndex).clamp(0.0, 1.0 - newHeight);
 
+    // כל התוכן נראה אם הפריט הראשון מתחיל בתוך המסך, האחרון מסתיים בתוכו,
+    // וכל הפריטים בטווח הזה מיוצגים — במצב כזה אין מה לגלול ואין טעם
+    // להציג את הפס.
+    final allVisible = minIndex == 0 &&
+        maxIndex == widget.itemCount - 1 &&
+        leadingAtMin >= 0 &&
+        trailingAtMax <= 1.0;
+
     setState(() {
-      _thumbHeight = newHeight;
-      _thumbPosition = newPosition;
+      _canScroll = !allVisible;
+      // _maxScrollableIndex חייב להתעדכן גם תוך כדי גרירה: כשהמשתמש גורר
+      // לתוך אזור עם פריטים גדולים יותר (לדוגמה — אזור שבו מפרש פתוח, או
+      // כותרות עם הרבה תוכן) מספר הפריטים הגלויים יורד והאינדקס המקסימלי
+      // שאליו אפשר לקפוץ עולה. בלי עדכון, שלב הגרירה הבא יחזיר אינדקס
+      // יעד מבוסס על ערך ישן ולא יגיע לסוף הספר.
+      _maxScrollableIndex = maxScrollableIndex;
+      if (!_isDragging) {
+        _thumbHeight = newHeight;
+        _thumbPosition = newPosition;
+      }
     });
+  }
+
+  // הופך את מיקום האגודל (0.0–(1.0 - _thumbHeight)) לאינדקס יעד בטווח
+  // [0, _maxScrollableIndex]. שימוש ב-_maxScrollableIndex ולא ב-itemCount
+  // מבטיח שגרירה לתחתית באמת מגיעה לסוף הספר גם כש-_thumbHeight מקובל
+  // למינימום (לדוגמה כשמפרש פתוח מתחת ומעט סגמנטים גלויים).
+  int _indexFromThumbPosition(double position) {
+    final maxPosition = 1.0 - _thumbHeight;
+    if (maxPosition <= 0) return 0;
+    final ratio = (position / maxPosition).clamp(0.0, 1.0);
+    return (ratio * _maxScrollableIndex).round();
   }
 
   void _onDragUpdate(double delta, double trackHeight) {
@@ -107,7 +158,7 @@ class _ScrollablePositionedListScrollbarState
       _thumbPosition = _thumbPosition.clamp(0.0, 1.0 - _thumbHeight);
     });
 
-    final int targetIndex = (_thumbPosition * widget.itemCount).round();
+    final int targetIndex = _indexFromThumbPosition(_thumbPosition);
 
     // אופטימיזציה: לא לקפוץ אם השינוי קטן מדי כדי למנוע ריצוד
     if ((targetIndex - _lastFirstIndex).abs() > widget.itemCount * 0.001) {
@@ -128,7 +179,7 @@ class _ScrollablePositionedListScrollbarState
   Widget build(BuildContext context) {
     return Row(
       children: [
-        if (widget.itemCount > 0)
+        if (widget.itemCount > 0 && _canScroll)
           SizedBox(
             width: _trackWidth,
             child: LayoutBuilder(
@@ -160,7 +211,7 @@ class _ScrollablePositionedListScrollbarState
                     });
 
                     final int targetIndex =
-                        (_thumbPosition * widget.itemCount).round();
+                        _indexFromThumbPosition(_thumbPosition);
                     widget.scrollController.jumpTo(index: targetIndex);
                   },
                   child: Container(
