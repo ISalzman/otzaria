@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/core/app_paths.dart';
 
@@ -11,6 +13,9 @@ import 'package:otzaria/core/app_paths.dart';
 /// הגדרת נתיב מפורש תחת APPDATA פותרת זאת.
 class WebViewEnvironmentHolder {
   static WebViewEnvironment? _environment;
+  static const MethodChannel _nativeShutdownChannel = MethodChannel(
+    'com.pichillilorenzo/flutter_inappwebview_manager',
+  );
 
   /// מחזיר את ה-WebViewEnvironment שנוצר באתחול, או null בפלטפורמות שאינן Windows.
   static WebViewEnvironment? get environment => _environment;
@@ -46,6 +51,35 @@ class WebViewEnvironmentHolder {
 
     try {
       await environment.dispose();
+    } catch (_) {}
+  }
+
+  /// Best-effort teardown for process exit on Windows.
+  static Future<void> shutdownForAppExit() async {
+    if (!Platform.isWindows) return;
+
+    final environment = _environment;
+    _environment = null;
+
+    if (environment != null) {
+      environment.onNewBrowserVersionAvailable = null;
+      environment.onBrowserProcessExited = null;
+      environment.onProcessInfosChanged = null;
+
+      try {
+        await environment.dispose();
+      } catch (_) {}
+    }
+
+    await Future<void>.delayed(Duration.zero);
+
+    try {
+      if (kDebugMode) {
+        debugPrint(
+          'WebViewEnvironmentHolder: requesting native shutdown preparation',
+        );
+      }
+      await _nativeShutdownChannel.invokeMethod('prepareForEngineShutdown');
     } catch (_) {}
   }
 }
