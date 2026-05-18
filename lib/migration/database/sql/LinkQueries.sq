@@ -36,6 +36,49 @@ AND ct.name IN ('COMMENTARY', 'TARGUM')
 GROUP BY l.targetBookId, b.title, a.name
 ORDER BY b.orderIndex, b.title;
 
+selectCommentatorsBySourceLine:
+SELECT DISTINCT l.targetBookId, b.title AS targetBookTitle, a.name AS author, COUNT(*) AS linkCount
+FROM link l
+JOIN connection_type ct ON l.connectionTypeId = ct.id
+JOIN book b ON l.targetBookId = b.id
+LEFT JOIN book_author ba ON b.id = ba.bookId
+LEFT JOIN author a ON ba.authorId = a.id
+WHERE l.sourceLineId = ?
+AND ct.name IN ('COMMENTARY', 'TARGUM')
+GROUP BY l.targetBookId, b.title, a.name
+ORDER BY b.orderIndex, b.title;
+
+-- מאתר את השורה ה-lineIndex (ביחס לספר המפרש) שמתאימה לקישור מ-sourceLineId
+-- אל ספר מפרש לפי שם. משמש לפתיחת ספר מפרש מתפריט FindRef ישירות במיקום
+-- המקביל ל-segment המקור.
+selectCommentatorTargetLineIndex:
+SELECT ln.lineIndex
+FROM link l
+JOIN book b ON l.targetBookId = b.id
+JOIN line ln ON l.targetLineId = ln.id
+JOIN connection_type ct ON l.connectionTypeId = ct.id
+WHERE l.sourceLineId = ?
+AND b.title = ?
+AND ct.name IN ('COMMENTARY', 'TARGUM')
+ORDER BY ln.lineIndex ASC
+LIMIT 1;
+
+-- Fallback: כאשר ה-sourceLineId אינו מאוכלס (tocEntry.lineId היה NULL),
+-- נאתר את ה-line.id דרך bookId + lineIndex של המקור, ואז את ה-link.
+selectCommentatorTargetLineIndexByBookLine:
+SELECT ln_t.lineIndex
+FROM line ln_s
+JOIN link l ON l.sourceLineId = ln_s.id
+JOIN book b ON l.targetBookId = b.id
+JOIN line ln_t ON l.targetLineId = ln_t.id
+JOIN connection_type ct ON l.connectionTypeId = ct.id
+WHERE ln_s.bookId = ?
+AND ln_s.lineIndex = ?
+AND b.title = ?
+AND ct.name IN ('COMMENTARY', 'TARGUM')
+ORDER BY ln_t.lineIndex ASC
+LIMIT 1;
+
 insert:
 INSERT INTO link (sourceBookId, targetBookId, sourceLineId, targetLineId, connectionTypeId)
 VALUES (?, ?, ?, ?, ?);

@@ -27,6 +27,11 @@ class _FindRefDialogState extends State<FindRefDialog> {
   int _selectedIndex = 0;
   bool _includePersonalBooks = false;
   final Map<int, GlobalKey> _itemKeys = {};
+  final Map<int, GlobalKey> _commentatorsButtonKeys = {};
+  // מפתח = "bookId:sourceLineId". value=null → טעינה בתהליך.
+  // value=[] → אין מפרשים זמינים (לא יוצג כפתור).
+  // value=[...] → המפרשים שיוצגו ב-popup.
+  final Map<String, List<String>?> _commentatorsByRef = {};
   FocusRestorer? _focusRestorer;
   Timer? _searchDebounce;
 
@@ -71,6 +76,39 @@ class _FindRefDialogState extends State<FindRefDialog> {
     return _itemKeys[index]!;
   }
 
+  GlobalKey _getCommentatorsButtonKey(int index) {
+    if (!_commentatorsButtonKeys.containsKey(index)) {
+      _commentatorsButtonKeys[index] = GlobalKey();
+    }
+    return _commentatorsButtonKeys[index]!;
+  }
+
+  String _commentatorsKey(DbReferenceResult ref) =>
+      '${ref.bookId}:${ref.sourceLineId}';
+
+  /// טוען את רשימת המפרשים ל-[ref] ברקע אם עוד לא נטענה.
+  /// תוצאות נשמרות ב-[_commentatorsByRef]; setState יגרום ל-redraw של ה-row.
+  void _ensureCommentatorsLoaded(DbReferenceResult ref) {
+    final key = _commentatorsKey(ref);
+    if (_commentatorsByRef.containsKey(key)) return; // נטען / בתהליך טעינה
+    _commentatorsByRef[key] = null; // sentinel: בתהליך
+    final repository = context.read<FindRefBloc>().findRefRepository;
+    () async {
+      try {
+        final list = await repository.getCommentatorsForResult(ref);
+        if (!mounted) return;
+        setState(() {
+          _commentatorsByRef[key] = list;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _commentatorsByRef[key] = const [];
+        });
+      }
+    }();
+  }
+
   void _scrollToSelected() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final key = _getKeyForIndex(_selectedIndex);
@@ -86,7 +124,16 @@ class _FindRefDialogState extends State<FindRefDialog> {
     });
   }
 
-  Future<void> _openRef(DbReferenceResult ref) async {
+  /// פותח את התוצאה.
+  ///
+  /// [initialCommentators] סמנטיקה:
+  ///   null  → ברירת מחדל: history fallback (התנהגות onTap הרגילה).
+  ///   []    → bypass מפורש: ללא מפרשים, גם אם בעבר היו (= "פתח ללא מפרש").
+  ///   [...] → רשימה מפורשת (= "פתח עם רש"י").
+  Future<void> _openRef(
+    DbReferenceResult ref, {
+    List<String>? initialCommentators,
+  }) async {
     Book? book;
 
     if (ref.isPdf && ref.filePath.isNotEmpty) {
@@ -95,7 +142,13 @@ class _FindRefDialogState extends State<FindRefDialog> {
     } else {
       try {
         final library = await DataRepository.instance.library;
-        book = _findBookInLibrary(library, ref.title);
+        // ספרים מסוימים (תלמוד בבלי וכו') מופיעים ב-library כ-PdfBook גם כשה-DB
+        // מכיר אותם כ-txt. אם המשתמש ביקש מפרש מסוים — חייבים TextBookTab,
+        // כי PdfBookTab אינו מקבל commentators כלל.
+        final needsTextBook =
+            initialCommentators != null && initialCommentators.isNotEmpty;
+        book = _findBookInLibrary(library, ref.title,
+            preferTextBook: needsTextBook);
       } catch (e) {
         debugPrint('Error searching library: $e');
       }
@@ -105,15 +158,112 @@ class _FindRefDialogState extends State<FindRefDialog> {
     if (!mounted) return;
     Navigator.of(context).pop();
     openBook(context, book, ref.segment.toInt(), '',
-        ignoreHistory: ref.isPdf, requiresStableLayout: ref.isPdf);
+        ignoreHistory: ref.isPdf,
+        requiresStableLayout: ref.isPdf,
+        initialCommentators: initialCommentators);
   }
 
-  Book? _findBookInLibrary(Category category, String title) {
+  /// פותח תפריט עם רשימת המפרשים הזמינים ל-[ref] (כבר preloaded).
+  /// בחירה פותחת את הספר עם המפרש שנבחר מיידית (single-select).
+  Future<void> _showCommentatorsMenu(
+    DbReferenceResult ref,
+    GlobalKey buttonKey,
+    List<String> commentators,
+  ) async {
+    if (commentators.isEmpty) return;
+
+    final buttonContext = buttonKey.currentContext;
+    if (buttonContext == null || !buttonContext.mounted) return;
+
+    final overlayBox =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final box = buttonContext.findRenderObject() as RenderBox;
+    final topLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+    final bottomRight = box.localToGlobal(
+        box.size.bottomRight(Offset.zero),
+        ancestor: overlayBox);
+
+    // אנו רוצים שה-popup ייפתח לכיוון שמאל פיזית: הקצה הימני של ה-popup
+    // יסיים בקצה השמאלי של ה-button (=topLeft.dx) וה-popup יתפשט שמאלה.
+    // ב-_PopupMenuRouteLayout, fork-1 נבחר כאשר position.left > position.right
+    // ואז `x = size.width - position.right - childSize.width`. לכן:
+    //   position.right = overlayWidth - topLeft.dx → popup.right == button.left
+    //   position.left  = overlayWidth (max possible) → ensures fork-1
+    final position = RelativeRect.fromLTRB(
+      overlayBox.size.width.toDouble(),
+      bottomRight.dy,
+      overlayBox.size.width - topLeft.dx,
+      overlayBox.size.height - bottomRight.dy,
+    );
+
+    final selected = await showMenu<String>(
+      context: context,
+      position: position,
+      constraints: const BoxConstraints(maxHeight: 400, minWidth: 220),
+      items: [
+        for (final c in commentators)
+          PopupMenuItem<String>(
+            value: c,
+            child: Text(
+              c,
+              textDirection: TextDirection.rtl,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+    );
+
+    if (selected == null || !mounted) return;
+    await _openCommentator(ref, selected);
+  }
+
+  /// פותח את ספר המפרש [commentatorTitle] כ-tab עצמאי, ממוקם בשורה המקבילה
+  /// לסגמנט המקור של [sourceRef] (דרך טבלת links).
+  Future<void> _openCommentator(
+      DbReferenceResult sourceRef, String commentatorTitle) async {
+    final repository = context.read<FindRefBloc>().findRefRepository;
+    final segment = await repository.resolveCommentatorSegment(
+            sourceRef, commentatorTitle) ??
+        0;
+
+    if (!mounted) return;
+
+    Book? book;
+    try {
+      final library = await DataRepository.instance.library;
+      book = _findBookInLibrary(library, commentatorTitle, preferTextBook: true);
+    } catch (e) {
+      debugPrint('Error searching library for commentator: $e');
+    }
+    book ??= TextBook(title: commentatorTitle);
+
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    openBook(context, book, segment, '');
+  }
+
+  Book? _findBookInLibrary(Category category, String title,
+      {bool preferTextBook = false}) {
+    // עוברים פעמיים אם preferTextBook: ראשונה — רק TextBook; שנייה — כל סוג.
+    // כך מקבלים TextBook אם קיים, ובלעדיו מקבלים PdfBook (או אחר).
+    for (final passOnlyText in preferTextBook ? [true, false] : [false]) {
+      final result =
+          _findBookInLibraryPass(category, title, onlyTextBook: passOnlyText);
+      if (result != null) return result;
+    }
+    return null;
+  }
+
+  Book? _findBookInLibraryPass(Category category, String title,
+      {required bool onlyTextBook}) {
     for (final b in category.books) {
-      if (b.title == title) return b;
+      if (b.title != title) continue;
+      if (onlyTextBook && b is! TextBook) continue;
+      return b;
     }
     for (final subCat in category.subCategories) {
-      final found = _findBookInLibrary(subCat, title);
+      final found =
+          _findBookInLibraryPass(subCat, title, onlyTextBook: onlyTextBook);
       if (found != null) return found;
     }
     return null;
@@ -231,8 +381,8 @@ class _FindRefDialogState extends State<FindRefDialog> {
                   'כלול ספרים אישיים',
                   textDirection: TextDirection.rtl,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
                 const SizedBox(width: 4),
                 Transform.scale(
@@ -242,15 +392,14 @@ class _FindRefDialogState extends State<FindRefDialog> {
                     value: _includePersonalBooks,
                     onChanged: (v) {
                       setState(() => _includePersonalBooks = v);
-                      final text =
-                          focusRepository.findRefSearchController.text;
+                      final text = focusRepository.findRefSearchController.text;
                       if (text.length >= 2) {
                         context.read<FindRefBloc>().add(
-                          SearchRefRequested(
-                            text,
-                            includePersonalBooks: v,
-                          ),
-                        );
+                              SearchRefRequested(
+                                text,
+                                includePersonalBooks: v,
+                              ),
+                            );
                       }
                     },
                   ),
@@ -281,7 +430,19 @@ class _FindRefDialogState extends State<FindRefDialog> {
                     return ListView.builder(
                       itemCount: state.refs.length,
                       itemBuilder: (context, index) {
+                        final ref = state.refs[index];
                         final isSelected = index == _selectedIndex;
+                        final eligible =
+                            !ref.isPdf && ref.bookId > 0 && !ref.isUserBook;
+                        // טעינה lazy בעת רינדור — ListView.builder יפעיל את
+                        // ה-itemBuilder רק עבור שורות נראות. ה-cache ב-repository
+                        // ימנע קריאות חוזרות.
+                        if (eligible) _ensureCommentatorsLoaded(ref);
+                        final cached =
+                            _commentatorsByRef[_commentatorsKey(ref)];
+                        final showButton =
+                            eligible && cached != null && cached.isNotEmpty;
+                        final menuButtonKey = _getCommentatorsButtonKey(index);
                         return Container(
                           key: _getKeyForIndex(index),
                           margin: const EdgeInsets.symmetric(
@@ -293,22 +454,24 @@ class _FindRefDialogState extends State<FindRefDialog> {
                             borderRadius: BorderRadius.circular(8.0),
                           ),
                           child: ListTile(
-                              leading: state.refs[index].isPdf
+                              hoverColor:
+                                  showButton ? Colors.transparent : null,
+                              leading: ref.isPdf
                                   ? const Icon(
                                       FluentIcons.document_pdf_24_regular)
                                   : null,
                               title: Text(
-                                state.refs[index].reference,
+                                ref.reference,
                                 style: TextStyle(
                                   fontWeight: isSelected
                                       ? FontWeight.w600
                                       : FontWeight.normal,
                                 ),
                               ),
-                              subtitle: state.refs[index].bookPath.isEmpty
+                              subtitle: ref.bookPath.isEmpty
                                   ? null
                                   : LibraryOverflowTooltipText(
-                                      text: state.refs[index].bookPath,
+                                      text: ref.bookPath,
                                       maxLines: 1,
                                       style: Theme.of(context)
                                           .textTheme
@@ -319,8 +482,18 @@ class _FindRefDialogState extends State<FindRefDialog> {
                                                 .onSurfaceVariant,
                                           ),
                                     ),
+                              trailing: showButton
+                                  ? IconButton(
+                                      key: menuButtonKey,
+                                      icon: const Icon(
+                                          FluentIcons.library_24_regular),
+                                      tooltip: 'הצג מפרשים זמינים',
+                                      onPressed: () => _showCommentatorsMenu(
+                                          ref, menuButtonKey, cached),
+                                    )
+                                  : null,
                               onTap: () {
-                                _openRef(state.refs[index]);
+                                _openRef(ref);
                               }),
                         );
                       },
