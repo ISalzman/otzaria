@@ -75,6 +75,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:otzaria/core/splash_screen.dart';
+import 'package:otzaria/plugins/services/plugin_packager_cli.dart';
 import 'package:otzaria/plugins/services/plugin_protocol_registration_service.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
@@ -243,6 +244,13 @@ bool _isIgnorableHardwareKeyboardAssertion(String errorString) {
 /// 4. Calls [initialize] to set up required services and configurations
 /// 5. Launches the main application widget
 void main(List<String> args) async {
+  // טיפול בפקודות CLI שאינן דורשות אתחול GUI (כגון אריזת תוסף).
+  // חייב לרוץ לפני SentryWidgetsFlutterBinding.ensureInitialized() כדי שלא
+  // ייפתח חלון Flutter ולא יתבצע אתחול מסד נתונים מיותר.
+  if (await _maybeRunCliCommand(args)) {
+    return;
+  }
+
   SentryWidgetsFlutterBinding.ensureInitialized();
   await _initializeDataRootForEarlyLogging();
   await _initializeLogMetadata();
@@ -592,6 +600,36 @@ String? _resolveLocalPluginPath(String arg) {
 String _buildLocalPluginInstallUri(String filePath) {
   final encoded = Uri.encodeQueryComponent(filePath);
   return 'otzaria://plugin/install-local?path=$encoded';
+}
+
+/// מזהה ארגומנטים של ממשק שורת פקודה (CLI). אם זוהתה פקודה — מריצה
+/// אותה ומחזירה `true` (האפליקציה צריכה לעצור מיד ולא להעלות GUI).
+///
+/// פקודות נתמכות:
+///   `otzaria.exe pack-plugin [path] [--force] [--output <file>]`
+///       אורז תיקיית תוסף לקובץ `.otzplugin`. אם `path` חסר — נעשה
+///       שימוש בתיקייה הנוכחית.
+///   `otzaria.exe pack-plugin --help` / `-h` — הצגת מסך עזרה.
+///
+/// הלוגיקה עצמה ב-[PluginPackagerCli.run] כדי לשתף בדיוק את אותו הקוד
+/// עם `tool/plugins/package_plugin.dart`.
+Future<bool> _maybeRunCliCommand(List<String> args) async {
+  if (args.isEmpty) return false;
+
+  final command = args.first.trim().toLowerCase();
+  // תמיכה גם ב-`pack-plugin`, ב-`--pack-plugin` וב-`/pack-plugin` (Windows style).
+  final normalized = command
+      .replaceFirst(RegExp(r'^(--|/)'), '')
+      .replaceAll('_', '-');
+
+  if (normalized == 'pack-plugin') {
+    final exitCode = await PluginPackagerCli.run(args.skip(1).toList());
+    await stdout.flush();
+    await stderr.flush();
+    exit(exitCode);
+  }
+
+  return false;
 }
 
 class AppBootstrap extends StatefulWidget {
