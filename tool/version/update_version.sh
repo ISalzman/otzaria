@@ -131,7 +131,10 @@ git add ".gitignore" "pubspec.yaml" "$VERSION_FILE" "$MAIN_DART" "$CHANGELOG"
 [[ -f "$ISS_FULL" ]]   && git add "$ISS_FULL"
 [[ -f "$ISS" ]]        && git add "$ISS"
 [[ -f "$ISS_SILENT" ]] && git add "$ISS_SILENT"
-[[ -f "$PBXPROJ" ]]    && git add "$PBXPROJ"
+# project.pbxproj is tracked but lives under a path matched by .gitignore (macos/*),
+# so plain `git add` prints a warning and exits 1 — killing the script under `set -e`.
+# -f forces the add for this already-tracked file.
+[[ -f "$PBXPROJ" ]]    && git add -f "$PBXPROJ"
 
 git commit -m "$NEW_VERSION"
 
