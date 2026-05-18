@@ -41,6 +41,32 @@ class IndexingRepository {
     return library.getAllBooks().isEmpty;
   }
 
+  @visibleForTesting
+  static bool areAllIndexableBooksIndexed(
+    Iterable<Book> books,
+    Iterable<String> booksDone,
+  ) {
+    final indexableBooks = books.where(isIndexableBook).toList();
+    if (indexableBooks.isEmpty) {
+      return false;
+    }
+
+    final indexedBookKeys = Set<String>.from(booksDone);
+    return indexableBooks.every(
+      (book) => indexedBookKeys.contains(catalogueOrderKey(book)),
+    );
+  }
+
+  @visibleForTesting
+  static bool shouldUseFastPath({
+    required Iterable<Book> books,
+    required Iterable<String> booksDone,
+    required bool requiresManualReindex,
+  }) {
+    return !requiresManualReindex &&
+        areAllIndexableBooksIndexed(books, booksDone);
+  }
+
   Future<bool> requiresManualReindex(Library library) async {
     if (shouldSkipManualReindexCheck(library)) {
       return false;
@@ -68,35 +94,47 @@ class IndexingRepository {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
   }) async {
-    _tantivyDataProvider.isIndexing.value = true;
-    final isolateService =
-        _isolateService ?? await IndexingIsolateService.create();
-    _activeIsolateService = isolateService;
-    final catalogueOrderSignature = buildCatalogueOrderSignature(library);
-    final catalogueOrderByBookKey = SearchCatalogueOrderHelper.buildKeyOrderMap(
-      library,
-      keyOf: (book) => catalogueOrderKey(book as Book),
-    );
-
     final allBooks = library.getAllBooks();
     final totalBooks = allBooks.length;
+    final catalogueOrderSignature = buildCatalogueOrderSignature(library);
+    final requiresManualReindex = await _tantivyDataProvider
+        .ensureIndexStateMatchesCatalogue(catalogueOrderSignature);
+
+    if (shouldUseFastPath(
+      books: allBooks,
+      booksDone: _tantivyDataProvider.booksDone,
+      requiresManualReindex: requiresManualReindex,
+    )) {
+      debugPrint(
+        '⚡ Fast path: כל הספרים האינדקסביליים כבר מאונדקסים ואין דרישת איפוס ידני - מדלג על האינדוקס',
+      );
+      return true;
+    }
+
+    if (requiresManualReindex) {
+      return false;
+    }
+
+    _tantivyDataProvider.isIndexing.value = true;
+    IndexingIsolateService? isolateService;
     bool cancelled = false;
     var didStartActualIndexing = false;
 
     try {
-      final requiresManualReindex = await _tantivyDataProvider
-          .ensureIndexStateMatchesCatalogue(catalogueOrderSignature);
-      if (requiresManualReindex) {
-        _tantivyDataProvider.isIndexing.value = false;
-        return false;
-      }
-
       if (shouldResetBeforeFullReindex(
         indexExistedBeforeInit: _tantivyDataProvider.indexExistedBeforeInit,
         booksDone: _tantivyDataProvider.booksDone,
       )) {
         await _resetExistingIndexBeforeFullReindex();
       }
+
+      isolateService = _isolateService ?? await IndexingIsolateService.create();
+      _activeIsolateService = isolateService;
+      final catalogueOrderByBookKey =
+          SearchCatalogueOrderHelper.buildKeyOrderMap(
+        library,
+        keyOf: (book) => catalogueOrderKey(book as Book),
+      );
 
       int processedBooks = 0;
       int actuallyIndexed = 0;
@@ -220,7 +258,8 @@ class IndexingRepository {
       }
     } finally {
       _activeIsolateService = null;
-      if (!identical(isolateService, _isolateService)) {
+      if (isolateService != null &&
+          !identical(isolateService, _isolateService)) {
         await isolateService.dispose();
       }
       _tantivyDataProvider.isIndexing.value = false;
