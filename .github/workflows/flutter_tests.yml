@@ -20,12 +20,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # שימוש ב-channel stable + cache, אחיד עם build-and-announce.yml
-      # (לא ננעל גרסה כדי שלא נצטרך לעדכן בשני מקומות).
+      # שימוש ב-channel stable + flutter-version קבוע, אחיד עם build-and-announce.yml.
+      # הגרסה ננעלת מפני שדרוגים אוטומטיים של pub/CI אחרי שחרור גרסת flutter יציבה חדשה.
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.41.9
           cache: true
 
       - name: Install dependencies
