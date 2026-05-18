@@ -39,6 +39,9 @@ DisableDirPage=yes
 DisableReadyPage=yes
 DisableFinishedPage=yes
 DisableWelcomePage=yes
+; ChangesEnvironment=yes נדרש כדי שעדכון ה-PATH (registration אוטומטית של
+; otzaria pack-plugin) ייכנס לתוקף מיד עבור תהליכים חדשים ללא logoff.
+ChangesEnvironment=yes
 
 [InstallDelete]
 ; ניקוי מסד הנתונים הישן של Isar שהוחלף על ידי hive_ce — מחיקה מכוונת בעת שדרוג.
@@ -57,6 +60,9 @@ Root: HKA; Subkey: "Software\Classes\otzaria"; ValueType: string; ValueName: "";
 Root: HKA; Subkey: "Software\Classes\otzaria"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\otzaria\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName}"; Flags: uninsdeletekeyifempty
 Root: HKA; Subkey: "Software\Classes\otzaria\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekeyifempty
+; הוספת {app} ל-PATH של המשתמש — אוטומטית במתקין השקט (אין tasks אופציונליים).
+; ה-Check מונע כפילויות בהתקנה חוזרת; ההסרה מהPATH ב-CurUninstallStepChanged.
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Flags: preservestringtype; Check: NeedsAddPath(ExpandConstant('{app}'))
 
 [Run]
 ; הפעלת התוכנה בסוף ההתקנה — גם במצב שקט (אין skipifsilent).
@@ -222,6 +228,77 @@ begin
     // (Result נשאר True). כל עמודי האשף מנוטרלים, אז המשתמש יראה
     // רק את חלון ההתקדמות עד לסיום — לא אידיאלי, אבל לא כשל שקט.
   end;
+end;
+
+// בודק האם הנתיב NewPath כבר נמצא ב-PATH של המשתמש. מחזיר True אם
+// יש להוסיף (לא קיים). מטפל גם בגרסה עם backslash סופי. case-insensitive
+// כי Windows מתייחס ל-PATH ככזה.
+function NeedsAddPath(NewPath: String): Boolean;
+var
+  CurrentPath: String;
+  Needle1, Needle2, Haystack: String;
+begin
+  Result := True;
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+    exit;
+
+  Haystack  := ';' + Lowercase(CurrentPath) + ';';
+  Needle1   := ';' + Lowercase(NewPath) + ';';
+  Needle2   := ';' + Lowercase(NewPath) + '\;';
+  if (Pos(Needle1, Haystack) > 0) or (Pos(Needle2, Haystack) > 0) then
+    Result := False;
+end;
+
+// מסיר את PathToRemove מ-PATH של המשתמש (ב-uninstall). מטפל בשני
+// הוריאנטים — עם וללא backslash סופי — **בנפרד**, כדי שכפילות
+// היסטורית (גם 'C:\app' וגם 'C:\app\') תוסר במלואה. גם מסיר כל
+// מופע חוזר.
+procedure RemoveAppFromUserPath(PathToRemove: String);
+var
+  CurrentPath, LowerCurrent: String;
+  Needles: array[0..1] of String;
+  LowerNeedle: String;
+  P, i: Integer;
+  Changed: Boolean;
+begin
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+    exit;
+
+  Changed := False;
+  CurrentPath := ';' + CurrentPath + ';';
+
+  Needles[0] := ';' + Lowercase(PathToRemove) + ';';
+  Needles[1] := ';' + Lowercase(PathToRemove) + '\;';
+
+  for i := 0 to 1 do
+  begin
+    LowerNeedle := Needles[i];
+    LowerCurrent := Lowercase(CurrentPath);
+    P := Pos(LowerNeedle, LowerCurrent);
+    while P > 0 do
+    begin
+      Delete(CurrentPath, P, Length(LowerNeedle) - 1);
+      LowerCurrent := Lowercase(CurrentPath);
+      Changed := True;
+      P := Pos(LowerNeedle, LowerCurrent);
+    end;
+  end;
+
+  if not Changed then
+    exit;
+
+  if (Length(CurrentPath) > 0) and (CurrentPath[1] = ';') then
+    Delete(CurrentPath, 1, 1);
+  if (Length(CurrentPath) > 0) and (CurrentPath[Length(CurrentPath)] = ';') then
+    Delete(CurrentPath, Length(CurrentPath), 1);
+
+  RegWriteExpandStringValue(HKCU, 'Environment', 'Path', CurrentPath);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+    RemoveAppFromUserPath(ExpandConstant('{app}'));
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
