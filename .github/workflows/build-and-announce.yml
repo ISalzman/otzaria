@@ -47,6 +47,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.41.9
           cache: true
 
       - name: Create Google Calendar Credentials
@@ -123,6 +124,12 @@ jobs:
 
       - name: Build Flutter Windows app
         shell: pwsh
+        env:
+          # מאלץ את MSBuild לקמפל קבצי C++ במקביל גם בתוך אותו פרויקט
+          # (ברירת המחדל מקבילה רק בין פרויקטים, וב-Flutter Windows יש רק אחד)
+          UseMultiToolTask: 'true'
+          EnforceProcessCountAcrossBuilds: 'true'
+          CMAKE_BUILD_PARALLEL_LEVEL: '4'
         run: |
           flutter build windows --release
 
@@ -396,6 +403,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.41.9
           cache: true
 
       - name: Create Google Calendar Credentials
@@ -440,11 +448,15 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y \
             build-essential ninja-build libgtk-3-dev libblkid1 liblzma5 \
-            clang cmake git pkg-config liblzma-dev rpm patchelf curl xz-utils zstd \
+            clang-15 lld-15 cmake git pkg-config liblzma-dev rpm patchelf curl xz-utils zstd \
             libcurl4-openssl-dev \
             libwpewebkit-1.0-dev \
             libwpebackend-fdo-1.0-dev \
             libwebkit2gtk-4.1-dev
+          # שדרוג clang ל-15 כדי שיכיר את הדגל -Wno-deprecated-literal-operator
+          # שמשתמשים בו ב-sentry-native (תלות של sentry_flutter).
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-15 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-15 100
           # Fallback אם מסיבה כלשהי cargo לא קיים (למשל כשל זמני ב-rustup)
           if ! command -v cargo >/dev/null 2>&1; then
             sudo apt-get install -y rustc cargo
@@ -474,6 +486,9 @@ jobs:
           dart run tool/generate_search_index.dart
 
       - name: Build Flutter Linux app (with retry)
+        env:
+          CC: clang-15
+          CXX: clang++-15
         run: |
           set -e
           tries=0
@@ -493,6 +508,9 @@ jobs:
       
       - name: Build and Patch Linux DEB package
         shell: bash
+        env:
+          CC: clang-15
+          CXX: clang++-15
         run: |
           set -e
 
@@ -535,6 +553,9 @@ jobs:
         
       - name: Build and Patch Linux RPM package
         shell: bash
+        env:
+          CC: clang-15
+          CXX: clang++-15
         run: |
           set -e
 
@@ -686,6 +707,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.41.9
           cache: true
 
       - name: Install Rust (stable)
@@ -936,6 +958,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.41.9
           cache: true
 
       - name: Create Google Calendar Credentials
@@ -1439,11 +1462,8 @@ jobs:
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (full history + tags)
+      - name: Checkout
         uses: actions/checkout@v4.2.2
-        with:
-          fetch-depth: 0   # חובה כדי לאפשר גישה לכל ההיסטוריה והתגים
-          fetch-tags: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -1453,53 +1473,13 @@ jobs:
       - name: Install dependencies for webhook script
         run: pip install bs4 requests pyluach yemot-api
 
-      - name: Build commit list since previous release
-        id: changelog
-        shell: bash
-        run: |
-          set -euo pipefail
-          CURRENT_TAG="${{ github.event.release.tag_name }}"
-          git fetch --tags --force
-          
-          # מצא את התג הקודם (הכי עדכני שהוא לא התג הנוכחי)
-          PREV_TAG=$(git for-each-ref --sort=-creatordate --format '%(refname:strip=2)' refs/tags | grep -v "^$CURRENT_TAG$" | head -n1 || true)
-
-          if [ -n "$PREV_TAG" ]; then
-            RANGE="$PREV_TAG..$CURRENT_TAG"
-            # צור רשימה של כותרות הcommits בטווח
-            COMMITS=$(git log --pretty=format:'- %s' "$RANGE" || true)
-          else
-            # אם אין תג קודם, קח רק את הcommit של התג הנוכחי
-            SHA=$(git rev-list -n 1 "$CURRENT_TAG")
-            COMMITS=$(git log --pretty=format:'- %s' "${SHA}^..${SHA}" || true)
-          fi
-
-          if [ -z "${COMMITS// /}" ]; then
-            COMMITS="(לא נמצאו כותרות commits חדשות להצגה)"
-          fi
-
-          # העבר את רשימת הcommits והתג הקודם לשלבים הבאים
-          {
-            echo "prev_tag=${PREV_TAG}"
-            echo "commits<<EOF"
-            echo "$COMMITS"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Run announcement script (Mitmachim + Yemot)
+      - name: Run announcement script (Forum + Yemot)
         env:
           # פרטי ה-Release נלקחים מאירוע ה-Webhook של GitHub
           RELEASE_TAG:  ${{ github.event.release.tag_name }}
           RELEASE_NAME: ${{ github.event.release.name }}
           RELEASE_URL:  ${{ github.event.release.html_url }}
           GITHUB_EVENT_PATH: ${{ github.event_path }} # חיוני כדי שהסקריפט ימצא את קבצי ההורדה
-
-          # הרכבת גוף ההודעה: התיאור מה-Release + רשימת הקומיטים שיצרנו
-          RELEASE_BODY: |
-            ${{ github.event.release.body }}
-
-            השינויים מאז הגרסה הקודמת${{ steps.changelog.outputs.prev_tag && format(' ({0})', steps.changelog.outputs.prev_tag) || '' }}:
-            ${{ steps.changelog.outputs.commits }}
 
           # סודות להתחברות לשירותים החיצוניים
           USER_NAME:  ${{ secrets.USER_NAME }}

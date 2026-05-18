@@ -593,6 +593,13 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
   }
 }
 
+/// חוזה ציבורי עבור פריט תפריט שמסוגל לפתוח תת-תפריט באופן פרוגרמטי.
+/// משמש את הסיור המודרך כדי לפתוח את תת-התפריט של "הצג לצד" בלי לעקוף
+/// את בדיקת הטיפוסים דרך `dynamic`.
+abstract interface class AppSubmenuOpener {
+  void openSubmenu([VoidCallback? afterOpen]);
+}
+
 class _LazyAppSubmenuButton extends StatefulWidget {
   final AppContextMenuEntry entry;
   final List<AppContextMenuEntry> Function() entriesBuilder;
@@ -619,7 +626,8 @@ class _LazyAppSubmenuButton extends StatefulWidget {
   State<_LazyAppSubmenuButton> createState() => _LazyAppSubmenuButtonState();
 }
 
-class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton> {
+class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton>
+    implements AppSubmenuOpener {
   List<AppContextMenuEntry>? _entries;
   List<Widget>? _menuChildren;
   bool? _hasEnabledChildren;
@@ -650,6 +658,7 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton> {
     super.dispose();
   }
 
+  @override
   void openSubmenu([VoidCallback? afterOpen]) {
     if (_menuChildren == null) {
       _ensureMenuChildrenLoaded();

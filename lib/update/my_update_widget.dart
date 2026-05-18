@@ -16,10 +16,111 @@ import 'package:otzaria/settings/settings_exports.dart';
 const _kInstallKind =
     String.fromEnvironment('INSTALL_KIND', defaultValue: 'auto');
 
-const _changelogUrl =
-    'https://raw.githubusercontent.com/Otzaria/otzaria/refs/heads/migrationDB_V2/assets/%D7%99%D7%95%D7%9E%D7%9F%20%D7%A9%D7%99%D7%A0%D7%95%D7%99%D7%99%D7%9D.md';
 const _githubOwner = 'Otzaria';
 const _githubRepository = 'otzaria';
+const _changelogAssetPath = 'assets/יומן שינויים.md';
+
+/// מטמון של תוצאות GitHub API. המפתח כולל גם את הערוץ (stable/dev) כדי למנוע
+/// דליפה בין ערוצים אם המשתמש מחליף הגדרה באותו סשן, וגם כדי שלא יחזרו
+/// תוצאות ישנות כאשר שני release-ים בערוץ dev חולקים אותה core version
+/// (כגון `0.9.92+628` ו-`0.9.92+629`).
+@visibleForTesting
+final Map<String, Map<String, dynamic>> releaseCacheForTesting = {};
+
+bool _isDevChannelEnabled() =>
+    Settings.getValue<bool>('key-dev-channel') ?? false;
+
+String _cacheKey(String version, {bool? isDev}) {
+  final dev = isDev ?? _isDevChannelEnabled();
+  return '${dev ? 'dev' : 'stable'}:$version';
+}
+
+/// מאחסן release ב-cache עבור גרסה נתונה. נקרא מ-`getLatestVersion` כדי
+/// להבטיח ש-`getChangelog`/`getBinaryUrl` מקבלים בדיוק את ה-release שזוהה
+/// כ"החדש ביותר", ולא נבחר מחדש לפי prefix.
+void _cacheRelease(String version, Map<String, dynamic> release,
+    {bool? isDev}) {
+  releaseCacheForTesting[_cacheKey(version, isDev: isDev)] = release;
+}
+
+/// בוחר את ה-release ה-pre-release האחרון ברשימה שמתאים לערוץ dev:
+/// pre-release אמיתי, לא draft, ולא PR preview (tag שלא מכיל `-pr`).
+/// אם אין התאמה — נופל ל-release הראשון ברשימה (כדי להתאים להתנהגות הקודמת).
+/// מקבלת `List<dynamic>` ישירות מ-`jsonDecode` ולא מסתמכת על הסקה גנרית
+/// של `firstWhere` שמשתנה לפי הטיפוס בזמן ריצה.
+@visibleForTesting
+Map<String, dynamic> pickLatestDevRelease(List<dynamic> releases) {
+  for (final r in releases) {
+    if (r is Map &&
+        r["prerelease"] == true &&
+        r["draft"] == false &&
+        !r["tag_name"].toString().contains('-pr')) {
+      return r.cast<String, dynamic>();
+    }
+  }
+  return (releases.first as Map).cast<String, dynamic>();
+}
+
+/// שולפת את מידע ה-release מ-GitHub עבור גרסה נתונה ושומרת אותו במטמון.
+/// אם `getLatestVersion` כבר הקדים לאחסן את ה-release המדויק שזוהה, נחזיר
+/// אותו ישירות — כך מובטח עקביות בין ה-release שזוהה כ"חדש" לבין
+/// ה-changelog וקובץ ההתקנה.
+Future<Map<String, dynamic>> _fetchRelease(String version) async {
+  final cached = releaseCacheForTesting[_cacheKey(version)];
+  if (cached != null) return cached;
+
+  final isDev = _isDevChannelEnabled();
+  Map<String, dynamic> release;
+
+  if (isDev) {
+    final data = await http.get(Uri.parse(
+      "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases",
+    ));
+    final releases = jsonDecode(data.body) as List;
+    final byPrefix = releases
+        .where((r) => r["tag_name"].toString().startsWith(version))
+        .toList();
+    final pool = byPrefix.isNotEmpty ? byPrefix : releases;
+    release = pickLatestDevRelease(pool);
+  } else {
+    var resp = await http.get(Uri.parse(
+      "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/tags/$version",
+    ));
+    if (resp.statusCode == 404) {
+      resp = await http.get(Uri.parse(
+        "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/tags/v$version",
+      ));
+    }
+    if (resp.statusCode >= 400) {
+      throw Exception(
+          'Release "$version" not found (status ${resp.statusCode})');
+    }
+    release = (jsonDecode(resp.body) as Map).cast<String, dynamic>();
+  }
+
+  _cacheRelease(version, release, isDev: isDev);
+  return release;
+}
+
+/// בונה URL לקובץ raw בריפו, צמוד לתג הספציפי של ה-release.
+/// שימוש ב-`pathSegments` מבטיח קידוד נכון של תווים מיוחדים כמו `+` שבתגים
+/// בערוץ dev (לדוגמה `0.9.92+628`) ושל תווי יוניקוד בנתיב.
+@visibleForTesting
+Uri rawAssetUrlForTag(String tagName, String relativePath) {
+  final segments = <String>[
+    _githubOwner,
+    _githubRepository,
+    'refs',
+    'tags',
+    tagName,
+    ...relativePath.split('/'),
+  ];
+  return Uri(
+    scheme: 'https',
+    host: 'raw.githubusercontent.com',
+    pathSegments: segments,
+  );
+}
 
 final _changelogHeadingPattern = RegExp(
   r'^\s*(?:(?:#{1,6}|[*-])\s*)?\*{0,2}v?(\d+(?:\.\d+){1,2}(?:[-+][^\s*]+)?)\*{0,2}\s*$',
@@ -225,9 +326,12 @@ class MyUpdatWidget extends StatelessWidget {
           }
           return UpdatWindowManager(
             getLatestVersion: () async {
-              // Github gives us a super useful latest endpoint, and we can use it to get the latest stable release
-              final isDevChannel =
-                  Settings.getValue<bool>('key-dev-channel') ?? false;
+              // ניקוי המטמון מבדיקת עדכון קודמת — אנו רוצים נתונים טריים
+              // עבור ה-flow הנוכחי (ובכך גם להבטיח שלא יוחזר release מיושן
+              // אם פורסם release חדש מאז הבדיקה הקודמת).
+              releaseCacheForTesting.clear();
+
+              final isDevChannel = _isDevChannelEnabled();
 
               if (isDevChannel) {
                 // For dev channel, get the latest pre-release from the main repo
@@ -235,54 +339,28 @@ class MyUpdatWidget extends StatelessWidget {
                   "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases",
                 ));
                 final releases = jsonDecode(data.body) as List;
-                // Find the first pre-release that is not a draft and not a PR preview
-                final preRelease = releases.firstWhere(
-                  (release) =>
-                      release["prerelease"] == true &&
-                      release["draft"] == false &&
-                      !release["tag_name"].toString().contains('-pr'),
-                  orElse: () => releases.first,
-                );
-                return _normalizeVersion(preRelease["tag_name"]);
+                final preRelease = pickLatestDevRelease(releases);
+                final normalized =
+                    _normalizeVersion(preRelease["tag_name"] as String);
+                // אחסון ה-release המדויק שזוהה — כדי ש-getChangelog ו-
+                // getBinaryUrl לא יבחרו מחדש לפי prefix ויתפסו release אחר.
+                _cacheRelease(normalized, preRelease, isDev: true);
+                return normalized;
               } else {
                 // For stable channel, get the latest stable release
                 final data = await http.get(Uri.parse(
                   "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/latest",
                 ));
-                return _normalizeVersion(jsonDecode(data.body)["tag_name"]);
+                final release =
+                    (jsonDecode(data.body) as Map).cast<String, dynamic>();
+                final normalized =
+                    _normalizeVersion(release["tag_name"] as String);
+                _cacheRelease(normalized, release, isDev: false);
+                return normalized;
               }
             },
             getBinaryUrl: (version) async {
-              final isDev = Settings.getValue<bool>('key-dev-channel') ?? false;
-
-              // קבלת פרטי ה-release
-              dynamic release;
-              if (isDev) {
-                // ערוץ dev - חיפוש לפי התחלת גרסה
-                final data = await http.get(Uri.parse(
-                    "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases"));
-                final releases = jsonDecode(data.body) as List;
-                final versionStr = version ?? '';
-                release = releases.firstWhere(
-                  (r) => r["tag_name"].toString().startsWith(versionStr),
-                  orElse: () => releases.first,
-                );
-              } else {
-                // ערוץ stable - ניסיון עם/בלי קידומת v
-                var resp = await http.get(Uri.parse(
-                    "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/tags/$version"));
-                if (resp.statusCode == 404) {
-                  resp = await http.get(Uri.parse(
-                      "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/tags/v$version"));
-                }
-                // וידוא שה-release נמצא
-                if (resp.statusCode >= 400) {
-                  throw Exception(
-                      'Release "$version" not found (status ${resp.statusCode})');
-                }
-                release = jsonDecode(resp.body);
-              }
-
+              final release = await _fetchRelease(version ?? '');
               final assets =
                   (release["assets"] as List).cast<Map<String, dynamic>>();
               final platform = Platform.operatingSystem.toLowerCase();
@@ -383,13 +461,14 @@ class MyUpdatWidget extends StatelessWidget {
             },
             appName: "otzaria", // This is used to name the downloaded files.
             getChangelog: (latestVersion, appVersion) async {
-              // Load changelog directly from GitHub repository
+              // טעינת יומן השינויים מהתג של ה-release עצמו, כך שהיומן יוצמד
+              // לקומיט שמכיל את כותרת הגרסה החדשה — ללא תלות בענף שממנו נבנתה.
               try {
-                final response = await http
-                    .get(
-                      Uri.parse(_changelogUrl),
-                    )
-                    .timeout(const Duration(seconds: 10));
+                final release = await _fetchRelease(latestVersion);
+                final tagName = release['tag_name'] as String;
+                final url = rawAssetUrlForTag(tagName, _changelogAssetPath);
+                final response =
+                    await http.get(url).timeout(const Duration(seconds: 10));
 
                 if (response.statusCode == 200) {
                   return changelogBetweenVersionsForUpdateDialog(

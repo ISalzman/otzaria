@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
+import 'package:otzaria/indexing/services/indexing_isolate_service.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 
@@ -68,6 +70,219 @@ void main() {
       );
 
       expect(shouldReset, isFalse);
+    });
+  });
+
+  group('IndexingRepository.areAllIndexableBooksIndexed', () {
+    test('מחזיר true כשכל הספרים האינדקסביליים קיימים ב-booksDone', () {
+      final library = _buildLibrary(
+        bavliBooks: const [('שבת', 1)],
+        additionalBooks: [
+          PdfBook(
+            title: 'קובץ PDF',
+            path: r'C:\library\sample.pdf',
+            categoryPath: 'ספרים אישיים',
+          ),
+          ExternalLibraryBook(
+            title: 'ספר חיצוני',
+            id: 900,
+            link: 'https://example.com/book',
+          ),
+        ],
+      );
+
+      final indexedBookKeys = library
+          .getAllBooks()
+          .where(IndexingRepository.isIndexableBook)
+          .map(IndexingRepository.catalogueOrderKey);
+
+      expect(
+        IndexingRepository.areAllIndexableBooksIndexed(
+          library.getAllBooks(),
+          indexedBookKeys,
+        ),
+        isTrue,
+      );
+    });
+
+    test('מחזיר false כשחסר ספר אינדקסבילי אחד', () {
+      final library = _buildLibrary(
+        bavliBooks: const [('שבת', 1)],
+        additionalBooks: [
+          DocxBook(
+            title: 'מסמך',
+            path: r'C:\library\doc.docx',
+            categoryPath: 'ספרים אישיים',
+          ),
+        ],
+      );
+
+      final indexedBookKeys = [
+        IndexingRepository.catalogueOrderKey(library.getAllBooks().first),
+      ];
+
+      expect(
+        IndexingRepository.areAllIndexableBooksIndexed(
+          library.getAllBooks(),
+          indexedBookKeys,
+        ),
+        isFalse,
+      );
+    });
+
+    test('מחזיר false כשאין כלל ספרים אינדקסביליים', () {
+      final library = Library(categories: []);
+      library.books.add(
+        ExternalLibraryBook(
+          title: 'ספר חיצוני',
+          id: 901,
+          link: 'https://example.com/ext',
+        ),
+      );
+
+      expect(
+        IndexingRepository.areAllIndexableBooksIndexed(
+          library.getAllBooks(),
+          const [],
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('IndexingRepository.shouldUseFastPath', () {
+    test(
+        'מחזיר true רק כשכל הספרים האינדקסביליים מאונדקסים ואין manual reindex',
+        () {
+      final library = _buildLibrary(
+        bavliBooks: const [('שבת', 1)],
+        additionalBooks: [
+          ExternalLibraryBook(
+            title: 'ספר חיצוני',
+            id: 900,
+            link: 'https://example.com/book',
+          ),
+        ],
+      );
+
+      final indexedBookKeys = library
+          .getAllBooks()
+          .where(IndexingRepository.isIndexableBook)
+          .map(IndexingRepository.catalogueOrderKey);
+
+      expect(
+        IndexingRepository.shouldUseFastPath(
+          books: library.getAllBooks(),
+          booksDone: indexedBookKeys,
+          requiresManualReindex: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('מחזיר false כשנדרש manual reindex גם אם כל הספרים כבר מאונדקסים', () {
+      final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
+      final indexedBookKeys = library
+          .getAllBooks()
+          .where(IndexingRepository.isIndexableBook)
+          .map(IndexingRepository.catalogueOrderKey);
+
+      expect(
+        IndexingRepository.shouldUseFastPath(
+          books: library.getAllBooks(),
+          booksDone: indexedBookKeys,
+          requiresManualReindex: true,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('IndexingRepository.indexAllBooks', () {
+    test('fast path מחזיר מוקדם בלי להפעיל isolate ובלי callbacks', () async {
+      final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
+      final indexedBookKeys = library
+          .getAllBooks()
+          .where(IndexingRepository.isIndexableBook)
+          .map(IndexingRepository.catalogueOrderKey)
+          .toList();
+      final catalogueOrderSignature =
+          IndexingRepository.buildCatalogueOrderSignature(library);
+      final provider = FakeTantivyDataProvider(
+        booksDoneValue: indexedBookKeys,
+        ensureIndexStateMatchesCatalogueValue: false,
+      );
+      final isolateService = FakeIndexingIsolateService();
+
+      final repository = IndexingRepository(
+        provider,
+        isolateService: isolateService,
+      );
+
+      var actualIndexingStarted = false;
+      var progressCalls = 0;
+
+      final result = await repository.indexAllBooks(
+        library,
+        onActualIndexingStarted: () {
+          actualIndexingStarted = true;
+        },
+        onProgress: (_, __) {
+          progressCalls++;
+        },
+      );
+
+      expect(result, isTrue);
+      expect(actualIndexingStarted, isFalse);
+      expect(progressCalls, 0);
+      expect(
+        provider.ensureIndexStateMatchesCatalogueCalls,
+        [catalogueOrderSignature],
+      );
+      expect(isolateService.wasUsed, isFalse);
+    });
+
+    test('לא מדלג ב-fast path כשנדרש manual reindex', () async {
+      final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
+      final indexedBookKeys = library
+          .getAllBooks()
+          .where(IndexingRepository.isIndexableBook)
+          .map(IndexingRepository.catalogueOrderKey)
+          .toList();
+      final catalogueOrderSignature =
+          IndexingRepository.buildCatalogueOrderSignature(library);
+      final provider = FakeTantivyDataProvider(
+        booksDoneValue: indexedBookKeys,
+        ensureIndexStateMatchesCatalogueValue: true,
+      );
+      final isolateService = FakeIndexingIsolateService();
+
+      final repository = IndexingRepository(
+        provider,
+        isolateService: isolateService,
+      );
+
+      var actualIndexingStarted = false;
+      var progressCalls = 0;
+
+      final result = await repository.indexAllBooks(
+        library,
+        onActualIndexingStarted: () {
+          actualIndexingStarted = true;
+        },
+        onProgress: (_, __) {
+          progressCalls++;
+        },
+      );
+
+      expect(result, isFalse);
+      expect(actualIndexingStarted, isFalse);
+      expect(progressCalls, 0);
+      expect(
+        provider.ensureIndexStateMatchesCatalogueCalls,
+        [catalogueOrderSignature],
+      );
+      expect(isolateService.wasUsed, isFalse);
     });
   });
 
@@ -232,8 +447,71 @@ void main() {
   });
 }
 
+class FakeTantivyDataProvider implements TantivyDataProvider {
+  FakeTantivyDataProvider({
+    required this.booksDoneValue,
+    required this.ensureIndexStateMatchesCatalogueValue,
+  });
+
+  final List<String> booksDoneValue;
+  final bool ensureIndexStateMatchesCatalogueValue;
+  final List<String> ensureIndexStateMatchesCatalogueCalls = [];
+
+  @override
+  List<String> get booksDone => booksDoneValue;
+
+  @override
+  Future<bool> ensureIndexStateMatchesCatalogue(
+    String currentCatalogueOrderSignature,
+  ) async {
+    ensureIndexStateMatchesCatalogueCalls.add(currentCatalogueOrderSignature);
+    return ensureIndexStateMatchesCatalogueValue;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    throw UnimplementedError('Unexpected call: $invocation');
+  }
+}
+
+class FakeIndexingIsolateService implements IndexingIsolateService {
+  bool wasUsed = false;
+
+  @override
+  Future<void> cancelActiveWork() async {
+    wasUsed = true;
+  }
+
+  @override
+  Future<void> dispose() async {
+    wasUsed = true;
+  }
+
+  @override
+  Future<Stream<IndexingIsolateUpdate>> processPdfPages({
+    required List<({String reference, String text, int pageIndex})> pages,
+  }) async {
+    wasUsed = true;
+    return const Stream.empty();
+  }
+
+  @override
+  Future<Stream<IndexingIsolateUpdate>> processTextBook({
+    required String text,
+  }) async {
+    wasUsed = true;
+    return const Stream.empty();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    throw UnimplementedError('Unexpected call: $invocation');
+  }
+}
+
 Library _buildLibrary({
   required List<(String, int)> bavliBooks,
+  List<Book> additionalBooks = const [],
 }) {
   final library = Library(categories: []);
   final tanakh = Category(
@@ -271,6 +549,8 @@ Library _buildLibrary({
         )
         .toList(),
   );
+
+  library.books.addAll(additionalBooks);
 
   return library;
 }
