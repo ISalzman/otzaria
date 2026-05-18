@@ -123,6 +123,49 @@ bool shouldShowOpenPdfLinksPaneEntry({
   return hasRelevantLinks && !isLinksTabActive;
 }
 
+/// בונה את פריט תפריט ההקשר "קישורים" עבור PDF.
+/// משתמש ב-`childrenBuilder` (טעינה עצלה) כדי שהתפריט הראשי ייפתח מיד,
+/// בלי להמתין ל-FutureBuilders של `link.displayReference` של כל קישור.
+@visibleForTesting
+AppContextMenuEntry buildPdfLinksContextMenuEntry({
+  required List<otz_links.Link> relevantLinks,
+  required bool showOpenLinksPaneEntry,
+  required VoidCallback onOpenLinksPane,
+  required void Function(otz_links.Link link) onOpenLink,
+}) {
+  List<AppContextMenuEntry> buildLinkChildren() {
+    return <AppContextMenuEntry>[
+      if (showOpenLinksPaneEntry) ...[
+        AppContextMenuEntry(
+          label: 'פתח קישורים בחלונית צד',
+          onTap: onOpenLinksPane,
+        ),
+        const AppContextMenuEntry.divider(),
+      ],
+      ...relevantLinks.map((link) => AppContextMenuEntry(
+            label: link.fallbackDisplayReference,
+            labelWidget: FutureBuilder<String>(
+              future: link.displayReference,
+              builder: (context, snapshot) => Text(
+                snapshot.data ?? link.fallbackDisplayReference,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textDirection: TextDirection.rtl,
+              ),
+            ),
+            onTap: () => onOpenLink(link),
+          )),
+    ];
+  }
+
+  return AppContextMenuEntry(
+    label: 'קישורים',
+    icon: FluentIcons.link_24_regular,
+    enabled: relevantLinks.isNotEmpty,
+    childrenBuilder: buildLinkChildren,
+  );
+}
+
 class _PdfBookScreenState extends State<PdfBookScreen>
     with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   static const int _defaultPdfLineRange = 50;
@@ -842,36 +885,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       isLinksTabActive: isLinksTabActive,
     );
 
-    final linkChildren = <AppContextMenuEntry>[
-      if (showOpenLinksPaneEntry) ...[
-        AppContextMenuEntry(
-          label: 'פתח קישורים בחלונית צד',
-          onTap: () => _openLinksPane(),
-        ),
-        const AppContextMenuEntry.divider(),
-      ],
-      ...relevantLinks.map((link) => AppContextMenuEntry(
-            label: link.fallbackDisplayReference,
-            labelWidget: FutureBuilder<String>(
-              future: link.displayReference,
-              builder: (context, snapshot) => Text(
-                snapshot.data ?? link.fallbackDisplayReference,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textDirection: TextDirection.rtl,
-              ),
-            ),
-            onTap: () => openBook(
-              menuContext,
-              TextBook(title: utils.getTitleFromPath(link.path2)),
-              link.index2 - 1,
-              '',
-              ignoreHistory: false,
-              insertAdjacent: true,
-            ),
-          )),
-    ];
-
     return [
       AppContextMenuEntry(
         label: 'חיפוש',
@@ -886,11 +899,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         enabled: relevantCommentators.isNotEmpty || shouldShowSelectEntry,
         children: commentatorChildren,
       ),
-      AppContextMenuEntry(
-        label: 'קישורים',
-        icon: FluentIcons.link_24_regular,
-        enabled: relevantLinks.isNotEmpty,
-        children: linkChildren,
+      buildPdfLinksContextMenuEntry(
+        relevantLinks: relevantLinks,
+        showOpenLinksPaneEntry: showOpenLinksPaneEntry,
+        onOpenLinksPane: _openLinksPane,
+        onOpenLink: (link) => openBook(
+          menuContext,
+          TextBook(title: utils.getTitleFromPath(link.path2)),
+          link.index2 - 1,
+          '',
+          ignoreHistory: false,
+          insertAdjacent: true,
+        ),
       ),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
