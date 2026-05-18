@@ -448,11 +448,15 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y \
             build-essential ninja-build libgtk-3-dev libblkid1 liblzma5 \
-            clang cmake git pkg-config liblzma-dev rpm patchelf curl xz-utils zstd \
+            clang-15 lld-15 cmake git pkg-config liblzma-dev rpm patchelf curl xz-utils zstd \
             libcurl4-openssl-dev \
             libwpewebkit-1.0-dev \
             libwpebackend-fdo-1.0-dev \
             libwebkit2gtk-4.1-dev
+          # שדרוג clang ל-15 כדי שיכיר את הדגל -Wno-deprecated-literal-operator
+          # שמשתמשים בו ב-sentry-native (תלות של sentry_flutter).
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-15 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-15 100
           # Fallback אם מסיבה כלשהי cargo לא קיים (למשל כשל זמני ב-rustup)
           if ! command -v cargo >/dev/null 2>&1; then
             sudo apt-get install -y rustc cargo
@@ -483,8 +487,8 @@ jobs:
 
       - name: Build Flutter Linux app (with retry)
         env:
-          CC: gcc
-          CXX: g++
+          CC: clang-15
+          CXX: clang++-15
         run: |
           set -e
           tries=0
@@ -505,8 +509,8 @@ jobs:
       - name: Build and Patch Linux DEB package
         shell: bash
         env:
-          CC: gcc
-          CXX: g++
+          CC: clang-15
+          CXX: clang++-15
         run: |
           set -e
 
@@ -550,8 +554,8 @@ jobs:
       - name: Build and Patch Linux RPM package
         shell: bash
         env:
-          CC: gcc
-          CXX: g++
+          CC: clang-15
+          CXX: clang++-15
         run: |
           set -e
 
