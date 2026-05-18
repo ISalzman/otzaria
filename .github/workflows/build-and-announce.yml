@@ -124,6 +124,12 @@ jobs:
 
       - name: Build Flutter Windows app
         shell: pwsh
+        env:
+          # מאלץ את MSBuild לקמפל קבצי C++ במקביל גם בתוך אותו פרויקט
+          # (ברירת המחדל מקבילה רק בין פרויקטים, וב-Flutter Windows יש רק אחד)
+          UseMultiToolTask: 'true'
+          EnforceProcessCountAcrossBuilds: 'true'
+          CMAKE_BUILD_PARALLEL_LEVEL: '4'
         run: |
           flutter build windows --release
 
