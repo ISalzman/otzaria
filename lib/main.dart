@@ -81,7 +81,7 @@ import 'package:otzaria/plugins/services/plugin_protocol_registration_service.da
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 // Updated automatically by version update scripts - do not edit manually
-const int _latestReleasedBuildNumber = 90910;
+const int _latestReleasedBuildNumber = 90920;
 
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
@@ -532,7 +532,6 @@ Future<void> _initializeRestartableRuntime() async {
       stackTrace,
     );
   }
-
 }
 
 Future<void>? _processInitializationFuture;
@@ -625,9 +624,8 @@ Future<bool> _maybeRunCliCommand(List<String> args) async {
 
   final command = args.first.trim().toLowerCase();
   // תמיכה גם ב-`pack-plugin`, ב-`--pack-plugin` וב-`/pack-plugin` (Windows style).
-  final normalized = command
-      .replaceFirst(RegExp(r'^(--|/)'), '')
-      .replaceAll('_', '-');
+  final normalized =
+      command.replaceFirst(RegExp(r'^(--|/)'), '').replaceAll('_', '-');
 
   if (normalized == 'pack-plugin') {
     final exitCode = await PluginPackagerCli.run(args.skip(1).toList());
