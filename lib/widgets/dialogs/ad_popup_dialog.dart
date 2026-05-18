@@ -207,6 +207,7 @@ class _AdPopupDialogState extends State<AdPopupDialog>
 
   // שלב 1: לוגו במרכז וטקסט מופיע לידו
   Widget _buildStage1() {
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
@@ -221,11 +222,11 @@ class _AdPopupDialogState extends State<AdPopupDialog>
               height: 100,
             ),
             const SizedBox(width: 20),
-            // טקסט מופיע עם אנימציה
+            // טקסט מופיע עם אנימציה (נכנס מהקצה החיצוני פנימה אל הלוגו)
             Flexible(
               child: SlideTransition(
                 position: Tween<Offset>(
-                  begin: const Offset(0.5, 0), // מתחיל מימין ללוגו
+                  begin: Offset(isRtl ? -0.5 : 0.5, 0),
                   end: Offset.zero,
                 ).animate(CurvedAnimation(
                   parent: _stage1Controller,

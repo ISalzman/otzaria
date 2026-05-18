@@ -96,6 +96,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   int? _selectedResultLine;
   int _activeSearchRequestId = 0;
   final ItemScrollController _resultsScrollController = ItemScrollController();
+  final ItemPositionsListener _resultsPositionsListener =
+      ItemPositionsListener.create();
 
   bool get _isSimpleSearch =>
       !_forceSearchEngine && _searchMode == SearchMode.exact;
@@ -452,10 +454,46 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     return 0;
   }
 
+  /// מחזיר את האינדקס הוויזואלי של שורת התוצאה עצמה (בלי הכותרת שלפניה).
+  /// משמש לבדיקת נראות בניווט בחצים — נראות הכותרת אינה מבטיחה שהשורה גלויה.
+  int _visualIndexForResultRow(int target) {
+    int idx = 0;
+    String? lastAddress;
+    for (var i = 0; i < searchResults.length; i++) {
+      final r = searchResults[i];
+      if (r.address != lastAddress) {
+        lastAddress = r.address;
+        idx++;
+      }
+      if (i == target) return idx;
+      idx++;
+    }
+    return 0;
+  }
+
   /// גולל את רשימת התוצאות לאינדקס הוויזואלי המדויק.
-  void _scrollResultsToIndex(int resultListIndex) {
+  ///
+  /// כש‑[onlyIfNotVisible] true, מדלגים על הגלילה אם היעד כבר גלוי לחלוטין —
+  /// כדי שניווט בחצים בין תוצאות סמוכות לא יזיז את הרשימה ללא צורך.
+  void _scrollResultsToIndex(
+    int resultListIndex, {
+    bool onlyIfNotVisible = false,
+  }) {
     if (!mounted) return;
     if (!_resultsScrollController.isAttached) return;
+
+    if (onlyIfNotVisible) {
+      final rowIdx = _visualIndexForResultRow(resultListIndex);
+      final positions = _resultsPositionsListener.itemPositions.value;
+      for (final p in positions) {
+        if (p.index == rowIdx &&
+            p.itemLeadingEdge >= 0.0 &&
+            p.itemTrailingEdge <= 1.0) {
+          return;
+        }
+      }
+    }
+
     final visualIdx = _visualIndexForResultListIndex(resultListIndex);
     _resultsScrollController.jumpTo(index: visualIdx, alignment: 0.0);
   }
@@ -513,6 +551,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     }
 
     _navigateToSearchResult(nextIndex);
+    _scrollResultsToIndex(nextIndex, onlyIfNotVisible: true);
   }
 
   List<TextSearchResult> _convertSearchResults(List<SearchResult> results) {
@@ -571,6 +610,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           : null,
       resultsWidget: ScrollablePositionedList.builder(
         itemScrollController: _resultsScrollController,
+        itemPositionsListener: _resultsPositionsListener,
         padding: const EdgeInsets.all(16),
         itemCount: items.length,
         itemBuilder: (context, index) {

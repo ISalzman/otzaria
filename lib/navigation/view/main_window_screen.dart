@@ -87,6 +87,7 @@ import 'package:otzaria/tour/models/tour_step.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/tour/view/tour_overlay_screen.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/plugins/view/plugin_background_host.dart';
 import 'package:otzaria/plugins/view/plugin_install_screen.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
 
@@ -822,11 +823,21 @@ class MainWindowScreenState extends State<MainWindowScreen>
         _currentPageIndex = targetPage;
       });
       if (pageController.hasClients) {
-        pageController.animateToPage(
-          targetPage,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
+        // מעבר שחוצה את עמוד "כלים" (index 2) — מ"הגדרות" אל מסכים שלפניו
+        // או אליהם — לא יעבור ויזואלית דרך "כלים", כדי שמערכת התוספים
+        // (כולל ה-WebView הראשי) לא תיטען לחינם.
+        final currentPage = pageController.page?.round() ?? _currentPageIndex;
+        final crossesTools = (currentPage < 2 && targetPage > 2) ||
+            (currentPage > 2 && targetPage < 2);
+        if (crossesTools) {
+          pageController.jumpToPage(targetPage);
+        } else {
+          pageController.animateToPage(
+            targetPage,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        }
       }
     }
 
@@ -2288,6 +2299,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
                         WorkStatusOverlay(
                           onTap: _openIndexingSettings,
                         ),
+                        // host נסתר לתוספים שביקשו לרוץ ברקע עם עליית
+                        // האפליקציה. הוא חי כל זמן שה-MainWindowScreen קיים,
+                        // ולא תלוי במסך "כלים".
+                        const PluginBackgroundHost(),
                         ContextOverlayPanel(
                           isOpen: _isReadingSettingsPanelOpen &&
                               (state.currentScreen == Screen.reading ||

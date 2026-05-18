@@ -455,6 +455,40 @@ class DocxBook extends FileBook {
 
   @override
   String toString() => 'DocxBook(title: $title, path: $path)';
+
+  /// עוטף את ה-DocxBook ל-TextBook לטובת זרימות שעובדות מול TextBook
+  /// (תצוגת טאב, פריוויו, אינדוקס). חשוב לשמר `id`, `categoryId`
+  /// ו-`externalLibraryId` — בלעדיהם `LibraryProviderManager.getBookText`
+  /// לא מאתר את הספר ב-cache (המפתח שלו הוא title+categoryId+fileType)
+  /// והתוכן יוצא ריק. `filePath` נופל ל-`path` כשאינו מוגדר כדי שזרימת
+  /// `DatabaseLibraryProvider.getBookText` תזהה את הקובץ ותפעיל docxToText.
+  TextBook toTextBook() {
+    return TextBook(
+      id: id,
+      title: title,
+      category: category,
+      author: author,
+      heCategories: heCategories,
+      heEra: heEra,
+      compDateStringHe: compDateStringHe,
+      compPlaceStringHe: compPlaceStringHe,
+      pubDateStringHe: pubDateStringHe,
+      pubPlaceStringHe: pubPlaceStringHe,
+      heShortDesc: heShortDesc,
+      heDesc: heDesc,
+      pubDate: pubDate,
+      pubPlace: pubPlace,
+      order: order,
+      topics: topics,
+      filePath: filePath ?? path,
+      fileType: fileType ?? 'docx',
+      categoryPath: categoryPath,
+      categoryId: categoryId,
+      extraTitles: extraTitles,
+      isUserBook: isUserBook,
+      externalLibraryId: externalLibraryId,
+    );
+  }
 }
 
 ///represents an entry in table of content , which is a node in a hirarchial tree of topics.

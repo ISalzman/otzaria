@@ -25,14 +25,21 @@ class OpenOrFocusTab extends TabsEvent {
   final String? targetTitle;
   final bool insertAdjacent;
 
+  /// כשטאב קיים מאותר ועושים לו focus - האם להעביר אליו את המיקום (index/page)
+  /// של הטאב הנכנס. משמש סימניות והיסטוריה - שם המשתמש בוחר מיקום ספציפי ולא
+  /// רק את הספר, ולכן רוצים שהטאב הקיים ייגלל לאותו מיקום.
+  final bool navigateToPositionIfReused;
+
   const OpenOrFocusTab(
     this.tab, {
     this.targetTitle,
     this.insertAdjacent = false,
+    this.navigateToPositionIfReused = false,
   });
 
   @override
-  List<Object?> get props => [tab, targetTitle, insertAdjacent];
+  List<Object?> get props =>
+      [tab, targetTitle, insertAdjacent, navigateToPositionIfReused];
 }
 
 class ReplaceAllTabs extends TabsEvent {
