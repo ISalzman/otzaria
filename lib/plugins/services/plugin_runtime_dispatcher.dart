@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 
-enum _PluginRuntimeShutdownMode { idle, restart }
+enum _PluginRuntimeShutdownMode { idle, restart, exit }
 
 class PluginRuntimeDispatcher {
   static final PluginRuntimeDispatcher instance = PluginRuntimeDispatcher._();
@@ -18,6 +18,13 @@ class PluginRuntimeDispatcher {
   final Map<String, Map<String, bool?>> _permissionCache = {};
 
   void registerController(String pluginId, InAppWebViewController controller) {
+    if (_shutdownMode == _PluginRuntimeShutdownMode.exit) {
+      debugPrint(
+        'PluginRuntimeDispatcher: ignoring controller registration for '
+        '$pluginId during app exit',
+      );
+      return;
+    }
     _shutdownMode = _PluginRuntimeShutdownMode.idle;
     _controllers[pluginId] = controller;
   }
@@ -38,6 +45,10 @@ class PluginRuntimeDispatcher {
 
   Future<void> prepareForAppRestart() async {
     await _prepareControllersForTeardown(_PluginRuntimeShutdownMode.restart);
+  }
+
+  Future<void> prepareForAppShutdown() async {
+    await _prepareControllersForTeardown(_PluginRuntimeShutdownMode.exit);
   }
 
   Future<void> _prepareControllersForTeardown(
