@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/core/window_persistence.dart';
@@ -124,19 +123,22 @@ class AppWindowListener extends WindowListener {
       if (kDebugMode) print('Flush failed at exit: $e');
     }
 
-    // Step 3: Storage close, error reporting, and window destruction.
+    // Step 3: Error reporting and window destruction.
+    //
+    // הוסרו במכוון:
+    //   - `WindowPersistence.saveNow()` — `Settings.setValue` כותב ל-Hive
+    //     `app_preferences`; הקריאה תוקעת את ה-isolate ב-admin install
+    //     (`Program Files\אוצריא\`) כי Defender real-time scan חוסם את
+    //     ה-CloseHandle של הקובץ. מצב החלון נשמר רציף ב-`scheduleSave`
+    //     (debounce 400ms על כל move/resize/maximize), אז ההלך הסופי
+    //     היה belt-and-suspenders מיותר.
+    //   - `await Hive.close()` — סגירת ה-handles של 7 קבצי `.hive` ב-
+    //     `%APPDATA%\otzaria\` נחסמת באותה צורה. כל `box.put()` כבר כותב
+    //     מיד דרך FFI ל-OS file buffer; ה-OS שוטף buffers בעת
+    //     `ExitProcess`/`TerminateProcess` כשהוא סוגר את ה-handles.
+    //     hive_ce שורד dirty shutdown מעיצוב (checksum על כל record).
+    //     `PreCloseRegistry.runAll()` ב-step2 כבר flushed את ההיסטוריה.
     try {
-      // הערה: לא קוראים ל-`WindowPersistence.saveNow()` כאן. ב-admin install
-      // (`Program Files\אוצריא\`) הקריאה הזו תוקעת את ה-Dart isolate לחלוטין
-      // — ככל הנראה Defender/AV חוסם את הכתיבות ל-Hive `app_preferences` של
-      // תהליכים שה-EXE שלהם יושב ב-Program Files. נראה בלוג ש-`step3` מתחיל,
-      // `WindowPersistence.saveNow(): start` מודפס, ואחריו שקט עד ש-watchdog
-      // יורה. מצב החלון נשמר בכל מקרה דרך `WindowPersistence.scheduleSave()`
-      // עם debounce 400ms על כל אירוע move/resize/maximize — הקריאה כאן
-      // הייתה belt-and-suspenders מיותר.
-
-      await Hive.close();
-
       if (flushFailure != null) {
         // Report BEFORE Sentry.close() so the event can still be sent.
         try {
