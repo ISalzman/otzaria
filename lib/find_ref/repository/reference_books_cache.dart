@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
@@ -35,9 +37,15 @@ class ReferenceBooksCache {
       <(String, ReferenceBookHit)>[];
 
   // Lazy PDF outline cache: filePath → Future of outline entries
-  // Populated on demand, not during warmup.
+  // Populated on demand (and optionally pre-warmed in background after warmUp).
   final Map<String, Future<List<(String, String, int)>>> _pdfOutlineCache =
       <String, Future<List<(String, String, int)>>>{};
+
+  /// פונקציית הפענוח של outline מ-PDF. ניתן להחליפה בבדיקות כדי להחליף את
+  /// ה-I/O הממשי בפעולה דטרמיניסטית, בלי להוציא את התלות ב-pdfrx לחוץ.
+  @visibleForTesting
+  Future<List<(String, String, int)>> Function(String filePath)
+      pdfOutlineParser = _parsePdfOutlineEntries;
 
   bool get isLoaded => _isLoaded;
 
@@ -146,6 +154,14 @@ class ReferenceBooksCache {
         '[ReferenceBooksCache] Ready with ${BooksCache.instance.books.length} DB books'
         ' + ${_fsPdfBooks.length} FS PDF books',
       );
+
+      // Pre-warm PDF outlines in the background — typically 20-40 FS PDFs,
+      // each requiring a file open + outline parse on first FindRef hit.
+      // Running here (post-swap) keeps `warmUp()`'s returned Future fast,
+      // while the throttled parse fills the cache before the user types.
+      unawaited(prewarmAllPdfOutlines().catchError((Object e) {
+        debugPrint('[ReferenceBooksCache] PDF outline pre-warm failed: $e');
+      }));
     } catch (e) {
       debugPrint('[ReferenceBooksCache] Warmup failed: $e');
       if (myGen == _generation) {
@@ -205,8 +221,62 @@ class ReferenceBooksCache {
   Future<List<(String, String, int)>> getPdfOutlineEntries(
       String filePath) async {
     return _pdfOutlineCache.putIfAbsent(
-        filePath, () => _parsePdfOutlineEntries(filePath));
+        filePath, () => pdfOutlineParser(filePath));
   }
+
+  /// Pre-warms the PDF outline cache for all currently-known FS PDF books.
+  ///
+  /// Runs in bounded batches of [maxConcurrent] files at a time to avoid
+  /// opening dozens of PdfDocument objects simultaneously (pdfrx serializes
+  /// work in a single background isolate, but each open file holds memory).
+  ///
+  /// Idempotent and cheap to re-run: entries already cached are skipped
+  /// automatically by [getPdfOutlineEntries]'s `putIfAbsent`.
+  ///
+  /// Respects [clear] via the generation counter — if the cache is cleared
+  /// mid-run, the remaining batches are aborted.
+  Future<void> prewarmAllPdfOutlines({int maxConcurrent = 4}) async {
+    // ולידציה רצה גם ב-release: ערך לא חיובי יוצר לולאה אינסופית
+    // (i += 0), עדיף להיכשל בקול מאשר להקפיא את ה-isolate.
+    if (maxConcurrent <= 0) {
+      throw ArgumentError.value(
+          maxConcurrent, 'maxConcurrent', 'must be > 0');
+    }
+    final gen = _generation;
+    final paths = _fsPdfBooks
+        .map((entry) => entry.$2.filePath)
+        .where((p) => p.isNotEmpty)
+        .toList(growable: false);
+    if (paths.isEmpty) return;
+
+    for (var i = 0; i < paths.length; i += maxConcurrent) {
+      if (gen != _generation) return;
+      final end =
+          (i + maxConcurrent < paths.length) ? i + maxConcurrent : paths.length;
+      await Future.wait([
+        for (var j = i; j < end; j++) getPdfOutlineEntries(paths[j]),
+      ]);
+    }
+    debugPrint(
+      '[ReferenceBooksCache] PDF outline pre-warm complete '
+      '(${paths.length} files)',
+    );
+  }
+
+  /// בדיקות בלבד — מאפשר למלא את רשימת ה-FS PDFs בלי לעבור דרך
+  /// [FileSystemLibraryProvider].
+  @visibleForTesting
+  void setFsPdfBooksForTesting(List<(String, ReferenceBookHit)> books) {
+    _fsPdfBooks
+      ..clear()
+      ..addAll(books);
+  }
+
+  /// בדיקות בלבד — חושף את מצב מטמון ה-outline (filePath → Future של ערכי
+  /// outline) כדי לבדוק אילו קבצים נטענו.
+  @visibleForTesting
+  Map<String, Future<List<(String, String, int)>>>
+      get pdfOutlineCacheForTesting => _pdfOutlineCache;
 
   /// Searches books by title and acronym from memory.
   ///
