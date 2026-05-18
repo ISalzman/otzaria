@@ -49,11 +49,22 @@ sedi() {
 # ---- .gitignore ----
 sedi -E "s|installer/otzaria-[0-9.]+-windows\.exe|installer/otzaria-$NEW_VERSION-windows.exe|" .gitignore
 sedi -E "s|installer/otzaria-[0-9.]+-windows-full\.exe|installer/otzaria-$NEW_VERSION-windows-full.exe|" .gitignore
+if grep -qE "installer/otzaria-[0-9.]+-windows-silent\.exe" .gitignore; then
+    sedi -E "s|installer/otzaria-[0-9.]+-windows-silent\.exe|installer/otzaria-$NEW_VERSION-windows-silent.exe|" .gitignore
+else
+    # Insert silent line right after the -full line to keep the three lines grouped.
+    sedi -E "/installer\/otzaria-[0-9.]+-windows-full\.exe/a\\
+installer/otzaria-$NEW_VERSION-windows-silent.exe
+" .gitignore
+fi
 echo "Updated .gitignore"
 
 # ---- pubspec.yaml ----
+# Update msix_version (4-part format: major.minor.patch.build) BEFORE version,
+# because the version: regex would otherwise also match msix_version: lines via greedy whitespace.
+sedi -E "s/^([[:space:]]*)msix_version:[[:space:]]*.*/\1msix_version: $NEW_VERSION.0/" pubspec.yaml
 sedi -E "s/^version: .*/version: $NEW_VERSION+$VERSION_CODE/" pubspec.yaml
-echo "Updated pubspec.yaml (version: $NEW_VERSION+$VERSION_CODE)"
+echo "Updated pubspec.yaml (version: $NEW_VERSION+$VERSION_CODE, msix_version: $NEW_VERSION.0)"
 
 # ---- installer/otzaria_full.iss ----
 ISS_FULL="installer/otzaria_full.iss"
@@ -67,6 +78,13 @@ ISS="installer/otzaria.iss"
 if [[ -f "$ISS" ]]; then
     sedi -E "s/^#define MyAppVersion .*/#define MyAppVersion \"$NEW_VERSION\"/" "$ISS"
     echo "Updated $ISS"
+fi
+
+# ---- installer/otzaria_silent.iss ----
+ISS_SILENT="installer/otzaria_silent.iss"
+if [[ -f "$ISS_SILENT" ]]; then
+    sedi -E "s/^#define MyAppVersion .*/#define MyAppVersion \"$NEW_VERSION\"/" "$ISS_SILENT"
+    echo "Updated $ISS_SILENT"
 fi
 
 # ---- android/local.properties ----
@@ -110,9 +128,10 @@ fi
 
 # ---- Git commit ----
 git add ".gitignore" "pubspec.yaml" "$VERSION_FILE" "$MAIN_DART" "$CHANGELOG"
-[[ -f "$ISS_FULL" ]] && git add "$ISS_FULL"
-[[ -f "$ISS" ]]      && git add "$ISS"
-[[ -f "$PBXPROJ" ]]  && git add "$PBXPROJ"
+[[ -f "$ISS_FULL" ]]   && git add "$ISS_FULL"
+[[ -f "$ISS" ]]        && git add "$ISS"
+[[ -f "$ISS_SILENT" ]] && git add "$ISS_SILENT"
+[[ -f "$PBXPROJ" ]]    && git add "$PBXPROJ"
 
 git commit -m "$NEW_VERSION"
 
