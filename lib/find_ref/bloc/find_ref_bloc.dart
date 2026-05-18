@@ -1,3 +1,4 @@
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_event.dart';
 import 'package:otzaria/find_ref/repository/find_ref_repository.dart';
@@ -9,7 +10,10 @@ class FindRefBloc extends Bloc<FindRefEvent, FindRefState> {
   final FindRefRepository findRefRepository;
 
   FindRefBloc({required this.findRefRepository}) : super(FindRefInitial()) {
-    on<SearchRefRequested>(_onSearchRefRequested);
+    // restartable: כל SearchRefRequested חדש מבטל handler קודם שעדיין רץ.
+    // כך הקלדה מהירה לא יכולה להוביל לכך ש-fetch ישן יחליף תוצאות חדשות
+    // (race condition כשה-DB מחזיר תוצאות בסדר לא צפוי).
+    on<SearchRefRequested>(_onSearchRefRequested, transformer: restartable());
     on<ClearSearchRequested>(_onClearSearchRequested);
     on<OpenBookRequested>(_onOpenBookRequested);
   }
@@ -26,8 +30,13 @@ class FindRefBloc extends Bloc<FindRefEvent, FindRefState> {
         event.refText,
         includePersonalBooks: event.includePersonalBooks,
       );
+      // emit.isDone יהיה true אם ה-handler בוטל ע"י restartable
+      // (event חדש הגיע באמצע ה-fetch). במצב כזה לא נpath את התוצאות
+      // המיושנות.
+      if (emit.isDone) return;
       emit(FindRefSuccess(refs));
     } catch (e) {
+      if (emit.isDone) return;
       emit(FindRefError(e.toString()));
     }
   }

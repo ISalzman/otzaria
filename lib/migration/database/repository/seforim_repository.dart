@@ -329,8 +329,7 @@ class SeforimRepository {
         );
         if (newCategory.id != 0) {
           // עדכון אינקרמנטלי של category_closure — מונע rebuild גלובלי בעלייה.
-          await _insertClosureForCategory(
-              newCategory.id, category.parentId);
+          await _insertClosureForCategory(newCategory.id, category.parentId);
           return newCategory.id;
         }
         throw Exception(
@@ -2332,7 +2331,10 @@ extension BookAcronymRepository on SeforimRepository {
     final db = await _database.database;
 
     final tocEntries = db.select('''
-        SELECT t.id, tt.text, t.level, COALESCE(l.lineIndex, t.lineId) as lineIndex, t.parentId
+        SELECT t.id, tt.text, t.level,
+               COALESCE(l.lineIndex, t.lineId) as lineIndex,
+               COALESCE(t.lineId, 0) as dbLineId,
+               t.parentId
         FROM tocEntry t
         JOIN tocText tt ON t.textId = tt.id
         LEFT JOIN line l ON t.lineId = l.id
@@ -2375,6 +2377,7 @@ extension BookAcronymRepository on SeforimRepository {
 
       final text = e['text'] as String;
       final lineIndex = e['lineIndex'] as int? ?? 0;
+      final dbLineId = e['dbLineId'] as int? ?? 0;
       final parentId = e['parentId'] as int?;
 
       final ancestorPath = buildPath(parentId);
@@ -2390,13 +2393,13 @@ extension BookAcronymRepository on SeforimRepository {
         reference: fullRef,
         segment: lineIndex,
         level: level,
+        dbLineId: dbLineId,
         ownTokens: ownTokens,
       );
 
       built.add(entry);
 
-      final parentLevel =
-          parentId == null ? null : entryLevels[parentId];
+      final parentLevel = parentId == null ? null : entryLevels[parentId];
       final isRoot =
           parentId == null || parentLevel == null || parentLevel == 0;
       if (isRoot) {
@@ -2434,7 +2437,8 @@ extension BookAcronymRepository on SeforimRepository {
 
       List<_CachedTocEntry> found = const [];
       for (final alt in alts) {
-        final hits = searchScope.where((e) => e.ownTokens.contains(alt)).toList();
+        final hits =
+            searchScope.where((e) => e.ownTokens.contains(alt)).toList();
         if (hits.isNotEmpty) {
           found = hits;
           break;
@@ -2448,8 +2452,7 @@ extension BookAcronymRepository on SeforimRepository {
       for (final e in found) {
         if (e.level < minLevel) minLevel = e.level;
       }
-      currentMatches =
-          found.where((e) => e.level == minLevel).toList();
+      currentMatches = found.where((e) => e.level == minLevel).toList();
 
       // מכין את מרחב החיפוש לטוקן הבא:
       // אם יש ילדים ישירים — יורדים אליהם (+ כל צאצאיהם).
@@ -2467,8 +2470,7 @@ extension BookAcronymRepository on SeforimRepository {
         searchScope = [
           if (includeCurrentLevel) ...currentMatches,
           ...directChildren,
-          ...directChildren
-              .expand((c) => _getAllDescendants(cache, c)),
+          ...directChildren.expand((c) => _getAllDescendants(cache, c)),
         ];
       } else {
         searchScope = currentMatches;
@@ -2522,7 +2524,9 @@ extension BookAcronymRepository on SeforimRepository {
 
     final entries = db.select('''
         SELECT e.id, t.text, e.level,
-               COALESCE(l.lineIndex, 0) as lineIndex, e.parentId
+               COALESCE(l.lineIndex, 0) as lineIndex,
+               COALESCE(e.lineId, 0) as dbLineId,
+               e.parentId
         FROM alt_toc_entry e
         JOIN tocText t ON e.textId = t.id
         LEFT JOIN line l ON e.lineId = l.id
@@ -2564,6 +2568,7 @@ extension BookAcronymRepository on SeforimRepository {
       final level = e['level'] as int;
       final text = e['text'] as String;
       final lineIndex = e['lineIndex'] as int? ?? 0;
+      final dbLineId = e['dbLineId'] as int? ?? 0;
       final parentId = e['parentId'] as int?;
 
       final ancestorPath = buildPath(parentId);
@@ -2581,6 +2586,7 @@ extension BookAcronymRepository on SeforimRepository {
         reference: fullRef,
         segment: lineIndex,
         level: level,
+        dbLineId: dbLineId,
         ownTokens: ownTokens,
       );
 
@@ -2652,6 +2658,10 @@ class _CachedTocEntry {
   final int segment;
   final int level;
 
+  /// מזהה השורה הגלובלי ב-`line` table (או 0 אם לא ידוע).
+  /// משמש לשאילתות segment-level כמו `link.sourceLineId`.
+  final int dbLineId;
+
   /// טוקנים של הטקסט של ערך זה בלבד (ללא אבות) — לשימוש בחיפוש היררכי.
   final List<String> ownTokens;
 
@@ -2660,6 +2670,7 @@ class _CachedTocEntry {
     required this.reference,
     required this.segment,
     required this.level,
+    required this.dbLineId,
     required this.ownTokens,
   });
 
@@ -2667,6 +2678,7 @@ class _CachedTocEntry {
         'reference': reference,
         'segment': segment,
         'level': level,
+        'dbLineId': dbLineId,
       };
 }
 

@@ -5,10 +5,13 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/find_ref/repository/db_reference_result.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 
 class FindRefRepository {
-  final DataRepository dataRepository;
+  /// שמור לצורך תאימות לאחור עם call-sites קיימים.
+  /// אינו בשימוש בפועל בקוד ה-repository.
+  final DataRepository? dataRepository;
 
   final Future<void> Function()? warmUpReferenceBooksCache;
   final bool Function()? isReferenceBooksCacheLoaded;
@@ -43,7 +46,15 @@ class FindRefRepository {
   /// Injection for testing: returns all books from the user personal books DB.
   /// Each record: (id, title, filePath, fileType, orderIndex).
   /// In production calls [UserBooksDatabaseHolder.instance.repository].
-  final Future<List<({int id, String title, String? filePath, String fileType, double orderIndex})>>
+  final Future<
+          List<
+              ({
+                int id,
+                String title,
+                String? filePath,
+                String fileType,
+                double orderIndex
+              })>>
       Function()? getAllUserBooks;
 
   /// Injection for testing: returns TOC entries from the user personal books DB.
@@ -54,8 +65,39 @@ class FindRefRepository {
     List<String>? queryTokens,
   })? getUserBookTocEntries;
 
+  /// Injection for testing: returns commentator rows for a specific source line.
+  /// In production calls [LinkDao.selectCommentatorsBySourceLine].
+  final Future<List<Map<String, dynamic>>> Function(int sourceLineId)?
+      selectCommentatorsBySourceLine;
+
+  /// Injection for testing: returns commentator rows for a whole book.
+  /// In production calls [LinkDao.selectCommentatorsByBook].
+  final Future<List<Map<String, dynamic>>> Function(int bookId)?
+      selectCommentatorsByBook;
+
+  /// Injection for testing: מחזירה את הדור של מפרש לפי שם.
+  /// In production calls [CommentaryService.getBookEra].
+  final Future<CommentaryEra> Function(String bookTitle)? getBookEra;
+
+  /// Injection for testing: מחזיר את ה-lineIndex (יחסי לספר המפרש) של השורה
+  /// המקושרת ל-[sourceLineId] בספר ששמו [targetBookTitle].
+  /// In production calls [LinkDao.selectCommentatorTargetLineIndex].
+  final Future<int?> Function(int sourceLineId, String targetBookTitle)?
+      selectCommentatorTargetLineIndex;
+
+  /// Injection for testing: fallback resolver דרך bookId+lineIndex של המקור.
+  /// In production calls [LinkDao.selectCommentatorTargetLineIndexByBookLine].
+  final Future<int?> Function(
+          int sourceBookId, int sourceLineIndex, String targetBookTitle)?
+      selectCommentatorTargetLineIndexByBookLine;
+
+  /// קאש בזיכרון: מפתח = "bookId:sourceLineId" (sourceLineId=0 כשנופלים ל-book-level).
+  /// חי כל זמן שה-repository חי. אינו מתנקה אוטומטית — קטן יחסית
+  /// (לכל היותר ~15 מפתחות פר session, רוב המשתמשים פחות).
+  final Map<String, List<String>> _commentatorsCache = {};
+
   FindRefRepository({
-    required this.dataRepository,
+    this.dataRepository,
     this.warmUpReferenceBooksCache,
     this.isReferenceBooksCacheLoaded,
     this.searchReferenceBooks,
@@ -66,7 +108,132 @@ class FindRefRepository {
     this.getPdfOutlineEntries,
     this.getAllUserBooks,
     this.getUserBookTocEntries,
+    this.selectCommentatorsBySourceLine,
+    this.selectCommentatorsByBook,
+    this.getBookEra,
+    this.selectCommentatorTargetLineIndex,
+    this.selectCommentatorTargetLineIndexByBookLine,
   });
+
+  /// מחזיר את ה-segment בתוך ספר המפרש [commentatorTitle] שמתאים ל-segment
+  /// המקור של [ref]. PDF / ספרים אישיים — `null`.
+  ///
+  /// אסטרטגיה (שלושה שלבים):
+  /// 1. אם `ref.sourceLineId > 0`: שאילתת link ישירה לפי `sourceLineId`.
+  /// 2. אם השלב הראשון לא החזיר ערך ו-`ref.bookId > 0`: fallback ע"י
+  ///    `sourceBookId + lineIndex` (למקרה ש-tocEntry.lineId היה NULL).
+  /// 3. fallback אחרון: מחזיר את `ref.segment` כ-best-effort — נכון רק
+  ///    אם המפרש aligned שורה-שורה עם המקור.
+  Future<int?> resolveCommentatorSegment(
+      DbReferenceResult ref, String commentatorTitle) async {
+    if (ref.isPdf || ref.isUserBook) return null;
+
+    final repository = SqliteDataProvider.instance.repository;
+    final byLineFn = selectCommentatorTargetLineIndex ??
+        (repository == null
+            ? null
+            : (int lineId, String title) => repository.database.linkDao
+                .selectCommentatorTargetLineIndex(lineId, title));
+    final byBookLineFn = selectCommentatorTargetLineIndexByBookLine ??
+        (repository == null
+            ? null
+            : (int bookId, int lineIndex, String title) =>
+                repository.database.linkDao
+                    .selectCommentatorTargetLineIndexByBookLine(
+                        bookId, lineIndex, title));
+
+    // שלב 1: lookup לפי sourceLineId הגלובלי.
+    if (ref.sourceLineId > 0 && byLineFn != null) {
+      try {
+        final result =
+            await byLineFn(ref.sourceLineId, commentatorTitle);
+        if (result != null) return result;
+      } catch (_) {/* נופל לשלב הבא */}
+    }
+
+    // שלב 2: lookup לפי bookId + lineIndex (כש-tocEntry.lineId היה NULL).
+    final sourceLineIndex = ref.segment.toInt();
+    if (ref.bookId > 0 && byBookLineFn != null && sourceLineIndex >= 0) {
+      try {
+        final result = await byBookLineFn(
+            ref.bookId, sourceLineIndex, commentatorTitle);
+        if (result != null) return result;
+      } catch (_) {/* נופל לfallback */}
+    }
+
+    // שלב 3: best-effort — לפי הנחת alignment שורה-שורה.
+    return sourceLineIndex >= 0 ? sourceLineIndex : null;
+  }
+
+  /// מחזיר רשימת שמות-מפרשים זמינים עבור תוצאה.
+  ///
+  /// אסטרטגיה:
+  /// 1. אם [DbReferenceResult.sourceLineId] > 0 — שאילתה segment-level.
+  ///    אם החזירה תוצאות — מחזיר אותן (זה הרזולוציה המדויקת ביותר).
+  /// 2. אחרת (או אם segment-level חזר ריק) — שאילתה book-level לכל הספר.
+  /// 3. PDFs / ספרים מחוץ ל-DB (bookId <= 0) / ספרים אישיים — מחזיר ריק.
+  ///    ספרים אישיים: ה-bookId/sourceLineId שלהם שייכים ל-user_books.db ולא
+  ///    מתאימים ל-link table של ה-DB הראשי — שאילתה תחזיר מפרשים שגויים.
+  ///
+  /// תוצאות נשמרות בקאש בזיכרון לאורך חיי ה-repository.
+  Future<List<String>> getCommentatorsForResult(DbReferenceResult ref) async {
+    if (ref.isPdf || ref.bookId <= 0 || ref.isUserBook) return const [];
+
+    final cacheKey = '${ref.bookId}:${ref.sourceLineId}';
+    final cached = _commentatorsCache[cacheKey];
+    if (cached != null) return cached;
+
+    final repository = SqliteDataProvider.instance.repository;
+    final lineFn = selectCommentatorsBySourceLine ??
+        (repository == null
+            ? null
+            : (int lineId) => repository.database.linkDao
+                .selectCommentatorsBySourceLine(lineId));
+    final bookFn = selectCommentatorsByBook ??
+        (repository == null
+            ? null
+            : (int bookId) =>
+                repository.database.linkDao.selectCommentatorsByBook(bookId));
+
+    if (lineFn == null && bookFn == null) return const [];
+
+    List<Map<String, dynamic>> rows = const [];
+    if (ref.sourceLineId > 0 && lineFn != null) {
+      rows = await lineFn(ref.sourceLineId);
+    }
+    if (rows.isEmpty && bookFn != null) {
+      rows = await bookFn(ref.bookId);
+    }
+
+    final titles = <String>[];
+    final seen = <String>{};
+    for (final row in rows) {
+      final title = row['targetBookTitle'] as String?;
+      if (title == null || title.isEmpty) continue;
+      if (seen.add(title)) titles.add(title);
+    }
+
+    if (titles.isEmpty) {
+      _commentatorsCache[cacheKey] = const [];
+      return const [];
+    }
+
+    // מיון לפי סדר הדורות (תורה → חז"ל → ראשונים → אחרונים → מודרני → שאר),
+    // ובתוך כל דור — אלפביתי. תואם להתנהגות תפריט המפרשים ב-text-book viewer.
+    final eraResolver = getBookEra ?? CommentaryService.getBookEra;
+    final eras = await Future.wait(titles.map(eraResolver));
+    final indices = List<int>.generate(titles.length, (i) => i)
+      ..sort((a, b) {
+        final ea = eras[a];
+        final eb = eras[b];
+        if (ea.order != eb.order) return ea.order.compareTo(eb.order);
+        return titles[a].compareTo(titles[b]);
+      });
+    final sorted = [for (final i in indices) titles[i]];
+
+    _commentatorsCache[cacheKey] = sorted;
+    return sorted;
+  }
 
   Future<List<DbReferenceResult>> findRefs(
     String ref, {
@@ -161,7 +328,9 @@ class FindRefRepository {
       final phraseTokens = queryTokens.take(n).toList();
       final qualifiedHits = hits.where((hit) {
         if (hit.matchRank >= 3) return true; // acronym match – always accept
-        if (hit.matchRank == 2) return false; // contains-only – never accept for n>1
+        if (hit.matchRank == 2) {
+          return false; // contains-only – never accept for n>1
+        }
         // הכותרת המנורמלת כבר מחושבת מראש בתוך הקאש.
         final titleTokens = _tokenize(hit.normalizedTitle);
         // Every phrase token at index i must match the start of title token i.
@@ -314,6 +483,7 @@ class FindRefRepository {
               orderIndex: hit.orderIndex,
               tocLevel: level,
               bookId: bookId,
+              sourceLineId: entry['dbLineId'] as int? ?? 0,
             ));
           }
         }
@@ -334,6 +504,7 @@ class FindRefRepository {
             orderIndex: hit.orderIndex,
             tocLevel: entry['level'] as int,
             bookId: bookId,
+            sourceLineId: entry['dbLineId'] as int? ?? 0,
           ));
         }
 
@@ -362,6 +533,7 @@ class FindRefRepository {
             tocLevel: entry['level'] as int,
             isAltToc: true,
             bookId: bookId,
+            sourceLineId: entry['dbLineId'] as int? ?? 0,
           ));
         }
       }
@@ -401,6 +573,7 @@ class FindRefRepository {
             tocLevel: entry['level'] as int,
             isAltToc: true,
             bookId: bookId,
+            sourceLineId: entry['dbLineId'] as int? ?? 0,
           ));
         }
       }
@@ -425,7 +598,14 @@ class FindRefRepository {
     final out = <DbReferenceResult>[];
     try {
       // Resolve user books list (injection or live DB)
-      final List<({int id, String title, String? filePath, String fileType, double orderIndex})> allBooks;
+      final List<
+          ({
+            int id,
+            String title,
+            String? filePath,
+            String fileType,
+            double orderIndex
+          })> allBooks;
       SeforimRepository? userRepo;
 
       if (getAllUserBooks != null) {
@@ -456,7 +636,8 @@ class FindRefRepository {
         if (injected != null) {
           return injected(bookId, bookTitle, queryTokens: qt);
         }
-        userRepo ??= UserBooksDatabaseHolder.instance.repository as SeforimRepository;
+        userRepo ??=
+            UserBooksDatabaseHolder.instance.repository as SeforimRepository;
         return (userRepo as SeforimRepository).getTocEntriesForReference(
           bookId,
           bookTitle,
@@ -504,6 +685,7 @@ class FindRefRepository {
             orderIndex: book.orderIndex,
             bookId: book.id,
             bookPath: personalBookPath,
+            isUserBook: true,
           ));
         } else if (remainingTokens.isEmpty) {
           // Book title + all level-2 TOC entries
@@ -516,6 +698,7 @@ class FindRefRepository {
             orderIndex: book.orderIndex,
             bookId: book.id,
             bookPath: personalBookPath,
+            isUserBook: true,
           ));
           final toc = await fetchUserToc(book.id, book.title);
           for (final entry in toc) {
@@ -531,6 +714,8 @@ class FindRefRepository {
                 tocLevel: level,
                 bookId: book.id,
                 bookPath: personalBookPath,
+                sourceLineId: entry['dbLineId'] as int? ?? 0,
+                isUserBook: true,
               ));
             }
           }
@@ -552,6 +737,8 @@ class FindRefRepository {
               tocLevel: entry['level'] as int,
               bookId: book.id,
               bookPath: personalBookPath,
+              sourceLineId: entry['dbLineId'] as int? ?? 0,
+              isUserBook: true,
             ));
           }
         }
@@ -597,6 +784,8 @@ class FindRefRepository {
         tocLevel: r.tocLevel,
         bookId: r.bookId,
         bookPath: path,
+        sourceLineId: r.sourceLineId,
+        isUserBook: r.isUserBook,
       );
     }).toList();
   }
@@ -683,7 +872,9 @@ class FindRefRepository {
       if (needsTokenWiseRanking) {
         for (int i = 1; i < queryTokens.length; i++) {
           final queryToken = queryTokens[i];
-          if (queryToken.length == 1) continue; // ← skip single-char location tokens
+          if (queryToken.length == 1) {
+            continue; // ← skip single-char location tokens
+          }
           final aHasMatch = i < a.titleTokens.length &&
               a.titleTokens[i].startsWith(queryToken);
           final bHasMatch = i < b.titleTokens.length &&
@@ -696,18 +887,21 @@ class FindRefRepository {
       if (a.citationMatch != b.citationMatch) return a.citationMatch ? -1 : 1;
 
       // 5. סדר ספר בספרייה — ספרי יסוד ודורות קדומים עולים ראשונים
-      final orderCmp =
-          a.result.orderIndex.compareTo(b.result.orderIndex);
+      final orderCmp = a.result.orderIndex.compareTo(b.result.orderIndex);
       if (orderCmp != 0) return orderCmp;
 
       // 6. סדר: TOC L1 < TOC L2 < AltToc < TOC L3+
       // AltToc (כותרות-משנה) מופיע אחרי הכותרות הבסיסיות (רמה 2) אך לפני הכותרות הפנימיות (רמה 3+).
       final aRank = a.result.isAltToc
           ? 3
-          : (a.result.tocLevel <= 2 ? a.result.tocLevel : a.result.tocLevel + 1);
+          : (a.result.tocLevel <= 2
+              ? a.result.tocLevel
+              : a.result.tocLevel + 1);
       final bRank = b.result.isAltToc
           ? 3
-          : (b.result.tocLevel <= 2 ? b.result.tocLevel : b.result.tocLevel + 1);
+          : (b.result.tocLevel <= 2
+              ? b.result.tocLevel
+              : b.result.tocLevel + 1);
       if (aRank != bRank) return aRank.compareTo(bRank);
 
       // 7. ציון קצר יותר עולה קודם (כשאותו ספר מחזיר מספר רמות)
@@ -739,7 +933,14 @@ class FindRefRepository {
     if (tokens.contains('דף') || tokens.contains('עמוד')) return true;
     // מספר דף עברי: 2–4 אותיות עבריות, ואינו מילת מבנה
     const structureWords = {
-      'פרק', 'משנה', 'פסוק', 'הלכה', 'סעיף', 'סימן', 'חלק', 'שאלה'
+      'פרק',
+      'משנה',
+      'פסוק',
+      'הלכה',
+      'סעיף',
+      'סימן',
+      'חלק',
+      'שאלה'
     };
     final penultimate = tokens[tokens.length - 2];
     if (structureWords.contains(penultimate)) return false;

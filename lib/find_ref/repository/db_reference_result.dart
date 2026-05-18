@@ -37,6 +37,15 @@ class DbReferenceResult {
   /// ריק אם לא נמצא.
   final String bookPath;
 
+  /// מזהה השורה הגלובלי ב-`line` table של ה-DB (לשאילתות `link.sourceLineId`).
+  /// 0 = לא ידוע / לא רלוונטי (למשל הפניה לספר עצמו או PDF).
+  final int sourceLineId;
+
+  /// true = תוצאה מ-user_books.db (ספרים אישיים).
+  /// ה-[bookId] וה-[sourceLineId] שייכים ל-namespace נפרד ואינם תקפים מול
+  /// ה-DB הראשי — אסור להריץ עליהם שאילתות `link` או `commentators`.
+  final bool isUserBook;
+
   const DbReferenceResult({
     required this.title,
     required this.reference,
@@ -48,6 +57,8 @@ class DbReferenceResult {
     this.tocLevel = 1,
     this.bookId = -1,
     this.bookPath = '',
+    this.sourceLineId = 0,
+    this.isUserBook = false,
   });
 
   @override
