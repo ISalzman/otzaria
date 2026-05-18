@@ -10,6 +10,7 @@ import 'package:otzaria/core/app_paths.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
@@ -35,6 +36,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         _defaultLibraryPathOverride = defaultLibraryPathOverride,
         super(const EmptyLibraryInitial(
             downloadDisabledReason: 'בודק מקום פנוי...')) {
+    HttpClientRegistry.register(_httpClient.close);
     on<PickDirectoryRequested>(_onPickDirectoryRequested);
     on<PickArchiveFileRequested>(_onPickArchiveFileRequested);
     on<DownloadLibraryRequested>(_onDownloadLibraryRequested);
@@ -1033,6 +1035,13 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     } finally {
       bindings.ZSTD_freeDStream(dStream);
     }
+  }
+
+  @override
+  Future<void> close() {
+    HttpClientRegistry.unregister(_httpClient.close);
+    _httpClient.close();
+    return super.close();
   }
 }
 

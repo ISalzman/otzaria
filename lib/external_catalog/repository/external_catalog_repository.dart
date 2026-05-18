@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:path/path.dart' as path;
@@ -24,7 +25,9 @@ class ExternalCatalogRepository {
     http.Client? httpClient,
     Zstandard? zstandard,
   })  : _httpClient = httpClient ?? http.Client(),
-        _zstandard = zstandard ?? Zstandard();
+        _zstandard = zstandard ?? Zstandard() {
+    HttpClientRegistry.register(_httpClient.close);
+  }
 
   /// מחזיר את נתיב קובץ ה-DB של הקטלוגים.
   String get databasePath => DatabaseConstants.getExternalCatalogDatabasePath();

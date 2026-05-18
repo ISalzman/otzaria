@@ -89,6 +89,15 @@ class DirectErrorReportService {
               toJson: (report) => report.toJson(),
             );
 
+  /// סוגר את ה-HTTP client הפנימי. ב-Windows admin install הקרנל נתקע
+  /// לכמה שניות בעת ניקוי socket handles ביציאה, אז יש לקרוא לפונקציה
+  /// הזו כשלב מקדים ל-onWindowClose עבור המופע הארוך-טווח (זה שמריץ
+  /// את `startAutomaticFlush` ב-main.dart). מופעים קצרי-טווח שנוצרים
+  /// בדיאלוגים ובמסכי הגדרות לא צריכים להיכלל כאן.
+  Future<void> closeHttpClient() async {
+    _client.close();
+  }
+
   String get senderEmail => (Settings.getValue<String>(
               SettingsRepository.keyErrorReportSenderEmail) ??
           '')

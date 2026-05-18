@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
@@ -92,6 +93,18 @@ class AppWindowListener extends WindowListener {
       _armForceExitWatchdog,
       timeout: const Duration(seconds: 1),
     );
+
+    // סוגרים את כל ה-HTTP clients המתמשכים לפני כל ניקוי אחר. כל socket
+    // פתוח מחזיק handle של kernel + state של TLS; ב-Windows admin install
+    // + ריצה לא-elevated, ניקוי ה-I/O ע"י הקרנל ביציאה לוקח מספר שניות
+    // (Defender real-time scan + מדיניות אמון נמוך). סגירה מקדימה משחררת
+    // את ה-resources בזמן שה-UI thread עוד פעיל, ומונעת "Not Responding".
+    await _runBestEffortShutdownStep(
+      'closeHttpClients',
+      HttpClientRegistry.closeAll,
+      timeout: const Duration(seconds: 1),
+    );
+
     await _runBestEffortShutdownStep(
       'prepareForAppShutdown',
       PluginRuntimeDispatcher.instance.prepareForAppShutdown,

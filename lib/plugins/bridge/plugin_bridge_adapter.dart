@@ -11,6 +11,7 @@ import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/search_repository.dart';
@@ -180,15 +181,20 @@ class PluginBridgeAdapter {
   })  : _dependencies = dependencies,
         _pluginRepo = pluginRepository ?? PluginRegistryRepository(),
         _notificationService = notificationService ?? NotificationService(),
-        _databaseService = databaseService ?? PluginDatabaseService();
+        _databaseService = databaseService ?? PluginDatabaseService() {
+    HttpClientRegistry.register(_closeHttpClient);
+  }
 
   final HttpClient _httpClient = HttpClient();
 
   // bookId → index → PluginHighlight (in-memory, per adapter instance)
   final Map<String, Map<int, PluginHighlight>> _highlights = {};
 
+  void _closeHttpClient() => _httpClient.close(force: true);
+
   void dispose() {
-    _httpClient.close(force: true);
+    HttpClientRegistry.unregister(_closeHttpClient);
+    _closeHttpClient();
   }
 
   Future<dynamic> execute(
