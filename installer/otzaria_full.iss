@@ -625,10 +625,10 @@ begin
     'תכונות עיקריות באוצריא',
     'הצצה למה שמחכה לכם בתוכנה');
 
-  files[0] := 'feature1.bmp';  captions[0] := 'חיפוש מתקדם';
-  files[1] := 'feature2.bmp';  captions[1] := 'ספר עם מפרשים';
-  files[2] := 'feature3.bmp';  captions[2] := 'סימניות והיסטוריה';
-  files[3] := 'feature4.bmp';  captions[3] := 'הערות אישיות';
+  files[0] := 'feature1.bmp';  captions[0] := 'ספר עם מפרשים';
+  files[1] := 'feature2.bmp';  captions[1] := 'לוח שנה';
+  files[2] := 'feature3.bmp';  captions[2] := 'ספרי PDF';
+  files[3] := 'feature4.bmp';  captions[3] := 'חיפוש מתקדם';
 
   // יחס תמונה 210/400. גודל דינמי לפי שטח העמוד.
   thumbW := (FeaturesPage.SurfaceWidth - FEATURES_GAP_X) div 2;
