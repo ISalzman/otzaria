@@ -63,6 +63,7 @@ import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
+import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
@@ -487,7 +488,13 @@ Future<void> _initializeProcessSingletons() async {
   }
 
   try {
-    await DirectErrorReportService().startAutomaticFlush();
+    // המופע הארוך-טווח: רץ עם Timer.periodic של 5 דקות, מחזיק http.Client
+    // עם connection pool שעלול לתקוע את היציאה ב-Windows admin install.
+    // רק המופע הזה נרשם ב-HttpClientRegistry; מופעים קצרי-טווח אחרים שנוצרים
+    // לפי דרישה (בדיאלוגים/הגדרות) אינם נרשמים כדי למנוע memory leak.
+    final reportService = DirectErrorReportService();
+    HttpClientRegistry.register(reportService.closeHttpClient);
+    await reportService.startAutomaticFlush();
   } catch (error, stackTrace) {
     _logNonFatalInitializationError(
         'Direct error report queue', error, stackTrace);

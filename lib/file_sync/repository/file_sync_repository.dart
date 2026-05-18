@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/services/data_collection_service.dart';
@@ -26,7 +27,9 @@ class FileSyncRepository {
     Future<Uint8List> Function(Uint8List compressedBytes)? decompressDiff,
   })  : _httpClient = httpClient ?? http.Client(),
         _zstandard = zstandard ?? Zstandard(),
-        _decompressDiff = decompressDiff;
+        _decompressDiff = decompressDiff {
+    HttpClientRegistry.register(_httpClient.close);
+  }
 
   int get currentProgress => _currentProgress;
   int get totalFiles => _totalFiles;
