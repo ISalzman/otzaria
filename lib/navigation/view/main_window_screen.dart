@@ -51,6 +51,7 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_state.dart';
 import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
+import 'package:otzaria/widgets/misc/app_context_menu.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
 import 'package:otzaria/work_status/work_status_item.dart';
 import 'package:otzaria/work_status/work_status_overlay.dart';
@@ -1155,8 +1156,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
         _scheduleTourTargetRebuilds(remainingFrames: 4);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          (tourTabSideBySideMenuItemTargetKey.currentState as dynamic)
-              ?.openSubmenu(() {
+          // ייתכן שהפריט נבנה כ-MenuItemButton רגיל (למשל כאשר אין מועמדות
+          // ל"הצג לצד" — לשונית בודדת או רק CombinedTabs). במקרה כזה אין
+          // תת-תפריט לפתוח, ולכן מדלגים בשקט במקום לזרוק NoSuchMethodError.
+          final submenuState = tourTabSideBySideMenuItemTargetKey.currentState;
+          if (submenuState is! AppSubmenuOpener) return;
+          final opener = submenuState as AppSubmenuOpener;
+          opener.openSubmenu(() {
             if (!mounted) return;
             _scheduleTourTargetRebuilds(remainingFrames: 4);
           });
