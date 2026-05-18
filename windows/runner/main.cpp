@@ -64,6 +64,39 @@ static std::string UrlEncodeQueryComponent(const std::string& s) {
   return out;
 }
 
+// Case-insensitive ASCII string equality.
+static bool EqualsIgnoreCase(const std::string& a, const std::string& b) {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); ++i) {
+    char ca = a[i];
+    char cb = b[i];
+    if (ca >= 'A' && ca <= 'Z') ca = static_cast<char>(ca - 'A' + 'a');
+    if (cb >= 'A' && cb <= 'Z') cb = static_cast<char>(cb - 'A' + 'a');
+    if (ca != cb) return false;
+  }
+  return true;
+}
+
+// Returns true when the command-line indicates a CLI sub-command that must
+// run without a visible window and without the single-instance guard
+// (e.g. `otzaria.exe pack-plugin <path>`). Strips a leading `--` / `/` and
+// underscores so `--pack-plugin` and `pack_plugin` are also accepted.
+//
+// Note: |args| is the list returned by GetCommandLineArguments(), which
+// already strips argv[0]. The first user-supplied argument is therefore at
+// index 0.
+static bool IsCliInvocation(const std::vector<std::string>& args) {
+  if (args.empty()) return false;
+  std::string cmd = args[0];
+  while (!cmd.empty() && (cmd.front() == '-' || cmd.front() == '/')) {
+    cmd.erase(cmd.begin());
+  }
+  for (auto& c : cmd) {
+    if (c == '_') c = '-';
+  }
+  return EqualsIgnoreCase(cmd, "pack-plugin");
+}
+
 // Case-insensitive check whether `s` ends with `suffix` (ASCII only).
 static bool EndsWithIgnoreCase(const std::string& s, const std::string& suffix) {
   if (s.size() < suffix.size()) return false;
@@ -140,13 +173,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
+  // CLI sub-commands (e.g. `pack-plugin`) must skip the single-instance check
+  // so they work even when the GUI is already running, and must not raise the
+  // existing GUI window. The Dart entrypoint will call exit() before any UI
+  // is rendered.
+  std::vector<std::string> early_args = GetCommandLineArguments();
+  const bool is_cli_invocation = IsCliInvocation(early_args);
+
   // Single-instance check: must happen before the Flutter engine starts so
   // that the second instance never acquires any shared resources (DB, etc.).
   // bInitialOwner = FALSE: we don't need ownership, just existence of the object.
   // If CreateMutexW fails (returns NULL), treat as first instance so the app
   // can still start rather than being permanently blocked.
-  HANDLE mutex =
-      CreateMutexW(nullptr, FALSE, kSingleInstanceMutexName);
+  HANDLE mutex = is_cli_invocation
+                     ? nullptr
+                     : CreateMutexW(nullptr, FALSE, kSingleInstanceMutexName);
   bool is_second_instance =
       (mutex != nullptr && GetLastError() == ERROR_ALREADY_EXISTS);
 
@@ -154,8 +195,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     // Enqueue any otzaria:// URIs (and .otzplugin file paths) passed on the
     // command line so the first instance can handle them via its file-watcher,
     // then exit immediately.
-    std::vector<std::string> args = GetCommandLineArguments();
-    for (const auto& arg : args) {
+    for (const auto& arg : early_args) {
       if (arg.size() >= 8 &&
           _strnicmp(arg.c_str(), "otzaria:", 8) == 0) {
         EnqueueUri(arg);
@@ -180,7 +220,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
-  FlutterWindow window(project);
+  FlutterWindow window(project, /*headless=*/is_cli_invocation);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
   if (!window.Create(kMainWindowTitle, origin, size)) {

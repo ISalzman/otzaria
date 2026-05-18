@@ -15,7 +15,11 @@
 class FlutterWindow : public Win32Window {
  public:
   // Creates a new FlutterWindow hosting a Flutter view running |project|.
-  explicit FlutterWindow(const flutter::DartProject& project);
+  // When |headless| is true, the window will not be shown after the first
+  // frame — used for CLI commands (e.g. pack-plugin) that expect the Dart
+  // entrypoint to call exit() before any UI is rendered.
+  explicit FlutterWindow(const flutter::DartProject& project,
+                         bool headless = false);
   virtual ~FlutterWindow();
 
  protected:
@@ -30,6 +34,9 @@ class FlutterWindow : public Win32Window {
 
   // The project to run.
   flutter::DartProject project_;
+
+  // When true, skip Show() in the first-frame callback. Used by CLI commands.
+  bool headless_ = false;
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
