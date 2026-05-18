@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -109,6 +111,114 @@ void main() {
     final delayedWidths = _tabWidthsInScrollableBar(tester);
     expect(delayedWidths, hasLength(2));
     expect(delayedWidths.first, greaterThan(initialWidth));
+  });
+
+  testWidgets('ביישור לימין טאב יחיד נשאר ברוחב טבעי ולא מקבל רוחב אחיד',
+      (tester) async {
+    final tab = _makeTextTab('ספר א');
+    final tabsBloc = _TestTabsBloc(
+      TabsState(tabs: [tab], currentTabIndex: 0),
+    );
+    final navigationBloc = _TestNavigationBloc(
+      const NavigationState(currentScreen: Screen.reading),
+    );
+    final settingsBloc = _TestSettingsBloc(
+      SettingsState.initial().copyWith(alignTabsToRight: true),
+    );
+
+    addTearDown(() async {
+      tab.dispose();
+      await tabsBloc.close();
+      await navigationBloc.close();
+      await settingsBloc.close();
+    });
+
+    await _setSurfaceSize(tester, const Size(1200, 800));
+    await _pumpTitleBar(
+      tester,
+      tabsBloc: tabsBloc,
+      navigationBloc: navigationBloc,
+      settingsBloc: settingsBloc,
+    );
+
+    expect(_tabWidthsInScrollableBar(tester), isEmpty);
+  });
+
+  testWidgets('ביישור לימין כמה טאבים עדיין מציגים את הכותרות שלהם',
+      (tester) async {
+    final first = _makeTextTab('ספר א');
+    final second = _makeTextTab('ספר ב');
+    final tabsBloc = _TestTabsBloc(
+      TabsState(tabs: [first, second], currentTabIndex: 0),
+    );
+    final navigationBloc = _TestNavigationBloc(
+      const NavigationState(currentScreen: Screen.reading),
+    );
+    final settingsBloc = _TestSettingsBloc(
+      SettingsState.initial().copyWith(alignTabsToRight: true),
+    );
+
+    addTearDown(() async {
+      first.dispose();
+      second.dispose();
+      await tabsBloc.close();
+      await navigationBloc.close();
+      await settingsBloc.close();
+    });
+
+    await _setSurfaceSize(tester, const Size(1200, 800));
+    await _pumpTitleBar(
+      tester,
+      tabsBloc: tabsBloc,
+      navigationBloc: navigationBloc,
+      settingsBloc: settingsBloc,
+    );
+
+    expect(find.text('ספר א'), findsOneWidget);
+    expect(find.text('ספר ב'), findsOneWidget);
+  });
+
+  testWidgets('ביישור לימין hover על טאב לא יוצר overflow',
+      (tester) async {
+    final first = _makeTextTab('ספר א');
+    final second = _makeTextTab('ספר ב');
+    final third = _makeTextTab('ספר ג');
+    final fourth = _makeTextTab('ספר ד');
+    final tabsBloc = _TestTabsBloc(
+      TabsState(tabs: [first, second, third, fourth], currentTabIndex: 0),
+    );
+    final navigationBloc = _TestNavigationBloc(
+      const NavigationState(currentScreen: Screen.reading),
+    );
+    final settingsBloc = _TestSettingsBloc(
+      SettingsState.initial().copyWith(alignTabsToRight: true),
+    );
+
+    addTearDown(() async {
+      first.dispose();
+      second.dispose();
+      third.dispose();
+      fourth.dispose();
+      await tabsBloc.close();
+      await navigationBloc.close();
+      await settingsBloc.close();
+    });
+
+    await _setSurfaceSize(tester, const Size(820, 800));
+    await _pumpTitleBar(
+      tester,
+      tabsBloc: tabsBloc,
+      navigationBloc: navigationBloc,
+      settingsBloc: settingsBloc,
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(gesture.removePointer);
+    await gesture.addPointer();
+    await gesture.moveTo(tester.getCenter(find.text('ספר ג')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
   });
 }
 
