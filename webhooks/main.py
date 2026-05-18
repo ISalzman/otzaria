@@ -1,19 +1,25 @@
+"""פרסום הכרזה על גרסה חדשה: פורום אוצריא + צינתוק ימות."""
+
 import json
 import os
+import re
+from pathlib import Path
 
 from pyluach import dates
 from yemot_api.yemot_api import Yemot
 from yemot_api.input_types import RunTzintukMethod
 from yemot_api.exceptions import YemotAPIError
 
-from mitmachim import MitmachimClient
-# from yemot import split_and_send
+from forum import NodeBBClient
+
+
+CHANGELOG_PATH = Path("assets/יומן שינויים.md")
+FORUM_BASE_URL = "https://otzaria.org/forum"
+FORUM_TOPIC_ID = 1373
 
 
 def heb_date() -> str:
-    today = dates.HebrewDate.today()
-    date_str = today.hebrew_date_string()
-    return date_str
+    return dates.HebrewDate.today().hebrew_date_string()
 
 
 def require_env(name: str) -> str:
@@ -26,68 +32,115 @@ def require_env(name: str) -> str:
 def load_asset_links(event_path: str | None) -> list[str]:
     if not event_path:
         return []
-
     with open(event_path, "r", encoding="utf-8") as file:
         event_data = json.load(file)
-
     assets = event_data.get("release", {}).get("assets", [])
     return [f"[{asset['name']}]({asset['browser_download_url']})" for asset in assets]
 
 
-date_str = heb_date()
-RELEASE_TAG = os.getenv("RELEASE_TAG", "Unknown")
-RELEASE_NAME = os.getenv("RELEASE_NAME", "No Name")
-RELEASE_BODY = os.getenv("RELEASE_BODY", "")
-RELEASE_URL = os.getenv("RELEASE_URL", "")
-GITHUB_EVENT_PATH = os.getenv("GITHUB_EVENT_PATH")
-username = require_env("USER_NAME")
-password = require_env("PASSWORD")
-yemot_token = require_env("TOKEN_YEMOT")
-asset_links = load_asset_links(GITHUB_EVENT_PATH)
-date_yemot = f"עדכון {date_str}\n"
-yemot_path = "ivr2:/2"
-tzintuk_list_name = "software update"
-yemot_message = f"עדכון {date_str}\nשחרור {RELEASE_NAME}\nפרטים: {RELEASE_BODY}\n"
-asset_section = ""
-if asset_links:
-    asset_section = "\nקבצים מצורפים:\n* " + "\n* ".join(asset_links)
-content_mitmachim = (
-    f"עדכון {date_str}\n"
-    f"שחרור {RELEASE_NAME}\n"
-    f"תג: {RELEASE_TAG}\n"
-    f"פרטים: {RELEASE_BODY}\n"
-    f"{RELEASE_URL}"
-    f"{asset_section}"
-)
+def extract_version(tag: str) -> str:
+    """מחלץ את מספר הגרסה הסמנטית מתוך תג (לדוגמה '0.9.92+631' → '0.9.92')."""
+    match = re.match(r"(\d+\.\d+\.\d+)", tag)
+    return match.group(1) if match else tag
 
-errors = []
-client = None
 
-try:
-    client = MitmachimClient(username.replace(" ", "+"), password)
-    client.login()
-    topic_id = 87961
-    client.send_post(content_mitmachim, topic_id)
-except Exception as error:
-    errors.append(f"Mitmachim announcement failed: {error}")
-finally:
-    if client is not None:
-        try:
-            client.logout()
-        except Exception as error:
-            errors.append(f"Mitmachim logout failed: {error}")
+def load_changelog_section(version: str) -> str:
+    """שולף את הסעיף של הגרסה מתוך 'יומן שינויים.md'.
 
-# try:
-#     split_and_send(yemot_message, date_yemot, yemot_token, yemot_path, tzintuk_list_name)
-# except Exception as error:
-#     errors.append(f"Yemot announcement failed: {error}")
-ins = Yemot(yemot_token)
-tzintuk_list_name = "software update"
-caller_id = "0773420857"
-try:
-    ins.run_tzintuk(RunTzintukMethod.TZL, [tzintuk_list_name], caller_id=caller_id, tzintuk_time_out=16)
-except YemotAPIError as e:
-    print(f"Error: {e}")
+    מצפה למבנה ``* **<גרסה>**`` ואחריו רשימת בולטים בהזחה,
+    ומסיים ברגע שמתחיל סעיף הגרסה הבא או בסוף הקובץ.
+    """
+    if not CHANGELOG_PATH.is_file():
+        return ""
+    text = CHANGELOG_PATH.read_text(encoding="utf-8")
+    pattern = re.compile(
+        rf"^\* \*\*{re.escape(version)}\*\*[ \t]*\n(.*?)(?=^\* \*\*|\Z)",
+        re.DOTALL | re.MULTILINE,
+    )
+    match = pattern.search(text)
+    if not match:
+        return ""
+    # ניקוי הזחה משורות הבולטים (מ-"  - " ל-"- ")
+    body = match.group(1).rstrip()
+    return re.sub(r"^[ \t]+-\s", "- ", body, flags=re.MULTILINE)
 
-if errors:
-    raise RuntimeError("\n".join(errors))
+
+def build_forum_message(
+    version: str,
+    release_name: str,
+    release_url: str,
+    changelog: str,
+    assets: list[str],
+) -> str:
+    title = release_name.strip() if release_name.strip() else f"גרסה {version}"
+    parts = [
+        f"## {title}",
+        f"_עדכון {heb_date()}_",
+        "",
+    ]
+    if changelog:
+        parts.append("### מה חדש")
+        parts.append(changelog)
+        parts.append("")
+    if release_url:
+        parts.append(f"[לדף השחרור בגיטהאב]({release_url})")
+        parts.append("")
+    if assets:
+        parts.append("### קבצים להורדה")
+        parts.extend(f"* {asset}" for asset in assets)
+    return "\n".join(parts).rstrip() + "\n"
+
+
+def main() -> None:
+    release_tag = os.getenv("RELEASE_TAG", "Unknown")
+    release_name = os.getenv("RELEASE_NAME", "")
+    release_url = os.getenv("RELEASE_URL", "")
+    event_path = os.getenv("GITHUB_EVENT_PATH")
+
+    username = require_env("USER_NAME")
+    password = require_env("PASSWORD")
+    yemot_token = require_env("TOKEN_YEMOT")
+
+    version = extract_version(release_tag)
+    changelog = load_changelog_section(version)
+    if not changelog:
+        print(f"Warning: no changelog section found for version {version}")
+    asset_links = load_asset_links(event_path)
+    content = build_forum_message(
+        version, release_name, release_url, changelog, asset_links
+    )
+
+    errors: list[str] = []
+
+    client: NodeBBClient | None = None
+    try:
+        client = NodeBBClient(FORUM_BASE_URL, username.replace(" ", "+"), password)
+        client.login()
+        client.send_post(content, FORUM_TOPIC_ID)
+        print(f"Forum announcement posted to topic {FORUM_TOPIC_ID}")
+    except Exception as error:
+        errors.append(f"Forum announcement failed: {error}")
+    finally:
+        if client is not None:
+            try:
+                client.logout()
+            except Exception as error:
+                errors.append(f"Forum logout failed: {error}")
+
+    yemot = Yemot(yemot_token)
+    try:
+        yemot.run_tzintuk(
+            RunTzintukMethod.TZL,
+            ["software update"],
+            caller_id="0773420857",
+            tzintuk_time_out=16,
+        )
+    except YemotAPIError as error:
+        print(f"Yemot error: {error}")
+
+    if errors:
+        raise RuntimeError("\n".join(errors))
+
+
+if __name__ == "__main__":
+    main()

@@ -1462,11 +1462,8 @@ jobs:
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (full history + tags)
+      - name: Checkout
         uses: actions/checkout@v4.2.2
-        with:
-          fetch-depth: 0   # חובה כדי לאפשר גישה לכל ההיסטוריה והתגים
-          fetch-tags: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -1476,53 +1473,13 @@ jobs:
       - name: Install dependencies for webhook script
         run: pip install bs4 requests pyluach yemot-api
 
-      - name: Build commit list since previous release
-        id: changelog
-        shell: bash
-        run: |
-          set -euo pipefail
-          CURRENT_TAG="${{ github.event.release.tag_name }}"
-          git fetch --tags --force
-          
-          # מצא את התג הקודם (הכי עדכני שהוא לא התג הנוכחי)
-          PREV_TAG=$(git for-each-ref --sort=-creatordate --format '%(refname:strip=2)' refs/tags | grep -v "^$CURRENT_TAG$" | head -n1 || true)
-
-          if [ -n "$PREV_TAG" ]; then
-            RANGE="$PREV_TAG..$CURRENT_TAG"
-            # צור רשימה של כותרות הcommits בטווח
-            COMMITS=$(git log --pretty=format:'- %s' "$RANGE" || true)
-          else
-            # אם אין תג קודם, קח רק את הcommit של התג הנוכחי
-            SHA=$(git rev-list -n 1 "$CURRENT_TAG")
-            COMMITS=$(git log --pretty=format:'- %s' "${SHA}^..${SHA}" || true)
-          fi
-
-          if [ -z "${COMMITS// /}" ]; then
-            COMMITS="(לא נמצאו כותרות commits חדשות להצגה)"
-          fi
-
-          # העבר את רשימת הcommits והתג הקודם לשלבים הבאים
-          {
-            echo "prev_tag=${PREV_TAG}"
-            echo "commits<<EOF"
-            echo "$COMMITS"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Run announcement script (Mitmachim + Yemot)
+      - name: Run announcement script (Forum + Yemot)
         env:
           # פרטי ה-Release נלקחים מאירוע ה-Webhook של GitHub
           RELEASE_TAG:  ${{ github.event.release.tag_name }}
           RELEASE_NAME: ${{ github.event.release.name }}
           RELEASE_URL:  ${{ github.event.release.html_url }}
           GITHUB_EVENT_PATH: ${{ github.event_path }} # חיוני כדי שהסקריפט ימצא את קבצי ההורדה
-
-          # הרכבת גוף ההודעה: התיאור מה-Release + רשימת הקומיטים שיצרנו
-          RELEASE_BODY: |
-            ${{ github.event.release.body }}
-
-            השינויים מאז הגרסה הקודמת${{ steps.changelog.outputs.prev_tag && format(' ({0})', steps.changelog.outputs.prev_tag) || '' }}:
-            ${{ steps.changelog.outputs.commits }}
 
           # סודות להתחברות לשירותים החיצוניים
           USER_NAME:  ${{ secrets.USER_NAME }}
