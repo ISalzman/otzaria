@@ -38,6 +38,9 @@ SolidCompression=yes
 CompressionThreads=1
 WizardStyle=modern
 DisableDirPage=no
+; ChangesEnvironment=yes נדרש כדי שעדכון ל-PATH (במשימת addtopath) ייכנס
+; לתוקף מיד עבור תהליכים חדשים ללא צורך ב-logoff.
+ChangesEnvironment=yes
 
 [InstallDelete]
 ; מחיקת ספריית נתונים ישנה לפני פריסת מסד הנתונים החדש
@@ -53,6 +56,9 @@ Root: HKA; Subkey: "Software\Classes\otzaria"; ValueType: string; ValueName: "";
 Root: HKA; Subkey: "Software\Classes\otzaria"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\otzaria\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName}"; Flags: uninsdeletekeyifempty
 Root: HKA; Subkey: "Software\Classes\otzaria\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekeyifempty
+; הוספת {app} ל-PATH של המשתמש כדי שניתן יהיה להריץ ‎`otzaria pack-plugin`‎
+; ישירות מהטרמינל. ה-Check מונע כפילויות; ההסרה ב-CurUninstallStepChanged.
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Flags: preservestringtype; Check: NeedsAddPath(ExpandConstant('{app}')); Tasks: addtopath
 
 [Languages]
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
@@ -770,6 +776,77 @@ begin
   // But maybe it's cleaner to handle this in a separate procedure if needed.
 end;
 
+// בודק האם הנתיב NewPath כבר נמצא ב-PATH של המשתמש. מחזיר True אם
+// יש להוסיף (לא קיים). מטפל גם בגרסה עם backslash סופי. case-insensitive
+// כי Windows מתייחס ל-PATH ככזה.
+function NeedsAddPath(NewPath: String): Boolean;
+var
+  CurrentPath: String;
+  Needle1, Needle2, Haystack: String;
+begin
+  Result := True;
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+    exit;
+
+  Haystack  := ';' + Lowercase(CurrentPath) + ';';
+  Needle1   := ';' + Lowercase(NewPath) + ';';
+  Needle2   := ';' + Lowercase(NewPath) + '\;';
+  if (Pos(Needle1, Haystack) > 0) or (Pos(Needle2, Haystack) > 0) then
+    Result := False;
+end;
+
+// מסיר את PathToRemove מ-PATH של המשתמש (ב-uninstall). מטפל בשני
+// הוריאנטים — עם וללא backslash סופי — **בנפרד**, כדי שכפילות
+// היסטורית (גם 'C:\app' וגם 'C:\app\') תוסר במלואה. גם מסיר כל
+// מופע חוזר.
+procedure RemoveAppFromUserPath(PathToRemove: String);
+var
+  CurrentPath, LowerCurrent: String;
+  Needles: array[0..1] of String;
+  LowerNeedle: String;
+  P, i: Integer;
+  Changed: Boolean;
+begin
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+    exit;
+
+  Changed := False;
+  CurrentPath := ';' + CurrentPath + ';';
+
+  Needles[0] := ';' + Lowercase(PathToRemove) + ';';
+  Needles[1] := ';' + Lowercase(PathToRemove) + '\;';
+
+  for i := 0 to 1 do
+  begin
+    LowerNeedle := Needles[i];
+    LowerCurrent := Lowercase(CurrentPath);
+    P := Pos(LowerNeedle, LowerCurrent);
+    while P > 0 do
+    begin
+      Delete(CurrentPath, P, Length(LowerNeedle) - 1);
+      LowerCurrent := Lowercase(CurrentPath);
+      Changed := True;
+      P := Pos(LowerNeedle, LowerCurrent);
+    end;
+  end;
+
+  if not Changed then
+    exit;
+
+  if (Length(CurrentPath) > 0) and (CurrentPath[1] = ';') then
+    Delete(CurrentPath, 1, 1);
+  if (Length(CurrentPath) > 0) and (CurrentPath[Length(CurrentPath)] = ';') then
+    Delete(CurrentPath, Length(CurrentPath), 1);
+
+  RegWriteExpandStringValue(HKCU, 'Environment', 'Path', CurrentPath);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+    RemoveAppFromUserPath(ExpandConstant('{app}'));
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ZstdPath, SevenZipPath: String;
@@ -858,6 +935,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "resetsettings"; Description: "איפוס הגדרות משתמש והסרת התקנות קודמות (מומלץ למעדכנים מגרסה < 0.9.80, שים לב: זה ימחק הערות אישיות!)"; Flags: unchecked
+Name: "addtopath"; Description: "הוסף את אוצריא ל-PATH של המשתמש (יאפשר להריץ ‎`otzaria pack-plugin`‎ ישירות מהטרמינל)"; Flags: unchecked
 
 [Files]
 ; Copy DLL files without compression to prevent corruption
