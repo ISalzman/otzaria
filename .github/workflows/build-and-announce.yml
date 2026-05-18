@@ -482,6 +482,9 @@ jobs:
           dart run tool/generate_search_index.dart
 
       - name: Build Flutter Linux app (with retry)
+        env:
+          CC: gcc
+          CXX: g++
         run: |
           set -e
           tries=0
@@ -501,6 +504,9 @@ jobs:
       
       - name: Build and Patch Linux DEB package
         shell: bash
+        env:
+          CC: gcc
+          CXX: g++
         run: |
           set -e
 
@@ -543,6 +549,9 @@ jobs:
         
       - name: Build and Patch Linux RPM package
         shell: bash
+        env:
+          CC: gcc
+          CXX: g++
         run: |
           set -e
 
