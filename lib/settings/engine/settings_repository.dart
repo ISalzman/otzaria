@@ -118,8 +118,10 @@ class SettingsRepository {
       'isDarkMode': _settings.getValue<bool>(keyDarkMode, defaultValue: false),
       'followSystemTheme':
           _settings.getValue<bool>(keyFollowSystemTheme, defaultValue: false),
-      'seedColor': Color(_settings.getValue<int>(keySwatchColor, defaultValue: AppSeedColors.defaultLight.toARGB32())),
-      'darkSeedColor': Color(_settings.getValue<int>(keyDarkSwatchColor, defaultValue: AppSeedColors.defaultDark.toARGB32())),
+      'seedColor':
+          _loadAndMigrateSeedColor(keySwatchColor, AppSeedColors.defaultLight),
+      'darkSeedColor': _loadAndMigrateSeedColor(
+          keyDarkSwatchColor, AppSeedColors.defaultDark),
       'textMaxWidth':
           _settings.getValue<double>(keyTextMaxWidth, defaultValue: -1),
       'fontSize': _settings.getValue<double>(keyFontSize, defaultValue: 25),
@@ -693,9 +695,52 @@ class SettingsRepository {
     await _settings.setValue('shortcuts', updatedShortcuts);
   }
 
+  /// טוען צבע seed תוך מיגרציה של פורמט legacy (מחרוזת hex כמו '#ff2c1b02').
+  ///
+  /// עד PR320 הצבעים נשמרו כמחרוזת hex דרך `getValue<String>` + `ColorUtils`.
+  /// אחרי המעבר ל-`getValue<int>`, קריאה ישירה על מפתח שעדיין מכיל String
+  /// תזרוק `TypeError` (SharedPreferences מבצע `as int?` על הערך).
+  /// השיטה הזו מנסה קודם int, ובמקרה של כשל קוראת כ-String, ממירה ושומרת מחדש
+  /// כ-int כדי שטעינות הבאות יעבדו במסלול המהיר.
+  Color _loadAndMigrateSeedColor(String key, Color defaultColor) {
+    try {
+      final intValue =
+          _settings.getValue<int>(key, defaultValue: defaultColor.toARGB32());
+      return Color(intValue);
+    } catch (_) {
+      // נפילה ל-String legacy.
+    }
+
+    try {
+      final legacyString = _settings.getValue<String?>(key, defaultValue: null);
+      if (legacyString != null && legacyString.isNotEmpty) {
+        final migrated = _parseLegacyHexColor(legacyString) ?? defaultColor;
+        // כתיבה מחדש כ-int כדי שטעינות הבאות לא יזדקקו למיגרציה.
+        // ignore: discarded_futures
+        _settings.setValue<int>(key, migrated.toARGB32());
+        return migrated;
+      }
+    } catch (_) {
+      // לא צפוי — נופל ל-default.
+    }
+
+    return defaultColor;
+  }
+
+  /// ממיר מחרוזת hex של צבע (פורמט `#ffrrggbb` או `#rrggbb`) ל-[Color].
+  static Color? _parseLegacyHexColor(String hex) {
+    var value = hex.trim();
+    if (value.startsWith('#')) value = value.substring(1);
+    if (value.length == 6) value = 'ff$value';
+    if (value.length != 8) return null;
+    final parsed = int.tryParse(value, radix: 16);
+    return parsed == null ? null : Color(parsed);
+  }
+
   /// Initialize default settings to disk if this is the first app launch
   Future<void> _initializeDefaultsIfNeeded() async {
-    if (!_settings.getValue<bool>('settings_initialized', defaultValue: false)) {
+    if (!_settings.getValue<bool>('settings_initialized',
+        defaultValue: false)) {
       await _writeDefaultsToStorage();
     }
   }
@@ -703,8 +748,10 @@ class SettingsRepository {
   /// Write all default settings to persistent storage
   Future<void> _writeDefaultsToStorage() async {
     await _settings.setValue(keyDarkMode, false);
-    await _settings.setValue(keySwatchColor, AppSeedColors.defaultLight.toARGB32());
-    await _settings.setValue(keyDarkSwatchColor, AppSeedColors.defaultDark.toARGB32());
+    await _settings.setValue(
+        keySwatchColor, AppSeedColors.defaultLight.toARGB32());
+    await _settings.setValue(
+        keyDarkSwatchColor, AppSeedColors.defaultDark.toARGB32());
     await _settings.setValue(keyTextMaxWidth, -1.0);
     await _settings.setValue(keyFontSize, 25.0);
     await _settings.setValue(keyFontFamily, AppFonts.defaultFont);
