@@ -17,6 +17,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/theme/app_interactions.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 
@@ -319,7 +320,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                   final currentMode =
                       widget.tab.searchBloc.state.configuration.searchMode;
 
-                    final shouldUseSimpleInBook = !hasEnabledOptions &&
+                  final shouldUseSimpleInBook = !hasEnabledOptions &&
                       !hasAlternativeWords &&
                       !hasSpacingValues &&
                       !looksLikeRegex &&
@@ -392,6 +393,9 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                   }
                 },
                 borderRadius: BorderRadius.circular(12),
+                overlayColor: AppInteractions.primaryContainerOverlay(
+                  Theme.of(context).colorScheme,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(

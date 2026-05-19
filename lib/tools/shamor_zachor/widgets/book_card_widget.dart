@@ -200,6 +200,10 @@ class _BookCardWidgetState extends State<BookCardWidget> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => _onCardTap(context),
+          borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+          overlayColor: AppInteractions.neutralSurfaceOverlay(
+            Theme.of(context).colorScheme,
+          ),
           child: SingleChildScrollView(
             child: Padding(
               padding: const EdgeInsets.all(12.0),
