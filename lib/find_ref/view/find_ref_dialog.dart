@@ -51,6 +51,14 @@ class _FindRefDialogState extends State<FindRefDialog> {
   // value=[] → אין מפרשים זמינים (לא יוצג כפתור).
   // value=[...] → רשומות מוכנות לפתיחה ישירה (כולל targetSegment ו-Book).
   final Map<String, List<_CommentatorEntry>?> _commentatorsByRef = {};
+  final ScrollController _resultsScrollController = ScrollController();
+  // `true` כשיש תוצאות מתחת לאזור הנראה. מעודכן משני מקורות:
+  //   1. listener על ה-ScrollController — מטפל בגלילה ע"י המשתמש.
+  //   2. NotificationListener<ScrollMetricsNotification> — מטפל בחיבור ראשון
+  //      של ה-ListView ובשינוי maxScrollExtent (סט תוצאות חדש).
+  // ScrollController.attach לבדו לא קורא notifyListeners, ולכן בלי ה-
+  // metrics notification ה-arrow היה נשאר מוסתר עד גלילה ידנית.
+  final ValueNotifier<bool> _hasMoreBelow = ValueNotifier<bool>(false);
   FocusRestorer? _focusRestorer;
 
   @override
@@ -77,13 +85,37 @@ class _FindRefDialogState extends State<FindRefDialog> {
           FocusRepository().findRefSearchFocusNode.canRequestFocus &&
           (ModalRoute.of(context)?.isCurrent ?? false),
     );
+
+    // listener מטפל בגלילה ידנית של המשתמש. עבור חיבור ראשון ולכל שינוי
+    // ב-maxScrollExtent (סט תוצאות חדש) משתמשים ב-NotificationListener
+    // ליד ה-ListView (ב-build).
+    _resultsScrollController.addListener(_updateHasMoreBelow);
   }
 
   @override
   void dispose() {
+    _resultsScrollController.removeListener(_updateHasMoreBelow);
+    _resultsScrollController.dispose();
+    _hasMoreBelow.dispose();
     final restorer = _focusRestorer;
     if (restorer != null) FocusRepository().unregisterActiveRestorer(restorer);
     super.dispose();
+  }
+
+  /// מעדכן את [_hasMoreBelow] לפי המצב הנוכחי של ה-ScrollController.
+  /// בטוח לקריאה בכל זמן — הוא חסום על `hasClients` ועל `hasContentDimensions`.
+  void _updateHasMoreBelow() {
+    final bool next;
+    if (!_resultsScrollController.hasClients) {
+      next = false;
+    } else {
+      final pos = _resultsScrollController.position;
+      // hasContentDimensions=false לפני שה-ListView סיים מדידה ראשונית.
+      next = pos.hasContentDimensions &&
+          // 8 פיקסלים של סף — מונע flicker כשהמשתמש כמעט בתחתית.
+          pos.maxScrollExtent - pos.pixels > 8;
+    }
+    if (_hasMoreBelow.value != next) _hasMoreBelow.value = next;
   }
 
   GlobalKey _getKeyForIndex(int index) {
@@ -160,6 +192,40 @@ class _FindRefDialogState extends State<FindRefDialog> {
         );
       }
     });
+  }
+
+  /// חץ קטן באותה שורה כמו "סגור" שמופיע כשיש תוצאות מתחת לאזור הנראה.
+  /// קליק גולל לסוף הרשימה. ה-IconButton נשאר קבוע במקום — רק ה-opacity
+  /// משתנה — כך שגודל הדיאלוג לא משתנה כשהחץ נכבה/נדלק.
+  ///
+  /// המקור הסינגלטוני של "האם יש יותר למטה" הוא [_hasMoreBelow], שמעודכן
+  /// משני נקודות (ראה השדה לפרטים).
+  Widget _buildScrollToEndArrow() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _hasMoreBelow,
+      builder: (context, hasMore, _) {
+        return AnimatedOpacity(
+          opacity: hasMore ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 150),
+          child: IgnorePointer(
+            ignoring: !hasMore,
+            child: IconButton(
+              iconSize: 18,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(FluentIcons.chevron_down_24_regular),
+              tooltip: 'גלול לסוף הרשימה',
+              onPressed: () {
+                _resultsScrollController.animateTo(
+                  _resultsScrollController.position.maxScrollExtent,
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOut,
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
   /// פותח את התוצאה.
@@ -434,7 +500,18 @@ class _FindRefDialogState extends State<FindRefDialog> {
             ),
             const SizedBox(height: 8),
             Expanded(
-              child: BlocBuilder<FindRefBloc, FindRefState>(
+              child: BlocConsumer<FindRefBloc, FindRefState>(
+                // ברגע שעוזבים מצב של "Success עם תוצאות" — אין ListView,
+                // אין ל-controller clients, ושום notification לא יישלח. בלי
+                // איפוס יזום, _hasMoreBelow היה נשאר true מהחיפוש הקודם
+                // וה-arrow היה מופיע באמצע spinner / "אין תוצאות" / Initial.
+                listener: (context, state) {
+                  final hasListView =
+                      state is FindRefSuccess && state.refs.isNotEmpty;
+                  if (!hasListView && _hasMoreBelow.value) {
+                    _hasMoreBelow.value = false;
+                  }
+                },
                 builder: (context, state) {
                   if (state is FindRefLoading) {
                     return const Center(child: CircularProgressIndicator());
@@ -453,9 +530,21 @@ class _FindRefDialogState extends State<FindRefDialog> {
                       return const SizedBox.shrink();
                     }
                   } else if (state is FindRefSuccess) {
-                    return ListView.builder(
-                      itemCount: state.refs.length,
-                      itemBuilder: (context, index) {
+                    return NotificationListener<ScrollMetricsNotification>(
+                      // נכנס לפעולה כאשר ה-ListView מתחבר לראשונה, וגם בכל
+                      // שינוי של maxScrollExtent (סט תוצאות חדש שמשנה את
+                      // גובה התוכן). מעדכן את _hasMoreBelow אחרי הסיום של
+                      // ה-frame הנוכחי כדי שלא נשנה ValueNotifier בזמן build.
+                      onNotification: (_) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) _updateHasMoreBelow();
+                        });
+                        return false;
+                      },
+                      child: ListView.builder(
+                        controller: _resultsScrollController,
+                        itemCount: state.refs.length,
+                        itemBuilder: (context, index) {
                         final ref = state.refs[index];
                         final isSelected = index == _selectedIndex;
                         final eligible =
@@ -523,6 +612,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
                               }),
                         );
                       },
+                      ),
                     );
                   }
                   return const SizedBox.shrink();
@@ -532,10 +622,27 @@ class _FindRefDialogState extends State<FindRefDialog> {
           ],
         ),
       ),
+      // החץ "גלול לסוף הרשימה" יושב באותה שורה כמו "סגור" (actions), אך עם
+      // padding עליון 0 ותחתון מצומצם — צמוד לתחתית התוכן.
+      // Stack על מלוא הרוחב: ה-Align מצמיד את "סגור" לקצה (visual left ב-RTL),
+      // וה-IconButton ממוקם במרכז ע"י alignment של ה-Stack עצמו.
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('סגור'),
+        SizedBox(
+          width: double.infinity,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('סגור'),
+                ),
+              ),
+              _buildScrollToEndArrow(),
+            ],
+          ),
         ),
       ],
     );
