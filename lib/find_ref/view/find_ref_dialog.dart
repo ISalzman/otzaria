@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -53,7 +52,6 @@ class _FindRefDialogState extends State<FindRefDialog> {
   // value=[...] → רשומות מוכנות לפתיחה ישירה (כולל targetSegment ו-Book).
   final Map<String, List<_CommentatorEntry>?> _commentatorsByRef = {};
   FocusRestorer? _focusRestorer;
-  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -83,7 +81,6 @@ class _FindRefDialogState extends State<FindRefDialog> {
 
   @override
   void dispose() {
-    _searchDebounce?.cancel();
     final restorer = _focusRestorer;
     if (restorer != null) FocusRepository().unregisterActiveRestorer(restorer);
     super.dispose();
@@ -365,9 +362,12 @@ class _FindRefDialogState extends State<FindRefDialog> {
                       suffixIcon: IconButton(
                         icon: const Icon(FluentIcons.dismiss_24_regular),
                         onPressed: () {
-                          _searchDebounce?.cancel();
-                          _searchDebounce = null;
                           focusRepository.findRefSearchController.clear();
+                          // קודם מבטלים חיפוש שעדיין רץ (restartable יקטוף
+                          // את ה-handler הקודם), ורק אחר-כך מחזירים את
+                          // ה-state ל-Initial.
+                          BlocProvider.of<FindRefBloc>(context)
+                              .add(const SearchRefRequested(''));
                           BlocProvider.of<FindRefBloc>(context)
                               .add(ClearSearchRequested());
                           setState(() {
@@ -379,14 +379,13 @@ class _FindRefDialogState extends State<FindRefDialog> {
                     controller: focusRepository.findRefSearchController,
                     onChanged: (ref) {
                       setState(() => _selectedIndex = 0);
-                      _searchDebounce?.cancel();
-                      _searchDebounce = Timer(
-                        const Duration(milliseconds: 150),
-                        () => BlocProvider.of<FindRefBloc>(context).add(
-                          SearchRefRequested(
-                            ref,
-                            includePersonalBooks: _includePersonalBooks,
-                          ),
+                      // ההקלדה נשלחת מיידית — ה-debounce עצמו מבוצע בתוך
+                      // ה-handler ב-bloc, כך שכל הקלדה חדשה גם מבטלת מיידית
+                      // כל handler שכבר רץ (גם אם הוא באמצע fetch).
+                      BlocProvider.of<FindRefBloc>(context).add(
+                        SearchRefRequested(
+                          ref,
+                          includePersonalBooks: _includePersonalBooks,
                         ),
                       );
                     },
