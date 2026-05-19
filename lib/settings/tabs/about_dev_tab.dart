@@ -658,6 +658,8 @@ class _ActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      // השורה עוטפת כפתור פעולה ב-trailing — מבטלים את ה-hover של ה-ListTile
+      // כדי שה-hover יופיע רק על הכפתור.
       hoverColor: Colors.transparent,
       leading: Icon(icon),
       title: Text(title, style: kSettingsTitleStyle),

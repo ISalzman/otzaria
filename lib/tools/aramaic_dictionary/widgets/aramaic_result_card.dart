@@ -89,7 +89,10 @@ class AramaicResultCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppTokens.spaceXS),
-          ToolCopyButton(onPressed: () => _copy(context)),
+          SecondaryIconButton(
+              icon: FluentIcons.copy_24_regular,
+              tooltip: 'העתק',
+              onPressed: () => _copy(context)),
         ],
       ),
     );

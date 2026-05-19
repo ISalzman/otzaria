@@ -17,6 +17,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/text_book/utils/search_query_sync.dart';
+import 'package:otzaria/theme/app_interactions.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -601,14 +602,9 @@ class SearchResultTile extends StatelessWidget {
             child: InkWell(
               onTap: onTap,
               borderRadius: BorderRadius.circular(8),
-              hoverColor: Theme.of(context)
-                  .colorScheme
-                  .primaryContainer
-                  .withValues(alpha: 0.3),
-              splashColor: Theme.of(context)
-                  .colorScheme
-                  .primaryContainer
-                  .withValues(alpha: 0.4),
+              overlayColor: AppInteractions.primaryContainerOverlay(
+                Theme.of(context).colorScheme,
+              ),
               child: Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

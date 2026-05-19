@@ -1257,7 +1257,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     final row = InkWell(
       mouseCursor: SystemMouseCursors.click,
       borderRadius: rowBorderRadius,
-      hoverColor: cs.primary.withValues(alpha: 0.06),
+      overlayColor: AppInteractions.subtlePrimaryOverlay(cs),
       hoverDuration: Durations.medium1,
       onTap: () => setState(() {
         if (isExpanded) {
@@ -1404,7 +1404,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         borderRadius: isGrouped
             ? BorderRadius.zero
             : BorderRadius.circular(AppTokens.radiusXL),
-        hoverColor: cs.primary.withValues(alpha: 0.06),
+        overlayColor: AppInteractions.subtlePrimaryOverlay(cs),
         hoverDuration: Durations.medium1,
         onTap: onTap,
         onDoubleTap: onDoubleTap,
@@ -1916,20 +1916,13 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   Widget _buildPreviewPane(SettingsState settingsState) {
     return BlocBuilder<LibraryBloc, LibraryState>(
       buildWhen: (p, c) => p.previewBook != c.previewBook,
-      builder: (ctx, previewState) => GestureDetector(
-        onDoubleTap: () {
+      builder: (ctx, previewState) => BookPreviewPanel(
+        book: previewState.previewBook,
+        onOpenInReader: (i) {
           if (previewState.previewBook != null) {
-            _openBookInReader(previewState.previewBook!, 0);
+            _openBookInReader(previewState.previewBook!, i);
           }
         },
-        child: BookPreviewPanel(
-          book: previewState.previewBook,
-          onOpenInReader: (i) {
-            if (previewState.previewBook != null) {
-              _openBookInReader(previewState.previewBook!, i);
-            }
-          },
-        ),
       ),
     );
   }

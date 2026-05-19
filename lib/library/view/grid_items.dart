@@ -47,7 +47,6 @@ Decoration _libraryTooltipDecoration(BuildContext context) {
   return BoxDecoration(
     color: cs.surfaceContainerHigh,
     borderRadius: BorderRadius.circular(12),
-    border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.65)),
   );
 }
 
@@ -214,7 +213,7 @@ class CategoryGridItem extends StatelessWidget {
         focusNode: focusNode,
         mouseCursor: SystemMouseCursors.click,
         borderRadius: BorderRadius.circular(AppTokens.radiusXL),
-        hoverColor: cs.primary.withValues(alpha: 0.06),
+        overlayColor: AppInteractions.subtlePrimaryOverlay(cs),
         hoverDuration: Durations.medium1,
         onTap: () => onCategoryClickCallback(),
         // Focus: Enter/Space מפעילים אוטומטית ע"י InkWell
@@ -333,7 +332,7 @@ class BookGridItem extends StatelessWidget {
             focusNode: focusNode,
             mouseCursor: SystemMouseCursors.click,
             borderRadius: BorderRadius.circular(AppTokens.radiusXL),
-            hoverColor: cs.primary.withValues(alpha: 0.06),
+            overlayColor: AppInteractions.subtlePrimaryOverlay(cs),
             onTap: () => onBookClickCallback(),
             hoverDuration: Durations.medium1,
             child: SizedBox.expand(

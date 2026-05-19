@@ -431,8 +431,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                           final bool selectAction = newValue == true;
                           final confirmed = await _showWarningDialog();
                           if (confirmed && mounted && widget.bookId != null) {
-                            await progressProvider
-                                .toggleSelectAllForColumnById(
+                            await progressProvider.toggleSelectAllForColumnById(
                               widget.bookId!,
                               bookDetails,
                               columnId,
@@ -715,9 +714,6 @@ class _BookDetailScreenState extends State<BookDetailScreen>
             visualDensity: VisualDensity(horizontal: -4, vertical: -4),
           ),
           dividerColor: Colors.transparent,
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-          hoverColor: Colors.transparent,
         ),
         child: ExpansionTile(
           key: ValueKey(section.id),

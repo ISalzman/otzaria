@@ -129,8 +129,10 @@ class AppFonts {
     // TTC (TrueType Collection): magic "ttcf" at offset 0.
     // numFonts at offset 8; font offsets start at offset 12.
     if (data.length >= 16 &&
-        data[0] == 0x74 && data[1] == 0x74 &&
-        data[2] == 0x63 && data[3] == 0x66) {
+        data[0] == 0x74 &&
+        data[1] == 0x74 &&
+        data[2] == 0x63 &&
+        data[3] == 0x66) {
       final numFonts =
           (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
       for (int i = 0; i < numFonts; i++) {

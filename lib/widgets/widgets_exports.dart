@@ -4,7 +4,7 @@
 //   → lib/widgets/dialogs/app_dialogs.dart
 //
 // כפתורי פעולה (RecommendedActionButton, NeutralActionButton,
-// ToolCopyButton, ToolNavigateButton):
+// SecondaryIconButton, PrimaryIconButton):
 //   → lib/widgets/buttons/action_buttons.dart
 //
 // Segmented button:

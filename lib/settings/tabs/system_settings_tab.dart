@@ -443,7 +443,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     } else {
       UiSnack.showError(result.message);
     }
-
   }
 
   Future<void> _editPendingReport(DirectErrorReport report) async {
@@ -831,6 +830,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       subtitle: 'שליחה ישירה לצוות אוצריא, כולל תור אוטומטי במצב אופליין.',
       children: [
         ListTile(
+          // השורה עוטפת כפתורי פעולה ב-trailing — מבטלים את ה-hover של
+          // ה-ListTile כדי שה-hover יופיע רק על הכפתורים, בלי double-hover.
           hoverColor: Colors.transparent,
           leading: const Icon(FluentIcons.mail_24_regular),
           title: const Text('כתובת מייל לזיהוי', style: kSettingsTitleStyle),
@@ -891,7 +892,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             return Column(
               children: [
                 ListTile(
-                  hoverColor: Colors.transparent,
                   leading: const Icon(FluentIcons.task_list_ltr_24_regular),
                   title: const Text('ניהול דיווחים שמורים',
                       style: kSettingsTitleStyle),
@@ -995,7 +995,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                       : const SizedBox.shrink(),
                 ),
                 ListTile(
-                  hoverColor: Colors.transparent,
                   leading: const Icon(FluentIcons.checkmark_circle_24_regular),
                   title:
                       const Text('דיווחים שנשלחו', style: kSettingsTitleStyle),
@@ -1069,7 +1068,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     return Column(
       children: [
         ListTile(
-          hoverColor: Colors.transparent,
           leading: const Icon(FluentIcons.document_bullet_list_24_regular),
           title: Text(
             report.bookTitle,
@@ -1120,7 +1118,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     return Column(
       children: [
         ListTile(
-          hoverColor: Colors.transparent,
           leading: const Icon(FluentIcons.checkmark_24_regular),
           title: Text(
             report.bookTitle,
@@ -1617,6 +1614,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
                     // הגדרת/שינוי סיסמה
                     ListTile(
+                      // השורה עוטפת כפתור פעולה ב-trailing — מבטלים את ה-hover
+                      // של ה-ListTile כדי שה-hover יופיע רק על הכפתור.
+                      hoverColor: Colors.transparent,
                       leading: const Icon(FluentIcons.key_24_regular),
                       title: const Text(
                         'סיסמה',
@@ -1644,6 +1644,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       subtitle: 'היכרות מהירה עם החלקים המרכזיים באוצריא.',
       children: [
         ListTile(
+          // השורה עוטפת כפתור פעולה ב-trailing — מבטלים את ה-hover של
+          // ה-ListTile כדי שה-hover יופיע רק על הכפתור.
           hoverColor: Colors.transparent,
           leading: const Icon(FluentIcons.sparkle_24_regular),
           title: const Text(
@@ -1682,6 +1684,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       title: 'איפוס',
       children: [
         ListTile(
+          // השורה עוטפת כפתור פעולה ב-trailing — מבטלים את ה-hover של
+          // ה-ListTile כדי שה-hover יופיע רק על הכפתור.
           hoverColor: Colors.transparent,
           leading: const Icon(FluentIcons.arrow_reset_24_regular),
           title: const Text('איפוס הגדרות', style: kSettingsTitleStyle),
