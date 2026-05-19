@@ -36,10 +36,15 @@ const List<String> pluginNetworkAllowlist = <String>[
   'https://hebrewbooks.org',
   // ספריית על התורה
   'https://library.alhatorah.org',
+  //על התורה - מקראות גדולות, רמבם, שס, טור
   'https://mg.alhatorah.org',
-  'https://turshulchanarukh.alhatorah.org',
   'https://rambam.alhatorah.org',
   'https://shas.alhatorah.org',
+  'https://turshulchanarukh.alhatorah.org',
+  // Google Apps Script — תוסף ספריית אוצריא
+  'https://script.google.com/macros/s/AKfycbwU7ktk7_VdSqIxlMBnj4L8dIOKX7C5XIYxxyJsr2gohCtJuLEKA4RPUWO6d88Ry8TAoA/exec',
+  // GitHub API — ספריית YairDaniel123/Otzarya-Library
+  'https://api.github.com/repos/YairDaniel123/Otzarya-Library',
 ];
 
 /// בודקת האם [uri] מורשה לגישה על-ידי תוספים.
@@ -62,14 +67,20 @@ bool isUriAllowedForPluginNetwork(Uri uri) {
     ..write('://')
     ..write(normalizedHost);
   if (uri.hasPort) {
-    normalizedUrl..write(':')..write(uri.port);
+    normalizedUrl
+      ..write(':')
+      ..write(uri.port);
   }
   normalizedUrl.write(uri.path);
   if (uri.hasQuery) {
-    normalizedUrl..write('?')..write(uri.query);
+    normalizedUrl
+      ..write('?')
+      ..write(uri.query);
   }
   if (uri.hasFragment) {
-    normalizedUrl..write('#')..write(uri.fragment);
+    normalizedUrl
+      ..write('#')
+      ..write(uri.fragment);
   }
   final fullUrl = normalizedUrl.toString();
 
@@ -84,7 +95,9 @@ bool isUriAllowedForPluginNetwork(Uri uri) {
       ..write('://')
       ..write(prefixUri.host.toLowerCase());
     if (prefixUri.hasPort) {
-      normalizedPrefix..write(':')..write(prefixUri.port);
+      normalizedPrefix
+        ..write(':')
+        ..write(prefixUri.port);
     }
     normalizedPrefix.write(prefixUri.path);
     final prefix = normalizedPrefix.toString();
