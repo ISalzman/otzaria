@@ -1,7 +1,7 @@
 // lib/settings/widgets/switch_settings_tile.dart
 //
 // מכיל:
-//  • [CustomSwitch]       — Switch תואם M3 עם hover מדויק
+//  • [CustomSwitch]       — Switch תואם M3
 //  • [SwitchSettingsTile] — ListTile עם CustomSwitch
 //
 // **שימוש:**
@@ -21,8 +21,10 @@ import 'package:flutter/services.dart';
 /// [Switch] תואם M3 — thumb/track/overlay מוגדרים לפי:
 /// https://m3.material.io/components/switch/specs
 ///
-/// תיקון hover במצב כהה: ברירת המחדל של Flutter משתמשת ב-primary חזק מדי.
-/// overlayColor מינימלי — 8% שקיפות דינמי לפי מצב המתג.
+/// תיקון hover במצב כהה: ברירת המחדל של Flutter משתמשת ב-primary חזק מדי
+/// כשמרחפים מעל ה-Switch. כאן ה-overlay דינמי לפי ערך ה-switch (12%
+/// בגוון primary כשפעיל / onSurface כשכבוי). בנוסף thumb מתחלף ל-onSurfaceVariant
+/// ב-hover כשהמצב כבוי כדי שיהיה ניגוד טוב יותר.
 class CustomSwitch extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
@@ -156,9 +158,8 @@ class _SwitchSettingsTileState extends State<SwitchSettingsTile> {
                 : null,
           ),
         ),
-        onTap: widget.enabled && widget.onChanged != null
-            ? () => _toggle()
-            : null,
+        onTap:
+            widget.enabled && widget.onChanged != null ? () => _toggle() : null,
       ),
     );
   }

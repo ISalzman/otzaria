@@ -105,14 +105,12 @@ class LibraryDafYomi extends StatelessWidget {
     String tractate,
     int dafAmud,
   ) {
-    final cs = Theme.of(context).colorScheme;
     final dateStyle =
         _primaryTextStyle(context, isCompact: true, emphasized: true);
     final dafStyle = _secondaryTextStyle(context, isCompact: true);
 
     return Container(
       decoration: BoxDecoration(
-        color: cs.onSecondaryContainer.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Tooltip(

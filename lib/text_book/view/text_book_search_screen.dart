@@ -10,6 +10,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/search_results.dart';
+import 'package:otzaria/theme/app_interactions.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/search/search_repository.dart';
@@ -729,14 +730,9 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                     );
                   },
                   borderRadius: BorderRadius.circular(8),
-                  hoverColor: Theme.of(context)
-                      .colorScheme
-                      .primaryContainer
-                      .withValues(alpha: 0.3),
-                  splashColor: Theme.of(context)
-                      .colorScheme
-                      .primaryContainer
-                      .withValues(alpha: 0.4),
+                  overlayColor: AppInteractions.primaryContainerOverlay(
+                    Theme.of(context).colorScheme,
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,

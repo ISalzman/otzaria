@@ -34,14 +34,11 @@ class RecommendedActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final style = FilledButton.styleFrom(
-        backgroundColor: cs.primary, foregroundColor: cs.onPrimary);
     final leading = iconWidget ?? (icon != null ? Icon(icon) : null);
 
     if (isLoading) {
       return FilledButton(
           onPressed: null,
-          style: style,
           child: SizedBox(
               width: 16,
               height: 16,
@@ -54,7 +51,6 @@ class RecommendedActionButton extends StatelessWidget {
         // האייקון צף בצד ה-start (ימין ב-RTL)
         return FilledButton(
           onPressed: onPressed,
-          style: style,
           child: Stack(
             children: [
               Center(
@@ -78,14 +74,11 @@ class RecommendedActionButton extends StatelessWidget {
       }
       return FilledButton.icon(
           onPressed: onPressed,
-          style: style,
           icon: leading,
           label: Text(text, textAlign: textAlign));
     }
     return FilledButton(
-        onPressed: onPressed,
-        style: style,
-        child: Text(text, textAlign: textAlign));
+        onPressed: onPressed, child: Text(text, textAlign: textAlign));
   }
 }
 
@@ -109,14 +102,10 @@ class NeutralActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final style = FilledButton.styleFrom(
-        backgroundColor: cs.secondaryContainer,
-        foregroundColor: cs.onSecondaryContainer);
 
     if (isLoading) {
       return FilledButton.tonal(
           onPressed: null,
-          style: style,
           child: SizedBox(
               width: 16,
               height: 16,
@@ -125,13 +114,9 @@ class NeutralActionButton extends StatelessWidget {
     }
     if (icon != null) {
       return FilledButton.tonalIcon(
-          onPressed: onPressed,
-          style: style,
-          icon: Icon(icon),
-          label: Text(text));
+          onPressed: onPressed, icon: Icon(icon), label: Text(text));
     }
-    return FilledButton.tonal(
-        onPressed: onPressed, style: style, child: Text(text));
+    return FilledButton.tonal(onPressed: onPressed, child: Text(text));
   }
 }
 
@@ -166,16 +151,14 @@ class _BalancedText extends StatelessWidget {
 
         if (singleLinePainter.width <= maxWidth) {
           return Text(text,
-              textAlign: textAlign,
-              textDirection: TextDirection.rtl);
+              textAlign: textAlign, textDirection: TextDirection.rtl);
         }
 
         // מצא את נקודת השבירה שנותנת שורות שוות ביותר
         final words = text.split(' ');
         if (words.length <= 1) {
           return Text(text,
-              textAlign: textAlign,
-              textDirection: TextDirection.rtl);
+              textAlign: textAlign, textDirection: TextDirection.rtl);
         }
 
         String bestText = text;
@@ -208,23 +191,24 @@ class _BalancedText extends StatelessWidget {
         }
 
         return Text(bestText,
-            textAlign: textAlign,
-            textDirection: TextDirection.rtl);
+            textAlign: textAlign, textDirection: TextDirection.rtl);
       },
     );
   }
 }
 
-// ── ToolCopyButton / ToolNavigateButton ──────────────────────────────────────
+// ── SecondaryIconButton / PrimaryIconButton ───────────────────────────────────
 
-class ToolCopyButton extends StatelessWidget {
+class SecondaryIconButton extends StatelessWidget {
   final VoidCallback onPressed;
   final String tooltip;
+  final IconData icon;
 
-  const ToolCopyButton({
+  const SecondaryIconButton({
     super.key,
     required this.onPressed,
-    this.tooltip = 'העתק',
+    required this.icon,
+    this.tooltip = '',
   });
 
   @override
@@ -233,7 +217,7 @@ class ToolCopyButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: IconButton(
-        icon: const Icon(FluentIcons.copy_24_regular, size: 20),
+        icon: Icon(icon, size: 20),
         onPressed: onPressed,
         style: IconButton.styleFrom(
           backgroundColor: cs.secondaryContainer,
@@ -247,13 +231,15 @@ class ToolCopyButton extends StatelessWidget {
   }
 }
 
-class ToolNavigateButton extends StatelessWidget {
+class PrimaryIconButton extends StatelessWidget {
   final VoidCallback onPressed;
   final String tooltip;
+  final IconData icon;
 
-  const ToolNavigateButton({
+  const PrimaryIconButton({
     super.key,
     required this.onPressed,
+    this.icon = FluentIcons.open_24_regular,
     this.tooltip = 'פתח מקור',
   });
 
@@ -263,7 +249,7 @@ class ToolNavigateButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: IconButton(
-        icon: const Icon(FluentIcons.open_24_regular, size: 20),
+        icon: Icon(icon, size: 20),
         onPressed: onPressed,
         style: IconButton.styleFrom(
           backgroundColor: cs.primary,
@@ -332,6 +318,10 @@ class ToolbarActionButton extends StatelessWidget {
     };
   }
 
+  // ה-overlay חייב להיות נגזרת של `selected`+`emphasis`, לא של ה-overlay
+  // הגלובלי של הכפתורים בתמה. ב-selected, הרקע כבר חזק (primary/secondary),
+  // ולכן ה-overlay של hover צריך להיות בצבע הניגוד (`onPrimary`/`onSecondaryContainer`)
+  // ב-10%. במצב לא-נבחר, מספיק overlay אפור עדין של 8%.
   Color _overlayColor(ColorScheme cs) {
     if (selected) {
       return switch (emphasis) {
@@ -385,6 +375,8 @@ class ToolbarActionButton extends StatelessWidget {
           foregroundColor: fg,
           shape: const CircleBorder(),
           highlightColor: overlay,
+        ).copyWith(
+          overlayColor: WidgetStatePropertyAll(overlay),
         ),
       );
     }
@@ -428,6 +420,8 @@ class ToolbarActionButton extends StatelessWidget {
           foregroundColor: fg,
           shape: const CircleBorder(),
           highlightColor: overlay,
+        ).copyWith(
+          overlayColor: WidgetStatePropertyAll(overlay),
         ),
       );
     }
