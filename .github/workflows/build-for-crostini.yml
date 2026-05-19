@@ -49,6 +49,12 @@ jobs:
       - name: Build Linux app
         run: flutter build linux --release
 
+      - name: Activate fastforge
+        run: dart pub global activate fastforge
+
+      - name: Build Linux DEB package
+        run: fastforge release --name=production --jobs=release-linux-deb --skip-clean
+
       - name: Prepare app bundle
         shell: bash
         run: |
@@ -63,12 +69,6 @@ jobs:
 
           tar -czf otzaria-linux-app.tar.gz -C $RAW_DIR .
 
-      - name: Activate fastforge
-        run: dart pub global activate fastforge
-
-      - name: Build Linux DEB package
-        run: fastforge release --name=production --jobs=release-linux-deb --skip-clean --no-build
-
       - name: Prepare DEB package
         id: find_packages
         shell: bash
@@ -77,6 +77,22 @@ jobs:
           if [ -n "$DEB_FILE" ]; then
             echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
             echo "deb_name=$(basename $DEB_FILE)" >> $GITHUB_OUTPUT
+
+            CONTROL_FILE=$(find dist -type f -name 'control' | head -n 1)
+            echo $CONTROL_FILE
+            if [ -n "$CONTROL_FILE" ]; then
+              DEB_DIR=$(dirname $(dirname $CONTROL_FILE))
+              RAW_DIR=$(find build -type d -name 'bundle' | head -n 1)
+              APP_DIR=$(find dist -type d -name 'otzaria' | head -n 1)
+
+              echo $DEB_DIR $DEB_FILE $RAW_DIR $APP_DIR
+
+              cp -fv $RAW_DIR/lib/libzstandard_linux.so $APP_DIR/lib/libzstandard_linux.so
+              cp -fv $RAW_DIR/lib/libzstandard_linux_plugin.so $APP_DIR/lib/libzstandard_linux_plugin.so
+
+              rm -fv $DEB_FILE
+              dpkg-deb --build --root-owner-group $DEB_DIR $DEB_FILE
+            fi
           fi
 
       - name: Prepare full bundle
