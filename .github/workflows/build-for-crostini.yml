@@ -61,7 +61,7 @@ jobs:
           ZSTD_LIB=$(find build -type f -name 'libzstandard_linux.so' | head -n 1)
           RAW_DIR=$(find build -type d -name 'bundle' | head -n 1)
 
-          cp $ZSTD_LIB $RAW_DIR/lib/$(basename $ZSTD_LIB)
+          cp -v $ZSTD_LIB $RAW_DIR/lib/$(basename $ZSTD_LIB)
           chmod 644 $RAW_DIR/lib/$(basename $ZSTD_LIB)
 
           RPATH=$(patchelf --print-rpath $RAW_DIR/lib/libzstandard_linux_plugin.so)
@@ -78,8 +78,8 @@ jobs:
             echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
             echo "deb_name=$(basename $DEB_FILE)" >> $GITHUB_OUTPUT
 
-            CONTROL_FILE=$(find dist -type f -name 'control' | head -n 1)
-            echo $CONTROL_FILE
+            CONTROL_FILE=$(find . -type f -name 'control' | head -n 1)
+            echo $DEB_FILE $CONTROL_FILE
             if [ -n "$CONTROL_FILE" ]; then
               DEB_DIR=$(dirname $(dirname $CONTROL_FILE))
               RAW_DIR=$(find build -type d -name 'bundle' | head -n 1)
