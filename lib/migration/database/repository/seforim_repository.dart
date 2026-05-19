@@ -2631,6 +2631,77 @@ extension BookAcronymRepository on SeforimRepository {
         .toList();
   }
 
+  /// מחזיר רשימה שטוחה של *כל* ערכי ה-AltToc על פני כל הספרים, עם הנתיב
+  /// המלא לכל ערך — בשאילתת SQL אחת. נועד ל-fallback הגלובלי של FindRef:
+  /// במקום 339 שאילתות סדרתיות (אחת לכל ספר), הוא מקבל קאש שטוח בודד
+  /// ושאר העבודה היא פילטר O(N) ב-Dart.
+  ///
+  /// כל map בתוצאה כולל את המפתחות:
+  /// `bookId`, `bookTitle`, `bookOrderIndex`, `reference` (נתיב מלא יחסי
+  /// לספר, ללא שם הספר), `segment` (=lineIndex), `level`, `dbLineId`.
+  Future<List<Map<String, dynamic>>> getAllAltTocFlatEntries() async {
+    final db = await _database.database;
+    final rows = db.select('''
+      SELECT s.bookId AS bookId,
+             b.title AS bookTitle,
+             b.orderIndex AS bookOrderIndex,
+             e.id AS entryId,
+             t.text AS text,
+             e.level AS level,
+             e.parentId AS parentId,
+             COALESCE(l.lineIndex, 0) AS lineIndex,
+             COALESCE(e.lineId, 0) AS dbLineId
+      FROM alt_toc_entry e
+      JOIN alt_toc_structure s ON e.structureId = s.id
+      JOIN book b ON b.id = s.bookId
+      JOIN tocText t ON e.textId = t.id
+      LEFT JOIN line l ON e.lineId = l.id
+    ''').toMapList();
+
+    if (rows.isEmpty) return const [];
+
+    // נבנה memoized buildPath עבור parentId → reference. ה-`entryId` יחיד
+    // ברמת ה-DB, ולכן מספיק קאש גלובלי אחד מעבר לכל הספרים.
+    final entryTexts = <int, String>{};
+    final entryParents = <int, int?>{};
+    for (final r in rows) {
+      final id = r['entryId'] as int;
+      entryTexts[id] = r['text'] as String;
+      entryParents[id] = r['parentId'] as int?;
+    }
+
+    final pathCache = <int, String>{};
+    String buildPath(int? id) {
+      if (id == null) return '';
+      final cached = pathCache[id];
+      if (cached != null) return cached;
+      final parent = buildPath(entryParents[id]);
+      final text = entryTexts[id]!;
+      final result = parent.isEmpty ? text : '$parent $text';
+      pathCache[id] = result;
+      return result;
+    }
+
+    final result = <Map<String, dynamic>>[];
+    for (final r in rows) {
+      final text = r['text'] as String;
+      final ancestorPath = buildPath(r['parentId'] as int?);
+      final fullRef = text.isEmpty
+          ? ancestorPath
+          : (ancestorPath.isEmpty ? text : '$ancestorPath $text');
+      result.add({
+        'bookId': r['bookId'] as int,
+        'bookTitle': r['bookTitle'] as String,
+        'bookOrderIndex': (r['bookOrderIndex'] as num).toDouble(),
+        'reference': fullRef,
+        'segment': r['lineIndex'] as int,
+        'level': r['level'] as int,
+        'dbLineId': r['dbLineId'] as int,
+      });
+    }
+    return result;
+  }
+
   /// מחזיר טוקן + גרסת טרנספוזיציה לאותיות עבריות דו-תווניות.
   /// לדוגמה: "טל" → ["טל", "לט"] (שתי שיטות מניין עבריות ל-39).
   List<String> _hebrewTokenAlternatives(String token) {
