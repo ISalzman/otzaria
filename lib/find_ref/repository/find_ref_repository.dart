@@ -94,6 +94,11 @@ class FindRefRepository {
   /// In production calls [CommentaryService.getBookEra].
   final Future<CommentaryEra> Function(String bookTitle)? getBookEra;
 
+  /// Injection for testing: גרסה סינכרונית של [getCategoryPath], משמשת את
+  /// `_rankResults` כדי לסווג "ספר יסוד" מול "מפרש" לפי הנתיב המלא של
+  /// קטגוריית הספר. In production: [ReferenceBooksCache.instance.getCategoryPathForBookSync].
+  final String? Function(int bookId)? getCategoryPathSync;
+
   /// קאש בזיכרון: מפתח = "bookId:sourceLineId" (sourceLineId=0 כשנופלים ל-book-level).
   /// חי כל זמן שה-repository חי. אינו מתנקה אוטומטית — קטן יחסית
   /// (לכל היותר ~15 מפתחות פר session, רוב המשתמשים פחות).
@@ -119,6 +124,7 @@ class FindRefRepository {
     this.selectCommentatorsBySourceLine,
     this.selectCommentatorsByBook,
     this.getBookEra,
+    this.getCategoryPathSync,
   });
 
   /// מחזיר את הקאש הגלובלי של AltToc; טוען אותו פעם אחת בקריאה הראשונה
@@ -880,6 +886,11 @@ class FindRefRepository {
     // שאינם מכילים "דף" (כגון משנה), כדי ש-"שבת עא ב" יציג גמרא לפני משנה.
     final isDafCitation = _queryLooksDafCitation(queryTokens);
 
+    // resolver של categoryPath לסיווג tier יסוד. בייצור — ReferenceBooksCache;
+    // בטסטים — דרך ה-injection `getCategoryPathSync`.
+    final pathResolver = getCategoryPathSync ??
+        ReferenceBooksCache.instance.getCategoryPathForBookSync;
+
     // Decorate: כל מפתחות המיון מחושבים פעם אחת לכל תוצאה.
     final decorated = List<_RankKey>.generate(results.length, (i) {
       final r = results[i];
@@ -887,6 +898,10 @@ class FindRefRepository {
       // citationMatch=true  → מתאים לסגנון הציון שהוזן
       // citationMatch=false → אינו מתאים (ירד מתחת לספרים שמתאימים)
       final citationMatch = !isDafCitation || r.reference.contains('דף');
+      // tier יסוד: 1=מקרא ... 10=שו"ע, null=מפרש/ספרות עזר.
+      final categoryPath = r.bookId > 0 ? pathResolver(r.bookId) : null;
+      final foundationalTier =
+          classifyFoundationalTier(categoryPath, r.title);
       return _RankKey(
         result: r,
         normTitle: normTitle,
@@ -894,6 +909,7 @@ class FindRefRepository {
         startsWithMatch: normTitle.startsWith(query),
         titleTokens: needsTokenWiseRanking ? _tokenize(normTitle) : const [],
         citationMatch: citationMatch,
+        foundationalTier: foundationalTier,
       );
     });
 
@@ -925,11 +941,24 @@ class FindRefRepository {
       // 4. התאמה לסגנון הציון (גמרא/משנה/תנ"ך)
       if (a.citationMatch != b.citationMatch) return a.citationMatch ? -1 : 1;
 
-      // 5. סדר ספר בספרייה — ספרי יסוד ודורות קדומים עולים ראשונים
+      // 5. ספר יסוד — מקרא → משנה → בבלי → ירושלמי → מדרש → זוהר →
+      // רמב"ם → טור → שו"ע. ספרים שאינם יסוד (מפרשים, ספרות עזר וכו')
+      // יורדים מתחת לכל היסודות. מופיע **לפני** orderIndex כדי ש"שבת יג"
+      // יחזיר את הספרים עצמם (משנה, בבלי, ירושלמי, רמב"ם) ולא את מפרשיהם.
+      final aTier = a.foundationalTier;
+      final bTier = b.foundationalTier;
+      if (aTier != bTier) {
+        if (aTier == null) return 1; // a לא יסוד → b קודם
+        if (bTier == null) return -1; // a יסוד, b לא → a קודם
+        return aTier.compareTo(bTier); // שניהם יסודות — tier קטן יותר ראשון
+      }
+
+      // 6. סדר ספר בספרייה — ספרים בסדר הספרייה (בתוך אותו tier יסוד או
+      // אותה רמת מפרשות, מיון לפי orderIndex).
       final orderCmp = a.result.orderIndex.compareTo(b.result.orderIndex);
       if (orderCmp != 0) return orderCmp;
 
-      // 6. סדר: TOC L1 < TOC L2 < AltToc < TOC L3+
+      // 7. סדר: TOC L1 < TOC L2 < AltToc < TOC L3+
       // AltToc (כותרות-משנה) מופיע אחרי הכותרות הבסיסיות (רמה 2) אך לפני הכותרות הפנימיות (רמה 3+).
       final aRank = a.result.isAltToc
           ? 3
@@ -998,6 +1027,139 @@ class FindRefRepository {
       .split(' ')
       .where((token) => token.isNotEmpty)
       .toList(growable: false);
+
+  /// מסווג ספר ל-tier של "ספר יסוד" לפי [categoryPath] ו-[title].
+  /// מחזיר tier בטווח 1-10 (קטן יותר → ראשון בדירוג) או `null` עבור ספרים
+  /// שאינם נחשבים יסוד (מפרשים, ספרות עזר, וכו').
+  ///
+  /// סדר ה-tiers לפי דרישת המשתמש: מקרא → משנה → בבלי → ירושלמי → מדרשי
+  /// הלכה → מדרשי אגדה → זוהר → רמב"ם → טור → שו"ע.
+  ///
+  /// הסיווג מבוסס נתיב קטגוריה: ספר נחשב יסוד אם הוא יושב **ישירות**
+  /// תחת הקטגוריה הראשית (למשל `משנה, סדר מועד`); ברגע שיש בנתיב segment
+  /// שמסמן מפרשים/ראשונים/אחרונים/וכו' — הוא יורד מ-tier היסוד.
+  @visibleForTesting
+  static int? classifyFoundationalTier(String? categoryPath, String title) {
+    if (categoryPath == null || categoryPath.isEmpty) return null;
+
+    final parts = categoryPath.split(', ');
+    if (parts.isEmpty) return null;
+
+    // אם בנתיב יש קטגוריית "מפרשים"/"ראשונים"/"אחרונים"/וכו' — הספר אינו
+    // יסוד אלא יושב מתחת לעץ של מפרשים, גם אם הוא בקטגוריית-עלה שנראית
+    // כמו של ספר יסוד (למשל: "משנה, ראשונים, ברטנורא, סדר מועד").
+    const commentaryMarkers = {
+      'ראשונים',
+      'אחרונים',
+      'מחברי זמננו',
+      'מפרשים',
+      'תרגומים',
+      'דרשות ודרושים',
+      'ספרות עזר',
+      'מסכתות קטנות',
+      'מערכות ועניינים',
+      'מפרשים על המסכתות הקטנות',
+    };
+    for (final p in parts) {
+      if (commentaryMarkers.contains(p)) return null;
+    }
+
+    final root = parts[0];
+    final second = parts.length >= 2 ? parts[1] : null;
+
+    // 1. תנ"ך — חייב להיות עומק 2 בדיוק, וסבא ידוע (תורה/נביאים/כתובים).
+    if (root == 'תנ"ך' &&
+        parts.length == 2 &&
+        (second == 'תורה' || second == 'נביאים' || second == 'כתובים')) {
+      return 1;
+    }
+
+    // 2. משנה — עומק 2, סבא "סדר X".
+    if (root == 'משנה' &&
+        parts.length == 2 &&
+        (second?.startsWith('סדר ') ?? false)) {
+      return 2;
+    }
+
+    // 3. תלמוד בבלי.
+    if (root == 'תלמוד בבלי' &&
+        parts.length == 2 &&
+        (second?.startsWith('סדר ') ?? false)) {
+      return 3;
+    }
+
+    // 4. תלמוד ירושלמי.
+    if (root == 'תלמוד ירושלמי' &&
+        parts.length == 2 &&
+        (second?.startsWith('סדר ') ?? false)) {
+      return 4;
+    }
+
+    // 5. מדרשי הלכה — מכילתא/ספרא/ספרי וכו'.
+    if (root == 'מדרש' &&
+        second == 'הלכה' &&
+        parts.length == 2 &&
+        !_titleSuggestsCommentary(title)) {
+      return 5;
+    }
+
+    // 6. מדרשי אגדה.
+    if (root == 'מדרש' &&
+        second == 'אגדה' &&
+        parts.length == 2 &&
+        !_titleSuggestsCommentary(title)) {
+      return 6;
+    }
+
+    // 7. זוהר — בקטגוריה "קבלה, זהר" יש גם פירושים. בוחרים לפי כותרת.
+    if (root == 'קבלה' &&
+        second == 'זהר' &&
+        parts.length == 2 &&
+        _isPrimaryZoharTitle(title)) {
+      return 7;
+    }
+
+    // 8. רמב"ם (משנה תורה) — חלוקה ל-14 ספרים תחת "הלכה, משנה תורה".
+    if (root == 'הלכה' &&
+        second == 'משנה תורה' &&
+        parts.length == 3 &&
+        (parts[2].startsWith('ספר ') || parts[2] == 'הקדמה')) {
+      return 8;
+    }
+
+    // 9. טור — תחת "הלכה, טור".
+    if (root == 'הלכה' && second == 'טור' && parts.length == 2) return 9;
+
+    // 10. שולחן ערוך — (לא שו"ע הרב — קטגוריה נפרדת).
+    if (root == 'הלכה' && second == 'שולחן ערוך' && parts.length == 2) {
+      return 10;
+    }
+
+    return null;
+  }
+
+  /// פטרני כותרת שמסמנים מפרש (משמש למקרים שה-categoryPath לא מבדיל
+  /// לבדו — כמו זוהר ומדרשים שגם פירושים יושבים תחת הקטגוריה הראשית).
+  static bool _titleSuggestsCommentary(String title) {
+    return title.contains(' על ') ||
+        title.startsWith('פירוש ') ||
+        title.startsWith('הערות ') ||
+        title.startsWith('ביאור ');
+  }
+
+  /// רשימה מצומצמת של ספרי היסוד בקטגוריית הזוהר (השאר באותה קטגוריה
+  /// הם פירושים — "הסולם על ספר הזהר", "יהל אור על ספר הזהר", וכו').
+  static bool _isPrimaryZoharTitle(String title) {
+    const primary = {
+      'ספר הזהר',
+      'זוהר חדש',
+      'תקוני הזהר',
+      'אדרא רבא',
+      'אדרא זוטא',
+      'ספרא דצניעותא',
+    };
+    return primary.contains(title);
+  }
 }
 
 /// מפתחות מיון מחושבים מראש לדירוג תוצאות (decorate-sort-undecorate).
@@ -1013,6 +1175,10 @@ class _RankKey {
   /// בציון גמרא). false = אינו מתאים וירד בדירוג.
   final bool citationMatch;
 
+  /// tier "ספר יסוד" של הספר: 1=מקרא, 2=משנה, ..., 10=שו"ע. `null` עבור
+  /// ספרים שאינם יסוד (מפרשים וכד'). ראה [FindRefRepository.classifyFoundationalTier].
+  final int? foundationalTier;
+
   const _RankKey({
     required this.result,
     required this.normTitle,
@@ -1020,5 +1186,6 @@ class _RankKey {
     required this.startsWithMatch,
     required this.titleTokens,
     required this.citationMatch,
+    required this.foundationalTier,
   });
 }

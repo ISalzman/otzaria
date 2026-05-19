@@ -7,6 +7,7 @@ import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/migration/models/category.dart' as db_models;
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -46,6 +47,13 @@ class ReferenceBooksCache {
   @visibleForTesting
   Future<List<(String, String, int)>> Function(String filePath)
       pdfOutlineParser = _parsePdfOutlineEntries;
+
+  /// Injection לבדיקות בלבד: ספק הקטגוריות עבור [_prewarmCategoryPaths]. אם
+  /// `null` (ברירת מחדל) — `_prewarmCategoryPaths` ניגש ל-[SqliteDataProvider].
+  /// טסטים יכולים להציב פונקציה זורקת חריגה לבדיקת מסלול הכשל, או רשימה
+  /// קונקרטית לבדיקת הצלחה.
+  @visibleForTesting
+  Future<List<db_models.Category>> Function()? categoriesProviderOverride;
 
   bool get isLoaded => _isLoaded;
 
@@ -149,6 +157,27 @@ class ReferenceBooksCache {
       _fsPdfBooks
         ..clear()
         ..addAll(localFsPdfBooks);
+      _categoryPaths.clear();
+
+      // Pre-warm category paths **לפני** סימון הקאש כ-loaded — דירוג ה-FindRef
+      // מסתמך על resolver סינכרוני שיחזיר null אם הקאש עוד לא מוכן, ואז
+      // כל הסיווג "ספר יסוד" מבוטל בחיפוש הראשון. שאילתה אחת + walk בזיכרון
+      // היא חבילה זולה (~hundreds of ms על ספרייה של ~10K ספרים), שווה
+      // לחסום את ה-warmUp עליה. PDF outline pre-warm נשאר בריקה כי הוא
+      // יקר משמעותית (file I/O).
+      //
+      // אם prewarm נכשל (לדוגמה, lock זמני על ה-DB) — נחזור בלי לסמן
+      // `_isLoaded = true`, כך שה-warmUp הבא יזכה לנסות שוב במקום להישאר
+      // עם classifier מבוטל לכל ה-session.
+      final pathsOk = await _prewarmCategoryPaths(myGen);
+      if (myGen != _generation) return;
+      if (!pathsOk) {
+        debugPrint(
+            '[ReferenceBooksCache] aborting warmUp — category-path prewarm failed; '
+            'next warmUp() will retry');
+        return;
+      }
+
       _isLoaded = true;
       debugPrint(
         '[ReferenceBooksCache] Ready with ${BooksCache.instance.books.length} DB books'
@@ -183,8 +212,23 @@ class ReferenceBooksCache {
     // Note: We don't clear the shared caches here as they may be used by other components
   }
 
-  // Lazy category-path cache: bookId → category path string (e.g., "תנ"ך, תורה, בראשית")
+  // Category-path cache: bookId → category path string of the book's category
+  // chain, **excluding** the book itself. e.g. for book "בראשית" (categoryId
+  // points to "תורה"), the path is "תנ"ך, תורה" — אורך 2. עבור "משנה תורה,
+  // הלכות שבת" (categoryId="ספר זמנים"), הנתיב הוא
+  // "הלכה, משנה תורה, ספר זמנים" — אורך 3.
+  //
+  // הקאש נטען ב-[_prewarmCategoryPaths] לפני שהקאש מסומן כ-loaded (single
+  // SQL + O(books) in-memory walk), כדי שדירוג ה-FindRef יוכל לסווג "ספר
+  // יסוד" מול "מפרש" סינכרונית בלי race עם ה-warmUp.
   final Map<int, String> _categoryPaths = <int, String>{};
+
+  /// גרסה סינכרונית של [getCategoryPathForBook]: מחזירה `null` אם הערך
+  /// אינו בקאש (למשל לפני warmUp או עבור ספרים שאינם ב-DB).
+  String? getCategoryPathForBookSync(int bookId) {
+    if (bookId < 0) return null;
+    return _categoryPaths[bookId];
+  }
 
   /// מחזיר את נתיב הקטגוריה עבור ספר לפי מזההו.
   /// הנתיב נבנה בפעם הראשונה בלבד ונשמר בזיכרון.
@@ -213,6 +257,68 @@ class ReferenceBooksCache {
       debugPrint('[ReferenceBooksCache] getCategoryPathForBook error: $e');
       _categoryPaths[bookId] = '';
       return '';
+    }
+  }
+
+  /// בונה ב-pass יחיד את כל ה-categoryPaths מ-`book.categoryId` לעלה.
+  /// מיועד לקריאה בתוך ה-warmUp **לפני** סימון הקאש כ-loaded.
+  ///
+  /// ערכי החזרה:
+  ///   `true`  — הצלחה (כולל המקרה של "אין DB"), הקאש מוכן לשימוש.
+  ///   `false` — כשל בפועל (חריגה בקריאה לשאילתת DB וכד'). הקורא חייב
+  ///             *לא* לסמן את הקאש כ-loaded, כך שה-warmUp הבא ינסה שוב.
+  ///   ביטול (myGen != _generation) — `true`. הקורא יבדוק את הדור בעצמו
+  ///   ויחזור בלי לסמן loaded; זה לא כשל לוגי אלא בקשת הפסקה.
+  Future<bool> _prewarmCategoryPaths(int myGen) async {
+    final override = categoriesProviderOverride;
+    final repository = SqliteDataProvider.instance.repository;
+    if (override == null && repository == null) {
+      return true; // אין DB — אין מה לחמם, לא נחשב כשל.
+    }
+
+    try {
+      final categories =
+          override != null ? await override() : await repository!.getAllCategories();
+      if (myGen != _generation) return true; // ביטול, לא כשל.
+
+      final byId = <int, ({int? parentId, String title})>{
+        for (final c in categories) c.id: (parentId: c.parentId, title: c.title)
+      };
+
+      // Memoization של נתיב לפי categoryId — כל נתיב מחושב פעם אחת.
+      final pathByCategoryId = <int, String>{};
+      String pathFor(int? categoryId) {
+        if (categoryId == null) return '';
+        final cached = pathByCategoryId[categoryId];
+        if (cached != null) return cached;
+
+        final visited = <int>{};
+        final parts = <String>[];
+        int? cur = categoryId;
+        while (cur != null && visited.add(cur)) {
+          final entry = byId[cur];
+          if (entry == null) break;
+          parts.insert(0, entry.title);
+          cur = entry.parentId;
+        }
+        final path = parts.join(', ');
+        pathByCategoryId[categoryId] = path;
+        return path;
+      }
+
+      const yieldBatch = 1000;
+      var processed = 0;
+      for (final book in BooksCache.instance.books) {
+        _categoryPaths[book.id] = pathFor(book.categoryId);
+        if (++processed % yieldBatch == 0) {
+          await Future<void>.delayed(Duration.zero);
+          if (myGen != _generation) return true; // ביטול.
+        }
+      }
+      return true;
+    } catch (e) {
+      debugPrint('[ReferenceBooksCache] _prewarmCategoryPaths failed: $e');
+      return false;
     }
   }
 
