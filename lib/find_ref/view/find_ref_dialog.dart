@@ -23,6 +23,26 @@ class FindRefDialog extends StatefulWidget {
   State<FindRefDialog> createState() => _FindRefDialogState();
 }
 
+/// רשומת מפרש מוכנה לפתיחה ישירה ללא שאילתות נוספות.
+/// נוצרת בעת טעינת רשימת המפרשים — מאחדת את ה-`title` ו-`targetSegment`
+/// מה-DB עם ה-[Book] המתאים מתוך הספרייה.
+///
+/// `targetSegment` הוא nullable: `non-null` רק כש-DB החזיר `targetLineIndex`
+/// מדויק (מסלול segment-level). ב-book-level הוא `null`, והקליק נופל ל-
+/// `ref.segment.toInt()`. חשוב: הרשומה הזו משותפת בין refs עם אותו
+/// `bookId+sourceLineId` אך `segment` שונה, ולכן אסור לקבע את ה-segment כאן.
+class _CommentatorEntry {
+  final String title;
+  final int? targetSegment;
+  final Book book;
+
+  const _CommentatorEntry({
+    required this.title,
+    required this.targetSegment,
+    required this.book,
+  });
+}
+
 class _FindRefDialogState extends State<FindRefDialog> {
   int _selectedIndex = 0;
   bool _includePersonalBooks = false;
@@ -30,8 +50,8 @@ class _FindRefDialogState extends State<FindRefDialog> {
   final Map<int, GlobalKey> _commentatorsButtonKeys = {};
   // מפתח = "bookId:sourceLineId". value=null → טעינה בתהליך.
   // value=[] → אין מפרשים זמינים (לא יוצג כפתור).
-  // value=[...] → המפרשים שיוצגו ב-popup.
-  final Map<String, List<String>?> _commentatorsByRef = {};
+  // value=[...] → רשומות מוכנות לפתיחה ישירה (כולל targetSegment ו-Book).
+  final Map<String, List<_CommentatorEntry>?> _commentatorsByRef = {};
   FocusRestorer? _focusRestorer;
   Timer? _searchDebounce;
 
@@ -86,8 +106,9 @@ class _FindRefDialogState extends State<FindRefDialog> {
   String _commentatorsKey(DbReferenceResult ref) =>
       '${ref.bookId}:${ref.sourceLineId}';
 
-  /// טוען את רשימת המפרשים ל-[ref] ברקע אם עוד לא נטענה.
-  /// תוצאות נשמרות ב-[_commentatorsByRef]; setState יגרום ל-redraw של ה-row.
+  /// טוען את רשימת המפרשים ל-[ref] ברקע אם עוד לא נטענה, יחד עם ה-[Book]
+  /// המתאים לכל מפרש. רשומות מלאות נשמרות ב-[_commentatorsByRef] כך שהקליק
+  /// על מפרש יוכל לפתוח אותו ישירות, בלי `await` וללא שאילתות.
   void _ensureCommentatorsLoaded(DbReferenceResult ref) {
     final key = _commentatorsKey(ref);
     if (_commentatorsByRef.containsKey(key)) return; // נטען / בתהליך טעינה
@@ -95,10 +116,30 @@ class _FindRefDialogState extends State<FindRefDialog> {
     final repository = context.read<FindRefBloc>().findRefRepository;
     () async {
       try {
-        final list = await repository.getCommentatorsForResult(ref);
+        final dbEntries = await repository.getCommentatorsForResult(ref);
         if (!mounted) return;
+        if (dbEntries.isEmpty) {
+          setState(() {
+            _commentatorsByRef[key] = const [];
+          });
+          return;
+        }
+        // pre-resolve של ה-Book עבור כל מפרש כדי שהקליק יהיה סינכרוני.
+        // `library` מוחזק בקאש ב-DataRepository.
+        final library = await DataRepository.instance.library;
+        if (!mounted) return;
+        final entries = <_CommentatorEntry>[
+          for (final e in dbEntries)
+            _CommentatorEntry(
+              title: e.title,
+              targetSegment: e.targetSegment,
+              book:
+                  _findBookInLibrary(library, e.title, preferTextBook: true) ??
+                      TextBook(title: e.title),
+            ),
+        ];
         setState(() {
-          _commentatorsByRef[key] = list;
+          _commentatorsByRef[key] = entries;
         });
       } catch (e) {
         if (!mounted) return;
@@ -163,12 +204,13 @@ class _FindRefDialogState extends State<FindRefDialog> {
         initialCommentators: initialCommentators);
   }
 
-  /// פותח תפריט עם רשימת המפרשים הזמינים ל-[ref] (כבר preloaded).
-  /// בחירה פותחת את הספר עם המפרש שנבחר מיידית (single-select).
+  /// פותח תפריט עם רשימת המפרשים הזמינים ל-[ref] (כבר preloaded — כולל
+  /// `Book` לכל רשומה). בחירה פותחת את הספר ישירות. ה-[ref] נחוץ עבור
+  /// fallback של `targetSegment` במסלול book-level (ראה [_openCommentator]).
   Future<void> _showCommentatorsMenu(
     DbReferenceResult ref,
     GlobalKey buttonKey,
-    List<String> commentators,
+    List<_CommentatorEntry> commentators,
   ) async {
     if (commentators.isEmpty) return;
 
@@ -196,16 +238,16 @@ class _FindRefDialogState extends State<FindRefDialog> {
       overlayBox.size.height - bottomRight.dy,
     );
 
-    final selected = await showMenu<String>(
+    final selected = await showMenu<_CommentatorEntry>(
       context: context,
       position: position,
       constraints: const BoxConstraints(maxHeight: 400, minWidth: 220),
       items: [
-        for (final c in commentators)
-          PopupMenuItem<String>(
-            value: c,
+        for (final e in commentators)
+          PopupMenuItem<_CommentatorEntry>(
+            value: e,
             child: Text(
-              c,
+              e.title,
               textDirection: TextDirection.rtl,
               overflow: TextOverflow.ellipsis,
             ),
@@ -214,32 +256,17 @@ class _FindRefDialogState extends State<FindRefDialog> {
     );
 
     if (selected == null || !mounted) return;
-    await _openCommentator(ref, selected);
+    _openCommentator(ref, selected);
   }
 
-  /// פותח את ספר המפרש [commentatorTitle] כ-tab עצמאי, ממוקם בשורה המקבילה
-  /// לסגמנט המקור של [sourceRef] (דרך טבלת links).
-  Future<void> _openCommentator(
-      DbReferenceResult sourceRef, String commentatorTitle) async {
-    final repository = context.read<FindRefBloc>().findRefRepository;
-    final segment = await repository.resolveCommentatorSegment(
-            sourceRef, commentatorTitle) ??
-        0;
-
-    if (!mounted) return;
-
-    Book? book;
-    try {
-      final library = await DataRepository.instance.library;
-      book = _findBookInLibrary(library, commentatorTitle, preferTextBook: true);
-    } catch (e) {
-      debugPrint('Error searching library for commentator: $e');
-    }
-    book ??= TextBook(title: commentatorTitle);
-
-    if (!mounted) return;
+  /// פותח את ספר המפרש מתוך רשומה שהוכנה מראש: ה-`book` כבר ידוע, וה-
+  /// `targetSegment` נלקח מה-[entry] או נופל ל-`ref.segment` כש-DB לא ידע
+  /// לפתור (מסלול book-level). הקליק סינכרוני לחלוטין — אין `await`, אין
+  /// שאילתות DB ואין מעבר על עץ הספרייה בזמן הקליק.
+  void _openCommentator(DbReferenceResult ref, _CommentatorEntry entry) {
+    final segment = entry.targetSegment ?? ref.segment.toInt();
     Navigator.of(context).pop();
-    openBook(context, book, segment, '');
+    openBook(context, entry.book, segment, '');
   }
 
   Book? _findBookInLibrary(Category category, String title,

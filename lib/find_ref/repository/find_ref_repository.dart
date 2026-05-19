@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/find_ref/repository/db_commentator_entry.dart';
 import 'package:otzaria/find_ref/repository/db_reference_result.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
@@ -67,11 +68,17 @@ class FindRefRepository {
 
   /// Injection for testing: returns commentator rows for a specific source line.
   /// In production calls [LinkDao.selectCommentatorsBySourceLine].
+  ///
+  /// כל row צפוי לכלול לפחות `targetBookTitle` ו-`targetLineIndex` (השורה
+  /// הראשונה בספר המפרש שמקושרת לשורת המקור).
   final Future<List<Map<String, dynamic>>> Function(int sourceLineId)?
       selectCommentatorsBySourceLine;
 
   /// Injection for testing: returns commentator rows for a whole book.
   /// In production calls [LinkDao.selectCommentatorsByBook].
+  ///
+  /// אין כאן `targetLineIndex` משמעותי לכל מפרש; הקוד נופל ל-best-effort
+  /// (`ref.segment.toInt()`) בהנחת alignment שורה-שורה.
   final Future<List<Map<String, dynamic>>> Function(int bookId)?
       selectCommentatorsByBook;
 
@@ -79,22 +86,10 @@ class FindRefRepository {
   /// In production calls [CommentaryService.getBookEra].
   final Future<CommentaryEra> Function(String bookTitle)? getBookEra;
 
-  /// Injection for testing: מחזיר את ה-lineIndex (יחסי לספר המפרש) של השורה
-  /// המקושרת ל-[sourceLineId] בספר ששמו [targetBookTitle].
-  /// In production calls [LinkDao.selectCommentatorTargetLineIndex].
-  final Future<int?> Function(int sourceLineId, String targetBookTitle)?
-      selectCommentatorTargetLineIndex;
-
-  /// Injection for testing: fallback resolver דרך bookId+lineIndex של המקור.
-  /// In production calls [LinkDao.selectCommentatorTargetLineIndexByBookLine].
-  final Future<int?> Function(
-          int sourceBookId, int sourceLineIndex, String targetBookTitle)?
-      selectCommentatorTargetLineIndexByBookLine;
-
   /// קאש בזיכרון: מפתח = "bookId:sourceLineId" (sourceLineId=0 כשנופלים ל-book-level).
   /// חי כל זמן שה-repository חי. אינו מתנקה אוטומטית — קטן יחסית
   /// (לכל היותר ~15 מפתחות פר session, רוב המשתמשים פחות).
-  final Map<String, List<String>> _commentatorsCache = {};
+  final Map<String, List<DbCommentatorEntry>> _commentatorsCache = {};
 
   FindRefRepository({
     this.dataRepository,
@@ -111,72 +106,33 @@ class FindRefRepository {
     this.selectCommentatorsBySourceLine,
     this.selectCommentatorsByBook,
     this.getBookEra,
-    this.selectCommentatorTargetLineIndex,
-    this.selectCommentatorTargetLineIndexByBookLine,
   });
 
-  /// מחזיר את ה-segment בתוך ספר המפרש [commentatorTitle] שמתאים ל-segment
-  /// המקור של [ref]. PDF / ספרים אישיים — `null`.
+  /// מחזיר רשימת רשומות מפרשים זמינים עבור תוצאה, מוכנות לפתיחה ישירה.
   ///
-  /// אסטרטגיה (שלושה שלבים):
-  /// 1. אם `ref.sourceLineId > 0`: שאילתת link ישירה לפי `sourceLineId`.
-  /// 2. אם השלב הראשון לא החזיר ערך ו-`ref.bookId > 0`: fallback ע"י
-  ///    `sourceBookId + lineIndex` (למקרה ש-tocEntry.lineId היה NULL).
-  /// 3. fallback אחרון: מחזיר את `ref.segment` כ-best-effort — נכון רק
-  ///    אם המפרש aligned שורה-שורה עם המקור.
-  Future<int?> resolveCommentatorSegment(
-      DbReferenceResult ref, String commentatorTitle) async {
-    if (ref.isPdf || ref.isUserBook) return null;
-
-    final repository = SqliteDataProvider.instance.repository;
-    final byLineFn = selectCommentatorTargetLineIndex ??
-        (repository == null
-            ? null
-            : (int lineId, String title) => repository.database.linkDao
-                .selectCommentatorTargetLineIndex(lineId, title));
-    final byBookLineFn = selectCommentatorTargetLineIndexByBookLine ??
-        (repository == null
-            ? null
-            : (int bookId, int lineIndex, String title) =>
-                repository.database.linkDao
-                    .selectCommentatorTargetLineIndexByBookLine(
-                        bookId, lineIndex, title));
-
-    // שלב 1: lookup לפי sourceLineId הגלובלי.
-    if (ref.sourceLineId > 0 && byLineFn != null) {
-      try {
-        final result =
-            await byLineFn(ref.sourceLineId, commentatorTitle);
-        if (result != null) return result;
-      } catch (_) {/* נופל לשלב הבא */}
-    }
-
-    // שלב 2: lookup לפי bookId + lineIndex (כש-tocEntry.lineId היה NULL).
-    final sourceLineIndex = ref.segment.toInt();
-    if (ref.bookId > 0 && byBookLineFn != null && sourceLineIndex >= 0) {
-      try {
-        final result = await byBookLineFn(
-            ref.bookId, sourceLineIndex, commentatorTitle);
-        if (result != null) return result;
-      } catch (_) {/* נופל לfallback */}
-    }
-
-    // שלב 3: best-effort — לפי הנחת alignment שורה-שורה.
-    return sourceLineIndex >= 0 ? sourceLineIndex : null;
-  }
-
-  /// מחזיר רשימת שמות-מפרשים זמינים עבור תוצאה.
+  /// כל [DbCommentatorEntry.targetSegment] הוא:
+  ///   - `int` במסלול segment-level — `MIN(targetLineIndex)` של הקישורים
+  ///     היוצאים מהשורה למפרש (=הקטע הראשון של המפרש על אותה שורה).
+  ///   - `null` במסלול book-level — על הצרכן ליפול ל-best-effort
+  ///     (`ref.segment.toInt()`) בהנחת alignment שורה-שורה.
+  ///
+  /// חשוב: `targetSegment` אינו תלוי ב-`ref.segment`. הקאש ממופתח לפי
+  /// `bookId:sourceLineId` בלבד, ולכן שני refs עם אותו `bookId` ו-`sourceLineId == 0`
+  /// אך `segment` שונה חולקים את אותה רשומה — והפתרון של ה-fallback חייב
+  /// להישאר באחריות הצרכן.
   ///
   /// אסטרטגיה:
-  /// 1. אם [DbReferenceResult.sourceLineId] > 0 — שאילתה segment-level.
-  ///    אם החזירה תוצאות — מחזיר אותן (זה הרזולוציה המדויקת ביותר).
-  /// 2. אחרת (או אם segment-level חזר ריק) — שאילתה book-level לכל הספר.
+  /// 1. אם [DbReferenceResult.sourceLineId] > 0 — שאילתה segment-level
+  ///    (`selectCommentatorsBySourceLine`). מחזירה גם `targetLineIndex`.
+  /// 2. אחרת (או אם segment-level חזר ריק) — שאילתה book-level לכל הספר;
+  ///    `targetSegment` יישאר `null`.
   /// 3. PDFs / ספרים מחוץ ל-DB (bookId <= 0) / ספרים אישיים — מחזיר ריק.
   ///    ספרים אישיים: ה-bookId/sourceLineId שלהם שייכים ל-user_books.db ולא
   ///    מתאימים ל-link table של ה-DB הראשי — שאילתה תחזיר מפרשים שגויים.
   ///
   /// תוצאות נשמרות בקאש בזיכרון לאורך חיי ה-repository.
-  Future<List<String>> getCommentatorsForResult(DbReferenceResult ref) async {
+  Future<List<DbCommentatorEntry>> getCommentatorsForResult(
+      DbReferenceResult ref) async {
     if (ref.isPdf || ref.bookId <= 0 || ref.isUserBook) return const [];
 
     final cacheKey = '${ref.bookId}:${ref.sourceLineId}';
@@ -198,19 +154,28 @@ class FindRefRepository {
     if (lineFn == null && bookFn == null) return const [];
 
     List<Map<String, dynamic>> rows = const [];
+    var usedSegmentLevel = false;
     if (ref.sourceLineId > 0 && lineFn != null) {
       rows = await lineFn(ref.sourceLineId);
+      usedSegmentLevel = rows.isNotEmpty;
     }
     if (rows.isEmpty && bookFn != null) {
       rows = await bookFn(ref.bookId);
     }
 
     final titles = <String>[];
-    final seen = <String>{};
+    final segmentByTitle = <String, int?>{};
     for (final row in rows) {
       final title = row['targetBookTitle'] as String?;
       if (title == null || title.isEmpty) continue;
-      if (seen.add(title)) titles.add(title);
+      if (segmentByTitle.containsKey(title)) continue;
+
+      // segment-level → `targetLineIndex` אם ה-row כולל אותו, אחרת null;
+      // book-level → null (הצרכן יפתור לפי ref.segment).
+      final int? segment =
+          usedSegmentLevel ? row['targetLineIndex'] as int? : null;
+      titles.add(title);
+      segmentByTitle[title] = segment;
     }
 
     if (titles.isEmpty) {
@@ -229,7 +194,13 @@ class FindRefRepository {
         if (ea.order != eb.order) return ea.order.compareTo(eb.order);
         return titles[a].compareTo(titles[b]);
       });
-    final sorted = [for (final i in indices) titles[i]];
+    final sorted = [
+      for (final i in indices)
+        DbCommentatorEntry(
+          title: titles[i],
+          targetSegment: segmentByTitle[titles[i]],
+        ),
+    ];
 
     _commentatorsCache[cacheKey] = sorted;
     return sorted;

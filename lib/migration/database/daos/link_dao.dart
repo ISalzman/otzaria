@@ -48,34 +48,14 @@ class LinkDao {
         .select(_queries['selectCommentatorsByBook']!, [bookId]).toMapList();
   }
 
+  /// מחזיר רשימת מפרשים זמינים עבור שורת מקור, כולל `targetLineIndex` —
+  /// ה-`lineIndex` הראשון בספר המפרש שמקושר לאותה שורה. זה מאפשר ל-FindRef
+  /// לפתוח את ספר המפרש ישירות במיקום המקביל, ללא שאילתה נפרדת בעת הקליק.
   Future<List<Map<String, dynamic>>> selectCommentatorsBySourceLine(
       int sourceLineId) async {
     final db = await database;
     return db.select(_queries['selectCommentatorsBySourceLine']!,
         [sourceLineId]).toMapList();
-  }
-
-  /// מחזיר את ה-`lineIndex` (יחסי לספר המפרש) של השורה המקושרת ל-[sourceLineId]
-  /// בספר ששמו [targetBookTitle]. `null` אם אין קישור.
-  Future<int?> selectCommentatorTargetLineIndex(
-      int sourceLineId, String targetBookTitle) async {
-    final db = await database;
-    final rows = db.select(_queries['selectCommentatorTargetLineIndex']!,
-        [sourceLineId, targetBookTitle]).toMapList();
-    if (rows.isEmpty) return null;
-    return rows.first['lineIndex'] as int?;
-  }
-
-  /// Fallback resolver: כאשר אין `sourceLineId` ידוע (tocEntry.lineId היה
-  /// NULL), מנסה לאתר ע"י [sourceBookId] + [sourceLineIndex].
-  Future<int?> selectCommentatorTargetLineIndexByBookLine(
-      int sourceBookId, int sourceLineIndex, String targetBookTitle) async {
-    final db = await database;
-    final rows = db.select(
-        _queries['selectCommentatorTargetLineIndexByBookLine']!,
-        [sourceBookId, sourceLineIndex, targetBookTitle]).toMapList();
-    if (rows.isEmpty) return null;
-    return rows.first['lineIndex'] as int?;
   }
 
   Future<int> insertLink(Link link, int connectionTypeId) async {
