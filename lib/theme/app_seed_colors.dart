@@ -7,8 +7,10 @@ class AppSeedColors {
   AppSeedColors._();
 
   // ── ברירות מחדל ————————————————————————————————
+  // ערכים אלו זהים לברירות המחדל שהיו לפני המעבר ל-int, כדי לא להחליף
+  // בשקט את הצבע שמשתמשים קיימים רואים אחרי שדרוג.
   static const Color defaultLight = darkBrown;
-  static const Color defaultDark = purple;
+  static const Color defaultDark = lightPurple;
 
   // ── צבעי ספקטרום ————————————————————————————————
   static const Color red = Color(0xFFF44336);
@@ -20,6 +22,7 @@ class AppSeedColors {
   static const Color blueGrey = Color(0xFF607D8B);
   static const Color navy = Color(0xFF001A33);
   static const Color purple = Color(0xFF9C27B0);
+  static const Color lightPurple = Color(0xFFCE93D8);
 
   // ── צבעים נייטרלים ————————————————————————————
   static const Color brown = Color(0xFF795548);
@@ -38,6 +41,7 @@ class AppSeedColors {
     (color: blueGrey, name: 'אפור גרפיט'),
     (color: navy, name: 'כחול כהה'),
     (color: purple, name: 'סגול'),
+    (color: lightPurple, name: 'סגול בהיר'),
     (color: brown, name: 'חום'),
     (color: parchment, name: 'פרגמנט / בז\''),
     (color: grey, name: 'אפור'),
