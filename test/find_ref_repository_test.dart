@@ -353,6 +353,228 @@ void main() {
         reason: 'Book whose second token starts with the query token must appear');
   });
 
+  // ─── ספרי יסוד (foundational tier) ─────────────────────────────────────────
+
+  group('FindRef.classifyFoundationalTier — סיווג ספרי יסוד', () {
+    // ה-categoryPath שמוזן ל-classifier הוא הפלט המדויק של
+    // `BookDatabaseResolver.buildCategoryPath` — כלומר נתיב הקטגוריות מהשורש
+    // ועד ולא כולל הספר עצמו.
+    //
+    // דוגמאות מ-seforim.db בפרודקשן:
+    //   book "בראשית"           → cat 2="תורה"    → cat 1="תנ"ך"    → path = "תנ"ך, תורה"           (אורך 2)
+    //   book "משנה שבת"         → cat 7="סדר מועד" → cat 5="משנה"    → path = "משנה, סדר מועד"       (אורך 2)
+    //   book "שבת" (בבלי)       → cat 14="סדר מועד" → cat 12="תלמוד בבלי" → path = "תלמוד בבלי, סדר מועד" (אורך 2)
+    //   book "משנה תורה, ה' שבת" → cat 48="ספר זמנים" → cat 44="משנה תורה" → cat 43="הלכה"
+    //                                                                    → path = "הלכה, משנה תורה, ספר זמנים" (אורך 3)
+    //
+    // הכותרות והנתיבים בטסטים האלו תואמים בדיוק את מה שמיוצר בעת ריצה.
+
+    test('תנ"ך: תורה/נביאים/כתובים → tier 1', () {
+      expect(FindRefRepository.classifyFoundationalTier('תנ"ך, תורה', 'בראשית'),
+          1);
+      expect(FindRefRepository.classifyFoundationalTier('תנ"ך, נביאים', 'יהושע'),
+          1);
+      expect(
+          FindRefRepository.classifyFoundationalTier('תנ"ך, כתובים', 'תהילים'),
+          1);
+    });
+
+    test('תנ"ך עם תת-קטגוריה של מפרשים → null', () {
+      // "תנ"ך, ראשונים, רש"י, תורה" — פירוש רש"י, לא ספר יסוד.
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'תנ"ך, ראשונים, רש"י, תורה', 'רש"י על בראשית'),
+        isNull,
+      );
+    });
+
+    test('משנה: "סדר X" → tier 2', () {
+      expect(
+          FindRefRepository.classifyFoundationalTier('משנה, סדר מועד', 'משנה שבת'),
+          2);
+      expect(
+          FindRefRepository.classifyFoundationalTier(
+              'משנה, סדר זרעים', 'משנה ברכות'),
+          2);
+    });
+
+    test('משנה עם פירוש (ברטנורא, תוספות יו"ט) → null', () {
+      // "משנה, ראשונים, ברטנורא, סדר מועד" — פירוש על המשנה, לא יסוד.
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'משנה, ראשונים, ברטנורא, סדר מועד', 'ברטנורא על משנה שבת'),
+        isNull,
+      );
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'משנה, אחרונים, תוספות יום טוב, סדר מועד', 'תוספות יום טוב על משנה שבת'),
+        isNull,
+      );
+    });
+
+    test('תלמוד בבלי: "סדר X" → tier 3', () {
+      expect(
+          FindRefRepository.classifyFoundationalTier(
+              'תלמוד בבלי, סדר מועד', 'שבת'),
+          3);
+    });
+
+    test('תלמוד בבלי עם פירוש (רש"י, תוספות) → null', () {
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'תלמוד בבלי, ראשונים, רש"י, סדר מועד', 'רש"י על שבת'),
+        isNull,
+      );
+    });
+
+    test('תלמוד ירושלמי → tier 4', () {
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'תלמוד ירושלמי, סדר מועד', 'ירושלמי שבת'),
+        4,
+      );
+    });
+
+    test('תלמוד ירושלמי עם פירוש → null', () {
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'תלמוד ירושלמי, מפרשים, פני משה, סדר מועד', 'פני משה על ירושלמי שבת'),
+        isNull,
+      );
+    });
+
+    test('מדרשי הלכה: tier 5', () {
+      expect(FindRefRepository.classifyFoundationalTier('מדרש, הלכה', 'ספרא'),
+          5);
+      expect(
+          FindRefRepository.classifyFoundationalTier(
+              'מדרש, הלכה', 'מכילתא דרבי ישמעאל'),
+          5);
+    });
+
+    test('מדרשי אגדה: tier 6', () {
+      expect(
+        FindRefRepository.classifyFoundationalTier('מדרש, אגדה', 'מדרש תנחומא'),
+        6,
+      );
+    });
+
+    test('מדרש עם פירוש בכותרת → null', () {
+      // "הערות בובר על מדרש משלי" — title-based filter כי הוא יושב באותה
+      // קטגוריה ("מדרש, אגדה") כמו ספרי היסוד.
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'מדרש, אגדה', 'הערות בובר על מדרש משלי'),
+        isNull,
+      );
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'מדרש, הלכה', 'הערות שוליים על מכילתא דרבי שמעון בן יוחאי'),
+        isNull,
+      );
+    });
+
+    test('זוהר: ספרי היסוד → tier 7', () {
+      expect(
+          FindRefRepository.classifyFoundationalTier('קבלה, זהר', 'ספר הזהר'),
+          7);
+      expect(
+          FindRefRepository.classifyFoundationalTier('קבלה, זהר', 'תקוני הזהר'),
+          7);
+      expect(
+          FindRefRepository.classifyFoundationalTier('קבלה, זהר', 'זוהר חדש'),
+          7);
+    });
+
+    test('זוהר עם פירוש → null (כותרת לא ברשימה)', () {
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'קבלה, זהר', 'הסולם על ספר הזהר'),
+        isNull,
+      );
+      expect(
+        FindRefRepository.classifyFoundationalTier('קבלה, זהר', 'יהל אור על ספר הזהר'),
+        isNull,
+      );
+    });
+
+    test('רמב"ם (משנה תורה): "ספר X" → tier 8', () {
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'הלכה, משנה תורה, ספר זמנים', 'משנה תורה, הלכות שבת'),
+        8,
+      );
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'הלכה, משנה תורה, הקדמה', 'הקדמת הרמב"ם'),
+        8,
+      );
+    });
+
+    test('רמב"ם עם פירוש (מפרשים, ראשונים) → null', () {
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'הלכה, משנה תורה, מפרשים, אבן האזל', 'אבן האזל על משנה תורה'),
+        isNull,
+      );
+    });
+
+    test('טור (בלי הסתעפויות) → tier 9', () {
+      expect(FindRefRepository.classifyFoundationalTier('הלכה, טור', 'טור'), 9);
+    });
+
+    test('טור עם מפרשים → null', () {
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'הלכה, טור, מפרשים', 'כפי אהרן על טור'),
+        isNull,
+      );
+    });
+
+    test('שולחן ערוך → tier 10', () {
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'הלכה, שולחן ערוך', 'שולחן ערוך, אורח חיים'),
+        10,
+      );
+    });
+
+    test('שולחן ערוך הרב (קטגוריה נפרדת) → null (לא תיקני "שו"ע")', () {
+      // "שולחן ערוך הרב" יושב תחת קטגוריה נפרדת, לא תחת "שולחן ערוך" עצמו.
+      // הוא לא נכלל ב-tier 10.
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'הלכה, שולחן ערוך הרב', 'שולחן ערוך הרב'),
+        isNull,
+      );
+    });
+
+    test('שו"ע עם מפרשים (בית מאיר, מגן אברהם) → null', () {
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'הלכה, שולחן ערוך, מפרשים', 'בית מאיר על שולחן ערוך'),
+        isNull,
+      );
+    });
+
+    test('categoryPath ריק / null → null', () {
+      expect(FindRefRepository.classifyFoundationalTier(null, 'בראשית'), isNull);
+      expect(FindRefRepository.classifyFoundationalTier('', 'בראשית'), isNull);
+    });
+
+    test('קטגוריה לא יסודית (חסידות, שו"ת, וכו\') → null', () {
+      expect(
+        FindRefRepository.classifyFoundationalTier(
+            'חסידות, ספר אחר', 'ספר חסידות כלשהו'),
+        isNull,
+      );
+      expect(
+        FindRefRepository.classifyFoundationalTier('שו"ת', 'שו"ת כלשהו'),
+        isNull,
+      );
+    });
+  });
+
   // ─── קלט שולי ───────────────────────────────────────────────────────────────
 
   group('FindRef — קלט שולי', () {
@@ -1740,6 +1962,149 @@ void main() {
 
       expect(rishonimIdx, lessThan(acharonimIdx),
           reason: 'ראשונים (orderIndex 4000) לפני אחרונים (orderIndex 8000)');
+    });
+
+    test(
+        'ספרי יסוד עולים מעל מפרשים גם כש-orderIndex של מפרש נמוך יותר',
+        () async {
+      // התרחיש: שאילתה "שבת יג". בספרייה יש:
+      //   - "משנה שבת" (tier 2 — יסוד), orderIndex גבוה (יחסית).
+      //   - "פירוש המגן על שבת" (מפרש, tier=null), orderIndex נמוך.
+      // לפני התיקון של "ספרי יסוד" — המפרש היה דוחק את המשנה כי orderIndex
+      // נבדק לפני tocLevel. עכשיו — tier 2 מנצח כל מי שאינו יסוד, ללא תלות
+      // ב-orderIndex.
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'שבת') {
+            return [
+              _hit(
+                bookId: 1,
+                title: 'משנה שבת',
+                normalizedTitle: 'משנה שבת',
+                matchRank: 1,
+                orderIndex: 5000.0, // אחרי המפרש בספרייה
+              ),
+              _hit(
+                bookId: 2,
+                title: 'פירוש המגן על שבת',
+                normalizedTitle: 'פירוש המגן על שבת',
+                matchRank: 1,
+                orderIndex: 1000.0, // לפני המשנה בספרייה
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (id, title, {queryTokens}) async => [
+          {'reference': '$title פרק יג', 'segment': 13, 'level': 2},
+        ],
+        getCategoryPathSync: (bookId) {
+          if (bookId == 1) return 'משנה, סדר מועד'; // tier 2
+          if (bookId == 2) return 'תלמוד בבלי, ראשונים, המגן, סדר מועד'; // null
+          return null;
+        },
+      );
+
+      final results = await repo.findRefs('שבת יג');
+      expect(results, isNotEmpty);
+
+      final mishnaIdx = results.indexWhere((r) => r.title == 'משנה שבת');
+      final commentaryIdx =
+          results.indexWhere((r) => r.title == 'פירוש המגן על שבת');
+
+      expect(mishnaIdx, isNot(-1), reason: 'משנה שבת חייבת להופיע');
+      expect(commentaryIdx, isNot(-1), reason: 'הפירוש חייב להופיע');
+      expect(mishnaIdx, lessThan(commentaryIdx),
+          reason: 'tier 2 (משנה) קודם ל-tier=null (פירוש), ללא תלות ב-orderIndex');
+    });
+
+    test(
+        '"שבת יג" — סדר ה-tiers: משנה (2) → בבלי (3) → ירושלמי (4) → רמב"ם (8)',
+        () async {
+      // 4 ספרי יסוד מ-tiers שונים — לפי דרישת המשתמש, הסדר חייב להיות:
+      //   משנה → בבלי → ירושלמי → רמב"ם.
+      // ה-orderIndex לכולם זהה (5000) כדי לוודא שה-tier הוא המכריע ולא ה-sort.
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'שבת') {
+            return [
+              _hit(
+                bookId: 1,
+                title: 'משנה שבת',
+                normalizedTitle: 'משנה שבת',
+                matchRank: 1,
+                orderIndex: 5000.0,
+              ),
+              _hit(
+                bookId: 2,
+                title: 'שבת',
+                normalizedTitle: 'שבת',
+                matchRank: 0,
+                orderIndex: 5000.0,
+              ),
+              _hit(
+                bookId: 3,
+                title: 'ירושלמי שבת',
+                normalizedTitle: 'ירושלמי שבת',
+                matchRank: 1,
+                orderIndex: 5000.0,
+              ),
+              _hit(
+                bookId: 4,
+                title: 'משנה תורה, הלכות שבת',
+                normalizedTitle: 'משנה תורה, הלכות שבת',
+                matchRank: 1,
+                orderIndex: 5000.0,
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (id, title, {queryTokens}) async => [
+          {'reference': '$title פרק יג', 'segment': 13, 'level': 2},
+        ],
+        getCategoryPathSync: (bookId) {
+          switch (bookId) {
+            case 1:
+              return 'משנה, סדר מועד'; // tier 2
+            case 2:
+              return 'תלמוד בבלי, סדר מועד'; // tier 3
+            case 3:
+              return 'תלמוד ירושלמי, סדר מועד'; // tier 4
+            case 4:
+              return 'הלכה, משנה תורה, ספר זמנים'; // tier 8
+            default:
+              return null;
+          }
+        },
+      );
+
+      final results = await repo.findRefs('שבת יג');
+
+      // איתור המופע הראשון של כל ספר. בכל בודק ש-tier קודם בא לפני tier
+      // מאוחר יותר.
+      final mishnaIdx = results.indexWhere((r) => r.title == 'משנה שבת');
+      final bavliIdx = results.indexWhere((r) => r.title == 'שבת');
+      final yerushalmiIdx =
+          results.indexWhere((r) => r.title == 'ירושלמי שבת');
+      final rambamIdx =
+          results.indexWhere((r) => r.title == 'משנה תורה, הלכות שבת');
+
+      expect([mishnaIdx, bavliIdx, yerushalmiIdx, rambamIdx],
+          everyElement(isNot(-1)),
+          reason: 'כל ארבעת הספרים חייבים להופיע ב-15 התוצאות הראשונות');
+      expect(mishnaIdx, lessThan(bavliIdx),
+          reason: 'tier 2 (משנה) לפני tier 3 (בבלי)');
+      expect(bavliIdx, lessThan(yerushalmiIdx),
+          reason: 'tier 3 (בבלי) לפני tier 4 (ירושלמי)');
+      expect(yerushalmiIdx, lessThan(rambamIdx),
+          reason: 'tier 4 (ירושלמי) לפני tier 8 (רמב"ם)');
     });
   });
 
