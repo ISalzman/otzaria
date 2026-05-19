@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/find_ref/repository/alt_toc_flat_entry.dart';
 import 'package:otzaria/find_ref/repository/db_commentator_entry.dart';
 import 'package:otzaria/find_ref/repository/db_reference_result.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
@@ -30,10 +31,17 @@ class FindRefRepository {
     List<String>? queryTokens,
   })? getAltTocEntriesForReference;
 
-  /// Injection for testing: returns all books that have AltToc structures.
-  /// In production this calls [SeforimRepository.getAllBooksWithAltToc].
-  final Future<List<({int bookId, String bookTitle})>> Function()?
-      getAllBooksWithAltToc;
+  /// Injection for testing: returns the global flat list of AltToc entries
+  /// across all books, as raw rows. In production this calls
+  /// [SeforimRepository.getAllAltTocFlatEntries].
+  ///
+  /// כל row כולל את המפתחות: `bookId`, `bookTitle`, `bookOrderIndex`,
+  /// `reference` (נתיב מלא יחסי לספר), `segment`, `level`, `dbLineId`.
+  ///
+  /// מחליף את הזוג הישן (`getAllBooksWithAltToc` + לולאת
+  /// `getAltTocEntriesForReference`) — המעבר ל-fetch יחיד חסך פעם 339
+  /// שאילתות סדרתיות.
+  final Future<List<Map<String, dynamic>>> Function()? getAllAltTocFlatEntries;
 
   /// Injection for testing: returns the category path string for a given bookId.
   /// In production this calls [ReferenceBooksCache.instance.getCategoryPathForBook].
@@ -91,6 +99,11 @@ class FindRefRepository {
   /// (לכל היותר ~15 מפתחות פר session, רוב המשתמשים פחות).
   final Map<String, List<DbCommentatorEntry>> _commentatorsCache = {};
 
+  /// קאש שטוח של כל ערכי ה-AltToc על פני כל הספרים. נבנה lazy בקריאה
+  /// הראשונה ל-fallback הגלובלי, ומשרת את כל ה-sessions שלאחר מכן.
+  /// השדה נשמר ברמת ה-instance של [FindRefRepository] (singleton באפליקציה).
+  List<AltTocFlatEntry>? _altTocFlatCache;
+
   FindRefRepository({
     this.dataRepository,
     this.warmUpReferenceBooksCache,
@@ -98,7 +111,7 @@ class FindRefRepository {
     this.searchReferenceBooks,
     this.getTocEntriesForReference,
     this.getAltTocEntriesForReference,
-    this.getAllBooksWithAltToc,
+    this.getAllAltTocFlatEntries,
     this.getCategoryPath,
     this.getPdfOutlineEntries,
     this.getAllUserBooks,
@@ -107,6 +120,52 @@ class FindRefRepository {
     this.selectCommentatorsByBook,
     this.getBookEra,
   });
+
+  /// מחזיר את הקאש הגלובלי של AltToc; טוען אותו פעם אחת בקריאה הראשונה
+  /// ושומר ב-[_altTocFlatCache]. כל קריאה לאחר מכן היא in-memory.
+  ///
+  /// הקריאה הזו אמורה להיות בטוחה לכשלון: אם השאילתה נופלת או שערך כלשהו
+  /// אינו במבנה הצפוי — מוחזר רשימה ריקה (ולא מתפשטת חריגה). כך מסלול
+  /// ה-per-book בתוך `findRefs` מתמיד גם אם ה-AltToc הגלובלי תקול.
+  Future<List<AltTocFlatEntry>> _getAltTocFlatCache() async {
+    final cached = _altTocFlatCache;
+    if (cached != null) return cached;
+
+    try {
+      final fn = getAllAltTocFlatEntries;
+      final rows = fn != null
+          ? await fn()
+          : (await SqliteDataProvider.instance.repository
+                  ?.getAllAltTocFlatEntries() ??
+              const <Map<String, dynamic>>[]);
+
+      final list = <AltTocFlatEntry>[];
+      for (final r in rows) {
+        final reference = r['reference'] as String;
+        final refTokens = _tokenize(_normalizeForMatch(reference));
+        list.add(AltTocFlatEntry(
+          bookId: r['bookId'] as int,
+          bookTitle: r['bookTitle'] as String,
+          // `book.orderIndex` הוא INTEGER NOT NULL בסכמה, אבל לא רוצים לסכן
+          // ב-cast קשיח אם בעתיד יוסיפו ספרים בלי orderIndex.
+          bookOrderIndex: (r['bookOrderIndex'] as num?)?.toDouble() ?? 999.0,
+          reference: reference,
+          segment: r['segment'] as int? ?? 0,
+          level: r['level'] as int? ?? 0,
+          dbLineId: r['dbLineId'] as int? ?? 0,
+          refTokens: refTokens,
+        ));
+      }
+      _altTocFlatCache = list;
+      return list;
+    } catch (e, st) {
+      debugPrint('[FindRef] AltToc flat cache build failed: $e\n$st');
+      // אל **תקבע** את הקאש לריק במקרה כשל — אם הסיבה הייתה זמנית
+      // (rebuild של DB, lock רגעי), שאילתה הבאה תקבל ניסיון חוזר.
+      // אם הכשל קבוע, ההשהיה ב-await יחזור ולא מקסים נזק.
+      return const [];
+    }
+  }
 
   /// מחזיר רשימת רשומות מפרשים זמינים עבור תוצאה, מוכנות לפתיחה ישירה.
   ///
@@ -510,43 +569,52 @@ class FindRefRepository {
       }
     }
 
-    // Global AltToc fallback: when no AltToc results were found in the per-book
-    // loop, search AltToc across all books. This handles queries like "נח עליה ב"
-    // where the user doesn't type the book name, even if some other book matched
-    // the first token (e.g., "תולדות יצחק" matching "תולדות").
-    if (!results.any((r) => r.isAltToc) && queryTokens.length >= 2) {
-      final fetchAllBooks = getAllBooksWithAltToc;
-      final altTocBooks = fetchAllBooks != null
-          ? await fetchAllBooks()
-          : (await repository?.getAllBooksWithAltToc() ?? const []);
-
-      for (final (:bookId, :bookTitle) in altTocBooks) {
-        final bookHit = searchBooks(bookTitle, limit: 1).firstOrNull;
-        final orderIdx = bookHit?.orderIndex ?? 0.0;
-        final altTocEntries = await fetchAltTocEntries(
-          bookId,
-          bookTitle,
-          queryTokens: queryTokens,
-        );
-        for (final entry in altTocEntries) {
-          final ref = entry['reference'] as String;
+    // Global AltToc fallback: when no specific result was found in the per-book
+    // loop, search AltToc across all books. This handles queries like
+    // "נח עליה ב" where the user doesn't type the book name, even if some
+    // other book matched the first token (e.g., "תולדות יצחק" matching "תולדות").
+    //
+    // התנאי הוא **AltToc *או* TOC L2+ ריקים** — כלומר, גם הפניות פנימיות
+    // רגילות נחשבות "ספציפיות". הסיבה: עם המעבר לקאש השטוח הגלובלי, הפילטר
+    // הוא רק `every(contains)`, שמייצר הרבה false-positives של AltToc
+    // מספרים עם orderIndex נמוך. אלה דוחקים החוצה תוצאות TOC PDF מספרים עם
+    // orderIndex גבוה (כי `_rankResults` בודק orderIndex לפני tocLevel),
+    // ובפועל גורם ל"ברכות ב" לא להציג את ה-PDF של ברכות. אם ה-per-book כבר
+    // החזיר התאמה ספציפית, אין צורך ב-fallback — שום שאילתה ש"דורשת" כותרת
+    // פנימית של ספר אחר.
+    //
+    // היסטורית הוזרמו 339 שאילתות SQL סדרתיות (אחת לכל ספר עם AltToc).
+    // עכשיו אנחנו מחזיקים קאש שטוח שנבנה פעם אחת ב-session, וכל הסינון
+    // הוא O(N) ב-Dart על רשימה in-memory.
+    //
+    // נעטף ב-try/catch כדי שכשלון במסלול ה-fallback לא יבלע את התוצאות
+    // הקיימות מהלולאת ה-per-book.
+    final bool perBookHasSpecificMatch =
+        results.any((r) => r.isAltToc || r.tocLevel >= 2);
+    if (!perBookHasSpecificMatch && queryTokens.length >= 2) {
+      try {
+        final flat = await _getAltTocFlatCache();
+        for (final entry in flat) {
           // Require that ALL query tokens appear in the matched reference.
           // Prevents partial matches from unrelated books (e.g., "הפטרת נח"
           // matching only "נח" when the query is "נח עליה ב").
-          final refTokens = _tokenize(_normalizeForMatch(ref));
-          if (!queryTokens.every((qt) => refTokens.contains(qt))) continue;
+          if (!queryTokens.every((qt) => entry.refTokens.contains(qt))) {
+            continue;
+          }
 
           results.add(DbReferenceResult(
-            title: bookTitle,
-            reference: ref,
-            segment: entry['segment'] as int,
-            orderIndex: orderIdx,
-            tocLevel: entry['level'] as int,
+            title: entry.bookTitle,
+            reference: entry.reference,
+            segment: entry.segment,
+            orderIndex: entry.bookOrderIndex,
+            tocLevel: entry.level,
             isAltToc: true,
-            bookId: bookId,
-            sourceLineId: entry['dbLineId'] as int? ?? 0,
+            bookId: entry.bookId,
+            sourceLineId: entry.dbLineId,
           ));
         }
+      } catch (e, st) {
+        debugPrint('[FindRef] Global AltToc fallback failed: $e\n$st');
       }
     }
 

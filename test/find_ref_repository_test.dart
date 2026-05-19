@@ -921,9 +921,20 @@ void main() {
                   final all = altTocBuilder(title);
                   return _filterTocHierarchically(all, queryTokens, title);
                 },
-          getAllBooksWithAltToc: altTocBuilder == null
+          getAllAltTocFlatEntries: altTocBuilder == null
               ? null
-              : () async => [(bookId: bookId, bookTitle: bookTitle)],
+              : () async => [
+                    for (final e in altTocBuilder(bookTitle))
+                      {
+                        'bookId': bookId,
+                        'bookTitle': bookTitle,
+                        'bookOrderIndex': 0.0,
+                        'reference': e['reference'] as String,
+                        'segment': e['segment'] as int,
+                        'level': e['level'] as int,
+                        'dbLineId': e['dbLineId'] as int? ?? 0,
+                      }
+                  ],
         );
 
     test('שבת עא ב — מוצא דף עא עמוד ב', () async {
@@ -1173,7 +1184,17 @@ void main() {
           }
           return const [];
         },
-        getAllBooksWithAltToc: () async => [(bookId: 2, bookTitle: 'בראשית')],
+        getAllAltTocFlatEntries: () async => const [
+          {
+            'bookId': 2,
+            'bookTitle': 'בראשית',
+            'bookOrderIndex': 0.0,
+            'reference': 'תולדות עליה ב',
+            'segment': 100,
+            'level': 2,
+            'dbLineId': 0,
+          }
+        ],
       );
 
       final results = await repo.findRefs('תולדות עליה ב');
@@ -1234,7 +1255,7 @@ void main() {
         getAltTocEntriesForReference: (id, title, {queryTokens}) async => [
           {'reference': 'הפטרת נח', 'segment': 10, 'level': 1},
         ],
-        getAllBooksWithAltToc: () async => const [],
+        getAllAltTocFlatEntries: () async => const [],
       );
 
       final results = await repo.findRefs('נח עליה ב');
@@ -1246,8 +1267,7 @@ void main() {
     });
 
     test('global fallback — מאצ\' חלקי ב-AltToc נחסם על-ידי token filter', () async {
-      // bookHits ריק; getAllBooksWithAltToc מחזיר "נחל שורק".
-      // AltToc שלו מחזיר "הפטרת נח" (מתאים רק ל-"נח" מתוך ["נח","עליה","ב"]).
+      // bookHits ריק; הקאש הגלובלי כולל ערך "הפטרת נח" של "נחל שורק".
       // queryTokens filter חייב לחסום — "עליה" ו-"ב" לא ב-reference.
       final repo = FindRefRepository(
         dataRepository: MockDataRepository(),
@@ -1255,10 +1275,17 @@ void main() {
         warmUpReferenceBooksCache: () async {},
         searchReferenceBooks: (query, {int limit = 50}) => const <ReferenceBookHit>[],
         getTocEntriesForReference: (id, title, {queryTokens}) async => const [],
-        getAltTocEntriesForReference: (id, title, {queryTokens}) async => [
-          {'reference': 'הפטרת נח', 'segment': 10, 'level': 1},
+        getAllAltTocFlatEntries: () async => const [
+          {
+            'bookId': 99,
+            'bookTitle': 'נחל שורק',
+            'bookOrderIndex': 0.0,
+            'reference': 'הפטרת נח',
+            'segment': 10,
+            'level': 1,
+            'dbLineId': 0,
+          }
         ],
-        getAllBooksWithAltToc: () async => [(bookId: 99, bookTitle: 'נחל שורק')],
       );
 
       final results = await repo.findRefs('נח עליה ב');
@@ -1267,6 +1294,267 @@ void main() {
         isFalse,
         reason: 'global fallback — "הפטרת נח" חסר "עליה" ו-"ב" ונחסם',
       );
+    });
+
+    test(
+        'per-book מצא TOC L2+ — global fallback מדולג (רגרסיה: "ברכות ב" עם PDF)',
+        () async {
+      // הבאג ההיסטורי: ה-fallback רץ גם כש-per-book החזיר תוצאות פנימיות,
+      // והוסיף false-positives שדחפו החוצה את ה-PDF של ברכות מתוך 15 התוצאות
+      // הראשונות (כי `orderIndex` נבדק לפני `tocLevel`).
+      // התיקון: התנאי החדש בודק `tocLevel >= 2 || isAltToc` — אם המסלול
+      // ה-per-book כבר החזיר משהו ספציפי, הגלובלי לא רץ.
+      var flatCacheCalled = false;
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'ברכות') {
+            return [
+              _hit(
+                bookId: 1,
+                title: 'ברכות',
+                normalizedTitle: 'ברכות',
+                fileType: 'pdf',
+                filePath: '/books/brachot.pdf',
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (id, title, {queryTokens}) async => [
+          // התאמת TOC L2: "ברכות דף ב" — מהווה תוצאה ספציפית.
+          {'reference': 'ברכות דף ב', 'segment': 2, 'level': 2},
+        ],
+        getAllAltTocFlatEntries: () async {
+          flatCacheCalled = true;
+          // לו ה-fallback היה רץ, ערך כזה היה עשוי להידחק קודם בגלל
+          // orderIndex=0 נמוך.
+          return const [
+            {
+              'bookId': 99,
+              'bookTitle': 'בראשית',
+              'bookOrderIndex': 0.0,
+              'reference': 'פרק ה ברכות',
+              'segment': 100,
+              'level': 2,
+              'dbLineId': 0,
+            }
+          ];
+        },
+      );
+
+      final results = await repo.findRefs('ברכות ב');
+
+      expect(flatCacheCalled, isFalse,
+          reason: 'per-book החזיר TOC L2 → הגלובלי חייב להידלג');
+      expect(results.any((r) => r.isPdf && r.title == 'ברכות'), isTrue,
+          reason: 'PDF של ברכות נשאר ב-15 התוצאות הראשונות');
+    });
+
+    test('per-book מצא AltToc — global fallback מדולג', () async {
+      // אם ה-per-book כבר מצא AltToc (תוצאה ספציפית), הגלובלי מיותר.
+      var flatCacheCalled = false;
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'בראשית') {
+            return [_hit(bookId: 1, title: 'בראשית', normalizedTitle: 'בראשית')];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getAltTocEntriesForReference: (_, __, {queryTokens}) async => [
+          {'reference': 'פרשת לך לך עליה ב', 'segment': 50, 'level': 2},
+        ],
+        getAllAltTocFlatEntries: () async {
+          flatCacheCalled = true;
+          return const [];
+        },
+      );
+
+      await repo.findRefs('בראשית לך לך עליה ב');
+      expect(flatCacheCalled, isFalse,
+          reason: 'AltToc נמצא ב-per-book → global מדולג');
+    });
+
+    test('global flat cache: lazy, נבנה רק פעם אחת בכל ה-session', () async {
+      // כמה שאילתות עוקבות שמפעילות את ה-fallback (per-book ריק) חייבות
+      // לבנות את הקאש פעם אחת בלבד. כל קריאה לאחר מכן יושבת על קאש in-memory.
+      var buildCount = 0;
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (_, {int limit = 50}) =>
+            const <ReferenceBookHit>[],
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getAllAltTocFlatEntries: () async {
+          buildCount++;
+          return const [];
+        },
+      );
+
+      await repo.findRefs('נח עליה ב');
+      await repo.findRefs('שמות פרק ה');
+      await repo.findRefs('דברים פסוק יג');
+
+      expect(buildCount, 1,
+          reason: 'הקאש השטוח נבנה lazy, רק בקריאה הראשונה ל-fallback');
+    });
+
+    test(
+        'global flat cache: כשל זמני בבנייה אינו "קופא" — שאילתה מאוחרת מנסה שוב',
+        () async {
+      // עם try/catch על בניית הקאש, חשוב שלא נקבע את הקאש לריק בכשל —
+      // אחרת תקלה זמנית אחת תהרוס את ה-fallback לכל ה-session.
+      var attempts = 0;
+      var shouldFail = true;
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (_, {int limit = 50}) =>
+            const <ReferenceBookHit>[],
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getAllAltTocFlatEntries: () async {
+          attempts++;
+          if (shouldFail) throw Exception('DB error');
+          return const [
+            {
+              'bookId': 1,
+              'bookTitle': 'בראשית',
+              'bookOrderIndex': 0.0,
+              'reference': 'פרשת נח עליה ב',
+              'segment': 50,
+              'level': 2,
+              'dbLineId': 0,
+            }
+          ];
+        },
+      );
+
+      // כשל ראשון: התוצאה ריקה, אבל החריגה לא מתפשטת.
+      final r1 = await repo.findRefs('נח עליה ב');
+      expect(r1, isEmpty);
+      expect(attempts, 1);
+
+      // כשל שני: אם היינו "מקפיאים" את הקאש לריק, attempts היה נשאר 1.
+      // התנהגות נכונה: ניסיון חוזר.
+      final r2 = await repo.findRefs('נח עליה ב');
+      expect(r2, isEmpty);
+      expect(attempts, 2,
+          reason: 'תקלה זמנית — שאילתה הבאה חייבת לנסות לבנות שוב');
+
+      // הבעיה נפתרה: הניסיון הבא מצליח ומאכלס את הקאש.
+      shouldFail = false;
+      final r3 = await repo.findRefs('נח עליה ב');
+      expect(r3.any((r) => r.isAltToc), isTrue,
+          reason: 'אחרי שה-DB חוזרת לאיתנה — ה-fallback פועל');
+      expect(attempts, 3);
+
+      // אחרי הצלחה — הקאש נשמר ולא נבנה שוב.
+      await repo.findRefs('שמות פרק ה');
+      expect(attempts, 3, reason: 'אחרי הצלחה ראשונה הקאש in-memory');
+    });
+
+    test(
+        'TOC L2 בספר "שגוי" → global מדולג גם אם AltToc נכון בספר אחר '
+        '(תיעוד trade-off)', () async {
+      // שאילתה אמביוולנטית: "תולדות עליה ב" — שתי פרשנויות אפשריות:
+      //   (a) הפניה פנימית בספר "תולדות יצחק" (התאמת ספר מובילה לפי שם).
+      //   (b) פרשת תולדות → עליה ב (AltToc גלובלי, בספר "בראשית").
+      //
+      // התנאי `perBookHasSpecificMatch` מדלג על ה-fallback ברגע ש-(a)
+      // החזיר TOC L2+, כך ש-(b) לא יופיע. זה compromise מודע: חוסם
+      // את ה-displacement של תוצאות PDF נכונות ע"י false-positives של
+      // AltToc גלובלי (ראו "ברכות ב" למעלה), אבל מאבד פרשנות AltToc
+      // לגיטימית במקרים אמביוולנטיים.
+      //
+      // אם הסמנטיקה הזו תרגיש כואבת — אפשר להחליף לתיקון מבוסס-דירוג
+      // (`tocLevel` לפני `orderIndex` ב-`_rankResults`), שירוץ את ה-fallback
+      // ויסמוך על המיון שלא ידחק תוצאות נכונות.
+      var flatCacheCalled = false;
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'תולדות') {
+            return [
+              _hit(
+                bookId: 1,
+                title: 'תולדות יצחק',
+                normalizedTitle: 'תולדות יצחק',
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [
+          // התאמת TOC L2 בספר "השגוי" — מספיקה כדי לדלג על הגלובלי.
+          {'reference': 'תולדות יצחק פרק עליה ב', 'segment': 5, 'level': 2},
+        ],
+        getAltTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getAllAltTocFlatEntries: () async {
+          flatCacheCalled = true;
+          return const [
+            {
+              'bookId': 99,
+              'bookTitle': 'בראשית',
+              'bookOrderIndex': 0.0,
+              'reference': 'פרשת תולדות עליה ב',
+              'segment': 100,
+              'level': 2,
+              'dbLineId': 0,
+            }
+          ];
+        },
+      );
+
+      final results = await repo.findRefs('תולדות עליה ב');
+
+      expect(flatCacheCalled, isFalse,
+          reason: 'TOC L2 ב-per-book → הגלובלי מדולג ע"י perBookHasSpecificMatch');
+      expect(results.any((r) => r.isAltToc), isFalse,
+          reason:
+              'AltToc הגלובלי של "בראשית" לא מופיע — trade-off מודע של ההחלטה הזו');
+    });
+
+    test('global flat cache: ערכי NULL בשדות אופציונליים — לא קורסים', () async {
+      // ה-cast ב-`_getAltTocFlatCache` חייב להיות סלחני: `bookOrderIndex` /
+      // `segment` / `level` / `dbLineId` יכולים להיות null מ-DB ישן/חלקי
+      // ולא להפיל את כל המסלול.
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (_, {int limit = 50}) =>
+            const <ReferenceBookHit>[],
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getAllAltTocFlatEntries: () async => const [
+          {
+            'bookId': 5,
+            'bookTitle': 'בראשית',
+            // bookOrderIndex / segment / level / dbLineId — חסרים בכוונה.
+            'reference': 'פרשת נח עליה ב',
+          }
+        ],
+      );
+
+      final results = await repo.findRefs('נח עליה ב');
+      // לא נזרקה חריגה, וה-fallback הצליח להתאים את ה-entry.
+      final alt = results.where((r) => r.isAltToc).toList();
+      expect(alt, hasLength(1));
+      expect(alt.single.bookId, 5);
+      expect(alt.single.orderIndex, 999.0,
+          reason: 'fallback ל-`bookOrderIndex` הוא 999 (סוף הספרייה)');
+      expect(alt.single.segment, 0);
+      expect(alt.single.tocLevel, 0);
+      expect(alt.single.sourceLineId, 0);
     });
   });
 
@@ -1674,7 +1962,17 @@ void main() {
         getAltTocEntriesForReference: (id, title, {queryTokens}) async => [
           {'reference': 'נח עליה ב', 'segment': 200, 'level': 2},
         ],
-        getAllBooksWithAltToc: () async => [(bookId: 42, bookTitle: 'בראשית')],
+        getAllAltTocFlatEntries: () async => const [
+          {
+            'bookId': 42,
+            'bookTitle': 'בראשית',
+            'bookOrderIndex': 0.0,
+            'reference': 'נח עליה ב',
+            'segment': 200,
+            'level': 2,
+            'dbLineId': 0,
+          }
+        ],
         getCategoryPath: (id) async => id == 42 ? 'תנך, תורה' : '',
       );
 
@@ -1687,7 +1985,7 @@ void main() {
       expect(
         altResult.every((r) => r.bookId == 42),
         isTrue,
-        reason: 'bookId חייב להיות 42 (מ-getAllBooksWithAltToc)',
+        reason: 'bookId חייב להיות 42 (מ-getAllAltTocFlatEntries)',
       );
       expect(
         altResult.every((r) => r.bookPath == 'תנך, תורה'),
