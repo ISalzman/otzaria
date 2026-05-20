@@ -10,11 +10,7 @@ import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
-import 'package:otzaria/tabs/models/commentators_tab.dart';
-import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
-import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
-import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
@@ -42,42 +38,29 @@ class BookmarkView extends StatelessWidget {
 
   const BookmarkView({super.key, this.bookFilter});
 
-  OpenedTab _buildTabForBookmark(
-    Bookmark bookmark,
-  ) {
-    if (bookmark.targetKind == BookmarkTargetKind.commentators) {
-      if (bookmark.book is PdfBook) {
-        final sourceTab = PdfBookTab(
-          book: bookmark.book as PdfBook,
-          pageNumber: bookmark.index,
-          openLeftPane: shouldAutoOpenReadingLeftPane(),
-        )..activeCommentators = bookmark.commentatorsToShow.toSet();
-        return PdfCommentatorsTab(sourceTab: sourceTab);
-      }
-
-      final sourceTab = OpenedTab.fromBook(
-        bookmark.book,
-        bookmark.index,
-        commentators: bookmark.commentatorsToShow,
-        openLeftPane: shouldAutoOpenReadingLeftPane(),
-      ) as TextBookTab;
-      return CommentatorsTab(sourceTab: sourceTab);
-    }
-
-    return OpenedTab.fromBook(
-      bookmark.book,
-      bookmark.index,
-      commentators: bookmark.commentatorsToShow,
-      openLeftPane: shouldAutoOpenReadingLeftPane(),
-    );
+  static int _compareBookmarks(Bookmark a, Bookmark b) {
+    final aPath = a.book.categoryPath ?? '';
+    final bPath = b.book.categoryPath ?? '';
+    final pathCmp = aPath.compareTo(bPath);
+    if (pathCmp != 0) return pathCmp;
+    final aCmp = bookIdentity(a.book).compareTo(bookIdentity(b.book));
+    if (aCmp != 0) return aCmp;
+    return a.index.compareTo(b.index);
   }
 
   void _openBook(
     BuildContext context,
-    Bookmark bookmark, {
+    Book book,
+    int index,
+    List<String>? commentators, {
     String? targetTitle,
   }) {
-    final tab = _buildTabForBookmark(bookmark);
+    final tab = OpenedTab.fromBook(
+      book,
+      index,
+      commentators: commentators,
+      openLeftPane: shouldAutoOpenReadingLeftPane(),
+    );
 
     context.read<TabsBloc>().add(
           OpenOrFocusTab(
@@ -124,20 +107,10 @@ class BookmarkView extends StatelessWidget {
           return segments.isNotEmpty ? segments.last : bm.book.title;
         }
 
-        int compareBookmarks(Bookmark a, Bookmark b) {
-          final aPath = a.book.categoryPath ?? '';
-          final bPath = b.book.categoryPath ?? '';
-          final pathCmp = aPath.compareTo(bPath);
-          if (pathCmp != 0) return pathCmp;
-          final aCmp = bookIdentity(a.book).compareTo(bookIdentity(b.book));
-          if (aCmp != 0) return aCmp;
-          return a.index.compareTo(b.index);
-        }
-
         return ItemsListView(
           items: state.bookmarks,
           itemSortComparator: (a, b) =>
-              compareBookmarks(b as Bookmark, a as Bookmark),
+              _compareBookmarks(b as Bookmark, a as Bookmark),
           additionalFilter: filterIdentity == null
               ? null
               : (item) => bookIdentity(item.book) == filterIdentity,
@@ -146,7 +119,9 @@ class BookmarkView extends StatelessWidget {
               bookmarkGroupTitle(item as Bookmark),
           onItemTap: (ctx, item, originalIndex) => _openBook(
             ctx,
-            item,
+            item.book,
+            item.index,
+            item.commentatorsToShow,
             targetTitle: item.ref,
           ),
           onDelete: (ctx, originalIndex) {
