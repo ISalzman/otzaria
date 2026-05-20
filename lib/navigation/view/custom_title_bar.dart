@@ -1,6 +1,4 @@
-import 'dart:async';
 import 'dart:io';
-import 'dart:math' show max;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -52,9 +50,6 @@ class CustomTitleBar extends StatefulWidget {
 const double _kAppBarControlsWidth = 105.0;
 const double _kWindowCaptionButtonsWidth = 138.0;
 const double _kWindowCaptionButtonWidth = 46.0;
-const double _kMaxTabWidth = 200.0;
-const double _kMinTabWidth = 72.0;
-
 /// סגנון משותף לכפתורי האייקון בשורת הכותרת
 final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
   minimumSize: const Size(32, 32),
@@ -69,50 +64,11 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     with TickerProviderStateMixin {
   bool _tabsOverflow = false;
   TabController? _tabController;
-  int _displayedTabCount = 0;
-  List<OpenedTab>? _previousTabs;
-  Timer? _tabCloseDebounce;
 
   @override
   void dispose() {
-    _tabCloseDebounce?.cancel();
     _tabController?.dispose();
     super.dispose();
-  }
-
-  void _updateTabsDisplay(TabsState state) {
-    final newTabs = state.tabs;
-    final prevTabs = _previousTabs;
-    _previousTabs = List.unmodifiable(newTabs);
-
-    if (prevTabs == null) return;
-
-    final newCount = newTabs.length;
-    final prevCount = prevTabs.length;
-    if (newCount == prevCount) return;
-
-    if (newCount > prevCount) {
-      _tabCloseDebounce?.cancel();
-      setState(() => _displayedTabCount = newCount);
-      return;
-    }
-
-    final lastTabRemoved = prevTabs.isNotEmpty &&
-        newCount == prevCount - 1 &&
-        (newCount == 0 || !newTabs.contains(prevTabs.last));
-
-    if (lastTabRemoved) {
-      _tabCloseDebounce?.cancel();
-      setState(() => _displayedTabCount = newCount);
-      return;
-    }
-
-    _tabCloseDebounce?.cancel();
-    _tabCloseDebounce = Timer(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      setState(() =>
-          _displayedTabCount = context.read<TabsBloc>().state.tabs.length);
-    });
   }
 
   void _handleReadingTabControllerChange() {
@@ -147,7 +103,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     }
   }
 
-  /// פריסת מסך צר: כשהאוריינטציה portrait הטאבים יורדים לשורה תחתונה
   bool _useStackedTabs(BuildContext context, NavigationState navState) {
     final isReading = navState.currentScreen == Screen.reading ||
         navState.currentScreen == Screen.search;
@@ -402,14 +357,8 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   }
 
   Widget _buildReadingTabs(BuildContext context) {
-    return BlocConsumer<TabsBloc, TabsState>(
-      listener: (context, state) => _updateTabsDisplay(state),
+    return BlocBuilder<TabsBloc, TabsState>(
       builder: (context, state) {
-        if (_previousTabs == null) {
-          _displayedTabCount = state.tabs.length;
-          _previousTabs = List.unmodifiable(state.tabs);
-        }
-
         if (!state.hasOpenTabs) {
           return DragToMoveArea(
             child: Center(
@@ -435,56 +384,42 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   }
 
   Widget _buildScrollableTabsArea(TabsState state) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final displayCount =
-            max(_displayedTabCount, state.tabs.length).clamp(1, 9999);
-        double? tabWidth;
-        if (displayCount > 1) {
-          tabWidth = (constraints.maxWidth / displayCount)
-              .clamp(_kMinTabWidth, _kMaxTabWidth);
+    return DragTarget<OpenedTab>(
+      onWillAcceptWithDetails: (details) => state.tabs.length > 1,
+      onAcceptWithDetails: (details) {
+        final renderBox = context.findRenderObject() as RenderBox;
+        final localOffset = renderBox.globalToLocal(details.offset);
+        final isLeftHalf = localOffset.dx < (renderBox.size.width / 2);
+        final isRtl = Directionality.of(context) == TextDirection.rtl;
+
+        final newIndex = isRtl
+            ? (isLeftHalf ? state.tabs.length - 1 : 0)
+            : (isLeftHalf ? 0 : state.tabs.length - 1);
+
+        final draggedTab = details.data;
+        final currentIndex = state.tabs.indexOf(draggedTab);
+        if (currentIndex != -1 && currentIndex != newIndex) {
+          context.read<TabsBloc>().add(MoveTab(draggedTab, newIndex));
         }
-
-        return DragTarget<OpenedTab>(
-          onWillAcceptWithDetails: (details) => state.tabs.length > 1,
-          onAcceptWithDetails: (details) {
-            final renderBox = context.findRenderObject() as RenderBox;
-            final localOffset = renderBox.globalToLocal(details.offset);
-            final isLeftHalf = localOffset.dx < (renderBox.size.width / 2);
-            final isRtl = Directionality.of(context) == TextDirection.rtl;
-
-            final newIndex = isRtl
-                ? (isLeftHalf ? state.tabs.length - 1 : 0)
-                : (isLeftHalf ? 0 : state.tabs.length - 1);
-
-            final draggedTab = details.data;
-            final currentIndex = state.tabs.indexOf(draggedTab);
-            if (currentIndex != -1 && currentIndex != newIndex) {
-              context.read<TabsBloc>().add(MoveTab(draggedTab, newIndex));
-            }
-          },
-          builder: (context, candidateData, rejectedData) {
-            return DragToMoveArea(
-              child: KeyedSubtree(
-                key: tourReadingTabsTargetKey,
-                child: ScrollableTabBarWithArrows(
-                  controller: _tabController!,
-                  tabAlignment: TabAlignment.start,
-                  hideArrowsWhenNotScrollable: true,
-                  onOverflowChanged: (overflow) {
-                    if (mounted && _tabsOverflow != overflow) {
-                      setState(() => _tabsOverflow = overflow);
-                    }
-                  },
-                  tabWidth: tabWidth,
-                  tabs: state.tabs
-                      .map((tab) => _buildTab(context, tab, state,
-                          tabWidth: tabWidth))
-                      .toList(),
-                ),
-              ),
-            );
-          },
+      },
+      builder: (context, candidateData, rejectedData) {
+        return DragToMoveArea(
+          child: KeyedSubtree(
+            key: tourReadingTabsTargetKey,
+            child: ScrollableTabBarWithArrows(
+              controller: _tabController!,
+              tabAlignment: TabAlignment.start,
+              hideArrowsWhenNotScrollable: true,
+              onOverflowChanged: (overflow) {
+                if (mounted && _tabsOverflow != overflow) {
+                  setState(() => _tabsOverflow = overflow);
+                }
+              },
+              tabs: state.tabs
+                  .map((tab) => _buildTab(context, tab, state))
+                  .toList(),
+            ),
+          ),
         );
       },
     );
@@ -512,13 +447,8 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   }
 
   Widget _buildNarrowTabsRow(BuildContext context) {
-    return BlocConsumer<TabsBloc, TabsState>(
-      listener: (context, state) => _updateTabsDisplay(state),
+    return BlocBuilder<TabsBloc, TabsState>(
       builder: (context, state) {
-        if (_previousTabs == null) {
-          _displayedTabCount = state.tabs.length;
-          _previousTabs = List.unmodifiable(state.tabs);
-        }
         if (!state.hasOpenTabs) return const SizedBox.shrink();
         _ensureReadingTabController(state);
         return Container(
@@ -569,25 +499,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     );
   }
 
-  double? _titleMaxWidthForTab({
-    required double? tabWidth,
-    required OpenedTab tab,
-    required bool isSelected,
-  }) {
-    if (tabWidth == null) return null;
-
-    final hasLeadingIcon = tab is CombinedTab || tab is PdfBookTab;
-    const pinSlotWidth = 20.0;
-    final reservedWidth = 25.0 +
-        24.0 +
-        16.0 +
-        pinSlotWidth +
-        (isSelected ? 4.0 : 0.0) +
-        (hasLeadingIcon ? 18.0 : 0.0);
-
-    return (tabWidth - reservedWidth).clamp(0.0, tabWidth);
-  }
-
   /// מציג אייקון הצמדה רק כשהכרטיסיה מוצמדת
   Widget _buildPinIconInline(BuildContext context, OpenedTab tab) {
     if (!tab.isPinned) return const SizedBox.shrink();
@@ -618,8 +529,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     }
   }
 
-  Widget _buildTab(BuildContext context, OpenedTab tab, TabsState state,
-      {double? tabWidth}) {
+  Widget _buildTab(BuildContext context, OpenedTab tab, TabsState state) {
     final index = state.tabs.indexOf(tab);
     final isSelected = index == state.currentTabIndex;
     final closeTabShortcut =
@@ -629,34 +539,18 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     bool isTabActive(int tabIndex) => tabIndex == state.currentTabIndex;
     bool isTabHovered = false;
 
-    final titleMaxWidth = _titleMaxWidthForTab(
-      tabWidth: tabWidth,
-      tab: tab,
-      isSelected: isSelected,
-    );
-
     Widget buildTabContent() {
       if (tab is CombinedTab) {
         return Tooltip(
           message: tab.title,
           child: Row(
-            mainAxisSize:
-                titleMaxWidth == null ? MainAxisSize.min : MainAxisSize.max,
+            mainAxisSize: MainAxisSize.min,
             children: [
               const Padding(
                 padding: EdgeInsets.all(8.0),
                 child: Icon(FluentIcons.panel_left_text_24_regular, size: 16),
               ),
-              if (titleMaxWidth != null)
-                SizedBox(
-                  width: titleMaxWidth,
-                  child: Text(tab.title,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      softWrap: false),
-                )
-              else
-                Text(truncate(tab.title, 20)),
+              Text(truncate(tab.title, 20)),
             ],
           ),
         );
@@ -667,15 +561,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
           valueListenable: tab.titleNotifier,
           builder: (context, title, child) => Tooltip(
             message: title,
-            child: titleMaxWidth != null
-                ? SizedBox(
-                    width: titleMaxWidth,
-                    child: Text(title,
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                        softWrap: false),
-                  )
-                : Text(truncate(title, 25)),
+            child: Text(truncate(title, 25)),
           ),
         );
       }
@@ -690,24 +576,13 @@ class _CustomTitleBarState extends State<CustomTitleBar>
             return Tooltip(
               message: tooltipMessage,
               child: Row(
-                mainAxisSize:
-                    titleMaxWidth == null ? MainAxisSize.min : MainAxisSize.max,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Padding(
                     padding: EdgeInsets.all(8.0),
-                    child:
-                        Icon(FluentIcons.document_pdf_24_regular, size: 16),
+                    child: Icon(FluentIcons.document_pdf_24_regular, size: 16),
                   ),
-                  if (titleMaxWidth != null)
-                    SizedBox(
-                      width: titleMaxWidth,
-                      child: Text(tab.title,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          softWrap: false),
-                    )
-                  else
-                    Text(truncate(tab.title, 12)),
+                  Text(truncate(tab.title, 12)),
                 ],
               ),
             );
@@ -724,15 +599,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
               : tab.title;
           return Tooltip(
             message: tooltipMessage,
-            child: titleMaxWidth != null
-                ? SizedBox(
-                    width: titleMaxWidth,
-                    child: Text(tab.title,
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                        softWrap: false),
-                  )
-                : Text(truncate(tab.title, 12)),
+            child: Text(truncate(tab.title, 12)),
           );
         },
       );
@@ -760,19 +627,16 @@ class _CustomTitleBarState extends State<CustomTitleBar>
               right: index == 0 ? 0 : 6,
             ),
             child: CustomPaint(
-              // ציור רקע הכרטיסייה הנבחרת
               painter: isSelected
                   ? _TabBackgroundPainter(colorScheme.surfaceContainer)
                   : null,
-              // שכבת hover בצורת הכרטיסייה (לא מלבנית) — מצויר על הילד
-              foregroundPainter: isTabHovered
+              foregroundPainter: isTabHovered && !isSelected
                   ? _TabBackgroundPainter(
                       colorScheme.onSurface.withValues(alpha: 0.08))
                   : null,
               child: Tab(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(
-                      horizontal: tabWidth != null ? 1.0 : 8.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   child: DefaultTextStyle(
                     style: TextStyle(
                       color: colorScheme.onSurface,
@@ -781,14 +645,11 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                       fontSize: 14,
                     ),
                     child: Row(
-                      mainAxisSize: tabWidth != null
-                          ? MainAxisSize.max
-                          : MainAxisSize.min,
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         if (isSelected) const SizedBox(width: 4),
                         _buildPinIconInline(context, tab),
-                        if (tabWidth != null) const SizedBox(width: 4),
                         buildTabContent(),
                         Tooltip(
                           preferBelow: false,
