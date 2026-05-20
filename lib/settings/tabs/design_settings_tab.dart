@@ -313,22 +313,6 @@ class DesignSettingsTab extends StatelessWidget {
                                 .add(UpdateCompactMenuMode(value));
                           },
                         ),
-                      SwitchSettingsTile(
-                        leading: const Icon(FluentIcons.tab_24_regular),
-                        title: const Text('הצגת כרטיסיות בימין',
-                            style: kSettingsTitleStyle),
-                        subtitle: Text(
-                            state.alignTabsToRight
-                                ? 'הכרטיסיות יהיו בצד ימין'
-                                : 'הכרטיסיות יהיו במרכז החלון',
-                            style: kSettingsSubtitleStyle),
-                        value: state.alignTabsToRight,
-                        onChanged: (value) {
-                          context
-                              .read<SettingsBloc>()
-                              .add(UpdateAlignTabsToRight(value));
-                        },
-                      ),
                     ],
                   ),
                 ),
