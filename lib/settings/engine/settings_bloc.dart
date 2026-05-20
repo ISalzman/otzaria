@@ -50,7 +50,6 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateSoftwareAndBookUpdatesEnabled>(
       _onUpdateSoftwareAndBookUpdatesEnabled,
     );
-    on<UpdateAlignTabsToRight>(_onUpdateAlignTabsToRight);
     on<UpdateEnableHtmlLinks>(_onUpdateEnableHtmlLinks);
     on<UpdatePersonalNotesCollapsedByDefault>(
         _onUpdatePersonalNotesCollapsedByDefault);
@@ -111,7 +110,6 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       autoSyncCatalogs: settings['autoSyncCatalogs'] ?? true,
       softwareAndBookUpdatesEnabled:
           settings['softwareAndBookUpdatesEnabled'] ?? true,
-      alignTabsToRight: settings['alignTabsToRight'] ?? false,
       enableHtmlLinks: settings['enableHtmlLinks'] ?? true,
       personalNotesCollapsedByDefault:
           settings['personalNotesCollapsedByDefault'] ?? true,
@@ -163,14 +161,6 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateSoftwareAndBookUpdatesEnabled(event.enabled);
     emit(state.copyWith(softwareAndBookUpdatesEnabled: event.enabled));
-  }
-
-  Future<void> _onUpdateAlignTabsToRight(
-    UpdateAlignTabsToRight event,
-    Emitter<SettingsState> emit,
-  ) async {
-    await _repository.updateAlignTabsToRight(event.alignTabsToRight);
-    emit(state.copyWith(alignTabsToRight: event.alignTabsToRight));
   }
 
   Future<void> _onUpdateEnableHtmlLinks(

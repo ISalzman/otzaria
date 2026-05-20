@@ -1645,17 +1645,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (rect == null) {
       return null;
     }
-    final settingsState = context.read<SettingsBloc>().state;
-    if (settingsState.alignTabsToRight) {
-      return Rect.fromLTRB(
-          rect.left - 36, rect.top - 4, rect.right, rect.bottom + 4);
-    }
     return Rect.fromLTRB(
-      rect.left - 28,
-      rect.top - 4,
-      rect.right + 28,
-      rect.bottom + 4,
-    );
+        rect.left - 36, rect.top - 4, rect.right, rect.bottom + 4);
   }
 
   Rect? _findRefDialogTourRect() {
@@ -1914,7 +1905,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
                       current.removeNikudFromTanach ||
                   previous.replaceHolyNames != current.replaceHolyNames ||
                   previous.libraryViewMode != current.libraryViewMode ||
-                  previous.alignTabsToRight != current.alignTabsToRight ||
                   previous.copyWithHeaders != current.copyWithHeaders ||
                   previous.copyHeaderFormat != current.copyHeaderFormat;
             },
@@ -1981,10 +1971,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
               if (previous.libraryViewMode != current.libraryViewMode) {
                 dispatch(SettingsRepository.keyLibraryViewMode,
                     current.libraryViewMode);
-              }
-              if (previous.alignTabsToRight != current.alignTabsToRight) {
-                dispatch(SettingsRepository.keyAlignTabsToRight,
-                    current.alignTabsToRight);
               }
               if (previous.copyWithHeaders != current.copyWithHeaders) {
                 dispatch(SettingsRepository.keyCopyWithHeaders,
