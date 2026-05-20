@@ -14,11 +14,30 @@ class AppDelegate: FlutterAppDelegate {
   }
 
   override func application(_ application: NSApplication, open urls: [URL]) {
-    for url in urls where url.scheme?.lowercased() == "otzaria" {
-      enqueueExternalActivation(url)
+    for url in urls {
+      let scheme = url.scheme?.lowercased()
+      if scheme == "otzaria" {
+        enqueueExternalActivation(url)
+      } else if scheme == "file"
+        && url.pathExtension.lowercased() == "otzplugin" {
+        if let installUrl = buildLocalPluginInstallUrl(forFileAt: url) {
+          enqueueExternalActivation(installUrl)
+        }
+      }
     }
 
     super.application(application, open: urls)
+  }
+
+  /// בונה URI פנימי `otzaria://plugin/install-local?path=<absolute-path>` שתואם
+  /// לפורמט ש-`ExternalUriRouter` ב-Dart מצפה לו עבור התקנת תוסף מקובץ מקומי.
+  private func buildLocalPluginInstallUrl(forFileAt fileUrl: URL) -> URL? {
+    var components = URLComponents()
+    components.scheme = "otzaria"
+    components.host = "plugin"
+    components.path = "/install-local"
+    components.queryItems = [URLQueryItem(name: "path", value: fileUrl.path)]
+    return components.url
   }
 
   private func enqueueExternalActivation(_ url: URL) {
