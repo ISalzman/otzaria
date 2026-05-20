@@ -646,26 +646,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     );
   }
 
-  double? _titleMaxWidthForRightAlignedTab({
-    required double? tabWidth,
-    required OpenedTab tab,
-    required bool isSelected,
-  }) {
-    if (tabWidth == null) return null;
-
-    final hasLeadingIcon = tab is CombinedTab || tab is PdfBookTab;
-    const pinSlotWidth = 20.0;
-    final reservedWidth = 25.0 +
-        24.0 +
-        16.0 +
-        pinSlotWidth +
-        (isSelected ? 4.0 : 0.0) +
-        (hasLeadingIcon ? 16.0 : 0.0) +
-        (hasLeadingIcon ? 2.0 : 0.0);
-
-    return (tabWidth - reservedWidth).clamp(0.0, tabWidth);
-  }
-
   /// בונה אייקון הצמדה inline עם hover state מהטאב
   Widget _buildPinIconInline(
       BuildContext context, OpenedTab tab, bool isHovered) {
@@ -709,8 +689,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   }
 
   Widget _buildTab(BuildContext context, OpenedTab tab, TabsState state,
-      SettingsState settingsState,
-      {double? tabWidth}) {
+      SettingsState settingsState) {
     final index = state.tabs.indexOf(tab);
     final isSelected = index == state.currentTabIndex;
     final closeTabShortcut =
@@ -728,27 +707,25 @@ class _CustomTitleBarState extends State<CustomTitleBar>
       double? titleMaxWidth,
     }) {
       if (isRightAligned) {
-        final effectiveTitle = Text(
-          title,
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-          softWrap: false,
-        );
         return Tooltip(
           message: tooltip,
           child: Row(
-            mainAxisSize:
-                titleMaxWidth == null ? MainAxisSize.min : MainAxisSize.max,
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (icon != null) ...[
                 Icon(icon, size: 14),
                 const SizedBox(width: 2),
               ],
-              if (titleMaxWidth != null)
-                SizedBox(width: titleMaxWidth, child: effectiveTitle)
-              else
-                effectiveTitle,
+              SizedBox(
+                width: titleMaxWidth,
+                child: Text(
+                  title,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  softWrap: false,
+                ),
+              ),
             ],
           ),
         );
@@ -861,11 +838,14 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     }
 
     Widget buildTabAppearance(StateSetter? setState) {
-      final showLeadingDivider =
-          index > 0 && !isTabActive(index) && !isTabActive(index - 1);
+      final showLeadingDivider = (index == 0 && !isTabActive(0)) ||
+          (index > 0 && !isTabActive(index) && !isTabActive(index - 1));
+      final showTrailingDivider = !isRightAligned &&
+          index == state.tabs.length - 1 &&
+          !isTabActive(index);
       final compactPadding = EdgeInsetsDirectional.only(
-        start: 0,
-        end: 0,
+        start: 2,
+        end: index == 0 && isRightAligned ? 0 : 2,
       );
 
       return Row(
@@ -875,29 +855,43 @@ class _CustomTitleBarState extends State<CustomTitleBar>
             Container(
               width: 1,
               height: 24,
-              margin: const EdgeInsets.symmetric(horizontal: 0.2, vertical: 6),
+              margin: const EdgeInsets.only(top: 6, bottom: 6),
               color: Colors.grey.shade400,
             ),
           Container(
             constraints: const BoxConstraints(maxHeight: 32),
             padding: isRightAligned
                 ? compactPadding
-                : const EdgeInsets.symmetric(horizontal: 3),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final effectiveTabWidth = constraints.maxWidth.isFinite
-                    ? constraints.maxWidth
-                    : tabWidth;
+                : const EdgeInsets.symmetric(horizontal: 6),
+            child: CustomPaint(
+              painter: isSelected
+                  ? _TabBackgroundPainter(
+                      Theme.of(context).colorScheme.surfaceContainer)
+                  : null,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final hasLeadingIcon =
+                      tab is CombinedTab || tab is PdfBookTab;
+                  final reservedWidth = 25.0 +
+                      24.0 +
+                      (isSelected ? 4.0 : 0.0) +
+                      (hasLeadingIcon ? 16.0 : 0.0) +
+                      (hasLeadingIcon ? 2.0 : 0.0);
+                  final titleMaxWidth = isRightAligned
+                      ? (constraints.maxWidth.isFinite
+                              ? constraints.maxWidth - reservedWidth
+                              : 0.0)
+                          .clamp(
+                              0.0,
+                              constraints.maxWidth.isFinite
+                                  ? constraints.maxWidth
+                                  : 0.0)
+                      : null;
 
-                return CustomPaint(
-                  painter: isSelected
-                      ? _TabBackgroundPainter(
-                          Theme.of(context).colorScheme.surfaceContainer)
-                      : null,
-                  child: Tab(
+                  return Tab(
                     child: Padding(
                       padding: EdgeInsets.symmetric(
-                          horizontal: isRightAligned ? 1 : 3),
+                          horizontal: isRightAligned ? 4 : 8),
                       child: DefaultTextStyle(
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.onSurface,
@@ -914,12 +908,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                             if (isRightAligned && isSelected)
                               const SizedBox(width: 4),
                             _buildPinIconInline(context, tab, isTabHovered),
-                            if (isRightAligned) const SizedBox(width: 4),
-                            buildTabTitle(_titleMaxWidthForRightAlignedTab(
-                              tabWidth: effectiveTabWidth,
-                              tab: tab,
-                              isSelected: isSelected,
-                            )),
+                            buildTabTitle(titleMaxWidth),
                             Tooltip(
                               preferBelow: false,
                               message: closeTabShortcut.toUpperCase(),
@@ -931,21 +920,36 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                                   maxHeight: 25,
                                 ),
                                 onPressed: () => closeTab(tab, context),
-                                icon: const Icon(
-                                  FluentIcons.dismiss_24_regular,
-                                  size: 10,
-                                ),
+                                icon: const Icon(FluentIcons.dismiss_24_regular,
+                                    size: 10),
                               ),
                             ),
+                            if (isRightAligned &&
+                                !isSelected &&
+                                index != state.currentTabIndex - 1)
+                              Container(
+                                width: 1,
+                                height: 16,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant,
+                              ),
                           ],
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
+          if (showTrailingDivider)
+            Container(
+              width: 1,
+              height: 24,
+              margin: const EdgeInsets.only(top: 6, bottom: 6),
+              color: Colors.grey.shade400,
+            ),
         ],
       );
     }
