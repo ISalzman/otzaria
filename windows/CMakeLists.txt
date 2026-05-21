@@ -109,3 +109,24 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# Bundle the Microsoft Visual C++ Redistributable runtime DLLs (v14.44+)
+# next to otzaria.exe in Release/Profile builds. Windows' DLL search order
+# prefers the application directory over System32, so these DLLs are picked
+# up by the host EXE and every plugin DLL — including flutter_inappwebview's
+# native plugin, which on a user's machine had been crashing inside the
+# system's stale MSVCP140 14.36.32532.0 (+0x12f58 NULL read) every time the
+# user opened a plugin tab. App-local bundling eliminates the entire class
+# of "user has old VC Redist" crashes without requiring vc_redist.x64.exe
+# to run at install time (so the regular installer, the silent installer,
+# and the portable ZIP all benefit, not just the full installer).
+#
+# Source DLLs live under installer/vcredist/x64 in the repo so they're a
+# single source of truth across all distribution paths; the .iss files
+# pull from build\windows\x64\runner\Release\* and therefore inherit
+# them automatically.
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/../installer/vcredist/x64/"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  CONFIGURATIONS Profile;Release
+  COMPONENT Runtime
+  FILES_MATCHING PATTERN "*.dll")
