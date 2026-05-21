@@ -49,12 +49,12 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
-  sentry_flutter: ^9.19.0
-  msix: ^3.16.8
+  sentry_flutter: ^9.20.0
+  msix: ^3.16.13
   flutter:
     sdk: flutter
   flutter_bloc: ^9.1.1
-  bloc: ^9.2.0
+  bloc: ^9.2.1
   bloc_concurrency: ^0.3.0
   equatable: ^2.0.8
   flutter_localizations:
@@ -63,11 +63,11 @@ dependencies:
   hive_ce: ^2.19.3
   path_provider: ^2.1.5
   html: ^0.15.6
-  pdfrx: ^2.3.2
+  pdfrx: ^2.4.1
   url_launcher: ^6.3.2
-  flutter_widget_from_html: ^0.17.0
+  flutter_widget_from_html: ^0.17.2
   scrollable_positioned_list: ^0.3.8
-  fuzzywuzzy: ^1.1.6
+  fuzzywuzzy: ^1.2.0
   flutter_svg: ^2.3.0  
   fluentui_system_icons: ^1.1.273
   file_picker: ^11.0.2
@@ -88,7 +88,7 @@ dependencies:
   zstandard: ^1.5.0
   ffi: ^2.2.0
   googleapis: ^16.0.0
-  googleapis_auth: ^2.3.0
+  googleapis_auth: ^2.3.1
   characters: ^1.4.1
   collection: ^1.19.1
   search_engine:
@@ -149,9 +149,9 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   test: ^1.30.0
-  build_runner: ^2.14.1
+  build_runner: ^2.15.0
   bloc_test: ^10.0.0
-  mockito: ^5.6.5
+  mockito: ^5.7.0
   hooks: ^1.0.3
   dart_pre_commit: ^6.1.2
 
