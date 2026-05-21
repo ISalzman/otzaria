@@ -6,7 +6,6 @@ class ScrollableTabBarWithArrows extends StatefulWidget {
   final TabController controller;
   final List<Widget> tabs;
   final TabAlignment? tabAlignment;
-  final double? tabWidth;
   // מאפשר לדעת אם יש גלילה אופקית (יש Overflow)
   final ValueChanged<bool>? onOverflowChanged;
   // האם להסתיר את החיצים כשאין גלילה (לצמצום רווחים)
@@ -17,7 +16,6 @@ class ScrollableTabBarWithArrows extends StatefulWidget {
     required this.controller,
     required this.tabs,
     this.tabAlignment,
-    this.tabWidth,
     this.onOverflowChanged,
     this.hideArrowsWhenNotScrollable = false,
   });
@@ -153,15 +151,10 @@ class _ScrollableTabBarWithArrowsState
                 _attachAndSyncPosition();
               });
             }
-            final resolvedTabs = widget.tabWidth != null
-                ? widget.tabs
-                    .map((tab) => SizedBox(width: widget.tabWidth, child: tab))
-                    .toList()
-                : widget.tabs;
             final tabBar = TabBar(
               controller: widget.controller,
               isScrollable: true,
-              tabs: resolvedTabs,
+              tabs: widget.tabs,
               tabAlignment: widget.tabAlignment ?? TabAlignment.start,
               padding: EdgeInsets.zero,
               labelPadding: EdgeInsets.zero,
@@ -229,13 +222,6 @@ class _ScrollableTabBarWithArrowsState
     final bool showArrows = !widget.hideArrowsWhenNotScrollable || hasOverflow;
 
     if (!hasOverflow) {
-      if (widget.tabWidth != null && widget.tabs.isNotEmpty) {
-        final totalWidth = widget.tabWidth! * widget.tabs.length;
-        return Align(
-          alignment: _nonOverflowAlignment(),
-          child: SizedBox(width: totalWidth, child: _buildTabBar()),
-        );
-      }
       return Align(
         alignment: _nonOverflowAlignment(),
         child: _buildTabBar(shrinkWrap: true),
