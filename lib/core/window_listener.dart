@@ -176,8 +176,59 @@ class AppWindowListener extends WindowListener {
       if (!kIsWeb &&
           (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
         if (Platform.isWindows) {
-          // window_manager.destroy() posts WM_QUIT on Windows. Awaiting it can
-          // stop the Flutter engine before the Dart continuation reaches exit().
+          // קריאה ל-TerminateProcess(GetCurrentProcess(), 0) דרך ה-runner.
+          // קופצת מעל atexit (כולל sentry-native flush שלוקח כמה שניות),
+          // DLL_PROCESS_DETACH, Dart VM teardown, ומסירה את צורך לבנות
+          // graceful shutdown. תהליכי WebView2 ילדים נהרגים אוטומטית דרך
+          // ה-Job Object שאליו ה-runner משייך אותם. כל נתון חיוני שלנו
+          // (Hive write-through, SQLite WAL) כבר מסומן עמיד ל-dirty
+          // shutdown לפני הנקודה הזו.
+          //
+          // ההנדלר הילידי מחזיר false כאשר ה-Job Object לא הוקם בהצלחה
+          // (סביבות sandboxed, debugger jobs, MDM/AV). במקרה כזה אסור
+          // לקרוא ל-TerminateProcess משלנו כי תהליכי WebView2 ילדים
+          // יהיו יתומים — אנחנו נופלים בחזרה ל-graceful close המקורי.
+          bool? terminateAttempted;
+          try {
+            terminateAttempted = await _processControlChannel
+                .invokeMethod<bool>('forceTerminate');
+          } catch (e, stackTrace) {
+            _logForceTerminateFailure(
+                'invokeMethod threw: $e', stackTrace.toString());
+            terminateAttempted = null;
+          }
+          if (terminateAttempted == true) {
+            // לעולם לא אמורים להגיע לכאן — TerminateProcess הרגה אותנו
+            // ב-handler הילידי. אם בכל זאת חזרנו, התהליך הילידי הצליח
+            // להשיב true אבל TerminateProcess עצמו נכשל איכשהו (תרחיש
+            // תיאורטי). exit(0) כ-last resort.
+            _logForceTerminateFailure(
+                'forceTerminate returned true but did not terminate', null);
+            exit(0);
+          }
+          if (terminateAttempted == false) {
+            // job_object_ready=false ב-runner — סביבה sandboxed / debugger
+            // / MDM שמנעה את ה-Job Object containment. אין כאן fallback
+            // מקסימלי באמת: `windowManager.destroy()` ידוע שעוצר את ה-
+            // Engine מיד וזה מסוכן בנתיב הזה (ראה ההערה המקורית למטה),
+            // ואין דרך אחרת להבטיח הריגה אטומית של תהליכי WebView2 ילדים.
+            //
+            // מה שאנחנו עושים: נותנים ל-IPC של WebView2 SDK חלון של ~500ms
+            // לסיים את ה-shutdown של תהליכי Edge — `shutdownForAppExit`
+            // למעלה כבר יזם dispose של ה-environment, אבל ההודעות לילדים
+            // אסינכרוניות. אחרי ההמתנה אנחנו פולטים ל-exit(0) הרגיל —
+            // **אותה התנהגות בדיוק שהייתה לפני שינוי forceTerminate**.
+            // המשמעות: סביבות שבהן Job Object נכשל לא מקבלות את ה-fast
+            // exit, אבל גם לא מאבדות שום הגנה שהייתה להן קודם.
+            _logForceTerminateFailure(
+                'Job Object not ready in native runner — degraded close, '
+                'WebView2 children may still orphan (pre-fix behavior)',
+                null);
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+          }
+          // Windows path מאז ומעולם — exit(0) במקום windowManager.destroy.
+          // כשה-Job Object כן הוקם (המצב הרגיל), TerminateProcess כבר
+          // הרג אותנו ולא נגיע לכאן.
           exit(0);
         }
 
@@ -191,6 +242,25 @@ class AppWindowListener extends WindowListener {
       }
       // נשמור על exit(0) רק למקרה חירום של קריסה בתהליך הסגירה
       exit(0);
+    }
+  }
+
+  /// כותב שורה לקובץ `%TEMP%\otzaria_shutdown_errors.log` כשמסלול ה-fast-exit
+  /// נכשל. עוזר לאבחן תלונות עתידיות של "לפעמים הסגירה איטית" — בלי הלוג
+  /// הזה אין שום אינדיקציה למה ה-Job Object לא הוקם או למה ה-channel
+  /// כשל. ה-I/O סינכרוני כדי להבטיח שהשורה נכתבת לפני exit(0).
+  void _logForceTerminateFailure(String reason, String? stackTrace) {
+    if (!Platform.isWindows) return;
+    try {
+      final temp = Platform.environment['TEMP'] ?? r'C:\Users\Public';
+      final logPath = '$temp\\otzaria_shutdown_errors.log';
+      final timestamp = DateTime.now().toIso8601String();
+      final line = stackTrace == null
+          ? '$timestamp | $reason\n'
+          : '$timestamp | $reason\n  $stackTrace\n';
+      File(logPath).writeAsStringSync(line, mode: FileMode.append);
+    } catch (_) {
+      // I/O failure must never block exit.
     }
   }
 
