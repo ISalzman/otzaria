@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -25,13 +24,27 @@ import 'package:otzaria/widgets/feedback/app_future_builder.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:otzaria/services/commentary_service.dart';
-import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as inline_notes;
+import 'package:otzaria/text_book/utils/inline_notes_utils.dart'
+    as inline_notes;
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
 
 // Type alias לתאימות לאחור - משתמש ב-LinkGroup מה-Service
 typedef CommentaryGroup = LinkGroup;
+
+/// מייצג תוצאת חיפוש בודדת עם קטע טקסט וכתובת גלובלית לניווט
+class CommentarySearchSnippet {
+  final String path;
+  final String snippet;
+  final int globalIndex;
+
+  const CommentarySearchSnippet({
+    required this.path,
+    required this.snippet,
+    required this.globalIndex,
+  });
+}
 
 class CommentaryListBase extends StatefulWidget {
   final Function(TextBookTab) openBookCallback;
@@ -53,6 +66,14 @@ class CommentaryListBase extends StatefulWidget {
   final TextEditingController? externalSearchController;
   final ValueNotifier<int>? externalCurrentIndexNotifier;
   final ValueNotifier<int>? externalTotalResultsNotifier;
+
+  /// מפה חיצונית: path של מפרש → מספר תוצאות חיפוש בו (ריק אם אין חיפוש)
+  final ValueNotifier<Map<String, int>>? externalSearchResultsByPathNotifier;
+
+  /// רשימת קטעי חיפוש חיצונית עם מידע לניווט (ריקה אם אין חיפוש)
+  final ValueNotifier<List<CommentarySearchSnippet>>?
+      externalSearchSnippetsNotifier;
+
   /// כשהדגל מופעל, ישתמש ב-availableCommentators (כל מפרשי הספר) ולא ב-activeCommentators
   final bool useAvailableCommentators;
 
@@ -76,6 +97,8 @@ class CommentaryListBase extends StatefulWidget {
     this.externalSearchController,
     this.externalCurrentIndexNotifier,
     this.externalTotalResultsNotifier,
+    this.externalSearchResultsByPathNotifier,
+    this.externalSearchSnippetsNotifier,
     this.useAvailableCommentators = false,
   });
 
@@ -104,23 +127,25 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   // Anti-jitter search stats
   Timer? _searchUpdateDebounce;
   final Map<String, int> _pendingCounts = {};
+  // מפה: link key → path2 (לצורך קיבוץ תוצאות לפי מפרש)
+  final Map<String, String> _linkKeyToPath = {};
+  // מפה: link key → קטעי טקסט (snippets) לתוצאות החיפוש
+  final Map<String, List<String>> _searchSnippetsPerLink = {};
 
   final ValueNotifier<String?> _savedSelectedText =
       ValueNotifier<String?>(null); // טקסט נבחר לתפריט הקשר
   final ValueNotifier<Link?> _lastSelectedLink =
       ValueNotifier<Link?>(null); // ה-link האחרון שנוגעו בו (לכותרות בהעתקה)
+  final Object _selectionOwner = Object(); // מזהה ייחודי לבעלות על הבחירה
+  int _selectionRevision = 0; // גרסה לאיפוס SelectionArea כשבחירה חיצונית מנקה
   bool _showCommentatorsFilter = false; // האם להציג את מסך בחירת המפרשים
   bool _filterWasAutoOpened = false; // האם מסך הסינון נפתח אוטומטית (לא ידנית)
   bool _userInteractedWithFilter =
       false; // האם המשתמש בחר בעצמו בתוך פאנל הסינון
-  // ערך הבסיס של counter ה-openFilterRequest שראינו ב-init. רק עליות מעבר
-  // לערך הזה מטריגרות פתיחה — כך counter "ישן" מבקשת קודמת לא ייספג שוב
-  // ביצירה מחודשת של ה-state.
-  int _lastSeenFilterRequest = 0;
   final FocusNode _focusNode = FocusNode();
   final FocusNode _searchFocusNode = FocusNode();
-  final Object _selectionOwner = Object();
-  int _selectionRevision = 0;
+  int _lastSeenFilterRequest = 0;
+  bool _snippetsRebuildScheduled = false;
 
   String _getLinkKey(Link link) =>
       '${link.index1}_${link.path2}_${link.index2}';
@@ -128,14 +153,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   // רשימה של כל ה-links לפי סדר הופעתם (נבנית מחדש בכל build)
   List<Link> _orderedLinks = [];
 
-  /// המפרשים הנבחרים *לצורך שאילתות קישורים* (לא כולל את 'הערות'
-  /// שהוא וירטואלי ולא מקושר כ-link אמיתי).
-  List<String> _selectedCommentators(TextBookLoaded state) {
-    final all = _allSelectedCommentators(state);
-    return all.where((c) => c != kNotesCommentatorTitle).toList();
-  }
-
-  /// כל המפרשים שנבחרו, כולל ה-virtual 'הערות' (לזיהוי מצב פעיל).
   List<String> _allSelectedCommentators(TextBookLoaded state) {
     if (widget.selectedCommentatorsOverride != null) {
       return widget.selectedCommentatorsOverride!;
@@ -144,6 +161,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       return state.availableCommentators;
     }
     return state.activeCommentators;
+  }
+
+  List<String> _selectedCommentators(TextBookLoaded state) {
+    final selected = _allSelectedCommentators(state);
+    return selected.where((title) => title != kNotesCommentatorTitle).toList();
   }
 
   String _buildGroupingSignature(List<Link> links) {
@@ -206,23 +228,45 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   }
 
   void navigateSearchNext() {
-    if (_currentSearchIndexNotifier.value < _totalSearchResultsNotifier.value - 1) {
+    if (_currentSearchIndexNotifier.value <
+        _totalSearchResultsNotifier.value - 1) {
       _currentSearchIndexNotifier.value++;
       _scrollToSearchResult();
     }
   }
 
-  ValueNotifier<int> get totalSearchResultsNotifier => _totalSearchResultsNotifier;
-  ValueNotifier<int> get currentSearchIndexNotifier => _currentSearchIndexNotifier;
+  ValueNotifier<int> get totalSearchResultsNotifier =>
+      _totalSearchResultsNotifier;
+  ValueNotifier<int> get currentSearchIndexNotifier =>
+      _currentSearchIndexNotifier;
+
+  /// ניווט לתוצאת חיפוש לפי אינדקס גלובלי (לשימוש חיצוני)
+  void navigateToGlobalIndex(int index) {
+    if (index < 0 || index >= _totalSearchResultsNotifier.value) return;
+    _currentSearchIndexNotifier.value = index;
+    _scrollToSearchResult();
+  }
 
   void _onExternalSearchChanged() {
     final text = widget.externalSearchController!.text;
     if (_searchQueryNotifier.value != text) {
       _searchQueryNotifier.value = text;
+      if (text.isNotEmpty) {
+        setState(() {
+          _allExpanded = true;
+          for (final key in _expansionStates.keys) {
+            _expansionStates[key] = true;
+          }
+        });
+      }
       _currentSearchIndexNotifier.value = 0;
       _totalSearchResultsNotifier.value = 0;
       _searchResultsPerLink.clear();
       _pendingCounts.clear();
+      _linkKeyToPath.clear();
+      _searchSnippetsPerLink.clear();
+      widget.externalSearchResultsByPathNotifier?.value = {};
+      widget.externalSearchSnippetsNotifier?.value = [];
     }
   }
 
@@ -240,12 +284,14 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     widget.externalSearchController?.addListener(_onExternalSearchChanged);
     if (widget.externalTotalResultsNotifier != null) {
       _totalSearchResultsNotifier.addListener(() {
-        widget.externalTotalResultsNotifier!.value = _totalSearchResultsNotifier.value;
+        widget.externalTotalResultsNotifier!.value =
+            _totalSearchResultsNotifier.value;
       });
     }
     if (widget.externalCurrentIndexNotifier != null) {
       _currentSearchIndexNotifier.addListener(() {
-        widget.externalCurrentIndexNotifier!.value = _currentSearchIndexNotifier.value;
+        widget.externalCurrentIndexNotifier!.value =
+            _currentSearchIndexNotifier.value;
       });
     }
   }
@@ -262,8 +308,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (oldWidget.openFilterRequest != widget.openFilterRequest) {
       oldWidget.openFilterRequest?.removeListener(_handleOpenFilterRequest);
       widget.openFilterRequest?.addListener(_handleOpenFilterRequest);
-      // איפוס ה-baseline ל-notifier החדש — אחרת ערך גבוה מה-notifier הקודם
-      // עלול לחסום פתיחות עתידיות עד שה-counter החדש "ישיג" אותו.
       _lastSeenFilterRequest = widget.openFilterRequest?.value ?? 0;
     }
     if (oldWidget.openFilterNotifier != widget.openFilterNotifier) {
@@ -301,7 +345,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   void _updateLastScrollIndex() {
     final positions = _itemPositionsListener.itemPositions.value;
     if (positions.isNotEmpty) {
-      _lastScrollIndex = topmostVisibleIndex(positions);
+      // שומר את האינדקס של הפריט הראשון הנראה
+      _lastScrollIndex = positions.first.index;
     }
   }
 
@@ -369,11 +414,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         identical(controller.activeOwner, _selectionOwner)) {
       return;
     }
-
-    if (!mounted) {
-      return;
-    }
-
+    if (!mounted) return;
     _savedSelectedText.value = null;
     _lastSelectedLink.value = null;
     setState(() {
@@ -514,6 +555,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (!mounted) return;
 
     final key = _getLinkKey(link);
+    // שמור את ה-path2 לצורך קיבוץ לפי מפרש
+    _linkKeyToPath[key] = link.path2;
     // אם הכמות לא השתנתה, אין צורך לעשות כלום
     if (_searchResultsPerLink[key] == count) return;
 
@@ -530,12 +573,68 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       _totalSearchResultsNotifier.value =
           _searchResultsPerLink.values.fold(0, (sum, count) => sum + count);
 
+      // עדכון נוטיפייר חיצוני לתוצאות לפי מפרש
+      if (widget.externalSearchResultsByPathNotifier != null) {
+        final byPath = <String, int>{};
+        for (final entry in _searchResultsPerLink.entries) {
+          final path = _linkKeyToPath[entry.key] ?? '';
+          if (path.isNotEmpty && entry.value > 0) {
+            byPath[path] = (byPath[path] ?? 0) + entry.value;
+          }
+        }
+        widget.externalSearchResultsByPathNotifier!.value = byPath;
+      }
+
+      // עדכון נוטיפייר קטעי החיפוש (snippets)
+      _scheduleSnippetsNotifierRebuild();
+
       // תיקון אינדקס אם חרגנו מהגבולות
       if (_currentSearchIndexNotifier.value >=
               _totalSearchResultsNotifier.value &&
           _totalSearchResultsNotifier.value > 0) {
         _currentSearchIndexNotifier.value = 0;
       }
+    });
+  }
+
+  void _updateSearchSnippets(Link link, List<String> snippets) {
+    if (!mounted) return;
+    final key = _getLinkKey(link);
+    _searchSnippetsPerLink[key] = snippets;
+    _scheduleSnippetsNotifierRebuild();
+  }
+
+  void _rebuildSnippetsNotifier() {
+    if (widget.externalSearchSnippetsNotifier == null) return;
+    final List<CommentarySearchSnippet> result = [];
+    int globalIndex = 0;
+    for (final link in _orderedLinks) {
+      final key = _getLinkKey(link);
+      final count = _searchResultsPerLink[key] ?? 0;
+      final snippets = _searchSnippetsPerLink[key] ?? [];
+      for (int i = 0; i < snippets.length; i++) {
+        result.add(CommentarySearchSnippet(
+          path: link.path2,
+          snippet: snippets[i],
+          globalIndex: globalIndex,
+        ));
+      }
+      globalIndex += count;
+    }
+    widget.externalSearchSnippetsNotifier!.value = result;
+  }
+
+  void _scheduleSnippetsNotifierRebuild() {
+    if (widget.externalSearchSnippetsNotifier == null ||
+        _snippetsRebuildScheduled ||
+        !mounted) {
+      return;
+    }
+    _snippetsRebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _snippetsRebuildScheduled = false;
+      if (!mounted) return;
+      _rebuildSnippetsNotifier();
     });
   }
 
@@ -585,14 +684,14 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       totalSearchResultsListenable: _totalSearchResultsNotifier,
       getItemSearchIndex: _getItemSearchIndex,
       updateSearchResultsCount: _updateSearchResultsCount,
+      updateSearchSnippets: widget.externalSearchSnippetsNotifier != null
+          ? _updateSearchSnippets
+          : null,
       itemKeys: _itemKeys,
       getLinkKey: _getLinkKey,
       indexesKey: indexesKey,
       savedSelectedTextListenable: _savedSelectedText,
       lastSelectedLinkListenable: _lastSelectedLink,
-      selectionSyncController: widget.selectionSyncController,
-      selectionOwner: _selectionOwner,
-      selectionRevision: _selectionRevision,
       onExpansionChanged: (expanded) {
         _expansionStates[groupKey] = expanded;
         // בודק אם כל המפרשים פתוחים או סגורים ומעדכן את המצב הגלובלי
@@ -607,14 +706,15 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       onLinkSelected: (link, text) {
         _savedSelectedText.value = text;
         _lastSelectedLink.value = link;
-        if (!_searchFocusNode.hasFocus) {
-          _focusNode.requestFocus();
-        }
+        _focusNode.requestFocus();
       },
       onLinkSelectionCleared: () {
         _savedSelectedText.value = null;
         _lastSelectedLink.value = null;
       },
+      selectionSyncController: widget.selectionSyncController,
+      selectionOwner: _selectionOwner,
+      selectionRevision: _selectionRevision,
     );
   }
 
@@ -642,20 +742,25 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           final selectedCommentators = _selectedCommentators(state);
           final notesIsActive =
               _allSelectedCommentators(state).contains(kNotesCommentatorTitle);
-          final shouldAutoOpenOverrideFilter = !notesIsActive &&
-              widget.showSearch &&
+          final shouldAutoOpenOverrideFilter = widget.showSearch &&
               widget.onSelectedCommentatorsOverrideChanged != null &&
               selectedCommentators.isEmpty &&
+              !notesIsActive &&
               !_showCommentatorsFilter;
 
           if (shouldAutoOpenOverrideFilter) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                setState(() {
-                  _showCommentatorsFilter = true;
-                  _filterWasAutoOpened = true;
-                });
+              if (!mounted || _showCommentatorsFilter) return;
+              // בדיקה מחדש: אם המפרשים הזמינים כבר נטענו מאז תזמון הקריאה, לא פותחים את הסינון
+              final currentBlocState = context.read<TextBookBloc>().state;
+              if (currentBlocState is TextBookLoaded) {
+                final currentSelected = _selectedCommentators(currentBlocState);
+                if (currentSelected.isNotEmpty) return;
               }
+              setState(() {
+                _showCommentatorsFilter = true;
+                _filterWasAutoOpened = true;
+              });
             });
             return const Center(child: CircularProgressIndicator());
           }
@@ -686,14 +791,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                 : 0)
                       ];
 
-                // בניית widget של 'הערות' (מפרש וירטואלי) אם הוא פעיל ויש
-                // הערות inline ב-state.content עבור האינדקסים הנוכחיים.
                 Widget? notesWidget;
                 if (notesIsActive) {
-                  final relevantNotes = inline_notes.notesForLines(
-                    state.content,
-                    currentIndexes,
-                  );
+                  final relevantNotes =
+                      inline_notes.notesForLines(state.content, currentIndexes);
                   if (relevantNotes.isNotEmpty) {
                     notesWidget = _NotesCommentaryWidget(
                       notes: relevantNotes,
@@ -713,6 +814,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                 Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                           textAlign: TextAlign.center,
+                          textDirection: TextDirection.rtl,
                         ),
                       ),
                     );
@@ -739,12 +841,28 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
                 // אם אין קישורים רלוונטיים
                 if (!hasRelevantLinks) {
+                  if (state.linksLoading) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'טוען מפרשים...',
+                          style: TextStyle(
+                            fontSize: widget.fontSize * 0.7,
+                            color: Colors.grey,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  }
+                  if (notesWidget != null) {
+                    return notesWidget;
+                  }
                   // אם יש מפרשים זמינים אבל לא נבחרו בכלל - פתח אוטומטית את מסך הבחירה
-                  // (לא במצב useAvailableCommentators — שם מוצג הכל אוטומטית,
-                  // ולא כש'הערות' פעיל — הוא ממלא את התפקיד של מפרש ברירת מחדל)
+                  // (לא במצב useAvailableCommentators — שם מוצג הכל אוטומטית)
                   if (widget.showSearch &&
                       !widget.useAvailableCommentators &&
-                      !notesIsActive &&
                       hasAnyCommentaryLinks &&
                       selectedCommentators.isEmpty &&
                       !_showCommentatorsFilter) {
@@ -757,10 +875,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                       }
                     });
                     return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (notesWidget != null) {
-                    return notesWidget;
                   }
 
                   // אין מפרשים בכלל לקטע הזה, או שיש מפרשים נבחרים אבל הם לא רלוונטיים
@@ -1065,6 +1179,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                                       _searchResultsPerLink
                                                           .clear();
                                                       _pendingCounts.clear();
+                                                      _searchFocusNode
+                                                          .requestFocus();
                                                     },
                                                   ),
                                                 ],
@@ -1084,12 +1200,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                           _totalSearchResultsNotifier.value = 0;
                                           _searchResultsPerLink.clear();
                                           _pendingCounts.clear();
-                                          WidgetsBinding.instance
-                                              .addPostFrameCallback((_) {
-                                            if (mounted) {
-                                              _searchFocusNode.requestFocus();
-                                            }
-                                          });
                                         }
                                       },
                                     );
@@ -1300,17 +1410,18 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   final ValueListenable<int> totalSearchResultsListenable;
   final int Function(Link) getItemSearchIndex;
   final void Function(Link, int) updateSearchResultsCount;
+  final void Function(Link, List<String>)? updateSearchSnippets;
   final Map<String, GlobalKey> itemKeys;
   final String Function(Link) getLinkKey;
   final String indexesKey;
   final ValueListenable<String?> savedSelectedTextListenable;
   final ValueListenable<Link?> lastSelectedLinkListenable;
-  final SelectionSyncController? selectionSyncController;
-  final Object selectionOwner;
-  final int selectionRevision;
   final void Function(bool) onExpansionChanged;
   final void Function(Link link, String text) onLinkSelected;
   final VoidCallback onLinkSelectionCleared;
+  final SelectionSyncController? selectionSyncController;
+  final Object? selectionOwner;
+  final int selectionRevision;
 
   const _CollapsibleCommentaryGroup({
     super.key,
@@ -1326,17 +1437,18 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     required this.totalSearchResultsListenable,
     required this.getItemSearchIndex,
     required this.updateSearchResultsCount,
+    this.updateSearchSnippets,
     required this.itemKeys,
     required this.getLinkKey,
     required this.indexesKey,
     required this.savedSelectedTextListenable,
     required this.lastSelectedLinkListenable,
-    required this.selectionSyncController,
-    required this.selectionOwner,
-    required this.selectionRevision,
     required this.onExpansionChanged,
     required this.onLinkSelected,
     required this.onLinkSelectionCleared,
+    this.selectionSyncController,
+    this.selectionOwner,
+    this.selectionRevision = 0,
   });
 
   @override
@@ -1428,12 +1540,17 @@ class _CollapsibleCommentaryGroupState
               },
               onSelectionChanged: (selection) {
                 if (selection != null && selection.plainText.isNotEmpty) {
-                  widget.selectionSyncController
-                      ?.activate(widget.selectionOwner);
+                  final owner = widget.selectionOwner;
+                  if (owner != null) {
+                    widget.selectionSyncController?.activate(owner);
+                  }
                   widget.onLinkSelected(link, selection.plainText);
                 } else if (selection == null ||
                     selection.plainText.trim().isEmpty) {
-                  widget.selectionSyncController?.clear(widget.selectionOwner);
+                  final owner = widget.selectionOwner;
+                  if (owner != null) {
+                    widget.selectionSyncController?.clear(owner);
+                  }
                   widget.onLinkSelectionCleared();
                 }
               },
@@ -1522,6 +1639,11 @@ class _CollapsibleCommentaryGroupState
                                         link,
                                         count,
                                       )
+                                  : null,
+                              onSearchSnippetsChanged: widget.showSearch &&
+                                      widget.updateSearchSnippets != null
+                                  ? (snippets) => widget.updateSearchSnippets!(
+                                      link, snippets)
                                   : null,
                             ),
                           );
