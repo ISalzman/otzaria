@@ -175,7 +175,13 @@ class _ReadingScreenState extends State<ReadingScreen>
                     child: PageView(
                       key: const ValueKey('normal_tab_view'),
                       controller: _pageController,
-                      physics: const NeverScrollableScrollPhysics(),
+                      onPageChanged: (index) {
+                        if (index < state.tabs.length) {
+                          context
+                              .read<TabsBloc>()
+                              .add(SetCurrentTab(index));
+                        }
+                      },
                       children: [
                         for (var i = 0; i < state.tabs.length; i++)
                           _buildTabView(
