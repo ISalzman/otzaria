@@ -30,19 +30,21 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: MultiBlocProvider(
-          providers: [
-            BlocProvider<TextBookBloc>.value(value: textBookBloc),
-            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
-          ],
-          child: LinksNotesSidebar(
-            bookId: 'ספר בדיקה',
-            openBookCallback: (_) {},
-            fontSize: 18,
-            initialTabIndex: 1,
-            onNavigateToLine: (_) {},
-            onClosePane: () {},
-            onTabChanged: (index) => selectedTab = index,
+        home: Scaffold(
+          body: MultiBlocProvider(
+            providers: [
+              BlocProvider<TextBookBloc>.value(value: textBookBloc),
+              BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            ],
+            child: LinksNotesSidebar(
+              bookId: 'ספר בדיקה',
+              openBookCallback: (_) {},
+              fontSize: 18,
+              initialTabIndex: 1,
+              onNavigateToLine: (_) {},
+              onClosePane: () {},
+              onTabChanged: (index) => selectedTab = index,
+            ),
           ),
         ),
       ),
@@ -69,17 +71,19 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: MultiBlocProvider(
-          providers: [
-            BlocProvider<TextBookBloc>.value(value: textBookBloc),
-            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
-          ],
-          child: LinksNotesSidebar(
-            bookId: 'ספר בדיקה',
-            openBookCallback: (_) {},
-            fontSize: 18,
-            onNavigateToLine: (_) {},
-            onClosePane: () => wasClosed = true,
+        home: Scaffold(
+          body: MultiBlocProvider(
+            providers: [
+              BlocProvider<TextBookBloc>.value(value: textBookBloc),
+              BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            ],
+            child: LinksNotesSidebar(
+              bookId: 'ספר בדיקה',
+              openBookCallback: (_) {},
+              fontSize: 18,
+              onNavigateToLine: (_) {},
+              onClosePane: () => wasClosed = true,
+            ),
           ),
         ),
       ),
