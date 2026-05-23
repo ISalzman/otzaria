@@ -21,8 +21,6 @@ import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/widgets/misc/app_context_menu.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
-import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
-import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../../test_helpers/memory_cache_provider.dart';
 
@@ -31,35 +29,6 @@ void main() {
 
   setUpAll(() async {
     await Settings.init(cacheProvider: MemoryCacheProvider());
-  });
-
-  test('display mode change keeps the visible source line', () {
-    expect(
-      resolveDisplayModeRestoreLineIndex(
-        visibleIndices: const [42, 43, 44],
-        selectedIndex: 7,
-        contentLength: 100,
-      ),
-      42,
-    );
-
-    expect(
-      resolveDisplayModeRestoreLineIndex(
-        visibleIndices: const [],
-        selectedIndex: 7,
-        contentLength: 100,
-      ),
-      7,
-    );
-
-    expect(
-      resolveDisplayModeRestoreLineIndex(
-        visibleIndices: const [150],
-        selectedIndex: 7,
-        contentLength: 100,
-      ),
-      isNull,
-    );
   });
 
   testWidgets('לחיצה על אינדיקטור הערה פותחת את טאב ההערות הפנימי',
@@ -741,119 +710,6 @@ void main() {
     scrollController.dispose();
     focusNode.dispose();
   });
-  test('מצב טקסט רציף מסיר הערות inline מהטקסט הראשי (יוצגו כמפרש בצד)', () {
-    const rawText = 'פסוק <i class="footnote">*(בספרי תימן בסמ״ך גדולה)</i>';
-    final processed = TextRendererService.processText(
-      rawText,
-      const RenderSettings(fontSize: 20),
-    );
-    final spans = buildInlineHtmlSpans(
-      processed,
-      const TextStyle(fontSize: 20),
-    );
-    final flattened = _flattenText(spans);
-
-    expect(flattened, contains('פסוק'));
-    expect(flattened, isNot(contains('בספרי תימן')));
-    expect(flattened, isNot(contains('<i')));
-    expect(flattened, isNot(contains('class="footnote"')));
-  });
-
-  test('מצב טקסט רציף משאיר סימן <sup> במקומו גם כשגוף ההערה מוסר', () {
-    const rawText =
-        'טקסט<sup class="footnote-marker">א</sup><i class="footnote">תוכן ההערה</i> המשך';
-    final processed = TextRendererService.processText(
-      rawText,
-      const RenderSettings(fontSize: 20),
-    );
-    final spans = buildInlineHtmlSpans(
-      processed,
-      const TextStyle(fontSize: 20),
-    );
-    final flattened = _flattenText(spans);
-
-    expect(flattened, contains('טקסט'));
-    expect(flattened, contains('א'));
-    expect(flattened, contains('המשך'));
-    expect(flattened, isNot(contains('תוכן ההערה')));
-  });
-
-  testWidgets('מצב טקסט רציף לא מיישר מקטע קצר לשני הצדדים', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 500,
-            child: ContinuousReadingParagraph(
-              lines: [
-                ContinuousReadingParagraphLine(
-                  lineIndex: 0,
-                  text: 'מקטע קצר',
-                  style: TextStyle(fontSize: 20),
-                ),
-              ],
-              baseStyle: TextStyle(fontSize: 20),
-              onLineTap: _noopLineTap,
-            ),
-          ),
-        ),
-      ),
-    );
-
-    final richText = tester.widget<RichText>(find.byType(RichText));
-
-    expect(richText.textAlign, TextAlign.start);
-  });
-
-  testWidgets('מצב טקסט רציף משאיר justify למקטע שנשבר לכמה שורות',
-      (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 120,
-            child: ContinuousReadingParagraph(
-              lines: [
-                ContinuousReadingParagraphLine(
-                  lineIndex: 0,
-                  text: 'זהו מקטע ארוך מספיק כדי להישבר לכמה שורות בתצוגה צרה',
-                  style: TextStyle(fontSize: 20),
-                ),
-              ],
-              baseStyle: TextStyle(fontSize: 20),
-              onLineTap: _noopLineTap,
-            ),
-          ),
-        ),
-      ),
-    );
-
-    final richText = tester.widget<RichText>(find.byType(RichText));
-
-    expect(richText.textAlign, TextAlign.justify);
-  });
-}
-
-void _noopLineTap(int lineIndex) {}
-
-String _flattenText(List<InlineSpan> spans) {
-  final buffer = StringBuffer();
-  for (final span in _flattenTextSpans(spans)) {
-    buffer.write(span.text);
-  }
-  return buffer.toString();
-}
-
-List<TextSpan> _flattenTextSpans(List<InlineSpan> spans) {
-  final result = <TextSpan>[];
-  void visit(InlineSpan span) {
-    if (span is! TextSpan) return;
-    result.add(span);
-    span.children?.forEach(visit);
-  }
-
-  spans.forEach(visit);
-  return result;
 }
 
 Key? _findSelectionAreaKey(WidgetTester tester) {

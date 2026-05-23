@@ -39,10 +39,6 @@ import 'package:otzaria/utils/text/word_at_position.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
-import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
-import 'package:otzaria/text_book/utils/reading_segments.dart';
-import 'package:otzaria/utils/text/html_link_handler.dart';
-import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 
 /// מחזירה האם אירוע המקלדת צריך להניע גלילה רציפה בצורת הדף.
@@ -155,23 +151,6 @@ int resolvePageShapeNavigationBaseIndex({
   return selectedIndex ?? 0;
 }
 
-/// מחזירה את שורת המקור שיש לשמר בעת מעבר בין תצוגת שורות לתצוגה רציפה.
-///
-/// השורה הראשונה שנראית על המסך היא העוגן המדויק ביותר; אם אין מידע גלילה
-/// זמין, משתמשים בשורה המסומנת כגיבוי.
-int? resolveDisplayModeRestoreLineIndex({
-  required List<int> visibleIndices,
-  required int? selectedIndex,
-  required int contentLength,
-}) {
-  final targetIndex =
-      visibleIndices.isNotEmpty ? visibleIndices.first : selectedIndex;
-  if (targetIndex == null || targetIndex < 0 || targetIndex >= contentLength) {
-    return null;
-  }
-  return targetIndex;
-}
-
 /// תצוגת טקסט פשוטה - משמשת גם לטקסט המרכזי וגם למפרשים
 class SimpleTextViewer extends StatefulWidget {
   final List<String> content;
@@ -231,11 +210,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   String? _savedSelectedText;
   int? _savedSelectedIndex;
   int _initialScrollRestoreAttempts = 0;
-  bool? _lastContinuousReadingMode;
-  int? _pendingDisplayModeRestoreLineIndex;
-  List<String>? _cachedReadingSegmentContent;
-  bool? _cachedReadingSegmentContinuous;
-  List<ReadingSegment> _cachedReadingSegments = const [];
   final Map<String, Future<bool>> _removeNikudCache = {};
   final DictionaryLookupRepository _dictionaryLookupRepository =
       DictionaryLookupRepository.instance;
@@ -516,60 +490,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       return false;
     }
 
-    final settingsState = context.read<SettingsBloc>().state;
-    _scrollController.jumpTo(
-      index: _segmentIndexForSourceLine(settingsState, targetIndex),
-    );
+    _scrollController.jumpTo(index: targetIndex);
     return true;
-  }
-
-  void _preserveScrollAfterDisplayModeChange({
-    required TextBookLoaded state,
-    required SettingsState settingsState,
-    required bool continuous,
-  }) {
-    final previousContinuous = _lastContinuousReadingMode;
-    _lastContinuousReadingMode = continuous;
-
-    if (!widget.isMainText ||
-        !widget.useInternalScroll ||
-        previousContinuous == null ||
-        previousContinuous == continuous) {
-      return;
-    }
-
-    final targetIndex = resolveDisplayModeRestoreLineIndex(
-      visibleIndices: state.visibleIndices,
-      selectedIndex: state.selectedIndex,
-      contentLength: widget.content.length,
-    );
-    if (targetIndex == null) {
-      return;
-    }
-
-    _pendingDisplayModeRestoreLineIndex = targetIndex;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted ||
-          _pendingDisplayModeRestoreLineIndex != targetIndex ||
-          !_scrollController.isAttached) {
-        return;
-      }
-
-      await scrollToSourceLine(
-        scrollController: _scrollController,
-        scrollOffsetController: state.scrollOffsetController,
-        positionsListener: _positionsListener,
-        segments: _readingSegments(settingsState),
-        lineIndex: targetIndex,
-        viewportExtent:
-            context.size?.height ?? MediaQuery.sizeOf(context).height,
-        duration: Duration.zero,
-      );
-
-      if (mounted && _pendingDisplayModeRestoreLineIndex == targetIndex) {
-        _pendingDisplayModeRestoreLineIndex = null;
-      }
-    });
   }
 
   Future<bool> _resolveSelectionRemoveNikud(
@@ -615,50 +537,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     return '$title|$defaultRemoveNikud|$removeNikudFromTanach|$categoryId|$fileType';
   }
 
-  bool _isContinuousReadingMode(SettingsState settingsState) {
-    return widget.isMainText && settingsState.continuousReadingMode;
-  }
-
-  List<ReadingSegment> _readingSegments(SettingsState settingsState) {
-    final continuous = _isContinuousReadingMode(settingsState);
-    if (!identical(_cachedReadingSegmentContent, widget.content) ||
-        _cachedReadingSegmentContinuous != continuous) {
-      _cachedReadingSegmentContent = widget.content;
-      _cachedReadingSegmentContinuous = continuous;
-      _cachedReadingSegments = buildReadingSegments(
-        widget.content,
-        continuous: continuous,
-      );
-    }
-    return _cachedReadingSegments;
-  }
-
-  int _segmentIndexForSourceLine(
-    SettingsState settingsState,
-    int lineIndex,
-  ) {
-    return segmentIndexForLine(_readingSegments(settingsState), lineIndex);
-  }
-
   List<int> _sourceIndicesForVisiblePositions(
-    SettingsState settingsState,
     Iterable<ItemPosition> itemPositions,
   ) {
-    final positions = itemPositions.toList();
-    if (!_isContinuousReadingMode(settingsState)) {
-      return positions.map((position) => position.index).toSet().toList()
-        ..sort();
-    }
-    return sourceLineIndicesForSegmentViewports(
-      _readingSegments(settingsState),
-      positions.map(
-        (position) => ReadingSegmentViewport(
-          segmentIndex: position.index,
-          leadingEdge: position.itemLeadingEdge,
-          trailingEdge: position.itemTrailingEdge,
-        ),
-      ),
-    );
+    return itemPositions.map((position) => position.index).toSet().toList()
+      ..sort();
   }
 
   RenderSettings _selectionRenderSettings({
@@ -685,14 +568,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   }
 
   List<int> _selectionSourceIndices() {
-    final settingsState = context.read<SettingsBloc>().state;
     final visiblePositions = _positionsListener.itemPositions.value.toList();
 
     if (visiblePositions.isNotEmpty) {
-      return _sourceIndicesForVisiblePositions(
-        settingsState,
-        visiblePositions,
-      );
+      return _sourceIndicesForVisiblePositions(visiblePositions);
     }
 
     return List<int>.generate(widget.content.length, (index) => index);
@@ -791,9 +670,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       return false;
     }
 
-    final settingsState = context.read<SettingsBloc>().state;
     final liveVisibleIndices = _sourceIndicesForVisiblePositions(
-      settingsState,
       _positionsListener.itemPositions.value,
     );
     final currentIndex = resolvePageShapeNavigationBaseIndex(
@@ -810,7 +687,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       context.read<TextBookBloc>().add(UpdateSelectedIndex(nextIndex));
       if (_scrollController.isAttached) {
         _scrollController.scrollTo(
-          index: _segmentIndexForSourceLine(settingsState, nextIndex),
+          index: nextIndex,
           duration: const Duration(milliseconds: 200),
           alignment: 0.5,
         );
@@ -827,7 +704,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       context.read<TextBookBloc>().add(UpdateSelectedIndex(prevIndex));
       if (_scrollController.isAttached) {
         _scrollController.scrollTo(
-          index: _segmentIndexForSourceLine(settingsState, prevIndex),
+          index: prevIndex,
           duration: const Duration(milliseconds: 200),
           alignment: 0.5,
         );
@@ -841,7 +718,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       context.read<TextBookBloc>().add(UpdateSelectedIndex(nextIndex));
       if (_scrollController.isAttached) {
         _scrollController.scrollTo(
-          index: _segmentIndexForSourceLine(settingsState, nextIndex),
+          index: nextIndex,
           duration: const Duration(milliseconds: 300),
           alignment: 0.5,
         );
@@ -855,7 +732,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       context.read<TextBookBloc>().add(UpdateSelectedIndex(prevIndex));
       if (_scrollController.isAttached) {
         _scrollController.scrollTo(
-          index: _segmentIndexForSourceLine(settingsState, prevIndex),
+          index: prevIndex,
           duration: const Duration(milliseconds: 300),
           alignment: 0.5,
         );
@@ -868,7 +745,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       context.read<TextBookBloc>().add(const UpdateSelectedIndex(0));
       if (_scrollController.isAttached) {
         _scrollController.scrollTo(
-          index: _segmentIndexForSourceLine(settingsState, 0),
+          index: 0,
           duration: const Duration(milliseconds: 300),
         );
       }
@@ -881,7 +758,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       context.read<TextBookBloc>().add(UpdateSelectedIndex(lastIndex));
       if (_scrollController.isAttached) {
         _scrollController.scrollTo(
-          index: _segmentIndexForSourceLine(settingsState, lastIndex),
+          index: lastIndex,
           duration: const Duration(milliseconds: 300),
         );
       }
@@ -1328,15 +1205,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                       noteMap.putIfAbsent(line, () => []).add(note);
                     }
                   }
-                  final settingsState = context.watch<SettingsBloc>().state;
-                  final readingSegments = _readingSegments(settingsState);
-                  final continuous = _isContinuousReadingMode(settingsState);
-                  _preserveScrollAfterDisplayModeChange(
-                    state: state,
-                    settingsState: settingsState,
-                    continuous: continuous,
-                  );
-
                   return SelectionArea(
                     key: ValueKey(
                       '${widget.isMainText ? 'main' : 'commentary'}_selection_$_selectionRevision',
@@ -1419,29 +1287,25 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                               ? ScrollablePositionedList.builder(
                                   itemScrollController: _scrollController,
                                   itemPositionsListener: _positionsListener,
-                                  itemCount: readingSegments.length,
+                                  itemCount: widget.content.length,
                                   padding: const EdgeInsets.all(4),
                                   itemBuilder: (context, index) => _buildLine(
                                     index,
                                     state,
                                     context,
                                     noteMap,
-                                    readingSegments[index],
-                                    continuous,
                                   ),
                                 )
                               : ListView.builder(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: readingSegments.length,
+                                  itemCount: widget.content.length,
                                   padding: const EdgeInsets.all(4),
                                   itemBuilder: (context, index) => _buildLine(
                                     index,
                                     state,
                                     context,
                                     noteMap,
-                                    readingSegments[index],
-                                    continuous,
                                   ),
                                 ),
                         ),
@@ -1462,16 +1326,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     TextBookLoaded state,
     BuildContext context,
     Map<int, List<PersonalNote>> noteMap,
-    ReadingSegment segment,
-    bool continuous,
   ) {
-    final primaryLineIndex = segment.startLineIndex;
-    final isSelected = widget.isMainText &&
-        state.selectedIndex != null &&
-        segment.containsLine(state.selectedIndex!);
-    final isHighlighted = widget.isMainText &&
-        state.highlightedLine != null &&
-        segment.containsLine(state.highlightedLine!);
+    final primaryLineIndex = index;
+    final isSelected =
+        widget.isMainText && state.selectedIndex == primaryLineIndex;
+    final isHighlighted =
+        widget.isMainText && state.highlightedLine == primaryLineIndex;
     // נתפס בזמן BUILD (כמו selectedText ב-ValueListenableBuilder של Combined),
     // כך שגם אם onSelectionChanged(null) ירוץ לפני menuBuilder, ה-closure
     // כבר סגור על הערך הנכון מהבנייה האחרונה.
@@ -1483,11 +1343,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     final theme = Theme.of(context);
     final backgroundColor = () {
-      if (!continuous && isHighlighted) {
+      if (isHighlighted) {
         return theme.colorScheme.secondaryContainer
             .withAlpha((0.4 * 255).round());
       }
-      if (isCommentaryHighlighted || (!continuous && isSelected)) {
+      if (isCommentaryHighlighted || isSelected) {
         // צבע הדגשה למפרש קשור - כמו השורה הנבחרת
         return theme.colorScheme.primary.withAlpha((0.08 * 255).round());
       }
@@ -1499,7 +1359,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onTap: widget.isMainText && !(continuous && !segment.isHeader)
+      onTap: widget.isMainText
           ? () {
               _requestKeyboardFocus('line-tap-$primaryLineIndex');
               // איפוס הטקסט השמור
@@ -1540,14 +1400,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       },
       child: AppContextMenuRegion(
         menuBuilder: (menuCtx, tapPos) {
-          final contextMenuIndex = continuous && !segment.isHeader
-              ? _savedSelectedIndex
-              : primaryLineIndex;
           return _buildContextMenu(
             state,
-            contextMenuIndex != null && segment.containsLine(contextMenuIndex)
-                ? contextMenuIndex
-                : primaryLineIndex,
+            primaryLineIndex,
             menuCtx,
             tapPos,
             savedTextAtBuild,
@@ -1562,14 +1417,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
           child: BlocBuilder<SettingsBloc, SettingsState>(
             builder: (context, settingsState) {
-              if (continuous && !segment.isHeader) {
-                return _buildContinuousSegmentContent(
-                  segment: segment,
-                  state: state,
-                  settingsState: settingsState,
-                );
-              }
-
               final data = widget.content[primaryLineIndex];
               final targetTitle =
                   widget.isMainText ? state.book.title : widget.bookTitle;
@@ -1710,135 +1557,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             },
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildContinuousSegmentContent({
-    required ReadingSegment segment,
-    required TextBookLoaded state,
-    required SettingsState settingsState,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final baseStyle = TextStyle(
-      fontSize: widget.fontSize,
-      fontFamily: widget.fontFamily ?? settingsState.fontFamily,
-      height: settingsState.lineHeight,
-      color: colorScheme.onSurface,
-    );
-    final paragraphLines = _buildContinuousParagraphLines(
-      segment: segment,
-      state: state,
-      settingsState: settingsState,
-      baseTextStyle: baseStyle,
-    );
-
-    return ContinuousReadingParagraph(
-      lines: paragraphLines,
-      baseStyle: baseStyle,
-      onTapUrl: (url) => HtmlLinkHandler.handleLink(
-        context,
-        url,
-        (tab) => widget.openBookCallback(tab),
-      ),
-      onLineTap: (lineIndex) {
-        final isLineSelected = state.selectedIndex == lineIndex;
-        _requestKeyboardFocus('line-tap-$lineIndex');
-        setState(() {
-          _savedSelectedText = null;
-          _savedSelectedIndex = lineIndex;
-        });
-        if (isLineSelected) {
-          context.read<TextBookBloc>().add(const UpdateSelectedIndex(null));
-        } else {
-          context.read<TextBookBloc>().add(UpdateSelectedIndex(lineIndex));
-        }
-      },
-      onLineSecondaryTap: (lineIndex) {
-        setState(() {
-          _savedSelectedIndex = lineIndex;
-        });
-      },
-    );
-  }
-
-  List<ContinuousReadingParagraphLine> _buildContinuousParagraphLines({
-    required ReadingSegment segment,
-    required TextBookLoaded state,
-    required SettingsState settingsState,
-    required TextStyle baseTextStyle,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final lines = <ContinuousReadingParagraphLine>[];
-    for (final lineIndex in segment.sourceLineIndices) {
-      if (lineIndex < 0 || lineIndex >= widget.content.length) {
-        continue;
-      }
-      final backgroundColor = state.highlightedLine == lineIndex
-          ? colorScheme.secondaryContainer.withAlpha((0.4 * 255).round())
-          : state.selectedIndex == lineIndex
-              ? colorScheme.primary.withAlpha((0.08 * 255).round())
-              : null;
-      final style = backgroundColor == null
-          ? baseTextStyle
-          : baseTextStyle.copyWith(backgroundColor: backgroundColor);
-      final htmlText = _continuousLineHtml(
-        widget.content[lineIndex],
-        lineIndex: lineIndex,
-        state: state,
-        settingsState: settingsState,
-      );
-
-      lines.add(
-        ContinuousReadingParagraphLine(
-          lineIndex: lineIndex,
-          text: utils.stripHtmlIfNeeded(htmlText).trim(),
-          htmlText: htmlText,
-          style: style,
-        ),
-      );
-    }
-
-    return lines;
-  }
-
-  String _continuousLineHtml(
-    String rawText, {
-    required int lineIndex,
-    required TextBookLoaded state,
-    required SettingsState settingsState,
-  }) {
-    final isPinpointTarget = widget.isMainText &&
-        state.pinpointHighlightIndex == lineIndex &&
-        state.pinpointHighlightText != null &&
-        state.pinpointHighlightText!.isNotEmpty;
-    final hasPinpoint =
-        widget.isMainText && state.pinpointHighlightIndex != null;
-    final searchText = isPinpointTarget
-        ? state.pinpointHighlightText!
-        : (hasPinpoint ? '' : (widget.isMainText ? state.searchText : ''));
-    final useStateSearchSettings = widget.isMainText && !hasPinpoint;
-    final effectiveSearchMode =
-        useStateSearchSettings ? state.searchMode : SearchMode.exact;
-
-    return TextRendererService.processText(
-      rawText.trim(),
-      RenderSettings(
-        removeNikud: state.removeNikud,
-        removePunctuation: state.removePunctuation,
-        removeTeamim: !settingsState.showTeamim,
-        replaceHolyNames: settingsState.replaceHolyNames,
-        searchText: searchText,
-        searchOptions: useStateSearchSettings ? state.searchOptions : const {},
-        alternativeWords:
-            useStateSearchSettings ? state.alternativeWords : const {},
-        spacingValues: useStateSearchSettings ? state.spacingValues : const {},
-        isFuzzySearch: effectiveSearchMode == SearchMode.fuzzy,
-        searchMode: effectiveSearchMode,
-        searchDistance: useStateSearchSettings ? state.searchDistance : 0,
-        fontSize: widget.fontSize,
-        fontFamily: widget.fontFamily ?? settingsState.fontFamily,
-        lineHeight: settingsState.lineHeight,
       ),
     );
   }

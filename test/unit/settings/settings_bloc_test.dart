@@ -64,7 +64,6 @@ void main() {
         'autoSyncCatalogs': true,
         'softwareAndBookUpdatesEnabled': true,
         'personalNotesCollapsedByDefault': true,
-        'continuousReadingMode': true,
       };
 
       blocTest<SettingsBloc, SettingsState>(
@@ -128,8 +127,6 @@ void main() {
                     true,
             protectedModeEnabled:
                 mockSettings['protectedModeEnabled'] as bool? ?? false,
-            continuousReadingMode:
-                mockSettings['continuousReadingMode'] as bool? ?? false,
           ),
         ],
         verify: (_) {
@@ -323,18 +320,5 @@ void main() {
       );
     });
 
-    group('UpdateContinuousReadingMode', () {
-      blocTest<SettingsBloc, SettingsState>(
-        'emits updated state when UpdateContinuousReadingMode is added',
-        build: () => settingsBloc,
-        act: (bloc) => bloc.add(const UpdateContinuousReadingMode(true)),
-        expect: () => [
-          settingsBloc.state.copyWith(continuousReadingMode: true),
-        ],
-        verify: (_) {
-          verify(mockRepository.updateContinuousReadingMode(true)).called(1);
-        },
-      );
-    });
   });
 }
