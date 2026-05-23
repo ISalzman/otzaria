@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:kosher_dart/kosher_dart.dart';
@@ -123,6 +125,51 @@ Map<String, dynamic> buildThemePayload(BuildContext context) {
       'commentatorsFontSize': commentatorsFontSize,
     },
   };
+}
+
+// ===================================================================
+// Helper: build CSS @font-face block with bundled fonts as data: URLs
+// so the plugin WebView can resolve names like 'FrankRuhlCLM'.
+// בלי זה — שמות הגופנים שאוצריא שולחת לתוסף מצביעים על font assets
+// של Flutter שאינם זמינים ל-WebView, וב-macOS ה-fallback של המערכת
+// לעברית נראה כגופן דקורטיבי (ראה תקלת תצוגת תוספים ב-macOS).
+// ===================================================================
+final Map<String, String> _fontFaceCache = {};
+
+Future<String> _loadFontFaceCss(String fontFamily) async {
+  if (fontFamily.isEmpty) return '';
+  final cached = _fontFaceCache[fontFamily];
+  if (cached != null) return cached;
+  final assetPath = AppFonts.fontPaths[fontFamily];
+  if (assetPath == null) return '';
+  try {
+    final bytes = await rootBundle.load(assetPath);
+    final b64 = base64Encode(bytes.buffer.asUint8List());
+    final css =
+        "@font-face{font-family:'$fontFamily';src:url(data:font/ttf;base64,$b64) format('truetype');font-display:block;}";
+    _fontFaceCache[fontFamily] = css;
+    return css;
+  } catch (_) {
+    return '';
+  }
+}
+
+/// בונה בלוק CSS עם `@font-face` עבור הגופנים המובנים שנבחרו בהגדרות,
+/// כך שתוספים שמשתמשים בשמות הגופנים שמגיעים ב-theme יוכלו להציגם.
+Future<String> buildPluginFontFaceCss() async {
+  final fontFamily =
+      Settings.getValue<String>(SettingsRepository.keyFontFamily) ??
+          AppFonts.defaultFont;
+  final commentatorsFontFamily =
+      Settings.getValue<String>(SettingsRepository.keyCommentatorsFontFamily) ??
+          AppFonts.defaultCommentatorsFont;
+  final families = <String>{fontFamily, commentatorsFontFamily};
+  final parts = <String>[];
+  for (final family in families) {
+    final css = await _loadFontFaceCss(family);
+    if (css.isNotEmpty) parts.add(css);
+  }
+  return parts.join('\n');
 }
 
 class PluginBridgeDependencies {
