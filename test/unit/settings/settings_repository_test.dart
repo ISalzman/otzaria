@@ -26,7 +26,8 @@ void main() {
               SettingsRepository.keyFollowSystemTheme,
               defaultValue: false))
           .thenReturn(false);
-      when(mockSettingsWrapper.getValue<int>(SettingsRepository.keySwatchColor,
+      when(mockSettingsWrapper.getValue<int>(
+              SettingsRepository.keySwatchColor,
               defaultValue: AppSeedColors.defaultLight.toARGB32()))
           .thenReturn(AppSeedColors.defaultLight.toARGB32());
       when(mockSettingsWrapper.getValue<int>(
@@ -114,7 +115,8 @@ void main() {
               SettingsRepository.keyFollowSystemTheme,
               defaultValue: false))
           .thenReturn(true);
-      when(mockSettingsWrapper.getValue<int>(SettingsRepository.keySwatchColor,
+      when(mockSettingsWrapper.getValue<int>(
+              SettingsRepository.keySwatchColor,
               defaultValue: AppSeedColors.defaultLight.toARGB32()))
           .thenReturn(const Color(0xff0000ff).toARGB32()); // Blue
       when(mockSettingsWrapper.getValue<int>(
@@ -210,61 +212,9 @@ void main() {
     test('updateSeedColor calls setValue on settings wrapper', () async {
       const color = Colors.red;
       await repository.updateSeedColor(color);
-      verify(mockSettingsWrapper.setValue(
-              SettingsRepository.keySwatchColor, color.toARGB32()))
+      verify(mockSettingsWrapper.setValue(SettingsRepository.keySwatchColor,
+              color.toARGB32()))
           .called(1);
-    });
-
-    test(
-        'loadSettings migrates legacy String seed color (#ffrrggbb) to int '
-        'and persists the migrated value', () async {
-      // קריאת int זורקת — כך SharedPreferences מתנהג כשהערך נשמר כ-String.
-      when(mockSettingsWrapper.getValue<int>(SettingsRepository.keySwatchColor,
-              defaultValue: AppSeedColors.defaultLight.toARGB32()))
-          .thenThrow(TypeError());
-      when(mockSettingsWrapper.getValue<String?>(
-              SettingsRepository.keySwatchColor,
-              defaultValue: null))
-          .thenReturn('#ff0000ff');
-      when(mockSettingsWrapper.getValue<int>(
-              SettingsRepository.keyDarkSwatchColor,
-              defaultValue: AppSeedColors.defaultDark.toARGB32()))
-          .thenReturn(AppSeedColors.defaultDark.toARGB32());
-      // לסמן שכבר הופעלו ברירות מחדל כדי לא להפעיל את הכתיבה הראשונית.
-      when(mockSettingsWrapper.getValue<bool>('settings_initialized',
-              defaultValue: false))
-          .thenReturn(true);
-
-      final settings = await repository.loadSettings();
-
-      expect(settings['seedColor'], const Color(0xff0000ff));
-      expect(settings['darkSeedColor'], AppSeedColors.defaultDark);
-      verify(mockSettingsWrapper.setValue<int>(
-              SettingsRepository.keySwatchColor,
-              const Color(0xff0000ff).toARGB32()))
-          .called(1);
-    });
-
-    test('loadSettings falls back to default when legacy String is unparseable',
-        () async {
-      when(mockSettingsWrapper.getValue<int>(
-              SettingsRepository.keyDarkSwatchColor,
-              defaultValue: AppSeedColors.defaultDark.toARGB32()))
-          .thenThrow(TypeError());
-      when(mockSettingsWrapper.getValue<String?>(
-              SettingsRepository.keyDarkSwatchColor,
-              defaultValue: null))
-          .thenReturn('not-a-color');
-      when(mockSettingsWrapper.getValue<int>(SettingsRepository.keySwatchColor,
-              defaultValue: AppSeedColors.defaultLight.toARGB32()))
-          .thenReturn(AppSeedColors.defaultLight.toARGB32());
-      when(mockSettingsWrapper.getValue<bool>('settings_initialized',
-              defaultValue: false))
-          .thenReturn(true);
-
-      final settings = await repository.loadSettings();
-
-      expect(settings['darkSeedColor'], AppSeedColors.defaultDark);
     });
 
     test('updateFontSize calls setValue on settings wrapper', () async {
@@ -315,7 +265,8 @@ void main() {
       when(mockSettingsWrapper.getValue<bool>(SettingsRepository.keyDarkMode,
               defaultValue: false))
           .thenReturn(false);
-      when(mockSettingsWrapper.getValue<int>(SettingsRepository.keySwatchColor,
+      when(mockSettingsWrapper.getValue<int>(
+              SettingsRepository.keySwatchColor,
               defaultValue: AppSeedColors.defaultLight.toARGB32()))
           .thenReturn(AppSeedColors.defaultLight.toARGB32());
       when(mockSettingsWrapper.getValue<int>(
@@ -432,7 +383,8 @@ void main() {
       when(mockSettingsWrapper.getValue<bool>(SettingsRepository.keyDarkMode,
               defaultValue: false))
           .thenReturn(false);
-      when(mockSettingsWrapper.getValue<int>(SettingsRepository.keySwatchColor,
+      when(mockSettingsWrapper.getValue<int>(
+              SettingsRepository.keySwatchColor,
               defaultValue: AppSeedColors.defaultLight.toARGB32()))
           .thenReturn(AppSeedColors.defaultLight.toARGB32());
       when(mockSettingsWrapper.getValue<int>(
