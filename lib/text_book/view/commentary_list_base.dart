@@ -77,6 +77,9 @@ class CommentaryListBase extends StatefulWidget {
   /// כשהדגל מופעל, ישתמש ב-availableCommentators (כל מפרשי הספר) ולא ב-activeCommentators
   final bool useAvailableCommentators;
 
+  /// קולבק לפתיחת המפרשים בכרטיסייה חדשה. כש-null הלחצן לא יוצג.
+  final VoidCallback? onOpenInNewTab;
+
   const CommentaryListBase({
     super.key,
     required this.openBookCallback,
@@ -100,6 +103,7 @@ class CommentaryListBase extends StatefulWidget {
     this.externalSearchResultsByPathNotifier,
     this.externalSearchSnippetsNotifier,
     this.useAvailableCommentators = false,
+    this.onOpenInNewTab,
   });
 
   @override
@@ -146,6 +150,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   final FocusNode _searchFocusNode = FocusNode();
   int _lastSeenFilterRequest = 0;
   bool _snippetsRebuildScheduled = false;
+  // האם להציג את שדה החיפוש (true) או את שורת ארבעת הלחצנים (false)
+  bool _showSearchField = false;
 
   String _getLinkKey(Link link) =>
       '${link.index1}_${link.path2}_${link.index2}';
@@ -270,6 +276,227 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     }
   }
 
+  void _handleSearchFocusChange() {
+    if (!mounted) return;
+    // אם איבדנו פוקוס והשדה ריק — חזור למצב לחצנים
+    if (!_searchFocusNode.hasFocus &&
+        _showSearchField &&
+        _searchController.text.isEmpty) {
+      setState(() => _showSearchField = false);
+    }
+  }
+
+  void _openInlineSearch() {
+    setState(() => _showSearchField = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _searchFocusNode.requestFocus();
+    });
+  }
+
+  void _clearSearchAndCloseField() {
+    _searchController.clear();
+    _searchQueryNotifier.value = '';
+    _currentSearchIndexNotifier.value = 0;
+    _totalSearchResultsNotifier.value = 0;
+    _searchResultsPerLink.clear();
+    _pendingCounts.clear();
+    setState(() => _showSearchField = false);
+  }
+
+  Widget _buildClosePaneButton() {
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: IconButton(
+        iconSize: 18,
+        padding: const EdgeInsets.all(8),
+        constraints: const BoxConstraints(
+          minWidth: 36,
+          minHeight: 36,
+        ),
+        icon: const Icon(FluentIcons.dismiss_24_regular),
+        onPressed: widget.onClosePane,
+      ),
+    );
+  }
+
+  Widget _buildButtonsRow(List<String> selectedCommentators) {
+    const double gap = 16;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // 1. בחירת מפרשים
+        CommentatorsFilterButton(
+          isActive: false,
+          onPressed: _openCommentatorsFilter,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+          ),
+          iconSize: 20,
+        ),
+        // 2. הרחב/כווץ הכל — רק כשיש מפרשים נבחרים (לוגיקה מקורית)
+        if (selectedCommentators.isNotEmpty) ...[
+          const SizedBox(width: gap),
+          IconButton(
+            icon: Icon(
+              _allExpanded
+                  ? FluentIcons.arrow_collapse_all_24_regular
+                  : FluentIcons.arrow_expand_all_24_regular,
+            ),
+            tooltip: _allExpanded
+                ? 'כווץ את כל המפרשים'
+                : 'הרחב את כל המפרשים',
+            onPressed: () {
+              setState(() {
+                _allExpanded = !_allExpanded;
+                for (var key in _expansionStates.keys) {
+                  _expansionStates[key] = _allExpanded;
+                }
+              });
+            },
+          ),
+        ],
+        // 3. פתיחה בכרטיסייה חדשה
+        if (widget.onOpenInNewTab != null) ...[
+          const SizedBox(width: gap),
+          IconButton(
+            icon: const Icon(FluentIcons.open_24_regular),
+            tooltip: 'פתח כרטסיית מפרשים',
+            onPressed: widget.onOpenInNewTab,
+          ),
+        ],
+        const SizedBox(width: gap),
+        // 4. הפעלת שדה החיפוש
+        IconButton(
+          icon: const Icon(FluentIcons.search_24_regular),
+          tooltip: 'חיפוש',
+          onPressed: _openInlineSearch,
+        ),
+        // לחצן סגירת הפאנל — נשאר רק אם הקולבק קיים
+        if (widget.onClosePane != null) ...[
+          const SizedBox(width: gap),
+          _buildClosePaneButton(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSearchFieldRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: ValueListenableBuilder<String>(
+            valueListenable: _searchQueryNotifier,
+            builder: (context, query, _) {
+              return ValueListenableBuilder<int>(
+                valueListenable: _totalSearchResultsNotifier,
+                builder: (context, total, __) {
+                  return ValueListenableBuilder<int>(
+                    valueListenable: _currentSearchIndexNotifier,
+                    builder: (context, currentIndex, ___) {
+                      return RtlTextField(
+                        focusNode: _searchFocusNode,
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'חפש בתוך המפרשים המוצגים...',
+                          prefixIcon:
+                              const Icon(FluentIcons.search_24_regular),
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (query.isNotEmpty && total > 1) ...[
+                                Text(
+                                  '${currentIndex + 1}/$total',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall,
+                                ),
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  icon: const Icon(
+                                      FluentIcons.chevron_up_24_regular),
+                                  iconSize: 20,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 24,
+                                    minHeight: 24,
+                                  ),
+                                  onPressed: currentIndex > 0
+                                      ? () {
+                                          _currentSearchIndexNotifier.value =
+                                              currentIndex - 1;
+                                          _scrollToSearchResult();
+                                        }
+                                      : null,
+                                ),
+                                IconButton(
+                                  icon: const Icon(FluentIcons
+                                      .chevron_down_24_regular),
+                                  iconSize: 20,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 24,
+                                    minHeight: 24,
+                                  ),
+                                  onPressed: currentIndex < total - 1
+                                      ? () {
+                                          _currentSearchIndexNotifier.value =
+                                              currentIndex + 1;
+                                          _scrollToSearchResult();
+                                        }
+                                      : null,
+                                ),
+                              ],
+                              IconButton(
+                                icon: const Icon(
+                                    FluentIcons.dismiss_24_regular),
+                                tooltip: 'סגור חיפוש',
+                                onPressed: _clearSearchAndCloseField,
+                              ),
+                            ],
+                          ),
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8.0),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          if (_searchQueryNotifier.value != value) {
+                            _searchQueryNotifier.value = value;
+                            _currentSearchIndexNotifier.value = 0;
+                            _totalSearchResultsNotifier.value = 0;
+                            _searchResultsPerLink.clear();
+                            _pendingCounts.clear();
+                          }
+                        },
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        if (widget.onClosePane != null) ...[
+          const SizedBox(width: 8),
+          _buildClosePaneButton(),
+        ],
+      ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -280,6 +507,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     _lastSeenFilterRequest = widget.openFilterRequest?.value ?? 0;
     widget.openFilterNotifier?.addListener(_onOpenFilterRequest);
     widget.closeFilterNotifier?.addListener(_onCloseFilterRequest);
+    _searchFocusNode.addListener(_handleSearchFocusChange);
     // חיפוש חיצוני
     widget.externalSearchController?.addListener(_onExternalSearchChanged);
     if (widget.externalTotalResultsNotifier != null) {
@@ -396,6 +624,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     widget.openFilterNotifier?.removeListener(_onOpenFilterRequest);
     widget.closeFilterNotifier?.removeListener(_onCloseFilterRequest);
     widget.externalSearchController?.removeListener(_onExternalSearchChanged);
+    _searchFocusNode.removeListener(_handleSearchFocusChange);
     _searchController.dispose();
     _savedSelectedText.dispose();
     _lastSelectedLink.dispose();
@@ -1079,191 +1308,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
               children: [
                 Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    children: [
-                      // כפתור בחירת מפרשים - בצד ימין
-                      CommentatorsFilterButton(
-                        isActive: false,
-                        onPressed: _openCommentatorsFilter,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 40,
-                          minHeight: 40,
-                        ),
-                        iconSize: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ValueListenableBuilder<String>(
-                          valueListenable: _searchQueryNotifier,
-                          builder: (context, query, _) {
-                            return ValueListenableBuilder<int>(
-                              valueListenable: _totalSearchResultsNotifier,
-                              builder: (context, total, __) {
-                                return ValueListenableBuilder<int>(
-                                  valueListenable: _currentSearchIndexNotifier,
-                                  builder: (context, currentIndex, ___) {
-                                    return RtlTextField(
-                                      focusNode: _searchFocusNode,
-                                      controller: _searchController,
-                                      decoration: InputDecoration(
-                                        hintText: 'חפש בתוך המפרשים המוצגים...',
-                                        prefixIcon: const Icon(
-                                            FluentIcons.search_24_regular),
-                                        suffixIcon: query.isNotEmpty
-                                            ? Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  if (total > 1) ...[
-                                                    Text(
-                                                      '${currentIndex + 1}/$total',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodySmall,
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    IconButton(
-                                                      icon: const Icon(FluentIcons
-                                                          .chevron_up_24_regular),
-                                                      iconSize: 20,
-                                                      padding: EdgeInsets.zero,
-                                                      constraints:
-                                                          const BoxConstraints(
-                                                        minWidth: 24,
-                                                        minHeight: 24,
-                                                      ),
-                                                      onPressed:
-                                                          currentIndex > 0
-                                                              ? () {
-                                                                  _currentSearchIndexNotifier
-                                                                          .value =
-                                                                      currentIndex -
-                                                                          1;
-                                                                  _scrollToSearchResult();
-                                                                }
-                                                              : null,
-                                                    ),
-                                                    IconButton(
-                                                      icon: const Icon(FluentIcons
-                                                          .chevron_down_24_regular),
-                                                      iconSize: 20,
-                                                      padding: EdgeInsets.zero,
-                                                      constraints:
-                                                          const BoxConstraints(
-                                                        minWidth: 24,
-                                                        minHeight: 24,
-                                                      ),
-                                                      onPressed: currentIndex <
-                                                              total - 1
-                                                          ? () {
-                                                              _currentSearchIndexNotifier
-                                                                      .value =
-                                                                  currentIndex +
-                                                                      1;
-                                                              _scrollToSearchResult();
-                                                            }
-                                                          : null,
-                                                    ),
-                                                  ],
-                                                  IconButton(
-                                                    icon: const Icon(FluentIcons
-                                                        .dismiss_24_regular),
-                                                    onPressed: () {
-                                                      _searchController.clear();
-                                                      _searchQueryNotifier
-                                                          .value = '';
-                                                      _currentSearchIndexNotifier
-                                                          .value = 0;
-                                                      _totalSearchResultsNotifier
-                                                          .value = 0;
-                                                      _searchResultsPerLink
-                                                          .clear();
-                                                      _pendingCounts.clear();
-                                                      _searchFocusNode
-                                                          .requestFocus();
-                                                    },
-                                                  ),
-                                                ],
-                                              )
-                                            : null,
-                                        isDense: true,
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8.0),
-                                        ),
-                                      ),
-                                      onChanged: (value) {
-                                        if (_searchQueryNotifier.value !=
-                                            value) {
-                                          _searchQueryNotifier.value = value;
-                                          _currentSearchIndexNotifier.value = 0;
-                                          _totalSearchResultsNotifier.value = 0;
-                                          _searchResultsPerLink.clear();
-                                          _pendingCounts.clear();
-                                        }
-                                      },
-                                    );
-                                  },
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // כפתור סגירה/פתיחה גלובלית של כל המפרשים - מוצג רק אם יש מפרשים פעילים
-                      if (selectedCommentators.isNotEmpty)
-                        IconButton(
-                          icon: Icon(
-                            _allExpanded
-                                ? FluentIcons.arrow_collapse_all_24_regular
-                                : FluentIcons.arrow_expand_all_24_regular,
-                          ),
-                          tooltip: _allExpanded
-                              ? 'כווץ את כל המפרשים'
-                              : 'הרחב את כל המפרשים',
-                          onPressed: () {
-                            setState(() {
-                              _allExpanded = !_allExpanded;
-                              // מעדכן את כל המצבים של הקבוצות
-                              for (var key in _expansionStates.keys) {
-                                _expansionStates[key] = _allExpanded;
-                              }
-                            });
-                          },
-                        ),
-                      // מציג את לחצן הסגירה רק אם יש callback
-                      if (widget.onClosePane != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surface
-                                .withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: IconButton(
-                            iconSize: 18,
-                            padding: const EdgeInsets.all(8),
-                            constraints: const BoxConstraints(
-                              minWidth: 36,
-                              minHeight: 36,
-                            ),
-                            icon: const Icon(FluentIcons.dismiss_24_regular),
-                            onPressed: widget.onClosePane,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                  child: _showSearchField
+                      ? _buildSearchFieldRow()
+                      : _buildButtonsRow(selectedCommentators),
                 ),
                 Flexible(
                   fit: FlexFit.loose,
