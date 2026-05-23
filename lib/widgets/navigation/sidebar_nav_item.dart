@@ -29,7 +29,6 @@
 // ```
 
 import 'package:flutter/material.dart';
-import 'package:otzaria/theme/app_interactions.dart';
 
 class SidebarNavItem extends StatelessWidget {
   /// אייקון רגיל (כשלא נבחר) — חובה אם לא מסופק [imageAsset]
@@ -101,7 +100,6 @@ class SidebarNavItem extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(28),
-          overlayColor: AppInteractions.primaryOverlay(cs),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
@@ -216,7 +214,6 @@ class TopNavItem extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(10),
-          overlayColor: AppInteractions.primaryOverlay(cs),
           child: ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 64, minHeight: 36),
             child: Padding(

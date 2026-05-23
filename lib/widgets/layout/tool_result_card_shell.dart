@@ -43,7 +43,6 @@ class ToolResultCardShell extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppTokens.radiusMD),
           focusColor: Colors.transparent,
-          overlayColor: AppInteractions.neutralSurfaceOverlay(cs),
           child: SelectionArea(
             child: Padding(
               padding: padding,

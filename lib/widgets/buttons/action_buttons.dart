@@ -318,22 +318,6 @@ class ToolbarActionButton extends StatelessWidget {
     };
   }
 
-  // ה-overlay חייב להיות נגזרת של `selected`+`emphasis`, לא של ה-overlay
-  // הגלובלי של הכפתורים בתמה. ב-selected, הרקע כבר חזק (primary/secondary),
-  // ולכן ה-overlay של hover צריך להיות בצבע הניגוד (`onPrimary`/`onSecondaryContainer`)
-  // ב-10%. במצב לא-נבחר, מספיק overlay אפור עדין של 8%.
-  Color _overlayColor(ColorScheme cs) {
-    if (selected) {
-      return switch (emphasis) {
-        ToolbarActionButtonEmphasis.prominent =>
-          cs.onPrimary.withValues(alpha: 0.10),
-        ToolbarActionButtonEmphasis.subtle =>
-          cs.onSecondaryContainer.withValues(alpha: 0.10),
-      };
-    }
-    return cs.onSurface.withValues(alpha: 0.08);
-  }
-
   @override
   Widget build(BuildContext context) {
     return compact ? _buildCompact(context) : _buildStandard(context);
@@ -345,7 +329,6 @@ class ToolbarActionButton extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final bg = _bgColor(cs);
     final fg = _fgColor(cs);
-    final overlay = _overlayColor(cs);
 
     Widget button;
     if (label != null) {
@@ -358,8 +341,6 @@ class ToolbarActionButton extends StatelessWidget {
           shape: const StadiumBorder(),
           minimumSize: const Size(0, 40),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ).copyWith(
-          overlayColor: WidgetStatePropertyAll(overlay),
         ),
         icon: iconWidget ?? Icon(icon, size: 20),
         label: Text(label!, style: const TextStyle(fontSize: 14.0)),
@@ -374,9 +355,6 @@ class ToolbarActionButton extends StatelessWidget {
           backgroundColor: bg,
           foregroundColor: fg,
           shape: const CircleBorder(),
-          highlightColor: overlay,
-        ).copyWith(
-          overlayColor: WidgetStatePropertyAll(overlay),
         ),
       );
     }
@@ -390,7 +368,6 @@ class ToolbarActionButton extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final bg = _bgColor(cs);
     final fg = _fgColor(cs);
-    final overlay = _overlayColor(cs);
 
     Widget button;
     if (label != null) {
@@ -403,8 +380,6 @@ class ToolbarActionButton extends StatelessWidget {
           shape: const StadiumBorder(),
           minimumSize: const Size(0, 28),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ).copyWith(
-          overlayColor: WidgetStatePropertyAll(overlay),
         ),
         icon: iconWidget ?? Icon(icon, size: 15),
         label: Text(label!, style: const TextStyle(fontSize: 12.0)),
@@ -419,9 +394,6 @@ class ToolbarActionButton extends StatelessWidget {
           backgroundColor: bg,
           foregroundColor: fg,
           shape: const CircleBorder(),
-          highlightColor: overlay,
-        ).copyWith(
-          overlayColor: WidgetStatePropertyAll(overlay),
         ),
       );
     }

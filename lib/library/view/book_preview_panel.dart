@@ -1,9 +1,10 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/library/view/book_preview_pdf_logic.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
@@ -38,8 +39,8 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
   bool _isPdfViewerReady = false;
   bool _pdfFileExists = true;
   double _fontSize = 18.0; // ברירת מחדל לגודל פונט
-  final PdfPreviewDoubleTapTracker _pdfDoubleTapTracker =
-      PdfPreviewDoubleTapTracker();
+  DateTime? _lastPdfPrimaryClickAt;
+  Offset? _lastPdfPrimaryClickPosition;
   final GlobalKey _pdfPreviewToolbarKey = GlobalKey();
   final GlobalKey _pdfVerticalScrollbarKey = GlobalKey();
   final GlobalKey _pdfHorizontalScrollbarKey = GlobalKey();
@@ -113,14 +114,9 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
 
   void _openCurrentPreviewInReader() {
     if (widget.book is PdfBook) {
-      final controller = _pdfController;
-      // PdfViewerController.pageNumber זורק כש-_state עוד null (לפני
-      // onViewerReady), לכן לא ניגשים אליו אלא אחרי בדיקת isReady.
-      final viewerReady = controller != null && controller.isReady;
-      final currentPage = computePdfReaderTargetPage(
-        viewerReady: viewerReady,
-        currentPageNumber: viewerReady ? controller.pageNumber : null,
-      );
+      final currentPage = (_pdfController != null && _pdfController!.isReady)
+          ? (_pdfController!.pageNumber ?? 1)
+          : 1;
       widget.onOpenInReader?.call(currentPage);
       return;
     }
@@ -150,6 +146,11 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
     return widgetRect.contains(globalPosition);
   }
 
+  bool _isPdfPreviewDoubleTapCandidate(PointerDownEvent event) {
+    return event.kind == PointerDeviceKind.mouse &&
+        event.buttons == kPrimaryMouseButton;
+  }
+
   bool _isPointerInsidePdfChrome(Offset globalPosition) {
     return _isPointerInsideWidget(_pdfPreviewToolbarKey, globalPosition) ||
         _isPointerInsideWidget(_pdfVerticalScrollbarKey, globalPosition) ||
@@ -157,18 +158,30 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
   }
 
   void _handlePdfPreviewPointerDown(PointerDownEvent event) {
-    if (!PdfPreviewDoubleTapTracker.isDoubleTapCandidate(event)) {
+    if (!_isPdfPreviewDoubleTapCandidate(event)) {
       return;
     }
 
     if (_isPointerInsidePdfChrome(event.position)) {
-      _pdfDoubleTapTracker.reset();
+      _lastPdfPrimaryClickAt = null;
+      _lastPdfPrimaryClickPosition = null;
       return;
     }
 
-    if (_pdfDoubleTapTracker.registerPointerDown(event.position)) {
+    final now = DateTime.now();
+    if (_lastPdfPrimaryClickAt != null &&
+        _lastPdfPrimaryClickPosition != null &&
+        now.difference(_lastPdfPrimaryClickAt!) <= kDoubleTapTimeout &&
+        (event.position - _lastPdfPrimaryClickPosition!).distance <=
+            kDoubleTapSlop) {
+      _lastPdfPrimaryClickAt = null;
+      _lastPdfPrimaryClickPosition = null;
       _openCurrentPreviewInReader();
+      return;
     }
+
+    _lastPdfPrimaryClickAt = now;
+    _lastPdfPrimaryClickPosition = event.position;
   }
 
   @override
@@ -257,17 +270,8 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                 child: _PreviewToolbar(
                   key: _pdfPreviewToolbarKey,
                   compact: compact,
-                  // _pdfController.zoomUp/Down זורקים StateError כשה-viewer
-                  // עוד לא הותקן (למשל קובץ חסר או טרם נטען). מגנים על זה
-                  // ע"י בדיקה ש-_isPdfViewerReady.
-                  onZoomIn: () {
-                    final c = _pdfController;
-                    if (c != null && _isPdfViewerReady) c.zoomUp();
-                  },
-                  onZoomOut: () {
-                    final c = _pdfController;
-                    if (c != null && _isPdfViewerReady) c.zoomDown();
-                  },
+                  onZoomIn: () => _pdfController?.zoomUp(),
+                  onZoomOut: () => _pdfController?.zoomDown(),
                   onOpen: _openCurrentPreviewInReader,
                 ),
               ),
@@ -291,7 +295,6 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
         return Stack(
           children: [
             GestureDetector(
-              key: const Key('book_preview_panel_double_tap_area'),
               onDoubleTap: _openCurrentPreviewInReader,
               child: BlocProvider.value(
                 value: _currentTextTab!.bloc,
@@ -335,7 +338,6 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
               top: compact ? 10 : 14,
               left: compact ? 16 : 20,
               child: _PreviewToolbar(
-                key: const Key('book_preview_panel_text_toolbar'),
                 compact: compact,
                 onZoomIn: () {
                   setState(() {
