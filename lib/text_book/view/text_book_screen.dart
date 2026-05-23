@@ -229,8 +229,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       final (bookDetails, bookName, topLevelCategoryKey) = result;
       debugPrint('Book found: $bookName (ID: $bookId)');
 
-      // קבלת הפרק הנוכחי
-      final currentIndex = _topmostVisibleIndex(state);
+      // קבלת הפרק הנוכחי — שורת מקור (לא segmentIndex של מצב רצף).
+      final currentIndex = _topmostVisibleSourceLine(state);
 
       // קבלת הכותרת הנוכחית
       String currentRef =
@@ -605,6 +605,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   // השתנה - אם הגדרות הניקוד עצמן השתנו, יש להחיל את
                   // הערך החדש
                   preserveRemoveNikud: !isNikudSettingsChange,
+                  // שינוי הגדרות גלובליות (גופן/ניקוד) לעולם לא יכבה
+                  // את מצב הרצף שהמשתמש בחר עבור הספר.
+                  preserveContinuousReadingMode: true,
                 ),
               );
         }
@@ -682,6 +685,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         }
         if (settings.removePunctuation != null) {
           textBookBloc.add(TogglePunctuation(settings.removePunctuation!));
+        }
+        if (settings.continuousReadingMode != null) {
+          textBookBloc.add(
+            ToggleContinuousReadingMode(settings.continuousReadingMode!),
+          );
         }
         break;
       }
@@ -1429,6 +1437,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           onPressed: () => _toggleAndSavePunctuation(context, state),
         ),
 
+      // 3c) Continuous Reading Mode Button - רק לספרים שתומכים (תנ"ך/תלמוד)
+      if (state.supportsContinuousReadingMode)
+        ActionButtonData(
+          widget: _buildContinuousReadingButton(context, state),
+          icon: state.continuousReadingMode
+              ? FluentIcons.text_align_justify_24_filled
+              : FluentIcons.text_align_justify_24_regular,
+          tooltip: state.continuousReadingMode
+              ? 'הצג כשורות בודדות'
+              : 'הצג כטקסט רציף',
+          onPressed: () => _toggleAndSaveContinuousReading(context, state),
+        ),
+
       // 4) Search Button
       ActionButtonData(
         widget: _buildSearchButton(
@@ -1577,11 +1598,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     icon: FluentIcons.link_multiple_24_regular,
                     tooltip: 'העתק קישור ישיר למקטע זה',
                     onPressed: () {
-                      final index =
-                          state.positionsListener.itemPositions.value.isNotEmpty
-                              ? state.positionsListener.itemPositions.value
-                                  .first.index
-                              : 0;
+                      // קישור deep-link חייב להפנות לשורת מקור: ב-positions
+                      // הסט לא ממוין, וב-מצב רצף ה-index הוא segmentIndex.
+                      final index = _topmostVisibleSourceLine(state);
                       copyLinkToClipboard(buildSectionLink(bookId, index));
                     },
                   ),
@@ -1813,12 +1832,33 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
+  Future<void> _toggleAndSaveContinuousReading(
+      BuildContext context, TextBookLoaded state) async {
+    final newValue = !state.continuousReadingMode;
+    context.read<TextBookBloc>().add(ToggleContinuousReadingMode(newValue));
+    await _savePerBookSettingsDirectly(context, state,
+        continuousReadingMode: newValue);
+  }
+
+  Widget _buildContinuousReadingButton(
+      BuildContext context, TextBookLoaded state) {
+    return IconButton(
+      onPressed: () => _toggleAndSaveContinuousReading(context, state),
+      icon: Icon(state.continuousReadingMode
+          ? FluentIcons.text_align_justify_24_filled
+          : FluentIcons.text_align_justify_24_regular),
+      tooltip: state.continuousReadingMode
+          ? 'הצג כשורות בודדות'
+          : 'הצג כטקסט רציף',
+    );
+  }
+
   Widget _buildBookmarkButton(BuildContext context, TextBookLoaded state) {
     final shortcut =
         Settings.getValue<String>('key-shortcut-add-bookmark') ?? 'ctrl+b';
     return IconButton(
       onPressed: () async {
-        int index = _topmostVisibleIndex(state);
+        int index = _topmostVisibleSourceLine(state);
         final toc = state.book.tableOfContents;
         String ref = await refFromIndex(index, toc);
         // הוספת שם הספר לכותרת
@@ -1997,12 +2037,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// ניווט לכותרת הקודמת ב-TOC
   void _navigateToPreviousToc(TextBookLoaded state) {
-    final currentIndex = _topmostVisibleIndex(state);
+    final currentIndex = _topmostVisibleSourceLine(state);
     final prevIndex = _findPreviousTocIndex(
         state.tableOfContents, currentIndex, state.book.title);
     if (prevIndex != null) {
       state.scrollController.scrollTo(
-        index: prevIndex,
+        // ה-TOC עובד בשורות מקור; ה-ListView לפי itemIndex (=segmentIndex
+        // במצב רצף).
+        index: _itemIndexForSourceLine(state, prevIndex),
         duration: const Duration(milliseconds: 300),
       );
     }
@@ -2010,12 +2052,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// ניווט לכותרת הבאה ב-TOC
   void _navigateToNextToc(TextBookLoaded state) {
-    final currentIndex = _bottommostVisibleIndex(state);
+    final currentIndex = _bottommostVisibleSourceLine(state);
     final nextIndex = _findNextTocIndex(
         state.tableOfContents, currentIndex, state.book.title);
     if (nextIndex != null) {
       state.scrollController.scrollTo(
-        index: nextIndex,
+        index: _itemIndexForSourceLine(state, nextIndex),
         duration: const Duration(milliseconds: 300),
       );
     }
@@ -2191,7 +2233,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       return;
     }
 
-    final currentIndex = _topmostVisibleIndex(state);
+    // PDF נמדד מול שורות מקור; ל-tab.index גם רוצים שורת מקור (לשמירה).
+    final currentIndex = _topmostVisibleSourceLine(state);
     widget.tab.index = currentIndex;
 
     final index = await textToPdfPage(state.book, currentIndex);
@@ -2210,7 +2253,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   void _handleBookmarkPress(BuildContext context, TextBookLoaded state) async {
-    final index = _topmostVisibleIndex(state);
+    final index = _topmostVisibleSourceLine(state);
     final toc = state.book.tableOfContents;
     final bookmarkBloc = context.read<BookmarkBloc>();
     String ref = await refFromIndex(index, toc);
@@ -2507,6 +2550,30 @@ int _topmostVisibleIndex(TextBookLoaded state) =>
 int _bottommostVisibleIndex(TextBookLoaded state) =>
     bottommostVisibleIndex(state.positionsListener.itemPositions.value);
 
+// ה-helpers הבאים הם wrapper-ים דקים לפונקציות הטהורות ב-visible_index.dart
+// (`resolveTopmostSourceLine`/`resolveBottommostSourceLine`/`resolveItemIndexForSourceLine`).
+// הלוגיקה נבדקת ב-test/text_book/utils/visible_index_test.dart.
+
+int _topmostVisibleSourceLine(TextBookLoaded state) =>
+    resolveTopmostSourceLine(
+      positions: state.positionsListener.itemPositions.value,
+      continuousReadingMode: state.continuousReadingMode,
+      readingSegments: state.readingSegments,
+    );
+
+int _bottommostVisibleSourceLine(TextBookLoaded state) =>
+    resolveBottommostSourceLine(
+      positions: state.positionsListener.itemPositions.value,
+      continuousReadingMode: state.continuousReadingMode,
+      readingSegments: state.readingSegments,
+    );
+
+int _itemIndexForSourceLine(TextBookLoaded state, int lineIndex) =>
+    resolveItemIndexForSourceLine(
+      lineIndex: lineIndex,
+      readingSegments: state.readingSegments,
+    );
+
 // [EDITING DISABLED]
 // // החלף את כל המחלקה הזו בקובץ text_book_screen.TXT
 //
@@ -2705,6 +2772,7 @@ Future<void> _savePerBookSettingsDirectly(
   bool? showSplitView,
   bool? removeNikud,
   bool? removePunctuation,
+  bool? continuousReadingMode,
 }) async {
   final settingsBloc = context.read<SettingsBloc>();
   if (!settingsBloc.state.enablePerBookSettings) {
@@ -2725,6 +2793,7 @@ Future<void> _savePerBookSettingsDirectly(
   bool? newCommentatorsBelow = existingSettings?.commentatorsBelow;
   bool? newRemoveNikud = existingSettings?.removeNikud;
   bool? newRemovePunctuation = existingSettings?.removePunctuation;
+  bool? newContinuousReadingMode = existingSettings?.continuousReadingMode;
 
   // עדכון רק השדה שהשתנה
   if (fontSize != null) {
@@ -2748,11 +2817,18 @@ Future<void> _savePerBookSettingsDirectly(
     newRemovePunctuation = removePunctuation ? true : null;
   }
 
+  if (continuousReadingMode != null) {
+    // ברירת המחדל למצב רצף היא false (אין הגדרה גלובלית), כך שרק true שווה
+    // לשמירה.
+    newContinuousReadingMode = continuousReadingMode ? true : null;
+  }
+
   // אם כל השדות null, מוחקים את הקובץ כולו
   if (newFontSize == null &&
       newCommentatorsBelow == null &&
       newRemoveNikud == null &&
-      newRemovePunctuation == null) {
+      newRemovePunctuation == null &&
+      newContinuousReadingMode == null) {
     await TextBookPerBookSettings.delete(state.book.title);
     return;
   }
@@ -2763,6 +2839,7 @@ Future<void> _savePerBookSettingsDirectly(
     commentatorsBelow: newCommentatorsBelow,
     removeNikud: newRemoveNikud,
     removePunctuation: newRemovePunctuation,
+    continuousReadingMode: newContinuousReadingMode,
   );
 
   await settings.save(state.book.title);
@@ -2771,7 +2848,7 @@ Future<void> _savePerBookSettingsDirectly(
 /// Helper function to add bookmark from keyboard shortcut
 void _addBookmarkFromKeyboard(
     BuildContext context, TextBookLoaded state) async {
-  final index = _topmostVisibleIndex(state);
+  final index = _topmostVisibleSourceLine(state);
   final toc = state.book.tableOfContents;
   final bookmarkBloc = context.read<BookmarkBloc>();
   String ref = await refFromIndex(index, toc);
@@ -2883,7 +2960,7 @@ Future<void> _addNoteFromKeyboard(
 
 void _togglePdfView(
     BuildContext context, TextBookLoaded state, TextBookTab tab) async {
-  final currentIndex = _topmostVisibleIndex(state);
+  final currentIndex = _topmostVisibleSourceLine(state);
   tab.index = currentIndex;
 
   final library = await DataRepository.instance.library;

@@ -1,0 +1,191 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
+
+/// טסטים לפיצ'ר ההצגה הרציפה. עיקר הסיכון הוא ב-`_styleForElement` החדש —
+/// פירוש סטיילים inline (color/background-color) של ה-`<span>`-ים שמנוע
+/// החיפוש מוסיף. שגיאה כאן הופכת תוצאות חיפוש לבלתי-מסומנות במצב רצף.
+void main() {
+  group('justify של פסקה רציפה', () {
+    testWidgets('מקטע קצר לא מיושר לשני הצדדים', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 500,
+              child: ContinuousReadingParagraph(
+                lines: [
+                  ContinuousReadingParagraphLine(
+                    lineIndex: 0,
+                    text: 'מקטע קצר',
+                    style: TextStyle(fontSize: 20),
+                  ),
+                ],
+                baseStyle: TextStyle(fontSize: 20),
+                onLineTap: _noopLineTap,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final richText = tester.widget<RichText>(find.byType(RichText));
+      expect(richText.textAlign, TextAlign.start);
+    });
+
+    testWidgets('מקטע ארוך משאיר justify', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 120,
+              child: ContinuousReadingParagraph(
+                lines: [
+                  ContinuousReadingParagraphLine(
+                    lineIndex: 0,
+                    text: 'זהו מקטע ארוך מספיק כדי להישבר לכמה שורות בתצוגה צרה',
+                    style: TextStyle(fontSize: 20),
+                  ),
+                ],
+                baseStyle: TextStyle(fontSize: 20),
+                onLineTap: _noopLineTap,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final richText = tester.widget<RichText>(find.byType(RichText));
+      expect(richText.textAlign, TextAlign.justify);
+    });
+  });
+
+  group('פירוש סטייל inline של תוצאות חיפוש', () {
+    test('color: red — נצבע אדום', () {
+      final spans = buildInlineHtmlSpans(
+        '<span style="color: red">יוסף</span>',
+        const TextStyle(fontSize: 20),
+      );
+      final colored = _findColoredSpan(spans);
+      expect(colored, isNotNull);
+      expect(colored!.style?.color, const Color(0xFFFF0000));
+    });
+
+    test('color + background-color (התוצאה הנוכחית) נצבעים יחד', () {
+      final spans = buildInlineHtmlSpans(
+        '<span style="color: blue; background-color: yellow;">יוסף</span>',
+        const TextStyle(fontSize: 20),
+      );
+      final colored = _findColoredSpan(spans);
+      expect(colored, isNotNull);
+      expect(colored!.style?.color, const Color(0xFF0000FF));
+      expect(colored.style?.backgroundColor, const Color(0xFFFFFF00));
+    });
+
+    test('background-color בלבד לא נתפס בטעות כ-color', () {
+      // הregex של _inlineColor חייב להבדיל בין `color:` ל-`background-color:`.
+      // אם הוא יתפוס את הערך אחרי `background-color:` כ-color — צבע
+      // הטקסט יזחל בטעות.
+      final spans = buildInlineHtmlSpans(
+        '<span style="background-color: yellow">יוסף</span>',
+        const TextStyle(fontSize: 20, color: Color(0xFF111111)),
+      );
+      final colored = _findColoredSpan(spans);
+      expect(colored, isNotNull);
+      expect(colored!.style?.backgroundColor, const Color(0xFFFFFF00));
+      // הצבע הראשי לא שונה — צריך להישאר ה-baseStyle.
+      expect(colored.style?.color, const Color(0xFF111111));
+    });
+
+    test('hex 6-תווים נפרס נכון', () {
+      final spans = buildInlineHtmlSpans(
+        '<span style="color: #ff8800">x</span>',
+        const TextStyle(fontSize: 20),
+      );
+      final colored = _findColoredSpan(spans);
+      expect(colored!.style?.color, const Color(0xFFFF8800));
+    });
+
+    test('hex 3-תווים מורחב נכון (rgb → rrggbb)', () {
+      final spans = buildInlineHtmlSpans(
+        '<span style="color: #f80">x</span>',
+        const TextStyle(fontSize: 20),
+      );
+      final colored = _findColoredSpan(spans);
+      expect(colored!.style?.color, const Color(0xFFFF8800));
+    });
+
+    test('הטקסט עצמו נשמר ב-spans', () {
+      // רגרסיה: אם תיקון הצביעה משנה משהו בפירוש ה-HTML, גוף הטקסט
+      // ישבר. החיפוש לא רק צובע — הוא גם חייב להציג את המילה.
+      final spans = buildInlineHtmlSpans(
+        'לפני <span style="color: red">יוסף</span> אחרי',
+        const TextStyle(fontSize: 20),
+      );
+      final flattened = _flattenText(spans);
+      expect(flattened, contains('יוסף'));
+      expect(flattened, contains('לפני'));
+      expect(flattened, contains('אחרי'));
+    });
+  });
+
+  group('פירוש סטייל inline — ערכי קצה', () {
+    test('צבע לא חוקי לא קורס ולא משנה את הצבע', () {
+      final spans = buildInlineHtmlSpans(
+        '<span style="color: notacolor">x</span>',
+        const TextStyle(fontSize: 20, color: Color(0xFF222222)),
+      );
+      final colored = _findColoredSpan(spans);
+      expect(colored, isNotNull);
+      expect(colored!.style?.color, const Color(0xFF222222));
+    });
+
+    test('ספאן בלי style — נשאר עם ה-baseStyle', () {
+      final spans = buildInlineHtmlSpans(
+        '<span>x</span>',
+        const TextStyle(fontSize: 20, color: Color(0xFF333333)),
+      );
+      final colored = _findColoredSpan(spans);
+      expect(colored!.style?.color, const Color(0xFF333333));
+    });
+  });
+}
+
+void _noopLineTap(int lineIndex) {}
+
+/// מאתר את ה-`TextSpan` הראשון ברמה הפנימית ביותר שיש לו `style.color`
+/// או `style.backgroundColor` שונה מ-baseStyle. משמש לבדוק שצביעת ה-HTML
+/// אכן הגיעה לרינדור.
+TextSpan? _findColoredSpan(List<InlineSpan> spans) {
+  TextSpan? result;
+  void visit(InlineSpan span) {
+    if (span is! TextSpan) return;
+    if (span.children != null) {
+      for (final child in span.children!) {
+        if (result != null) return;
+        visit(child);
+      }
+    }
+    if (result == null && (span.style?.color != null || span.style?.backgroundColor != null)) {
+      result = span;
+    }
+  }
+
+  for (final span in spans) {
+    visit(span);
+    if (result != null) return result;
+  }
+  return result;
+}
+
+String _flattenText(List<InlineSpan> spans) {
+  final buffer = StringBuffer();
+  void visit(InlineSpan span) {
+    if (span is! TextSpan) return;
+    if (span.text != null) buffer.write(span.text);
+    span.children?.forEach(visit);
+  }
+
+  spans.forEach(visit);
+  return buffer.toString();
+}

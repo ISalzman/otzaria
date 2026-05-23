@@ -7,6 +7,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 
 /// מחלקה לטיפול בקישורי HTML בתוך הטקסט
 class HtmlLinkHandler {
@@ -186,18 +187,22 @@ class HtmlLinkHandler {
       }
 
       // חיפוש הכותרת בתוכן הספציפי
+      final viewportExtent =
+          context.size?.height ?? MediaQuery.sizeOf(context).height;
       final index = await _findHeaderIndex(state.book, headerName);
 
       if (index != null) {
         // ניווט לאינדקס שנמצא
-        if (state.scrollController.isAttached) {
-          await state.scrollController.scrollTo(
-            index: index,
-            alignment: 0.05,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.ease,
-          );
-        }
+        await scrollToSourceLine(
+          scrollController: state.scrollController,
+          scrollOffsetController: state.scrollOffsetController,
+          positionsListener: state.positionsListener,
+          segments: state.readingSegments,
+          lineIndex: index,
+          viewportExtent: viewportExtent,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.ease,
+        );
 
         if (context.mounted) {
           UiSnack.show('נווט ל: $headerName');

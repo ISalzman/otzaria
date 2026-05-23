@@ -23,6 +23,7 @@ import 'package:otzaria/text_book/utils/link_processing.dart';
 import 'package:otzaria/text_book/utils/he_categories_enricher.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as notes;
+import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
@@ -122,6 +123,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<UpdateCommentators>(_onUpdateCommentators);
     on<ToggleNikud>(_onToggleNikud);
     on<TogglePunctuation>(_onTogglePunctuation);
+    on<ToggleContinuousReadingMode>(_onToggleContinuousReadingMode);
     on<UpdateVisibleIndecies>(_onUpdateVisibleIndecies);
     on<UpdateSelectedIndex>(_onUpdateSelectedIndex);
     on<HighlightLine>(_onHighlightLine);
@@ -138,6 +140,36 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<UpdateAvailableCommentators>(_onUpdateAvailableCommentators);
     on<RefreshLinksForCurrentWindow>(_onRefreshLinksForCurrentWindow);
     on<LoadAllLinksForIndices>(_onLoadAllLinksForIndices);
+  }
+
+  /// מחזירה את הערך האפקטיבי של מצב הרצף לאחר אירוע
+  /// [ToggleContinuousReadingMode].
+  ///
+  /// ספר שלא תומך → תמיד false (גם אם בקשו true ידנית — דרך קיצור מקלדת
+  /// או plugin).
+  @visibleForTesting
+  static bool computeEffectiveContinuousReading({
+    required bool requestedEnabled,
+    required bool stateSupportsContinuous,
+  }) =>
+      requestedEnabled && stateSupportsContinuous;
+
+  /// קובעת את הערך של `continuousReadingMode` ב-`emit` של `_onLoadContent`.
+  ///
+  /// - ספר שלא תומך → תמיד false.
+  /// - אם הדגל [preserveFlag] פעיל ו-currentState הוא Loaded → שומרים
+  ///   את הערך הקודם של המשתמש.
+  /// - אחרת — default (false). זה המסלול שמאפס בעת `_resetPerBookSettings`.
+  @visibleForTesting
+  static bool resolvePreservedContinuousReadingMode({
+    required bool supportsContinuous,
+    required bool preserveFlag,
+    required TextBookState? currentState,
+  }) {
+    if (!supportsContinuous) return false;
+    if (!preserveFlag) return false;
+    if (currentState is! TextBookLoaded) return false;
+    return currentState.continuousReadingMode;
   }
 
   @visibleForTesting
@@ -372,10 +404,31 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         categoryId: book.categoryId,
         fileType: book.fileType,
       );
+      final supportsContinuousReading =
+          await FileSystemData.instance.supportsContinuousReadingMode(
+        book.title,
+        categoryId: book.categoryId,
+        fileType: book.fileType,
+      );
       final removeNikud = shouldRemoveNikudForBook(
         defaultRemoveNikud: defaultRemoveNikud,
         removeNikudFromTanach: removeNikudFromTanach,
         isTanach: isTanach,
+      );
+
+      // מצב הרצף שומר את הערך הנוכחי רק כש-preserveContinuousReadingMode=true.
+      // הלוגיקה הזו מנופית ל-`resolvePreservedContinuousReadingMode` כדי
+      // שתוכל להיבדק טהורה: _resetPerBookSettings סומך על default=false,
+      // וה-listener על שינוי גופן/ניקוד מעביר preserveFlag=true כדי לא
+      // לכבות מצב רצף שהמשתמש בחר.
+      final effectiveContinuousReading = resolvePreservedContinuousReadingMode(
+        supportsContinuous: supportsContinuousReading,
+        preserveFlag: event.preserveContinuousReadingMode,
+        currentState: state,
+      );
+      final readingSegments = buildReadingSegments(
+        contentLines,
+        continuous: effectiveContinuousReading,
       );
 
       const List<Link> emptyLinks = [];
@@ -482,6 +535,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             ? preservedRemoveNikud
             : removeNikud,
         isTanach: isTanach,
+        supportsContinuousReadingMode: supportsContinuousReading,
+        continuousReadingMode: effectiveContinuousReading,
+        readingSegments: readingSegments,
         linksLoading: false,
         visibleIndices: visibleIndices,
         pinLeftPane: preservedPinLeftPane ??
@@ -715,6 +771,34 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         selectedIndex: currentState.selectedIndex,
       ));
     }
+  }
+
+  void _onToggleContinuousReadingMode(
+    ToggleContinuousReadingMode event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is! TextBookLoaded) {
+      return;
+    }
+
+    final currentState = state as TextBookLoaded;
+    // אם הספר לא תומך — מתעלמים. הכפתור ב-UI ממילא לא מוצג, אבל זה מגן
+    // גם מקריאות תוכנתיות (קיצורי מקלדת, plugins).
+    final effectiveEnabled = computeEffectiveContinuousReading(
+      requestedEnabled: event.enabled,
+      stateSupportsContinuous: currentState.supportsContinuousReadingMode,
+    );
+    if (currentState.continuousReadingMode == effectiveEnabled) {
+      return;
+    }
+
+    emit(currentState.copyWith(
+      continuousReadingMode: effectiveEnabled,
+      readingSegments: buildReadingSegments(
+        currentState.content,
+        continuous: effectiveEnabled,
+      ),
+    ));
   }
 
   void _onUpdateVisibleIndecies(
@@ -1025,8 +1109,23 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     // closestTocEntryIndex) מצביע על הסעיף הקודם במקום על זה שאליו ניווטו.
     final itemPositions = _filterBarelyVisiblePositions(allItemPositions);
 
-    return itemPositions.map((position) => position.index).toSet().toList()
-      ..sort();
+    if (!state.continuousReadingMode) {
+      return itemPositions.map((position) => position.index).toSet().toList()
+        ..sort();
+    }
+
+    // במצב רציף: ה-positions הם segmentIndex. ממירים בחזרה לשורות מקור
+    // כדי ש-visibleIndices ב-state יישאר תמיד ברמת שורות.
+    return sourceLineIndicesForSegmentViewports(
+      state.readingSegments,
+      itemPositions.map(
+        (position) => ReadingSegmentViewport(
+          segmentIndex: position.index,
+          leadingEdge: position.itemLeadingEdge,
+          trailingEdge: position.itemTrailingEdge,
+        ),
+      ),
+    );
   }
 
   /// סינון item positions שגלויים מאוד מעט (פחות מ-15% מה-segment גלוי). כך
@@ -1198,6 +1297,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     final updatedState = _withInlineNotesCommentator(currentState.copyWith(
       content: event.content,
+      readingSegments: buildReadingSegments(
+        event.content,
+        continuous: currentState.continuousReadingMode,
+      ),
     ));
     // אחרי שסרקנו את התוכן המלא, אין יותר טעם בסריקה נוספת על הרחבות
     // טווח עתידיות — או שכבר הוסף 'הערות' ל-availableCommentators (ואז
@@ -1249,6 +1352,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     emit(_withInlineNotesCommentator(
       currentState.copyWith(
         content: nextContent,
+        readingSegments: buildReadingSegments(
+          nextContent,
+          continuous: currentState.continuousReadingMode,
+        ),
       ),
       // אופטימיזציה: לסרוק רק את השורות החדשות במקום את כל ה-content
       // המצטבר (מונע עבודה ריבועית במהלך warming הדרגתי של ספר ארוך).
