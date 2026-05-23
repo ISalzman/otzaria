@@ -369,7 +369,8 @@ class PluginBridgeAdapter {
         int startIndex = offset;
         if (section != null && section.isNotEmpty) {
           final idx = rawText.indexOf(section);
-          if (idx >= 0) startIndex = idx;
+          // ה-offset נספר יחסית למיקום ה-section, לא לתחילת הטקסט
+          if (idx >= 0) startIndex = idx + offset;
         }
         final clampedLimit = limit > 5000 ? 5000 : limit;
         final end = (startIndex + clampedLimit).clamp(0, rawText.length);
