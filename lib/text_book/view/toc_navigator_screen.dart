@@ -12,7 +12,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
-import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/view/toc_filter.dart';
 import 'package:otzaria/text_book/view/toc_navigator_internals.dart';
 
@@ -213,17 +212,14 @@ class _TocViewerState extends State<TocViewer>
       if (state is! TextBookLoaded) {
         return;
       }
-      unawaited(scrollToSourceLine(
-        scrollController: widget.scrollController,
-        scrollOffsetController: state.scrollOffsetController,
-        positionsListener: state.positionsListener,
-        segments: state.readingSegments,
-        lineIndex: entry.index,
-        viewportExtent:
-            context.size?.height ?? MediaQuery.sizeOf(context).height,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.ease,
-      ));
+      if (widget.scrollController.isAttached) {
+        unawaited(widget.scrollController.scrollTo(
+          index: entry.index,
+          alignment: 0.05,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.ease,
+        ));
+      }
       if (Platform.isAndroid) {
         widget.closeLeftPaneCallback();
       }

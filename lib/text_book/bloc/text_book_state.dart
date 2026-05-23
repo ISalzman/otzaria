@@ -4,7 +4,6 @@ import 'package:otzaria/models/links.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
-import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 
 String _searchOptionsSignature(Map<String, Map<String, bool>> options) {
@@ -25,13 +24,6 @@ String _alternativeWordsSignature(Map<int, List<String>> words) {
 
   final keys = words.keys.toList()..sort();
   return keys.map((key) => '$key:${words[key]!.join(',')}').join('|');
-}
-
-String _subtitleHeadingsSignature(Map<int, List<String>> headings) {
-  if (headings.isEmpty) return '';
-
-  final keys = headings.keys.toList()..sort();
-  return keys.map((key) => '$key:${headings[key]!.join(',')}').join('|');
 }
 
 String _spacingValuesSignature(Map<String, String> values) {
@@ -149,7 +141,6 @@ class TextBookLoaded extends TextBookState {
   final bool removeNikud;
   final bool removePunctuation;
   final bool isTanach;
-  final bool supportsContinuousReadingMode;
   final List<int> visibleIndices;
   final int? selectedIndex;
   final bool pinLeftPane;
@@ -164,10 +155,6 @@ class TextBookLoaded extends TextBookState {
   final int? selectedTextStart;
   final int? selectedTextEnd;
   final int? highlightedLine;
-  final bool continuousReadingMode;
-  final bool showSubtitles;
-  final Map<int, List<String>> subtitleHeadingsByLine;
-  final List<ReadingSegment> readingSegments;
   final bool linksLoading;
 
   /// אינדקס הסעיף שבו מבוצעת הדגשה ממוקדת (deep link). null = אין.
@@ -210,7 +197,6 @@ class TextBookLoaded extends TextBookState {
     required this.removeNikud,
     this.removePunctuation = false,
     this.isTanach = false,
-    this.supportsContinuousReadingMode = false,
     required this.visibleIndices,
     this.selectedIndex,
     required this.pinLeftPane,
@@ -228,10 +214,6 @@ class TextBookLoaded extends TextBookState {
     this.selectedTextStart,
     this.selectedTextEnd,
     this.highlightedLine,
-    this.continuousReadingMode = false,
-    this.showSubtitles = true,
-    this.subtitleHeadingsByLine = const {},
-    this.readingSegments = const [],
     this.linksLoading = false,
     this.pinpointHighlightIndex,
     this.pinpointHighlightText,
@@ -276,10 +258,6 @@ class TextBookLoaded extends TextBookState {
       selectedTextStart: null,
       selectedTextEnd: null,
       highlightedLine: null,
-      continuousReadingMode: false,
-      showSubtitles: true,
-      subtitleHeadingsByLine: const {},
-      readingSegments: const [],
       linksLoading: false,
       isEditorOpen: false,
       editorIndex: null,
@@ -308,7 +286,6 @@ class TextBookLoaded extends TextBookState {
     bool? removeNikud,
     bool? removePunctuation,
     bool? isTanach,
-    bool? supportsContinuousReadingMode,
     int? selectedIndex,
     bool clearSelectedIndex = false,
     List<int>? visibleIndices,
@@ -328,10 +305,6 @@ class TextBookLoaded extends TextBookState {
     int? selectedTextEnd,
     int? highlightedLine,
     bool clearHighlight = false,
-    bool? continuousReadingMode,
-    bool? showSubtitles,
-    Map<int, List<String>>? subtitleHeadingsByLine,
-    List<ReadingSegment>? readingSegments,
     bool? linksLoading,
     int? pinpointHighlightIndex,
     String? pinpointHighlightText,
@@ -362,8 +335,6 @@ class TextBookLoaded extends TextBookState {
       removeNikud: removeNikud ?? this.removeNikud,
       removePunctuation: removePunctuation ?? this.removePunctuation,
       isTanach: isTanach ?? this.isTanach,
-      supportsContinuousReadingMode:
-          supportsContinuousReadingMode ?? this.supportsContinuousReadingMode,
       visibleIndices: visibleIndices ?? this.visibleIndices,
       selectedIndex:
           clearSelectedIndex ? null : (selectedIndex ?? this.selectedIndex),
@@ -384,12 +355,6 @@ class TextBookLoaded extends TextBookState {
       selectedTextEnd: selectedTextEnd ?? this.selectedTextEnd,
       highlightedLine:
           clearHighlight ? null : (highlightedLine ?? this.highlightedLine),
-      continuousReadingMode:
-          continuousReadingMode ?? this.continuousReadingMode,
-      showSubtitles: showSubtitles ?? this.showSubtitles,
-      subtitleHeadingsByLine:
-          subtitleHeadingsByLine ?? this.subtitleHeadingsByLine,
-      readingSegments: readingSegments ?? this.readingSegments,
       linksLoading: linksLoading ?? this.linksLoading,
       pinpointHighlightIndex: clearPinpointHighlight
           ? null
@@ -424,7 +389,6 @@ class TextBookLoaded extends TextBookState {
         removeNikud,
         removePunctuation,
         isTanach,
-        supportsContinuousReadingMode,
         visibleIndices,
         selectedIndex,
         pinLeftPane,
@@ -439,10 +403,6 @@ class TextBookLoaded extends TextBookState {
         selectedTextStart,
         selectedTextEnd,
         highlightedLine,
-        continuousReadingMode,
-        showSubtitles,
-        _subtitleHeadingsSignature(subtitleHeadingsByLine),
-        readingSegments.length,
         linksLoading,
         pinpointHighlightIndex,
         pinpointHighlightText,
