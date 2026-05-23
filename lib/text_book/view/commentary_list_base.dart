@@ -80,6 +80,15 @@ class CommentaryListBase extends StatefulWidget {
   /// קולבק לפתיחת המפרשים בכרטיסייה חדשה. כש-null הלחצן לא יוצג.
   final VoidCallback? onOpenInNewTab;
 
+  /// נוטיפייר חיצוני שמשתקף ממצב הכיווץ הגלובלי. שימוש: הורה רוצה להציג
+  /// מחוץ לפאנל כפתור כווץ/הרחב מסונכרן.
+  final ValueNotifier<bool>? externalAllExpandedNotifier;
+
+  /// אם סופק, יקרא במקום פתיחת חלון בחירת המפרשים הפנימי (פופ-אפ).
+  /// מאפשר להורה (למשל CommentatorsTabScreen) להפנות בחירת מפרשים ללשונית
+  /// בסרגל הצד במקום פופ-אפ.
+  final VoidCallback? onFilterOpenRequested;
+
   const CommentaryListBase({
     super.key,
     required this.openBookCallback,
@@ -104,6 +113,8 @@ class CommentaryListBase extends StatefulWidget {
     this.externalSearchSnippetsNotifier,
     this.useAvailableCommentators = false,
     this.onOpenInNewTab,
+    this.externalAllExpandedNotifier,
+    this.onFilterOpenRequested,
   });
 
   @override
@@ -122,7 +133,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   final ValueNotifier<int> _totalSearchResultsNotifier = ValueNotifier<int>(0);
   final Map<String, int> _searchResultsPerLink = {};
   int _lastScrollIndex = 0; // שומר את מיקום הגלילה האחרון
-  bool _allExpanded = true; // מצב גלובלי של פתיחה/סגירה של כל המפרשים
+  // מצב גלובלי של פתיחה/סגירה של כל המפרשים — חשוף ככ-ValueListenable כדי
+  // שצרכנים חיצוניים (למשל CommentatorsTabScreen) יוכלו להאזין ולעדכן UI.
+  final ValueNotifier<bool> _allExpandedNotifier = ValueNotifier<bool>(true);
+  bool get _allExpanded => _allExpandedNotifier.value;
+  set _allExpanded(bool value) => _allExpandedNotifier.value = value;
   final Map<String, bool> _expansionStates =
       {}; // מעקב אחרי מצב כל קבוצת מפרשים
   String? _cachedGroupingSignature;
@@ -245,6 +260,20 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       _totalSearchResultsNotifier;
   ValueNotifier<int> get currentSearchIndexNotifier =>
       _currentSearchIndexNotifier;
+
+  /// האזנה למצב הגלובלי של פתיחה/כיווץ כל המפרשים. שימושי לרכיבי הורה
+  /// (כגון [CommentatorsTabScreen]) שמציגים לחצן כווץ/הרחב מחוץ לפאנל זה.
+  ValueListenable<bool> get allExpandedListenable => _allExpandedNotifier;
+
+  /// מתג מצב הכיווץ הגלובלי של כל המפרשים. מעדכן את כל הקבוצות בהתאם.
+  void toggleAllExpanded() {
+    setState(() {
+      _allExpanded = !_allExpanded;
+      for (final key in _expansionStates.keys) {
+        _expansionStates[key] = _allExpanded;
+      }
+    });
+  }
 
   /// ניווט לתוצאת חיפוש לפי אינדקס גלובלי (לשימוש חיצוני)
   void navigateToGlobalIndex(int index) {
@@ -522,6 +551,13 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
             _currentSearchIndexNotifier.value;
       });
     }
+    // סנכרון מצב הכיווץ הגלובלי לנוטיפייר חיצוני (אם סופק)
+    if (widget.externalAllExpandedNotifier != null) {
+      widget.externalAllExpandedNotifier!.value = _allExpanded;
+      _allExpandedNotifier.addListener(() {
+        widget.externalAllExpandedNotifier!.value = _allExpanded;
+      });
+    }
   }
 
   @override
@@ -601,6 +637,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   }
 
   void _onOpenFilterRequest() {
+    // אם ההורה ביקש להפנות בקשות פתיחה אליו (למשל לפתיחת לשונית בסרגל הצד),
+    // קוראים לקולבק במקום לפתוח פופ-אפ פנימי.
+    if (widget.onFilterOpenRequested != null) {
+      widget.onFilterOpenRequested!();
+      return;
+    }
     setState(() {
       _showCommentatorsFilter = true;
       _userInteractedWithFilter = false;
@@ -631,6 +673,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     _searchQueryNotifier.dispose();
     _currentSearchIndexNotifier.dispose();
     _totalSearchResultsNotifier.dispose();
+    _allExpandedNotifier.dispose();
     _focusNode.dispose();
     _searchFocusNode.dispose();
     super.dispose();
@@ -986,12 +1029,21 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                 final currentSelected = _selectedCommentators(currentBlocState);
                 if (currentSelected.isNotEmpty) return;
               }
+              // אם ההורה רוצה לטפל בעצמו (לפתוח לשונית בסרגל הצד), מעבירים אליו.
+              if (widget.onFilterOpenRequested != null) {
+                widget.onFilterOpenRequested!();
+                return;
+              }
               setState(() {
                 _showCommentatorsFilter = true;
                 _filterWasAutoOpened = true;
               });
             });
-            return const Center(child: CircularProgressIndicator());
+            // כאשר ההורה מטפל בפתיחה, אין סיבה להחזיר ספינר טעינה — נמשיך לבנות
+            // את התצוגה הרגילה (שתציג הודעת "אין מפרשים נבחרים" בהמשך).
+            if (widget.onFilterOpenRequested == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
           }
 
           Widget buildList() {

@@ -16,7 +16,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
-import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
+import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
@@ -48,8 +48,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   TocEntry? _selectedChapter;
   int _selectedVerseIdx = _kAllChapter;
 
-  final _openFilterNotifier = ValueNotifier<int>(0);
   final _commentaryKey = GlobalKey<CommentaryListBaseState>();
+  // מצב פתיחה/כיווץ של כל המפרשים, מסונכרן עם CommentaryListBase
+  final _allExpandedInChild = ValueNotifier<bool>(true);
   bool _navPaneOpen = false;
   bool _pinLeftPane = false;
   // רשימת המפרשים הנבחרים (עצמאית לחלונית זו, מסונכרנת פעם אחת עם מקור הפתיחה)
@@ -68,17 +69,23 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   late final TabController _navTabController;
 
+  // אינדקסי טאבים בסרגל הניווט הצדדי
+  static const int _commentatorsTabIndex = 1;
+  static const int _searchTabIndex = 2;
+
   @override
   void initState() {
     super.initState();
-    _navTabController = TabController(length: 2, vsync: this);
+    _navTabController = TabController(length: 3, vsync: this);
     _navTabController.addListener(() {
-      if (_navTabController.index == 1) {
+      if (_navTabController.index == _searchTabIndex) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _searchFocusNode.requestFocus();
         });
       }
     });
+    // בקשות לפתיחת בחירת מפרשים מ-CommentaryListBase מועברות ישירות אל
+    // _openCommentatorsSelectionPane דרך onFilterOpenRequested (ראה build).
     // סנכרון חד-פעמי של המפרשים הנבחרים עם חלונית המקור
     final sourceState = widget.tab.sourceTab.bloc.state;
     if (sourceState is TextBookLoaded &&
@@ -109,7 +116,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     _externalTotalResults.dispose();
     _externalSearchResultsByPath.dispose();
     _externalSearchSnippets.dispose();
-    _openFilterNotifier.dispose();
+    _allExpandedInChild.dispose();
     super.dispose();
   }
 
@@ -472,13 +479,14 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                         onSelectedCommentatorsOverrideChanged: (list) {
                           setState(() => _selectedCommentatorsOverride = list);
                         },
-                        openFilterNotifier: _openFilterNotifier,
+                        onFilterOpenRequested: _openCommentatorsSelectionPane,
                         externalSearchController: _commentarySearchController,
                         externalCurrentIndexNotifier: _externalCurrentIndex,
                         externalTotalResultsNotifier: _externalTotalResults,
                         externalSearchResultsByPathNotifier:
                             _externalSearchResultsByPath,
                         externalSearchSnippetsNotifier: _externalSearchSnippets,
+                        externalAllExpandedNotifier: _allExpandedInChild,
                       ),
                     ),
                     paneContent: _buildNavPanel(
@@ -600,10 +608,15 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   void _openSearchPane() {
     setState(() => _navPaneOpen = true);
-    _navTabController.animateTo(1);
+    _navTabController.animateTo(_searchTabIndex);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _searchFocusNode.requestFocus();
     });
+  }
+
+  void _openCommentatorsSelectionPane() {
+    setState(() => _navPaneOpen = true);
+    _navTabController.animateTo(_commentatorsTabIndex);
   }
 
   Future<void> _addBookmark(
@@ -725,15 +738,33 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               tooltip: 'חיפוש',
               onPressed: _openSearchPane,
             ),
-            // בחירת מפרשים
+            // כיווץ/הרחבת כל המפרשים — שולט במצב הגלובלי בתוך CommentaryListBase
             ActionButtonData(
-              widget: CommentatorsFilterButton(
-                isActive: false,
-                onPressed: () => _openFilterNotifier.value++,
+              widget: ValueListenableBuilder<bool>(
+                valueListenable: _allExpandedInChild,
+                builder: (context, allExpanded, _) {
+                  return IconButton(
+                    icon: Icon(
+                      allExpanded
+                          ? FluentIcons.arrow_collapse_all_24_regular
+                          : FluentIcons.arrow_expand_all_24_regular,
+                    ),
+                    tooltip: allExpanded
+                        ? 'כווץ את כל המפרשים'
+                        : 'הרחב את כל המפרשים',
+                    onPressed: () =>
+                        _commentaryKey.currentState?.toggleAllExpanded(),
+                  );
+                },
               ),
-              icon: FluentIcons.apps_list_24_regular,
-              tooltip: 'בחירת מפרשים',
-              onPressed: () => _openFilterNotifier.value++,
+              icon: _allExpandedInChild.value
+                  ? FluentIcons.arrow_collapse_all_24_regular
+                  : FluentIcons.arrow_expand_all_24_regular,
+              tooltip: _allExpandedInChild.value
+                  ? 'כווץ את כל המפרשים'
+                  : 'הרחב את כל המפרשים',
+              onPressed: () =>
+                  _commentaryKey.currentState?.toggleAllExpanded(),
             ),
             ActionButtonData(
               widget: IconButton(
@@ -884,6 +915,12 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                         child: Text('ניווט', style: TextStyle(fontSize: 11)),
                       ),
                       Tab(
+                        icon: Icon(FluentIcons.apps_list_24_regular, size: 16),
+                        iconMargin: EdgeInsets.only(bottom: 1),
+                        height: 44,
+                        child: Text('מפרשים', style: TextStyle(fontSize: 11)),
+                      ),
+                      Tab(
                         icon: Icon(FluentIcons.search_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
@@ -923,11 +960,41 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
             children: [
               _buildTocList(context,
                   chapters: chapters, content: state.content),
+              _buildCommentatorsSelectionPanel(context, state),
               _buildCommentarySearchPanel(context),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  // ── פאנל בחירת מפרשים ─────────────────────────────────────────────────────
+
+  Widget _buildCommentatorsSelectionPanel(
+      BuildContext context, TextBookLoaded state) {
+    final groups = state.commentatorGroups;
+    final selected =
+        _selectedCommentatorsOverride ?? state.activeCommentators;
+    if (groups.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'טוען מפרשים...',
+            style: Theme.of(context).textTheme.bodySmall,
+            textDirection: TextDirection.rtl,
+          ),
+        ),
+      );
+    }
+    return CommentatorsSelectionPanel(
+      groups: groups,
+      selectedCommentators: selected,
+      bookTitle: state.book.title,
+      onSelectionChanged: (list) {
+        setState(() => _selectedCommentatorsOverride = list);
+      },
     );
   }
 
