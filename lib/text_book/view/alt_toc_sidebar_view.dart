@@ -18,6 +18,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -350,14 +351,17 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
       if (state is! TextBookLoaded) {
         return;
       }
-      if (widget.scrollController.isAttached) {
-        unawaited(widget.scrollController.scrollTo(
-          index: index,
-          alignment: 0.05,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        ));
-      }
+      unawaited(scrollToSourceLine(
+        scrollController: widget.scrollController,
+        scrollOffsetController: state.scrollOffsetController,
+        positionsListener: state.positionsListener,
+        segments: state.readingSegments,
+        lineIndex: index,
+        viewportExtent:
+            context.size?.height ?? MediaQuery.sizeOf(context).height,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      ));
 
       if (Platform.isAndroid) {
         widget.closeLeftPaneCallback();

@@ -4,6 +4,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 
 String _searchOptionsSignature(Map<String, Map<String, bool>> options) {
@@ -141,6 +142,14 @@ class TextBookLoaded extends TextBookState {
   final bool removeNikud;
   final bool removePunctuation;
   final bool isTanach;
+  final bool supportsContinuousReadingMode;
+  final bool continuousReadingMode;
+
+  /// נגזר מ-[content] + [continuousReadingMode]. ה-bloc מחזיק אותו רק כדי
+  /// שהרינדור לא ייאלץ לחשב מחדש בכל build. **אסור** להזליג segmentIndex
+  /// אל ה-state הלוגי — selectedIndex/highlightedLine/searchText נשארים
+  /// ברמת שורות מקור.
+  final List<ReadingSegment> readingSegments;
   final List<int> visibleIndices;
   final int? selectedIndex;
   final bool pinLeftPane;
@@ -197,6 +206,9 @@ class TextBookLoaded extends TextBookState {
     required this.removeNikud,
     this.removePunctuation = false,
     this.isTanach = false,
+    this.supportsContinuousReadingMode = false,
+    this.continuousReadingMode = false,
+    this.readingSegments = const [],
     required this.visibleIndices,
     this.selectedIndex,
     required this.pinLeftPane,
@@ -248,6 +260,9 @@ class TextBookLoaded extends TextBookState {
       linksByLine: const {},
       tableOfContents: const [],
       removeNikud: false,
+      supportsContinuousReadingMode: false,
+      continuousReadingMode: false,
+      readingSegments: const [],
       pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
       searchText: '',
       scrollController: ItemScrollController(),
@@ -286,6 +301,9 @@ class TextBookLoaded extends TextBookState {
     bool? removeNikud,
     bool? removePunctuation,
     bool? isTanach,
+    bool? supportsContinuousReadingMode,
+    bool? continuousReadingMode,
+    List<ReadingSegment>? readingSegments,
     int? selectedIndex,
     bool clearSelectedIndex = false,
     List<int>? visibleIndices,
@@ -335,6 +353,11 @@ class TextBookLoaded extends TextBookState {
       removeNikud: removeNikud ?? this.removeNikud,
       removePunctuation: removePunctuation ?? this.removePunctuation,
       isTanach: isTanach ?? this.isTanach,
+      supportsContinuousReadingMode:
+          supportsContinuousReadingMode ?? this.supportsContinuousReadingMode,
+      continuousReadingMode:
+          continuousReadingMode ?? this.continuousReadingMode,
+      readingSegments: readingSegments ?? this.readingSegments,
       visibleIndices: visibleIndices ?? this.visibleIndices,
       selectedIndex:
           clearSelectedIndex ? null : (selectedIndex ?? this.selectedIndex),
@@ -389,6 +412,9 @@ class TextBookLoaded extends TextBookState {
         removeNikud,
         removePunctuation,
         isTanach,
+        supportsContinuousReadingMode,
+        continuousReadingMode,
+        readingSegments.length,
         visibleIndices,
         selectedIndex,
         pinLeftPane,

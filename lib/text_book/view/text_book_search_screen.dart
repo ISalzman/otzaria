@@ -22,6 +22,7 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/utils/section_search_utils.dart';
 import 'package:otzaria/text_book/utils/search_query_sync.dart';
 
@@ -519,14 +520,17 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     if (loadedState is! TextBookLoaded) {
       return;
     }
-    if (widget.scrollControler.isAttached) {
-      unawaited(widget.scrollControler.scrollTo(
-        index: result.index,
-        alignment: 0.35,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.ease,
-      ));
-    }
+    unawaited(scrollToSourceLine(
+      scrollController: widget.scrollControler,
+      scrollOffsetController: loadedState.scrollOffsetController,
+      positionsListener: loadedState.positionsListener,
+      segments: loadedState.readingSegments,
+      lineIndex: result.index,
+      viewportExtent: context.size?.height ?? MediaQuery.sizeOf(context).height,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.ease,
+      alignment: 0.35,
+    ));
 
     if (closePaneOnAndroid && Platform.isAndroid) {
       widget.closeLeftPaneCallback();

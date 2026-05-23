@@ -20,6 +20,11 @@ class LoadContent extends TextBookEvent {
   // per-book toggle) instead of applying the new value from settings.
   // Use this for font-only reloads where nikud settings did NOT change.
   final bool preserveRemoveNikud;
+  // When true and state is already loaded, keep current continuousReadingMode.
+  // ברירת המחדל false — `_resetPerBookSettings` סומך עליה כדי לאפס את המצב.
+  // הצרכן היחיד שצריך true הוא ה-listener על שינוי גופן/ניקוד שלא אמור
+  // לכבות מצב רצף שהמשתמש בחר.
+  final bool preserveContinuousReadingMode;
 
   const LoadContent({
     required this.fontSize,
@@ -30,6 +35,7 @@ class LoadContent extends TextBookEvent {
     this.forceCloseLeftPane = false, // Default to false
     this.preserveRemoveNikud =
         false, // Default to false for backward compatibility
+    this.preserveContinuousReadingMode = false,
   });
 
   @override
@@ -41,7 +47,19 @@ class LoadContent extends TextBookEvent {
         loadCommentators,
         forceCloseLeftPane,
         preserveRemoveNikud,
+        preserveContinuousReadingMode,
       ];
+}
+
+/// החלפת מצב קריאה רציף. **רינדור בלבד** — לא משנה content, search, links,
+/// selectedIndex, או visibleIndices (שנותרים ברמת שורות מקור).
+class ToggleContinuousReadingMode extends TextBookEvent {
+  final bool enabled;
+
+  const ToggleContinuousReadingMode(this.enabled);
+
+  @override
+  List<Object?> get props => [enabled];
 }
 
 class UpdateFontSize extends TextBookEvent {

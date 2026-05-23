@@ -35,6 +35,7 @@ import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 
@@ -447,14 +448,17 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final targetIndex =
         (lineNumber - 1).clamp(0, state.content.length - 1).toInt();
 
-    if (state.scrollController.isAttached) {
-      await state.scrollController.scrollTo(
-        index: targetIndex,
-        alignment: 0.05,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-      );
-    }
+    await scrollToSourceLine(
+      scrollController: state.scrollController,
+      scrollOffsetController: widget.scrollOffsetController,
+      positionsListener: state.positionsListener,
+      segments: state.readingSegments,
+      lineIndex: targetIndex,
+      viewportExtent: context.size?.height ?? MediaQuery.sizeOf(context).height,
+      alignment: 0.05,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+    );
 
     if (!mounted || !context.mounted) {
       return;
