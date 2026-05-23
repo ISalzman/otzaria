@@ -35,8 +35,10 @@ void main() {
     bool showSplitView = true,
     TextBookTab? tab,
     _RecordingTabsBloc? tabsBloc,
+    List<String> activeCommentators = const [],
   }) {
-    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final textBookBloc = _TestTextBookBloc(
+        _loadedState(activeCommentators: activeCommentators));
     final personalNotesBloc =
         _TestPersonalNotesBloc(const PersonalNotesState.initial());
     final settingsBloc = _TestSettingsBloc(SettingsState.initial());
@@ -164,10 +166,15 @@ void main() {
   });
 
   testWidgets('כפתור ההרחבה מוסיף CommentatorsTab ל-TabsBloc', (tester) async {
+    // הגדרת רוחב מסוים כדי שכל הלחצנים ייכנסו בלי תפריט גלישה
+    await tester.binding.setSurfaceSize(const Size(800, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final sourceTab = TextBookTab(
       book: TextBook(title: 'ספר בדיקה'),
       index: 0,
-      blocOverride: _TestTextBookBloc(_loadedState()),
+      blocOverride: _TestTextBookBloc(
+          _loadedState(activeCommentators: const ['רש"י'])),
     );
     addTearDown(sourceTab.dispose);
 
@@ -177,6 +184,7 @@ void main() {
     await tester.pumpWidget(buildPanel(
       tab: sourceTab,
       tabsBloc: tabsBloc,
+      activeCommentators: const ['רש"י'],
     ));
     await tester.pump();
 
@@ -250,16 +258,19 @@ class _TabSwitcherWrapperState extends State<_TabSwitcherWrapper> {
 
 // ===== Helpers =====
 
-TextBookLoaded _loadedState() => TextBookLoaded(
+TextBookLoaded _loadedState({
+  List<String> activeCommentators = const [],
+}) =>
+    TextBookLoaded(
       book: TextBook(title: 'ספר בדיקה'),
       showLeftPane: false,
       content: const ['שורה א', 'שורה ב'],
       fontSize: 18,
       showSplitView: true,
       showPageShapeView: false,
-      activeCommentators: const [],
+      activeCommentators: activeCommentators,
       commentatorGroups: const [],
-      availableCommentators: const [],
+      availableCommentators: activeCommentators,
       links: const <Link>[],
       visibleLinks: const <Link>[],
       linksByLine: const {},

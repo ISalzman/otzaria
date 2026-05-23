@@ -107,10 +107,13 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
 
   String? _savedSelectedText;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = '';
   int _currentSearchIndex = 0;
   int _totalSearchResults = 0;
   bool _allExpanded = true;
+  // האם להציג את שדה החיפוש (true) או את שורת ארבעת הלחצנים (false)
+  bool _showSearchField = false;
   final Map<String, bool> _expansionStates = {};
 
   // Anti-jitter search stats
@@ -181,6 +184,33 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     return -1;
   }
 
+  void _handleSearchFocusChange() {
+    if (!mounted) return;
+    if (!_searchFocusNode.hasFocus &&
+        _showSearchField &&
+        _searchController.text.isEmpty) {
+      setState(() => _showSearchField = false);
+    }
+  }
+
+  void _openInlineSearch() {
+    setState(() => _showSearchField = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _searchFocusNode.requestFocus();
+    });
+  }
+
+  void _clearSearchAndCloseField() {
+    _searchController.clear();
+    setState(() {
+      _searchQuery = '';
+      _currentSearchIndex = 0;
+      _totalSearchResults = 0;
+      _searchResultsPerLink.clear();
+      _showSearchField = false;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -201,6 +231,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     _lastSeenFilterRequest = widget.openFilterRequest?.value ?? 0;
     widget.openFilterNotifier?.addListener(_onOpenFilterRequest);
     widget.externalSearchController?.addListener(_onExternalSearchChanged);
+    _searchFocusNode.addListener(_handleSearchFocusChange);
     _loadCommentatorGroups();
   }
 
@@ -309,6 +340,8 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     widget.openFilterRequest?.removeListener(_handleOpenFilterRequest);
     widget.openFilterNotifier?.removeListener(_onOpenFilterRequest);
     widget.externalSearchController?.removeListener(_onExternalSearchChanged);
+    _searchFocusNode.removeListener(_handleSearchFocusChange);
+    _searchFocusNode.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -421,21 +454,6 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         PanelTabHeader(
           controller: _tabController,
           onClose: widget.onClose,
-          extraActions: [
-            IconButton(
-              iconSize: 18,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
-              tooltip: 'פתח כרטסיית מפרשים',
-              icon: const Icon(FluentIcons.arrow_expand_24_regular),
-              onPressed: () => context.read<TabsBloc>().add(
-                    AddTab(
-                      PdfCommentatorsTab(sourceTab: widget.tab),
-                      insertAdjacent: true,
-                    ),
-                  ),
-            ),
-          ],
           onTap: (index) {
             if (index == 0 && _showFilterTab) {
               setState(() => _showFilterTab = false);
@@ -547,132 +565,148 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: Row(
-        children: [
-          CommentatorsFilterButton(
-            isActive: false,
+      child: _showSearchField ? _buildSearchFieldRow() : _buildButtonsRow(),
+    );
+  }
+
+  Widget _buildButtonsRow() {
+    const double gap = 16;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // 1. בחירת מפרשים
+        CommentatorsFilterButton(
+          isActive: false,
+          onPressed: () {
+            setState(() {
+              _showFilterTab = true;
+            });
+          },
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+          ),
+          iconSize: 20,
+        ),
+        // 2. הרחב/כווץ הכל — רק כשיש מפרשים פעילים (לוגיקה מקורית)
+        if (widget.tab.activeCommentators.isNotEmpty) ...[
+          const SizedBox(width: gap),
+          IconButton(
+            icon: Icon(
+              _allExpanded
+                  ? FluentIcons.arrow_collapse_all_24_regular
+                  : FluentIcons.arrow_expand_all_24_regular,
+            ),
+            tooltip:
+                _allExpanded ? 'כווץ את כל המפרשים' : 'הרחב את כל המפרשים',
             onPressed: () {
               setState(() {
-                _showFilterTab = true;
+                final nextExpanded = !_allExpanded;
+                _allExpanded = nextExpanded;
+
+                for (final key in _expansionStates.keys.toList()) {
+                  _expansionStates[key] = nextExpanded;
+                }
+                for (final group in _orderedGroups) {
+                  _expansionStates[group.bookTitle] = nextExpanded;
+                }
               });
             },
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(
-              minWidth: 40,
-              minHeight: 40,
-            ),
-            iconSize: 20,
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: RtlTextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'חפש בתוך המפרשים המוצגים...',
-                prefixIcon: const Icon(FluentIcons.search_24_regular),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_totalSearchResults > 0) ...[
-                            Text(
-                              '${_currentSearchIndex + 1}/$_totalSearchResults',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon:
-                                  const Icon(FluentIcons.chevron_up_24_regular),
-                              iconSize: 20,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                  minWidth: 24, minHeight: 24),
-                              onPressed: _currentSearchIndex > 0
-                                  ? () {
-                                      setState(() {
-                                        _currentSearchIndex--;
-                                      });
-                                      _scrollToSearchResult();
-                                    }
-                                  : null,
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                  FluentIcons.chevron_down_24_regular),
-                              iconSize: 20,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                  minWidth: 24, minHeight: 24),
-                              onPressed:
-                                  _currentSearchIndex < _totalSearchResults - 1
-                                      ? () {
-                                          setState(() {
-                                            _currentSearchIndex++;
-                                          });
-                                          _scrollToSearchResult();
-                                        }
-                                      : null,
-                            ),
-                          ],
-                          IconButton(
-                            icon: const Icon(FluentIcons.dismiss_24_regular),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _searchQuery = '';
-                                _currentSearchIndex = 0;
-                                _totalSearchResults = 0;
-                                _searchResultsPerLink.clear();
-                              });
-                            },
-                          ),
-                        ],
-                      )
-                    : null,
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8.0),
+        ],
+        const SizedBox(width: gap),
+        // 3. פתיחה בכרטיסייה חדשה
+        IconButton(
+          icon: const Icon(FluentIcons.open_24_regular),
+          tooltip: 'פתח כרטסיית מפרשים',
+          onPressed: () => context.read<TabsBloc>().add(
+                AddTab(
+                  PdfCommentatorsTab(sourceTab: widget.tab),
+                  insertAdjacent: true,
                 ),
               ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                  _currentSearchIndex = 0;
-                  if (value.isEmpty) {
-                    _searchResultsPerLink.clear();
-                    _totalSearchResults = 0;
-                  }
-                });
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (widget.tab.activeCommentators.isNotEmpty)
-            IconButton(
-              icon: Icon(
-                _allExpanded
-                    ? FluentIcons.arrow_collapse_all_24_regular
-                    : FluentIcons.arrow_expand_all_24_regular,
-              ),
-              tooltip:
-                  _allExpanded ? 'כווץ את כל המפרשים' : 'הרחב את כל המפרשים',
-              onPressed: () {
-                setState(() {
-                  final nextExpanded = !_allExpanded;
-                  _allExpanded = nextExpanded;
+        ),
+        const SizedBox(width: gap),
+        // 4. הפעלת שדה החיפוש
+        IconButton(
+          icon: const Icon(FluentIcons.search_24_regular),
+          tooltip: 'חיפוש',
+          onPressed: _openInlineSearch,
+        ),
+      ],
+    );
+  }
 
-                  // החל על כל הקבוצות שכבר נצפו/נטענו כדי שהלחצן ישפיע מיידית
-                  for (final key in _expansionStates.keys.toList()) {
-                    _expansionStates[key] = nextExpanded;
-                  }
-                  for (final group in _orderedGroups) {
-                    _expansionStates[group.bookTitle] = nextExpanded;
-                  }
-                });
-              },
+  Widget _buildSearchFieldRow() {
+    return RtlTextField(
+      focusNode: _searchFocusNode,
+      controller: _searchController,
+      decoration: InputDecoration(
+        hintText: 'חפש בתוך המפרשים המוצגים...',
+        prefixIcon: const Icon(FluentIcons.search_24_regular),
+        suffixIcon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_searchQuery.isNotEmpty && _totalSearchResults > 0) ...[
+              Text(
+                '${_currentSearchIndex + 1}/$_totalSearchResults',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(FluentIcons.chevron_up_24_regular),
+                iconSize: 20,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 24, minHeight: 24),
+                onPressed: _currentSearchIndex > 0
+                    ? () {
+                        setState(() {
+                          _currentSearchIndex--;
+                        });
+                        _scrollToSearchResult();
+                      }
+                    : null,
+              ),
+              IconButton(
+                icon: const Icon(FluentIcons.chevron_down_24_regular),
+                iconSize: 20,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 24, minHeight: 24),
+                onPressed: _currentSearchIndex < _totalSearchResults - 1
+                    ? () {
+                        setState(() {
+                          _currentSearchIndex++;
+                        });
+                        _scrollToSearchResult();
+                      }
+                    : null,
+              ),
+            ],
+            IconButton(
+              icon: const Icon(FluentIcons.dismiss_24_regular),
+              tooltip: 'סגור חיפוש',
+              onPressed: _clearSearchAndCloseField,
             ),
-        ],
+          ],
+        ),
+        isDense: true,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.0),
+        ),
       ),
+      onChanged: (value) {
+        setState(() {
+          _searchQuery = value;
+          _currentSearchIndex = 0;
+          if (value.isEmpty) {
+            _searchResultsPerLink.clear();
+            _totalSearchResults = 0;
+          }
+        });
+      },
     );
   }
 
