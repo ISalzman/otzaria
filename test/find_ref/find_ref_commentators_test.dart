@@ -287,15 +287,28 @@ void main() {
       expect(_titles(result), ['אבן עזרא', 'רמב"ן', 'רש"י']);
     });
 
-    test('מסיר כפילויות לפי targetBookTitle (שומר על הראשון)', () async {
-      // אם אותו targetBookTitle מופיע פעמיים, אנחנו שומרים על ה-row הראשון
+    test('מסיר כפילויות לפי (targetBookTitle, targetBookId) — שומר על הראשון',
+        () async {
+      // אם אותו (title, bookId) מופיע פעמיים, אנחנו שומרים על ה-row הראשון
       // (כולל ה-targetLineIndex שלו). זה חשוב לסגמנט-level: שני קישורים שונים
       // לאותו מפרש שונים זה מזה רק ב-targetLineIndex, אנחנו רוצים את הראשון.
       final repo = _repoWith(
         bySourceLine: (id) async => [
-          {'targetBookTitle': 'רש"י', 'targetLineIndex': 100},
-          {'targetBookTitle': 'רש"י', 'targetLineIndex': 999},
-          {'targetBookTitle': 'אבן עזרא', 'targetLineIndex': 50},
+          {
+            'targetBookTitle': 'רש"י',
+            'targetBookId': 50,
+            'targetLineIndex': 100,
+          },
+          {
+            'targetBookTitle': 'רש"י',
+            'targetBookId': 50,
+            'targetLineIndex': 999,
+          },
+          {
+            'targetBookTitle': 'אבן עזרא',
+            'targetBookId': 60,
+            'targetLineIndex': 50,
+          },
         ],
       );
 
@@ -305,6 +318,62 @@ void main() {
       final segmentByTitle = {for (final e in result) e.title: e.targetSegment};
       expect(segmentByTitle['רש"י'], 100); // ראשון, לא 999
       expect(segmentByTitle['אבן עזרא'], 50);
+    });
+
+    test(
+        'שני מפרשים בעלי אותה כותרת ו-targetBookId שונה — שניהם נשמרים '
+        '(P1 רגרסיה)', () async {
+      // המקרה שהדיפף נועד לתקן: book table יכול להכיל שני book records נפרדים
+      // עם אותה כותרת (למשל "רש"י" על תורה ועל בבלי). dedupe לפי title בלבד
+      // היה זורק אחד, וגם resolve לפי id בדיאלוג לא היה משנה — כי הרשומה
+      // נעלמת לפני שה-UI רואה אותה. כעת dedupe לפי (title, bookId) שומר את שניהם.
+      final repo = _repoWith(
+        bySourceLine: (id) async => [
+          {
+            'targetBookTitle': 'רש"י',
+            'targetBookId': 100,
+            'targetLineIndex': 10,
+          },
+          {
+            'targetBookTitle': 'רש"י',
+            'targetBookId': 200,
+            'targetLineIndex': 20,
+          },
+        ],
+      );
+
+      final result = await repo.getCommentatorsForResult(_ref(sourceLineId: 1));
+
+      expect(result, hasLength(2),
+          reason: 'שני מפרשים בעלי targetBookId שונה לא יכולים להתאחד');
+      // כל אחד שומר את ה-bookId וה-targetSegment שלו (אסור שהם יתערבבו).
+      final byBookId = {for (final e in result) e.bookId: e};
+      expect(byBookId[100], isNotNull);
+      expect(byBookId[100]!.targetSegment, 10);
+      expect(byBookId[200], isNotNull);
+      expect(byBookId[200]!.targetSegment, 20);
+      // שני המופעים נושאים את אותה כותרת — אסור שהדיפף ישנה את התווית.
+      expect(result.every((e) => e.title == 'רש"י'), isTrue);
+    });
+
+    test(
+        'rows ללא targetBookId — נחשבים אותו "ספר" ומתאחדים '
+        '(תאימות לאחור)', () async {
+      // אם DB ישן לא מחזיר targetBookId, כל ה-rows באותו title חולקים מפתח
+      // dedupe (title, null) — והשני מסונן. זה משחזר את ההתנהגות הקודמת ולא
+      // יוצר רעש בתפריט כשאין מידע מבדל.
+      final repo = _repoWith(
+        bySourceLine: (id) async => [
+          {'targetBookTitle': 'רש"י', 'targetLineIndex': 11},
+          {'targetBookTitle': 'רש"י', 'targetLineIndex': 22},
+        ],
+      );
+
+      final result = await repo.getCommentatorsForResult(_ref(sourceLineId: 1));
+
+      expect(result, hasLength(1));
+      expect(result.single.bookId, isNull);
+      expect(result.single.targetSegment, 11);
     });
 
     test('targetBookTitle ריק/null — מדלג', () async {

@@ -42,6 +42,60 @@ class _CommentatorEntry {
   });
 }
 
+/// מאתר את ה-`Book` הנכון בעץ הספרייה לפי [bookId] אם נמסר, ולפי [title]
+/// אם לא. הסיבה: שני ספרים יכולים לחלוק כותרת זהה (למשל גרסאות שונות של
+/// פירוש), וה-link שייצא משאילתת המפרשים יודע בדיוק לאיזה ספר ללכת —
+/// פתרון רק לפי title היה פותח את הראשון שנמצא בעץ.
+Book? _resolveCommentatorBook(
+  Category library,
+  String title, {
+  required int? bookId,
+}) {
+  if (bookId != null && bookId > 0) {
+    final byId = _findBookInLibraryById(library, bookId);
+    if (byId != null) return byId;
+  }
+  // fallback ל-title (תאימות לאחור עם DB שלא מחזיר targetBookId).
+  return _findBookInLibraryByTitle(library, title, preferTextBook: true);
+}
+
+Book? _findBookInLibraryById(Category category, int bookId) {
+  for (final b in category.books) {
+    if (b.id == bookId) return b;
+  }
+  for (final subCat in category.subCategories) {
+    final found = _findBookInLibraryById(subCat, bookId);
+    if (found != null) return found;
+  }
+  return null;
+}
+
+Book? _findBookInLibraryByTitle(Category category, String title,
+    {bool preferTextBook = false}) {
+  // עוברים פעמיים אם preferTextBook: ראשונה — רק TextBook; שנייה — כל סוג.
+  for (final passOnlyText in preferTextBook ? [true, false] : [false]) {
+    final result = _findBookInLibraryByTitlePass(category, title,
+        onlyTextBook: passOnlyText);
+    if (result != null) return result;
+  }
+  return null;
+}
+
+Book? _findBookInLibraryByTitlePass(Category category, String title,
+    {required bool onlyTextBook}) {
+  for (final b in category.books) {
+    if (b.title != title) continue;
+    if (onlyTextBook && b is! TextBook) continue;
+    return b;
+  }
+  for (final subCat in category.subCategories) {
+    final found = _findBookInLibraryByTitlePass(subCat, title,
+        onlyTextBook: onlyTextBook);
+    if (found != null) return found;
+  }
+  return null;
+}
+
 class _FindRefDialogState extends State<FindRefDialog> {
   int _selectedIndex = 0;
   bool _includePersonalBooks = false;
@@ -162,8 +216,10 @@ class _FindRefDialogState extends State<FindRefDialog> {
             _CommentatorEntry(
               title: e.title,
               targetSegment: e.targetSegment,
+              // פתרון לפי `bookId` כשזמין כדי שלא ייפתח ספר בעל אותה כותרת
+              // אך מזהה אחר; ה-fallback ל-title שומר על תאימות.
               book:
-                  _findBookInLibrary(library, e.title, preferTextBook: true) ??
+                  _resolveCommentatorBook(library, e.title, bookId: e.bookId) ??
                       TextBook(title: e.title),
             ),
         ];
@@ -251,8 +307,13 @@ class _FindRefDialogState extends State<FindRefDialog> {
         // כי PdfBookTab אינו מקבל commentators כלל.
         final needsTextBook =
             initialCommentators != null && initialCommentators.isNotEmpty;
-        book = _findBookInLibrary(library, ref.title,
-            preferTextBook: needsTextBook);
+        // ספרים אישיים: ה-`bookId` שלהם שייך ל-user_books.db ואין לו תאומים
+        // ב-library object, לכן ניפול ל-title; ספר רשמי עם `bookId > 0`
+        // נפתח דרך ה-id כדי שלא יחליף שני ספרים בעלי אותה כותרת.
+        final officialBookId =
+            (ref.bookId > 0 && !ref.isUserBook) ? ref.bookId : null;
+        book = _findBookInLibraryByIdThenTitle(library, ref.title,
+            bookId: officialBookId, preferTextBook: needsTextBook);
       } catch (e) {
         debugPrint('Error searching library: $e');
       }
@@ -284,8 +345,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
         Overlay.of(context).context.findRenderObject() as RenderBox;
     final box = buttonContext.findRenderObject() as RenderBox;
     final topLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
-    final bottomRight = box.localToGlobal(
-        box.size.bottomRight(Offset.zero),
+    final bottomRight = box.localToGlobal(box.size.bottomRight(Offset.zero),
         ancestor: overlayBox);
 
     // אנו רוצים שה-popup ייפתח לכיוון שמאל פיזית: הקצה הימני של ה-popup
@@ -332,31 +392,20 @@ class _FindRefDialogState extends State<FindRefDialog> {
     openBook(context, entry.book, segment, '');
   }
 
-  Book? _findBookInLibrary(Category category, String title,
-      {bool preferTextBook = false}) {
-    // עוברים פעמיים אם preferTextBook: ראשונה — רק TextBook; שנייה — כל סוג.
-    // כך מקבלים TextBook אם קיים, ובלעדיו מקבלים PdfBook (או אחר).
-    for (final passOnlyText in preferTextBook ? [true, false] : [false]) {
-      final result =
-          _findBookInLibraryPass(category, title, onlyTextBook: passOnlyText);
-      if (result != null) return result;
+  /// מחפש ספר ב-[category] לפי [bookId] כשנמסר, ונופל ל-[title] אם לא נמצא.
+  /// פתרון לפי id מונע התנגשות בין שני ספרים בעלי כותרת זהה בעץ.
+  Book? _findBookInLibraryByIdThenTitle(
+    Category category,
+    String title, {
+    required int? bookId,
+    bool preferTextBook = false,
+  }) {
+    if (bookId != null) {
+      final byId = _findBookInLibraryById(category, bookId);
+      if (byId != null) return byId;
     }
-    return null;
-  }
-
-  Book? _findBookInLibraryPass(Category category, String title,
-      {required bool onlyTextBook}) {
-    for (final b in category.books) {
-      if (b.title != title) continue;
-      if (onlyTextBook && b is! TextBook) continue;
-      return b;
-    }
-    for (final subCat in category.subCategories) {
-      final found =
-          _findBookInLibraryPass(subCat, title, onlyTextBook: onlyTextBook);
-      if (found != null) return found;
-    }
-    return null;
+    return _findBookInLibraryByTitle(category, title,
+        preferTextBook: preferTextBook);
   }
 
   @override
@@ -545,73 +594,76 @@ class _FindRefDialogState extends State<FindRefDialog> {
                         controller: _resultsScrollController,
                         itemCount: state.refs.length,
                         itemBuilder: (context, index) {
-                        final ref = state.refs[index];
-                        final isSelected = index == _selectedIndex;
-                        final eligible =
-                            !ref.isPdf && ref.bookId > 0 && !ref.isUserBook;
-                        // טעינה lazy בעת רינדור — ListView.builder יפעיל את
-                        // ה-itemBuilder רק עבור שורות נראות. ה-cache ב-repository
-                        // ימנע קריאות חוזרות.
-                        if (eligible) _ensureCommentatorsLoaded(ref);
-                        final cached =
-                            _commentatorsByRef[_commentatorsKey(ref)];
-                        final showButton =
-                            eligible && cached != null && cached.isNotEmpty;
-                        final menuButtonKey = _getCommentatorsButtonKey(index);
-                        return Container(
-                          key: _getKeyForIndex(index),
-                          margin: const EdgeInsets.symmetric(
-                              horizontal: 8.0, vertical: 4.0),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? Theme.of(context).colorScheme.primaryContainer
-                                : null,
-                            borderRadius: BorderRadius.circular(8.0),
-                          ),
-                          child: ListTile(
-                              hoverColor:
-                                  showButton ? Colors.transparent : null,
-                              leading: ref.isPdf
-                                  ? const Icon(
-                                      FluentIcons.document_pdf_24_regular)
+                          final ref = state.refs[index];
+                          final isSelected = index == _selectedIndex;
+                          final eligible =
+                              !ref.isPdf && ref.bookId > 0 && !ref.isUserBook;
+                          // טעינה lazy בעת רינדור — ListView.builder יפעיל את
+                          // ה-itemBuilder רק עבור שורות נראות. ה-cache ב-repository
+                          // ימנע קריאות חוזרות.
+                          if (eligible) _ensureCommentatorsLoaded(ref);
+                          final cached =
+                              _commentatorsByRef[_commentatorsKey(ref)];
+                          final showButton =
+                              eligible && cached != null && cached.isNotEmpty;
+                          final menuButtonKey =
+                              _getCommentatorsButtonKey(index);
+                          return Container(
+                            key: _getKeyForIndex(index),
+                            margin: const EdgeInsets.symmetric(
+                                horizontal: 8.0, vertical: 4.0),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer
                                   : null,
-                              title: Text(
-                                ref.reference,
-                                style: TextStyle(
-                                  fontWeight: isSelected
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: ListTile(
+                                hoverColor:
+                                    showButton ? Colors.transparent : null,
+                                leading: ref.isPdf
+                                    ? const Icon(
+                                        FluentIcons.document_pdf_24_regular)
+                                    : null,
+                                title: Text(
+                                  ref.reference,
+                                  style: TextStyle(
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
                                 ),
-                              ),
-                              subtitle: ref.bookPath.isEmpty
-                                  ? null
-                                  : LibraryOverflowTooltipText(
-                                      text: ref.bookPath,
-                                      maxLines: 1,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                    ),
-                              trailing: showButton
-                                  ? IconButton(
-                                      key: menuButtonKey,
-                                      icon: const Icon(
-                                          FluentIcons.library_24_regular),
-                                      tooltip: 'הצג מפרשים זמינים',
-                                      onPressed: () => _showCommentatorsMenu(
-                                          ref, menuButtonKey, cached),
-                                    )
-                                  : null,
-                              onTap: () {
-                                _openRef(ref);
-                              }),
-                        );
-                      },
+                                subtitle: ref.bookPath.isEmpty
+                                    ? null
+                                    : LibraryOverflowTooltipText(
+                                        text: ref.bookPath,
+                                        maxLines: 1,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                      ),
+                                trailing: showButton
+                                    ? IconButton(
+                                        key: menuButtonKey,
+                                        icon: const Icon(
+                                            FluentIcons.library_24_regular),
+                                        tooltip: 'הצג מפרשים זמינים',
+                                        onPressed: () => _showCommentatorsMenu(
+                                            ref, menuButtonKey, cached),
+                                      )
+                                    : null,
+                                onTap: () {
+                                  _openRef(ref);
+                                }),
+                          );
+                        },
                       ),
                     );
                   }

@@ -6,6 +6,14 @@ class DbCommentatorEntry {
   /// שם ספר המפרש (כפי שמופיע ב-`book.title`).
   final String title;
 
+  /// מזהה ספר המפרש ב-DB (`book.id`).
+  ///
+  /// נדרש לפתרון חד-משמעי של ה-`Book` כשיש שני ספרים בעלי אותה כותרת
+  /// בעץ הספרייה (פתרון לפי title בלבד היה פותח את הראשון שנמצא בעץ,
+  /// גם אם ה-link המקושר התכוון לאחר). `null` רק כשה-row של ה-DB לא
+  /// כלל `targetBookId` (תאימות לאחור).
+  final int? bookId;
+
   /// ה-`lineIndex` בספר המפרש שאליו יש לנווט, אם ידוע במדויק.
   ///
   /// `non-null` רק במסלול segment-level (`sourceLineId > 0`) — זה
@@ -25,6 +33,7 @@ class DbCommentatorEntry {
 
   const DbCommentatorEntry({
     required this.title,
+    required this.bookId,
     required this.targetSegment,
   });
 
@@ -32,11 +41,12 @@ class DbCommentatorEntry {
   bool operator ==(Object other) =>
       other is DbCommentatorEntry &&
       other.title == title &&
+      other.bookId == bookId &&
       other.targetSegment == targetSegment;
 
   @override
-  int get hashCode => Object.hash(title, targetSegment);
+  int get hashCode => Object.hash(title, bookId, targetSegment);
 
   @override
-  String toString() => 'DbCommentatorEntry($title @ $targetSegment)';
+  String toString() => 'DbCommentatorEntry($title #$bookId @ $targetSegment)';
 }
