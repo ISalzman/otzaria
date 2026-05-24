@@ -15,6 +15,32 @@ String previewForLabel(String text, {int maxLen = 25}) {
   return '${cleaned.substring(0, maxLen)}…';
 }
 
+/// בונה תווית "חפש '<טקסט>' <סיומת>" שבה רק הטקסט שבתוך המרכאות
+/// ייחתך עם `…` אם אין מספיק מקום, בעוד הקידומת "חפש '" והסיומת
+/// (לדוגמה "' בספר זה") נשארות תמיד גלויות במלואן.
+Widget buildSearchMenuLabel({
+  required String selectedText,
+  required String suffix,
+}) {
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    textDirection: TextDirection.rtl,
+    children: [
+      const Text("חפש '", textDirection: TextDirection.rtl),
+      Flexible(
+        child: Text(
+          selectedText,
+          overflow: TextOverflow.ellipsis,
+          softWrap: false,
+          maxLines: 1,
+          textDirection: TextDirection.rtl,
+        ),
+      ),
+      Text("' $suffix", textDirection: TextDirection.rtl),
+    ],
+  );
+}
+
 void openGlobalSearch(
   BuildContext context,
   String? selectedText, {

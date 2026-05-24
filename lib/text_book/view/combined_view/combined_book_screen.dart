@@ -629,12 +629,20 @@ class _CombinedViewState extends State<CombinedView> {
               ? [
                   AppContextMenuEntry(
                     label: "חפש '$preview' בספר זה",
+                    labelWidget: buildSearchMenuLabel(
+                      selectedText: cleanedText,
+                      suffix: 'בספר זה',
+                    ),
                     icon: FluentIcons.book_search_24_regular,
                     onTap: () =>
                         widget.openLeftPaneTab(1, searchText: cleanedText),
                   ),
                   AppContextMenuEntry(
                     label: "חפש '$preview' בכל הספרים",
+                    labelWidget: buildSearchMenuLabel(
+                      selectedText: cleanedText,
+                      suffix: 'בכל הספרים',
+                    ),
                     icon: FluentIcons.library_24_regular,
                     onTap: () => openGlobalSearch(
                       context,
