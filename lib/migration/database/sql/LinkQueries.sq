@@ -36,6 +36,22 @@ AND ct.name IN ('COMMENTARY', 'TARGUM')
 GROUP BY l.targetBookId, b.title, a.name
 ORDER BY b.orderIndex, b.title;
 
+-- מחזיר גם את `targetLineIndex` (=MIN(ln.lineIndex)) כדי לפתוח את ספר המפרש
+-- ישירות בשורה המקבילה לסגמנט המקור, ללא צורך בשאילתה נוספת בעת הקליק.
+selectCommentatorsBySourceLine:
+SELECT DISTINCT l.targetBookId, b.title AS targetBookTitle, a.name AS author,
+       COUNT(*) AS linkCount, MIN(ln.lineIndex) AS targetLineIndex
+FROM link l
+JOIN connection_type ct ON l.connectionTypeId = ct.id
+JOIN book b ON l.targetBookId = b.id
+JOIN line ln ON l.targetLineId = ln.id
+LEFT JOIN book_author ba ON b.id = ba.bookId
+LEFT JOIN author a ON ba.authorId = a.id
+WHERE l.sourceLineId = ?
+AND ct.name IN ('COMMENTARY', 'TARGUM')
+GROUP BY l.targetBookId, b.title, a.name
+ORDER BY b.orderIndex, b.title;
+
 insert:
 INSERT INTO link (sourceBookId, targetBookId, sourceLineId, targetLineId, connectionTypeId)
 VALUES (?, ?, ?, ?, ?);

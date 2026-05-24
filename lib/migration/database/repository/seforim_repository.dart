@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:logging/logging.dart';
 
+import '../../../utils/text/text_manipulation.dart';
 import '../../models/author.dart';
 import '../../models/book.dart';
 import '../../models/category.dart';
@@ -30,7 +31,26 @@ class SeforimRepository {
 
   bool _initialized = false;
 
+  /// קאש בזיכרון לערכי TOC מעובדים לכל ספר.
+  /// המפתח: bookId. הערך: מבנה הכולל את כל הערכים + מבנה היררכי.
+  final Map<int, _TocBookCache> _tocCache = <int, _TocBookCache>{};
+
+  /// קאש בזיכרון לערכי AltToc (כותרות-משנה) לכל ספר.
+  final Map<int, _TocBookCache> _altTocCache = <int, _TocBookCache>{};
+
   SeforimRepository(this._database);
+
+  /// מבטל את ערך הקאש של [getTocEntriesForReference] ו-[getAltTocEntriesForReference].
+  /// אם [bookId] סופק — מבטל רק את הערך של אותו ספר; אחרת מנקה הכול.
+  void _invalidateTocCache({int? bookId}) {
+    if (bookId != null) {
+      _tocCache.remove(bookId);
+      _altTocCache.remove(bookId);
+    } else {
+      _tocCache.clear();
+      _altTocCache.clear();
+    }
+  }
 
   /// Ensures the database is initialized before use
   Future<void> ensureInitialized() async {
@@ -314,8 +334,7 @@ class SeforimRepository {
         );
         if (newCategory.id != 0) {
           // עדכון אינקרמנטלי של category_closure — מונע rebuild גלובלי בעלייה.
-          await _insertClosureForCategory(
-              newCategory.id, category.parentId);
+          await _insertClosureForCategory(newCategory.id, category.parentId);
           return newCategory.id;
         }
         throw Exception(
@@ -867,6 +886,7 @@ class SeforimRepository {
   /// Creates toc_text entries and toc_entry entries.
   Future<void> _insertTocEntriesForExternalBook(
       int bookId, List<TocEntry> entries) async {
+    _invalidateTocCache(bookId: bookId);
     _logger.fine(
         'Inserting ${entries.length} TOC entries for external book $bookId');
     final localToActualIds = <int, int>{};
@@ -1060,6 +1080,7 @@ class SeforimRepository {
   }
 
   Future<int> insertTocEntry(TocEntry entry) async {
+    _invalidateTocCache(bookId: entry.bookId);
     final textId = entry.textId ?? await _getOrCreateTocText(entry.text);
 
     final entryWithTextId = TocEntry(
@@ -1081,15 +1102,19 @@ class SeforimRepository {
   // Nouvelle méthode pour mettre à jour hasChildren
   Future<void> updateTocEntryHasChildren(
       int tocEntryId, bool hasChildren) async {
+    // bookId לא ידוע כאן — ניקוי גורף בטוח יותר מ-stale data.
+    _invalidateTocCache();
     await _database.tocDao.updateHasChildren(tocEntryId, hasChildren);
   }
 
   Future<void> updateTocEntryLineId(int tocEntryId, int lineId) async {
+    _invalidateTocCache();
     await _database.tocDao.updateLineId(tocEntryId, lineId);
   }
 
   Future<void> updateTocEntryIsLastChild(
       int tocEntryId, bool isLastChild) async {
+    _invalidateTocCache();
     await _database.tocDao.updateIsLastChild(tocEntryId, isLastChild);
   }
 
@@ -1097,6 +1122,7 @@ class SeforimRepository {
   Future<void> bulkUpdateTocEntryLineIds(
       List<({int tocId, int lineId})> updates) async {
     if (updates.isEmpty) return;
+    _invalidateTocCache();
     final db = await _database.database;
     withTransaction(db, () {
       for (final update in updates) {
@@ -1110,6 +1136,7 @@ class SeforimRepository {
   Future<void> bulkUpdateTocEntryHasChildren(
       List<int> tocEntryIds, bool hasChildren) async {
     if (tocEntryIds.isEmpty) return;
+    _invalidateTocCache();
     final db = await _database.database;
     final placeholders = List.filled(tocEntryIds.length, '?').join(',');
     db.execute(
@@ -1121,6 +1148,7 @@ class SeforimRepository {
   Future<void> bulkUpdateTocEntryIsLastChild(
       List<int> tocEntryIds, bool isLastChild) async {
     if (tocEntryIds.isEmpty) return;
+    _invalidateTocCache();
     final db = await _database.database;
     final placeholders = List.filled(tocEntryIds.length, '?').join(',');
     db.execute(
@@ -1942,6 +1970,7 @@ class SeforimRepository {
   /// Deletes a book and all its related data (lines, TOC entries, links, etc.)
   /// This is useful when replacing an existing book.
   Future<void> deleteBookCompletely(int bookId) async {
+    _invalidateTocCache(bookId: bookId);
     _logger.info('Deleting book completely: $bookId');
 
     final db = await _database.database;
@@ -1995,6 +2024,7 @@ class SeforimRepository {
   /// Updates tocEntry.lineId for all entries in a book by matching lineIndex.
   /// Should be called after lines and tocEntries are inserted for a book (insertContent=true).
   Future<void> updateTocEntryLineIdsByLineIndex(int bookId) async {
+    _invalidateTocCache(bookId: bookId);
     final db = await _database.database;
     db.execute('''
       UPDATE tocEntry SET lineId = (
@@ -2152,6 +2182,7 @@ extension FileSyncRepository on SeforimRepository {
   /// Deletes all TOC entries for a specific book.
   /// Used when updating book content.
   Future<void> deleteBookTocEntries(int bookId) async {
+    _invalidateTocCache(bookId: bookId);
     final db = await database.database;
     db.execute('DELETE FROM tocEntry WHERE bookId = ?', [bookId]);
   }
@@ -2276,16 +2307,39 @@ extension BookAcronymRepository on SeforimRepository {
   /// [bookId] - The book ID
   /// [bookTitle] - The book title (for building full reference)
   /// [queryTokens] - Optional tokens to filter TOC entries
+  ///
+  /// בנייה ראשונית של ערכי ה-TOC (SQL + הרכבת reference + נורמליזציה)
+  /// נשמרת במטמון פר-ספר. שיחות חוזרות (אופייניות בעת הקלדה הדרגתית של
+  /// המשתמש) מסננות in-memory בלבד.
   Future<List<Map<String, dynamic>>> getTocEntriesForReference(
       int bookId, String bookTitle,
       {List<String>? queryTokens}) async {
+    final cache = await _buildTocCacheForBook(bookId, bookTitle);
+
+    if (cache.all.isEmpty || queryTokens == null || queryTokens.isEmpty) {
+      return cache.all.map((e) => e.toMap()).toList();
+    }
+
+    // חיפוש היררכי: יורד רמה-אחר-רמה עם תמיכה בטרנספוזיציית אותיות.
+    final matches = _searchTocHierarchically(cache, queryTokens);
+    return matches.map((e) => e.toMap()).toList();
+  }
+
+  /// בונה (פעם אחת לכל [bookId]) את רשימת ערכי ה-TOC המעובדים.
+  /// כל ערך כולל את ה-reference המלא (כולל נתיב אבות שלם) ואת הטוקנים המנורמלים
+  /// שלו מראש. מבנה היררכי (childrenByParentId) מאפשר חיפוש רמה-אחר-רמה.
+  Future<_TocBookCache> _buildTocCacheForBook(
+      int bookId, String bookTitle) async {
+    final cached = _tocCache[bookId];
+    if (cached != null) return cached;
+
     final db = await _database.database;
 
-    // Get all TOC entries for the book
-    // Note: COALESCE(l.lineIndex, t.lineId) is used to support external books
-    // where lineId stores the line/page index directly (no entry in line table)
     final tocEntries = db.select('''
-        SELECT t.id, tt.text, t.level, COALESCE(l.lineIndex, t.lineId) as lineIndex, t.parentId
+        SELECT t.id, tt.text, t.level,
+               COALESCE(l.lineIndex, t.lineId) as lineIndex,
+               COALESCE(t.lineId, 0) as dbLineId,
+               t.parentId
         FROM tocEntry t
         JOIN tocText tt ON t.textId = tt.id
         LEFT JOIN line l ON t.lineId = l.id
@@ -2294,113 +2348,436 @@ extension BookAcronymRepository on SeforimRepository {
       ''', [bookId]).toMapList();
 
     if (tocEntries.isEmpty) {
-      // If no TOC, return just the book itself
-      return [
-        {
-          'reference': bookTitle,
-          'segment': 0,
-          'level': 0,
-        }
-      ];
+      _tocCache[bookId] = _TocBookCache.empty;
+      return _TocBookCache.empty;
     }
 
-    final results = <Map<String, dynamic>>[];
-
-    // Build maps for parent texts and levels
-    final parentTexts = <int, String>{};
-    final parentLevels = <int, int>{};
-    for (final entry in tocEntries) {
-      final id = entry['id'] as int;
-      final level = entry['level'] as int;
-      parentTexts[id] = entry['text'] as String;
-      parentLevels[id] = level;
+    // מפות עזר לבניית נתיב אבות ומבנה היררכי.
+    final entryTexts = <int, String>{};
+    final entryLevels = <int, int>{};
+    final entryParentIds = <int, int?>{};
+    for (final e in tocEntries) {
+      final id = e['id'] as int;
+      entryTexts[id] = e['text'] as String;
+      entryLevels[id] = e['level'] as int;
+      entryParentIds[id] = e['parentId'] as int?;
     }
 
-    for (final entry in tocEntries) {
-      final text = entry['text'] as String;
-      final level = entry['level'] as int;
-      final lineIndex = entry['lineIndex'] as int? ?? 0;
-      final parentId = entry['parentId'] as int?;
+    // בונה נתיב reference מלא ע"י מעבר רקורסיבי על שרשרת האבות.
+    String buildPath(int? id) {
+      if (id == null) return bookTitle;
+      final lvl = entryLevels[id];
+      if (lvl == null || lvl == 0) return bookTitle;
+      return '${buildPath(entryParentIds[id])} ${entryTexts[id]!}';
+    }
 
-      // Skip level 0 entries – they hold the book title itself.
-      // (In the DB, h1→level 0 is the book name; chapters start at level 1.)
-      // Previously this skipped level 1, which inadvertently dropped all
-      // chapter headings for books that have only level 0 + level 1 (e.g. בראשית).
+    final built = <_CachedTocEntry>[];
+    final childrenByParentId = <int, List<_CachedTocEntry>>{};
+    final rootEntries = <_CachedTocEntry>[];
+
+    for (final e in tocEntries) {
+      final id = e['id'] as int;
+      final level = e['level'] as int;
       if (level == 0) continue;
 
-      // Build full reference path, skipping the book-name level (level 0).
-      String fullRef = bookTitle;
-      if (text.isNotEmpty) {
-        // Check if parent exists and is NOT the book-name level (level 0)
-        if (parentId != null &&
-            parentTexts.containsKey(parentId) &&
-            parentLevels[parentId] != 0) {
-          fullRef = '$bookTitle ${parentTexts[parentId]} $text';
-        } else {
-          fullRef = '$bookTitle $text';
+      final text = e['text'] as String;
+      final lineIndex = e['lineIndex'] as int? ?? 0;
+      final dbLineId = e['dbLineId'] as int? ?? 0;
+      final parentId = e['parentId'] as int?;
+
+      final ancestorPath = buildPath(parentId);
+      final fullRef = text.isNotEmpty ? '$ancestorPath $text' : ancestorPath;
+
+      final ownTokens = normalizeForFindRefMatch(text)
+          .split(' ')
+          .where((t) => t.isNotEmpty)
+          .toList(growable: false);
+
+      final entry = _CachedTocEntry(
+        id: id,
+        reference: fullRef,
+        segment: lineIndex,
+        level: level,
+        dbLineId: dbLineId,
+        ownTokens: ownTokens,
+      );
+
+      built.add(entry);
+
+      final parentLevel = parentId == null ? null : entryLevels[parentId];
+      final isRoot =
+          parentId == null || parentLevel == null || parentLevel == 0;
+      if (isRoot) {
+        rootEntries.add(entry);
+      } else {
+        childrenByParentId.putIfAbsent(parentId, () => []).add(entry);
+      }
+    }
+
+    // מיון לפי segment — כך הסינון העוקב שומר על הסדר.
+    built.sort((a, b) => a.segment.compareTo(b.segment));
+    rootEntries.sort((a, b) => a.segment.compareTo(b.segment));
+    for (final children in childrenByParentId.values) {
+      children.sort((a, b) => a.segment.compareTo(b.segment));
+    }
+
+    final cache = _TocBookCache(
+      all: built,
+      rootEntries: rootEntries,
+      childrenByParentId: childrenByParentId,
+    );
+    _tocCache[bookId] = cache;
+    return cache;
+  }
+
+  /// חיפוש היררכי ב-TOC: יורד רמה-אחר-רמה עבור כל טוקן.
+  /// תומך בטרנספוזיציה של שתי אותיות עבריות ("טל" ↔ "לט").
+  List<_CachedTocEntry> _searchTocHierarchically(
+      _TocBookCache cache, List<String> tokens) {
+    var searchScope = cache.rootEntries;
+    var currentMatches = <_CachedTocEntry>[];
+
+    for (final token in tokens) {
+      final alts = _hebrewTokenAlternatives(token);
+
+      List<_CachedTocEntry> found = const [];
+      for (final alt in alts) {
+        final hits =
+            searchScope.where((e) => e.ownTokens.contains(alt)).toList();
+        if (hits.isNotEmpty) {
+          found = hits;
+          break;
         }
       }
 
-      // Filter by query tokens if provided
-      if (queryTokens != null && queryTokens.isNotEmpty) {
-        // Use the same normalization as FindRef for consistent matching
-        final refNormalized = _normalizeForTocMatch(fullRef);
-        final refTokens =
-            refNormalized.split(' ').where((t) => t.isNotEmpty).toList();
+      if (found.isEmpty) break;
 
-        // Check if ALL query tokens match exactly as complete tokens
-        // This prevents "א" from matching "יא", "כא", etc.
-        bool matches = true;
-        for (final queryToken in queryTokens) {
-          // Look for exact token match
-          bool tokenFound = refTokens.contains(queryToken);
-
-          if (!tokenFound) {
-            matches = false;
-            break;
-          }
-        }
-
-        if (!matches) continue;
+      // שומר רק את הרמה הרדודה ביותר בין ההתאמות.
+      var minLevel = found.first.level;
+      for (final e in found) {
+        if (e.level < minLevel) minLevel = e.level;
       }
+      currentMatches = found.where((e) => e.level == minLevel).toList();
 
-      results.add({
+      // מכין את מרחב החיפוש לטוקן הבא:
+      // אם יש ילדים ישירים — יורדים אליהם (+ כל צאצאיהם).
+      // אם אין ילדים — נשארים ב-currentMatches לסינון נוסף באותה רמה.
+      final directChildren = currentMatches
+          .expand((m) =>
+              cache.childrenByParentId[m.id] ?? const <_CachedTocEntry>[])
+          .toList();
+
+      if (directChildren.isNotEmpty) {
+        // כשיש מרובה התאמות (למשל כל הפרקים אחרי "פרק") — כולל את currentMatches
+        // בסקופ הבא כדי שהטוקן הבא יוכל לחדד **באותה רמה** (למשל "כ" → "פרק כ").
+        // כשיש התאמה יחידה — יורדים לילדים בלבד, כי הטוקן הבא נועד להעמיק.
+        final includeCurrentLevel = currentMatches.length > 1;
+        searchScope = [
+          if (includeCurrentLevel) ...currentMatches,
+          ...directChildren,
+          ...directChildren.expand((c) => _getAllDescendants(cache, c)),
+        ];
+      } else {
+        searchScope = currentMatches;
+      }
+    }
+
+    return currentMatches;
+  }
+
+  /// מחזיר את כל הצאצאים (ילדים, נכדים, ...) של [entry].
+  Iterable<_CachedTocEntry> _getAllDescendants(
+      _TocBookCache cache, _CachedTocEntry entry) sync* {
+    final children =
+        cache.childrenByParentId[entry.id] ?? const <_CachedTocEntry>[];
+    for (final child in children) {
+      yield child;
+      yield* _getAllDescendants(cache, child);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // AltToc (כותרות-משנה) — חיפוש במבנים חלופיים (עליות, פרשות, וכד')
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// מחפש בכותרות-משנה (AltToc) של [bookId] לפי [queryTokens].
+  ///
+  /// מחזיר ערכים בפורמט זהה ל-[getTocEntriesForReference]:
+  /// `{'reference': ..., 'segment': ..., 'level': ...}`.
+  /// אם אין מבנים חלופיים לספר, מחזיר רשימה ריקה.
+  Future<List<Map<String, dynamic>>> getAltTocEntriesForReference(
+      int bookId, String bookTitle,
+      {List<String>? queryTokens}) async {
+    if (queryTokens == null || queryTokens.isEmpty) return const [];
+
+    final cache = await _buildAltTocCacheForBook(bookId, bookTitle);
+    if (cache.all.isEmpty) return const [];
+
+    final matches = _searchTocHierarchically(cache, queryTokens);
+    return matches.map((e) => e.toMap()).toList();
+  }
+
+  /// בונה (פעם אחת לכל [bookId]) את קאש ה-AltToc.
+  /// מאחד את כל המבנים החלופיים (structureId) של הספר לתוך קאש יחיד,
+  /// ומבנה עליהם חיפוש היררכי זהה לזה של ה-TOC הרגיל.
+  Future<_TocBookCache> _buildAltTocCacheForBook(
+      int bookId, String bookTitle) async {
+    final cached = _altTocCache[bookId];
+    if (cached != null) return cached;
+
+    final db = await _database.database;
+
+    final entries = db.select('''
+        SELECT e.id, t.text, e.level,
+               COALESCE(l.lineIndex, 0) as lineIndex,
+               COALESCE(e.lineId, 0) as dbLineId,
+               e.parentId
+        FROM alt_toc_entry e
+        JOIN tocText t ON e.textId = t.id
+        LEFT JOIN line l ON e.lineId = l.id
+        WHERE e.structureId IN (
+            SELECT id FROM alt_toc_structure WHERE bookId = ?
+        )
+        ORDER BY COALESCE(l.lineIndex, 0), e.level
+      ''', [bookId]).toMapList();
+
+    if (entries.isEmpty) {
+      _altTocCache[bookId] = _TocBookCache.empty;
+      return _TocBookCache.empty;
+    }
+
+    final entryTexts = <int, String>{};
+    final entryParentIds = <int, int?>{};
+    for (final e in entries) {
+      final id = e['id'] as int;
+      entryTexts[id] = e['text'] as String;
+      entryParentIds[id] = e['parentId'] as int?;
+    }
+
+    // בונה נתיב reference **ללא** שם הספר — AltToc references הם יחסיים לספר.
+    // רמה 1: "פרשת לך לך"  (ולא "בראשית פרשת לך לך")
+    // רמה 2: "פרשת לך לך עליה ו"
+    String buildPath(int? id) {
+      if (id == null) return ''; // שורש ריק — ללא שם הספר
+      final parentId = entryParentIds[id];
+      final parent = buildPath(parentId);
+      return parent.isEmpty ? entryTexts[id]! : '$parent ${entryTexts[id]!}';
+    }
+
+    final built = <_CachedTocEntry>[];
+    final childrenByParentId = <int, List<_CachedTocEntry>>{};
+    final rootEntries = <_CachedTocEntry>[];
+
+    for (final e in entries) {
+      final id = e['id'] as int;
+      final level = e['level'] as int;
+      final text = e['text'] as String;
+      final lineIndex = e['lineIndex'] as int? ?? 0;
+      final dbLineId = e['dbLineId'] as int? ?? 0;
+      final parentId = e['parentId'] as int?;
+
+      final ancestorPath = buildPath(parentId);
+      final fullRef = text.isNotEmpty
+          ? (ancestorPath.isEmpty ? text : '$ancestorPath $text')
+          : ancestorPath;
+
+      final ownTokens = normalizeForFindRefMatch(text)
+          .split(' ')
+          .where((t) => t.isNotEmpty)
+          .toList(growable: false);
+
+      final entry = _CachedTocEntry(
+        id: id,
+        reference: fullRef,
+        segment: lineIndex,
+        level: level,
+        dbLineId: dbLineId,
+        ownTokens: ownTokens,
+      );
+
+      built.add(entry);
+
+      if (parentId == null) {
+        rootEntries.add(entry);
+      } else {
+        childrenByParentId.putIfAbsent(parentId, () => []).add(entry);
+      }
+    }
+
+    built.sort((a, b) => a.segment.compareTo(b.segment));
+    rootEntries.sort((a, b) => a.segment.compareTo(b.segment));
+    for (final children in childrenByParentId.values) {
+      children.sort((a, b) => a.segment.compareTo(b.segment));
+    }
+
+    final cache = _TocBookCache(
+      all: built,
+      rootEntries: rootEntries,
+      childrenByParentId: childrenByParentId,
+    );
+    _altTocCache[bookId] = cache;
+    return cache;
+  }
+
+  /// מחזיר את כל הספרים שיש להם לפחות מבנה AltToc אחד.
+  /// משמש ל-fallback גלובלי של חיפוש כותרות-משנה ללא שם ספר בשאילתה.
+  Future<List<({int bookId, String bookTitle})>> getAllBooksWithAltToc() async {
+    final db = await _database.database;
+    final rows = db.select(
+      'SELECT DISTINCT s.bookId, b.title '
+      'FROM alt_toc_structure s JOIN book b ON b.id = s.bookId',
+      [],
+    ).toMapList();
+    return rows
+        .map((r) => (
+              bookId: r['bookId'] as int,
+              bookTitle: r['title'] as String,
+            ))
+        .toList();
+  }
+
+  /// מחזיר רשימה שטוחה של *כל* ערכי ה-AltToc על פני כל הספרים, עם הנתיב
+  /// המלא לכל ערך — בשאילתת SQL אחת. נועד ל-fallback הגלובלי של FindRef:
+  /// במקום 339 שאילתות סדרתיות (אחת לכל ספר), הוא מקבל קאש שטוח בודד
+  /// ושאר העבודה היא פילטר O(N) ב-Dart.
+  ///
+  /// כל map בתוצאה כולל את המפתחות:
+  /// `bookId`, `bookTitle`, `bookOrderIndex`, `reference` (נתיב מלא יחסי
+  /// לספר, ללא שם הספר), `segment` (=lineIndex), `level`, `dbLineId`.
+  Future<List<Map<String, dynamic>>> getAllAltTocFlatEntries() async {
+    final db = await _database.database;
+    final rows = db.select('''
+      SELECT s.bookId AS bookId,
+             b.title AS bookTitle,
+             b.orderIndex AS bookOrderIndex,
+             e.id AS entryId,
+             t.text AS text,
+             e.level AS level,
+             e.parentId AS parentId,
+             COALESCE(l.lineIndex, 0) AS lineIndex,
+             COALESCE(e.lineId, 0) AS dbLineId
+      FROM alt_toc_entry e
+      JOIN alt_toc_structure s ON e.structureId = s.id
+      JOIN book b ON b.id = s.bookId
+      JOIN tocText t ON e.textId = t.id
+      LEFT JOIN line l ON e.lineId = l.id
+    ''').toMapList();
+
+    if (rows.isEmpty) return const [];
+
+    // נבנה memoized buildPath עבור parentId → reference. ה-`entryId` יחיד
+    // ברמת ה-DB, ולכן מספיק קאש גלובלי אחד מעבר לכל הספרים.
+    final entryTexts = <int, String>{};
+    final entryParents = <int, int?>{};
+    for (final r in rows) {
+      final id = r['entryId'] as int;
+      entryTexts[id] = r['text'] as String;
+      entryParents[id] = r['parentId'] as int?;
+    }
+
+    final pathCache = <int, String>{};
+    String buildPath(int? id) {
+      if (id == null) return '';
+      final cached = pathCache[id];
+      if (cached != null) return cached;
+      final parent = buildPath(entryParents[id]);
+      final text = entryTexts[id]!;
+      final result = parent.isEmpty ? text : '$parent $text';
+      pathCache[id] = result;
+      return result;
+    }
+
+    final result = <Map<String, dynamic>>[];
+    for (final r in rows) {
+      final text = r['text'] as String;
+      final ancestorPath = buildPath(r['parentId'] as int?);
+      final fullRef = text.isEmpty
+          ? ancestorPath
+          : (ancestorPath.isEmpty ? text : '$ancestorPath $text');
+      result.add({
+        'bookId': r['bookId'] as int,
+        'bookTitle': r['bookTitle'] as String,
+        'bookOrderIndex': (r['bookOrderIndex'] as num).toDouble(),
         'reference': fullRef,
-        'segment': lineIndex,
-        'level': level,
+        'segment': r['lineIndex'] as int,
+        'level': r['level'] as int,
+        'dbLineId': r['dbLineId'] as int,
       });
     }
+    return result;
+  }
 
-    // When filtering by queryTokens, prefer the shallowest matching level.
-    // This prevents verse-level entries (level 2) from flooding results when
-    // chapter-level entries (level 1) already satisfy the query.
-    // Example: "בראשית א" → returns "גור אריה על בראשית פרק א" (level 1)
-    // but NOT "גור אריה על בראשית פרק ב פסוק א" (level 2).
-    if (queryTokens != null && queryTokens.isNotEmpty && results.isNotEmpty) {
-      var minLevel = results.first['level'] as int;
-      for (final r in results) {
-        final l = r['level'] as int;
-        if (l < minLevel) minLevel = l;
+  /// מחזיר טוקן + גרסת טרנספוזיציה לאותיות עבריות דו-תווניות.
+  /// לדוגמה: "טל" → ["טל", "לט"] (שתי שיטות מניין עבריות ל-39).
+  List<String> _hebrewTokenAlternatives(String token) {
+    if (token.length == 2) {
+      final c0 = token.codeUnitAt(0);
+      final c1 = token.codeUnitAt(1);
+      // אותיות עבריות U+05D0–U+05EA
+      if (c0 >= 0x05D0 &&
+          c0 <= 0x05EA &&
+          c1 >= 0x05D0 &&
+          c1 <= 0x05EA &&
+          c0 != c1) {
+        return [token, '${token[1]}${token[0]}'];
       }
-      results.retainWhere((r) => (r['level'] as int) == minLevel);
     }
-
-    // Sort results by segment (lineIndex) for logical ordering
-    results
-        .sort((a, b) => (a['segment'] as int).compareTo(b['segment'] as int));
-
-    return results;
+    return [token];
   }
+}
 
-  /// Normalizes text for TOC matching (same as FindRef normalization)
-  String _normalizeForTocMatch(String input) {
-    // Remove nikud and teamim
-    var cleaned = input;
-    // Remove common Hebrew diacritics
-    cleaned = cleaned.replaceAll(RegExp(r'[\u0591-\u05C7]'), '');
-    // Keep only letters, numbers, and spaces
-    cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9\u0590-\u05FF\s]'), ' ');
-    cleaned = cleaned.toLowerCase();
-    return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
+/// ערך TOC מעובד שנשמר בקאש בזיכרון של [SeforimRepository].
+/// `tokens` הם תוצאת [normalizeForFindRefMatch] על `reference`, מפוצלת לטוקנים.
+class _CachedTocEntry {
+  final int id;
+  final String reference;
+  final int segment;
+  final int level;
+
+  /// מזהה השורה הגלובלי ב-`line` table (או 0 אם לא ידוע).
+  /// משמש לשאילתות segment-level כמו `link.sourceLineId`.
+  final int dbLineId;
+
+  /// טוקנים של הטקסט של ערך זה בלבד (ללא אבות) — לשימוש בחיפוש היררכי.
+  final List<String> ownTokens;
+
+  const _CachedTocEntry({
+    required this.id,
+    required this.reference,
+    required this.segment,
+    required this.level,
+    required this.dbLineId,
+    required this.ownTokens,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'reference': reference,
+        'segment': segment,
+        'level': level,
+        'dbLineId': dbLineId,
+      };
+}
+
+/// קאש TOC לספר יחיד: רשימה שטוחה + מבנה היררכי לחיפוש.
+class _TocBookCache {
+  /// כל ערכי ה-TOC (ממוינים לפי segment).
+  final List<_CachedTocEntry> all;
+
+  /// ערכי שורש — ילדים ישירים של entry ברמה 0 (שם הספר).
+  final List<_CachedTocEntry> rootEntries;
+
+  /// מיפוי id → ילדים ישירים (ממוינים לפי segment).
+  final Map<int, List<_CachedTocEntry>> childrenByParentId;
+
+  static const empty = _TocBookCache(
+    all: [],
+    rootEntries: [],
+    childrenByParentId: {},
+  );
+
+  const _TocBookCache({
+    required this.all,
+    required this.rootEntries,
+    required this.childrenByParentId,
+  });
 }

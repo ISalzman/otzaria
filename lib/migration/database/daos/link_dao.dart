@@ -48,6 +48,16 @@ class LinkDao {
         .select(_queries['selectCommentatorsByBook']!, [bookId]).toMapList();
   }
 
+  /// מחזיר רשימת מפרשים זמינים עבור שורת מקור, כולל `targetLineIndex` —
+  /// ה-`lineIndex` הראשון בספר המפרש שמקושר לאותה שורה. זה מאפשר ל-FindRef
+  /// לפתוח את ספר המפרש ישירות במיקום המקביל, ללא שאילתה נפרדת בעת הקליק.
+  Future<List<Map<String, dynamic>>> selectCommentatorsBySourceLine(
+      int sourceLineId) async {
+    final db = await database;
+    return db.select(_queries['selectCommentatorsBySourceLine']!,
+        [sourceLineId]).toMapList();
+  }
+
   Future<int> insertLink(Link link, int connectionTypeId) async {
     final db = await database;
     db.execute(_queries['insert']!, [
@@ -130,4 +140,3 @@ class LinkDao {
     );
   }
 }
-

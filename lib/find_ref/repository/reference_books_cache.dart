@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
+import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/migration/models/category.dart' as db_models;
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -22,6 +27,9 @@ class ReferenceBooksCache {
   bool _isLoaded = false;
   Future<void>? _loadingFuture;
 
+  /// מונה דורות לזיהוי [clear] שקרה במהלך טעינה.
+  int _generation = 0;
+
   // Normalized titles cache (computed from BooksCache)
   final Map<int, String> _normalizedTitles = <int, String>{};
 
@@ -30,9 +38,22 @@ class ReferenceBooksCache {
       <(String, ReferenceBookHit)>[];
 
   // Lazy PDF outline cache: filePath → Future of outline entries
-  // Populated on demand, not during warmup.
+  // Populated on demand (and optionally pre-warmed in background after warmUp).
   final Map<String, Future<List<(String, String, int)>>> _pdfOutlineCache =
       <String, Future<List<(String, String, int)>>>{};
+
+  /// פונקציית הפענוח של outline מ-PDF. ניתן להחליפה בבדיקות כדי להחליף את
+  /// ה-I/O הממשי בפעולה דטרמיניסטית, בלי להוציא את התלות ב-pdfrx לחוץ.
+  @visibleForTesting
+  Future<List<(String, String, int)>> Function(String filePath)
+      pdfOutlineParser = _parsePdfOutlineEntries;
+
+  /// Injection לבדיקות בלבד: ספק הקטגוריות עבור [_prewarmCategoryPaths]. אם
+  /// `null` (ברירת מחדל) — `_prewarmCategoryPaths` ניגש ל-[SqliteDataProvider].
+  /// טסטים יכולים להציב פונקציה זורקת חריגה לבדיקת מסלול הכשל, או רשימה
+  /// קונקרטית לבדיקת הצלחה.
+  @visibleForTesting
+  Future<List<db_models.Category>> Function()? categoriesProviderOverride;
 
   bool get isLoaded => _isLoaded;
 
@@ -50,15 +71,27 @@ class ReferenceBooksCache {
   }
 
   Future<void> _loadInternal() async {
+    final myGen = _generation;
     try {
       // Warm up shared caches
       await BooksCache.instance.warmUp();
+      if (myGen != _generation) return;
       await AcronymsCache.instance.warmUp();
+      if (myGen != _generation) return;
 
-      // Pre-compute normalized titles for fast matching
-      _normalizedTitles.clear();
+      // Pre-compute normalized titles for fast matching.
+      // בונים למפה מקומית — ה-cache החי לא נוגע עד ה-swap בסוף.
+      // יציאה ל-event loop כל chunk כדי לא לחסום את ה-UI thread על
+      // ספריות גדולות (~50K ספרים × regex לנורמליזציה).
+      final localNormalizedTitles = <int, String>{};
+      const yieldBatch = 1000;
+      var processed = 0;
       for (final book in BooksCache.instance.books) {
-        _normalizedTitles[book.id] = _normalizeForMatch(book.title);
+        localNormalizedTitles[book.id] = _normalizeForMatch(book.title);
+        if (++processed % yieldBatch == 0) {
+          await Future<void>.delayed(Duration.zero);
+          if (myGen != _generation) return;
+        }
       }
 
       // Collect DB PDF titles to avoid duplicates with file-system PDFs
@@ -67,11 +100,24 @@ class ReferenceBooksCache {
           .map((b) => b.title)
           .toSet();
 
+      // מפה מכותרת → orderIndex הנמוך ביותר מקרב כל ספרי ה-DB (כולל טקסט).
+      // FS PDF בעל אותה כותרת כספר DB יירש את ה-orderIndex שלו, כדי שלא
+      // ידחק לסוף הרשימה (999.0 קבוע).
+      final titleToDbOrderIndex = <String, double>{};
+      for (final book in BooksCache.instance.books) {
+        final existing = titleToDbOrderIndex[book.title];
+        if (existing == null || book.orderIndex < existing) {
+          titleToDbOrderIndex[book.title] = book.orderIndex;
+        }
+      }
+
       // Load PDF books from file system that are not in the DB.
       // PDF outline parsing is NOT done here — it happens lazily via getPdfOutlineEntries().
-      _fsPdfBooks.clear();
+      final localFsPdfBooks = <(String, ReferenceBookHit)>[];
       if (FileSystemLibraryProvider.instance.isInitialized) {
         final keyToPath = await FileSystemLibraryProvider.instance.keyToPath;
+        if (myGen != _generation) return;
+        var processedPdfs = 0;
         for (final entry in keyToPath.entries) {
           final key = BookCompositeKey.tryParse(entry.key);
           if (key == null || key.fileType != 'pdf') continue;
@@ -80,20 +126,56 @@ class ReferenceBooksCache {
           final normalizedTitle = _normalizeForMatch(key.title);
           if (normalizedTitle.isEmpty) continue;
 
-          _fsPdfBooks.add((
+          // FS PDF inherits the DB book's orderIndex when one exists with the same title,
+          // preventing it from being pushed behind all text books (default 999.0).
+          final orderIdx = titleToDbOrderIndex[key.title] ?? 999.0;
+
+          localFsPdfBooks.add((
             normalizedTitle,
             ReferenceBookHit(
               bookId: -1,
               title: key.title,
+              normalizedTitle: normalizedTitle,
               filePath: entry.value,
               fileType: 'pdf',
               matchRank: 0,
-              orderIndex: 999.0,
+              orderIndex: orderIdx,
             ),
           ));
+          if (++processedPdfs % yieldBatch == 0) {
+            await Future<void>.delayed(Duration.zero);
+            if (myGen != _generation) return;
+          }
         }
+      }
+
+      // Swap אטומי — רק אם הדור עדיין שלנו.
+      if (myGen != _generation) return;
+      _normalizedTitles
+        ..clear()
+        ..addAll(localNormalizedTitles);
+      _fsPdfBooks
+        ..clear()
+        ..addAll(localFsPdfBooks);
+      _categoryPaths.clear();
+
+      // Pre-warm category paths **לפני** סימון הקאש כ-loaded — דירוג ה-FindRef
+      // מסתמך על resolver סינכרוני שיחזיר null אם הקאש עוד לא מוכן, ואז
+      // כל הסיווג "ספר יסוד" מבוטל בחיפוש הראשון. שאילתה אחת + walk בזיכרון
+      // היא חבילה זולה (~hundreds of ms על ספרייה של ~10K ספרים), שווה
+      // לחסום את ה-warmUp עליה. PDF outline pre-warm נשאר בריקה כי הוא
+      // יקר משמעותית (file I/O).
+      //
+      // אם prewarm נכשל (לדוגמה, lock זמני על ה-DB) — נחזור בלי לסמן
+      // `_isLoaded = true`, כך שה-warmUp הבא יזכה לנסות שוב במקום להישאר
+      // עם classifier מבוטל לכל ה-session.
+      final pathsOk = await _prewarmCategoryPaths(myGen);
+      if (myGen != _generation) return;
+      if (!pathsOk) {
         debugPrint(
-            '[ReferenceBooksCache] Added ${_fsPdfBooks.length} FS PDF books');
+            '[ReferenceBooksCache] aborting warmUp — category-path prewarm failed; '
+            'next warmUp() will retry');
+        return;
       }
 
       _isLoaded = true;
@@ -101,21 +183,143 @@ class ReferenceBooksCache {
         '[ReferenceBooksCache] Ready with ${BooksCache.instance.books.length} DB books'
         ' + ${_fsPdfBooks.length} FS PDF books',
       );
+
+      // Pre-warm PDF outlines in the background — typically 20-40 FS PDFs,
+      // each requiring a file open + outline parse on first FindRef hit.
+      // Running here (post-swap) keeps `warmUp()`'s returned Future fast,
+      // while the throttled parse fills the cache before the user types.
+      unawaited(prewarmAllPdfOutlines().catchError((Object e) {
+        debugPrint('[ReferenceBooksCache] PDF outline pre-warm failed: $e');
+      }));
     } catch (e) {
       debugPrint('[ReferenceBooksCache] Warmup failed: $e');
-      _normalizedTitles.clear();
-      _fsPdfBooks.clear();
-      _isLoaded = true;
+      if (myGen == _generation) {
+        _normalizedTitles.clear();
+        _fsPdfBooks.clear();
+        _isLoaded = true;
+      }
     }
   }
 
   void clear() {
+    _generation++;
     _normalizedTitles.clear();
     _fsPdfBooks.clear();
     _pdfOutlineCache.clear();
+    _categoryPaths.clear();
     _isLoaded = false;
     _loadingFuture = null;
     // Note: We don't clear the shared caches here as they may be used by other components
+  }
+
+  // Category-path cache: bookId → category path string of the book's category
+  // chain, **excluding** the book itself. e.g. for book "בראשית" (categoryId
+  // points to "תורה"), the path is "תנ"ך, תורה" — אורך 2. עבור "משנה תורה,
+  // הלכות שבת" (categoryId="ספר זמנים"), הנתיב הוא
+  // "הלכה, משנה תורה, ספר זמנים" — אורך 3.
+  //
+  // הקאש נטען ב-[_prewarmCategoryPaths] לפני שהקאש מסומן כ-loaded (single
+  // SQL + O(books) in-memory walk), כדי שדירוג ה-FindRef יוכל לסווג "ספר
+  // יסוד" מול "מפרש" סינכרונית בלי race עם ה-warmUp.
+  final Map<int, String> _categoryPaths = <int, String>{};
+
+  /// גרסה סינכרונית של [getCategoryPathForBook]: מחזירה `null` אם הערך
+  /// אינו בקאש (למשל לפני warmUp או עבור ספרים שאינם ב-DB).
+  String? getCategoryPathForBookSync(int bookId) {
+    if (bookId < 0) return null;
+    return _categoryPaths[bookId];
+  }
+
+  /// מחזיר את נתיב הקטגוריה עבור ספר לפי מזההו.
+  /// הנתיב נבנה בפעם הראשונה בלבד ונשמר בזיכרון.
+  Future<String> getCategoryPathForBook(int bookId) async {
+    if (bookId < 0) return '';
+    if (_categoryPaths.containsKey(bookId)) return _categoryPaths[bookId]!;
+
+    final book = BooksCache.instance.getBookById(bookId);
+    if (book == null) {
+      _categoryPaths[bookId] = '';
+      return '';
+    }
+
+    final repository = SqliteDataProvider.instance.repository;
+    if (repository == null) {
+      _categoryPaths[bookId] = '';
+      return '';
+    }
+
+    try {
+      final path = await BookDatabaseResolver.buildCategoryPath(
+          repository, book.categoryId);
+      _categoryPaths[bookId] = path;
+      return path;
+    } catch (e) {
+      debugPrint('[ReferenceBooksCache] getCategoryPathForBook error: $e');
+      _categoryPaths[bookId] = '';
+      return '';
+    }
+  }
+
+  /// בונה ב-pass יחיד את כל ה-categoryPaths מ-`book.categoryId` לעלה.
+  /// מיועד לקריאה בתוך ה-warmUp **לפני** סימון הקאש כ-loaded.
+  ///
+  /// ערכי החזרה:
+  ///   `true`  — הצלחה (כולל המקרה של "אין DB"), הקאש מוכן לשימוש.
+  ///   `false` — כשל בפועל (חריגה בקריאה לשאילתת DB וכד'). הקורא חייב
+  ///             *לא* לסמן את הקאש כ-loaded, כך שה-warmUp הבא ינסה שוב.
+  ///   ביטול (myGen != _generation) — `true`. הקורא יבדוק את הדור בעצמו
+  ///   ויחזור בלי לסמן loaded; זה לא כשל לוגי אלא בקשת הפסקה.
+  Future<bool> _prewarmCategoryPaths(int myGen) async {
+    final override = categoriesProviderOverride;
+    final repository = SqliteDataProvider.instance.repository;
+    if (override == null && repository == null) {
+      return true; // אין DB — אין מה לחמם, לא נחשב כשל.
+    }
+
+    try {
+      final categories =
+          override != null ? await override() : await repository!.getAllCategories();
+      if (myGen != _generation) return true; // ביטול, לא כשל.
+
+      final byId = <int, ({int? parentId, String title})>{
+        for (final c in categories) c.id: (parentId: c.parentId, title: c.title)
+      };
+
+      // Memoization של נתיב לפי categoryId — כל נתיב מחושב פעם אחת.
+      final pathByCategoryId = <int, String>{};
+      String pathFor(int? categoryId) {
+        if (categoryId == null) return '';
+        final cached = pathByCategoryId[categoryId];
+        if (cached != null) return cached;
+
+        final visited = <int>{};
+        final parts = <String>[];
+        int? cur = categoryId;
+        while (cur != null && visited.add(cur)) {
+          final entry = byId[cur];
+          if (entry == null) break;
+          parts.insert(0, entry.title);
+          cur = entry.parentId;
+        }
+        final path = parts.join(', ');
+        pathByCategoryId[categoryId] = path;
+        return path;
+      }
+
+      const yieldBatch = 1000;
+      var processed = 0;
+      for (final book in BooksCache.instance.books) {
+        _categoryPaths[book.id] = pathFor(book.categoryId);
+        if (++processed % yieldBatch == 0) {
+          await Future<void>.delayed(Duration.zero);
+          if (myGen != _generation) return true; // ביטול.
+        }
+      }
+      return true;
+    } catch (e) {
+      debugPrint('[ReferenceBooksCache] _prewarmCategoryPaths failed: $e');
+      return false;
+    }
   }
 
   /// Returns outline entries for a file-system PDF, parsed lazily and cached.
@@ -123,8 +327,62 @@ class ReferenceBooksCache {
   Future<List<(String, String, int)>> getPdfOutlineEntries(
       String filePath) async {
     return _pdfOutlineCache.putIfAbsent(
-        filePath, () => _parsePdfOutlineEntries(filePath));
+        filePath, () => pdfOutlineParser(filePath));
   }
+
+  /// Pre-warms the PDF outline cache for all currently-known FS PDF books.
+  ///
+  /// Runs in bounded batches of [maxConcurrent] files at a time to avoid
+  /// opening dozens of PdfDocument objects simultaneously (pdfrx serializes
+  /// work in a single background isolate, but each open file holds memory).
+  ///
+  /// Idempotent and cheap to re-run: entries already cached are skipped
+  /// automatically by [getPdfOutlineEntries]'s `putIfAbsent`.
+  ///
+  /// Respects [clear] via the generation counter — if the cache is cleared
+  /// mid-run, the remaining batches are aborted.
+  Future<void> prewarmAllPdfOutlines({int maxConcurrent = 4}) async {
+    // ולידציה רצה גם ב-release: ערך לא חיובי יוצר לולאה אינסופית
+    // (i += 0), עדיף להיכשל בקול מאשר להקפיא את ה-isolate.
+    if (maxConcurrent <= 0) {
+      throw ArgumentError.value(
+          maxConcurrent, 'maxConcurrent', 'must be > 0');
+    }
+    final gen = _generation;
+    final paths = _fsPdfBooks
+        .map((entry) => entry.$2.filePath)
+        .where((p) => p.isNotEmpty)
+        .toList(growable: false);
+    if (paths.isEmpty) return;
+
+    for (var i = 0; i < paths.length; i += maxConcurrent) {
+      if (gen != _generation) return;
+      final end =
+          (i + maxConcurrent < paths.length) ? i + maxConcurrent : paths.length;
+      await Future.wait([
+        for (var j = i; j < end; j++) getPdfOutlineEntries(paths[j]),
+      ]);
+    }
+    debugPrint(
+      '[ReferenceBooksCache] PDF outline pre-warm complete '
+      '(${paths.length} files)',
+    );
+  }
+
+  /// בדיקות בלבד — מאפשר למלא את רשימת ה-FS PDFs בלי לעבור דרך
+  /// [FileSystemLibraryProvider].
+  @visibleForTesting
+  void setFsPdfBooksForTesting(List<(String, ReferenceBookHit)> books) {
+    _fsPdfBooks
+      ..clear()
+      ..addAll(books);
+  }
+
+  /// בדיקות בלבד — חושף את מצב מטמון ה-outline (filePath → Future של ערכי
+  /// outline) כדי לבדוק אילו קבצים נטענו.
+  @visibleForTesting
+  Map<String, Future<List<(String, String, int)>>>
+      get pdfOutlineCacheForTesting => _pdfOutlineCache;
 
   /// Searches books by title and acronym from memory.
   ///
@@ -151,13 +409,11 @@ class ReferenceBooksCache {
       } else if (t.contains(q)) {
         matchRank = 2;
       } else {
-        // acronym match
-        final rawAcronyms = AcronymsCache.instance.getAcronymsForBook(book.id);
-        if (rawAcronyms != null) {
-          for (final rawAcr in rawAcronyms) {
-            final a = _normalizeForMatch(rawAcr);
-            if (a.isEmpty) continue;
-
+        // התאמת ראשי תיבות — המונחים כבר מנורמלים בעת טעינת הקאש.
+        final normalizedAcronyms =
+            AcronymsCache.instance.getAcronymsForBook(book.id);
+        if (normalizedAcronyms != null) {
+          for (final a in normalizedAcronyms) {
             if (a == q) {
               matchRank = 3;
               matchedTerm = a;
@@ -179,6 +435,7 @@ class ReferenceBooksCache {
       final hit = ReferenceBookHit(
         bookId: book.id,
         title: book.title,
+        normalizedTitle: t,
         filePath: book.filePath ?? '',
         fileType: book.fileType,
         matchRank: matchRank,
@@ -208,6 +465,7 @@ class ReferenceBooksCache {
       final hit = ReferenceBookHit(
         bookId: baseHit.bookId,
         title: baseHit.title,
+        normalizedTitle: t,
         filePath: baseHit.filePath,
         fileType: baseHit.fileType,
         matchRank: matchRank,
@@ -237,18 +495,8 @@ class ReferenceBooksCache {
     return merged.length > limit ? merged.take(limit).toList() : merged;
   }
 
-  static String _normalizeForMatch(String input) {
-    var cleaned = removeTeamim(removeVolwels(input));
-
-    // Remove quotes/gershayim completely (don't convert to space)
-    // This way מ"ב becomes מב (not מ ב)
-    cleaned = cleaned.replaceAll('"', '').replaceAll("'", '');
-    cleaned = cleaned.replaceAll('״', '').replaceAll('׳', '');
-
-    cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9֐-׿\s]'), ' ');
-    cleaned = cleaned.toLowerCase();
-    return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
+  static String _normalizeForMatch(String input) =>
+      normalizeForFindRefMatch(input);
 
   static Future<List<(String, String, int)>> _parsePdfOutlineEntries(
       String filePath) async {
@@ -288,6 +536,10 @@ class ReferenceBooksCache {
 class ReferenceBookHit {
   final int bookId;
   final String title;
+
+  /// הכותרת לאחר [normalizeForFindRefMatch], מחושבת מראש במטמון
+  /// כדי לחסוך נורמליזציה חוזרת בצרכן.
+  final String normalizedTitle;
   final String filePath;
   final String fileType;
   final int matchRank;
@@ -297,6 +549,7 @@ class ReferenceBookHit {
   const ReferenceBookHit({
     required this.bookId,
     required this.title,
+    required this.normalizedTitle,
     required this.filePath,
     required this.fileType,
     required this.matchRank,

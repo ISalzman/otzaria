@@ -16,6 +16,11 @@ class BooksCache {
   bool _isLoaded = false;
   Future<void>? _loadingFuture;
 
+  /// מונה דורות לזיהוי [clear] שקרה במהלך טעינה.
+  /// כל [clear] מעלה את המונה; טעינה שנפתחה לפניו תפסיק לכתוב נתונים
+  /// אחרי ה-yield הבא, ולא תסמן `_isLoaded = true`.
+  int _generation = 0;
+
   final List<BookCacheEntry> _books = <BookCacheEntry>[];
   final Map<int, BookCacheEntry> _booksById = <int, BookCacheEntry>{};
 
@@ -41,21 +46,29 @@ class BooksCache {
   }
 
   Future<void> _loadInternal() async {
+    final myGen = _generation;
     final repository = SqliteDataProvider.instance.repository;
     if (repository == null) {
       debugPrint('[BooksCache] DB not initialized; skipping warmup');
-      _books.clear();
-      _booksById.clear();
-      _isLoaded = false;
+      if (myGen == _generation) {
+        _books.clear();
+        _booksById.clear();
+        _isLoaded = false;
+      }
       return;
     }
 
     try {
       final allBooks = await repository.database.bookDao.getAllLocalBooks();
+      if (myGen != _generation) return; // הופסק על ידי clear()
 
-      _books.clear();
-      _booksById.clear();
-
+      // בונים למבני ביניים מקומיים — ה-cache החי לא נוגע עד ה-swap בסוף.
+      // יציאה ל-event loop כל chunk כדי לא לחסום את ה-UI thread על
+      // ספריות גדולות (~50K ספרים).
+      final localBooks = <BookCacheEntry>[];
+      final localBooksById = <int, BookCacheEntry>{};
+      const yieldBatch = 1000;
+      var i = 0;
       for (final b in allBooks) {
         final entry = BookCacheEntry(
           id: b.id,
@@ -65,22 +78,37 @@ class BooksCache {
           categoryId: b.categoryId,
           orderIndex: b.order,
         );
-        _books.add(entry);
-        _booksById[b.id] = entry;
+        localBooks.add(entry);
+        localBooksById[b.id] = entry;
+        if (++i % yieldBatch == 0) {
+          await Future<void>.delayed(Duration.zero);
+          if (myGen != _generation) return; // הופסק על ידי clear()
+        }
       }
 
+      // Swap אטומי (סינכרוני בדארט) — רק אם הדור עדיין שלנו.
+      if (myGen != _generation) return;
+      _books
+        ..clear()
+        ..addAll(localBooks);
+      _booksById
+        ..clear()
+        ..addAll(localBooksById);
       _isLoaded = true;
       debugPrint(
           '[BooksCache] Loaded ${_books.length} books into shared cache');
     } catch (e) {
       debugPrint('[BooksCache] Warmup failed: $e');
-      _books.clear();
-      _booksById.clear();
-      _isLoaded = true; // Mark as loaded to avoid repeated attempts
+      if (myGen == _generation) {
+        _books.clear();
+        _booksById.clear();
+        _isLoaded = true; // Mark as loaded to avoid repeated attempts
+      }
     }
   }
 
   void clear() {
+    _generation++;
     _books.clear();
     _booksById.clear();
     _isLoaded = false;

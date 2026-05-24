@@ -447,6 +447,12 @@ class _PluginTabPageState extends State<PluginTabPage> {
           // לוכד theme לפני ה-await (context חייב להישמר synchronously)
           final theme = buildThemePayload(context);
 
+          // טוען CSS עם @font-face לגופנים המובנים, כדי שה-WebView
+          // יוכל לפענח שמות כמו 'FrankRuhlCLM' שמגיעים ב-theme payload
+          // (אחרת ב-macOS ה-fallback של המערכת לעברית נראה דקורטיבי).
+          final fontFaceCss = await buildPluginFontFaceCss();
+          if (!mounted) return;
+
           // Use cached PackageInfo — avoids async gap crossing a dispose
           final packageInfo =
               _cachedPackageInfo ?? await PackageInfo.fromPlatform();
@@ -475,11 +481,21 @@ class _PluginTabPageState extends State<PluginTabPage> {
           };
 
           final jsonPayload = jsonEncode(bootPayload);
+          final fontFaceJson = jsonEncode(fontFaceCss);
 
           // Real SDK — injected after load, calls _boot() which re-plays queued
           // Otzaria.on() calls and then fires plugin.boot
           await controller.evaluateJavascript(source: '''
 (function () {
+  try {
+    var __css = $fontFaceJson;
+    if (__css) {
+      var __style = document.createElement('style');
+      __style.setAttribute('data-otzaria-fonts', '1');
+      __style.appendChild(document.createTextNode(__css));
+      (document.head || document.documentElement).appendChild(__style);
+    }
+  } catch (e) { console.error('font-face inject failed', e); }
   var _ls = {};
   var realSdk = {
     call: function (method, payload) {

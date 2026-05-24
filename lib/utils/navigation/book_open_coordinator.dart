@@ -30,6 +30,7 @@ class BookOpenCoordinator {
     bool requiresStableLayout = false,
     String? pinpointHighlight,
     bool insertAdjacent = false,
+    List<String>? initialCommentators,
   }) {
     final tabsState = tabsBloc.state;
     if (tabsState.hasOpenTabs) {
@@ -51,7 +52,12 @@ class BookOpenCoordinator {
     final initialIndex = (ignoreHistory || hasPinpoint || index != 0)
         ? index
         : (lastOpened?.index ?? 0);
-    final initialCommentators = lastOpened?.commentatorsToShow;
+    // סמנטיקה של [initialCommentators]:
+    //   null   → ברירת מחדל: נופלים להיסטוריה (commentatorsToShow).
+    //   []     → bypass מפורש: פתיחה בלי מפרשים, גם אם בעבר נשמרו ב-history.
+    //   [...]  → רשימה מפורשת מהקורא (למשל FindRef → "פתח עם רש"י").
+    final resolvedCommentators =
+        initialCommentators ?? lastOpened?.commentatorsToShow;
 
     final shouldOpenLeftPane = shouldAutoOpenReadingLeftPane();
 
@@ -62,7 +68,7 @@ class BookOpenCoordinator {
       book,
       initialIndex,
       searchText: searchQuery,
-      commentators: initialCommentators,
+      commentators: resolvedCommentators,
       openLeftPane: shouldOpenLeftPane,
       showPageShapeView: savedViewMode,
       requiresStableLayout: requiresStableLayout,

@@ -174,9 +174,6 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     final hasPath = pathStr != null;
 
     return ListTile(
-      // השורה עוטפת כפתורי פעולה ב-trailing — מבטלים את ה-hover של ה-ListTile
-      // כדי שה-hover יופיע רק על הכפתורים, בלי double-hover.
-      hoverColor: Colors.transparent,
       leading: const Icon(FluentIcons.folder_24_regular),
       title: const Text('מיקום ספריית אוצריא', style: kSettingsTitleStyle),
       subtitle: Text(
@@ -227,9 +224,6 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     final hasPath = pathStr != null && pathStr.isNotEmpty;
 
     return ListTile(
-      // השורה עוטפת כפתורי פעולה ב-trailing — מבטלים את ה-hover של ה-ListTile
-      // כדי שה-hover יופיע רק על הכפתורים, בלי double-hover.
-      hoverColor: Colors.transparent,
       leading: const Icon(FluentIcons.folder_24_regular),
       title: const Text('מיקום ספרי היברובוקס', style: kSettingsTitleStyle),
       subtitle: Text(
@@ -411,9 +405,6 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
               subtitleText = 'האינדקס לא מעודכן';
             }
             return ListTile(
-              // השורה עוטפת כפתורי פעולה ב-trailing — מבטלים את ה-hover של
-              // ה-ListTile כדי שה-hover יופיע רק על הכפתורים, בלי double-hover.
-              hoverColor: Colors.transparent,
               leading: const Icon(FluentIcons.table_24_regular),
               title: const Text(
                 'אינדקס חיפוש',

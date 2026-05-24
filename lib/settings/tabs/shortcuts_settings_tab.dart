@@ -232,9 +232,6 @@ class ShortcutsSettingsTab extends StatelessWidget {
                 title: 'כללי',
                 children: [
                   ListTile(
-                    // השורה עוטפת כפתור פעולה ב-trailing — מבטלים את ה-hover
-                    // של ה-ListTile כדי שה-hover יופיע רק על הכפתור.
-                    hoverColor: Colors.transparent,
                     leading: const Icon(FluentIcons.arrow_reset_24_regular),
                     title: const Text('איפוס קיצורי מקשים',
                         style: kSettingsTitleStyle),

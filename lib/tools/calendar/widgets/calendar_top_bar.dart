@@ -884,9 +884,6 @@ class _ViewBtn extends StatelessWidget {
       child: InkWell(
         onTap: onPressed,
         borderRadius: BorderRadius.circular(6),
-        // hover עדין ביותר — מתאים לכפתורי toggle בסרגל הלוח. שמירת אותו
-        // overlay ניטרלי שהיה לפני "ניקוי ה-hover".
-        hoverColor: cs.onSurface.withValues(alpha: 0.04),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(

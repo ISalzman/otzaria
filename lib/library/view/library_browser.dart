@@ -1257,7 +1257,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     final row = InkWell(
       mouseCursor: SystemMouseCursors.click,
       borderRadius: rowBorderRadius,
-      overlayColor: AppInteractions.subtlePrimaryOverlay(cs),
       hoverDuration: Durations.medium1,
       onTap: () => setState(() {
         if (isExpanded) {
@@ -1404,7 +1403,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         borderRadius: isGrouped
             ? BorderRadius.zero
             : BorderRadius.circular(AppTokens.radiusXL),
-        overlayColor: AppInteractions.subtlePrimaryOverlay(cs),
         hoverDuration: Durations.medium1,
         onTap: onTap,
         onDoubleTap: onDoubleTap,
