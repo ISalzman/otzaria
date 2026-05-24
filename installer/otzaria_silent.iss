@@ -108,28 +108,92 @@ begin
   Result := False;
 end;
 
-function FindPreviousInstallDir(): String;
+function PathStartsWith(PathValue: String; Prefix: String): Boolean;
+var
+  NormalizedPath: String;
+  NormalizedPrefix: String;
+begin
+  NormalizedPath := Lowercase(PathValue);
+  if (NormalizedPath <> '') and (Copy(NormalizedPath, Length(NormalizedPath), 1) <> '\') then
+    NormalizedPath := NormalizedPath + '\';
+
+  NormalizedPrefix := Lowercase(Prefix);
+  if (NormalizedPrefix <> '') and (Copy(NormalizedPrefix, Length(NormalizedPrefix), 1) <> '\') then
+    NormalizedPrefix := NormalizedPrefix + '\';
+
+  Result := Pos(NormalizedPrefix, NormalizedPath) = 1;
+end;
+
+// מזהה נתיבים מערכתיים שמחייבים UAC לשדרוג. זה נותן לנו לבקש הרשאות
+// מראש עבור התקנות ישנות שנרשמו ב-HKCU אבל הותקנו בפועל תחת Program Files.
+// הסיווג הוא לפי מיקום ידוע, לא לפי ניסיון כתיבה, כדי להימנע מ-false-positive
+// בגלל AV / מנעולי קבצים / דיסק מלא.
+function PathLikelyRequiresAdmin(PathDir: String): Boolean;
+begin
+  Result :=
+    PathStartsWith(PathDir, ExpandConstant('{commonpf}')) or
+    PathStartsWith(PathDir, ExpandConstant('{commonpf32}')) or
+    PathStartsWith(PathDir, ExpandConstant('{commonpf64}'));
+end;
+
+function RelaunchSetupElevated(Params: String; var ErrorCode: Integer): Boolean;
+var
+  CmdLine: String;
+begin
+  // Inno Setup לא מאפשר להריץ את Setup עצמו דרך ShellExec מתוך
+  // InitializeSetup. לכן מרימים את cmd.exe, והוא מפעיל את המתקין.
+  CmdLine :=
+    '/c start "" "' + ExpandConstant('{srcexe}') + '" ' + Params;
+  Result := ShellExec(
+    'runas',
+    ExpandConstant('{sys}\cmd.exe'),
+    CmdLine,
+    '',
+    SW_SHOWNORMAL,
+    ewNoWait,
+    ErrorCode);
+end;
+
+// מחזירה את תיקיית ההתקנה הקודמת. RequiresAdmin נקבע לפי מקור הזיהוי
+// ובמקרי HKCU גם לפי הנתיב בפועל, כדי לבקש UAC לפני כשל בכתיבה.
+function FindPreviousInstallDir(var RequiresAdmin: Boolean): String;
 var
   InstallDir: String;
   LegacyDir: String;
   UninstallKey: String;
 begin
+  RequiresAdmin := False;
   UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{EEC4F712-CD05-4D15-A753-509E840A51A5}_is1';
 
-  if TryGetInstallDirFromRegistry(HKLM64, UninstallKey, InstallDir) or
-     TryGetInstallDirFromRegistry(HKCU, UninstallKey, InstallDir) then
+  // HKLM64 = התקנה מערכתית קודמת ⇒ דורשת מנהל לשדרוג.
+  if TryGetInstallDirFromRegistry(HKLM64, UninstallKey, InstallDir) then
   begin
     Result := InstallDir;
+    RequiresAdmin := True;
     exit;
   end;
 
+  // בדרך כלל HKCU = התקנת משתמש. אם הנתיב בפועל תחת Program Files,
+  // מבקשים UAC מראש כדי לא ליפול לכשל כתיבה מאוחר יותר.
+  if TryGetInstallDirFromRegistry(HKCU, UninstallKey, InstallDir) then
+  begin
+    Result := InstallDir;
+    RequiresAdmin := PathLikelyRequiresAdmin(InstallDir);
+    exit;
+  end;
+
+  // C:\אוצריא = שורש דרייב מערכתי ⇒ יצירה/שכתוב דורשים מנהל.
   LegacyDir := 'C:\אוצריא';
   if DirExists(LegacyDir) then
   begin
     Result := LegacyDir;
+    RequiresAdmin := True;
     exit;
   end;
 
+  // {autopf} בריצת non-admin מתפענח ל-%LocalAppData%\Programs (נתיב משתמש).
+  // בריצת admin זה Program Files, אבל אז IsAdmin=True ב-InitializeSetup
+  // ולא נכנסים לענף ההסלמה ממילא — כך ש-RequiresAdmin נשאר False בבטחה.
   LegacyDir := ExpandConstant('{autopf}\אוצריא');
   if DirExists(LegacyDir) then
   begin
@@ -148,8 +212,10 @@ begin
 end;
 
 function GetDefaultInstallDir(Param: String): String;
+var
+  Dummy: Boolean;
 begin
-  Result := FindPreviousInstallDir();
+  Result := FindPreviousInstallDir(Dummy);
   if Result = '' then
     Result := ExpandConstant('{autopf}\אוצריא');
 end;
@@ -267,6 +333,8 @@ var
   ResultCode: Integer;
   PrivilegeFlag: String;
   Launched: Boolean;
+  RequiresAdmin: Boolean;
+  PreviousDir: String;
 begin
   Result := True;
 
@@ -275,10 +343,43 @@ begin
   // והקוד הזה לא ירוץ שוב.
   if not WizardSilent then
   begin
+    PreviousDir := FindPreviousInstallDir(RequiresAdmin);
+
     if IsAdmin then
-      PrivilegeFlag := '/ALLUSERS'
+    begin
+      PrivilegeFlag := '/ALLUSERS';
+    end
+    else if RequiresAdmin then
+    begin
+      // ההתקנה הקודמת בנתיב הדורש הרשאות מנהל. משגרים מחדש עם 'runas'
+      // כדי לקבל UAC; cmd.exe המורם יפעיל את המתקין עם /ALLUSERS.
+      PrivilegeFlag := '/ALLUSERS';
+      Launched := RelaunchSetupElevated(
+        '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART ' + PrivilegeFlag,
+        ResultCode);
+
+      if Launched then
+      begin
+        Result := False;
+        exit;
+      end;
+
+      // אם גם השיגור המורם נכשל, המשתמש דחה את ה-UAC (ERROR_CANCELLED)
+      // או שהייתה שגיאת מערכת. לא נופלים ל-/CURRENTUSER, כי ההתקנה
+      // הייתה נכשלת בכתיבה לנתיב המוגן.
+      MsgBox(
+        'אוצריא הותקנה בעבר בנתיב הדורש הרשאות מנהל:' + #13#10 +
+        PreviousDir + #13#10 + #13#10 +
+        'כדי לשדרג, יש להפעיל את המתקין כמנהל' + #13#10 +
+        '(קליק ימני על קובץ ההתקנה ↦ "Run as administrator").',
+        mbError, MB_OK);
+      Result := False;
+      exit;
+    end
     else
+    begin
       PrivilegeFlag := '/CURRENTUSER';
+    end;
 
     Launched := Exec(ExpandConstant('{srcexe}'),
          '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART ' + PrivilegeFlag,
