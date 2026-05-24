@@ -231,10 +231,10 @@ Future<List<Link>> getLinksforIndexs(
 
     // אם אותו מפרש, מיון לפי heRef
     return a.heRef
-        .replaceAll(' טו,', ' ,יה')
+        .replaceAll(' טו,', ' יה,')
         .replaceAll(' טז,', ' יו,')
         .compareTo(
-            b.heRef.replaceAll(' טו,', ' ,יה').replaceAll(' טז,', ' יו,'));
+            b.heRef.replaceAll(' טו,', ' יה,').replaceAll(' טז,', ' יו,'));
   });
 
   return filteredLinks;
