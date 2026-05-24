@@ -43,12 +43,14 @@ jobs:
       # בדיוק. SHA-256 מאומת אחרי כל הורדה (תופס בלאי / שינוי תוכן ב-CDN).
       # ה-VERSION משמש כ-assertion על System32 של ה-runner אחרי ההתקנה —
       # ראה ההערה בשלב "Bundle latest VC++ Redistributable" להסבר מלא.
-      # לעדכון גרסה: לפתור את aka.ms/vs/17/release/vc_redist.x64.exe ידנית,
+      # לעדכון גרסה: לפתור את aka.ms/vc14/vc_redist.x64.exe ידנית (זה
+      # ה-permalink היציב לגרסה האחרונה הנתמכת של MSVC v14, כפי שמופיע
+      # בתיעוד הרשמי learn.microsoft.com/cpp/windows/latest-supported-vc-redist),
       # להעתיק את ה-URL הסופי, את ה-SHA-256 (מופיע בנתיב ה-URL עצמו)
       # ואת מספר הגרסה (מ-Get-Item ...VersionInfo.FileVersion).
-      VC_REDIST_URL: 'https://download.visualstudio.microsoft.com/download/pr/7ebf5fdb-36dc-4145-b0a0-90d3d5990a61/CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe'
-      VC_REDIST_SHA256: 'CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B'
-      VC_REDIST_VERSION: '14.44.35211.0'
+      VC_REDIST_URL: 'https://download.visualstudio.microsoft.com/download/pr/c1bd4f2c-3672-468e-8480-7ed419dbb641/90E48ADE404E4576D023ABFA374F323555F233982A8805EA9AC63DCA9491A16B/VC_redist.x64.exe'
+      VC_REDIST_SHA256: '90E48ADE404E4576D023ABFA374F323555F233982A8805EA9AC63DCA9491A16B'
+      VC_REDIST_VERSION: '14.51.36231.0'
     # env:
     #   RUSTUP_HOME: ${{ github.workspace }}\.rustup
     #   CARGO_HOME:  ${{ github.workspace }}\.cargo
