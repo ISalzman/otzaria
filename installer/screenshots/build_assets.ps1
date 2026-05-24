@@ -1,6 +1,6 @@
 # מייצר את כל קבצי ה-BMP הדרושים למתקין מתוך הצילומים בתיקייה זו.
-# מקור: 1.jpg = מסך ראשי (לתמונת WizardImageFile האנכית)
-#       2.jpg-5.png = תכונות (לדף תכונות מותאם)
+# מקור: 1.png = מסך ראשי (לתמונת WizardImageFile האנכית)
+#       2.png-5.png = תכונות (לדף תכונות מותאם)
 # פלט:  ../wizard_large.bmp + @2x + @3x       (164x314 / 246x471 / 328x628)
 #       ../wizard_small.bmp + @2x + @3x       (55x58  / 83x87  / 110x116)  מה-icon
 #       ../feature1..4.bmp                    (400x210 כל אחד, לדף התכונות)
@@ -41,6 +41,52 @@ function Resize-Image {
     return $resized
 }
 
+function Crop-ToOpaqueBounds {
+    param([System.Drawing.Image]$Source, [int]$AlphaThreshold = 250)
+    # מסיר שוליים שקופים (צל/הילה) ב-PNG. מחזיר Bitmap חדש 32bpp עם אזור התוכן בלבד.
+    # אם אין מידע אלפא משמעותי - מחזיר העתק של המקור.
+    $w = $Source.Width
+    $h = $Source.Height
+    $bmp32 = New-Object System.Drawing.Bitmap($w, $h, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $g32 = [System.Drawing.Graphics]::FromImage($bmp32)
+    $g32.DrawImage($Source, 0, 0, $w, $h)
+    $g32.Dispose()
+
+    $rect = New-Object System.Drawing.Rectangle 0, 0, $w, $h
+    $data = $bmp32.LockBits($rect, [System.Drawing.Imaging.ImageLockMode]::ReadOnly, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $stride = $data.Stride
+    $buf = New-Object byte[] ($stride * $h)
+    [System.Runtime.InteropServices.Marshal]::Copy($data.Scan0, $buf, 0, $buf.Length)
+    $bmp32.UnlockBits($data)
+
+    $minX = $w; $minY = $h; $maxX = -1; $maxY = -1
+    for ($y = 0; $y -lt $h; $y++) {
+        $row = $y * $stride
+        for ($x = 0; $x -lt $w; $x++) {
+            if ($buf[$row + $x*4 + 3] -ge $AlphaThreshold) {
+                if ($x -lt $minX) { $minX = $x }
+                if ($x -gt $maxX) { $maxX = $x }
+                if ($y -lt $minY) { $minY = $y }
+                if ($y -gt $maxY) { $maxY = $y }
+            }
+        }
+    }
+
+    if ($maxX -lt 0 -or ($maxX - $minX + 1 -eq $w -and $maxY - $minY + 1 -eq $h)) {
+        # אין שוליים שקופים - לא צריך לחתוך
+        return $bmp32
+    }
+
+    $cropW = $maxX - $minX + 1
+    $cropH = $maxY - $minY + 1
+    $cropped = New-Object System.Drawing.Bitmap($cropW, $cropH, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $g = [System.Drawing.Graphics]::FromImage($cropped)
+    $g.DrawImage($bmp32, (New-Object System.Drawing.Rectangle(0, 0, $cropW, $cropH)), $minX, $minY, $cropW, $cropH, [System.Drawing.GraphicsUnit]::Pixel)
+    $g.Dispose()
+    $bmp32.Dispose()
+    return $cropped
+}
+
 function Crop-CenterVertical {
     param([System.Drawing.Image]$Source, [double]$TargetAspect)
     # מחזיר חיתוך מרכזי לפי יחס יעד (W/H). אם המקור רחב מדי - חותך לרוחב מרכזי.
@@ -64,8 +110,10 @@ function Crop-CenterVertical {
 }
 
 Write-Output ""
-Write-Output "=== WizardImageFile (תמונה אנכית גדולה) מתוך 1.jpg ==="
-$src1 = [System.Drawing.Image]::FromFile((Join-Path $srcDir '1.jpg'))
+Write-Output "=== WizardImageFile (תמונה אנכית גדולה) מתוך 1.png ==="
+$src1Raw = [System.Drawing.Image]::FromFile((Join-Path $srcDir '1.png'))
+$src1 = Crop-ToOpaqueBounds -Source $src1Raw
+$src1Raw.Dispose()
 $targetAspect = 164.0 / 314.0
 $cropped = Crop-CenterVertical -Source $src1 -TargetAspect $targetAspect
 foreach ($pair in @(@{n='wizard_large.bmp';     w=164; h=314},
@@ -96,13 +144,15 @@ Write-Output ""
 Write-Output "=== Feature thumbnails (לדף תכונות מותאם) ==="
 # יחס יעד: 400x210 (~1.9:1, תואם את ה-1770x935 של המקור)
 $featureMap = @(
-    @{src='2.jpg'; out='feature1.bmp'},
-    @{src='3.jpg'; out='feature2.bmp'},
-    @{src='4.jpg'; out='feature3.bmp'},
+    @{src='2.png'; out='feature1.bmp'},
+    @{src='3.png'; out='feature2.bmp'},
+    @{src='4.png'; out='feature3.bmp'},
     @{src='5.png'; out='feature4.bmp'}
 )
 foreach ($m in $featureMap) {
-    $img = [System.Drawing.Image]::FromFile((Join-Path $srcDir $m.src))
+    $imgRaw = [System.Drawing.Image]::FromFile((Join-Path $srcDir $m.src))
+    $img = Crop-ToOpaqueBounds -Source $imgRaw
+    $imgRaw.Dispose()
     # חיתוך ליחס 400:210 = 1.905 לפני שינוי גודל
     $thumbAspect = 400.0 / 210.0
     $cropped = Crop-CenterVertical -Source $img -TargetAspect $thumbAspect
