@@ -931,6 +931,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             ? [
                 AppContextMenuEntry(
                   label: "חפש '$preview' בספר זה",
+                  labelWidget: buildSearchMenuLabel(
+                    selectedText: cleanedText,
+                    suffix: 'בספר זה',
+                  ),
                   icon: FluentIcons.book_search_24_regular,
                   onTap: () {
                     if (widget.onOpenSearch != null) {
@@ -942,6 +946,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 ),
                 AppContextMenuEntry(
                   label: "חפש '$preview' בכל הספרים",
+                  labelWidget: buildSearchMenuLabel(
+                    selectedText: cleanedText,
+                    suffix: 'בכל הספרים',
+                  ),
                   icon: FluentIcons.library_24_regular,
                   onTap: () => openGlobalSearch(
                     context,
