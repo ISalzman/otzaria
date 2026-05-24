@@ -169,4 +169,116 @@ void main() {
       expect(result, equals('משפט עם נקודה.'));
     });
   });
+
+  group('normalizeForFindRefMatch', () {
+    test('מחרוזת ריקה מחזירה ריקה', () {
+      expect(normalizeForFindRefMatch(''), equals(''));
+    });
+
+    test('רווחים בלבד מחזירים מחרוזת ריקה', () {
+      expect(normalizeForFindRefMatch('   '), equals(''));
+      expect(normalizeForFindRefMatch('\t \n'), equals(''));
+    });
+
+    test('גרשיים כפולים (ASCII) מוסרים ללא הוספת רווח', () {
+      // קריטי: "שו"ע" → "שוע" (לא "שו ע") כדי שראשי-תיבות יעבדו.
+      expect(normalizeForFindRefMatch('שו"ע'), equals('שוע'));
+      expect(normalizeForFindRefMatch('מ"ב'), equals('מב'));
+    });
+
+    test('גרשיים עבריים (״) מוסרים ללא הוספת רווח', () {
+      expect(normalizeForFindRefMatch('שו״ע'), equals('שוע'));
+      expect(normalizeForFindRefMatch('רמב״ם'), equals('רמבם'));
+    });
+
+    test('גרש בודד (\') מוסר ללא הוספת רווח', () {
+      expect(normalizeForFindRefMatch("ה'"), equals('ה'));
+    });
+
+    test('גרש עברי (׳) מוסר ללא הוספת רווח', () {
+      expect(normalizeForFindRefMatch('ה׳'), equals('ה'));
+    });
+
+    test('ניקוד עברי מוסר', () {
+      expect(normalizeForFindRefMatch('בְּרֵאשִׁית'), equals('בראשית'));
+      expect(normalizeForFindRefMatch('שָׁלוֹם'), equals('שלום'));
+    });
+
+    test('טעמי מקרא מוסרים', () {
+      // טעם דרגא (U+05A7) על "בְּ"
+      expect(normalizeForFindRefMatch('בְּ֧רֵאשִׁ֖ית'), equals('בראשית'));
+    });
+
+    test('אותיות אנגלית הופכות לאותיות קטנות', () {
+      expect(normalizeForFindRefMatch('Genesis'), equals('genesis'));
+      expect(normalizeForFindRefMatch('GENESIS'), equals('genesis'));
+    });
+
+    test('רווחים מרובים מתכווצים לרווח אחד', () {
+      expect(normalizeForFindRefMatch('א   ב'), equals('א ב'));
+      expect(normalizeForFindRefMatch('א\t\tב'), equals('א ב'));
+    });
+
+    test('תווים מיוחדים הופכים לרווח', () {
+      expect(normalizeForFindRefMatch('א-ב'), equals('א ב'));
+      expect(normalizeForFindRefMatch('א,ב'), equals('א ב'));
+      expect(normalizeForFindRefMatch('א.ב'), equals('א ב'));
+      expect(normalizeForFindRefMatch('א/ב'), equals('א ב'));
+    });
+
+    test('רווחים מובילים וסוגרים מקוצצים', () {
+      expect(normalizeForFindRefMatch('  שלום  '), equals('שלום'));
+    });
+
+    test('ספרות נשמרות', () {
+      expect(normalizeForFindRefMatch('פרק 1'), equals('פרק 1'));
+      expect(normalizeForFindRefMatch('סימן 42'), equals('סימן 42'));
+    });
+
+    test('אותיות עבריות נשמרות', () {
+      expect(normalizeForFindRefMatch('אבגדהוזחטיכלמנסעפצקרשת'),
+          equals('אבגדהוזחטיכלמנסעפצקרשת'));
+    });
+
+    test('שילוב: ניקוד+גרשיים+טעמים+רווחים', () {
+      // "שוּ״ע - אוֹ״ח" → "שוע אוח"
+      expect(normalizeForFindRefMatch('שוּ״ע - אוֹ״ח'), equals('שוע אוח'));
+    });
+
+    group('סימון עמוד גמרא (ב. / ב:)', () {
+      test('נקודה אחרי 1–3 אותיות עבריות בסוף מחרוזת → עמוד א', () {
+        expect(normalizeForFindRefMatch('ב.'), equals('ב א'));
+        expect(normalizeForFindRefMatch('לט.'), equals('לט א'));
+        expect(normalizeForFindRefMatch('קמד.'), equals('קמד א'));
+      });
+
+      test('נקודתיים אחרי 1–3 אותיות עבריות בסוף מחרוזת → עמוד ב', () {
+        expect(normalizeForFindRefMatch('ב:'), equals('ב ב'));
+        expect(normalizeForFindRefMatch('לט:'), equals('לט ב'));
+      });
+
+      test('נקודה/נקודתיים בסוף טוקן (לפני רווח) → עמוד', () {
+        expect(normalizeForFindRefMatch('שבת ב.'), equals('שבת ב א'));
+        expect(normalizeForFindRefMatch('שבת ב:'), equals('שבת ב ב'));
+        expect(normalizeForFindRefMatch('ברכות לט.'), equals('ברכות לט א'));
+      });
+
+      test('נקודה בין אותיות (לא סוף טוקן) — לא מורחבת', () {
+        // "א.ב" — נקודה שאינה בגבול מילה → נותרת ריווח רגיל
+        expect(normalizeForFindRefMatch('א.ב'), equals('א ב'));
+      });
+
+      test('נקודה אחרי יותר מ-3 אותיות — לא מורחבת (לא מספר דף)', () {
+        // "ראשי." — 4 אותיות, לא מספר דף
+        expect(normalizeForFindRefMatch('ראשי.'), equals('ראשי'));
+      });
+
+      test('קיצור עם גרש לפני הנקודה — לא מורחב (פ"א. / רמ"א.)', () {
+        // "פ"א." ← גרש לפני האות; לא ציון דף אלא קיצור
+        expect(normalizeForFindRefMatch('פ"א.'), equals('פא'));
+        expect(normalizeForFindRefMatch('רמ"א.'), equals('רמא'));
+        expect(normalizeForFindRefMatch('מ"ב.'), equals('מב'));
+      });
+    });
+  });
 }

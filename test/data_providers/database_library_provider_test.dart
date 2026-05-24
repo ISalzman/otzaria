@@ -386,11 +386,14 @@ void main() {
 
         await provider.initialize();
         final library = await provider.buildLibraryCatalog({}, tempDir.path);
-        final books = library.subCategories.single.books;
+        // מסננים קטגוריית "ספרים אישיים" שעלולה להצטרף אוטומטית מ-user_books.db
+        // הגלובלי ב-AppData של המכונה — לטסט אכפת רק מהקטגוריה שהוא יצר.
+        final halachaCategory =
+            library.subCategories.firstWhere((c) => c.title == 'הלכה');
+        final books = halachaCategory.books;
         final targetBook =
             books.firstWhere((book) => book.title == 'ספר בדיקה');
 
-        expect(library.subCategories, hasLength(1));
         expect(books, hasLength(1200));
         expect(targetBook.author, 'רש"י');
 
@@ -398,7 +401,7 @@ void main() {
           ..library = Future.value(library);
         final results = await repositoryForSearch.findBooks(
           'רש"י',
-          library.subCategories.single,
+          halachaCategory,
           sortByRatio: false,
         );
 
@@ -486,8 +489,8 @@ void main() {
       } finally {
         await Settings.setValue<String>(
             SettingsRepository.keyLibraryPath, previousLibraryPath ?? '');
-        await Settings.setValue<String>(
-            SettingsRepository.keyDbEffectivePath, previousEffectiveDbPath ?? '');
+        await Settings.setValue<String>(SettingsRepository.keyDbEffectivePath,
+            previousEffectiveDbPath ?? '');
         await provider.sqliteProvider.dispose();
         provider.clearCache();
         database.close();
@@ -546,8 +549,8 @@ void main() {
       } finally {
         await Settings.setValue<String>(
             SettingsRepository.keyLibraryPath, previousLibraryPath ?? '');
-        await Settings.setValue<String>(
-            SettingsRepository.keyDbEffectivePath, previousEffectiveDbPath ?? '');
+        await Settings.setValue<String>(SettingsRepository.keyDbEffectivePath,
+            previousEffectiveDbPath ?? '');
         await provider.sqliteProvider.dispose();
         provider.clearCache();
         database.close();
@@ -625,116 +628,116 @@ void main() {
       );
 
       final sourceId = await repository.insertSource('local-test', -10);
-        final personalCategoryId = await repository.insertCategory(
-          const migration_models.Category(
-            title: 'ספרים אישיים',
-            parentId: null,
-            level: 0,
-            orderIndex: 1,
-          ),
-        );
-        final existingFolderId = await repository.insertCategory(
-          migration_models.Category(
-            title: 'תיקייה קיימת',
-            parentId: personalCategoryId,
-            level: 1,
-            orderIndex: 1,
-          ),
-        );
+      final personalCategoryId = await repository.insertCategory(
+        const migration_models.Category(
+          title: 'ספרים אישיים',
+          parentId: null,
+          level: 0,
+          orderIndex: 1,
+        ),
+      );
+      final existingFolderId = await repository.insertCategory(
+        migration_models.Category(
+          title: 'תיקייה קיימת',
+          parentId: personalCategoryId,
+          level: 1,
+          orderIndex: 1,
+        ),
+      );
 
-        await repository.insertBook(
-          migration_models.Book(
-            id: 1,
-            categoryId: existingFolderId,
-            sourceId: sourceId,
-            title: 'ספר ראשי',
-            filePath: path.join(tempDir.path, 'main_book.txt'),
-            fileType: 'txt',
-          ),
-        );
+      await repository.insertBook(
+        migration_models.Book(
+          id: 1,
+          categoryId: existingFolderId,
+          sourceId: sourceId,
+          title: 'ספר ראשי',
+          filePath: path.join(tempDir.path, 'main_book.txt'),
+          fileType: 'txt',
+        ),
+      );
 
-        final userBooksRepository =
-            await UserBooksDatabaseHolder.instance.repository;
-        final userSourceId =
-            await userBooksRepository.insertSource('user-test', -20);
-        final userPersonalCategoryId = await userBooksRepository.insertCategory(
-          const migration_models.Category(
-            title: 'ספרים אישיים',
-            parentId: null,
-            level: 0,
-            orderIndex: 1,
-          ),
-        );
-        final userExistingFolderId = await userBooksRepository.insertCategory(
-          migration_models.Category(
-            title: 'תיקייה קיימת',
-            parentId: userPersonalCategoryId,
-            level: 1,
-            orderIndex: 1,
-          ),
-        );
-        final nestedFolderId = await userBooksRepository.insertCategory(
-          migration_models.Category(
-            title: 'תת קטגוריה',
-            parentId: userExistingFolderId,
-            level: 2,
-            orderIndex: 1,
-          ),
-        );
+      final userBooksRepository =
+          await UserBooksDatabaseHolder.instance.repository;
+      final userSourceId =
+          await userBooksRepository.insertSource('user-test', -20);
+      final userPersonalCategoryId = await userBooksRepository.insertCategory(
+        const migration_models.Category(
+          title: 'ספרים אישיים',
+          parentId: null,
+          level: 0,
+          orderIndex: 1,
+        ),
+      );
+      final userExistingFolderId = await userBooksRepository.insertCategory(
+        migration_models.Category(
+          title: 'תיקייה קיימת',
+          parentId: userPersonalCategoryId,
+          level: 1,
+          orderIndex: 1,
+        ),
+      );
+      final nestedFolderId = await userBooksRepository.insertCategory(
+        migration_models.Category(
+          title: 'תת קטגוריה',
+          parentId: userExistingFolderId,
+          level: 2,
+          orderIndex: 1,
+        ),
+      );
 
-        await userBooksRepository.insertBook(
-          migration_models.Book(
-            categoryId: userExistingFolderId,
-            sourceId: userSourceId,
-            title: 'ספר משתמש',
-            filePath: path.join(tempDir.path, 'user_book.txt'),
-            fileType: 'txt',
-          ),
-        );
-        await userBooksRepository.insertBook(
-          migration_models.Book(
-            categoryId: nestedFolderId,
-            sourceId: userSourceId,
-            title: 'ספר פנימי',
-            filePath: path.join(tempDir.path, 'nested_user_book.txt'),
-            fileType: 'txt',
-          ),
-        );
+      await userBooksRepository.insertBook(
+        migration_models.Book(
+          categoryId: userExistingFolderId,
+          sourceId: userSourceId,
+          title: 'ספר משתמש',
+          filePath: path.join(tempDir.path, 'user_book.txt'),
+          fileType: 'txt',
+        ),
+      );
+      await userBooksRepository.insertBook(
+        migration_models.Book(
+          categoryId: nestedFolderId,
+          sourceId: userSourceId,
+          title: 'ספר פנימי',
+          filePath: path.join(tempDir.path, 'nested_user_book.txt'),
+          fileType: 'txt',
+        ),
+      );
 
-        await provider.initialize();
-        final library = await provider.buildLibraryCatalog({}, libraryPath);
+      await provider.initialize();
+      final library = await provider.buildLibraryCatalog({}, libraryPath);
 
-        final personalCategories =
-            library.subCategories.where((c) => c.title == 'ספרים אישיים');
-        expect(personalCategories, hasLength(1));
+      final personalCategories =
+          library.subCategories.where((c) => c.title == 'ספרים אישיים');
+      expect(personalCategories, hasLength(1));
 
-        final personalCategory = personalCategories.single;
-        final mergedCategories = personalCategory.subCategories
-            .where((c) => c.title == 'תיקייה קיימת');
-        expect(mergedCategories, hasLength(1));
+      final personalCategory = personalCategories.single;
+      final mergedCategories = personalCategory.subCategories
+          .where((c) => c.title == 'תיקייה קיימת');
+      expect(mergedCategories, hasLength(1));
 
-        final mergedCategory = mergedCategories.single;
-        expect(mergedCategory.parent, same(personalCategory));
-        expect(
-          mergedCategory.books.map((book) => book.title),
-          containsAll(['ספר ראשי', 'ספר משתמש']),
-        );
+      final mergedCategory = mergedCategories.single;
+      expect(mergedCategory.parent, same(personalCategory));
+      expect(
+        mergedCategory.books.map((book) => book.title),
+        containsAll(['ספר ראשי', 'ספר משתמש']),
+      );
 
-        final mainBook =
-            mergedCategory.books.firstWhere((book) => book.title == 'ספר ראשי');
-        final userBook = mergedCategory.books
-            .firstWhere((book) => book.title == 'ספר משתמש');
-        expect(mainBook.category, same(mergedCategory));
-        expect(userBook.category, same(mergedCategory));
+      final mainBook =
+          mergedCategory.books.firstWhere((book) => book.title == 'ספר ראשי');
+      final userBook =
+          mergedCategory.books.firstWhere((book) => book.title == 'ספר משתמש');
+      expect(mainBook.category, same(mergedCategory));
+      expect(userBook.category, same(mergedCategory));
 
-        final nestedCategories =
-            mergedCategory.subCategories.where((c) => c.title == 'תת קטגוריה');
-        expect(nestedCategories, hasLength(1));
+      final nestedCategories =
+          mergedCategory.subCategories.where((c) => c.title == 'תת קטגוריה');
+      expect(nestedCategories, hasLength(1));
 
-        final nestedCategory = nestedCategories.single;
-        expect(nestedCategory.parent, same(mergedCategory));
-        expect(nestedCategory.path, '/ספרים אישיים/תיקייה קיימת/תת קטגוריה');
-        expect(nestedCategory.books, hasLength(1));
+      final nestedCategory = nestedCategories.single;
+      expect(nestedCategory.parent, same(mergedCategory));
+      expect(nestedCategory.path, '/ספרים אישיים/תיקייה קיימת/תת קטגוריה');
+      expect(nestedCategory.books, hasLength(1));
       expect(nestedCategory.books.single.title, 'ספר פנימי');
       expect(nestedCategory.books.single.category, same(nestedCategory));
     });
