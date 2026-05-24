@@ -2529,28 +2529,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
                           onClose: _toggleReadingSettingsPanel,
                           deferChildBuildOnOpen: true,
                           preserveChildStateOnClose: true,
-                          child: Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      'הגדרות תצוגת הספרים',
-                                      textDirection: TextDirection.rtl,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineMedium
-                                          ?.copyWith(
-                                              fontWeight: FontWeight.bold),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Expanded(
-                                child: ReadingSettingsPanel(),
-                              ),
-                            ],
+                          title: 'הגדרות תצוגת הספרים',
+                          child: const Expanded(
+                            child: ReadingSettingsPanel(),
                           ),
                         ),
                       ],
