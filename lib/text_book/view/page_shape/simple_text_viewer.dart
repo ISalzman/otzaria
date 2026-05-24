@@ -990,17 +990,19 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
 
     entries.add(const AppContextMenuEntry.divider());
+    final reportTargetBook = widget.reportBook ?? state.book;
     entries.addAll([
       AppContextMenuEntry(
         label: 'הוסף הערה אישית ',
         icon: FluentIcons.note_add_24_regular,
         onTap: () => _createNoteForCurrentLine(index, capturedText),
       ),
-      AppContextMenuEntry(
-        label: 'דווח על טעות בספר',
-        icon: FluentIcons.error_circle_24_regular,
-        onTap: () => _openErrorReportDialog(capturedText ?? ''),
-      ),
+      if (!reportTargetBook.isUserBook)
+        AppContextMenuEntry(
+          label: 'דווח על טעות בספר',
+          icon: FluentIcons.error_circle_24_regular,
+          onTap: () => _openErrorReportDialog(capturedText ?? ''),
+        ),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
         label: 'העתק',
