@@ -166,6 +166,14 @@ class ShortcutsSettingsTab extends StatelessWidget {
       cardId: 'shortcuts.main',
       keywords: ['מפרשים', 'חלונית', 'ctrl+shift+c', 'מקלדת'],
     ),
+    SettingsSearchEntry(
+      id: 'shortcuts.book.open_commentators_tab',
+      title: 'קיצור לפתיחת כרטיסיית מפרשים',
+      subtitle: 'פתיחת המפרשים בכרטיסייה נפרדת ליד הספר הנוכחי',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['מפרשים', 'כרטיסייה', 'טאב', 'מקלדת'],
+    ),
   ];
 
   static const Map<String, String> _shortcutsList = {
@@ -398,6 +406,13 @@ class ShortcutsSettingsTab extends StatelessWidget {
               label: 'פתח/סגור חלונית מפרשים',
               defaultShortcut: 'ctrl+shift+c',
               icon: FluentIcons.book_open_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
+              settingKey: 'key-shortcut-open-commentators-tab',
+              label: 'פתח כרטיסיית מפרשים',
+              defaultShortcut: '',
+              icon: FluentIcons.open_24_regular,
               allShortcuts: _shortcutsList,
             ),
           ]),
