@@ -72,6 +72,11 @@ class ContextOverlayPanel extends StatefulWidget {
   /// רוחב מקסימלי לגרירה
   final double? maxWidth;
 
+  /// כותרת אופציונלית שתוצג בראש הפאנל (headlineMedium, מודגש)
+  ///
+  /// כשמוגדרת, `child` צריך להיות `Expanded(...)` כדי שהפריסה תעבוד נכון.
+  final String? title;
+
   const ContextOverlayPanel({
     super.key,
     required this.isOpen,
@@ -85,6 +90,7 @@ class ContextOverlayPanel extends StatefulWidget {
     this.preserveChildStateOnClose = false,
     this.minWidth = 200,
     this.maxWidth,
+    this.title,
   });
 
   @override
@@ -168,6 +174,29 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
     });
   }
 
+  Widget _buildChildWithTitle(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              Text(
+                widget.title!,
+                textDirection: TextDirection.rtl,
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+        widget.child,
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -220,7 +249,9 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
                       child: Padding(
                         padding: widget.contentPadding,
                         child: _shouldBuildChild
-                            ? widget.child
+                            ? (widget.title != null
+                                ? _buildChildWithTitle(context)
+                                : widget.child)
                             : const SizedBox.shrink(),
                       ),
                     ),
