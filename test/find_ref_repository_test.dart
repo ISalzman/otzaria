@@ -2260,6 +2260,55 @@ void main() {
       expect(chapterResults.every((r) => r.tocLevel == 2), isTrue,
           reason: 'פרקי outline מטופלים כ-TOC רמה 2');
     });
+
+    test(
+        'שני FS PDFs בעלי אותה כותרת אך filePath שונה — שניהם שורדים '
+        'את ה-dedupe (P2 רגרסיה)', () async {
+      // לכל FS PDF יש bookId == -1. שני קבצים שונים מהדיסק יכולים לחלוק
+      // כותרת (גרסאות שונות של אותו ספר), וההבדל היחיד ביניהם הוא ה-filePath.
+      // dedupe ללא filePath היה מאחד אותם משרירותיות; ב-Dedupe הנוכחי
+      // filePath נכלל למפתח רק כש-bookId == -1, כדי לשמור על האיחוד הנכון
+      // של תוצאות DB עם filePath ידוע/ריק.
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'ספר אטלס') {
+            return [
+              _hit(
+                bookId: -1,
+                title: 'ספר אטלס',
+                normalizedTitle: 'ספר אטלס',
+                fileType: 'pdf',
+                filePath: '/books/atlas-v1.pdf',
+              ),
+              _hit(
+                bookId: -1,
+                title: 'ספר אטלס',
+                normalizedTitle: 'ספר אטלס',
+                fileType: 'pdf',
+                filePath: '/books/atlas-v2.pdf',
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        // outline ריק לשני הקבצים — נשארת רק תוצאה אחת לכל קובץ (הכותרת).
+        getPdfOutlineEntries: (_) async => const [],
+        getCategoryPath: (_) async => '',
+      );
+
+      final results = await repo.findRefs('ספר אטלס');
+
+      // שתי תוצאות — אחת לכל קובץ — שתיהן עם אותו title אך filePath שונה.
+      expect(results, hasLength(2),
+          reason: 'שני קבצי PDF שונים לא יכולים להתאחד ע"י dedupe');
+      final filePaths = results.map((r) => r.filePath).toSet();
+      expect(filePaths,
+          equals({'/books/atlas-v1.pdf', '/books/atlas-v2.pdf'}));
+    });
   });
 
   // ─── bookId ו-bookPath ───────────────────────────────────────────────────────

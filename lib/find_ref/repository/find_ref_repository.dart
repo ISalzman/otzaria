@@ -125,7 +125,40 @@ class FindRefRepository {
     this.selectCommentatorsByBook,
     this.getBookEra,
     this.getCategoryPathSync,
-  });
+  }) {
+    _liveInstances.add(this);
+  }
+
+  /// כל ה-instances הפעילים — כדי שמסלולי refresh/reset של הספרייה יוכלו
+  /// לאפס את ה-caches שלהם בלי תלות ב-singleton או ב-context. ה-repository
+  /// נוצר ב-BlocProvider, ולכן אין נקודה גלובלית אחת לפנות אליה.
+  static final Set<FindRefRepository> _liveInstances = <FindRefRepository>{};
+
+  /// מאפס את ה-caches הפנימיים של כל ה-instances הקיימים. נקרא ממסלולי
+  /// refresh הספרייה (navigation_repository) ואיפוס runtime (app_runtime_reset).
+  static void clearAllCaches() {
+    for (final repo in _liveInstances) {
+      repo.clearCaches();
+    }
+  }
+
+  /// בדיקות בלבד: מבטל את ההרשמה של ה-instance מ-[_liveInstances]. שימושי
+  /// בטסטים שיוצרים הרבה repositories מבלי לשמור שיורי state בין מבחנים.
+  @visibleForTesting
+  void disposeForTesting() {
+    _liveInstances.remove(this);
+  }
+
+  /// מנקה את ה-caches הפנימיים של ה-repository (מפרשים ו-AltToc שטוח).
+  ///
+  /// יש לקרוא לזה במסלולי refresh של הספרייה / איפוס runtime, כדי שתוצאות
+  /// מספרייה ישנה לא ידלפו לחיפוש שאחרי הרענון. ה-repository עצמו חי לכל
+  /// אורך חיי האפליקציה (singleton ב-main), ולכן בלי ניקוי יזום הקאש ישרוד
+  /// עד restart מלא.
+  void clearCaches() {
+    _commentatorsCache.clear();
+    _altTocFlatCache = null;
+  }
 
   /// מחזיר את הקאש הגלובלי של AltToc; טוען אותו פעם אחת בקריאה הראשונה
   /// ושומר ב-[_altTocFlatCache]. כל קריאה לאחר מכן היא in-memory.
@@ -228,22 +261,29 @@ class FindRefRepository {
       rows = await bookFn(ref.bookId);
     }
 
-    final titles = <String>[];
-    final segmentByTitle = <String, int?>{};
+    // dedupe על `(title, bookId)` ולא רק `title`: שני מפרשים שונים יכולים
+    // לחלוק אותה כותרת ולהיבדל ב-`targetBookId` (למשל "רש"י" שיש לו
+    // book records נפרדים על תורה ועל גמרא). dedupe לפי title בלבד היה מוחק
+    // אחד מהם ומבטל את הנתון שבזכותו הצרכן יודע לאיזה ספר ללכת.
+    //
+    // עבור rows ישנים שאין להם `targetBookId` (תאימות לאחור), המפתח (title, null)
+    // יחיד — כך שכפילויות אמיתיות עם אותו ספר חסר-id עדיין מסוננות.
+    final entries = <({String title, int? bookId, int? segment})>[];
+    final seen = <(String, int?)>{};
     for (final row in rows) {
       final title = row['targetBookTitle'] as String?;
       if (title == null || title.isEmpty) continue;
-      if (segmentByTitle.containsKey(title)) continue;
+      final int? bookId = row['targetBookId'] as int?;
+      if (!seen.add((title, bookId))) continue;
 
       // segment-level → `targetLineIndex` אם ה-row כולל אותו, אחרת null;
       // book-level → null (הצרכן יפתור לפי ref.segment).
       final int? segment =
           usedSegmentLevel ? row['targetLineIndex'] as int? : null;
-      titles.add(title);
-      segmentByTitle[title] = segment;
+      entries.add((title: title, bookId: bookId, segment: segment));
     }
 
-    if (titles.isEmpty) {
+    if (entries.isEmpty) {
       _commentatorsCache[cacheKey] = const [];
       return const [];
     }
@@ -251,19 +291,20 @@ class FindRefRepository {
     // מיון לפי סדר הדורות (תורה → חז"ל → ראשונים → אחרונים → מודרני → שאר),
     // ובתוך כל דור — אלפביתי. תואם להתנהגות תפריט המפרשים ב-text-book viewer.
     final eraResolver = getBookEra ?? CommentaryService.getBookEra;
-    final eras = await Future.wait(titles.map(eraResolver));
-    final indices = List<int>.generate(titles.length, (i) => i)
+    final eras = await Future.wait(entries.map((e) => eraResolver(e.title)));
+    final indices = List<int>.generate(entries.length, (i) => i)
       ..sort((a, b) {
         final ea = eras[a];
         final eb = eras[b];
         if (ea.order != eb.order) return ea.order.compareTo(eb.order);
-        return titles[a].compareTo(titles[b]);
+        return entries[a].title.compareTo(entries[b].title);
       });
     final sorted = [
       for (final i in indices)
         DbCommentatorEntry(
-          title: titles[i],
-          targetSegment: segmentByTitle[titles[i]],
+          title: entries[i].title,
+          bookId: entries[i].bookId,
+          targetSegment: entries[i].segment,
         ),
     ];
 
@@ -676,14 +717,16 @@ class FindRefRepository {
         int bookId,
         String bookTitle, {
         List<String>? qt,
-      }) {
+      }) async {
         final injected = getUserBookTocEntries;
         if (injected != null) {
           return injected(bookId, bookTitle, queryTokens: qt);
         }
-        userRepo ??=
-            UserBooksDatabaseHolder.instance.repository as SeforimRepository;
-        return (userRepo as SeforimRepository).getTocEntriesForReference(
+        // `UserBooksDatabaseHolder.instance.repository` הוא `Future<SeforimRepository>`,
+        // לכן נדרש `await` ולא cast — הקאסט הקודם היה זורק TypeError כש-userRepo
+        // לא הוזרק מראש (תרחיש שטחי בטסטים, אך bug רדום שראוי לתקן).
+        userRepo ??= await UserBooksDatabaseHolder.instance.repository;
+        return userRepo!.getTocEntriesForReference(
           bookId,
           bookTitle,
           queryTokens: qt,
@@ -862,10 +905,23 @@ class FindRefRepository {
     final out = <DbReferenceResult>[];
 
     for (final r in results) {
-      // Deduplicate by (title, segment, isPdf): two entries that navigate to the
-      // same line in the same book are duplicates regardless of reference format
-      // (e.g., "בראשית תולדות עליה ב" vs "תולדות עליה ב" from TOC vs AltToc).
-      final key = '${r.title}|${r.segment}|${r.isPdf}';
+      // Deduplicate by (bookId, isUserBook, title, segment, isPdf [, filePath]):
+      //   - title|segment|isPdf — שני TOC/AltToc שמובילים לאותה שורה באותו ספר
+      //     הם כפילות, ללא תלות בפורמט ה-reference
+      //     ("בראשית תולדות עליה ב" מול "תולדות עליה ב").
+      //   - bookId + isUserBook — שני ספרים *שונים* (למשל ספר רשמי וספר אישי,
+      //     או שני רשמיים) בעלי אותה כותרת *אינם* כפילות; ה-namespace של
+      //     user_books.db נפרד מזה של seforim.db ובלעדיהם מפתח אחיד היה
+      //     מוחק את אחד מהם משרירותיות.
+      //   - filePath נוסף **רק** עבור FS PDFs (`bookId == -1`): לכולם אותו
+      //     bookId שלילי, וההבדלה היחידה ביניהם היא הקובץ עצמו. שני קבצי PDF
+      //     שונים מהדיסק עם אותה כותרת חייבים לשרוד את ה-dedupe. עבור
+      //     תוצאות DB אנחנו דווקא רוצים שה-filePath *לא* יבדיל — מסלול
+      //     ה-global AltToc fallback מייצר תוצאה עם filePath ריק, וצריך
+      //     להתמזג עם תוצאת ה-per-book של אותו bookId שיש לה filePath ידוע.
+      final filePathKey = r.bookId == -1 ? r.filePath : '';
+      final key =
+          '${r.bookId}|${r.isUserBook}|${r.title}|${r.segment}|${r.isPdf}|$filePathKey';
       if (seen.add(key)) {
         out.add(r);
       }
@@ -900,8 +956,7 @@ class FindRefRepository {
       final citationMatch = !isDafCitation || r.reference.contains('דף');
       // tier יסוד: 1=מקרא ... 10=שו"ע, null=מפרש/ספרות עזר.
       final categoryPath = r.bookId > 0 ? pathResolver(r.bookId) : null;
-      final foundationalTier =
-          classifyFoundationalTier(categoryPath, r.title);
+      final foundationalTier = classifyFoundationalTier(categoryPath, r.title);
       return _RankKey(
         result: r,
         normTitle: normTitle,
