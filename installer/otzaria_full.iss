@@ -72,9 +72,9 @@ const
 
 var
   CompPage: TWizardPage;
-  VCCheck, WV2Check: TCheckBox;
-  VCLabel, WV2Label: TLabel;
-  InstallVC, InstallWV2: Boolean;
+  WV2Check: TCheckBox;
+  WV2Label: TLabel;
+  InstallWV2: Boolean;
 
   BooksPage: TWizardPage;
   BooksPathEdit: TEdit;
@@ -170,18 +170,6 @@ end;
 
 // ─── בדיקות רכיבי מערכת ───────────────────────────────────────────────────
 
-function GetVCVersion: String;
-var
-  Version: String;
-begin
-  if RegQueryStringValue(HKLM64,
-      'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64',
-      'Version', Version) then
-    Result := Version
-  else
-    Result := '';
-end;
-
 function GetWebView2Version: String;
 var
   Version: String;
@@ -199,11 +187,6 @@ begin
     Result := Version
   else
     Result := '';
-end;
-
-function VCRedistNeedsInstall: Boolean;
-begin
-  Result := GetVCVersion = '';
 end;
 
 function WebView2NeedsInstall: Boolean;
@@ -235,7 +218,6 @@ begin
   // האזהרה על מחיקת ספרים קיימים מוצגת בדף בחירת תיקיית הספרים
 
   // אתחול ברירות מחדל — גם להתקנה שקטה (/SILENT, /VERYSILENT)
-  InstallVC  := VCRedistNeedsInstall;
   InstallWV2 := WebView2NeedsInstall;
   SelectedBooksPath := GetDataDir('') + '\books';
 end;
@@ -244,9 +226,9 @@ end;
 
 procedure CreateComponentsPage;
 var
-  VCVersion, WV2Version: String;
-  VCStatus, WV2Status: String;
-  VCColor, WV2Color: TColor;
+  WV2Version: String;
+  WV2Status: String;
+  WV2Color: TColor;
   TopY: Integer;
   HeaderLabel: TLabel;
 begin
@@ -254,7 +236,6 @@ begin
     'בחירת רכיבי מערכת להתקנה',
     'בדיקת הרכיבים הנדרשים לאפליקציה');
 
-  VCVersion  := GetVCVersion;
   WV2Version := GetWebView2Version;
 
   // כותרת הסבר
@@ -266,51 +247,19 @@ begin
   HeaderLabel.AutoSize := False;
   HeaderLabel.WordWrap := True;
   HeaderLabel.Caption :=
-    'להלן רכיבי המערכת הנדרשים לפעולת אוצריא.' + #13#10 +
-    'רכיבים באדום חסרים — נדרשת התקנה.' + #13#10 +
-    'רכיבים ירוקים קיימים — אין צורך בפעולה.';
+    'בדיקת רכיבי Microsoft הנדרשים לאוצריא.' + #13#10 +
+    'בכתום: חסר — מומלץ להתקין.' + #13#10 +
+    'בירוק: קיים — אין צורך בפעולה.';
   HeaderLabel.Height := ScaleY(60);  // 3 שורות קצרות, בלי עודף ריפוד
 
   TopY := HeaderLabel.Height + ScaleY(6);
 
-  // ─── Visual C++ Runtime ───────────────────────────────────────────────────
-  VCCheck := TCheckBox.Create(CompPage);
-  VCCheck.Parent  := CompPage.Surface;
-  VCCheck.Left    := 0;
-  VCCheck.Top     := TopY + ScaleY(2);
-  VCCheck.Width   := CompPage.SurfaceWidth;
-  VCCheck.Height  := ScaleY(20);
-  VCCheck.Caption := 'Visual C++ Redistributable 2022 (x64)';
-
-  if VCVersion = '' then
-  begin
-    VCStatus := '⚠ חסר — נדרשת התקנה! ללא רכיב זה האפליקציה לא תפעל.';
-    VCColor  := clRed;
-    VCCheck.Checked := True;
-    VCCheck.Enabled := False;  // חובה — לא ניתן לבטל
-  end
-  else
-  begin
-    VCStatus := '✓ קיים (גרסה: ' + VCVersion + ') — לא נדרשת פעולה.';
-    VCColor  := $006400;  // ירוק כהה
-    VCCheck.Checked := False;
-    VCCheck.Enabled := False;  // קיים — נעול כדי למנוע התקנה מיותרת
-  end;
-
-  VCLabel := TLabel.Create(CompPage);
-  VCLabel.Parent   := CompPage.Surface;
-  VCLabel.Left     := ScaleX(20);
-  VCLabel.Top      := TopY + ScaleY(18);
-  VCLabel.Width    := CompPage.SurfaceWidth - ScaleX(20);
-  VCLabel.AutoSize := False;
-  VCLabel.WordWrap := True;
-  VCLabel.Caption  := VCStatus;
-  VCLabel.Font.Color := VCColor;
-  VCLabel.Height   := ScaleY(36);
-
-  TopY := TopY + ScaleY(58);
-
   // ─── WebView2 Runtime ─────────────────────────────────────────────────────
+  // הערה: Visual C++ Runtime כבר לא מותקן ע"י המתקין — ה-DLLs נארזים
+  // app-local ליד otzaria.exe (ראה .github/workflows/build-and-announce.yml
+  // והשלב "Bundle latest VC++ Redistributable runtime DLLs"), כך שאין
+  // צורך לבדוק / להתקין אותו בזמן ההתקנה. המתקין FULL מציג עכשיו רק
+  // את ה-WebView2 בדף בחירת רכיבי המערכת.
   WV2Check := TCheckBox.Create(CompPage);
   WV2Check.Parent  := CompPage.Surface;
   WV2Check.Left    := 0;
@@ -557,11 +506,6 @@ begin
   SaveStringToFile(PrefsFile, JsonContent, False);
 end;
 
-function ShouldInstallVC: Boolean;
-begin
-  Result := InstallVC;
-end;
-
 function ShouldInstallWV2: Boolean;
 begin
   Result := InstallWV2;
@@ -662,7 +606,6 @@ end;
 
 procedure InitializeWizard;
 begin
-  InstallVC  := VCRedistNeedsInstall;
   InstallWV2 := WebView2NeedsInstall;
   CreateFeaturesPage;
   CreateComponentsPage;
@@ -692,7 +635,6 @@ begin
   Result := True;
   if (CompPage <> nil) and (CurPageID = CompPage.ID) then
   begin
-    InstallVC  := VCCheck.Checked;
     InstallWV2 := WV2Check.Checked;
   end;
   if (BooksPage <> nil) and (CurPageID = BooksPage.ID) then
@@ -942,7 +884,10 @@ begin
 end;
 
 [Run]
-Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "מתקין Visual C++ Redistributable 2022..."; Flags: waituntilterminated; Check: ShouldInstallVC
+; Visual C++ Redistributable כבר לא מותקן ע"י המתקין — ה-DLLs של ה-runtime
+; נארזים app-local ליד otzaria.exe (ראה .github/workflows/build-and-announce.yml,
+; השלב "Bundle latest VC++ Redistributable runtime DLLs"). זה פותר גם משתמשים
+; שתקועים עם MSVCP140.dll 14.36.32532.0 הפגום, בלי הרצת installer נוסף.
 Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "מתקין Microsoft WebView2 Runtime..."; Flags: waituntilterminated; Check: ShouldInstallWV2
 Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
@@ -974,9 +919,6 @@ Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{app}\_staging"; Fla
 Source: "zstd.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "7za.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-; vc_redist.x64.exe — הגרסה הרשמית של Microsoft, כ-25MB במקום AIO (~50MB)
-; כוללת את 2015/2017/2019/2022 תחת אותו מספר גרסה (14.x)
-Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallVC
 ; MicrosoftEdgeWebview2Setup.exe — bootstrapper קטן (~2MB) שמוריד ומתקין WebView2
 ; נדרש על ידי flutter_inappwebview_windows; ב-Win10/11 עם Edge עדכני — כבר קיים
 Source: "MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallWV2
