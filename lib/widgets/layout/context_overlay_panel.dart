@@ -179,17 +179,15 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            children: [
-              Text(
-                widget.title!,
-                textDirection: TextDirection.rtl,
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-            ],
+          child: Center(
+            child: Text(
+              widget.title!,
+              textDirection: TextDirection.rtl,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
           ),
         ),
         widget.child,
