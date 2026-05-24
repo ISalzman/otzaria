@@ -689,14 +689,15 @@ class _CombinedViewState extends State<CombinedView> {
         icon: FluentIcons.note_add_24_regular,
         onTap: () => _showNoteEditor(selectedText),
       ),
-      AppContextMenuEntry(
-        label: 'דווח על טעות בספר',
-        icon: FluentIcons.error_circle_24_regular,
-        onTap: () => _openErrorReportDialog(
-          selectedText ?? '',
-          fallbackLineIndex: paragraphIndex,
+      if (!state.book.isUserBook)
+        AppContextMenuEntry(
+          label: 'דווח על טעות בספר',
+          icon: FluentIcons.error_circle_24_regular,
+          onTap: () => _openErrorReportDialog(
+            selectedText ?? '',
+            fallbackLineIndex: paragraphIndex,
+          ),
         ),
-      ),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
         label: 'העתק',
@@ -1284,10 +1285,10 @@ class _CombinedViewState extends State<CombinedView> {
   ) {
     // [index] הוא segmentIndex; ה-segment הזה עשוי לעטוף כמה שורות מקור.
     // במצב הרגיל זה 1:1 (segment.startLineIndex == index, sourceLineIndices=[index]).
-    final segment = state.readingSegments.isNotEmpty &&
-            index < state.readingSegments.length
-        ? state.readingSegments[index]
-        : null;
+    final segment =
+        state.readingSegments.isNotEmpty && index < state.readingSegments.length
+            ? state.readingSegments[index]
+            : null;
     final primaryLineIndex = segment?.startLineIndex ?? index;
     final isContinuousParagraph = state.continuousReadingMode &&
         segment != null &&
