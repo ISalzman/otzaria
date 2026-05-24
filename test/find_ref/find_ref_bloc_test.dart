@@ -22,7 +22,10 @@ class _FakeRepository implements FindRefRepository {
         _error = error;
 
   @override
-  Future<List<DbReferenceResult>> findRefs(String ref) async {
+  Future<List<DbReferenceResult>> findRefs(
+    String ref, {
+    bool includePersonalBooks = false,
+  }) async {
     if (_error != null) throw _error;
     return _fn(ref);
   }
@@ -49,6 +52,9 @@ FindRefBloc _bloc({
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
+// השהיה שמספיקה בנדיבות כדי לעבור את ה-debounce של 250ms בתוך ה-handler.
+const _kPastDebounce = Duration(milliseconds: 400);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -66,6 +72,7 @@ void main() {
       'שני תווים — גבול התחתון של החיפוש האמיתי — עובר Loading ואז Success',
       build: () => _bloc(fn: (_) async => [_result()]),
       act: (b) => b.add(const SearchRefRequested('בר')),
+      wait: _kPastDebounce,
       expect: () => [
         isA<FindRefLoading>(),
         isA<FindRefSuccess>().having((s) => s.refs, 'refs', hasLength(1)),
@@ -76,6 +83,7 @@ void main() {
       'חיפוש תקין מחזיר Loading לפני Success עם תוצאות',
       build: () => _bloc(fn: (_) async => [_result(), _result(title: 'שמות')]),
       act: (b) => b.add(const SearchRefRequested('בראשית')),
+      wait: _kPastDebounce,
       expect: () => [
         isA<FindRefLoading>(),
         isA<FindRefSuccess>().having((s) => s.refs, 'refs', hasLength(2)),
@@ -86,6 +94,7 @@ void main() {
       'שגיאה במאגר מחזירה FindRefError אחרי Loading',
       build: () => _bloc(error: Exception('DB error')),
       act: (b) => b.add(const SearchRefRequested('בראשית')),
+      wait: _kPastDebounce,
       expect: () => [
         isA<FindRefLoading>(),
         isA<FindRefError>().having((s) => s.message, 'message', contains('DB error')),
@@ -110,6 +119,7 @@ void main() {
         await Future.delayed(Duration.zero);
         b.add(const SearchRefRequested('בראשית'));
       },
+      wait: _kPastDebounce,
       expect: () => [
         isA<FindRefInitial>(),
         isA<FindRefLoading>(),
