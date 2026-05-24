@@ -10,7 +10,7 @@ Divider settingsCardDivider(BuildContext context) => Divider(
       thickness: 1.5,
       indent: 0,
       endIndent: 0,
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      color: Theme.of(context).scaffoldBackgroundColor,
     );
 
 /// כרטיס הגדרות מעוצב בסגנון Material 3 / Google Account
@@ -70,35 +70,24 @@ class SettingsCard extends StatelessWidget {
           ),
         ),
         // הכרטיס המכיל את ההגדרות
-        Card(
-          elevation: 0,
-          margin: EdgeInsets.zero,
-          color: cardColor,
-          clipBehavior: Clip.antiAlias,
-          shape: const RoundedRectangleBorder(
-            side: BorderSide.none,
-            borderRadius: BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
-          ),
+        ClipRRect(
+          borderRadius:
+              const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
           child: Column(
-            children: _buildChildrenWithDividers(context),
+            mainAxisSize: MainAxisSize.min,
+            children: _buildChildrenWithDividers(context, cardColor),
           ),
         ),
       ],
     );
   }
 
-  List<Widget> _buildChildrenWithDividers(BuildContext context) {
+  List<Widget> _buildChildrenWithDividers(
+      BuildContext context, Color cardColor) {
     return [
       for (int i = 0; i < children.length; i++) ...[
-        children[i],
-        if (i < children.length - 1)
-          Divider(
-            height: 1,
-            thickness: 1.5,
-            indent: 0,
-            endIndent: 0,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          ),
+        ColoredBox(color: cardColor, child: children[i]),
+        if (i < children.length - 1) const SizedBox(height: 1.5),
       ],
     ];
   }
