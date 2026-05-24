@@ -11,6 +11,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/core/http_client_registry.dart';
@@ -362,7 +364,21 @@ class PluginBridgeAdapter {
       case 'getBookContent':
         final bookId = (args['bookId'] ?? args['title']) as String?;
         if (bookId == null) throw Exception('bookId required');
-        final rawText = await DataRepository.instance.getBookText(bookId);
+        // איתור ה-TextBook מהקטלוג כדי לקבל categoryId/fileType נכונים מה-metadata.
+        // בלי זה, השכבה התחתונה מקבעת fileType='txt' ונכשלת לגבי ספרים בפורמט אחר
+        // אצל משתמשים שאין להם קבצי טקסט נפרדים בדיסק (רק seforim.db).
+        final allBooks = library.getAllBooks();
+        final cataloged = allBooks
+            .cast<dynamic>()
+            .firstWhere((b) => b?.title == bookId, orElse: () => null);
+        String rawText;
+        if (cataloged is TextBook) {
+          rawText = await TextBookRepository(
+            fileSystem: FileSystemData.instance,
+          ).getBookContent(cataloged);
+        } else {
+          rawText = await DataRepository.instance.getBookText(bookId);
+        }
         final limit = args['limit'] as int? ?? 1000;
         final offset = args['offset'] as int? ?? 0;
         final section = args['section'] as String?;
