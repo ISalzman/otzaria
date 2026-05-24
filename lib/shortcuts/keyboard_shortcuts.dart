@@ -6,6 +6,8 @@ import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -114,6 +116,8 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     final toggleCommentatorsPaneShortcut =
         shortcutSettings['key-shortcut-toggle-commentators-pane'] ??
             'ctrl+shift+c';
+    final openCommentatorsTabShortcut =
+        shortcutSettings['key-shortcut-open-commentators-tab'] ?? '';
 
     // פתח/סגור חלונית ניווט. אם הטאב הפעיל אינו ספר — מחזירים `ignored`
     // כדי לא לבלוע את הקיצור (כך מנוע ה-shortcut יכול להמשיך הלאה במקום
@@ -144,6 +148,26 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       }
       if (tab is PdfBookTab) {
         tab.toggleCommentatorsPaneNotifier.value++;
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+
+    // פתיחת כרטיסיית מפרשים נפרדת מהטאב הנוכחי
+    if (openCommentatorsTabShortcut.isNotEmpty &&
+        ShortcutHelper.matchesShortcut(event, openCommentatorsTabShortcut)) {
+      final tabsBloc = context.read<TabsBloc>();
+      final tab = tabsBloc.state.currentTab;
+      if (tab is TextBookTab) {
+        tabsBloc.add(
+          AddTab(CommentatorsTab(sourceTab: tab), insertAdjacent: true),
+        );
+        return KeyEventResult.handled;
+      }
+      if (tab is PdfBookTab) {
+        tabsBloc.add(
+          AddTab(PdfCommentatorsTab(sourceTab: tab), insertAdjacent: true),
+        );
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;

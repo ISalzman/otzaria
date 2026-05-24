@@ -47,6 +47,7 @@ class ShortcutValidator {
     'key-shortcut-shamor-zachor-cycle-filter',
     'key-shortcut-toggle-nav-pane',
     'key-shortcut-toggle-commentators-pane',
+    'key-shortcut-open-commentators-tab',
   ];
 
   /// Default values for shortcuts
@@ -75,6 +76,7 @@ class ShortcutValidator {
     'key-shortcut-shamor-zachor-cycle-filter': 'ctrl+e',
     'key-shortcut-toggle-nav-pane': 'ctrl+shift+l',
     'key-shortcut-toggle-commentators-pane': 'ctrl+shift+c',
+    'key-shortcut-open-commentators-tab': '',
   };
 
   /// Shortcut names for display
@@ -104,6 +106,7 @@ class ShortcutValidator {
         'שמור וזכור: מעבר בין הסינונים',
     'key-shortcut-toggle-nav-pane': 'פתח/סגור חלונית ניווט',
     'key-shortcut-toggle-commentators-pane': 'פתח/סגור חלונית מפרשים',
+    'key-shortcut-open-commentators-tab': 'פתח כרטיסיית מפרשים',
   };
 
   /// Check for conflicts in current shortcuts
