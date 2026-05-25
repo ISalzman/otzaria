@@ -329,6 +329,8 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     final title = switch (navState.currentScreen) {
       Screen.settings => 'הגדרות',
       Screen.more => 'כלים',
+      Screen.find => 'איתור',
+      Screen.search => 'חיפוש',
       _ => 'אוצריא',
     };
     return _buildPanelTitle(context, title);

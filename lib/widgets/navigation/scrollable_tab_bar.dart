@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
 
 /// TabBar גלילה עם חיצים לשמאל/ימין ועיצוב יפה יותר.
 class ScrollableTabBarWithArrows extends StatefulWidget {
@@ -161,7 +162,7 @@ class _ScrollableTabBarWithArrowsState
               indicatorPadding: EdgeInsets.zero,
               indicator: const BoxDecoration(),
               splashFactory: NoSplash.splashFactory,
-              overlayColor: WidgetStateProperty.all(Colors.transparent),
+              overlayColor: AppSurfaces.tabBarNoOverlay,
             );
 
             return Align(
