@@ -254,17 +254,20 @@ class TextBookRepository {
 
   /// מחזיר רשימת פרשנים זמינים לספר מה-DB
   Future<List<String>> getAvailableCommentators(TextBook book) async {
+    // ספרים אישיים אינם כוללים קישורי מפרשים במסד הנתונים הרשמי.
+    // חיפוש לפי book.id ב-seforim.db יחזיר מפרשים של ספר רשמי עם אותו ID.
+    if (book.isUserBook) return [];
+
     final repository = _sqliteProvider.repository;
     if (repository == null) {
       return [];
     }
 
-    // מקבל את ה-book מה-DB לפי שם וקטגוריה
-    final dbBook = await BookLocator.getBookFromDatabase(
-      book.title,
-      category: book.category,
-      categoryId: book.categoryId,
-    );
+    // מקבל את ה-book ישירות מה-repository (אותו DB שממנו נשלוף את המפרשים)
+    final dbBook = book.categoryId != null
+        ? await repository.getBookByTitleAndCategory(
+            book.title, book.categoryId!)
+        : await repository.getBookByTitle(book.title);
     if (dbBook == null) {
       return [];
     }
