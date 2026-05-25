@@ -12,14 +12,15 @@ void main() {
     expect(find.text('hello'), findsOneWidget);
   });
 
-  testWidgets('AppCard without onTap uses ClipRRect and no InkWell', (tester) async {
+  testWidgets('AppCard without onTap uses Material and no InkWell',
+      (tester) async {
     final key = GlobalKey();
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(body: AppCard(key: key, child: const SizedBox())),
     ));
     final cardFinder = find.byKey(key);
     expect(
-      find.descendant(of: cardFinder, matching: find.byType(ClipRRect)),
+      find.descendant(of: cardFinder, matching: find.byType(Material)),
       findsOneWidget,
     );
     expect(
@@ -31,7 +32,8 @@ void main() {
   testWidgets('AppCard with onTap uses Material + InkWell', (tester) async {
     final key = GlobalKey();
     await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: AppCard(key: key, onTap: () {}, child: const SizedBox())),
+      home: Scaffold(
+          body: AppCard(key: key, onTap: () {}, child: const SizedBox())),
     ));
     final cardFinder = find.byKey(key);
     expect(
@@ -61,36 +63,13 @@ void main() {
   testWidgets('AppCard with selected adds ColoredBox overlay', (tester) async {
     final key = GlobalKey();
     await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: AppCard(key: key, selected: true, child: const SizedBox())),
+      home: Scaffold(
+          body: AppCard(key: key, selected: true, child: const SizedBox())),
     ));
     final cardFinder = find.byKey(key);
     expect(
       find.descendant(of: cardFinder, matching: find.byType(ColoredBox)),
       findsWidgets,
-    );
-  });
-
-  testWidgets('AppCard with animateSize wraps in AnimatedSize', (tester) async {
-    final key = GlobalKey();
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: AppCard(key: key, animateSize: true, child: const SizedBox())),
-    ));
-    final cardFinder = find.byKey(key);
-    expect(
-      find.descendant(of: cardFinder, matching: find.byType(AnimatedSize)),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('AppCard without animateSize has no AnimatedSize', (tester) async {
-    final key = GlobalKey();
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: AppCard(key: key, child: const SizedBox())),
-    ));
-    final cardFinder = find.byKey(key);
-    expect(
-      find.descendant(of: cardFinder, matching: find.byType(AnimatedSize)),
-      findsNothing,
     );
   });
 
@@ -111,7 +90,8 @@ void main() {
     expect(find.text('three'), findsOneWidget);
   });
 
-  testWidgets('AppCard.section inserts N-1 SizedBox gaps between N children', (tester) async {
+  testWidgets('AppCard.section inserts N-1 Container gaps between N children',
+      (tester) async {
     final key = GlobalKey();
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
@@ -122,16 +102,21 @@ void main() {
       ),
     ));
     final cardFinder = find.byKey(key);
-    final gaps = tester
-        .widgetList<SizedBox>(
-          find.descendant(of: cardFinder, matching: find.byType(SizedBox)),
-        )
-        .where((s) => s.height == 1.5)
+    final allContainers = tester.widgetList<Container>(
+      find.descendant(of: cardFinder, matching: find.byType(Container)),
+    );
+    final dividers = allContainers
+        .where((c) {
+          final constraints = c.constraints;
+          return constraints != null &&
+              constraints.minHeight == AppCard.sectionSpacing &&
+              constraints.maxHeight == AppCard.sectionSpacing;
+        })
         .toList();
-    expect(gaps.length, 2); // N-1 = 3-1 = 2
+    expect(dividers.length, 2); // N-1 = 3-1 = 2
   });
 
-  testWidgets('AppCard.section wraps each child in ColoredBox', (tester) async {
+  testWidgets('AppCard.section uses single Material with clip', (tester) async {
     final key = GlobalKey();
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
@@ -143,12 +128,16 @@ void main() {
     ));
     final cardFinder = find.byKey(key);
     expect(
-      find.descendant(of: cardFinder, matching: find.byType(ColoredBox)),
-      findsAtLeast(2),
+      find.descendant(of: cardFinder, matching: find.byType(Material)),
+      findsOneWidget,
     );
+    final material = tester.widget<Material>(
+      find.descendant(of: cardFinder, matching: find.byType(Material)),
+    );
+    expect(material.clipBehavior, Clip.antiAlias);
   });
 
-  testWidgets('AppCard.section uses ClipRRect', (tester) async {
+  testWidgets('AppCard.section does not use ClipRRect', (tester) async {
     final key = GlobalKey();
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
@@ -158,7 +147,7 @@ void main() {
     final cardFinder = find.byKey(key);
     expect(
       find.descendant(of: cardFinder, matching: find.byType(ClipRRect)),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
@@ -181,7 +170,8 @@ void main() {
 
   // --- AppCard.sectionDivider ---
 
-  testWidgets('sectionDivider returns Divider with scaffoldBackgroundColor', (tester) async {
+  testWidgets('sectionDivider returns Divider with scaffoldBackgroundColor',
+      (tester) async {
     late Color dividerColor;
     late Color scaffoldColor;
     await tester.pumpWidget(MaterialApp(
