@@ -199,6 +199,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   final FocusNode _navigationFieldFocusNode = FocusNode();
   final FocusNode _pdfViewFocusNode = FocusNode();
   final GlobalKey _pdfViewportBoundaryKey = GlobalKey();
+  final GlobalKey<AppContextMenuRegionState> _pdfContextMenuKey = GlobalKey();
   late final StreamSubscription<SettingsState> _settingsSub;
   late final AnimationController _pageTurnController;
 
@@ -1031,7 +1032,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         }
       },
       onGeneralTap: (tapContext, _, details) {
-        return details.type == PdfViewerGeneralTapType.secondaryTap;
+        if (details.type == PdfViewerGeneralTapType.secondaryTap) {
+          return true;
+        }
+        if (details.type == PdfViewerGeneralTapType.longPress) {
+          final renderBox = tapContext.findRenderObject();
+          final globalPosition = renderBox is RenderBox
+              ? renderBox.localToGlobal(details.localPosition)
+              : details.localPosition;
+          _pdfContextMenuKey.currentState?.openMenuAt(globalPosition);
+          return true;
+        }
+        return false;
       },
       onKey: (params, key, isRealKeyPress) {
         if (key == LogicalKeyboardKey.arrowLeft) {
@@ -1051,6 +1063,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       viewerOverlayBuilder: (context, size, handleLinkTap) => [
         Positioned.fill(
           child: AppContextMenuRegion(
+            key: _pdfContextMenuKey,
             menuBuilder: _buildPdfContextMenuEntries,
             child: Listener(
               behavior: HitTestBehavior.translucent,
