@@ -1280,8 +1280,20 @@ class PluginBridgeAdapter {
       'monthName': formatter.formatMonth(jewishCalendar),
       'isLeapYear': jewishCalendar.isJewishLeapYear(),
       'isShabbat': jewishCalendar.getDayOfWeek() == 7,
+      'parasha': _upcomingParasha(date, inIsrael, formatter),
       'holidays': _buildHolidayPayloads(jewishCalendar, formatter),
     };
+  }
+
+  String _upcomingParasha(
+      DateTime date, bool inIsrael, HebrewDateFormatter formatter) {
+    final dayOfWeek = date.weekday; // 1=Mon … 6=Sat, 7=Sun in Dart
+    // Dart weekday: Mon=1 … Sat=6, Sun=7. Shabbat = Saturday = 6.
+    final daysUntilShabbat = dayOfWeek == 6 ? 0 : (6 - dayOfWeek) % 7;
+    final shabbatDate = date.add(Duration(days: daysUntilShabbat));
+    final shabbatCalendar = JewishCalendar.fromDateTime(shabbatDate)
+      ..inIsrael = inIsrael;
+    return formatter.formatParsha(shabbatCalendar);
   }
 
   List<Map<String, String>> _buildHolidayPayloads(
