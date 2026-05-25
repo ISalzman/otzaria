@@ -2089,11 +2089,21 @@ class MainWindowScreenState extends State<MainWindowScreen>
             // Build the pages list here so we can inject the EmptyLibraryScreen
             // into the library page while keeping the rest of the app visible.
             // נבנה את הדפים רק פעם אחת ונשמור אותם
-            // אם מצב הספרייה השתנה, נבנה מחדש את דף הספרייה
-            if (_cachedLibraryPage == null ||
-                state.isLibraryEmpty !=
-                    (_cachedLibraryPage is EmptyLibraryScreen) ||
-                _previousLibraryEmptyState != state.isLibraryEmpty) {
+            // אם מצב הספרייה השתנה, נבנה מחדש את דף הספרייה.
+            //
+            // אופטימיזציית bootstrap: LibraryBrowser הוא widget כבד עם BlocBuilder<LibraryBloc>
+            // ו-context גלובלי. כש-PageView (ב-index 1=Reading) דורש את שכניו (index 0=Library),
+            // הקונסטרקטור והקריאות הראשוניות חוסמות את ה-UI thread. עד שהמשתמש לא ביקש לפתוח
+            // את הספרייה, מציגים placeholder ריק; כשהוא יבחר 'ספרייה', ה-BlocBuilder ירוץ שוב
+            // ויחליף ל-LibraryBrowser/EmptyLibraryScreen האמיתיים.
+            final libraryNeverBuilt = _cachedLibraryPage == null ||
+                _previousLibraryEmptyState == null;
+            final libraryRequested = state.currentScreen == Screen.library;
+            final libraryStateChanged = !libraryNeverBuilt &&
+                _previousLibraryEmptyState != state.isLibraryEmpty;
+
+            if ((libraryNeverBuilt && libraryRequested) ||
+                libraryStateChanged) {
               if (state.isLibraryEmpty) {
                 // יצירת BLoC פעם אחת אם עדיין לא קיים
                 _emptyLibraryBloc ??= EmptyLibraryBloc();
@@ -2114,6 +2124,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 _cachedLibraryPage = LibraryBrowser(key: libraryBrowserKey);
               }
               _previousLibraryEmptyState = state.isLibraryEmpty;
+            } else if (libraryNeverBuilt) {
+              // המשתמש עדיין ב-Reading/Tools/Settings ולא ביקש את הספרייה —
+              // מציגים placeholder זול. הוא יוחלף ל-LibraryBrowser בפעם הראשונה
+              // שהמשתמש ינווט ל-Screen.library.
+              _cachedLibraryPage = const SizedBox.shrink();
             }
 
             _cachedReadingPage ??= const ReadingScreen();
@@ -2192,8 +2207,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                           _pinnedNavRailIdsChanged,
                                                       builder: (context,
                                                           pluginState) {
-                                                        final settingsState = context
-                                                            .select<SettingsBloc,
+                                                        final settingsState =
+                                                            context.select<
+                                                                    SettingsBloc,
                                                                     SettingsState>(
                                                                 (b) => b.state);
                                                         final pinnedItems =
@@ -2222,18 +2238,18 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                             .more &&
                                                                     activeToolId !=
                                                                         null
-                                                                ? pinnedItems.indexWhere(
-                                                                    (it) =>
+                                                                ? pinnedItems
+                                                                    .indexWhere((it) =>
                                                                         it.toolId ==
                                                                         activeToolId)
                                                                 : -1;
                                                             // "כלים" מודגש רק כשאין פריט-מוצמד-לסרגל פעיל
-                                                            final isToolsSelected = state
-                                                                        .currentScreen ==
-                                                                    Screen
-                                                                        .more &&
-                                                                activePinnedIndex ==
-                                                                    -1;
+                                                            final isToolsSelected =
+                                                                state.currentScreen ==
+                                                                        Screen
+                                                                            .more &&
+                                                                    activePinnedIndex ==
+                                                                        -1;
                                                             return LayoutBuilder(
                                                               builder: (context,
                                                                   constraints) {
@@ -2241,22 +2257,21 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                     60.0;
                                                                 const minSpacerHeight =
                                                                     20.0;
-                                                                final totalItems =
-                                                                    _navData.length +
-                                                                        pinnedItems
-                                                                            .length;
-                                                                final needsScroll =
-                                                                    totalItems *
-                                                                                buttonHeight +
-                                                                            minSpacerHeight >
-                                                                        constraints
-                                                                            .maxHeight;
+                                                                final totalItems = _navData
+                                                                        .length +
+                                                                    pinnedItems
+                                                                        .length;
+                                                                final needsScroll = totalItems *
+                                                                            buttonHeight +
+                                                                        minSpacerHeight >
+                                                                    constraints
+                                                                        .maxHeight;
 
                                                                 final topItems =
                                                                     <Widget>[
-                                                                  for (int i = 0;
-                                                                      i <
-                                                                          _toolsNavIndex;
+                                                                  for (int i =
+                                                                          0;
+                                                                      i < _toolsNavIndex;
                                                                       i++)
                                                                     _buildNavRailItem(
                                                                       context,
@@ -2272,7 +2287,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                     selectedOverride:
                                                                         isToolsSelected,
                                                                   ),
-                                                                  for (int i = 0;
+                                                                  for (int i =
+                                                                          0;
                                                                       i <
                                                                           pinnedItems
                                                                               .length;
@@ -2336,11 +2352,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                         Expanded(child: pageView),
                                         BlocBuilder<PluginSystemBloc,
                                             PluginSystemState>(
-                                          buildWhen:
-                                              _pinnedNavRailIdsChanged,
+                                          buildWhen: _pinnedNavRailIdsChanged,
                                           builder: (context, pluginState) {
-                                            final settingsState = context
-                                                .select<SettingsBloc,
+                                            final settingsState =
+                                                context.select<SettingsBloc,
                                                         SettingsState>(
                                                     (b) => b.state);
                                             final pinnedItems =
@@ -2357,8 +2372,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                 String?>(
                                               valueListenable:
                                                   activeToolIdNotifier,
-                                              builder: (context, activeToolId,
-                                                  _) {
+                                              builder:
+                                                  (context, activeToolId, _) {
                                                 return NavigationBar(
                                                   backgroundColor: AppSurfaces
                                                       .panelBackground(
@@ -2582,8 +2597,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
         return 3;
       case Screen.more:
         if (activeToolId != null) {
-          final idx = pinnedItems
-              .indexWhere((item) => item.toolId == activeToolId);
+          final idx =
+              pinnedItems.indexWhere((item) => item.toolId == activeToolId);
           // הפריטים יושבים ישירות אחרי "כלים", ולכן position = settingsIndex + idx
           if (idx >= 0) return _settingsNavIndex + idx;
         }
@@ -2621,9 +2636,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     BuildContext context,
     _PinnedToolNavItem item,
   ) {
-    context
-        .read<NavigationBloc>()
-        .add(const NavigateToScreen(Screen.more));
+    context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
     if (item.isPlugin && item.plugin != null) {
       _openPluginInToolsWhenAvailable(item.plugin!);
     } else {
