@@ -42,6 +42,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     on<UnpinPluginRequested>(_onUnpinPluginRequested);
     on<PinPluginToNavRailRequested>(_onPinPluginToNavRailRequested);
     on<UnpinPluginFromNavRailRequested>(_onUnpinPluginFromNavRailRequested);
+    on<SetPluginHiddenRequested>(_onSetPluginHiddenRequested);
     on<ReorderPluginsRequested>(_onReorderPluginsRequested);
     on<EnablePluginRequested>(_onEnablePluginRequested);
     on<DisablePluginRequested>(_onDisablePluginRequested);
@@ -127,6 +128,20 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     } catch (e) {
       UiSnack.showError(
           'שגיאה בהסרת הצמדת התוסף מסרגל הניווט: ${e.toString()}');
+    }
+  }
+
+  Future<void> _onSetPluginHiddenRequested(
+      SetPluginHiddenRequested event,
+      Emitter<PluginSystemState> emit) async {
+    try {
+      await repository.updateHiddenState(event.pluginId, event.hidden);
+      add(LoadPlugins());
+    } catch (e) {
+      UiSnack.showError(
+          event.hidden
+              ? 'שגיאה בהסתרת התוסף: ${e.toString()}'
+              : 'שגיאה בהצגת התוסף: ${e.toString()}');
     }
   }
 

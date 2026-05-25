@@ -25,6 +25,7 @@ InstalledPlugin _plugin({
   bool enabled = true,
   bool pinned = true,
   bool pinnedToNavRail = false,
+  bool hiddenFromTools = false,
   int? userOrder,
   int? manifestToolTabOrder,
 }) {
@@ -37,6 +38,7 @@ InstalledPlugin _plugin({
     enabled: enabled,
     pinned: pinned,
     pinnedToNavRail: pinnedToNavRail,
+    hiddenFromTools: hiddenFromTools,
     manifest: _manifest(toolTabOrder: manifestToolTabOrder),
     installedAt: DateTime.utc(2026, 5, 10, 12, 0),
     updatedAt: DateTime.utc(2026, 5, 10, 12, 0),
@@ -243,6 +245,81 @@ void main() {
           original.copyWith(userOrder: 3, clearUserOrder: true);
       expect(updated.userOrder, isNull,
           reason: 'clearUserOrder must take precedence over userOrder');
+    });
+  });
+
+  group('InstalledPlugin.hiddenFromTools', () {
+    test('default value is false', () {
+      final plugin = InstalledPlugin(
+        pluginId: 'p',
+        name: 'p',
+        version: '1.0.0',
+        installPath: '/x',
+        entrypointPath: 'i.html',
+        enabled: true,
+        pinned: true,
+        // hiddenFromTools intentionally omitted
+        manifest: _manifest(),
+        installedAt: DateTime.utc(2026, 1, 1),
+        updatedAt: DateTime.utc(2026, 1, 1),
+      );
+      expect(plugin.hiddenFromTools, isFalse);
+    });
+
+    test('toDbMap serializes hiddenFromTools as 0/1', () {
+      expect(
+          _plugin(hiddenFromTools: false).toDbMap()['hidden_from_tools'], 0);
+      expect(_plugin(hiddenFromTools: true).toDbMap()['hidden_from_tools'], 1);
+    });
+
+    test('round-trip toDbMap → fromDbMap preserves hiddenFromTools=true', () {
+      final original = _plugin(hiddenFromTools: true);
+      final restored = InstalledPlugin.fromDbMap(original.toDbMap());
+      expect(restored.hiddenFromTools, isTrue);
+    });
+
+    test(
+        'fromDbMap defaults hiddenFromTools to false when column is absent '
+        '(legacy DB before migration)', () {
+      final legacyMap = _plugin(hiddenFromTools: true).toDbMap();
+      legacyMap.remove('hidden_from_tools');
+      final restored = InstalledPlugin.fromDbMap(legacyMap);
+      expect(restored.hiddenFromTools, isFalse,
+          reason: 'pre-migration row must not crash and must default to false');
+    });
+
+    test('copyWith updates hiddenFromTools without touching other flags', () {
+      final original = _plugin(
+        pinned: true,
+        pinnedToNavRail: true,
+        hiddenFromTools: false,
+      );
+      final updated = original.copyWith(hiddenFromTools: true);
+
+      expect(updated.hiddenFromTools, isTrue);
+      expect(updated.pinned, isTrue,
+          reason: 'hide must not unpin the plugin from the tools tab');
+      expect(updated.pinnedToNavRail, isTrue,
+          reason: 'hide must not unpin the plugin from the nav rail');
+      expect(updated.enabled, isTrue,
+          reason: 'hide must not disable the plugin');
+    });
+
+    test(
+        'copyWith without hiddenFromTools preserves the existing value', () {
+      final original = _plugin(hiddenFromTools: true);
+      final updated = original.copyWith(pinned: false);
+      expect(updated.hiddenFromTools, isTrue,
+          reason: 'omitted parameter should keep current value');
+    });
+
+    test(
+        'hiddenFromTools is orthogonal to enabled — a hidden plugin can still '
+        'be enabled (it still loads in the background)', () {
+      final p = _plugin(enabled: true, hiddenFromTools: true);
+      final restored = InstalledPlugin.fromDbMap(p.toDbMap());
+      expect(restored.enabled, isTrue);
+      expect(restored.hiddenFromTools, isTrue);
     });
   });
 }

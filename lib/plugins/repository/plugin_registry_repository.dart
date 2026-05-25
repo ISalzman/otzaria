@@ -96,6 +96,11 @@ class PluginRegistryRepository {
     await _db.updatePluginNavRailPinState(pluginId, pinnedToNavRail);
   }
 
+  Future<void> updateHiddenState(
+      String pluginId, bool hiddenFromTools) async {
+    await _db.updatePluginHiddenState(pluginId, hiddenFromTools);
+  }
+
   /// שומר סדר מותאם אישית של תוספים לפי מיקומם ברשימה הנתונה.
   ///
   /// המיקום הראשון מקבל סדר 0, השני 1 וכן הלאה. מזהים שלא קיימים ב-DB

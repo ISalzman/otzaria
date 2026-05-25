@@ -169,5 +169,35 @@ void main() {
       expect(_hasColumn(db, 'pinned_to_nav_rail'), isTrue);
       expect(_hasColumn(db, 'user_order'), isTrue);
     });
+
+    test('adds hidden_from_tools column with default 0 on legacy schema', () {
+      db.execute(_legacyCreateTable);
+      _seedLegacyRow(db, 'legacy.a');
+      expect(_hasColumn(db, 'hidden_from_tools'), isFalse);
+
+      PluginSystemDatabase.ensureSchemaUpgrades(db);
+
+      expect(_hasColumn(db, 'hidden_from_tools'), isTrue);
+      final rows = db.select(
+          'SELECT hidden_from_tools FROM plugin_installation WHERE plugin_id = ?',
+          ['legacy.a']);
+      expect(rows.first['hidden_from_tools'], 0,
+          reason:
+              'existing plugins must default to visible (hidden_from_tools=0)');
+    });
+
+    test('hidden_from_tools migration is idempotent', () {
+      db.execute(_legacyCreateTable);
+
+      PluginSystemDatabase.ensureSchemaUpgrades(db);
+      expect(() => PluginSystemDatabase.ensureSchemaUpgrades(db),
+          returnsNormally);
+
+      final cols =
+          db.select('PRAGMA table_info(plugin_installation)').toMapList();
+      final hiddenCols =
+          cols.where((c) => c['name'] == 'hidden_from_tools').toList();
+      expect(hiddenCols, hasLength(1));
+    });
   });
 }

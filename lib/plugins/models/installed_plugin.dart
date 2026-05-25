@@ -11,6 +11,11 @@ class InstalledPlugin {
   final bool enabled;
   final bool pinned;
   final bool pinnedToNavRail;
+
+  /// האם התוסף מוסתר לחלוטין מהממשק (לשונית כלים + פאנל צד + nav rail).
+  /// בניגוד ל-[enabled] שמשבית את הריצה, [hiddenFromTools] משאיר את התוסף
+  /// פעיל אך לא מציג אותו למשתמש.
+  final bool hiddenFromTools;
   final PluginManifest manifest;
   final DateTime installedAt;
   final DateTime updatedAt;
@@ -53,6 +58,7 @@ class InstalledPlugin {
     required this.enabled,
     required this.pinned,
     this.pinnedToNavRail = false,
+    this.hiddenFromTools = false,
     required this.manifest,
     required this.installedAt,
     required this.updatedAt,
@@ -72,6 +78,7 @@ class InstalledPlugin {
       enabled: (map['enabled'] as int) != 0,
       pinned: (map['pinned'] as int) != 0,
       pinnedToNavRail: ((map['pinned_to_nav_rail'] as int?) ?? 0) != 0,
+      hiddenFromTools: ((map['hidden_from_tools'] as int?) ?? 0) != 0,
       manifest: PluginManifest.fromJson(jsonDecode(map['manifest_json'] as String)),
       installedAt: DateTime.parse(map['installed_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
@@ -92,6 +99,7 @@ class InstalledPlugin {
       'enabled': enabled ? 1 : 0,
       'pinned': pinned ? 1 : 0,
       'pinned_to_nav_rail': pinnedToNavRail ? 1 : 0,
+      'hidden_from_tools': hiddenFromTools ? 1 : 0,
       'manifest_json': jsonEncode(manifest.toJson()),
       'installed_at': installedAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
@@ -111,6 +119,7 @@ class InstalledPlugin {
     bool? enabled,
     bool? pinned,
     bool? pinnedToNavRail,
+    bool? hiddenFromTools,
     PluginManifest? manifest,
     DateTime? installedAt,
     DateTime? updatedAt,
@@ -130,6 +139,7 @@ class InstalledPlugin {
       enabled: enabled ?? this.enabled,
       pinned: pinned ?? this.pinned,
       pinnedToNavRail: pinnedToNavRail ?? this.pinnedToNavRail,
+      hiddenFromTools: hiddenFromTools ?? this.hiddenFromTools,
       manifest: manifest ?? this.manifest,
       installedAt: installedAt ?? this.installedAt,
       updatedAt: updatedAt ?? this.updatedAt,

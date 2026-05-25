@@ -57,6 +57,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateCompactMenuMode>(_onUpdateCompactMenuMode);
     on<UpdateProtectedModeEnabled>(_onUpdateProtectedModeEnabled);
     on<UpdateProtectedModePassword>(_onUpdateProtectedModePassword);
+    on<UpdateHiddenBuiltInToolIds>(_onUpdateHiddenBuiltInToolIds);
+    on<UpdateBuiltInToolsPinnedToNavRail>(
+        _onUpdateBuiltInToolsPinnedToNavRail);
   }
 
   Future<void> _onLoadSettings(
@@ -114,6 +117,11 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
           settings['personalNotesCollapsedByDefault'] ?? true,
       compactMenuMode: settings['compactMenuMode'] ?? false,
       protectedModeEnabled: settings['protectedModeEnabled'] ?? false,
+      hiddenBuiltInToolIds:
+          (settings['hiddenBuiltInToolIds'] as Set<String>?) ?? <String>{},
+      builtInToolsPinnedToNavRail:
+          (settings['builtInToolsPinnedToNavRail'] as Set<String>?) ??
+              <String>{},
     ));
   }
 
@@ -204,6 +212,24 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     Emitter<SettingsState> emit,
   ) async {
     await _repository.updateProtectedModePassword(event.password);
+  }
+
+  Future<void> _onUpdateHiddenBuiltInToolIds(
+    UpdateHiddenBuiltInToolIds event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateHiddenBuiltInToolIds(event.hiddenBuiltInToolIds);
+    emit(state.copyWith(hiddenBuiltInToolIds: event.hiddenBuiltInToolIds));
+  }
+
+  Future<void> _onUpdateBuiltInToolsPinnedToNavRail(
+    UpdateBuiltInToolsPinnedToNavRail event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository
+        .updateBuiltInToolsPinnedToNavRail(event.builtInToolsPinnedToNavRail);
+    emit(state.copyWith(
+        builtInToolsPinnedToNavRail: event.builtInToolsPinnedToNavRail));
   }
 
   Future<void> _onUpdateDarkMode(

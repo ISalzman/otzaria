@@ -42,6 +42,11 @@ class PluginSystemDatabase {
       db.execute(
           'ALTER TABLE plugin_installation ADD COLUMN user_order INTEGER');
     }
+    final hasHiddenCol = cols.any((c) => c['name'] == 'hidden_from_tools');
+    if (!hasHiddenCol) {
+      db.execute(
+          'ALTER TABLE plugin_installation ADD COLUMN hidden_from_tools INTEGER NOT NULL DEFAULT 0');
+    }
   }
 
   void _createSchema(Database db) {
@@ -57,6 +62,7 @@ class PluginSystemDatabase {
         enabled INTEGER NOT NULL,
         pinned INTEGER NOT NULL DEFAULT 1,
         pinned_to_nav_rail INTEGER NOT NULL DEFAULT 0,
+        hidden_from_tools INTEGER NOT NULL DEFAULT 0,
         manifest_json TEXT NOT NULL,
         installed_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
@@ -168,6 +174,18 @@ class PluginSystemDatabase {
     db.execute(
         'UPDATE plugin_installation SET pinned = ?, updated_at = ? WHERE plugin_id = ?',
         [pinned ? 1 : 0, DateTime.now().toIso8601String(), pluginId]);
+  }
+
+  Future<void> updatePluginHiddenState(
+      String pluginId, bool hiddenFromTools) async {
+    final db = await database;
+    db.execute(
+        'UPDATE plugin_installation SET hidden_from_tools = ?, updated_at = ? WHERE plugin_id = ?',
+        [
+          hiddenFromTools ? 1 : 0,
+          DateTime.now().toIso8601String(),
+          pluginId,
+        ]);
   }
 
   Future<void> updatePluginNavRailPinState(

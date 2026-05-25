@@ -65,6 +65,7 @@ InstalledPlugin _pluginFor({
   required String id,
   required String name,
   bool networkEnabled = false,
+  bool hiddenFromTools = false,
 }) {
   return InstalledPlugin(
     pluginId: id,
@@ -74,6 +75,7 @@ InstalledPlugin _pluginFor({
     entrypointPath: '/tmp/$id/index.html',
     enabled: true,
     pinned: true,
+    hiddenFromTools: hiddenFromTools,
     manifest: _manifestFor(
       id: id,
       name: name,
@@ -346,6 +348,52 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('לא הותקנו תוספים'), findsOneWidget);
+    });
+  });
+
+  group('סינון "מוסתר מהממשק"', () {
+    testWidgets(
+        'תוסף עם hiddenFromTools=true לא מופיע בפאנל הצד גם כשהוא enabled',
+        (tester) async {
+      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
+        _pluginFor(id: 'visible.plugin', name: 'תוסף גלוי'),
+        _pluginFor(
+            id: 'hidden.plugin', name: 'תוסף מוסתר', hiddenFromTools: true),
+      ]));
+      addTearDown(pluginBloc.close);
+
+      await tester.pumpWidget(_wrap(
+        pluginBloc: pluginBloc,
+        settingsBloc: _FakeSettingsBloc(),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('תוסף גלוי'), findsOneWidget);
+      expect(find.text('תוסף מוסתר'), findsNothing,
+          reason:
+              'hiddenFromTools must remove the plugin from the side panel '
+              '(P1 bug: previously the panel called state.plugins instead '
+              'of state.visiblePlugins).');
+    });
+
+    testWidgets(
+        'כשכל התוספים מוסתרים מציג הודעת empty state ייעודית',
+        (tester) async {
+      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
+        _pluginFor(
+            id: 'h1', name: 'תוסף אחד', hiddenFromTools: true),
+        _pluginFor(
+            id: 'h2', name: 'תוסף שני', hiddenFromTools: true),
+      ]));
+      addTearDown(pluginBloc.close);
+
+      await tester.pumpWidget(_wrap(
+        pluginBloc: pluginBloc,
+        settingsBloc: _FakeSettingsBloc(),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('הוסתרו מההגדרות'), findsOneWidget);
     });
   });
 

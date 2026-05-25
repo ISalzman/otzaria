@@ -42,6 +42,12 @@ class SettingsState extends Equatable {
   final bool protectedModeEnabled;
   final bool autoSyncCatalogs;
   final bool compactMenuMode;
+
+  /// מזהי כלים מובנים שהמשתמש בחר להסתיר מהממשק.
+  final Set<String> hiddenBuiltInToolIds;
+
+  /// מזהי כלים מובנים שהמשתמש הצמיד לסרגל הניווט הראשי.
+  final Set<String> builtInToolsPinnedToNavRail;
   final bool? _softwareAndBookUpdatesEnabled;
 
   const SettingsState({
@@ -83,6 +89,8 @@ class SettingsState extends Equatable {
     required this.protectedModeEnabled,
     required this.autoSyncCatalogs,
     this.compactMenuMode = false,
+    this.hiddenBuiltInToolIds = const <String>{},
+    this.builtInToolsPinnedToNavRail = const <String>{},
     bool? softwareAndBookUpdatesEnabled,
   }) : _softwareAndBookUpdatesEnabled = softwareAndBookUpdatesEnabled;
 
@@ -169,6 +177,8 @@ class SettingsState extends Equatable {
     bool? protectedModeEnabled,
     bool? autoSyncCatalogs,
     bool? compactMenuMode,
+    Set<String>? hiddenBuiltInToolIds,
+    Set<String>? builtInToolsPinnedToNavRail,
     bool? softwareAndBookUpdatesEnabled,
   }) {
     return SettingsState(
@@ -214,6 +224,9 @@ class SettingsState extends Equatable {
       protectedModeEnabled: protectedModeEnabled ?? this.protectedModeEnabled,
       autoSyncCatalogs: autoSyncCatalogs ?? this.autoSyncCatalogs,
       compactMenuMode: compactMenuMode ?? this.compactMenuMode,
+      hiddenBuiltInToolIds: hiddenBuiltInToolIds ?? this.hiddenBuiltInToolIds,
+      builtInToolsPinnedToNavRail:
+          builtInToolsPinnedToNavRail ?? this.builtInToolsPinnedToNavRail,
       softwareAndBookUpdatesEnabled:
           softwareAndBookUpdatesEnabled ?? this.softwareAndBookUpdatesEnabled,
     );
@@ -265,6 +278,8 @@ class SettingsState extends Equatable {
         protectedModeEnabled,
         autoSyncCatalogs,
         compactMenuMode,
+        hiddenBuiltInToolIds,
+        builtInToolsPinnedToNavRail,
         softwareAndBookUpdatesEnabled,
       ];
 }

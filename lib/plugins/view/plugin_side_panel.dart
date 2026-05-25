@@ -136,14 +136,22 @@ class PluginSidePanel extends StatelessWidget {
               if (state is PluginSystemLoaded) {
                 final isOfflineMode = context
                     .select<SettingsBloc, bool>((b) => b.state.isOfflineMode);
-                final plugins =
-                    state.plugins.filterForOfflineMode(isOfflineMode);
+                // visiblePlugins מסנן תוספים שהמשתמש סימן כ"מוסתר" במסך
+                // ההגדרות (`hiddenFromTools`); אחריו מסננים גם offline.
+                final plugins = state.visiblePlugins
+                    .filterForOfflineMode(isOfflineMode);
                 if (plugins.isEmpty) {
+                  // ההודעה משתנה לפי הסיבה: אם יש תוספים שמוסתרים ידנית,
+                  // נציין זאת. אחרת — נציין offline או "לא הותקנו".
+                  final allHiddenManually = state.plugins.isNotEmpty &&
+                      state.plugins.every((p) => p.hiddenFromTools);
                   return Center(
                     child: Text(
-                      isOfflineMode && state.plugins.isNotEmpty
-                          ? 'כל התוספים המותקנים דורשים אינטרנט\nוהוסתרו במצב מנותק'
-                          : 'לא הותקנו תוספים',
+                      allHiddenManually
+                          ? 'כל התוספים המותקנים הוסתרו מההגדרות'
+                          : (isOfflineMode && state.plugins.isNotEmpty
+                              ? 'כל התוספים המותקנים דורשים אינטרנט\nוהוסתרו במצב מנותק'
+                              : 'לא הותקנו תוספים'),
                       textAlign: TextAlign.center,
                     ),
                   );

@@ -46,6 +46,7 @@ InstalledPlugin _plugin({
 class _FakeDb implements PluginSystemDatabase {
   final List<InstalledPlugin> plugins;
   final List<Map<String, int>> userOrderCalls = [];
+  final List<({String pluginId, bool hidden})> hiddenCalls = [];
 
   _FakeDb(this.plugins);
 
@@ -56,6 +57,12 @@ class _FakeDb implements PluginSystemDatabase {
   @override
   Future<void> updatePluginsUserOrder(Map<String, int> ordering) async {
     userOrderCalls.add(Map.of(ordering));
+  }
+
+  @override
+  Future<void> updatePluginHiddenState(
+      String pluginId, bool hiddenFromTools) async {
+    hiddenCalls.add((pluginId: pluginId, hidden: hiddenFromTools));
   }
 
   @override
@@ -253,6 +260,45 @@ void main() {
       final repo = PluginRegistryRepository(database: fake);
 
       expect(await repo.getNextUserOrderForNewPlugin(), 6);
+    });
+  });
+
+  group('PluginRegistryRepository.updateHiddenState', () {
+    test('forwards (pluginId, true) to the DB layer', () async {
+      final fake = _FakeDb([]);
+      final repo = PluginRegistryRepository(database: fake);
+
+      await repo.updateHiddenState('plugin.x', true);
+
+      expect(fake.hiddenCalls, hasLength(1));
+      expect(fake.hiddenCalls.single.pluginId, 'plugin.x');
+      expect(fake.hiddenCalls.single.hidden, isTrue);
+    });
+
+    test('forwards (pluginId, false) — used for "show again" path', () async {
+      final fake = _FakeDb([]);
+      final repo = PluginRegistryRepository(database: fake);
+
+      await repo.updateHiddenState('plugin.x', false);
+
+      expect(fake.hiddenCalls.single.hidden, isFalse,
+          reason:
+              'unhide path must preserve the boolean — was a P1 concern: '
+              'the panel must round-trip both directions');
+    });
+
+    test('each call appends — repository does not coalesce duplicate writes',
+        () async {
+      final fake = _FakeDb([]);
+      final repo = PluginRegistryRepository(database: fake);
+
+      await repo.updateHiddenState('a', true);
+      await repo.updateHiddenState('b', true);
+      await repo.updateHiddenState('a', false);
+
+      expect(fake.hiddenCalls, hasLength(3));
+      expect(fake.hiddenCalls.map((c) => c.pluginId).toList(),
+          ['a', 'b', 'a']);
     });
   });
 }
