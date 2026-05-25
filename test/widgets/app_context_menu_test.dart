@@ -237,6 +237,73 @@ void main() {
   });
 
   testWidgets(
+      'גרירה לבחירת טקסט מחוץ לתפריט סוגרת את התפריט',
+      (tester) async {
+    // בדיקה עצמאית — מנהלת את כל ה-gestures ידנית כדי לשלוט בסדר down/up
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: AppContextMenuRegion(
+              menuBuilder: (_, __) => [
+                AppContextMenuEntry(label: 'העתק', onTap: () {}),
+              ],
+              child: const SizedBox(
+                width: 100,
+                height: 100,
+                child: ColoredBox(color: Colors.amber),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // פתיחת התפריט עם לחיצה ימנית
+    final rightGesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryButton,
+    );
+    await rightGesture.addPointer(location: Offset.zero);
+    addTearDown(rightGesture.removePointer);
+
+    final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
+    await rightGesture.moveTo(regionCenter);
+    await rightGesture.down(regionCenter);
+    await tester.pump();
+    await rightGesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('העתק'), findsOneWidget,
+        reason: 'התפריט צריך להיות פתוח לפני הגרירה');
+
+    // מסיר את ה-gesture הימני לפני יצירת ה-gesture השמאלי —
+    // mouse tracker דורש שה-pointer יוסר לפני הוספת pointer חדש מאותו device kind
+    await rightGesture.removePointer();
+
+    // מדמה תחילת גרירה לבחירת טקסט: רק pointer DOWN, ללא UP
+    final leftGesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kPrimaryButton,
+    );
+    await leftGesture.addPointer(location: Offset.zero);
+    addTearDown(leftGesture.removePointer);
+
+    await leftGesture.down(const Offset(10, 10));
+    await tester.pump();
+
+    expect(find.text('העתק'), findsNothing,
+        reason: 'pointer DOWN מחוץ לתפריט (תחילת גרירה) חייב לסגור את התפריט — '
+            'לפני התיקון רק onTap (down+up ללא תנועה) היה סוגר');
+
+    await leftGesture.moveBy(const Offset(50, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('העתק'), findsNothing,
+        reason: 'התפריט צריך להישאר סגור גם לאחר המשך הגרירה');
+  });
+
+  testWidgets(
       'capturedText: פעולת תפריט משתמשת בערך שנלכד בזמן הבנייה, לא בזמן הלחיצה',
       (tester) async {
     // ——————————————————————————————————————————————————————————————————————
@@ -310,6 +377,125 @@ void main() {
       reason:
           'הפעולה חייבת להשתמש ב-capturedText שנלכד בזמן הבנייה, '
           'גם אחרי ניקוי הערך ע"י onSelectionChanged(null)',
+    );
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // openMenuAt — פתיחה פרוגרמטית (משמש ל-long press ב-PDF)
+  // ───────────────────────────────────────────────────────────────────────
+
+  testWidgets(
+      'AppContextMenuRegionState נגישה דרך GlobalKey ומאפשרת openMenuAt',
+      (tester) async {
+    final key = GlobalKey<AppContextMenuRegionState>();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppContextMenuRegion(
+            key: key,
+            menuBuilder: (_, __) => [
+              AppContextMenuEntry(label: 'העתק', onTap: () {}),
+            ],
+            child: const SizedBox(
+              width: 200,
+              height: 200,
+              child: ColoredBox(color: Colors.amber),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(key.currentState, isNotNull,
+        reason: 'AppContextMenuRegionState חייב להיות נגיש דרך GlobalKey');
+
+    await key.currentState!.openMenuAt(const Offset(100, 100));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('העתק'),
+      findsOneWidget,
+      reason: 'openMenuAt חייב לפתוח את התפריט עם הפריטים שנבנו',
+    );
+  });
+
+  testWidgets(
+      'openMenuAt: לחיצה על פריט מפעילה את onTap ומכסה את התפריט',
+      (tester) async {
+    final key = GlobalKey<AppContextMenuRegionState>();
+    var tapped = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppContextMenuRegion(
+            key: key,
+            menuBuilder: (_, __) => [
+              AppContextMenuEntry(
+                  label: 'פעולה א', onTap: () => tapped = true),
+              AppContextMenuEntry(label: 'פעולה ב', onTap: () {}),
+            ],
+            child: const SizedBox(
+              width: 200,
+              height: 200,
+              child: ColoredBox(color: Colors.amber),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await key.currentState!.openMenuAt(const Offset(100, 100));
+    await tester.pumpAndSettle();
+
+    expect(find.text('פעולה א'), findsOneWidget);
+    expect(find.text('פעולה ב'), findsOneWidget);
+
+    await tester.tap(find.text('פעולה א'));
+    await tester.pumpAndSettle();
+
+    expect(tapped, isTrue,
+        reason: 'לחיצה על פריט אחרי openMenuAt חייבת להפעיל את ה-onTap שלו');
+    expect(find.text('פעולה א'), findsNothing,
+        reason: 'התפריט חייב להיסגר לאחר בחירת פריט');
+  });
+
+  testWidgets(
+      'openMenuAt: קריאה כפולה אינה פותחת שני תפריטים',
+      (tester) async {
+    final key = GlobalKey<AppContextMenuRegionState>();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppContextMenuRegion(
+            key: key,
+            menuBuilder: (_, __) => [
+              AppContextMenuEntry(label: 'פריט', onTap: () {}),
+            ],
+            child: const SizedBox(
+              width: 200,
+              height: 200,
+              child: ColoredBox(color: Colors.amber),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await key.currentState!.openMenuAt(const Offset(100, 100));
+    await tester.pumpAndSettle();
+    expect(find.text('פריט'), findsOneWidget);
+
+    // פתיחה שנייה — אמור להחליף את הקיים ולא ליצור כפול
+    await key.currentState!.openMenuAt(const Offset(100, 100));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('פריט'),
+      findsOneWidget,
+      reason: 'קריאה כפולה ל-openMenuAt לא אמורה לפתוח שני תפריטים',
     );
   });
 }

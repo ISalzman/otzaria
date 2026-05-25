@@ -1,6 +1,5 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 
@@ -37,10 +36,10 @@ class AppContextMenuRegion extends StatefulWidget {
   });
 
   @override
-  State<AppContextMenuRegion> createState() => _AppContextMenuRegionState();
+  State<AppContextMenuRegion> createState() => AppContextMenuRegionState();
 }
 
-class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
+class AppContextMenuRegionState extends State<AppContextMenuRegion> {
   static const double _contextMenuScreenPadding = 8;
   static const double _contextMenuMaxWidth = 320;
 
@@ -92,6 +91,9 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
       Offset.zero,
     )));
   }
+
+  Future<void> openMenuAt(Offset globalPosition) =>
+      _openContextMenu(globalPosition);
 
   double _resolveContextMenuMaxWidth(
     double overlayWidth,
@@ -243,9 +245,6 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
               Listener(
                 behavior: HitTestBehavior.translucent,
                 onPointerDown: (event) {
-                  if (event.buttons != kSecondaryButton) {
-                    return;
-                  }
                   if (_isPointerInsideMenu(event.position)) {
                     return;
                   }
