@@ -478,7 +478,11 @@ class _ActionBar extends StatelessWidget {
     );
     if (confirmed != true) return;
     for (final p in plugins) {
-      bloc.add(UninstallPluginRequested(p.pluginId));
+      if (p.isDevelopment) {
+        bloc.add(DetachDevelopmentPluginRequested(p.pluginId));
+      } else {
+        bloc.add(UninstallPluginRequested(p.pluginId));
+      }
     }
     UiSnack.show('התוספים סומנו למחיקה');
   }

@@ -80,6 +80,9 @@ class CommentatorsTab extends OpenedTab {
   }
 
   @override
+  OpenedTab clone() => CommentatorsTab(sourceTab: sourceTab)..isPinned = isPinned;
+
+  @override
   void dispose() {
     bloc.close();
     if (_disposeSourceTabOnDispose) {

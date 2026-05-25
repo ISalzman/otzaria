@@ -323,13 +323,23 @@ class MainWindowScreenState extends State<MainWindowScreen>
     PluginSystemState prev,
     PluginSystemState curr,
   ) {
-    final prevIds = prev is PluginSystemLoaded
-        ? prev.pluginsPinnedToNavRail.map((p) => p.pluginId).toList()
-        : const <String>[];
-    final currIds = curr is PluginSystemLoaded
-        ? curr.pluginsPinnedToNavRail.map((p) => p.pluginId).toList()
-        : const <String>[];
-    return !listEquals(prevIds, currIds);
+    final prevPlugins = prev is PluginSystemLoaded
+        ? prev.pluginsPinnedToNavRail
+        : const <InstalledPlugin>[];
+    final currPlugins = curr is PluginSystemLoaded
+        ? curr.pluginsPinnedToNavRail
+        : const <InstalledPlugin>[];
+    if (prevPlugins.length != currPlugins.length) return true;
+    for (var i = 0; i < prevPlugins.length; i++) {
+      final p = prevPlugins[i];
+      final c = currPlugins[i];
+      if (p.pluginId != c.pluginId ||
+          p.manifest.toolTabTitle != c.manifest.toolTabTitle ||
+          p.manifest.toolTabIconName != c.manifest.toolTabIconName) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// מחזיר את רשימת התוספים המוצמדים-לסרגל מתוך ה-state, או רשימה ריקה כשאין.
