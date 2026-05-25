@@ -223,6 +223,7 @@ class PanelTabHeader extends StatelessWidget {
   final List<Widget> tabs;
   final VoidCallback? onClose;
   final ValueChanged<int>? onTap;
+  final List<Widget> extraActions;
 
   const PanelTabHeader({
     super.key,
@@ -230,6 +231,7 @@ class PanelTabHeader extends StatelessWidget {
     required this.tabs,
     this.onClose,
     this.onTap,
+    this.extraActions = const [],
   });
 
   @override
@@ -246,6 +248,7 @@ class PanelTabHeader extends StatelessWidget {
               onTap: onTap,
             ),
           ),
+          ...extraActions,
           IconButton(
             iconSize: 18,
             padding: EdgeInsets.zero,
