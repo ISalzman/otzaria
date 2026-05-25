@@ -595,6 +595,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       initialDirectory: downloadsDirectory?.path,
       allowedExtensions: ['bat'],
       type: FileType.custom,
+      lockParentWindow: true,
     );
     if (path == null || !mounted) {
       return;
@@ -1370,7 +1371,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   Future<void> _restoreBackup() async {
     final result = await FilePicker.pickFiles(
-        type: FileType.custom, allowedExtensions: ['json']);
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        lockParentWindow: true);
     final filePath = result?.files.single.path;
     if (filePath == null) return;
     if (!mounted) return;

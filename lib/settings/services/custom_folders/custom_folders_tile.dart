@@ -48,7 +48,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
 
   Future<void> _addFolder() async {
     final bloc = context.read<CustomFoldersBloc>();
-    final path = await FilePicker.getDirectoryPath();
+    final path = await FilePicker.getDirectoryPath(lockParentWindow: true);
     if (path == null) return;
 
     final dir = Directory(path);

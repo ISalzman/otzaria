@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/models/books.dart';
@@ -31,6 +31,15 @@ class SqliteDataProvider {
   static SqliteDataProvider get instance {
     _instance ??= SqliteDataProvider._();
     return _instance!;
+  }
+
+  /// Factory לבדיקות בלבד: יוצר provider עם repository מוזרק ומסומן כמאותחל.
+  @visibleForTesting
+  factory SqliteDataProvider.withRepository(SeforimRepository repository) {
+    final provider = SqliteDataProvider._();
+    provider._repository = repository;
+    provider._isInitialized = true;
+    return provider;
   }
 
   /// Initializes the database connection

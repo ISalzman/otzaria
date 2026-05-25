@@ -27,6 +27,7 @@ class PluginSidePanel extends StatelessWidget {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['otzplugin'],
+      lockParentWindow: true,
     );
     if (result != null && result.files.single.path != null) {
       if (context.mounted) {
@@ -38,7 +39,7 @@ class PluginSidePanel extends StatelessWidget {
   }
 
   Future<void> _loadDevPlugin(BuildContext context) async {
-    final rootPath = await FilePicker.getDirectoryPath();
+    final rootPath = await FilePicker.getDirectoryPath(lockParentWindow: true);
     if (rootPath != null) {
       if (context.mounted) {
         context

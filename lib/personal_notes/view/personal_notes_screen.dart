@@ -387,6 +387,7 @@ class _PersonalNotesManagerScreenState
       fileName: 'otzaria_notes_export.json',
       allowedExtensions: ['json'],
       type: FileType.custom,
+      lockParentWindow: true,
     );
     if (!mounted) return;
     if (path == null) return;
@@ -406,6 +407,7 @@ class _PersonalNotesManagerScreenState
       dialogTitle: 'בחר קובץ ייבוא',
       allowedExtensions: ['json'],
       type: FileType.custom,
+      lockParentWindow: true,
     );
     if (!mounted) return;
     if (picked == null || picked.files.isEmpty) return;
