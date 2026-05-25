@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:flutter/cupertino.dart' show cupertinoTextSelectionHandleControls;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
@@ -174,7 +176,6 @@ class SimpleTextViewer extends StatefulWidget {
       onOpenSearch; // callback לפתיחת חיפוש עם הטקסט הנבחר
   final TextBook? reportBook;
   final SelectionSyncController? selectionSyncController;
-
   const SimpleTextViewer({
     super.key,
     required this.content,
@@ -220,7 +221,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   final DictionaryLookupRepository _dictionaryLookupRepository =
       DictionaryLookupRepository.instance;
   final Object _selectionOwner = Object();
-  int _selectionRevision = 0;
+  final GlobalKey<SelectableRegionState> _selectionRegionKey = GlobalKey();
+  late final FocusNode _selectionFocusNode;
 
   bool _isTextInputFocused() {
     return isTextInputFocusNode(FocusManager.instance.primaryFocus);
@@ -336,6 +338,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     _scrollController = widget.scrollController ?? ItemScrollController();
     _positionsListener =
         widget.positionsListener ?? ItemPositionsListener.create();
+    _selectionFocusNode = FocusNode(debugLabel: 'SelectionAreaFocus');
     _resolvedKeyboardFocusNode;
 
     // מאזין גלובלי ל-Ctrl+C במפרשים (ללא צורך בפוקוס)
@@ -402,6 +405,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       HardwareKeyboard.instance.removeHandler(_handleCommentaryCopyKeyEvent);
       if (_lastActiveCommentary == this) _lastActiveCommentary = null;
     }
+    _selectionFocusNode.dispose();
     _keyboardFocusNode?.dispose();
     super.dispose();
   }
@@ -432,8 +436,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       return;
     }
 
+    // ניקוי ישיר ללא שינוי מפתח — הרשימה לא נהרסת ואין קפיצה
+    _selectionRegionKey.currentState?.clearSelection();
+
     setState(() {
-      _selectionRevision = controller.revision;
       _savedSelectedText = null;
       _savedSelectedIndex = null;
     });
@@ -1313,10 +1319,17 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                   final itemCount = segments.isNotEmpty
                       ? segments.length
                       : widget.content.length;
-                  return SelectionArea(
-                    key: ValueKey(
-                      '${widget.isMainText ? 'main' : 'commentary'}_selection_$_selectionRevision',
-                    ),
+                  return SelectableRegion(
+                    key: _selectionRegionKey,
+                    focusNode: _selectionFocusNode,
+                    selectionControls: switch (defaultTargetPlatform) {
+                      TargetPlatform.android ||
+                      TargetPlatform.fuchsia =>
+                        materialTextSelectionHandleControls,
+                      TargetPlatform.iOS =>
+                        cupertinoTextSelectionHandleControls,
+                      _ => emptyTextSelectionControls,
+                    },
                     // ביטול תפריט ברירת המחדל של Flutter - נשתמש רק ב-ContextMenuRegion
                     contextMenuBuilder: (context, selectableRegionState) =>
                         const SizedBox.shrink(),
