@@ -177,9 +177,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                       controller: _pageController,
                       onPageChanged: (index) {
                         if (index < state.tabs.length) {
-                          context
-                              .read<TabsBloc>()
-                              .add(SetCurrentTab(index));
+                          context.read<TabsBloc>().add(SetCurrentTab(index));
                         }
                       },
                       children: [

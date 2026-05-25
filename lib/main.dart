@@ -484,66 +484,46 @@ Future<void> _initializeProcessSingletons() async {
   await createDirs();
   await loadCerts();
 
-  try {
-    await NotificationService().init();
-  } catch (error, stackTrace) {
-    _logNonFatalInitializationError('Notification service', error, stackTrace);
-  }
-
-  try {
-    // המופע הארוך-טווח: רץ עם Timer.periodic של 5 דקות, מחזיק http.Client
-    // עם connection pool שעלול לתקוע את היציאה ב-Windows admin install.
-    // רק המופע הזה נרשם ב-HttpClientRegistry; מופעים קצרי-טווח אחרים שנוצרים
-    // לפי דרישה (בדיאלוגים/הגדרות) אינם נרשמים כדי למנוע memory leak.
-    final reportService = DirectErrorReportService();
-    HttpClientRegistry.register(reportService.closeHttpClient);
-    await reportService.startAutomaticFlush();
-  } catch (error, stackTrace) {
-    _logNonFatalInitializationError(
-        'Direct error report queue', error, stackTrace);
-  }
+  // שירות ההתראות (לוח השנה) ושירות דיווחי השגיאות אינם חיוניים להצגת
+  // המסך הראשי. tz.initializeTimeZones + plugin init של flutter_local_notifications
+  // יכולים לקחת מאות מילי-שניות ב-Windows, ודיווחי השגיאות הם רק Timer.periodic.
+  unawaited(_runDeferredNotificationService());
+  unawaited(_runDeferredErrorReportFlush());
 }
 
 Future<void> _initializeRestartableRuntime() async {
-  await initHive();
+  // initHive נקרא כבר ב-_initializeProcessSingletons. הקריאה הכפולה כאן
+  // הייתה no-op (Hive.openBox מחזיר box קיים), אבל בכל זאת חוסכת קצת זמן
+  // בקריאה הראשונה. ב-restart אין צורך לפתוח שוב — boxes לא נסגרים.
   await SqliteDataProvider.instance.initialize();
 
-  try {
-    final cacheDir = await getTemporaryDirectory();
-    Pdfrx.cacheDirectoryPath = cacheDir.path;
-    debugPrint('Pdfrx cache directory set to: ${cacheDir.path}');
-  } catch (error, stackTrace) {
-    _logNonFatalInitializationError('Pdfrx cache directory', error, stackTrace);
-  }
+  // הגדרת cache של pdfrx — לא חיונית להצגת המסך הראשי. PDF הראשון יקבל
+  // cache ברירת מחדל אם זה עוד לא הוגדר.
+  unawaited(_runDeferredPdfrxCacheInit());
 
+  // initPluginDatabaseSources היא רישום סינכרוני קצר (in-memory only) של
+  // המקורות שהאפליקציה מציעה לתוספים. חייב לרוץ לפני שתוסף יקרא ל-
+  // database.listSources — אחרת תוסף שנפתח מוקדם יראה את כל המקורות
+  // כלא-זמינים (regression: ראה PluginDatabaseService._registry.getSource).
   await initPluginDatabaseSources();
 
-  // טעינת רשימת ה-quarantine של תוספים שהקריסו את התוכנה בהפעלה הקודמת.
-  // חייב להיות זמין לפני שמסך "כלים" מנסה ליצור PluginTabPage.
-  try {
-    await PluginCrashGuard.ensureInitialized();
-  } catch (error, stackTrace) {
+  // PluginCrashGuard.ensureInitialized חייב להסתיים לפני שטעינת תוסף מתחילה.
+  // PluginTabPage.markLoadAttemptSync דורש state אתחל (אחרת ה-canary לא נשמר
+  // והתוסף לא ייכנס ל-quarantine אם יקרוס), ו-PluginCrashGuard.isBlocked
+  // מחזיר false כל עוד _blocked הוא null. הקריאה זולה (קריאת JSON קטן).
+  await PluginCrashGuard.ensureInitialized()
+      .catchError((Object error, StackTrace stackTrace) {
     _logNonFatalInitializationError(
         'Plugin crash guard initialization', error, stackTrace);
-  }
+  });
 
-  try {
-    if (await BackupService.shouldPerformAutoBackup()) {
-      await BackupService.performAutoBackup();
-    }
-  } catch (error, stackTrace) {
-    _logNonFatalInitializationError('Automatic backup', error, stackTrace);
-  }
-
-  try {
-    await PluginProtocolRegistrationService().ensureRegistered();
-  } catch (error, stackTrace) {
-    _logNonFatalInitializationError(
-      'Plugin protocol registration',
-      error,
-      stackTrace,
-    );
-  }
+  // גיבוי אוטומטי ורישום פרוטוקול אינם נחוצים להצגת ה-UI הראשי (טאבים,
+  // ספרים, ניווט). הם מועברים ל-unawaited כדי שלא יעכבו את ה-bootstrap —
+  // אחרת ב-Windows רישום הפרוטוקול לבדו מריץ 10 תת-תהליכי reg.exe סדרתית,
+  // מה שמוסיף כמה שניות עד שהטאבים השמורים נטענים. ראה
+  // _runDeferredAutoBackup ו-_runDeferredProtocolRegistration למטה.
+  unawaited(_runDeferredAutoBackup());
+  unawaited(_runDeferredProtocolRegistration());
 
   // פרי-וורם של WebView2 environment ברקע. הפעם הראשונה שיוצרים סביבת
   // WebView2 ב-Windows מצמיחה כמה תהליכי-בן של Edge ולוקחת 1-2 שניות
@@ -560,6 +540,61 @@ Future<void> _initializeRestartableRuntime() async {
   // עלות: ~100MB RAM לתהליכי Edge הילדים, מנוקים ע"י ה-Job Object
   // בעת סגירת התהליך — אז לא יוותרו זומבים גם אם המשתמש לעולם לא יפתח תוסף.
   unawaited(_preWarmWebViewEnvironment());
+}
+
+Future<void> _runDeferredNotificationService() async {
+  try {
+    await NotificationService().init();
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError('Notification service', error, stackTrace);
+  }
+}
+
+Future<void> _runDeferredErrorReportFlush() async {
+  try {
+    // המופע הארוך-טווח: רץ עם Timer.periodic של 5 דקות, מחזיק http.Client
+    // עם connection pool שעלול לתקוע את היציאה ב-Windows admin install.
+    // רק המופע הזה נרשם ב-HttpClientRegistry; מופעים קצרי-טווח אחרים שנוצרים
+    // לפי דרישה (בדיאלוגים/הגדרות) אינם נרשמים כדי למנוע memory leak.
+    final reportService = DirectErrorReportService();
+    HttpClientRegistry.register(reportService.closeHttpClient);
+    await reportService.startAutomaticFlush();
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError(
+        'Direct error report queue', error, stackTrace);
+  }
+}
+
+Future<void> _runDeferredPdfrxCacheInit() async {
+  try {
+    final cacheDir = await getTemporaryDirectory();
+    Pdfrx.cacheDirectoryPath = cacheDir.path;
+    debugPrint('Pdfrx cache directory set to: ${cacheDir.path}');
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError('Pdfrx cache directory', error, stackTrace);
+  }
+}
+
+Future<void> _runDeferredAutoBackup() async {
+  try {
+    if (await BackupService.shouldPerformAutoBackup()) {
+      await BackupService.performAutoBackup();
+    }
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError('Automatic backup', error, stackTrace);
+  }
+}
+
+Future<void> _runDeferredProtocolRegistration() async {
+  try {
+    await PluginProtocolRegistrationService().ensureRegistered();
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError(
+      'Plugin protocol registration',
+      error,
+      stackTrace,
+    );
+  }
 }
 
 Future<void> _preWarmWebViewEnvironment() async {
@@ -731,7 +766,9 @@ class _AppBootstrapState extends State<AppBootstrap> {
           if (kDebugMode) debugPrint('Failed to warm up system fonts: $e');
         }));
         unawaited(ReferenceBooksCache.instance.warmUp().catchError((e) {
-          if (kDebugMode) debugPrint('Failed to warm up ReferenceBooksCache: $e');
+          if (kDebugMode) {
+            debugPrint('Failed to warm up ReferenceBooksCache: $e');
+          }
         }));
       });
     }).catchError((Object error, StackTrace stackTrace) {
@@ -786,7 +823,20 @@ class _AppBootstrapState extends State<AppBootstrap> {
             )..add(LoadSettings()),
           ),
           BlocProvider<LibraryBloc>(
-            create: (_) => LibraryBloc()..add(LoadLibrary()),
+            create: (_) {
+              final bloc = LibraryBloc();
+              // LoadLibrary טוען ~1500ms מ-SQLite — חוסם את ה-UI thread גם
+              // בקטעים בין ה-awaits. דוחים בשני פריימים עוקבים כדי לאפשר
+              // ל-ReadingScreen להיבנות ולהיצבע לפני שהטעינה מתחילה.
+              // LibraryBrowser בכל מקרה לא נטען מיד (המשתמש ב-Reading) — הוא
+              // יקבל את ה-state ברגע שיגיע.
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  bloc.add(LoadLibrary());
+                });
+              });
+              return bloc;
+            },
           ),
           BlocProvider<CustomFoldersBloc>(
             create: (context) => CustomFoldersBloc(
