@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
@@ -61,9 +62,12 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       // במשך 1500ms+. מעבירים אותו לרקע אחרי שה-state כבר עודכן ל-UI.
       // אם prune ימצא תיקיות שהוסרו, המשתמש יראה את השינוי בהפעלה הבאה או
       // ב-RefreshLibrary הבא (שעדיין מבצע prune סינכרוני בכוונה).
-      unawaited(_pruneRemovedCustomFoldersIfNeeded().catchError((Object e) {
-        developer.log('Background prune failed: $e', name: 'LibraryBloc');
-      }));
+      launchBackgroundLibraryMaintenance(
+        _pruneRemovedCustomFoldersIfNeeded,
+        onError: (Object e) {
+          developer.log('Background prune failed: $e', name: 'LibraryBloc');
+        },
+      );
 
       developer.log('📚 LibraryBloc: State emitted with isLoading=false',
           name: 'LibraryBloc');
@@ -524,4 +528,14 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       searchResults: state.searchResults,
     ));
   }
+}
+
+@visibleForTesting
+void launchBackgroundLibraryMaintenance(
+  Future<void> Function() task, {
+  void Function(Object error)? onError,
+}) {
+  unawaited(task().catchError((Object error) {
+    onError?.call(error);
+  }));
 }

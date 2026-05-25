@@ -162,6 +162,33 @@ class MainWindowScreen extends StatefulWidget {
   MainWindowScreenState createState() => MainWindowScreenState();
 }
 
+enum LibraryPageBuildDecision {
+  buildRealPage,
+  usePlaceholder,
+  keepExistingPage,
+}
+
+@visibleForTesting
+LibraryPageBuildDecision resolveLibraryPageBuildDecision({
+  required bool hasCachedPage,
+  required bool? previousLibraryEmptyState,
+  required bool isLibraryEmpty,
+  required Screen currentScreen,
+}) {
+  final libraryNeverBuilt = !hasCachedPage || previousLibraryEmptyState == null;
+  final libraryRequested = currentScreen == Screen.library;
+  final libraryStateChanged =
+      !libraryNeverBuilt && previousLibraryEmptyState != isLibraryEmpty;
+
+  if ((libraryNeverBuilt && libraryRequested) || libraryStateChanged) {
+    return LibraryPageBuildDecision.buildRealPage;
+  }
+  if (libraryNeverBuilt) {
+    return LibraryPageBuildDecision.usePlaceholder;
+  }
+  return LibraryPageBuildDecision.keepExistingPage;
+}
+
 // Global key for accessing MoreScreen
 final GlobalKey<ToolsScreenState> moreScreenKey = GlobalKey<ToolsScreenState>();
 final GlobalKey<State<LibraryBrowser>> libraryBrowserKey =
@@ -2096,14 +2123,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
             // הקונסטרקטור והקריאות הראשוניות חוסמות את ה-UI thread. עד שהמשתמש לא ביקש לפתוח
             // את הספרייה, מציגים placeholder ריק; כשהוא יבחר 'ספרייה', ה-BlocBuilder ירוץ שוב
             // ויחליף ל-LibraryBrowser/EmptyLibraryScreen האמיתיים.
-            final libraryNeverBuilt = _cachedLibraryPage == null ||
-                _previousLibraryEmptyState == null;
-            final libraryRequested = state.currentScreen == Screen.library;
-            final libraryStateChanged = !libraryNeverBuilt &&
-                _previousLibraryEmptyState != state.isLibraryEmpty;
+            final libraryBuildDecision = resolveLibraryPageBuildDecision(
+              hasCachedPage: _cachedLibraryPage != null,
+              previousLibraryEmptyState: _previousLibraryEmptyState,
+              isLibraryEmpty: state.isLibraryEmpty,
+              currentScreen: state.currentScreen,
+            );
 
-            if ((libraryNeverBuilt && libraryRequested) ||
-                libraryStateChanged) {
+            if (libraryBuildDecision ==
+                LibraryPageBuildDecision.buildRealPage) {
               if (state.isLibraryEmpty) {
                 // יצירת BLoC פעם אחת אם עדיין לא קיים
                 _emptyLibraryBloc ??= EmptyLibraryBloc();
@@ -2124,7 +2152,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 _cachedLibraryPage = LibraryBrowser(key: libraryBrowserKey);
               }
               _previousLibraryEmptyState = state.isLibraryEmpty;
-            } else if (libraryNeverBuilt) {
+            } else if (libraryBuildDecision ==
+                LibraryPageBuildDecision.usePlaceholder) {
               // המשתמש עדיין ב-Reading/Tools/Settings ולא ביקש את הספרייה —
               // מציגים placeholder זול. הוא יוחלף ל-LibraryBrowser בפעם הראשונה
               // שהמשתמש ינווט ל-Screen.library.
