@@ -378,14 +378,14 @@ void main() {
     });
   });
 
-  group('ItemsListView — פריסה רספונסיבית', () {
-    // הבעיה שמנעו: ב-Row(ref|subtitle|delete) ה-subtitle בלי הגבלת רוחב
-    // חוטף את כל המקום של ref, וטקסט ארוך מתקפל לתו-לשורה. במסך צר עוברים
-    // למבנה Column(ref, subtitle), במסך רחב נשארת שורה אחת.
+  group('ItemsListView — פריסת ref ו-subtitle', () {
+    // ref ו-subtitle מוצגים זה מתחת לזה (Column) בכל גודל מסך — בלי זה,
+    // ב-Row(ref|subtitle|delete) ה-subtitle בלי הגבלת רוחב חוטף את כל המקום
+    // של ref וטקסט ארוך מתקפל לתו-לשורה.
     const longRef = 'חזון איש, יורה דעה, סימן יב, סעיף ג';
     const subtitleText = 'שולחן עבודה 1';
 
-    testWidgets('מסך רחב: ref ו-subtitle באותה שורה (y זהה)', (tester) async {
+    testWidgets('מסך רחב: subtitle מתחת ל-ref (Column)', (tester) async {
       await tester.binding.setSurfaceSize(const Size(1024, 768));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -395,10 +395,11 @@ void main() {
       ));
       await tester.pump();
 
-      final refTop = tester.getTopLeft(find.text(longRef)).dy;
+      final refBottom = tester.getBottomLeft(find.text(longRef)).dy;
       final subtitleTop = tester.getTopLeft(find.text(subtitleText)).dy;
-      // מותר הפרש קטן בגלל גובה שונה בין הטקסטים, אבל הם באותו row.
-      expect((refTop - subtitleTop).abs(), lessThan(8));
+      expect(subtitleTop, greaterThanOrEqualTo(refBottom),
+          reason: 'גם במסך רחב subtitle מוצג מתחת ל-ref כדי שלא ייאסף לרוחב '
+              'ויקצץ את ref לכמה שורות');
     });
 
     testWidgets('מסך צר: subtitle מתחת ל-ref (y גדול יותר)', (tester) async {
