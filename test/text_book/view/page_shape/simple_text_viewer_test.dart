@@ -553,13 +553,12 @@ void main() {
   });
 
   testWidgets(
-      'SelectionArea לא נבנה מחדש כשאזור חיצוני נעשה פעיל ואין לנו בחירה משלנו '
+      'SelectableRegion לא נבנה מחדש כשאזור חיצוני נעשה פעיל ואין לנו בחירה משלנו '
       '(מונע טעינה מחדש של תוכן בעת בחירה במפרש בצורת הדף)', (tester) async {
-    // רגרסיה: לפני התיקון, כל הפעלה של אזור חיצוני (למשל בחירת טקסט במפרש
-    // אחר) גרמה לאזור שלנו לקדם את revision ולבנות מחדש את ה-SelectionArea
-    // — מה שהשמיד את עץ הצאצאים (ScrollablePositionedList) וגרם לאיפוס
-    // מצב פנימי/קפיצות גלילה. אם אין לנו בחירה משלנו אין מה לנקות, ולכן
-    // אסור לבנות מחדש.
+    // רגרסיה: לפני התיקון, כל הפעלה של אזור חיצוני גרמה לבנייה מחדש של
+    // ה-SelectionArea — מה שהשמיד את עץ הצאצאים (ScrollablePositionedList)
+    // וגרם לאיפוס מצב פנימי/קפיצות גלילה. אם אין לנו בחירה משלנו אין מה
+    // לנקות, ולכן אסור לבנות מחדש.
     final controller = SelectionSyncController();
     addTearDown(controller.dispose);
     final otherOwner = Object();
@@ -601,27 +600,26 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    final initialKey = _findSelectionAreaKey(tester);
-    expect(initialKey, isNotNull);
+    final elementBefore = _findSelectableRegionElement(tester);
+    expect(elementBefore, isNotNull);
 
     controller.activate(otherOwner);
     await tester.pump();
 
-    final keyAfterExternalActivate = _findSelectionAreaKey(tester);
+    final elementAfter = _findSelectableRegionElement(tester);
     expect(
-      keyAfterExternalActivate,
-      equals(initialKey),
+      elementAfter,
+      same(elementBefore),
       reason: 'בלי בחירה משלנו, הפעלת אזור חיצוני אסור שתגרום ל-rebuild — '
           'אחרת עץ הצאצאים נהרס לחינם',
     );
   });
 
   testWidgets(
-      'SelectionArea לא נבנה מחדש כשהבחירה התנקתה (activeOwner הופך ל-null)',
+      'SelectableRegion לא נבנה מחדש כשהבחירה התנקתה (activeOwner הופך ל-null)',
       (tester) async {
-    // רגרסיה: לפני התיקון, ניקוי בחירה (לחיצה במקום אחר) גרם להחלפת ה-key
-    // של ה-SelectionArea ולבנייה מחדש של ה-ScrollablePositionedList — והגלילה
-    // קפצה לתחילת הקטע.
+    // רגרסיה: לפני התיקון, ניקוי בחירה גרם להחלפת ה-key של ה-SelectionArea
+    // ולבנייה מחדש של ה-ScrollablePositionedList — והגלילה קפצה לתחילת הקטע.
     final controller = SelectionSyncController();
     addTearDown(controller.dispose);
     final otherOwner = Object();
@@ -663,20 +661,87 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    // האזור החיצוני מפעיל ומיד מנקה - דמוי משתמש שבחר ושחרר את הבחירה.
+    // האזור החיצוני מפעיל ומיד מנקה — דמוי משתמש שבחר ושחרר את הבחירה.
     controller.activate(otherOwner);
     await tester.pump();
-    final keyAfterActivate = _findSelectionAreaKey(tester);
+    final elementAfterActivate = _findSelectableRegionElement(tester);
 
     controller.clear(otherOwner);
     await tester.pump();
-    final keyAfterClear = _findSelectionAreaKey(tester);
+    final elementAfterClear = _findSelectableRegionElement(tester);
 
     expect(
-      keyAfterClear,
-      equals(keyAfterActivate),
+      elementAfterClear,
+      same(elementAfterActivate),
       reason:
           'ניקוי בחירה (activeOwner=null) אסור שיגרום ל-rebuild — אחרת הגלילה קופצת',
+    );
+  });
+
+  testWidgets(
+      'SelectableRegion במפרש לא נהרס כשאזור חיצוני (טקסט ראשי) נעשה פעיל — '
+      'מונע קפיצת גלילה לתחילת הספר בצורת הדף', (tester) async {
+    // רגרסיה: כשבחרו טקסט במפרש ואחר כך בטקסט הראשי, ה-SelectionArea של
+    // המפרש נבנה מחדש עם מפתח חדש (כדי לנקות בחירה ויזואלית). הבנייה מחדש
+    // השמידה את ה-ScrollablePositionedList ואיפסה את מיקום הגלילה לשורה 0.
+    // התיקון: שימוש ב-SelectableRegion עם GlobalKey יציב + clearSelection()
+    // ישיר — ללא שינוי מפתח ולכן ללא קפיצה.
+    final controller = SelectionSyncController();
+    addTearDown(controller.dispose);
+    final mainTextOwner = Object();
+
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      PersonalNotesState(
+        isLoading: false,
+        bookId: 'ספר בדיקה',
+        locatedNotes: const [],
+        missingNotes: const [],
+        errorMessage: null,
+        filteredLocatedNotes: const [],
+        filteredMissingNotes: const [],
+      ),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: SimpleTextViewer(
+              content: const ['שורה א', 'שורה ב', 'שורה ג'],
+              fontSize: 18,
+              openBookCallback: (_) {},
+              isMainText: false, // מפרש — כאן התרחש הבאג
+              selectionSyncController: controller,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final elementBefore = _findSelectableRegionElement(tester);
+    expect(elementBefore, isNotNull,
+        reason: 'SimpleTextViewer חייב לרנדר SelectableRegion');
+
+    // דמוי בחירת טקסט בטקסט הראשי (הפעלת אזור חיצוני) —
+    // לפני התיקון זה היה גורם לבנייה מחדש של SelectionArea של המפרש
+    controller.activate(mainTextOwner);
+    await tester.pump();
+
+    final elementAfter = _findSelectableRegionElement(tester);
+    expect(
+      elementAfter,
+      same(elementBefore),
+      reason: 'SelectableRegion של המפרש לא אמור להיהרס ולהיווצר מחדש — '
+          'הרס כזה היה מאפס את ScrollablePositionedList לשורה 0 וגורם לקפיצה',
     );
   });
 
@@ -712,13 +777,15 @@ void main() {
   });
 }
 
-Key? _findSelectionAreaKey(WidgetTester tester) {
-  // SelectionArea היחיד עם ValueKey הוא זה שמסונכרן עם SelectionSyncController.
-  // MaterialApp/Scaffold עוטפים את העץ ב-SelectionContainer אבל לא ב-SelectionArea עם key.
-  final widgets = tester.widgetList<SelectionArea>(find.byType(SelectionArea));
-  for (final widget in widgets) {
-    if (widget.key is ValueKey<String>) {
-      return widget.key;
+/// מחזירה את ה-Element של SelectableRegion שנוצר על-ידי SimpleTextViewer.
+/// SimpleTextViewer משתמש ב-`GlobalKey<SelectableRegionState>` — מה שמאפשר
+/// לזהות אותו בין שאר ה-SelectableRegion שעשויים להימצא בעץ.
+Element? _findSelectableRegionElement(WidgetTester tester) {
+  for (final element
+      in tester.elementList(find.byType(SelectableRegion))) {
+    if ((element.widget as SelectableRegion).key
+        is GlobalKey<SelectableRegionState>) {
+      return element;
     }
   }
   return null;
