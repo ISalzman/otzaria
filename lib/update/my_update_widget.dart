@@ -388,6 +388,9 @@ class MyUpdatWidget extends StatelessWidget {
                     continue;
                   }
 
+                  // דלג על קובץ silent - המשתמש רוצה את מתקין ה-GUI הרגיל
+                  if (name.contains('silent')) continue;
+
                   for (final ext in extsInOrder) {
                     if (name.endsWith(ext)) return url;
                   }

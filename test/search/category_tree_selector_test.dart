@@ -1,10 +1,49 @@
+import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
+import 'package:otzaria/library/bloc/library_event.dart';
+import 'package:otzaria/library/bloc/library_state.dart';
+import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/search/search_scope_preferences.dart';
 import 'package:otzaria/search/view/category_tree_selector.dart';
+
+class _MockLibraryBloc extends MockBloc<LibraryEvent, LibraryState>
+    implements LibraryBloc {}
+
+/// בונה ספריית בדיקה: תנ״ך, משנה, תלמוד בבלי, ותחת "מדרש" יש "הלכה" ו"אגדה".
+Library _buildLibraryWithMidrashChildren() {
+  Category mkCat(String title, {List<Category> children = const []}) {
+    final cat = Category(
+      title: title,
+      description: '',
+      shortDescription: '',
+      order: 10,
+      subCategories: List<Category>.from(children),
+      books: const [],
+      parent: null,
+    );
+    for (final child in cat.subCategories) {
+      child.parent = cat;
+    }
+    return cat;
+  }
+
+  final halacha = mkCat('הלכה');
+  final aggada = mkCat('אגדה');
+  final midrash = mkCat('מדרש', children: [halacha, aggada]);
+  final tanach = mkCat('תנ״ך');
+  final mishna = mkCat('משנה');
+  final bavli = mkCat('תלמוד בבלי');
+
+  final library = Library(categories: [tanach, mishna, bavli, midrash]);
+  for (final cat in library.subCategories) {
+    cat.parent = library;
+  }
+  return library;
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -130,6 +169,89 @@ void main() {
 
       final switchWidget = tester.widget<Switch>(find.byType(Switch));
       expect(switchWidget.value, isFalse);
+    });
+
+    testWidgets(
+        'ביטול סימון תת-קטגוריה לא בוחר את כל הקטגוריות העליונות האחרות',
+        (tester) async {
+      // רגרסיה: כש"מדרש" מסומן וביטלנו סימון של "הלכה" (תת-קטגוריה שלו),
+      // הקוד הישן היה "מפוצץ" החל מהשורש ומוסיף את כל הקטגוריות העליונות
+      // האחרות (תנ"ך, משנה, בבלי) כאילו "/" הוא ה-facet המכסה - למרות שהוא
+      // לא היה בבחירה כלל. התוצאה הצפויה: רק "מדרש/אגדה" נשארת מסומנת.
+
+      final library = _buildLibraryWithMidrashChildren();
+      final libraryBloc = _MockLibraryBloc();
+      whenListen(
+        libraryBloc,
+        const Stream<LibraryState>.empty(),
+        initialState: LibraryState(
+          library: library,
+          isLoading: false,
+          currentCategory: library,
+        ),
+      );
+      addTearDown(libraryBloc.close);
+
+      var selection = <String>{'/מדרש'};
+      final emittedSelections = <Set<String>>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BlocProvider<LibraryBloc>.value(
+              value: libraryBloc,
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  return CategoryTreeSelector(
+                    selectedFacets: selection,
+                    onSelectionChanged: (next) {
+                      setState(() {
+                        selection = next;
+                        emittedSelections.add(next);
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // הרחבת "מדרש" כדי לחשוף את תת-הקטגוריות
+      await tester.tap(find.text('מדרש'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('הלכה'), findsOneWidget);
+      expect(find.text('אגדה'), findsOneWidget);
+
+      // לחיצה על ה-Checkbox של "הלכה" (כרגע מסומן ב-cascade מהאב "מדרש")
+      final halachaCheckbox = find.descendant(
+        of: find
+            .ancestor(of: find.text('הלכה'), matching: find.byType(Row))
+            .first,
+        matching: find.byType(Checkbox),
+      );
+      expect(halachaCheckbox, findsOneWidget);
+
+      await tester.tap(halachaCheckbox);
+      await tester.pumpAndSettle();
+
+      expect(emittedSelections, isNotEmpty);
+      final finalSelection = emittedSelections.last;
+
+      expect(
+        finalSelection,
+        equals({'/מדרש/אגדה'}),
+        reason:
+            'אחרי ביטול "הלכה", רק "אגדה" צריכה להישאר. הקטגוריות העליונות '
+            'האחרות לא היו מסומנות מלכתחילה ולכן לא היו אמורות לקפוץ לסימון.',
+      );
+      expect(finalSelection.contains('/תנ״ך'), isFalse);
+      expect(finalSelection.contains('/משנה'), isFalse);
+      expect(finalSelection.contains('/תלמוד בבלי'), isFalse);
     });
 
     testWidgets('מצב ידני ריק נשמר גם אחרי rebuild של ההורה', (tester) async {

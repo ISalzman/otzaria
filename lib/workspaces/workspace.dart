@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 
 /// Represents a workspace in the application.
@@ -45,11 +47,18 @@ class Workspace extends Equatable {
   }
 
   factory Workspace.fromJson(Map<String, dynamic> json) {
+    OpenedTab? decodeTab(Map<String, dynamic> map) {
+      if (map['type'] == 'PdfCommentatorsTab') return null;
+      if (map['type'] == 'CommentatorsTab') return CommentatorsTab.fromJson(map);
+      return OpenedTab.fromJson(map);
+    }
+
     return Workspace(
       id: json['id'] as String?,
       name: json['name'] as String,
       tabs: (json['tabs'] as List?)
-              ?.map((tab) => OpenedTab.fromJson(castMap(tab)))
+              ?.map((raw) => decodeTab(castMap(raw)))
+              .whereType<OpenedTab>()
               .toList() ??
           [],
       activeTabIndex: json['currentTab'] as int? ?? 0,
@@ -57,11 +66,19 @@ class Workspace extends Equatable {
   }
 
   Map<String, dynamic> toJson() {
+    final persistedTabs = <OpenedTab>[];
+    var remappedIndex = 0;
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i] is PdfCommentatorsTab) continue;
+      if (i <= activeTabIndex) remappedIndex = persistedTabs.length;
+      persistedTabs.add(tabs[i]);
+    }
+    final safeIndex = persistedTabs.isEmpty ? 0 : remappedIndex.clamp(0, persistedTabs.length - 1);
     return {
       'id': id,
       'name': name,
-      'tabs': tabs.map((tab) => tab.toJson()).toList(),
-      'currentTab': activeTabIndex,
+      'tabs': persistedTabs.map((tab) => tab.toJson()).toList(),
+      'currentTab': safeIndex,
     };
   }
 

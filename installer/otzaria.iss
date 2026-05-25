@@ -20,7 +20,6 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DefaultDirName={code:GetDefaultInstallDir}
 DefaultGroupName={#MyAppName}
@@ -100,6 +99,16 @@ const
 
 var
   FeaturesPage: TWizardPage;
+  SlideshowImage: TBitmapImage;
+  SlideshowTimerId: LongWord;
+  SlideshowTimerCallback: LongWord;
+  SlideshowIndex: Integer;
+
+// TTimer לא זמין ב-Pascal Script של Inno Setup; נשתמש ב-Windows API.
+function SetTimer(hWnd, nIDEvent, uElapse, lpTimerFunc: LongWord): LongWord;
+  external 'SetTimer@user32.dll stdcall';
+function KillTimer(hWnd, nIDEvent: LongWord): LongWord;
+  external 'KillTimer@user32.dll stdcall';
 
 procedure CreateFeaturesPage();
 var
@@ -156,9 +165,65 @@ begin
   end;
 end;
 
+procedure OnSlideshowTimer(H: LongWord; Msg: LongWord; IdEvent: LongWord; Time: LongWord);
+var
+  NextFile: String;
+begin
+  if SlideshowImage = nil then
+    exit;
+  SlideshowIndex := (SlideshowIndex + 1) mod 4;
+  case SlideshowIndex of
+    0: NextFile := 'feature1.bmp';
+    1: NextFile := 'feature2.bmp';
+    2: NextFile := 'feature3.bmp';
+    3: NextFile := 'feature4.bmp';
+  end;
+  SlideshowImage.Bitmap.LoadFromFile(ExpandConstant('{tmp}\') + NextFile);
+end;
+
+procedure InitializeSlideshow;
+var
+  GaugeBottom, AvailH, ImgH: Integer;
+begin
+  SlideshowIndex := 0;
+  GaugeBottom := WizardForm.ProgressGauge.Top + WizardForm.ProgressGauge.Height;
+  AvailH := WizardForm.InstallingPage.Height - GaugeBottom;
+  if AvailH < ScaleY(60) then
+    exit;
+  ImgH := AvailH - ScaleY(10);
+
+  SlideshowImage := TBitmapImage.Create(WizardForm.InstallingPage);
+  SlideshowImage.Parent := WizardForm.InstallingPage;
+  SlideshowImage.Stretch := True;
+  SlideshowImage.Left := 0;
+  SlideshowImage.Top := GaugeBottom + ScaleY(8);
+  SlideshowImage.Width := WizardForm.InstallingPage.Width;
+  SlideshowImage.Height := ImgH;
+  SlideshowImage.Bitmap.LoadFromFile(ExpandConstant('{tmp}\feature1.bmp'));
+
+  SlideshowTimerCallback := CreateCallback(@OnSlideshowTimer);
+end;
+
 procedure InitializeWizard();
 begin
   CreateFeaturesPage();
+  InitializeSlideshow();
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if SlideshowTimerCallback = 0 then
+    exit;
+  if CurPageID = wpInstalling then
+  begin
+    if SlideshowTimerId = 0 then
+      SlideshowTimerId := SetTimer(0, 0, 1500, SlideshowTimerCallback);
+  end
+  else if SlideshowTimerId <> 0 then
+  begin
+    KillTimer(0, SlideshowTimerId);
+    SlideshowTimerId := 0;
+  end;
 end;
 
 function TryGetInstallDirFromRegistry(RootKey: Integer; const SubKey: String; var InstallDir: String): Boolean;
@@ -370,10 +435,19 @@ begin
       if DirExists(AppDataPath) then
         DelTreeExceptBooks(AppDataPath);
         
-      // Delete old settings and personal notes (in AppData/Roaming)
+      // הגדרות ישנות בשם com.example (לפני שינוי מזהה החבילה)
       AppDataPath := ExpandConstant('{userappdata}\com.example');
       if DirExists(AppDataPath) then
         DelTreeExceptBooks(AppDataPath);
+
+      // נתיבים ישנים מאוד: LocalAppData בעברית (לפני גרסה 0.9.x)
+      AppDataPath := ExpandConstant('{localappdata}\אוצריא');
+      if DirExists(AppDataPath) then
+        DelTree(AppDataPath, True, True, True);
+
+      AppDataPath := ExpandConstant('{localappdata}\אוצריא\Data');
+      if DirExists(AppDataPath) then
+        DelTree(AppDataPath, True, True, True);
     end;
   end;
 end;

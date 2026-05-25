@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -7,6 +8,7 @@ import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_handler.dart';
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:collection';
@@ -29,9 +31,9 @@ import 'package:otzaria/plugins/view/plugin_dev_error_view.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
+import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
-import 'package:otzaria/plugins/services/webview2_compat_check.dart';
-import 'package:otzaria/plugins/view/webview2_unsupported_view.dart';
+import 'package:otzaria/plugins/view/plugin_crashed_view.dart';
 
 // ---------------------------------------------------------------------------
 // Stub SDK — injected at AT_DOCUMENT_START before any page JS runs.
@@ -86,6 +88,8 @@ class _PluginTabPageState extends State<PluginTabPage> {
   static Future<void>? _webViewPrerequisitesFuture;
 
   InAppWebViewController? webViewController;
+  Offset _pendingTrackpadDelta = Offset.zero;
+  bool _trackpadFrameScheduled = false;
   late String localHtmlPath;
   late final PluginBridgeHandler _bridge;
   late final PluginBridgeAdapter _adapter;
@@ -245,6 +249,13 @@ class _PluginTabPageState extends State<PluginTabPage> {
 
   @override
   void dispose() {
+    // dispose רץ רק כשמחזור החיים הרגיל של Flutter קורא לו — כלומר התהליך
+    // חי. אם הייתה קריסה native, dispose לא היה רץ בכלל. לכן מנקים את ה-
+    // canary של ה-crash guard גם פה: סגירה רגילה של האפליקציה / החלפת
+    // טאב / unmount של הוויג'ט = לא קריסה, ואין סיבה לחסום בהפעלה הבאה.
+    // משתמשים בגרסה sync כדי שהכתיבה תושלם גם אם dispose נקרא בתוך סגירה
+    // של האפליקציה שלא יספיק להריץ async writes.
+    PluginCrashGuard.markLoadSuccessSync(widget.plugin.pluginId);
     _adapter.dispose();
     PluginRuntimeDispatcher.instance
         .unregisterController(widget.plugin.pluginId);
@@ -279,50 +290,42 @@ class _PluginTabPageState extends State<PluginTabPage> {
       return const SizedBox.shrink(); // התוסף כבר הוסר — הטאב ייסגר בקרוב
     }
 
-    // הסדר חשוב: בדיקת תאימות חייבת לרוץ *לפני* יצירת WebViewEnvironment.
-    // הקריאה הזו היא static ולא דורשת אתחול של WebView — היא רק שואלת
-    // את ה-Loader DLL איזו גרסת Runtime מותקנת. כך אם הגרסה ידועה כקורסת,
-    // נחזיר מסך הסבר עוד לפני שניגענו ב-WebView2 בכלל.
-    return FutureBuilder<WebView2CompatResult>(
-      future: WebView2CompatCheck.check(),
-      builder: (context, compatSnapshot) {
-        if (compatSnapshot.connectionState != ConnectionState.done) {
-          return const SizedBox.shrink();
-        }
-        final compatResult = compatSnapshot.data;
-        if (compatResult != null && !compatResult.supported) {
-          return WebView2UnsupportedView(
-            result: compatResult,
-            pluginName: widget.plugin.name,
-          );
-        }
+    // אם בהפעלה הקודמת התוסף הזה הקריס את התוכנה (נשאר ב-PluginCrashGuard),
+    // אנחנו לא טוענים אותו אוטומטית — מציגים מסך הסבר עם כפתור "נסה שוב".
+    // כשהבאג יתוקן (upstream או דרך עדכון WebView2), הטעינה הראשונה
+    // המוצלחת תקרא ל-markLoadSuccess ותסיר את הסימון לבד.
+    if (PluginCrashGuard.isBlocked(widget.plugin.pluginId)) {
+      return PluginCrashedView(
+        pluginId: widget.plugin.pluginId,
+        pluginName: widget.plugin.name,
+        onRetry: () {
+          if (mounted) setState(() {});
+        },
+      );
+    }
 
-        // רק כעת — אחרי שאישרנו שהגרסה תומכת — נאתחל את ה-prerequisites
-        // ונבנה את ה-WebView עצמו.
-        if (_needsWebViewPrerequisites) {
-          return FutureBuilder<void>(
-            future: _ensureWebViewPrerequisitesConfigured(),
-            builder: (context, prereqSnapshot) {
-              if (prereqSnapshot.connectionState != ConnectionState.done) {
-                return const SizedBox.shrink();
-              }
-              if (prereqSnapshot.hasError) {
-                debugPrint(
-                    'WebView prerequisites init error: ${prereqSnapshot.error}');
-                return Center(
-                  child: Text(
-                    'שגיאה באתחול סביבת הדפדפן: ${prereqSnapshot.error}',
-                    textDirection: TextDirection.rtl,
-                  ),
-                );
-              }
-              return _buildWebView();
-            },
-          );
-        }
-        return _buildWebView();
-      },
-    );
+    if (_needsWebViewPrerequisites) {
+      return FutureBuilder<void>(
+        future: _ensureWebViewPrerequisitesConfigured(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const SizedBox.shrink();
+          }
+          if (snapshot.hasError) {
+            debugPrint('WebView prerequisites init error: ${snapshot.error}');
+            return Center(
+              child: Text(
+                'שגיאה באתחול סביבת הדפדפן: ${snapshot.error}',
+                textDirection: TextDirection.rtl,
+              ),
+            );
+          }
+          return _buildWebView();
+        },
+      );
+    }
+
+    return _buildWebView();
   }
 
   Widget _buildWebView() {
@@ -345,15 +348,25 @@ class _PluginTabPageState extends State<PluginTabPage> {
         ),
       ]),
       onWebViewCreated: (controller) {
+        // מסמנים שמתחיל ניסיון טעינה. שימוש בגרסה הסינכרונית מבטיח שהקובץ
+        // מתעדכן מיד (לפני שיש הזדמנות ל-dispose לרוץ ולנקות ריק) — אחרת
+        // קיים race שבו סגירה מהירה של הטאב לפני שה-Future של ה-async
+        // markLoadAttempt הספיק להוסיף לזיכרון, מוביל ל-canary שגוי.
+        // הסימון נשאר ב-disk **רק** אם התהליך מת native לפני שהגענו
+        // לאחד מנתיבי הסיום ב-Dart (catch / success / dispose).
+        PluginCrashGuard.markLoadAttemptSync(widget.plugin.pluginId);
         try {
           webViewController = controller;
           PluginRuntimeDispatcher.instance
               .registerController(widget.plugin.pluginId, controller);
           _bridge.register(controller);
         } catch (e) {
-          // bridge.register נכשל — מנקים את ה-registration הלא שלם
+          // bridge.register נכשל — התהליך חי, לא קריסה native. מנקים גם את
+          // ה-registration הלא שלם וגם את ה-canary של ה-crash guard.
           PluginRuntimeDispatcher.instance
               .unregisterController(widget.plugin.pluginId);
+          unawaited(
+              PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
           debugPrint(
               'Plugin [${widget.plugin.pluginId}] WebView init error: $e');
           if (mounted) setState(() => _hasError = true);
@@ -525,7 +538,15 @@ class _PluginTabPageState extends State<PluginTabPage> {
   window.Otzaria._boot(realSdk, $jsonPayload);
 })();
 ''');
+          // הטעינה הצליחה עד הסוף (גם ה-stub וגם ה-boot payload הוזרקו).
+          // מסירים את התוסף מ-quarantine כדי שהפעלה הבאה תאפשר טעינה רגילה.
+          unawaited(
+              PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
         } catch (e, st) {
+          // Boot ב-Dart נכשל — התהליך חי, לא קריסה native. מנקים את ה-canary
+          // כדי שלא נחסום בהפעלה הבאה תוסף שפשוט החזיר שגיאת אתחול רגילה.
+          unawaited(
+              PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
           debugPrint('Plugin [${widget.plugin.pluginId}] boot error: $e\n$st');
           PluginSystemDatabase.instance
               .writeLog(widget.plugin.pluginId, 'ERROR', 'Boot failed: $e');
@@ -540,6 +561,10 @@ class _PluginTabPageState extends State<PluginTabPage> {
       onReceivedError: (controller, request, error) {
         // only fail the view for the entrypoint file load itself
         if (request.url.scheme == 'file') {
+          // שגיאת רשת/קובץ נתפסה ב-Dart — התהליך חי, לא קריסה native.
+          // מנקים את ה-canary כדי שלא נחסום שגיאה רגילה כ"קריסה".
+          unawaited(
+              PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
           if (mounted) setState(() => _hasError = true);
         }
       },
@@ -559,7 +584,25 @@ class _PluginTabPageState extends State<PluginTabPage> {
       },
     );
 
-    return webView;
+    if (!Platform.isWindows) return webView;
+
+    return Listener(
+      onPointerPanZoomUpdate: (event) {
+        final ctrl = webViewController;
+        if (ctrl == null) return;
+        _pendingTrackpadDelta += event.panDelta;
+        if (_trackpadFrameScheduled) return;
+        _trackpadFrameScheduled = true;
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          _trackpadFrameScheduled = false;
+          if (!mounted) return;
+          final delta = _pendingTrackpadDelta;
+          _pendingTrackpadDelta = Offset.zero;
+          ctrl.evaluateJavascript(source: buildTrackpadScrollJs(delta));
+        });
+      },
+      child: webView,
+    );
   }
 
   static bool get _needsWebViewPrerequisites {
@@ -579,3 +622,11 @@ class _PluginTabPageState extends State<PluginTabPage> {
     }
   }
 }
+
+/// בונה פקודת JavaScript לגלילת WebView בתגובה ל-PointerPanZoomUpdate.
+///
+/// [panDelta] — כמות הגלילה בפיקסלים (תנועת האצבעות בלוח המגע).
+/// ערך חיובי ב-dy גורם לגלילה למטה; חיובי ב-dx — גלילה ימינה.
+@visibleForTesting
+String buildTrackpadScrollJs(Offset panDelta) =>
+    'window.scrollBy(${panDelta.dx.toStringAsFixed(2)},${panDelta.dy.toStringAsFixed(2)});';

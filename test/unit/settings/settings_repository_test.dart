@@ -494,5 +494,104 @@ void main() {
         isFalse,
       );
     });
+
+    // ─── Tools-management keys (built-in tools hidden / pinned-to-nav-rail) ──
+    //
+    // הערכים נשמרים כ-CSV ממוין. בדיקות אלה מבטיחות:
+    //   1. סדרת CSV דטרמיניסטית (ממוין) ⇒ אין dirty diffs ב-SharedPreferences.
+    //   2. ערכים שנשמרים נטענים זהים — round-trip.
+    //   3. סט ריק נשמר כמחרוזת ריקה (ולא כ-`",,"` או דומה).
+
+    test('updateHiddenBuiltInToolIds serializes the set to a sorted CSV',
+        () async {
+      // הקלט הוא Set לא ממוין; הפלט חייב להיות ממוין כדי שהמחרוזת הנשמרת
+      // תהיה דטרמיניסטית בין הפעלות.
+      await repository.updateHiddenBuiltInToolIds(
+        {'builtin.gematria', 'builtin.calendar', 'builtin.notes'},
+      );
+
+      final captured = verify(mockSettingsWrapper.setValue(
+        SettingsRepository.keyHiddenBuiltInToolIds,
+        captureAny,
+      )).captured.single as String;
+
+      expect(captured, 'builtin.calendar,builtin.gematria,builtin.notes');
+    });
+
+    test('updateHiddenBuiltInToolIds saves empty set as empty string',
+        () async {
+      await repository.updateHiddenBuiltInToolIds(<String>{});
+
+      verify(mockSettingsWrapper.setValue(
+        SettingsRepository.keyHiddenBuiltInToolIds,
+        '',
+      )).called(1);
+    });
+
+    test('updateBuiltInToolsPinnedToNavRail uses its own key', () async {
+      await repository.updateBuiltInToolsPinnedToNavRail(
+        {'builtin.calendar'},
+      );
+
+      verify(mockSettingsWrapper.setValue(
+        SettingsRepository.keyBuiltInToolsPinnedToNavRail,
+        'builtin.calendar',
+      )).called(1);
+    });
+
+    test('loadSettings parses hiddenBuiltInToolIds CSV into a Set', () async {
+      // מאתחלים את כל ה-defaults הנדרשים כדי ש-loadSettings יסיים בלי
+      // null-cast errors — אבל ה-stubs לערכי ברירת מחדל מספקים את זה דרך
+      // ה-MockSettingsWrapper.
+      when(mockSettingsWrapper.getValue<bool>('settings_initialized',
+              defaultValue: false))
+          .thenReturn(true);
+      when(mockSettingsWrapper.getValue<String>(
+        SettingsRepository.keyHiddenBuiltInToolIds,
+        defaultValue: '',
+      )).thenReturn('builtin.calendar,builtin.gematria');
+      when(mockSettingsWrapper.getValue<String>(
+        SettingsRepository.keyBuiltInToolsPinnedToNavRail,
+        defaultValue: '',
+      )).thenReturn('');
+
+      // שאר ה-stubs כבר מוגדרים ב-mock עם defaults — נטען את כל המפה
+      final settings = await repository.loadSettings();
+
+      expect(
+        settings['hiddenBuiltInToolIds'],
+        equals({'builtin.calendar', 'builtin.gematria'}),
+      );
+      expect(
+        settings['builtInToolsPinnedToNavRail'],
+        equals(<String>{}),
+        reason:
+            'empty CSV must round-trip to an empty Set, not a Set with an '
+            'empty string',
+      );
+    });
+
+    test('loadSettings tolerates whitespace and empty entries in CSV',
+        () async {
+      when(mockSettingsWrapper.getValue<bool>('settings_initialized',
+              defaultValue: false))
+          .thenReturn(true);
+      when(mockSettingsWrapper.getValue<String>(
+        SettingsRepository.keyHiddenBuiltInToolIds,
+        defaultValue: '',
+      )).thenReturn('builtin.calendar, ,builtin.notes,');
+      when(mockSettingsWrapper.getValue<String>(
+        SettingsRepository.keyBuiltInToolsPinnedToNavRail,
+        defaultValue: '',
+      )).thenReturn('');
+
+      final settings = await repository.loadSettings();
+
+      expect(
+        settings['hiddenBuiltInToolIds'],
+        equals({'builtin.calendar', 'builtin.notes'}),
+        reason: 'parser must trim whitespace and drop empty entries',
+      );
+    });
   });
 }

@@ -12,7 +12,6 @@ class LoadContent extends TextBookEvent {
   final double fontSize;
   final bool showSplitView;
   final bool removeNikud;
-  final bool continuousReadingMode;
   final bool preserveState; // Whether to preserve current state during reload
   final bool loadCommentators; // Whether to load commentators
   final bool
@@ -21,17 +20,22 @@ class LoadContent extends TextBookEvent {
   // per-book toggle) instead of applying the new value from settings.
   // Use this for font-only reloads where nikud settings did NOT change.
   final bool preserveRemoveNikud;
+  // When true and state is already loaded, keep current continuousReadingMode.
+  // ברירת המחדל false — `_resetPerBookSettings` סומך עליה כדי לאפס את המצב.
+  // הצרכן היחיד שצריך true הוא ה-listener על שינוי גופן/ניקוד שלא אמור
+  // לכבות מצב רצף שהמשתמש בחר.
+  final bool preserveContinuousReadingMode;
 
   const LoadContent({
     required this.fontSize,
     required this.showSplitView,
     required this.removeNikud,
-    this.continuousReadingMode = false,
     this.preserveState = false, // Default to false for backward compatibility
     this.loadCommentators = true, // Default to true for backward compatibility
     this.forceCloseLeftPane = false, // Default to false
     this.preserveRemoveNikud =
         false, // Default to false for backward compatibility
+    this.preserveContinuousReadingMode = false,
   });
 
   @override
@@ -39,30 +43,23 @@ class LoadContent extends TextBookEvent {
         fontSize,
         showSplitView,
         removeNikud,
-        continuousReadingMode,
         preserveState,
         loadCommentators,
         forceCloseLeftPane,
         preserveRemoveNikud,
+        preserveContinuousReadingMode,
       ];
 }
 
-class UpdateTextBookContinuousReadingMode extends TextBookEvent {
+/// החלפת מצב קריאה רציף. **רינדור בלבד** — לא משנה content, search, links,
+/// selectedIndex, או visibleIndices (שנותרים ברמת שורות מקור).
+class ToggleContinuousReadingMode extends TextBookEvent {
   final bool enabled;
 
-  const UpdateTextBookContinuousReadingMode(this.enabled);
+  const ToggleContinuousReadingMode(this.enabled);
 
   @override
   List<Object?> get props => [enabled];
-}
-
-class UpdateTextBookShowSubtitles extends TextBookEvent {
-  final bool show;
-
-  const UpdateTextBookShowSubtitles(this.show);
-
-  @override
-  List<Object?> get props => [show];
 }
 
 class UpdateFontSize extends TextBookEvent {
@@ -367,6 +364,15 @@ class UpdateLinks extends TextBookEvent {
       [links, replaceExisting, targetBookTitlesSignature];
 }
 
+class SetLinksLoading extends TextBookEvent {
+  final bool isLoading;
+
+  const SetLinksLoading(this.isLoading);
+
+  @override
+  List<Object?> get props => [isLoading];
+}
+
 /// Event to update available commentators after background loading
 class UpdateAvailableCommentators extends TextBookEvent {
   final List<String> availableCommentators;
@@ -393,4 +399,15 @@ class OpenFullFileEditor extends TextBookEvent {
 
   @override
   List<Object?> get props => [];
+}
+
+/// טוען את כל הקישורים (ללא סינון מפרשים) עבור טווח שורות נתון.
+/// משמש לכרטסיית מפרשים עצמאית.
+class LoadAllLinksForIndices extends TextBookEvent {
+  final List<int> indices;
+
+  const LoadAllLinksForIndices(this.indices);
+
+  @override
+  List<Object?> get props => [indices];
 }

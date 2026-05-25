@@ -24,11 +24,18 @@
 import 'package:flutter/material.dart';
 
 class NavRailItem extends StatelessWidget {
-  /// אייקון רגיל (כשלא נבחר)
-  final IconData icon;
+  /// אייקון רגיל (כשלא נבחר). חובה כשלא הועבר [imageAsset].
+  final IconData? icon;
 
   /// אייקון filled (כשנבחר) — אופציונלי
   final IconData? iconFilled;
+
+  /// נכס תמונה לשימוש במקום [icon]. מועדף אם קיים — תואם לכלים שמשתמשים
+  /// בלוגו ייחודי (כמו "שמור וזכור") במקום באייקון Fluent.
+  ///
+  /// כשמשתמשים ב-imageAsset, ההנפשה regular↔filled לא רלוונטית (אותה
+  /// תמונה לשני המצבים, רק הצבע משתנה).
+  final String? imageAsset;
 
   /// תווית מתחת לאייקון
   final String label;
@@ -53,8 +60,9 @@ class NavRailItem extends StatelessWidget {
 
   const NavRailItem({
     super.key,
-    required this.icon,
+    this.icon,
     this.iconFilled,
+    this.imageAsset,
     required this.label,
     required this.isSelected,
     required this.onTap,
@@ -62,28 +70,36 @@ class NavRailItem extends StatelessWidget {
     this.tourTargetKey,
     this.tourItemKey,
     this.isTourHighlighted = false,
-  });
+  }) : assert(icon != null || imageAsset != null,
+            'NavRailItem requires either icon or imageAsset');
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
+    final iconColor =
+        isSelected ? cs.onSecondaryContainer : cs.onSurfaceVariant;
+
     // ── אייקון עם אנימציה regular ↔ filled ──────────────────────────────
-    Widget iconWidget = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
-      switchInCurve: Curves.easeInOutCubicEmphasized,
-      switchOutCurve: Curves.easeInOutCubicEmphasized,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(scale: animation, child: child),
-      ),
-      child: Icon(
-        isSelected && iconFilled != null ? iconFilled! : icon,
-        key: ValueKey<bool>(isSelected),
-        size: 24,
-        color: isSelected ? cs.onSecondaryContainer : cs.onSurfaceVariant,
-      ),
-    );
+    // עבור image-asset אין נפרד "filled" — מתחלף רק הצבע. עבור IconData
+    // משתמשים ב-AnimatedSwitcher כדי לאניים regular↔filled.
+    Widget iconWidget = imageAsset != null
+        ? ImageIcon(AssetImage(imageAsset!), size: 24, color: iconColor)
+        : AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            switchInCurve: Curves.easeInOutCubicEmphasized,
+            switchOutCurve: Curves.easeInOutCubicEmphasized,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(scale: animation, child: child),
+            ),
+            child: Icon(
+              isSelected && iconFilled != null ? iconFilled! : icon,
+              key: ValueKey<bool>(isSelected),
+              size: 24,
+              color: iconColor,
+            ),
+          );
 
     if (tooltip != null) {
       iconWidget = Tooltip(

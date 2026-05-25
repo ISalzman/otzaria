@@ -14,7 +14,6 @@ class SettingsState extends Equatable {
   final double commentatorsFontSize;
   final double
       lineHeight; // מרווח בין שורות (1.0 = רגיל, 1.5 = מרווח וחצי, וכו')
-  final bool continuousReadingMode;
   final bool showOtzarHachochma;
   final bool showHebrewBooks;
   final bool showExternalBooks;
@@ -43,6 +42,12 @@ class SettingsState extends Equatable {
   final bool protectedModeEnabled;
   final bool autoSyncCatalogs;
   final bool compactMenuMode;
+
+  /// מזהי כלים מובנים שהמשתמש בחר להסתיר מהממשק.
+  final Set<String> hiddenBuiltInToolIds;
+
+  /// מזהי כלים מובנים שהמשתמש הצמיד לסרגל הניווט הראשי.
+  final Set<String> builtInToolsPinnedToNavRail;
   final bool? _softwareAndBookUpdatesEnabled;
 
   const SettingsState({
@@ -56,7 +61,6 @@ class SettingsState extends Equatable {
     required this.commentatorsFontFamily,
     required this.commentatorsFontSize,
     required this.lineHeight,
-    required this.continuousReadingMode,
     required this.showOtzarHachochma,
     required this.showHebrewBooks,
     required this.showExternalBooks,
@@ -85,6 +89,8 @@ class SettingsState extends Equatable {
     required this.protectedModeEnabled,
     required this.autoSyncCatalogs,
     this.compactMenuMode = false,
+    this.hiddenBuiltInToolIds = const <String>{},
+    this.builtInToolsPinnedToNavRail = const <String>{},
     bool? softwareAndBookUpdatesEnabled,
   }) : _softwareAndBookUpdatesEnabled = softwareAndBookUpdatesEnabled;
 
@@ -101,7 +107,6 @@ class SettingsState extends Equatable {
       commentatorsFontFamily: 'NotoRashiHebrew',
       commentatorsFontSize: 22,
       lineHeight: 1.5,
-      continuousReadingMode: false,
       showOtzarHachochma: false,
       showHebrewBooks: false,
       showExternalBooks: false,
@@ -144,7 +149,6 @@ class SettingsState extends Equatable {
     String? commentatorsFontFamily,
     double? commentatorsFontSize,
     double? lineHeight,
-    bool? continuousReadingMode,
     bool? showOtzarHachochma,
     bool? showHebrewBooks,
     bool? showExternalBooks,
@@ -173,6 +177,8 @@ class SettingsState extends Equatable {
     bool? protectedModeEnabled,
     bool? autoSyncCatalogs,
     bool? compactMenuMode,
+    Set<String>? hiddenBuiltInToolIds,
+    Set<String>? builtInToolsPinnedToNavRail,
     bool? softwareAndBookUpdatesEnabled,
   }) {
     return SettingsState(
@@ -187,8 +193,6 @@ class SettingsState extends Equatable {
           commentatorsFontFamily ?? this.commentatorsFontFamily,
       commentatorsFontSize: commentatorsFontSize ?? this.commentatorsFontSize,
       lineHeight: lineHeight ?? this.lineHeight,
-      continuousReadingMode:
-          continuousReadingMode ?? this.continuousReadingMode,
       showOtzarHachochma: showOtzarHachochma ?? this.showOtzarHachochma,
       showHebrewBooks: showHebrewBooks ?? this.showHebrewBooks,
       showExternalBooks: showExternalBooks ?? this.showExternalBooks,
@@ -220,6 +224,9 @@ class SettingsState extends Equatable {
       protectedModeEnabled: protectedModeEnabled ?? this.protectedModeEnabled,
       autoSyncCatalogs: autoSyncCatalogs ?? this.autoSyncCatalogs,
       compactMenuMode: compactMenuMode ?? this.compactMenuMode,
+      hiddenBuiltInToolIds: hiddenBuiltInToolIds ?? this.hiddenBuiltInToolIds,
+      builtInToolsPinnedToNavRail:
+          builtInToolsPinnedToNavRail ?? this.builtInToolsPinnedToNavRail,
       softwareAndBookUpdatesEnabled:
           softwareAndBookUpdatesEnabled ?? this.softwareAndBookUpdatesEnabled,
     );
@@ -243,7 +250,6 @@ class SettingsState extends Equatable {
         commentatorsFontFamily,
         commentatorsFontSize,
         lineHeight,
-        continuousReadingMode,
         showOtzarHachochma,
         showHebrewBooks,
         showExternalBooks,
@@ -272,6 +278,8 @@ class SettingsState extends Equatable {
         protectedModeEnabled,
         autoSyncCatalogs,
         compactMenuMode,
+        hiddenBuiltInToolIds,
+        builtInToolsPinnedToNavRail,
         softwareAndBookUpdatesEnabled,
       ];
 }

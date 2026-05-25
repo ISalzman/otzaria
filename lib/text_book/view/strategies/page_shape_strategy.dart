@@ -18,6 +18,7 @@ class PageShapeStrategyImpl extends TextBookViewStrategy {
       sidebarTabNotifier: config.pageShapeSidebarTabNotifier,
       onOpenSearch: config.openSearch,
       scrollOffsetController: config.tab.mainOffsetController,
+      tab: config.tab,
     );
 
     // Wrap with RepaintBoundary if print key is provided

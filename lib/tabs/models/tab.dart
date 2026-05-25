@@ -18,6 +18,12 @@ abstract class OpenedTab {
   /// Override this method to perform cleanup.
   void dispose() {}
 
+  /// Returns a fresh independent copy of this tab.
+  /// Subclasses that manage their own state (e.g. BLoC, controllers) must
+  /// override this so that [OpenedTab.from] produces a real clone and not
+  /// a shared-object alias.
+  OpenedTab clone() => this;
+
   factory OpenedTab.from(OpenedTab tab) {
     if (tab is TextBookTab) {
       bool? splitedView;
@@ -66,7 +72,7 @@ abstract class OpenedTab {
     } else if (tab is SearchingTab) {
       return SearchingTab.clone(tab);
     }
-    return tab;
+    return tab.clone();
   }
 
   factory OpenedTab.fromBook(Book book, int index,

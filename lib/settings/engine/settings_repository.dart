@@ -17,7 +17,6 @@ class SettingsRepository {
       'key-commentators-font-family';
   static const String keyCommentatorsFontSize = 'key-commentators-font-size';
   static const String keyLineHeight = 'key-line-height';
-  static const String keyContinuousReadingMode = 'key-continuous-reading-mode';
   static const String keyShowOtzarHachochma = 'key-show-otzar-hachochma';
   static const String keyShowHebrewBooks = 'key-show-hebrew-books';
   static const String keyShowExternalBooks = 'key-show-external-books';
@@ -67,6 +66,13 @@ class SettingsRepository {
   static const String keyPersonalNotesCollapsedByDefault =
       'key-personal-notes-collapsed';
   static const String keyCompactMenuMode = 'key-compact-menu-mode';
+
+  /// CSV של מזהי כלים מובנים שהמשתמש הסתיר מהממשק (לשונית הכלים).
+  static const String keyHiddenBuiltInToolIds = 'key-hidden-builtin-tool-ids';
+
+  /// CSV של מזהי כלים מובנים שהמשתמש הצמיד לסרגל הניווט הראשי.
+  static const String keyBuiltInToolsPinnedToNavRail =
+      'key-builtin-tools-pinned-to-nav-rail';
 
   // Protected Mode Settings
   static const String keyProtectedModeEnabled = 'key-protected-mode-enabled';
@@ -138,10 +144,6 @@ class SettingsRepository {
       'lineHeight': _settings.getValue<double>(
         keyLineHeight,
         defaultValue: 1.5,
-      ),
-      'continuousReadingMode': _settings.getValue<bool>(
-        keyContinuousReadingMode,
-        defaultValue: false,
       ),
       'showOtzarHachochma': _settings.getValue<bool>(
         keyShowOtzarHachochma,
@@ -265,6 +267,15 @@ class SettingsRepository {
         keyCompactMenuMode,
         defaultValue: false,
       ),
+      'hiddenBuiltInToolIds': _parseToolIdSet(_settings.getValue<String>(
+        keyHiddenBuiltInToolIds,
+        defaultValue: '',
+      )),
+      'builtInToolsPinnedToNavRail':
+          _parseToolIdSet(_settings.getValue<String>(
+        keyBuiltInToolsPinnedToNavRail,
+        defaultValue: '',
+      )),
 
       // Protected Mode
       'protectedModeEnabled': _settings.getValue<bool>(
@@ -366,10 +377,6 @@ class SettingsRepository {
 
   Future<void> updateLineHeight(double value) async {
     await _settings.setValue(keyLineHeight, value);
-  }
-
-  Future<void> updateContinuousReadingMode(bool value) async {
-    await _settings.setValue(keyContinuousReadingMode, value);
   }
 
   Future<void> updateShowOtzarHachochma(bool value) async {
@@ -494,6 +501,31 @@ class SettingsRepository {
 
   Future<void> updateCompactMenuMode(bool value) async {
     await _settings.setValue(keyCompactMenuMode, value);
+  }
+
+  Future<void> updateHiddenBuiltInToolIds(Set<String> value) async {
+    await _settings.setValue(keyHiddenBuiltInToolIds, _serializeToolIdSet(value));
+  }
+
+  Future<void> updateBuiltInToolsPinnedToNavRail(Set<String> value) async {
+    await _settings.setValue(
+        keyBuiltInToolsPinnedToNavRail, _serializeToolIdSet(value));
+  }
+
+  /// פירוק רשימת מזהי כלים מ-CSV. מתעלם מערכים ריקים ומ-whitespace.
+  static Set<String> _parseToolIdSet(String raw) {
+    if (raw.isEmpty) return <String>{};
+    return raw
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+  }
+
+  /// סדרת מזהי כלים ל-CSV. ממוין דטרמיניסטית.
+  static String _serializeToolIdSet(Set<String> value) {
+    final list = value.toList()..sort();
+    return list.join(',');
   }
 
   // Protected Mode
@@ -712,7 +744,6 @@ class SettingsRepository {
         keyCommentatorsFontFamily, AppFonts.defaultCommentatorsFont);
     await _settings.setValue(keyCommentatorsFontSize, 22.0);
     await _settings.setValue(keyLineHeight, 1.5);
-    await _settings.setValue(keyContinuousReadingMode, false);
     await _settings.setValue(keyShowOtzarHachochma, false);
     await _settings.setValue(keyShowHebrewBooks, false);
     await _settings.setValue(keyShowExternalBooks, false);

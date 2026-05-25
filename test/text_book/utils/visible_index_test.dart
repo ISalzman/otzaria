@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -86,6 +87,213 @@ void main() {
 
       expect(topmostVisibleIndex(listener.itemPositions.value), 5);
       expect(bottommostVisibleIndex(listener.itemPositions.value), 9);
+    });
+  });
+
+  // ─── תרגום segmentIndex ⇄ source line — קריטי לסימניות, TOC, PDF, deep-links ───
+  group('resolveTopmostSourceLine', () {
+    test('מצב רגיל — מחזיר את ה-itemIndex המינימלי (זהה לשורת מקור)', () {
+      // segments[i].startLineIndex == i במצב הרגיל.
+      final segments =
+          buildReadingSegments(['א', 'ב', 'ג', 'ד'], continuous: false);
+      expect(
+        resolveTopmostSourceLine(
+          positions: [_pos(2), _pos(3)],
+          continuousReadingMode: false,
+          readingSegments: segments,
+        ),
+        2,
+      );
+    });
+
+    test('מצב רצף — מתרגם segmentIndex לשורת מקור הראשונה של הפסקה', () {
+      // ['<h1>x</h1>', 'a', 'b', 'c', 'd'] במצב רצף:
+      //   segment 0 = header (line 0)
+      //   segment 1 = paragraph (lines 1-4)
+      final segments = buildReadingSegments(
+        ['<h1>x</h1>', 'a', 'b', 'c', 'd'],
+        continuous: true,
+      );
+      // segmentIndex 1 → startLineIndex = 1 (לא 1 בכל מקרה - כאן זה צירוף מקרים).
+      expect(
+        resolveTopmostSourceLine(
+          positions: [_pos(1)],
+          continuousReadingMode: true,
+          readingSegments: segments,
+        ),
+        1,
+      );
+    });
+
+    test('מצב רצף עם פסקאות נפרדות — segmentIndex≠sourceLineIndex', () {
+      // ['<h1>x</h1>', 'a', '<h1>y</h1>', 'b', 'c']
+      //   seg 0 = header (line 0)
+      //   seg 1 = 'a' (line 1)
+      //   seg 2 = header (line 2)
+      //   seg 3 = paragraph (lines 3-4)
+      final segments = buildReadingSegments(
+        ['<h1>x</h1>', 'a', '<h1>y</h1>', 'b', 'c'],
+        continuous: true,
+      );
+      // segmentIndex 3 → startLineIndex = 3.
+      expect(
+        resolveTopmostSourceLine(
+          positions: [_pos(3)],
+          continuousReadingMode: true,
+          readingSegments: segments,
+        ),
+        3,
+      );
+    });
+
+    test('positions ריק → 0', () {
+      expect(
+        resolveTopmostSourceLine(
+          positions: const <ItemPosition>[],
+          continuousReadingMode: true,
+          readingSegments: const [],
+        ),
+        0,
+      );
+    });
+
+    test('continuous=true אבל segments ריק → fallback להתנהגות הרגילה', () {
+      // הגנה: אם השדה לא חושב עדיין, לא רוצים לחזור 0 בטעות.
+      expect(
+        resolveTopmostSourceLine(
+          positions: [_pos(5)],
+          continuousReadingMode: true,
+          readingSegments: const [],
+        ),
+        5,
+      );
+    });
+
+    test('segmentIndex מחוץ לטווח של segments → 0 (הגנה)', () {
+      final segments = buildReadingSegments(['א'], continuous: true);
+      expect(
+        resolveTopmostSourceLine(
+          positions: [_pos(99)],
+          continuousReadingMode: true,
+          readingSegments: segments,
+        ),
+        0,
+      );
+    });
+
+    test('positions לא ממוין — בוחר את ה-segmentIndex המינימלי', () {
+      // הבאג של .first: ב-itemPositions הוא Set שסדר ההכנסה שלו לא בהכרח
+      // מסכים עם האינדקס. בלי .reduce(min), קוראים סגמנט שגוי.
+      final segments = buildReadingSegments(
+        ['<h1>x</h1>', 'a', 'b', 'c'],
+        continuous: true,
+      );
+      expect(
+        resolveTopmostSourceLine(
+          positions: [_pos(1), _pos(0)],
+          continuousReadingMode: true,
+          readingSegments: segments,
+        ),
+        0,
+      );
+    });
+  });
+
+  group('resolveBottommostSourceLine', () {
+    test('מצב רגיל — מחזיר את ה-itemIndex המקסימלי', () {
+      final segments =
+          buildReadingSegments(['א', 'ב', 'ג'], continuous: false);
+      expect(
+        resolveBottommostSourceLine(
+          positions: [_pos(0), _pos(1), _pos(2)],
+          continuousReadingMode: false,
+          readingSegments: segments,
+        ),
+        2,
+      );
+    });
+
+    test('מצב רצף — מחזיר את שורת המקור האחרונה של הפסקה האחרונה הנראית', () {
+      // ['a', 'b', 'c'] במצב רצף → פסקה אחת [0,1,2].
+      // segmentIndex 0 → sourceLineIndices.last = 2.
+      final segments =
+          buildReadingSegments(['a', 'b', 'c'], continuous: true);
+      expect(
+        resolveBottommostSourceLine(
+          positions: [_pos(0)],
+          continuousReadingMode: true,
+          readingSegments: segments,
+        ),
+        2,
+      );
+    });
+
+    test('positions ריק → 0', () {
+      expect(
+        resolveBottommostSourceLine(
+          positions: const <ItemPosition>[],
+          continuousReadingMode: true,
+          readingSegments: const [],
+        ),
+        0,
+      );
+    });
+  });
+
+  group('resolveItemIndexForSourceLine', () {
+    test('segments ריק → מחזיר את שורת המקור (אין מה לתרגם)', () {
+      expect(
+        resolveItemIndexForSourceLine(
+          lineIndex: 7,
+          readingSegments: const [],
+        ),
+        7,
+      );
+    });
+
+    test('מצב רגיל — שורה N היא segmentIndex N', () {
+      final segments =
+          buildReadingSegments(['א', 'ב', 'ג'], continuous: false);
+      expect(
+        resolveItemIndexForSourceLine(
+          lineIndex: 1,
+          readingSegments: segments,
+        ),
+        1,
+      );
+    });
+
+    test('מצב רצף — שורות בפסקה מתרגמות לאותו segmentIndex', () {
+      // ['<h1>x</h1>', 'a', 'b', 'c']
+      //   seg 0 = header (line 0)
+      //   seg 1 = paragraph (lines 1, 2, 3)
+      final segments = buildReadingSegments(
+        ['<h1>x</h1>', 'a', 'b', 'c'],
+        continuous: true,
+      );
+      expect(
+        resolveItemIndexForSourceLine(lineIndex: 1, readingSegments: segments),
+        1,
+      );
+      expect(
+        resolveItemIndexForSourceLine(lineIndex: 2, readingSegments: segments),
+        1,
+      );
+      expect(
+        resolveItemIndexForSourceLine(lineIndex: 3, readingSegments: segments),
+        1,
+      );
+    });
+
+    test('שורה שתואמת כותרת — מקבלת את segmentIndex של הכותרת', () {
+      final segments = buildReadingSegments(
+        ['<h1>x</h1>', 'a', 'b'],
+        continuous: true,
+      );
+      expect(
+        resolveItemIndexForSourceLine(lineIndex: 0, readingSegments: segments),
+        0,
+      );
     });
   });
 }

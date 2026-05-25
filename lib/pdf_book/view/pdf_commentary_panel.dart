@@ -8,8 +8,11 @@ import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentary_content.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
@@ -46,6 +49,19 @@ class PdfCommentaryPanel extends StatefulWidget {
   final int? initialTabIndex;
   final ValueChanged<int>? onTabChanged;
   final ValueListenable<int>? openFilterRequest;
+  final ValueNotifier<int>? openFilterNotifier;
+
+  /// כשאמת — מציג כמסך מלא (כמו CommentatorsTabScreen) ללא כרטיסיות פאנל
+  final bool isFullScreen;
+
+  /// override לטווח השורות בטקסט (לכרטסייה עצמאית)
+  final int? lineStartOverride;
+  final int? lineEndOverride;
+
+  /// חיפוש חיצוני — כשמסופק, מסתיר שורת חיפוש פנימית
+  final TextEditingController? externalSearchController;
+  final ValueNotifier<int>? externalTotalResultsNotifier;
+  final ValueNotifier<int>? externalCurrentIndexNotifier;
 
   const PdfCommentaryPanel({
     super.key,
@@ -58,13 +74,20 @@ class PdfCommentaryPanel extends StatefulWidget {
     this.initialTabIndex,
     this.onTabChanged,
     this.openFilterRequest,
+    this.openFilterNotifier,
+    this.isFullScreen = false,
+    this.lineStartOverride,
+    this.lineEndOverride,
+    this.externalSearchController,
+    this.externalTotalResultsNotifier,
+    this.externalCurrentIndexNotifier,
   });
 
   @override
-  State<PdfCommentaryPanel> createState() => _PdfCommentaryPanelState();
+  State<PdfCommentaryPanel> createState() => PdfCommentaryPanelState();
 }
 
-class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
+class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late VoidCallback _tabControllerListener;
@@ -84,10 +107,13 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
 
   String? _savedSelectedText;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = '';
   int _currentSearchIndex = 0;
   int _totalSearchResults = 0;
   bool _allExpanded = true;
+  // האם להציג את שדה החיפוש (true) או את שורת ארבעת הלחצנים (false)
+  bool _showSearchField = false;
   final Map<String, bool> _expansionStates = {};
 
   // Anti-jitter search stats
@@ -158,6 +184,33 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     return -1;
   }
 
+  void _handleSearchFocusChange() {
+    if (!mounted) return;
+    if (!_searchFocusNode.hasFocus &&
+        _showSearchField &&
+        _searchController.text.isEmpty) {
+      setState(() => _showSearchField = false);
+    }
+  }
+
+  void _openInlineSearch() {
+    setState(() => _showSearchField = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _searchFocusNode.requestFocus();
+    });
+  }
+
+  void _clearSearchAndCloseField() {
+    _searchController.clear();
+    setState(() {
+      _searchQuery = '';
+      _currentSearchIndex = 0;
+      _totalSearchResults = 0;
+      _searchResultsPerLink.clear();
+      _showSearchField = false;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -176,7 +229,31 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     _tabController.addListener(_tabControllerListener);
     widget.openFilterRequest?.addListener(_handleOpenFilterRequest);
     _lastSeenFilterRequest = widget.openFilterRequest?.value ?? 0;
+    widget.openFilterNotifier?.addListener(_onOpenFilterRequest);
+    widget.externalSearchController?.addListener(_onExternalSearchChanged);
+    _searchFocusNode.addListener(_handleSearchFocusChange);
     _loadCommentatorGroups();
+  }
+
+  void _onExternalSearchChanged() {
+    final text = widget.externalSearchController!.text;
+    if (!mounted) return;
+    setState(() {
+      _searchQuery = text;
+      _currentSearchIndex = 0;
+      if (text.isEmpty) {
+        _searchResultsPerLink.clear();
+        _totalSearchResults = 0;
+      }
+    });
+    widget.externalTotalResultsNotifier?.value = _totalSearchResults;
+    widget.externalCurrentIndexNotifier?.value = _currentSearchIndex;
+  }
+
+  void _onOpenFilterRequest() {
+    if (mounted) {
+      setState(() => _showFilterTab = true);
+    }
   }
 
   Future<void> _loadCommentatorGroups() async {
@@ -235,6 +312,10 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       // עלול לחסום פתיחות עתידיות עד שה-counter החדש "ישיג" אותו.
       _lastSeenFilterRequest = widget.openFilterRequest?.value ?? 0;
     }
+    if (oldWidget.openFilterNotifier != widget.openFilterNotifier) {
+      oldWidget.openFilterNotifier?.removeListener(_onOpenFilterRequest);
+      widget.openFilterNotifier?.addListener(_onOpenFilterRequest);
+    }
 
     if (oldWidget.tab != widget.tab) {
       _visibleContentCache = null;
@@ -257,8 +338,30 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     _searchUpdateDebounce?.cancel();
     _tabController.removeListener(_tabControllerListener);
     widget.openFilterRequest?.removeListener(_handleOpenFilterRequest);
+    widget.openFilterNotifier?.removeListener(_onOpenFilterRequest);
+    widget.externalSearchController?.removeListener(_onExternalSearchChanged);
+    _searchFocusNode.removeListener(_handleSearchFocusChange);
+    _searchFocusNode.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// ניווט לתוצאת חיפוש קודמת (להפעלה מ-PdfCommentatorsTabScreen)
+  void navigateSearchPrev() {
+    if (_currentSearchIndex > 0) {
+      setState(() => _currentSearchIndex--);
+      widget.externalCurrentIndexNotifier?.value = _currentSearchIndex;
+      _scrollToSearchResult();
+    }
+  }
+
+  /// ניווט לתוצאת חיפוש הבאה (להפעלה מ-PdfCommentatorsTabScreen)
+  void navigateSearchNext() {
+    if (_currentSearchIndex < _totalSearchResults - 1) {
+      setState(() => _currentSearchIndex++);
+      widget.externalCurrentIndexNotifier?.value = _currentSearchIndex;
+      _scrollToSearchResult();
+    }
   }
 
   void _updateSearchResultsCount(Link link, int count) {
@@ -297,6 +400,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             _totalSearchResults > 0) {
           _currentSearchIndex = 0;
         }
+        widget.externalTotalResultsNotifier?.value = _totalSearchResults;
+        widget.externalCurrentIndexNotifier?.value = _currentSearchIndex;
       });
     });
   }
@@ -325,6 +430,24 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isFullScreen) {
+      // במצב fullscreen: הכותרת + הניווט מופעלים מ-PdfCommentatorsTabScreen.
+      // הפאנל מציג רק את תוכן המפרשים (כולל שורת חיפוש ופילטר)
+      return SelectionArea(
+        contextMenuBuilder: (context, selectableRegionState) {
+          return const SizedBox.shrink();
+        },
+        onSelectionChanged: (selection) {
+          if (selection != null && selection.plainText.isNotEmpty) {
+            setState(() {
+              _savedSelectedText = selection.plainText;
+            });
+          }
+        },
+        child: _buildCommentariesView(),
+      );
+    }
+
     return Column(
       children: [
         // שורת הכרטיסיות
@@ -442,132 +565,148 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: Row(
-        children: [
-          CommentatorsFilterButton(
-            isActive: false,
+      child: _showSearchField ? _buildSearchFieldRow() : _buildButtonsRow(),
+    );
+  }
+
+  Widget _buildButtonsRow() {
+    const double gap = 16;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // 1. בחירת מפרשים
+        CommentatorsFilterButton(
+          isActive: false,
+          onPressed: () {
+            setState(() {
+              _showFilterTab = true;
+            });
+          },
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+          ),
+          iconSize: 20,
+        ),
+        // 2. הרחב/כווץ הכל — רק כשיש מפרשים פעילים (לוגיקה מקורית)
+        if (widget.tab.activeCommentators.isNotEmpty) ...[
+          const SizedBox(width: gap),
+          IconButton(
+            icon: Icon(
+              _allExpanded
+                  ? FluentIcons.arrow_collapse_all_24_regular
+                  : FluentIcons.arrow_expand_all_24_regular,
+            ),
+            tooltip:
+                _allExpanded ? 'כווץ את כל המפרשים' : 'הרחב את כל המפרשים',
             onPressed: () {
               setState(() {
-                _showFilterTab = true;
+                final nextExpanded = !_allExpanded;
+                _allExpanded = nextExpanded;
+
+                for (final key in _expansionStates.keys.toList()) {
+                  _expansionStates[key] = nextExpanded;
+                }
+                for (final group in _orderedGroups) {
+                  _expansionStates[group.bookTitle] = nextExpanded;
+                }
               });
             },
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(
-              minWidth: 40,
-              minHeight: 40,
-            ),
-            iconSize: 20,
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: RtlTextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'חפש בתוך המפרשים המוצגים...',
-                prefixIcon: const Icon(FluentIcons.search_24_regular),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_totalSearchResults > 0) ...[
-                            Text(
-                              '${_currentSearchIndex + 1}/$_totalSearchResults',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon:
-                                  const Icon(FluentIcons.chevron_up_24_regular),
-                              iconSize: 20,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                  minWidth: 24, minHeight: 24),
-                              onPressed: _currentSearchIndex > 0
-                                  ? () {
-                                      setState(() {
-                                        _currentSearchIndex--;
-                                      });
-                                      _scrollToSearchResult();
-                                    }
-                                  : null,
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                  FluentIcons.chevron_down_24_regular),
-                              iconSize: 20,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                  minWidth: 24, minHeight: 24),
-                              onPressed:
-                                  _currentSearchIndex < _totalSearchResults - 1
-                                      ? () {
-                                          setState(() {
-                                            _currentSearchIndex++;
-                                          });
-                                          _scrollToSearchResult();
-                                        }
-                                      : null,
-                            ),
-                          ],
-                          IconButton(
-                            icon: const Icon(FluentIcons.dismiss_24_regular),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _searchQuery = '';
-                                _currentSearchIndex = 0;
-                                _totalSearchResults = 0;
-                                _searchResultsPerLink.clear();
-                              });
-                            },
-                          ),
-                        ],
-                      )
-                    : null,
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8.0),
+        ],
+        const SizedBox(width: gap),
+        // 3. פתיחה בכרטיסייה חדשה
+        IconButton(
+          icon: const Icon(FluentIcons.open_24_regular),
+          tooltip: 'פתח כרטסיית מפרשים',
+          onPressed: () => context.read<TabsBloc>().add(
+                AddTab(
+                  PdfCommentatorsTab(sourceTab: widget.tab),
+                  insertAdjacent: true,
                 ),
               ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                  _currentSearchIndex = 0;
-                  if (value.isEmpty) {
-                    _searchResultsPerLink.clear();
-                    _totalSearchResults = 0;
-                  }
-                });
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (widget.tab.activeCommentators.isNotEmpty)
-            IconButton(
-              icon: Icon(
-                _allExpanded
-                    ? FluentIcons.arrow_collapse_all_24_regular
-                    : FluentIcons.arrow_expand_all_24_regular,
-              ),
-              tooltip:
-                  _allExpanded ? 'כווץ את כל המפרשים' : 'הרחב את כל המפרשים',
-              onPressed: () {
-                setState(() {
-                  final nextExpanded = !_allExpanded;
-                  _allExpanded = nextExpanded;
+        ),
+        const SizedBox(width: gap),
+        // 4. הפעלת שדה החיפוש
+        IconButton(
+          icon: const Icon(FluentIcons.search_24_regular),
+          tooltip: 'חיפוש',
+          onPressed: _openInlineSearch,
+        ),
+      ],
+    );
+  }
 
-                  // החל על כל הקבוצות שכבר נצפו/נטענו כדי שהלחצן ישפיע מיידית
-                  for (final key in _expansionStates.keys.toList()) {
-                    _expansionStates[key] = nextExpanded;
-                  }
-                  for (final group in _orderedGroups) {
-                    _expansionStates[group.bookTitle] = nextExpanded;
-                  }
-                });
-              },
+  Widget _buildSearchFieldRow() {
+    return RtlTextField(
+      focusNode: _searchFocusNode,
+      controller: _searchController,
+      decoration: InputDecoration(
+        hintText: 'חפש בתוך המפרשים המוצגים...',
+        prefixIcon: const Icon(FluentIcons.search_24_regular),
+        suffixIcon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_searchQuery.isNotEmpty && _totalSearchResults > 0) ...[
+              Text(
+                '${_currentSearchIndex + 1}/$_totalSearchResults',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(FluentIcons.chevron_up_24_regular),
+                iconSize: 20,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 24, minHeight: 24),
+                onPressed: _currentSearchIndex > 0
+                    ? () {
+                        setState(() {
+                          _currentSearchIndex--;
+                        });
+                        _scrollToSearchResult();
+                      }
+                    : null,
+              ),
+              IconButton(
+                icon: const Icon(FluentIcons.chevron_down_24_regular),
+                iconSize: 20,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 24, minHeight: 24),
+                onPressed: _currentSearchIndex < _totalSearchResults - 1
+                    ? () {
+                        setState(() {
+                          _currentSearchIndex++;
+                        });
+                        _scrollToSearchResult();
+                      }
+                    : null,
+              ),
+            ],
+            IconButton(
+              icon: const Icon(FluentIcons.dismiss_24_regular),
+              tooltip: 'סגור חיפוש',
+              onPressed: _clearSearchAndCloseField,
             ),
-        ],
+          ],
+        ),
+        isDense: true,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.0),
+        ),
       ),
+      onChanged: (value) {
+        setState(() {
+          _searchQuery = value;
+          _currentSearchIndex = 0;
+          if (value.isEmpty) {
+            _searchResultsPerLink.clear();
+            _totalSearchResults = 0;
+          }
+        });
+      },
     );
   }
 
@@ -578,7 +717,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
 
     return Column(
       children: [
-        _buildSearchBar(),
+        // במצב fullscreen עם חיפוש חיצוני, מסתיר שורת חיפוש פנימית
+        if (widget.externalSearchController == null) _buildSearchBar(),
         Expanded(
           child: _buildCommentariesListContent(),
         ),
@@ -946,7 +1086,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             turns: isExpanded ? -0.25 : 0,
             duration: const Duration(milliseconds: 200),
             child: Icon(
-              Icons.keyboard_arrow_left,
+              FluentIcons.chevron_left_24_regular,
               size: 20,
               color: Theme.of(context)
                   .colorScheme
@@ -1099,7 +1239,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   _PdfVisibleContentCache? _getVisibleContent() {
-    final currentLine = widget.tab.currentTextLineNumber;
+    final currentLine =
+        widget.lineStartOverride ?? widget.tab.currentTextLineNumber;
     if (currentLine == null) {
       _visibleContentCache = null;
       return null;
@@ -1170,7 +1311,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   ({int startLine, int endLine}) _getCurrentRange(int currentLine) {
-    final endLine = widget.tab.currentTextLineNumberEnd ?? currentLine + 50;
+    final endLine = widget.lineEndOverride ??
+        (widget.tab.currentTextLineNumberEnd ?? currentLine + 50);
     return (startLine: currentLine, endLine: endLine);
   }
 
@@ -1301,7 +1443,7 @@ class _CollapsibleCommentaryGroupState
                   turns: widget.isExpanded ? -0.25 : 0,
                   duration: const Duration(milliseconds: 200),
                   child: Icon(
-                    Icons.keyboard_arrow_left,
+                    FluentIcons.chevron_left_24_regular,
                     size: 20,
                     color: Theme.of(context)
                         .colorScheme

@@ -17,7 +17,11 @@ import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dar
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/widgets/feedback/loading_indicator.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/link_types.dart';
@@ -51,6 +55,7 @@ class PageShapeScreen extends StatefulWidget {
   final ValueNotifier<int?>? sidebarTabNotifier;
   final ValueChanged<String?>? onOpenSearch;
   final ScrollOffsetController? scrollOffsetController;
+  final TextBookTab? tab;
 
   const PageShapeScreen({
     super.key,
@@ -58,6 +63,7 @@ class PageShapeScreen extends StatefulWidget {
     this.sidebarTabNotifier,
     this.onOpenSearch,
     this.scrollOffsetController,
+    this.tab,
   });
 
   @override
@@ -382,6 +388,14 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       bookTitleOverride: state.book.title,
       onSelectedCommentatorsOverrideChanged: (selected) =>
           _saveRightPaneCommentators(state, selected),
+      onOpenInNewTab: widget.tab == null
+          ? null
+          : () => context.read<TabsBloc>().add(
+                AddTab(
+                  CommentatorsTab(sourceTab: widget.tab!),
+                  insertAdjacent: true,
+                ),
+              ),
     );
   }
 

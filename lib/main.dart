@@ -9,6 +9,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show FrameCallback;
 import 'package:flutter/services.dart';
 import 'package:flutter_single_instance/flutter_single_instance.dart';
 import 'package:window_manager/window_manager.dart';
@@ -77,8 +78,10 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:otzaria/core/splash_screen.dart';
+import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_packager_cli.dart';
 import 'package:otzaria/plugins/services/plugin_protocol_registration_service.dart';
+import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 // Updated automatically by version update scripts - do not edit manually
@@ -482,12 +485,73 @@ Future<void> _initializeProcessSingletons() async {
   await createDirs();
   await loadCerts();
 
+  // שירות ההתראות (לוח השנה) ושירות דיווחי השגיאות אינם חיוניים להצגת
+  // המסך הראשי. tz.initializeTimeZones + plugin init של flutter_local_notifications
+  // יכולים לקחת מאות מילי-שניות ב-Windows, ודיווחי השגיאות הם רק Timer.periodic.
+  unawaited(_runDeferredNotificationService());
+  unawaited(_runDeferredErrorReportFlush());
+}
+
+Future<void> _initializeRestartableRuntime() async {
+  // initHive נקרא כבר ב-_initializeProcessSingletons. הקריאה הכפולה כאן
+  // הייתה no-op (Hive.openBox מחזיר box קיים), אבל בכל זאת חוסכת קצת זמן
+  // בקריאה הראשונה. ב-restart אין צורך לפתוח שוב — boxes לא נסגרים.
+  await SqliteDataProvider.instance.initialize();
+
+  // הגדרת cache של pdfrx — לא חיונית להצגת המסך הראשי. PDF הראשון יקבל
+  // cache ברירת מחדל אם זה עוד לא הוגדר.
+  unawaited(_runDeferredPdfrxCacheInit());
+
+  // initPluginDatabaseSources היא רישום סינכרוני קצר (in-memory only) של
+  // המקורות שהאפליקציה מציעה לתוספים. חייב לרוץ לפני שתוסף יקרא ל-
+  // database.listSources — אחרת תוסף שנפתח מוקדם יראה את כל המקורות
+  // כלא-זמינים (regression: ראה PluginDatabaseService._registry.getSource).
+  await initPluginDatabaseSources();
+
+  // PluginCrashGuard.ensureInitialized חייב להסתיים לפני שטעינת תוסף מתחילה.
+  // PluginTabPage.markLoadAttemptSync דורש state אתחל (אחרת ה-canary לא נשמר
+  // והתוסף לא ייכנס ל-quarantine אם יקרוס), ו-PluginCrashGuard.isBlocked
+  // מחזיר false כל עוד _blocked הוא null. הקריאה זולה (קריאת JSON קטן).
+  await PluginCrashGuard.ensureInitialized()
+      .catchError((Object error, StackTrace stackTrace) {
+    _logNonFatalInitializationError(
+        'Plugin crash guard initialization', error, stackTrace);
+  });
+
+  // גיבוי אוטומטי ורישום פרוטוקול אינם נחוצים להצגת ה-UI הראשי (טאבים,
+  // ספרים, ניווט). הם מועברים ל-unawaited כדי שלא יעכבו את ה-bootstrap —
+  // אחרת ב-Windows רישום הפרוטוקול לבדו מריץ 10 תת-תהליכי reg.exe סדרתית,
+  // מה שמוסיף כמה שניות עד שהטאבים השמורים נטענים. ראה
+  // _runDeferredAutoBackup ו-_runDeferredProtocolRegistration למטה.
+  unawaited(_runDeferredAutoBackup());
+  unawaited(_runDeferredProtocolRegistration());
+
+  // פרי-וורם של WebView2 environment ברקע. הפעם הראשונה שיוצרים סביבת
+  // WebView2 ב-Windows מצמיחה כמה תהליכי-בן של Edge ולוקחת 1-2 שניות
+  // CPU + רישות I/O. אם המשתמש פותח תוסף בפעם הראשונה — הוא רואה את
+  // ההשהיה הזו כטאב לבן/קפוא. ביצוע ה-init פה, אחרי שכל שאר ה-bootstrap
+  // סיים, מעביר את העלות לרקע בעוד ה-UI מציג את המסך הראשי.
+  //
+  // קריאה מקבילית לאותה initialize ע"י plugin_tab_page (כשהמשתמש פותח
+  // תוסף לפני שה-pre-warm הסתיים) בטוחה — ה-WebViewEnvironmentHolder
+  // עצמו עוטף את ה-init הראשון ב-future ששמור, וקוראים מאוחרים יחלקו
+  // את אותו future. אין סיכוי לכפילות של Edge process trees.
+  //
+  // אנחנו לא await כדי לא לעכב את ה-bootstrap; השגיאה הופכת ל-non-fatal.
+  // עלות: ~100MB RAM לתהליכי Edge הילדים, מנוקים ע"י ה-Job Object
+  // בעת סגירת התהליך — אז לא יוותרו זומבים גם אם המשתמש לעולם לא יפתח תוסף.
+  unawaited(_preWarmWebViewEnvironment());
+}
+
+Future<void> _runDeferredNotificationService() async {
   try {
     await NotificationService().init();
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Notification service', error, stackTrace);
   }
+}
 
+Future<void> _runDeferredErrorReportFlush() async {
   try {
     // המופע הארוך-טווח: רץ עם Timer.periodic של 5 דקות, מחזיק http.Client
     // עם connection pool שעלול לתקוע את היציאה ב-Windows admin install.
@@ -502,10 +566,7 @@ Future<void> _initializeProcessSingletons() async {
   }
 }
 
-Future<void> _initializeRestartableRuntime() async {
-  await initHive();
-  await SqliteDataProvider.instance.initialize();
-
+Future<void> _runDeferredPdfrxCacheInit() async {
   try {
     final cacheDir = await getTemporaryDirectory();
     Pdfrx.cacheDirectoryPath = cacheDir.path;
@@ -513,9 +574,9 @@ Future<void> _initializeRestartableRuntime() async {
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Pdfrx cache directory', error, stackTrace);
   }
+}
 
-  await initPluginDatabaseSources();
-
+Future<void> _runDeferredAutoBackup() async {
   try {
     if (await BackupService.shouldPerformAutoBackup()) {
       await BackupService.performAutoBackup();
@@ -523,7 +584,9 @@ Future<void> _initializeRestartableRuntime() async {
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Automatic backup', error, stackTrace);
   }
+}
 
+Future<void> _runDeferredProtocolRegistration() async {
   try {
     await PluginProtocolRegistrationService().ensureRegistered();
   } catch (error, stackTrace) {
@@ -535,11 +598,53 @@ Future<void> _initializeRestartableRuntime() async {
   }
 }
 
+Future<void> _preWarmWebViewEnvironment() async {
+  if (kIsWeb || !Platform.isWindows) return;
+  try {
+    // בדיקה לפני pre-warm: אם המשתמש לא התקין שום תוסף, ה-WebView2
+    // environment הוא בזבוז של ~100MB RAM (5-7 תהליכי Edge ילדים).
+    // הבדיקה זולה: השאילתה ל-plugin DB כבר רצה בbootstrap (b-
+    // `initPluginDatabaseSources`), השאילתה כאן רק קוראת את התוצאה.
+    // משתמש שיתקין תוסף מאוחר יותר ייעלם משם את ה-pre-warm רק
+    // בהפעלה הבאה — בפעם הראשונה בכל מקרה יש את ההשהיה של 1-2
+    // שניות שהיא העלות הרגילה של יצירת environment.
+    final installed = await PluginRegistryRepository().getAllPlugins();
+    if (installed.isEmpty) {
+      if (kDebugMode) {
+        debugPrint('WebView2 pre-warm skipped: no plugins installed');
+      }
+      return;
+    }
+    await WebViewEnvironmentHolder.initialize();
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError(
+      'WebView2 environment pre-warm',
+      error,
+      stackTrace,
+    );
+  }
+}
+
 Future<void>? _processInitializationFuture;
 
 Future<void> _ensureBootstrapInitialized() {
   return (_processInitializationFuture ??= _initializeProcessSingletons())
       .then((_) => _initializeRestartableRuntime());
+}
+
+@visibleForTesting
+void scheduleAfterTwoFrames(
+  VoidCallback action, {
+  WidgetsBinding? binding,
+  void Function(FrameCallback callback)? scheduleFrameCallback,
+}) {
+  final schedule =
+      scheduleFrameCallback ?? (binding ?? WidgetsBinding.instance).addPostFrameCallback;
+  schedule((_) {
+    schedule((_) {
+      action();
+    });
+  });
 }
 
 Future<void> _enqueueExternalActivationArgs(List<String> args) async {
@@ -677,7 +782,9 @@ class _AppBootstrapState extends State<AppBootstrap> {
           if (kDebugMode) debugPrint('Failed to warm up system fonts: $e');
         }));
         unawaited(ReferenceBooksCache.instance.warmUp().catchError((e) {
-          if (kDebugMode) debugPrint('Failed to warm up ReferenceBooksCache: $e');
+          if (kDebugMode) {
+            debugPrint('Failed to warm up ReferenceBooksCache: $e');
+          }
         }));
       });
     }).catchError((Object error, StackTrace stackTrace) {
@@ -732,7 +839,18 @@ class _AppBootstrapState extends State<AppBootstrap> {
             )..add(LoadSettings()),
           ),
           BlocProvider<LibraryBloc>(
-            create: (_) => LibraryBloc()..add(LoadLibrary()),
+            create: (_) {
+              final bloc = LibraryBloc();
+              // LoadLibrary טוען ~1500ms מ-SQLite — חוסם את ה-UI thread גם
+              // בקטעים בין ה-awaits. דוחים בשני פריימים עוקבים כדי לאפשר
+              // ל-ReadingScreen להיבנות ולהיצבע לפני שהטעינה מתחילה.
+              // LibraryBrowser בכל מקרה לא נטען מיד (המשתמש ב-Reading) — הוא
+              // יקבל את ה-state ברגע שיגיע.
+              scheduleAfterTwoFrames(() {
+                bloc.add(LoadLibrary());
+              });
+              return bloc;
+            },
           ),
           BlocProvider<CustomFoldersBloc>(
             create: (context) => CustomFoldersBloc(

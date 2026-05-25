@@ -30,6 +30,13 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 
+/// בדיקה האם שני סטים מכילים את אותם הערכים. שימושי ב-`listenWhen`.
+bool _setEquals(Set<String> a, Set<String> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  return a.containsAll(b);
+}
+
 /// מזהה הכלי שפעיל כרגע ב-ToolsScreen, או `null` אם המסך לא מוצג.
 /// משמש את ה-MainWindowScreen כדי להדגיש את התוסף שבחרת בסרגל הניווט/הבר
 /// כשנבחרה לשונית של תוסף-מוצמד-לסרגל.
@@ -138,7 +145,7 @@ class PluginToolDescriptor extends ToolDescriptor {
       : super(
             toolId: plugin.pluginId,
             label: plugin.manifest.toolTabTitle,
-            order: plugin.manifest.toolTabOrder);
+            order: plugin.effectiveToolTabOrder);
 
   @override
   Widget buildTab(BuildContext context) {
@@ -154,7 +161,14 @@ class PluginToolDescriptor extends ToolDescriptor {
 
   @override
   Widget buildPage(BuildContext context) => PluginTabPage(
-        key: ValueKey(plugin.pluginId),
+        // ה-key כולל גם את `version` ו-`updatedAt` כדי שעדכון של התוסף יאלץ
+        // יצירה מחדש של ה-State. ל-PluginTabPage יש לוגיקה ב-initState
+        // שתלויה ב-plugin (resolvedRootPath, bridge, adapter) — בלי הרחבת
+        // ה-key Flutter היה משתמש שוב ב-State הישן עם הנתיב הישן.
+        key: ValueKey(
+          'plugin-tab-${plugin.pluginId}-${plugin.version}-'
+          '${plugin.updatedAt.millisecondsSinceEpoch}',
+        ),
         plugin: plugin,
       );
 
@@ -216,6 +230,13 @@ class ToolsScreenState extends State<ToolsScreen>
   bool _showMobileMenu = true;
   InstalledPlugin? _transientPlugin;
   bool _didInitFromBloc = false;
+
+  /// toolId-ים שכבר הוצגו פעם אחת לפחות. בדסקטופ ה-IndexedStack בונה את
+  /// הילדים שלו עצלן: רק כלים שמופיעים פה נבנים בפועל, השאר נשארים
+  /// SizedBox.shrink(). זה מונע יצירה מקבילית של כל ה-WebViews של תוספים
+  /// כשהמשתמש נכנס למסך "כלים", ומקטין את החשיפה לבאגים native של
+  /// flutter_inappwebview_windows בעת אתחול מרובה.
+  final Set<String> _activatedToolIds = {};
   // מונע rebuild מרובה של הטאבים כאשר הזהות המלאה של הלשוניות לא השתנתה
   String _lastDescriptorsSignature = '';
 
@@ -321,7 +342,9 @@ class ToolsScreenState extends State<ToolsScreen>
 
   // ─── Tab / descriptor management ────────────────────────────────────────────
 
-  List<ToolDescriptor> _buildBaseDescriptors() {
+  /// בונה את כל הכלים המובנים, ללא סינון. רשימה זו מהווה את המקור הסמכותי
+  /// לזיהוי כלים מובנים תקפים גם עבור מסך הגדרות הניהול.
+  List<BuiltInToolDescriptor> _buildAllBuiltInDescriptors() {
     return [
       BuiltInToolDescriptor(
         toolId: 'builtin.calendar',
@@ -383,6 +406,14 @@ class ToolsScreenState extends State<ToolsScreen>
     ];
   }
 
+  List<ToolDescriptor> _buildBaseDescriptors() {
+    final hiddenIds =
+        context.read<SettingsBloc>().state.hiddenBuiltInToolIds;
+    return _buildAllBuiltInDescriptors()
+        .where((d) => !hiddenIds.contains(d.toolId))
+        .toList();
+  }
+
   void _closeTransientPanelsForToolId(String? toolId) {
     if (toolId == 'builtin.calendar') {
       _calendarKey.currentState?.closeTransientPanels();
@@ -395,6 +426,11 @@ class ToolsScreenState extends State<ToolsScreen>
 
   void _setSelectedToolId(String? id) {
     _selectedToolId = id;
+    if (id != null) {
+      // מסמנים את הכלי כ"הופעל" כדי שה-IndexedStack בדסקטופ יבנה אותו
+      // ויחזיק אותו בחיים מכאן והלאה.
+      _activatedToolIds.add(id);
+    }
     setActiveToolIdSafely(id, isMounted: () => mounted);
   }
 
@@ -461,14 +497,48 @@ class ToolsScreenState extends State<ToolsScreen>
     }
     _lastDescriptorsSignature = newSignature;
 
+    if (newDescriptors.isEmpty) {
+      void applyEmpty() {
+        _descriptors = [];
+        _pages = [];
+        _setSelectedToolId(null);
+      }
+
+      if (notify) {
+        setState(applyEmpty);
+      } else {
+        applyEmpty();
+      }
+      return;
+    }
+
     String newToolId = _selectedToolId ?? newDescriptors.first.toolId;
     if (!newDescriptors.any((d) => d.toolId == newToolId)) {
       newToolId = newDescriptors.first.toolId;
     }
 
     void applyState() {
+      // re-use של widgets קיימים לפי toolId+updatedAt — כשמשתמש מסדר מחדש
+      // תוספים (drag-and-drop) הסדר משתנה אבל אותם תוספים נמצאים. בנייה
+      // מחדש של PluginTabPage גורמת ל-IndexedStack לבצע dispose ל-WebView
+      // של תוסף שלא בתצוגה, וזה גורם לקריסה ב-flutter_inappwebview_windows.
+      // הצמדת updatedAt למפתח מבטיחה שעדכון תוסף *כן* יבנה widget חדש.
+      String reuseKey(ToolDescriptor d) {
+        if (d is PluginToolDescriptor) {
+          return '${d.toolId}|${d.plugin.updatedAt.microsecondsSinceEpoch}';
+        }
+        return d.toolId;
+      }
+
+      final oldPagesByKey = <String, Widget>{};
+      for (var i = 0; i < _descriptors.length && i < _pages.length; i++) {
+        oldPagesByKey[reuseKey(_descriptors[i])] = _pages[i];
+      }
       _descriptors = newDescriptors;
-      _pages = newDescriptors.map((t) => t.buildPage(context)).toList();
+      _pages = newDescriptors.map((t) {
+        final existing = oldPagesByKey[reuseKey(t)];
+        return existing ?? t.buildPage(context);
+      }).toList();
       _setSelectedToolId(newToolId);
     }
 
@@ -545,12 +615,13 @@ class ToolsScreenState extends State<ToolsScreen>
   }
 
   void resetToCalendar() {
-    if (_selectedToolId != 'builtin.calendar') {
+    // _showMobileMenu חייב להתאפס גם כשהכלי כבר הוא לוח השנה, אחרת במסך צר
+    // המשתמש שהיה בתפריט "כלים" וחזר ללוח שנה ימשיך לראות את התפריט.
+    if (_selectedToolId != 'builtin.calendar' || _showMobileMenu) {
       setState(() {
         _setSelectedToolId('builtin.calendar');
         _showMobileMenu = false;
       });
-      return;
     }
     _requestCalendarFocus();
   }
@@ -568,24 +639,46 @@ class ToolsScreenState extends State<ToolsScreen>
       return;
     }
 
-    // ה-descriptor לא נמצא בלשוניות הנוכחיות. בודקים אם מדובר בתוסף שכן מותקן
-    // אבל סונן מהתצוגה בגלל מצב מנותק — כדי להחזיר שגיאה תיאורית במקום
-    // "הכלי לא נמצא" המטעה.
-    final isOfflineMode = context.read<SettingsBloc>().state.isOfflineMode;
-    if (isOfflineMode) {
-      final blocState = context.read<PluginSystemBloc>().state;
-      if (blocState is PluginSystemLoaded) {
-        InstalledPlugin? hiddenPlugin;
-        for (final p in blocState.plugins) {
-          if (p.pluginId == toolId) {
-            hiddenPlugin = p;
-            break;
-          }
+    // ה-descriptor לא נמצא בלשוניות הנוכחיות. בודקים אם מדובר בכלי קיים
+    // שסונן מהתצוגה — כדי להחזיר שגיאה תיאורית במקום "הכלי לא נמצא" המטעה.
+
+    // בדיקה: כלי מובנה מוסתר
+    final settingsState = context.read<SettingsBloc>().state;
+    final allBuiltIns = _buildAllBuiltInDescriptors();
+    final hiddenBuiltIn = allBuiltIns.cast<BuiltInToolDescriptor?>().firstWhere(
+          (d) => d?.toolId == toolId,
+          orElse: () => null,
+        );
+    if (hiddenBuiltIn != null &&
+        settingsState.hiddenBuiltInToolIds.contains(toolId)) {
+      _clearPendingTool();
+      UiSnack.showError(
+          'הכלי "${hiddenBuiltIn.label}" מוסתר. ניתן להציג אותו דרך הגדרות → ניהול כלים');
+      return;
+    }
+
+    // בדיקה: תוסף מוסתר (hiddenFromTools) או שדורש אינטרנט במצב מנותק
+    final isOfflineMode = settingsState.isOfflineMode;
+    final blocState = context.read<PluginSystemBloc>().state;
+    if (blocState is PluginSystemLoaded) {
+      InstalledPlugin? matchedPlugin;
+      for (final p in blocState.plugins) {
+        if (p.pluginId == toolId) {
+          matchedPlugin = p;
+          break;
         }
-        if (hiddenPlugin != null && hiddenPlugin.requiresNetwork) {
+      }
+      if (matchedPlugin != null) {
+        if (matchedPlugin.hiddenFromTools) {
           _clearPendingTool();
           UiSnack.showError(
-              'התוסף "${hiddenPlugin.name}" דורש חיבור אינטרנט ולא ניתן לפתוח אותו במצב מנותק');
+              'התוסף "${matchedPlugin.name}" מוסתר. ניתן להציג אותו דרך הגדרות → ניהול כלים');
+          return;
+        }
+        if (isOfflineMode && matchedPlugin.requiresNetwork) {
+          _clearPendingTool();
+          UiSnack.showError(
+              'התוסף "${matchedPlugin.name}" דורש חיבור אינטרנט ולא ניתן לפתוח אותו במצב מנותק');
           return;
         }
       }
@@ -934,7 +1027,18 @@ class ToolsScreenState extends State<ToolsScreen>
                                       : IndexedStack(
                                           sizing: StackFit.expand,
                                           index: safeIndex,
-                                          children: _pages,
+                                          // בנייה עצלנית: רק כלים שכבר נבחרו
+                                          // פעם אחת מוצגים כ-widget אמיתי.
+                                          // אחרים נשארים SizedBox.shrink() —
+                                          // החיסכון העיקרי: לא יוצרים WebView
+                                          // לכל תוסף בכניסה למסך "כלים".
+                                          children: List<Widget>.generate(
+                                            _pages.length,
+                                            (i) => _activatedToolIds.contains(
+                                                    _descriptors[i].toolId)
+                                                ? _pages[i]
+                                                : const SizedBox.shrink(),
+                                          ),
                                         ),
                                 ),
                               ),
@@ -972,7 +1076,10 @@ class ToolsScreenState extends State<ToolsScreen>
     return MultiBlocListener(
       listeners: [
         BlocListener<SettingsBloc, SettingsState>(
-          listenWhen: (prev, curr) => prev.isOfflineMode != curr.isOfflineMode,
+          listenWhen: (prev, curr) =>
+              prev.isOfflineMode != curr.isOfflineMode ||
+              !_setEquals(
+                  prev.hiddenBuiltInToolIds, curr.hiddenBuiltInToolIds),
           listener: (context, settingsState) {
             final blocState = context.read<PluginSystemBloc>().state;
             if (blocState is! PluginSystemLoaded) return;
@@ -996,7 +1103,11 @@ class ToolsScreenState extends State<ToolsScreen>
                 final updatedTransient = state.plugins.firstWhere(
                     (p) => p.pluginId == _transientPlugin!.pluginId,
                     orElse: () => _transientPlugin!);
-                _transientPlugin = updatedTransient;
+                if (updatedTransient.hiddenFromTools) {
+                  _transientPlugin = null;
+                } else {
+                  _transientPlugin = updatedTransient;
+                }
               }
               final isOfflineMode =
                   context.read<SettingsBloc>().state.isOfflineMode;

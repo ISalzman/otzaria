@@ -1,4 +1,16 @@
-import 'dart:convert';
+/// תשתית "מצב קריאה רציף" — רינדור בלבד.
+///
+/// **כלל מפתח:** כל ה-state ב-`TextBookBloc` (visibleIndices, selectedIndex,
+/// highlightedLine, חיפוש, קישורים, פסיקות וכו') משתמש ב-**שורות מקור**
+/// כאינדקסים. הסגמנטים נחשבים רק כפריט-תצוגה ב-`ScrollablePositionedList`.
+///
+/// תרגום:
+/// - שורה → סגמנט: [segmentIndexForLine] — לפני קריאת `scrollTo(index:)`.
+/// - viewport → שורות: [sourceLineIndicesForSegmentViewports] — אחרי
+///   `positionsListener` כדי לחשב מחדש visibleIndices ברמת שורות.
+///
+/// **אסור** להזליג segmentIndex אל ה-state של ה-bloc. הוא מקומי לרינדור.
+library;
 
 class ReadingLineRange {
   final int lineIndex;
@@ -19,28 +31,17 @@ class ReadingSegment {
   final List<int> sourceLineIndices;
   final List<ReadingLineRange> lineRanges;
   final bool isHeader;
-  final bool isVirtualHeader;
 
   const ReadingSegment({
     required this.text,
     required this.sourceLineIndices,
     required this.lineRanges,
     required this.isHeader,
-    this.isVirtualHeader = false,
   });
 
   int get startLineIndex => sourceLineIndices.first;
 
   bool containsLine(int lineIndex) => sourceLineIndices.contains(lineIndex);
-
-  int lineForTextOffset(int offset) {
-    for (final range in lineRanges) {
-      if (range.containsOffset(offset)) {
-        return range.lineIndex;
-      }
-    }
-    return startLineIndex;
-  }
 }
 
 class ReadingSegmentViewport {
@@ -65,37 +66,18 @@ bool isReadingHeaderLine(String line) {
   return headerPattern.hasMatch(line);
 }
 
+/// מחשב את רשימת הסגמנטים לרינדור.
+///
+/// במצב הרגיל (`continuous: false`) — כל שורה היא סגמנט נפרד (זה גם
+/// מבטיח שהמיפוי שורה↔סגמנט הוא 1:1 ולא נדרשת המרה).
+///
+/// במצב רציף (`continuous: true`) — שורות עוקבות שאינן כותרת מתמזגות
+/// לפסקה אחת; כותרת (`<h1>`–`<h6>`) שוברת פסקה.
 List<ReadingSegment> buildReadingSegments(
   List<String> lines, {
   required bool continuous,
-  Map<int, List<String>> subtitleHeadingsByLine = const {},
 }) {
-  final hasSubtitleHeadings = subtitleHeadingsByLine.isNotEmpty;
-
   if (!continuous) {
-    if (hasSubtitleHeadings) {
-      final segments = <ReadingSegment>[];
-      for (var index = 0; index < lines.length; index++) {
-        segments
-            .addAll(_subtitleHeadingSegments(subtitleHeadingsByLine, index));
-        segments.add(
-          ReadingSegment(
-            text: lines[index],
-            sourceLineIndices: [index],
-            lineRanges: [
-              ReadingLineRange(
-                lineIndex: index,
-                start: 0,
-                end: lines[index].length,
-              ),
-            ],
-            isHeader: isReadingHeaderLine(lines[index]),
-          ),
-        );
-      }
-      return segments;
-    }
-
     final cached = _lineSegmentsCache[lines];
     if (cached != null) {
       return cached;
@@ -120,11 +102,9 @@ List<ReadingSegment> buildReadingSegments(
     return segments;
   }
 
-  if (!hasSubtitleHeadings) {
-    final cached = _continuousSegmentsCache[lines];
-    if (cached != null) {
-      return cached;
-    }
+  final cached = _continuousSegmentsCache[lines];
+  if (cached != null) {
+    return cached;
   }
 
   final segments = <ReadingSegment>[];
@@ -166,14 +146,6 @@ List<ReadingSegment> buildReadingSegments(
 
   for (var index = 0; index < lines.length; index++) {
     final line = lines[index];
-    final subtitleSegments = _subtitleHeadingSegments(
-      subtitleHeadingsByLine,
-      index,
-    );
-    if (subtitleSegments.isNotEmpty) {
-      flushParagraph();
-      segments.addAll(subtitleSegments);
-    }
 
     if (isReadingHeaderLine(line)) {
       flushParagraph();
@@ -198,41 +170,14 @@ List<ReadingSegment> buildReadingSegments(
   }
 
   flushParagraph();
-  if (!hasSubtitleHeadings) {
-    _continuousSegmentsCache[lines] = segments;
-  }
+  _continuousSegmentsCache[lines] = segments;
   return segments;
 }
 
-List<ReadingSegment> _subtitleHeadingSegments(
-  Map<int, List<String>> subtitleHeadingsByLine,
-  int lineIndex,
-) {
-  final titles = subtitleHeadingsByLine[lineIndex];
-  if (titles == null || titles.isEmpty) {
-    return const [];
-  }
-
-  const htmlEscape = HtmlEscape();
-  return [
-    for (final title in titles)
-      if (title.trim().isNotEmpty)
-        ReadingSegment(
-          text: '<h2>${htmlEscape.convert(title.trim())}</h2>',
-          sourceLineIndices: [lineIndex],
-          lineRanges: [
-            ReadingLineRange(
-              lineIndex: lineIndex,
-              start: 0,
-              end: title.trim().length,
-            ),
-          ],
-          isHeader: true,
-          isVirtualHeader: true,
-        ),
-  ];
-}
-
+/// מאתר את האינדקס של הסגמנט שמכיל את שורת המקור [lineIndex].
+///
+/// משמש בכל אתר קריאה לגלילה (`scrollController.scrollTo(index: ...)`):
+/// השורה הלוגית מתורגמת לסגמנט שאליו צריך לגלול.
 int segmentIndexForLine(List<ReadingSegment> segments, int lineIndex) {
   if (segments.isEmpty) {
     return 0;
@@ -253,6 +198,10 @@ int segmentIndexForLine(List<ReadingSegment> segments, int lineIndex) {
   return segments.length - 1;
 }
 
+/// השבר היחסי של שורת [lineIndex] בתוך הסגמנט [segment] (0..1).
+///
+/// משמש לדיוק עדין של גלילה: אחרי שגולשים לסגמנט, ה-`scrollOffsetController`
+/// מתקדם בשבר הזה בתוך הסגמנט כדי שהשורה הספציפית תהיה גלויה.
 double lineFractionWithinSegment(ReadingSegment segment, int lineIndex) {
   final lineOffset = segment.sourceLineIndices.indexOf(lineIndex);
   if (lineOffset <= 0 || segment.sourceLineIndices.length <= 1) {
@@ -261,20 +210,11 @@ double lineFractionWithinSegment(ReadingSegment segment, int lineIndex) {
   return lineOffset / segment.sourceLineIndices.length;
 }
 
-List<int> sourceLineIndicesForSegments(
-  List<ReadingSegment> segments,
-  Iterable<int> segmentIndices,
-) {
-  final sourceIndices = <int>{};
-  for (final segmentIndex in segmentIndices) {
-    if (segmentIndex < 0 || segmentIndex >= segments.length) {
-      continue;
-    }
-    sourceIndices.addAll(segments[segmentIndex].sourceLineIndices);
-  }
-  return sourceIndices.toList()..sort();
-}
-
+/// ממיר רשימת `ItemPosition` (במונחי segmentIndex) לרשימת שורות-מקור גלויות.
+///
+/// במצב הרגיל זה איזומורפי — segmentIndex == lineIndex, אבל ההמרה עוברת
+/// דרך אותה פונקציה כדי ש-`_resolveVisibleSourceIndices` ב-bloc לא יצטרך
+/// להבדיל בין המצבים.
 List<int> sourceLineIndicesForSegmentViewports(
   List<ReadingSegment> segments,
   Iterable<ReadingSegmentViewport> viewports,

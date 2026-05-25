@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
 import 'package:otzaria/plugins/utils/plugin_version_utils.dart';
+import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'dart:isolate';
 
 class PluginOverwriteException implements Exception {
@@ -117,6 +118,13 @@ class PluginInstallerService {
       await _copyDirectory(tempDir, installDir);
 
       // 4. Save to DB
+      // לעדכון/התקנה-מחדש: שומרים את הסדר הידני של המשתמש.
+      // להתקנה חדשה: אם כבר יש תוספים שסודרו ידנית, התוסף החדש מצטרף
+      // בסוף הסדר — אחרת הוא היה נכנס *לפני* הבלוק המסודר (raw 900 < 1000+).
+      final newUserOrder = existingPlugin != null
+          ? existingPlugin.userOrder
+          : await _repository.getNextUserOrderForNewPlugin();
+
       final plugin = InstalledPlugin(
         pluginId: manifest.id,
         name: manifest.name,
@@ -130,9 +138,13 @@ class PluginInstallerService {
         manifest: manifest,
         installedAt: existingPlugin?.installedAt ?? DateTime.now(),
         updatedAt: DateTime.now(),
+        userOrder: newUserOrder,
       );
 
       await _repository.savePlugin(plugin);
+
+      // אם התוסף היה ב-quarantine (קרס בטעינה קודמת), שדרוג מוצלח מוריד אותו.
+      await PluginCrashGuard.retry(manifest.id);
 
       // Seed grants: for new installs, grant all. For updates:
       // - Only grant permissions that did NOT previously have an explicit decision.

@@ -55,10 +55,11 @@ void main() {
         settingsBloc: settingsBloc,
       );
 
-      final textField = find.byType(TextField);
-      await tester.tap(textField);
-      await tester.pumpAndSettle();
+      // בעיצוב החדש שדה החיפוש מוסתר מאחורי כפתור אייקון; פותחים אותו ידנית.
+      await _openInlineSearch(tester);
 
+      final textField = find.byType(TextField);
+      expect(textField, findsOneWidget);
       expect(_searchFocusNode(tester).hasFocus, isTrue);
 
       await tester.enterText(textField, 'מפרש');
@@ -69,7 +70,7 @@ void main() {
       expect(find.text('מפרש'), findsOneWidget);
     });
 
-    testWidgets('ניקוי החיפוש מחזיר פוקוס לשדה האמיתי של CommentaryListBase',
+    testWidgets('לחיצה על dismiss סוגרת את שדה החיפוש ומנקה את הטקסט',
         (tester) async {
       await _pumpWidget(
         tester,
@@ -77,10 +78,15 @@ void main() {
         settingsBloc: settingsBloc,
       );
 
+      await _openInlineSearch(tester);
+
       final textField = find.byType(TextField);
       await tester.enterText(textField, 'מפרש');
       await tester.pump();
       await tester.pump();
+
+      // שומרים הפניה ל-controller לפני שהשדה נעלם מעץ הוויג'טים.
+      final controller = _searchController(tester);
 
       await tester.tap(
         find.byIcon(FluentIcons.dismiss_24_regular).hitTestable(),
@@ -88,10 +94,17 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(_searchFocusNode(tester).hasFocus, isTrue);
-      expect(_searchController(tester).text, isEmpty);
+      // השדה נסגר וחוזרים לשורת הלחצנים (כולל אייקון החיפוש).
+      expect(find.byType(TextField), findsNothing);
+      expect(find.byIcon(FluentIcons.search_24_regular), findsWidgets);
+      expect(controller.text, isEmpty);
     });
   });
+}
+
+Future<void> _openInlineSearch(WidgetTester tester) async {
+  await tester.tap(find.byIcon(FluentIcons.search_24_regular).first);
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pumpWidget(
