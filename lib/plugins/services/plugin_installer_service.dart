@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
 import 'package:otzaria/plugins/utils/plugin_version_utils.dart';
+import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'dart:isolate';
 
 class PluginOverwriteException implements Exception {
@@ -141,6 +142,9 @@ class PluginInstallerService {
       );
 
       await _repository.savePlugin(plugin);
+
+      // אם התוסף היה ב-quarantine (קרס בטעינה קודמת), שדרוג מוצלח מוריד אותו.
+      await PluginCrashGuard.retry(manifest.id);
 
       // Seed grants: for new installs, grant all. For updates:
       // - Only grant permissions that did NOT previously have an explicit decision.
