@@ -488,14 +488,14 @@ class ShortcutsSettingsTab extends StatelessWidget {
       }
     }
 
-    settingsBloc.add(UpdateShortcut(selectedKey, shortcut));
-
     if (conflictingNames.isNotEmpty) {
-      UiSnack.showWarning(
-        'אזהרה: קיצור זה כבר בשימוש עבור: ${conflictingNames.join(', ')}',
-        duration: const Duration(seconds: 3),
+      UiSnack.showError(
+        'קיצור זה כבר בשימוש עבור: ${conflictingNames.join(', ')}',
       );
+      return;
     }
+
+    settingsBloc.add(UpdateShortcut(selectedKey, shortcut));
   }
 
   Future<void> _resetShortcuts(BuildContext context) async {
