@@ -72,6 +72,7 @@ class _BooksListDialogState extends State<_BooksListDialog> {
       initialDirectory: downloadsDirectory?.path,
       allowedExtensions: ['csv'],
       type: FileType.custom,
+      lockParentWindow: true,
     );
     if (path == null || !mounted) return;
 
