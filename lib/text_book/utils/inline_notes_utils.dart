@@ -24,7 +24,7 @@ String stripInlineNotes(String html) {
 /// בודק אם הספר מכיל לפחות שורה אחת עם הערה inline.
 bool hasInlineNotes(List<String> content) {
   for (final line in content) {
-    if (_footnoteBodyRegExp.hasMatch(line)) return true;
+    if (line.contains('footnote') && _footnoteBodyRegExp.hasMatch(line)) return true;
   }
   return false;
 }

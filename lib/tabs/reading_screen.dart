@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -175,6 +176,12 @@ class _ReadingScreenState extends State<ReadingScreen>
                     child: PageView(
                       key: const ValueKey('normal_tab_view'),
                       controller: _pageController,
+                      // גלילה בין טאבים רק במובייל; בדסקטופ tab-bar הוא
+                      // אמצעי הניווט, ו-PageScrollPhysics מתנגשת עם
+                      // סימון טקסט אופקי ועם גלילה אופקית ב-PDF.
+                      physics: Platform.isAndroid || Platform.isIOS
+                          ? const PageScrollPhysics()
+                          : const NeverScrollableScrollPhysics(),
                       onPageChanged: (index) {
                         if (index < state.tabs.length) {
                           context.read<TabsBloc>().add(SetCurrentTab(index));

@@ -11,6 +11,9 @@ class PdfCommentatorsTab extends OpenedTab {
       : super('מפרשים | ${sourceTab.title}');
 
   @override
+  OpenedTab clone() => PdfCommentatorsTab(sourceTab: sourceTab)..isPinned = isPinned;
+
+  @override
   Map<String, dynamic> toJson() => {
         'title': title,
         'type': 'PdfCommentatorsTab',

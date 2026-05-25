@@ -79,6 +79,7 @@ var
   BooksPage: TWizardPage;
   BooksPathEdit: TEdit;
   BooksPathBrowseBtn: TButton;
+  BooksWarnLabel: TLabel;
   SelectedBooksPath: String;
 
   FeaturesPage: TWizardPage;
@@ -299,19 +300,33 @@ end;
 
 // ─── דף בחירת תיקיית הספרים ─────────────────────────────────────────────────
 
+procedure UpdateBooksWarning(const Path: String);
+begin
+  if BooksWarnLabel = nil then exit;
+  if DirExists(Path) then
+    BooksWarnLabel.Caption :=
+      '⚠ שים לב: תיקייה קיימת כבר בנתיב זה.' + #13#10 +
+      'התקנה זו תמחק את תוכנה ותחליף בספרים החדשים שבחבילה.'
+  else
+    BooksWarnLabel.Caption := '';
+end;
+
 procedure BrowseBooksFolder(Sender: TObject);
 var
   Dir: String;
 begin
   Dir := BooksPathEdit.Text;
   if BrowseForFolder('בחר תיקיית ספרים:', Dir, False) then
+  begin
     BooksPathEdit.Text := Dir;
+    UpdateBooksWarning(Dir);
+  end;
 end;
 
 procedure CreateBooksPage;
 var
   DefaultPath: String;
-  DescLabel, WarnLabel, PathLabel: TLabel;
+  DescLabel, PathLabel: TLabel;
 begin
   BooksPage := CreateCustomPage(CompPage.ID,
     'תיקיית הספרים',
@@ -358,22 +373,17 @@ begin
   BooksPathBrowseBtn.Caption := 'עיון...';
   BooksPathBrowseBtn.OnClick := @BrowseBooksFolder;
 
-  WarnLabel := TLabel.Create(BooksPage);
-  WarnLabel.Parent     := BooksPage.Surface;
-  WarnLabel.Left       := 0;
-  WarnLabel.Top        := BooksPathEdit.Top + BooksPathEdit.Height + ScaleY(8);
-  WarnLabel.Width      := BooksPage.SurfaceWidth;
-  WarnLabel.AutoSize   := False;
-  WarnLabel.WordWrap   := True;
-  WarnLabel.Height     := ScaleY(42);
-  WarnLabel.Font.Color := clRed;
+  BooksWarnLabel := TLabel.Create(BooksPage);
+  BooksWarnLabel.Parent     := BooksPage.Surface;
+  BooksWarnLabel.Left       := 0;
+  BooksWarnLabel.Top        := BooksPathEdit.Top + BooksPathEdit.Height + ScaleY(8);
+  BooksWarnLabel.Width      := BooksPage.SurfaceWidth;
+  BooksWarnLabel.AutoSize   := False;
+  BooksWarnLabel.WordWrap   := True;
+  BooksWarnLabel.Height     := ScaleY(42);
+  BooksWarnLabel.Font.Color := clRed;
 
-  if DirExists(DefaultPath) then
-    WarnLabel.Caption :=
-      '⚠ שים לב: תיקיית ספרים קיימת כבר בנתיב זה.' + #13#10 +
-      'התקנה זו תמחק את תוכנה ותחליף בספרים החדשים שבחבילה.'
-  else
-    WarnLabel.Caption := '';
+  UpdateBooksWarning(DefaultPath);
 end;
 
 function EscapeJsonString(const Value: String): String;
