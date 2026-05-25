@@ -138,8 +138,8 @@ class PluginSidePanel extends StatelessWidget {
                     .select<SettingsBloc, bool>((b) => b.state.isOfflineMode);
                 // visiblePlugins מסנן תוספים שהמשתמש סימן כ"מוסתר" במסך
                 // ההגדרות (`hiddenFromTools`); אחריו מסננים גם offline.
-                final plugins = state.visiblePlugins
-                    .filterForOfflineMode(isOfflineMode);
+                final plugins =
+                    state.visiblePlugins.filterForOfflineMode(isOfflineMode);
                 if (plugins.isEmpty) {
                   // ההודעה משתנה לפי הסיבה: אם יש תוספים שמוסתרים ידנית,
                   // נציין זאת. אחרת — נציין offline או "לא הותקנו".
@@ -224,9 +224,12 @@ class _DraggablePluginRow extends StatelessWidget {
                   ),
                 )
               : null,
-          child: _PluginListTile(
-            plugin: plugin,
-            onPluginSelected: onPluginSelected,
+          child: Material(
+            color: Colors.transparent,
+            child: _PluginListTile(
+              plugin: plugin,
+              onPluginSelected: onPluginSelected,
+            ),
           ),
         );
       },
@@ -257,8 +260,8 @@ class _PluginListTile extends StatelessWidget {
               child: Tooltip(
                 message: 'תוסף פיתוח המוטען מתיקייה מקומית',
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 4, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.tertiary,
                     borderRadius: BorderRadius.circular(4),
@@ -276,8 +279,7 @@ class _PluginListTile extends StatelessWidget {
             ),
         ],
       ),
-      title:
-          Text(plugin.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: Text(plugin.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(plugin.version),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
