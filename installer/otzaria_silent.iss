@@ -515,9 +515,18 @@ begin
     if DirExists(AppDataPath) then
       DelTreeExceptBooks(AppDataPath);
 
-    // הגדרות והערות אישיות ישנות (com.example)
+    // הגדרות ישנות בשם com.example (לפני שינוי מזהה החבילה)
     AppDataPath := ExpandConstant('{userappdata}\com.example');
     if DirExists(AppDataPath) then
       DelTreeExceptBooks(AppDataPath);
+
+    // נתיבים ישנים מאוד: LocalAppData בעברית (לפני גרסה 0.9.x)
+    AppDataPath := ExpandConstant('{localappdata}\אוצריא');
+    if DirExists(AppDataPath) then
+      DelTree(AppDataPath, True, True, True);
+
+    AppDataPath := ExpandConstant('{localappdata}\אוצריא\Data');
+    if DirExists(AppDataPath) then
+      DelTree(AppDataPath, True, True, True);
   end;
 end;
