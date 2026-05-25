@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,8 +16,12 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/search/view/full_text_search_screen.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
+import 'package:otzaria/text_book/view/commentators_tab_screen.dart';
+import 'package:otzaria/pdf_book/view/pdf_commentators_tab_screen.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 
@@ -171,7 +176,17 @@ class _ReadingScreenState extends State<ReadingScreen>
                     child: PageView(
                       key: const ValueKey('normal_tab_view'),
                       controller: _pageController,
-                      physics: const NeverScrollableScrollPhysics(),
+                      // גלילה בין טאבים רק במובייל; בדסקטופ tab-bar הוא
+                      // אמצעי הניווט, ו-PageScrollPhysics מתנגשת עם
+                      // סימון טקסט אופקי ועם גלילה אופקית ב-PDF.
+                      physics: Platform.isAndroid || Platform.isIOS
+                          ? const PageScrollPhysics()
+                          : const NeverScrollableScrollPhysics(),
+                      onPageChanged: (index) {
+                        if (index < state.tabs.length) {
+                          context.read<TabsBloc>().add(SetCurrentTab(index));
+                        }
+                      },
                       children: [
                         for (var i = 0; i < state.tabs.length; i++)
                           _buildTabView(
@@ -218,6 +233,19 @@ class _ReadingScreenState extends State<ReadingScreen>
           ));
     } else if (tab is SearchingTab) {
       return FullTextSearchScreen(key: ValueKey(tab), tab: tab);
+    } else if (tab is CommentatorsTab) {
+      return CommentatorsTabScreen(
+        key: ValueKey(tab),
+        tab: tab,
+        openBookCallback: (t, {int index = 1}) {
+          context.read<TabsBloc>().add(OpenOrFocusTab(t, insertAdjacent: true));
+        },
+      );
+    } else if (tab is PdfCommentatorsTab) {
+      return PdfCommentatorsTabScreen(
+        key: ValueKey(tab),
+        tab: tab,
+      );
     }
     return const SizedBox.shrink();
   }

@@ -1,0 +1,23 @@
+import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/models/pdf_tab.dart';
+
+/// Tab שמציג מפרשים של ספר PDF בכרטסייה עצמאית.
+/// חולק state עם sourceTab החי.
+/// הטאב הזה תלוי ב-sourceTab ולכן אינו נשמר לשחזור בהפעלה הבאה.
+class PdfCommentatorsTab extends OpenedTab {
+  final PdfBookTab sourceTab;
+
+  PdfCommentatorsTab({required this.sourceTab})
+      : super('מפרשים | ${sourceTab.title}');
+
+  @override
+  OpenedTab clone() => PdfCommentatorsTab(sourceTab: sourceTab)..isPinned = isPinned;
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        'type': 'PdfCommentatorsTab',
+        'isPinned': isPinned,
+        // לא שומרים sourceTab כי לא ניתן לשחזר בקלות
+      };
+}

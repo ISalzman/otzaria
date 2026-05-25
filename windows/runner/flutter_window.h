@@ -43,6 +43,20 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       process_control_channel_;
   std::atomic_bool force_exit_watchdog_armed_ = false;
+
+  // Win32 Job Object that contains this process plus any child processes
+  // it spawns (notably WebView2's msedgewebview2.exe instances). Configured
+  // with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE so the kernel kills every
+  // member when the handle is released — which happens on TerminateProcess
+  // of the host. Without this, fast-exit shutdown orphans Edge children.
+  //
+  // Setup can fail on hardened environments (sandboxed launches, debugger
+  // job objects on Win32 versions that don't allow nesting, certain
+  // enterprise MDM/AV configurations). `job_object_ready_` reflects whether
+  // every setup step succeeded; we only honour forceTerminate when it did,
+  // otherwise the Dart side falls back to the existing graceful close path.
+  HANDLE job_handle_ = nullptr;
+  std::atomic_bool job_object_ready_ = false;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

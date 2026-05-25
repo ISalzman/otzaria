@@ -400,6 +400,8 @@ Otzaria.on('plugin.boot',    (p) => applyTheme(p.theme));
 Otzaria.on('theme.changed',  applyTheme);   // ← חשוב! מעדכן בזמן אמת
 ```
 
+> **גופנים — אין צורך לארוז:** השמות שמגיעים ב-`theme.typography.fontFamily` ו-`theme.typography.commentatorsFontFamily` (כגון `FrankRuhlCLM`, `Shofar`) נטענים אוטומטית כ-`@font-face` ב-WebView של התוסף לפני ה-`plugin.boot`. ניתן להפנות אליהם ישירות מ-CSS. כשהמשתמש בחר גופן מערכת מותאם, ההזרקה מדלגת עליו ויש להסתמך על fallback של מערכת ההפעלה — לכן השאירו תמיד `serif` (ועדיף גם `'David'`) בסוף שרשרת ה-`font-family`.
+
 ---
 
 ## אחסון פרטי
@@ -670,38 +672,17 @@ if (typeof Otzaria === 'undefined') {
 
 ---
 
-## דוגמה מלאה
-
-תוסף דמו מוכן לשימוש נמצא ב-`docs/plugin-sdk/hebrew-calendar-demo.otzplugin`.
-
-קבצי התשתית נמצאים ב:
+## תיעוד נוסף
 
 ```
-assets/plugin-sdk/
-├── otzaria_plugin.js      — ספריית ה-JS שכל תוסף מייבא
-├── otzaria_plugin.d.ts    — TypeScript definitions
-└── example/               — תוסף דמו (לוח שנה עברי)
-    ├── manifest.json      — manifest של תוסף הדמו
-    └── index.html         — קוד ה-HTML/JS המלא של תוסף הדמו
-
 docs/plugin-sdk/
-├── hebrew-calendar-demo.otzplugin  — תוסף דמו מוכן להתקנה
-├── API_REFERENCE.md
-└── DESIGN_GUIDE.md
+├── README.md             — מדריך פיתוח
+├── API_REFERENCE.md      — רשימת ה-API המלא
+├── DESIGN_GUIDE.md       — מדריך עיצוב
+└── otzaria_plugin.d.ts   — הגדרות TypeScript לאובייקט הגלובלי Otzaria
 ```
 
-### יצירת `.otzplugin` מהדמו
-
-```bash
-cd /path/to/otzaria/assets/plugin-sdk/example
-
-zip -r hebrew-calendar-demo.otzplugin \
-  manifest.json \
-  index.html \
-  -x "*.DS_Store"
-```
-
-לאחר מכן התקן ב-אוצריא כרגיל.
+> **הערה:** האובייקט הגלובלי `Otzaria` מוזרק אוטומטית על-ידי אוצריא לכל WebView של תוסף — אין צורך לייבא ספריית JS. כלל את `otzaria_plugin.d.ts` בפרויקט TypeScript שלך כדי לקבל השלמה אוטומטית ב-IDE.
 
 ---
 

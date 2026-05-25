@@ -10,7 +10,42 @@ class PluginRegistryRepository {
       : _db = database ?? PluginSystemDatabase.instance;
 
   Future<List<InstalledPlugin>> getAllPlugins() async {
-    return _db.getAllInstalledPlugins();
+    final plugins = await _db.getAllInstalledPlugins();
+    plugins.sort(_compareForDisplay);
+    return plugins;
+  }
+
+  /// השוואת תוספים לצורך תצוגה — קודם לפי [InstalledPlugin.effectiveToolTabOrder],
+  /// ואז tie-breakers דטרמיניסטיים: [InstalledPlugin.installedAt] ובסוף
+  /// [InstalledPlugin.pluginId]. בלי tie-breaker, כש-N תוספים חולקים את
+  /// אותו `toolTabOrder` (ברירת מחדל 900 ב-manifest), הסדר ביניהם משתנה
+  /// בין הרצות.
+  static int _compareForDisplay(InstalledPlugin a, InstalledPlugin b) {
+    final orderCmp =
+        a.effectiveToolTabOrder.compareTo(b.effectiveToolTabOrder);
+    if (orderCmp != 0) return orderCmp;
+    final timeCmp = a.installedAt.compareTo(b.installedAt);
+    if (timeCmp != 0) return timeCmp;
+    return a.pluginId.compareTo(b.pluginId);
+  }
+
+  /// מחזיר את [InstalledPlugin.userOrder] שיש להקצות לתוסף חדש כך שהוא
+  /// יצטרף בסוף הסדר הידני הקיים.
+  ///
+  /// • אם אף תוסף לא סודר ידנית — מחזיר `null` (התוסף ישתמש ב-manifest order).
+  /// • אם כן — מחזיר `max(userOrder) + 1` כדי שהתוסף החדש יהיה אחרון.
+  ///
+  /// בלי זה, תוסף חדש (userOrder=null → effective=900) נכנס *לפני* כל
+  /// הבלוק שסודר ידנית (effective ≥ 1000), והמשתמש מאבד את הסדר שלו.
+  Future<int?> getNextUserOrderForNewPlugin() async {
+    final plugins = await _db.getAllInstalledPlugins();
+    int? maxOrder;
+    for (final p in plugins) {
+      final uo = p.userOrder;
+      if (uo == null) continue;
+      if (maxOrder == null || uo > maxOrder) maxOrder = uo;
+    }
+    return maxOrder == null ? null : maxOrder + 1;
   }
 
   Future<InstalledPlugin?> getPlugin(String pluginId) async {
@@ -59,6 +94,23 @@ class PluginRegistryRepository {
   Future<void> updateNavRailPinState(
       String pluginId, bool pinnedToNavRail) async {
     await _db.updatePluginNavRailPinState(pluginId, pinnedToNavRail);
+  }
+
+  Future<void> updateHiddenState(
+      String pluginId, bool hiddenFromTools) async {
+    await _db.updatePluginHiddenState(pluginId, hiddenFromTools);
+  }
+
+  /// שומר סדר מותאם אישית של תוספים לפי מיקומם ברשימה הנתונה.
+  ///
+  /// המיקום הראשון מקבל סדר 0, השני 1 וכן הלאה. מזהים שלא קיימים ב-DB
+  /// יתעלמו בשקט (UPDATE ללא שורות תואמות).
+  Future<void> reorderPlugins(List<String> orderedPluginIds) async {
+    final ordering = <String, int>{
+      for (var i = 0; i < orderedPluginIds.length; i++)
+        orderedPluginIds[i]: i,
+    };
+    await _db.updatePluginsUserOrder(ordering);
   }
 
   Future<void> setPermission(

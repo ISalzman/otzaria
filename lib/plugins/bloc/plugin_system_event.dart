@@ -125,6 +125,29 @@ class UnpinPluginFromNavRailRequested extends PluginSystemEvent {
   List<Object?> get props => [pluginId];
 }
 
+/// קובע האם תוסף מוסתר לחלוטין מהממשק (לשונית כלים + פאנל צד + nav rail).
+class SetPluginHiddenRequested extends PluginSystemEvent {
+  final String pluginId;
+  final bool hidden;
+
+  const SetPluginHiddenRequested({
+    required this.pluginId,
+    required this.hidden,
+  });
+
+  @override
+  List<Object?> get props => [pluginId, hidden];
+}
+
+class ReorderPluginsRequested extends PluginSystemEvent {
+  /// רשימת מזהי תוספים בסדר החדש שנקבע ע"י המשתמש.
+  final List<String> orderedPluginIds;
+  const ReorderPluginsRequested(this.orderedPluginIds);
+
+  @override
+  List<Object?> get props => [orderedPluginIds];
+}
+
 class RefreshPlugins extends PluginSystemEvent {}
 
 class LoadDevelopmentPluginRequested extends PluginSystemEvent {

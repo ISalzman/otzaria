@@ -11,6 +11,10 @@ import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/view/commentators_list_screen.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 
@@ -25,6 +29,9 @@ class TabbedCommentaryPanel extends StatefulWidget {
   final bool showSplitView; // האם במצב מפוצל (true) או מפרשים למטה (false)
   final SelectionSyncController? selectionSyncController;
   final ValueListenable<int>? openFilterRequest;
+  final ValueNotifier<int>? openCommentatorsFilterNotifier;
+  final ValueNotifier<int>? closeCommentatorsFilterNotifier;
+  final TextBookTab? tab; // עבור פתיחת כרטסיית מפרשים
 
   const TabbedCommentaryPanel({
     super.key,
@@ -37,6 +44,9 @@ class TabbedCommentaryPanel extends StatefulWidget {
     this.showSplitView = true,
     this.selectionSyncController,
     this.openFilterRequest,
+    this.openCommentatorsFilterNotifier,
+    this.closeCommentatorsFilterNotifier,
+    this.tab,
   });
 
   @override
@@ -124,6 +134,31 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                 return PanelTabHeader(
                   controller: _tabController,
                   onClose: widget.onClosePane,
+                  // במצב "מפרשים למטה" שורת הלחצנים החדשה לא קיימת (הטאב הראשון
+                  // מציג הגדרות מפרשים), לכן משאירים כאן את לחצן הפתיחה בכרטיסייה
+                  // חדשה כפי שהיה במקור.
+                  extraActions: widget.showSplitView
+                      ? const []
+                      : [
+                          IconButton(
+                            iconSize: 18,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                                minWidth: 36, minHeight: 40),
+                            tooltip: 'פתח כרטסיית מפרשים',
+                            icon: const Icon(FluentIcons.open_24_regular),
+                            onPressed: widget.tab == null
+                                ? null
+                                : () => context.read<TabsBloc>().add(
+                                      AddTab(
+                                        CommentatorsTab(
+                                          sourceTab: widget.tab!,
+                                        ),
+                                        insertAdjacent: true,
+                                      ),
+                                    ),
+                          ),
+                        ],
                   tabs: isCompact
                       ? [
                           Tab(icon: firstTabIcon),
@@ -173,11 +208,24 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                       selectionSyncController: widget.selectionSyncController,
                       openFilterRequest: widget.openFilterRequest,
                       selectedCommentatorsOverride: state.activeCommentators,
+                      openFilterNotifier: widget.openCommentatorsFilterNotifier,
+                      closeFilterNotifier:
+                          widget.closeCommentatorsFilterNotifier,
                       onSelectedCommentatorsOverrideChanged: (commentators) {
                         context
                             .read<TextBookBloc>()
                             .add(UpdateCommentators(commentators));
                       },
+                      onOpenInNewTab: widget.tab == null
+                          ? null
+                          : () => context.read<TabsBloc>().add(
+                                AddTab(
+                                  CommentatorsTab(
+                                    sourceTab: widget.tab!,
+                                  ),
+                                  insertAdjacent: true,
+                                ),
+                              ),
                     )
                   else
                     const CommentatorsListView(

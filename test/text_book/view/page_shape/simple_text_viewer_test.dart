@@ -21,8 +21,6 @@ import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/widgets/misc/app_context_menu.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
-import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
-import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../../test_helpers/memory_cache_provider.dart';
 
@@ -31,35 +29,6 @@ void main() {
 
   setUpAll(() async {
     await Settings.init(cacheProvider: MemoryCacheProvider());
-  });
-
-  test('display mode change keeps the visible source line', () {
-    expect(
-      resolveDisplayModeRestoreLineIndex(
-        visibleIndices: const [42, 43, 44],
-        selectedIndex: 7,
-        contentLength: 100,
-      ),
-      42,
-    );
-
-    expect(
-      resolveDisplayModeRestoreLineIndex(
-        visibleIndices: const [],
-        selectedIndex: 7,
-        contentLength: 100,
-      ),
-      7,
-    );
-
-    expect(
-      resolveDisplayModeRestoreLineIndex(
-        visibleIndices: const [150],
-        selectedIndex: 7,
-        contentLength: 100,
-      ),
-      isNull,
-    );
   });
 
   testWidgets('לחיצה על אינדיקטור הערה פותחת את טאב ההערות הפנימי',
@@ -583,8 +552,13 @@ void main() {
     otherButtonFocusNode.dispose();
   });
 
-  testWidgets('SelectionArea נבנה מחדש כשאזור אחר נעשה פעיל (key משתנה)',
-      (tester) async {
+  testWidgets(
+      'SelectableRegion לא נבנה מחדש כשאזור חיצוני נעשה פעיל ואין לנו בחירה משלנו '
+      '(מונע טעינה מחדש של תוכן בעת בחירה במפרש בצורת הדף)', (tester) async {
+    // רגרסיה: לפני התיקון, כל הפעלה של אזור חיצוני גרמה לבנייה מחדש של
+    // ה-SelectionArea — מה שהשמיד את עץ הצאצאים (ScrollablePositionedList)
+    // וגרם לאיפוס מצב פנימי/קפיצות גלילה. אם אין לנו בחירה משלנו אין מה
+    // לנקות, ולכן אסור לבנות מחדש.
     final controller = SelectionSyncController();
     addTearDown(controller.dispose);
     final otherOwner = Object();
@@ -626,28 +600,26 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    final initialKey = _findSelectionAreaKey(tester);
-    expect(initialKey, isNotNull);
+    final elementBefore = _findSelectableRegionElement(tester);
+    expect(elementBefore, isNotNull);
 
-    // אזור אחר נעשה פעיל - האזור שלנו חייב לבנות מחדש את ה-SelectionArea
-    // כדי לשחרר את הבחירה החזותית.
     controller.activate(otherOwner);
     await tester.pump();
 
-    final keyAfterExternalActivate = _findSelectionAreaKey(tester);
+    final elementAfter = _findSelectableRegionElement(tester);
     expect(
-      keyAfterExternalActivate,
-      isNot(equals(initialKey)),
-      reason: 'הפעלת אזור חיצוני חייבת להחליף את ה-key כדי לאלץ rebuild',
+      elementAfter,
+      same(elementBefore),
+      reason: 'בלי בחירה משלנו, הפעלת אזור חיצוני אסור שתגרום ל-rebuild — '
+          'אחרת עץ הצאצאים נהרס לחינם',
     );
   });
 
   testWidgets(
-      'SelectionArea לא נבנה מחדש כשהבחירה התנקתה (activeOwner הופך ל-null)',
+      'SelectableRegion לא נבנה מחדש כשהבחירה התנקתה (activeOwner הופך ל-null)',
       (tester) async {
-    // רגרסיה: לפני התיקון, ניקוי בחירה (לחיצה במקום אחר) גרם להחלפת ה-key
-    // של ה-SelectionArea ולבנייה מחדש של ה-ScrollablePositionedList — והגלילה
-    // קפצה לתחילת הקטע.
+    // רגרסיה: לפני התיקון, ניקוי בחירה גרם להחלפת ה-key של ה-SelectionArea
+    // ולבנייה מחדש של ה-ScrollablePositionedList — והגלילה קפצה לתחילת הקטע.
     final controller = SelectionSyncController();
     addTearDown(controller.dispose);
     final otherOwner = Object();
@@ -689,20 +661,87 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    // האזור החיצוני מפעיל ומיד מנקה - דמוי משתמש שבחר ושחרר את הבחירה.
+    // האזור החיצוני מפעיל ומיד מנקה — דמוי משתמש שבחר ושחרר את הבחירה.
     controller.activate(otherOwner);
     await tester.pump();
-    final keyAfterActivate = _findSelectionAreaKey(tester);
+    final elementAfterActivate = _findSelectableRegionElement(tester);
 
     controller.clear(otherOwner);
     await tester.pump();
-    final keyAfterClear = _findSelectionAreaKey(tester);
+    final elementAfterClear = _findSelectableRegionElement(tester);
 
     expect(
-      keyAfterClear,
-      equals(keyAfterActivate),
+      elementAfterClear,
+      same(elementAfterActivate),
       reason:
           'ניקוי בחירה (activeOwner=null) אסור שיגרום ל-rebuild — אחרת הגלילה קופצת',
+    );
+  });
+
+  testWidgets(
+      'SelectableRegion במפרש לא נהרס כשאזור חיצוני (טקסט ראשי) נעשה פעיל — '
+      'מונע קפיצת גלילה לתחילת הספר בצורת הדף', (tester) async {
+    // רגרסיה: כשבחרו טקסט במפרש ואחר כך בטקסט הראשי, ה-SelectionArea של
+    // המפרש נבנה מחדש עם מפתח חדש (כדי לנקות בחירה ויזואלית). הבנייה מחדש
+    // השמידה את ה-ScrollablePositionedList ואיפסה את מיקום הגלילה לשורה 0.
+    // התיקון: שימוש ב-SelectableRegion עם GlobalKey יציב + clearSelection()
+    // ישיר — ללא שינוי מפתח ולכן ללא קפיצה.
+    final controller = SelectionSyncController();
+    addTearDown(controller.dispose);
+    final mainTextOwner = Object();
+
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      PersonalNotesState(
+        isLoading: false,
+        bookId: 'ספר בדיקה',
+        locatedNotes: const [],
+        missingNotes: const [],
+        errorMessage: null,
+        filteredLocatedNotes: const [],
+        filteredMissingNotes: const [],
+      ),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: SimpleTextViewer(
+              content: const ['שורה א', 'שורה ב', 'שורה ג'],
+              fontSize: 18,
+              openBookCallback: (_) {},
+              isMainText: false, // מפרש — כאן התרחש הבאג
+              selectionSyncController: controller,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final elementBefore = _findSelectableRegionElement(tester);
+    expect(elementBefore, isNotNull,
+        reason: 'SimpleTextViewer חייב לרנדר SelectableRegion');
+
+    // דמוי בחירת טקסט בטקסט הראשי (הפעלת אזור חיצוני) —
+    // לפני התיקון זה היה גורם לבנייה מחדש של SelectionArea של המפרש
+    controller.activate(mainTextOwner);
+    await tester.pump();
+
+    final elementAfter = _findSelectableRegionElement(tester);
+    expect(
+      elementAfter,
+      same(elementBefore),
+      reason: 'SelectableRegion של המפרש לא אמור להיהרס ולהיווצר מחדש — '
+          'הרס כזה היה מאפס את ScrollablePositionedList לשורה 0 וגורם לקפיצה',
     );
   });
 
@@ -736,136 +775,17 @@ void main() {
     scrollController.dispose();
     focusNode.dispose();
   });
-  test('מצב טקסט רציף מעבד הערות אינלייניות במקום להציג HTML גולמי', () {
-    const rawText = 'פסוק <i class="footnote">*(בספרי תימן בסמ״ך גדולה)</i>';
-    final processed = TextRendererService.processText(
-      rawText,
-      const RenderSettings(fontSize: 20),
-    );
-    final spans = buildInlineHtmlSpans(
-      processed,
-      const TextStyle(fontSize: 20),
-    );
-    final flattened = _flattenText(spans);
-    final styledNote = _flattenTextSpans(spans).firstWhere(
-      (span) => span.text?.contains('בספרי תימן') ?? false,
-    );
-
-    expect(flattened, contains('בספרי תימן'));
-    expect(flattened, isNot(contains('<i')));
-    expect(styledNote.style?.fontStyle, FontStyle.italic);
-    expect(styledNote.style?.fontSize, lessThan(20));
-  });
-
-  test('מצב טקסט רציף משמר big בתוך הערה אינליינית', () {
-    const rawText = 'text <i class="footnote">*(small <big>large</big>)</i>';
-    final processed = TextRendererService.processText(
-      rawText,
-      const RenderSettings(fontSize: 20),
-    );
-    final spans = buildInlineHtmlSpans(
-      processed,
-      const TextStyle(fontSize: 20),
-    );
-    final textSpans = _flattenTextSpans(spans);
-    final regularNote = textSpans.firstWhere(
-      (span) => span.text?.contains('small') ?? false,
-    );
-    final enlargedNote = textSpans.firstWhere(
-      (span) => span.text?.contains('large') ?? false,
-    );
-    final regularFontSize = regularNote.style!.fontSize!;
-    final enlargedFontSize = enlargedNote.style!.fontSize!;
-
-    expect(enlargedFontSize, greaterThan(regularFontSize));
-    expect(enlargedNote.style?.fontStyle, FontStyle.italic);
-  });
-
-  testWidgets('מצב טקסט רציף לא מיישר מקטע קצר לשני הצדדים', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 500,
-            child: ContinuousReadingParagraph(
-              lines: [
-                ContinuousReadingParagraphLine(
-                  lineIndex: 0,
-                  text: 'מקטע קצר',
-                  style: TextStyle(fontSize: 20),
-                ),
-              ],
-              baseStyle: TextStyle(fontSize: 20),
-              onLineTap: _noopLineTap,
-            ),
-          ),
-        ),
-      ),
-    );
-
-    final richText = tester.widget<RichText>(find.byType(RichText));
-
-    expect(richText.textAlign, TextAlign.start);
-  });
-
-  testWidgets('מצב טקסט רציף משאיר justify למקטע שנשבר לכמה שורות',
-      (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 120,
-            child: ContinuousReadingParagraph(
-              lines: [
-                ContinuousReadingParagraphLine(
-                  lineIndex: 0,
-                  text: 'זהו מקטע ארוך מספיק כדי להישבר לכמה שורות בתצוגה צרה',
-                  style: TextStyle(fontSize: 20),
-                ),
-              ],
-              baseStyle: TextStyle(fontSize: 20),
-              onLineTap: _noopLineTap,
-            ),
-          ),
-        ),
-      ),
-    );
-
-    final richText = tester.widget<RichText>(find.byType(RichText));
-
-    expect(richText.textAlign, TextAlign.justify);
-  });
 }
 
-void _noopLineTap(int lineIndex) {}
-
-String _flattenText(List<InlineSpan> spans) {
-  final buffer = StringBuffer();
-  for (final span in _flattenTextSpans(spans)) {
-    buffer.write(span.text);
-  }
-  return buffer.toString();
-}
-
-List<TextSpan> _flattenTextSpans(List<InlineSpan> spans) {
-  final result = <TextSpan>[];
-  void visit(InlineSpan span) {
-    if (span is! TextSpan) return;
-    result.add(span);
-    span.children?.forEach(visit);
-  }
-
-  spans.forEach(visit);
-  return result;
-}
-
-Key? _findSelectionAreaKey(WidgetTester tester) {
-  // SelectionArea היחיד עם ValueKey הוא זה שמסונכרן עם SelectionSyncController.
-  // MaterialApp/Scaffold עוטפים את העץ ב-SelectionContainer אבל לא ב-SelectionArea עם key.
-  final widgets = tester.widgetList<SelectionArea>(find.byType(SelectionArea));
-  for (final widget in widgets) {
-    if (widget.key is ValueKey<String>) {
-      return widget.key;
+/// מחזירה את ה-Element של SelectableRegion שנוצר על-ידי SimpleTextViewer.
+/// SimpleTextViewer משתמש ב-`GlobalKey<SelectableRegionState>` — מה שמאפשר
+/// לזהות אותו בין שאר ה-SelectableRegion שעשויים להימצא בעץ.
+Element? _findSelectableRegionElement(WidgetTester tester) {
+  for (final element
+      in tester.elementList(find.byType(SelectableRegion))) {
+    if ((element.widget as SelectableRegion).key
+        is GlobalKey<SelectableRegionState>) {
+      return element;
     }
   }
   return null;

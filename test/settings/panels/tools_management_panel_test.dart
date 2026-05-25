@@ -1,0 +1,510 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
+import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
+import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
+import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_state.dart';
+import 'package:otzaria/settings/panels/tools_management_panel.dart';
+
+// ─── Test doubles ─────────────────────────────────────────────────────────────
+
+class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
+    implements SettingsBloc {
+  final List<SettingsEvent> dispatched = [];
+  _FakeSettingsBloc({
+    Set<String> hidden = const <String>{},
+    Set<String> pinnedToNav = const <String>{},
+  }) : super(SettingsState.initial().copyWith(
+          hiddenBuiltInToolIds: hidden,
+          builtInToolsPinnedToNavRail: pinnedToNav,
+        )) {
+    on<SettingsEvent>((event, emit) {
+      dispatched.add(event);
+      if (event is UpdateHiddenBuiltInToolIds) {
+        emit(state.copyWith(
+            hiddenBuiltInToolIds: event.hiddenBuiltInToolIds));
+      } else if (event is UpdateBuiltInToolsPinnedToNavRail) {
+        emit(state.copyWith(
+            builtInToolsPinnedToNavRail:
+                event.builtInToolsPinnedToNavRail));
+      }
+    });
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+class _FakePluginSystemBloc
+    extends Bloc<PluginSystemEvent, PluginSystemState>
+    implements PluginSystemBloc {
+  final List<PluginSystemEvent> dispatched = [];
+  _FakePluginSystemBloc(List<InstalledPlugin> plugins)
+      : super(PluginSystemLoaded(plugins)) {
+    on<PluginSystemEvent>((event, emit) {
+      dispatched.add(event);
+    });
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+PluginManifest _manifest({
+  String id = 'p',
+  List<String> permissions = const [],
+  bool networkEnabled = false,
+}) {
+  return PluginManifest.fromJson({
+    'schemaVersion': 1,
+    'id': id,
+    'name': id,
+    'version': '1.0.0',
+    'entrypoint': 'index.html',
+    'permissions': permissions,
+    'networkEnabled': networkEnabled,
+    'contributes': {
+      'toolTab': {'title': id},
+    },
+  });
+}
+
+InstalledPlugin _plugin({
+  required String id,
+  String name = 'plugin',
+  bool enabled = true,
+  bool hidden = false,
+  bool pinnedToNavRail = false,
+  List<String> permissions = const [],
+}) {
+  return InstalledPlugin(
+    pluginId: id,
+    name: name,
+    version: '1.0.0',
+    installPath: '/x/$id',
+    entrypointPath: 'index.html',
+    enabled: enabled,
+    pinned: true,
+    pinnedToNavRail: pinnedToNavRail,
+    hiddenFromTools: hidden,
+    manifest: _manifest(id: id, permissions: permissions),
+    installedAt: DateTime.utc(2026, 1, 1),
+    updatedAt: DateTime.utc(2026, 1, 1),
+  );
+}
+
+Widget _wrap({
+  required SettingsBloc settingsBloc,
+  required PluginSystemBloc pluginBloc,
+}) {
+  return MaterialApp(
+    home: Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        body: SingleChildScrollView(
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider<SettingsBloc>.value(value: settingsBloc),
+              BlocProvider<PluginSystemBloc>.value(value: pluginBloc),
+            ],
+            child: const ToolsManagementPanel(),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+void main() {
+  testWidgets(
+    'shows built-in tools section with all catalog entries',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc(const []),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('כלים מובנים'), findsOneWidget);
+      expect(find.text('לוח שנה'), findsOneWidget);
+      expect(find.text('גימטריה'), findsOneWidget);
+      expect(find.text('שמור וזכור'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'plugins card is hidden when no plugins are installed',
+    (tester) async {
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc(const []),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('תוספים מותקנים'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'plugins card is shown when plugins are installed',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(id: 'p1', name: 'תוסף-A'),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('תוספים מותקנים'), findsOneWidget);
+      expect(find.textContaining('תוסף-A'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'selecting a built-in tool reveals the action bar',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc(const []),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('נבחרו'), findsNothing);
+
+      await tester.tap(find.text('לוח שנה'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 נבחרו'), findsOneWidget);
+      expect(find.text('הסתר'), findsOneWidget);
+      expect(find.text('הצמד לסרגל הניווט'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'tapping "Hide" on selected built-in tool dispatches UpdateHiddenBuiltInToolIds',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final settingsBloc = _FakeSettingsBloc();
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: settingsBloc,
+        pluginBloc: _FakePluginSystemBloc(const []),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('לוח שנה'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('הסתר'));
+      await tester.pumpAndSettle();
+
+      final updates = settingsBloc.dispatched
+          .whereType<UpdateHiddenBuiltInToolIds>()
+          .toList();
+      expect(updates, hasLength(1));
+      expect(updates.single.hiddenBuiltInToolIds, contains('builtin.calendar'));
+    },
+  );
+
+  testWidgets(
+    'tapping "Pin to nav rail" on selected built-in tool dispatches '
+    'UpdateBuiltInToolsPinnedToNavRail',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final settingsBloc = _FakeSettingsBloc();
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: settingsBloc,
+        pluginBloc: _FakePluginSystemBloc(const []),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('גימטריה'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('הצמד לסרגל הניווט'));
+      await tester.pumpAndSettle();
+
+      final updates = settingsBloc.dispatched
+          .whereType<UpdateBuiltInToolsPinnedToNavRail>()
+          .toList();
+      expect(updates, hasLength(1));
+      expect(updates.single.builtInToolsPinnedToNavRail,
+          contains('builtin.gematria'));
+    },
+  );
+
+  testWidgets(
+    'selecting only plugins reveals plugin-specific actions (delete)',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(id: 'p1', name: 'תוסף-A'),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.textContaining('תוסף-A'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('מחק'), findsOneWidget);
+      expect(find.text('השבת'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'selecting only built-in tools does NOT show plugin-only actions',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(id: 'p1', name: 'תוסף-A'),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('לוח שנה'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('מחק'), findsNothing);
+      expect(find.text('השבת'), findsNothing);
+      expect(find.textContaining('פעולות נוספות זמינות רק לתוספים'),
+          findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'hide on a hidden built-in shows "Show" instead',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final settingsBloc = _FakeSettingsBloc(
+        hidden: const {'builtin.calendar'},
+      );
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: settingsBloc,
+        pluginBloc: _FakePluginSystemBloc(const []),
+      ));
+      await tester.pumpAndSettle();
+
+      // הכלי עדיין מופיע בטבלה — רק הוא מוסתר מהממשק הראשי.
+      expect(find.text('לוח שנה'), findsOneWidget);
+      // וגם תווית "מוסתר" צריכה להופיע.
+      expect(find.text('מוסתר'), findsOneWidget);
+
+      await tester.tap(find.text('לוח שנה'));
+      await tester.pumpAndSettle();
+
+      // כשהפריט הנבחר כבר מוסתר, הכפתור צריך לעבור ל"הצג".
+      expect(find.text('הצג'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'tapping enable/disable on selected plugin dispatches relevant event',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final pluginBloc = _FakePluginSystemBloc([
+        _plugin(id: 'p1', name: 'תוסף-A'),
+      ]);
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: pluginBloc,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.textContaining('תוסף-A'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('השבת'));
+      await tester.pumpAndSettle();
+
+      final disableEvents =
+          pluginBloc.dispatched.whereType<DisablePluginRequested>().toList();
+      expect(disableEvents, hasLength(1));
+      expect(disableEvents.single.pluginId, 'p1');
+    },
+  );
+
+  testWidgets(
+    'tapping hide on a plugin dispatches SetPluginHiddenRequested',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final pluginBloc = _FakePluginSystemBloc([
+        _plugin(id: 'p1', name: 'תוסף-A'),
+      ]);
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: pluginBloc,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.textContaining('תוסף-A'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('הסתר'));
+      await tester.pumpAndSettle();
+
+      final events =
+          pluginBloc.dispatched.whereType<SetPluginHiddenRequested>().toList();
+      expect(events, hasLength(1));
+      expect(events.single.pluginId, 'p1');
+      expect(events.single.hidden, isTrue);
+    },
+  );
+
+  testWidgets(
+    'network access menu — selecting "הענק" dispatches granted:true',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final pluginBloc = _FakePluginSystemBloc([
+        _plugin(
+          id: 'p1',
+          name: 'תוסף-A',
+          permissions: const ['network.access'],
+        ),
+      ]);
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: pluginBloc,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.textContaining('תוסף-A'));
+      await tester.pumpAndSettle();
+
+      // פתיחת התפריט (יש שני "גישה לרשת" — אחד בסרגל ואחד בתפריט)
+      await tester.tap(find.text('גישה לרשת').first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('הענק'));
+      await tester.pumpAndSettle();
+
+      final events = pluginBloc.dispatched
+          .whereType<SetPluginPermissionRequested>()
+          .where((e) => e.permission == 'network.access')
+          .toList();
+      expect(events, hasLength(1));
+      expect(events.single.granted, isTrue);
+    },
+  );
+
+  testWidgets(
+    'network access menu — selecting "בטל" dispatches granted:false',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final pluginBloc = _FakePluginSystemBloc([
+        _plugin(
+          id: 'p1',
+          name: 'תוסף-A',
+          permissions: const ['network.access'],
+        ),
+      ]);
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: pluginBloc,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.textContaining('תוסף-A'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('גישה לרשת').first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('בטל'));
+      await tester.pumpAndSettle();
+
+      final events = pluginBloc.dispatched
+          .whereType<SetPluginPermissionRequested>()
+          .where((e) => e.permission == 'network.access')
+          .toList();
+      expect(events, hasLength(1));
+      expect(events.single.granted, isFalse,
+          reason:
+              'revoke must send granted:false — was a P1 bug where panel '
+              'always sent granted:true');
+    },
+  );
+
+  testWidgets(
+    'startup permission menu — selecting "בטל" dispatches granted:false',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final pluginBloc = _FakePluginSystemBloc([
+        _plugin(
+          id: 'p1',
+          name: 'תוסף-A',
+          permissions: const ['app.run_on_startup'],
+        ),
+      ]);
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: pluginBloc,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.textContaining('תוסף-A'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('טעינה אוטומטית בעלייה').first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('בטל'));
+      await tester.pumpAndSettle();
+
+      final events = pluginBloc.dispatched
+          .whereType<SetPluginPermissionRequested>()
+          .where((e) => e.permission == 'app.run_on_startup')
+          .toList();
+      expect(events, hasLength(1));
+      expect(events.single.granted, isFalse);
+    },
+  );
+}

@@ -20,7 +20,6 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DefaultDirName={code:GetDefaultInstallDir}
 DefaultGroupName={#MyAppName}
@@ -66,12 +65,6 @@ Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 [Code]
 
 const
-  // הגרסה הראשית המינימלית של Edge WebView2 הנדרשת. v143 ומטה ידועים כקורסים
-  // (native access violation ב-MSVCP140) על Windows 10 build < 19041 בשילוב
-  // עם flutter_inappwebview_windows. אם המשתמש על גרסה ישנה — נבקש עדכון
-  // דרך MicrosoftEdgeWebview2Setup.exe (bootstrapper שמוריד את הגרסה החדשה).
-  MIN_WEBVIEW2_MAJOR = 144;
-
   // קבועי פריסה לדף "תכונות עיקריות" - Inno Setup לא תומך ב-const מקומי בתוך פרוצדורה.
   FEATURES_GAP_X = 14;
   FEATURES_GAP_Y = 8;
@@ -79,16 +72,27 @@ const
 
 var
   CompPage: TWizardPage;
-  VCCheck, WV2Check: TCheckBox;
-  VCLabel, WV2Label: TLabel;
-  InstallVC, InstallWV2: Boolean;
+  WV2Check: TCheckBox;
+  WV2Label: TLabel;
+  InstallWV2: Boolean;
 
   BooksPage: TWizardPage;
   BooksPathEdit: TEdit;
   BooksPathBrowseBtn: TButton;
+  BooksWarnLabel: TLabel;
   SelectedBooksPath: String;
 
   FeaturesPage: TWizardPage;
+  SlideshowImage: TBitmapImage;
+  SlideshowTimerId: LongWord;
+  SlideshowTimerCallback: LongWord;
+  SlideshowIndex: Integer;
+
+// TTimer לא זמין ב-Pascal Script של Inno Setup; נשתמש ב-Windows API.
+function SetTimer(hWnd, nIDEvent, uElapse, lpTimerFunc: LongWord): LongWord;
+  external 'SetTimer@user32.dll stdcall';
+function KillTimer(hWnd, nIDEvent: LongWord): LongWord;
+  external 'KillTimer@user32.dll stdcall';
 
 function TryGetInstallDirFromRegistry(RootKey: Integer; const SubKey: String; var InstallDir: String): Boolean;
 begin
@@ -167,18 +171,6 @@ end;
 
 // ─── בדיקות רכיבי מערכת ───────────────────────────────────────────────────
 
-function GetVCVersion: String;
-var
-  Version: String;
-begin
-  if RegQueryStringValue(HKLM64,
-      'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64',
-      'Version', Version) then
-    Result := Version
-  else
-    Result := '';
-end;
-
 function GetWebView2Version: String;
 var
   Version: String;
@@ -198,57 +190,9 @@ begin
     Result := '';
 end;
 
-function VCRedistNeedsInstall: Boolean;
-begin
-  Result := GetVCVersion = '';
-end;
-
-// מחלץ את המספר הראשי מתוך version string בפורמט "143.0.3650.139".
-// מחזיר 0 אם הפענוח נכשל (חוסר נתון = נתפס כצריך התקנה).
-// הערה: ב-Inno Setup Pascal Script אין `Val()` של Object Pascal —
-// משתמשים ב-`StrToIntDef` שמחזיר ברירת מחדל בכישלון פענוח.
-function ParseMajorVersion(const Version: String): Integer;
-var
-  DotPos: Integer;
-  MajorStr: String;
-begin
-  Result := 0;
-  if Version = '' then exit;
-  DotPos := Pos('.', Version);
-  if DotPos > 1 then
-    MajorStr := Copy(Version, 1, DotPos - 1)
-  else
-    MajorStr := Version;
-  Result := StrToIntDef(MajorStr, 0);
-end;
-
-// מצב WebView2 — מאפשר הבחנה בין "חסר", "ישן" ו"עדכני".
-//   0 = לא מותקן
-//   1 = מותקן אבל גרסה ישנה מ-MIN_WEBVIEW2_MAJOR (קורס בעבודה עם תוספים)
-//   2 = מותקן בגרסה תואמת
-function GetWebView2State: Integer;
-var
-  Version: String;
-  Major: Integer;
-begin
-  Version := GetWebView2Version;
-  if Version = '' then
-  begin
-    Result := 0;
-    exit;
-  end;
-  Major := ParseMajorVersion(Version);
-  if Major >= MIN_WEBVIEW2_MAJOR then
-    Result := 2
-  else
-    Result := 1;
-end;
-
 function WebView2NeedsInstall: Boolean;
 begin
-  // צריך התקנה גם כשחסר וגם כשגרסה ישנה — ה-bootstrapper של Microsoft
-  // יעדכן את הגרסה הקיימת ולא יתקין על גביה גרסה ישנה יותר.
-  Result := GetWebView2State <> 2;
+  Result := GetWebView2Version = '';
 end;
 
 function InitializeSetup(): Boolean;
@@ -275,7 +219,6 @@ begin
   // האזהרה על מחיקת ספרים קיימים מוצגת בדף בחירת תיקיית הספרים
 
   // אתחול ברירות מחדל — גם להתקנה שקטה (/SILENT, /VERYSILENT)
-  InstallVC  := VCRedistNeedsInstall;
   InstallWV2 := WebView2NeedsInstall;
   SelectedBooksPath := GetDataDir('') + '\books';
 end;
@@ -284,9 +227,9 @@ end;
 
 procedure CreateComponentsPage;
 var
-  VCVersion, WV2Version: String;
-  VCStatus, WV2Status: String;
-  VCColor, WV2Color: TColor;
+  WV2Version: String;
+  WV2Status: String;
+  WV2Color: TColor;
   TopY: Integer;
   HeaderLabel: TLabel;
 begin
@@ -294,7 +237,6 @@ begin
     'בחירת רכיבי מערכת להתקנה',
     'בדיקת הרכיבים הנדרשים לאפליקציה');
 
-  VCVersion  := GetVCVersion;
   WV2Version := GetWebView2Version;
 
   // כותרת הסבר
@@ -306,51 +248,19 @@ begin
   HeaderLabel.AutoSize := False;
   HeaderLabel.WordWrap := True;
   HeaderLabel.Caption :=
-    'להלן רכיבי המערכת הנדרשים לפעולת אוצריא.' + #13#10 +
-    'רכיבים באדום חסרים — נדרשת התקנה.' + #13#10 +
-    'רכיבים ירוקים קיימים — אין צורך בפעולה.';
+    'בדיקת רכיבי Microsoft הנדרשים לאוצריא.' + #13#10 +
+    'בכתום: חסר — מומלץ להתקין.' + #13#10 +
+    'בירוק: קיים — אין צורך בפעולה.';
   HeaderLabel.Height := ScaleY(60);  // 3 שורות קצרות, בלי עודף ריפוד
 
   TopY := HeaderLabel.Height + ScaleY(6);
 
-  // ─── Visual C++ Runtime ───────────────────────────────────────────────────
-  VCCheck := TCheckBox.Create(CompPage);
-  VCCheck.Parent  := CompPage.Surface;
-  VCCheck.Left    := 0;
-  VCCheck.Top     := TopY + ScaleY(2);
-  VCCheck.Width   := CompPage.SurfaceWidth;
-  VCCheck.Height  := ScaleY(20);
-  VCCheck.Caption := 'Visual C++ Redistributable 2022 (x64)';
-
-  if VCVersion = '' then
-  begin
-    VCStatus := '⚠ חסר — נדרשת התקנה! ללא רכיב זה האפליקציה לא תפעל.';
-    VCColor  := clRed;
-    VCCheck.Checked := True;
-    VCCheck.Enabled := False;  // חובה — לא ניתן לבטל
-  end
-  else
-  begin
-    VCStatus := '✓ קיים (גרסה: ' + VCVersion + ') — לא נדרשת פעולה.';
-    VCColor  := $006400;  // ירוק כהה
-    VCCheck.Checked := False;
-    VCCheck.Enabled := False;  // קיים — נעול כדי למנוע התקנה מיותרת
-  end;
-
-  VCLabel := TLabel.Create(CompPage);
-  VCLabel.Parent   := CompPage.Surface;
-  VCLabel.Left     := ScaleX(20);
-  VCLabel.Top      := TopY + ScaleY(18);
-  VCLabel.Width    := CompPage.SurfaceWidth - ScaleX(20);
-  VCLabel.AutoSize := False;
-  VCLabel.WordWrap := True;
-  VCLabel.Caption  := VCStatus;
-  VCLabel.Font.Color := VCColor;
-  VCLabel.Height   := ScaleY(36);
-
-  TopY := TopY + ScaleY(58);
-
   // ─── WebView2 Runtime ─────────────────────────────────────────────────────
+  // הערה: Visual C++ Runtime כבר לא מותקן ע"י המתקין — ה-DLLs נארזים
+  // app-local ליד otzaria.exe (ראה .github/workflows/build-and-announce.yml
+  // והשלב "Bundle latest VC++ Redistributable runtime DLLs"), כך שאין
+  // צורך לבדוק / להתקין אותו בזמן ההתקנה. המתקין FULL מציג עכשיו רק
+  // את ה-WebView2 בדף בחירת רכיבי המערכת.
   WV2Check := TCheckBox.Create(CompPage);
   WV2Check.Parent  := CompPage.Surface;
   WV2Check.Left    := 0;
@@ -359,9 +269,7 @@ begin
   WV2Check.Height  := ScaleY(20);
   WV2Check.Caption := 'Microsoft WebView2 Runtime';
 
-  // WebView2 אינו חובה — משמש רק למערכת הפלאגינים (לא לקריאה/חיפוש/סימניות).
-  // גרסה < MIN_WEBVIEW2_MAJOR ידועה כקורסת על Windows 10 ישן עם תוספים,
-  // ולכן מוצעת לעדכון בדיוק כמו מצב שאינה מותקנת.
+  // WebView2 אינו חובה — משמש רק למערכת הפלאגינים (לא לקריאה/חיפוש/סימניות)
   if WV2Version = '' then
   begin
     WV2Status := '⚠ חסר — מומלץ להתקין. ללא רכיב זה מערכת הפלאגינים לא תפעל,' +
@@ -370,21 +278,12 @@ begin
     WV2Check.Checked := True;
     WV2Check.Enabled := True;  // אופציונלי — ניתן לבטל
   end
-  else if ParseMajorVersion(WV2Version) < MIN_WEBVIEW2_MAJOR then
-  begin
-    WV2Status := '⚠ גרסה ישנה (' + WV2Version + ') — מומלץ לעדכן.' + #13#10 +
-                 'גרסה זו עלולה לקרוס בעת טעינת תוספים. העדכון יעלה לגרסה ' +
-                 IntToStr(MIN_WEBVIEW2_MAJOR) + ' ומעלה.';
-    WV2Color  := $007FFF;
-    WV2Check.Checked := True;
-    WV2Check.Enabled := True;
-  end
   else
   begin
     WV2Status := '✓ קיים (גרסה: ' + WV2Version + ') — לא נדרשת פעולה.';
     WV2Color  := $006400;
     WV2Check.Checked := False;
-    WV2Check.Enabled := False;  // עדכני — נעול כדי למנוע התקנה מיותרת
+    WV2Check.Enabled := False;  // קיים — נעול כדי למנוע התקנה מיותרת
   end;
 
   WV2Label := TLabel.Create(CompPage);
@@ -396,10 +295,21 @@ begin
   WV2Label.WordWrap := True;
   WV2Label.Caption  := WV2Status;
   WV2Label.Font.Color := WV2Color;
-  WV2Label.Height   := ScaleY(48);  // 3 שורות — תומך גם בהודעת "ישן" הארוכה
+  WV2Label.Height   := ScaleY(34);
 end;
 
 // ─── דף בחירת תיקיית הספרים ─────────────────────────────────────────────────
+
+procedure UpdateBooksWarning(const Path: String);
+begin
+  if BooksWarnLabel = nil then exit;
+  if DirExists(Path) then
+    BooksWarnLabel.Caption :=
+      '⚠ שים לב: תיקייה קיימת כבר בנתיב זה.' + #13#10 +
+      'התקנה זו תמחק את תוכנה ותחליף בספרים החדשים שבחבילה.'
+  else
+    BooksWarnLabel.Caption := '';
+end;
 
 procedure BrowseBooksFolder(Sender: TObject);
 var
@@ -407,13 +317,16 @@ var
 begin
   Dir := BooksPathEdit.Text;
   if BrowseForFolder('בחר תיקיית ספרים:', Dir, False) then
+  begin
     BooksPathEdit.Text := Dir;
+    UpdateBooksWarning(Dir);
+  end;
 end;
 
 procedure CreateBooksPage;
 var
   DefaultPath: String;
-  DescLabel, WarnLabel, PathLabel: TLabel;
+  DescLabel, PathLabel: TLabel;
 begin
   BooksPage := CreateCustomPage(CompPage.ID,
     'תיקיית הספרים',
@@ -460,22 +373,17 @@ begin
   BooksPathBrowseBtn.Caption := 'עיון...';
   BooksPathBrowseBtn.OnClick := @BrowseBooksFolder;
 
-  WarnLabel := TLabel.Create(BooksPage);
-  WarnLabel.Parent     := BooksPage.Surface;
-  WarnLabel.Left       := 0;
-  WarnLabel.Top        := BooksPathEdit.Top + BooksPathEdit.Height + ScaleY(8);
-  WarnLabel.Width      := BooksPage.SurfaceWidth;
-  WarnLabel.AutoSize   := False;
-  WarnLabel.WordWrap   := True;
-  WarnLabel.Height     := ScaleY(42);
-  WarnLabel.Font.Color := clRed;
+  BooksWarnLabel := TLabel.Create(BooksPage);
+  BooksWarnLabel.Parent     := BooksPage.Surface;
+  BooksWarnLabel.Left       := 0;
+  BooksWarnLabel.Top        := BooksPathEdit.Top + BooksPathEdit.Height + ScaleY(8);
+  BooksWarnLabel.Width      := BooksPage.SurfaceWidth;
+  BooksWarnLabel.AutoSize   := False;
+  BooksWarnLabel.WordWrap   := True;
+  BooksWarnLabel.Height     := ScaleY(42);
+  BooksWarnLabel.Font.Color := clRed;
 
-  if DirExists(DefaultPath) then
-    WarnLabel.Caption :=
-      '⚠ שים לב: תיקיית ספרים קיימת כבר בנתיב זה.' + #13#10 +
-      'התקנה זו תמחק את תוכנה ותחליף בספרים החדשים שבחבילה.'
-  else
-    WarnLabel.Caption := '';
+  UpdateBooksWarning(DefaultPath);
 end;
 
 function EscapeJsonString(const Value: String): String;
@@ -608,11 +516,6 @@ begin
   SaveStringToFile(PrefsFile, JsonContent, False);
 end;
 
-function ShouldInstallVC: Boolean;
-begin
-  Result := InstallVC;
-end;
-
 function ShouldInstallWV2: Boolean;
 begin
   Result := InstallWV2;
@@ -672,13 +575,68 @@ begin
   end;
 end;
 
+procedure OnSlideshowTimer(H: LongWord; Msg: LongWord; IdEvent: LongWord; Time: LongWord);
+var
+  NextFile: String;
+begin
+  if SlideshowImage = nil then
+    exit;
+  SlideshowIndex := (SlideshowIndex + 1) mod 4;
+  case SlideshowIndex of
+    0: NextFile := 'feature1.bmp';
+    1: NextFile := 'feature2.bmp';
+    2: NextFile := 'feature3.bmp';
+    3: NextFile := 'feature4.bmp';
+  end;
+  SlideshowImage.Bitmap.LoadFromFile(ExpandConstant('{tmp}\') + NextFile);
+end;
+
+procedure InitializeSlideshow;
+var
+  GaugeBottom, AvailH, ImgH: Integer;
+begin
+  SlideshowIndex := 0;
+  GaugeBottom := WizardForm.ProgressGauge.Top + WizardForm.ProgressGauge.Height;
+  AvailH := WizardForm.InstallingPage.Height - GaugeBottom;
+  if AvailH < ScaleY(60) then
+    exit;
+  ImgH := AvailH - ScaleY(10);
+
+  SlideshowImage := TBitmapImage.Create(WizardForm.InstallingPage);
+  SlideshowImage.Parent := WizardForm.InstallingPage;
+  SlideshowImage.Stretch := True;
+  SlideshowImage.Left := 0;
+  SlideshowImage.Top := GaugeBottom + ScaleY(8);
+  SlideshowImage.Width := WizardForm.InstallingPage.Width;
+  SlideshowImage.Height := ImgH;
+  SlideshowImage.Bitmap.LoadFromFile(ExpandConstant('{tmp}\feature1.bmp'));
+
+  SlideshowTimerCallback := CreateCallback(@OnSlideshowTimer);
+end;
+
 procedure InitializeWizard;
 begin
-  InstallVC  := VCRedistNeedsInstall;
   InstallWV2 := WebView2NeedsInstall;
   CreateFeaturesPage;
   CreateComponentsPage;
   CreateBooksPage;
+  InitializeSlideshow;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if SlideshowTimerCallback = 0 then
+    exit;
+  if CurPageID = wpInstalling then
+  begin
+    if SlideshowTimerId = 0 then
+      SlideshowTimerId := SetTimer(0, 0, 1500, SlideshowTimerCallback);
+  end
+  else if SlideshowTimerId <> 0 then
+  begin
+    KillTimer(0, SlideshowTimerId);
+    SlideshowTimerId := 0;
+  end;
 end;
 
 // שמירת בחירות בלחיצת "הבא"
@@ -687,7 +645,6 @@ begin
   Result := True;
   if (CompPage <> nil) and (CurPageID = CompPage.ID) then
   begin
-    InstallVC  := VCCheck.Checked;
     InstallWV2 := WV2Check.Checked;
   end;
   if (BooksPage <> nil) and (CurPageID = BooksPage.ID) then
@@ -881,8 +838,17 @@ begin
       if DirExists(AppDataPath) then
         DelTree(AppDataPath, True, True, True);
         
-      // Delete old settings and personal notes (in AppData/Roaming)
+      // הגדרות ישנות בשם com.example (לפני שינוי מזהה החבילה)
       AppDataPath := ExpandConstant('{userappdata}\com.example');
+      if DirExists(AppDataPath) then
+        DelTree(AppDataPath, True, True, True);
+
+      // נתיבים ישנים מאוד: LocalAppData בעברית (לפני גרסה 0.9.x)
+      AppDataPath := ExpandConstant('{localappdata}\אוצריא');
+      if DirExists(AppDataPath) then
+        DelTree(AppDataPath, True, True, True);
+
+      AppDataPath := ExpandConstant('{localappdata}\אוצריא\Data');
       if DirExists(AppDataPath) then
         DelTree(AppDataPath, True, True, True);
     end;
@@ -906,9 +872,22 @@ begin
     Abort;
   end;
 
+  WizardForm.ProgressGauge.Style := npbstMarquee;
+
+  WizardForm.StatusLabel.Caption := 'מחלץ מסד הנתונים seforim.db...';
+  WizardForm.StatusLabel.Update;
   ExtractBundledDatabase('seforim.db.zst', 'seforim.db');
+
+  WizardForm.StatusLabel.Caption := 'מחלץ קטלוג אוצר החכמה...';
+  WizardForm.StatusLabel.Update;
   ExtractBundledDatabase('otzar-HB_catalog.db.zst', 'otzar-HB_catalog.db');
+
+  WizardForm.StatusLabel.Caption := 'מחלץ ספרי תלמוד בבלי...';
+  WizardForm.StatusLabel.Update;
   ExtractBundledTarArchive('talmud_bavli_latest.tar.zst', 'תלמוד בבלי');
+
+  WizardForm.ProgressGauge.Style := npbstNormal;
+  WizardForm.ProgressGauge.Position := WizardForm.ProgressGauge.Max;
   DeleteFile(ZstdPath);
   DeleteFile(SevenZipPath);
 
@@ -924,7 +903,10 @@ begin
 end;
 
 [Run]
-Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "מתקין Visual C++ Redistributable 2022..."; Flags: waituntilterminated; Check: ShouldInstallVC
+; Visual C++ Redistributable כבר לא מותקן ע"י המתקין — ה-DLLs של ה-runtime
+; נארזים app-local ליד otzaria.exe (ראה .github/workflows/build-and-announce.yml,
+; השלב "Bundle latest VC++ Redistributable runtime DLLs"). זה פותר גם משתמשים
+; שתקועים עם MSVCP140.dll 14.36.32532.0 הפגום, בלי הרצת installer נוסף.
 Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "מתקין Microsoft WebView2 Runtime..."; Flags: waituntilterminated; Check: ShouldInstallWV2
 Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
@@ -956,9 +938,6 @@ Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{app}\_staging"; Fla
 Source: "zstd.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "7za.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-; vc_redist.x64.exe — הגרסה הרשמית של Microsoft, כ-25MB במקום AIO (~50MB)
-; כוללת את 2015/2017/2019/2022 תחת אותו מספר גרסה (14.x)
-Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallVC
 ; MicrosoftEdgeWebview2Setup.exe — bootstrapper קטן (~2MB) שמוריד ומתקין WebView2
 ; נדרש על ידי flutter_inappwebview_windows; ב-Win10/11 עם Edge עדכני — כבר קיים
 Source: "MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallWV2

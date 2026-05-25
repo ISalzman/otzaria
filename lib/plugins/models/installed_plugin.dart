@@ -11,11 +11,35 @@ class InstalledPlugin {
   final bool enabled;
   final bool pinned;
   final bool pinnedToNavRail;
+
+  /// האם התוסף מוסתר לחלוטין מהממשק (לשונית כלים + פאנל צד + nav rail).
+  /// בניגוד ל-[enabled] שמשבית את הריצה, [hiddenFromTools] משאיר את התוסף
+  /// פעיל אך לא מציג אותו למשתמש.
+  final bool hiddenFromTools;
   final PluginManifest manifest;
   final DateTime installedAt;
   final DateTime updatedAt;
   final String sourceType;
   final String? devRootPath;
+
+  /// סדר מותאם אישית שנקבע ע"י המשתמש (גרירה ושחרור). `null` = להשתמש
+  /// בסדר ברירת המחדל מתוך המניפסט ([PluginManifest.toolTabOrder]).
+  ///
+  /// הערכים נשמרים כאינדקסים פשוטים (0,1,2...) ומומרים בתצוגה לטווח
+  /// שמבטיח שהתוספים יישארו אחרי הכלים המובנים — ראו
+  /// [effectiveToolTabOrder] ו-[userOrderToolTabOffset].
+  final int? userOrder;
+
+  /// בסיס הסדר עבור תוספים בעלי [userOrder]. ערך גבוה מספיק כדי שכל הכלים
+  /// המובנים (`builtin.*`, סדרים 10-100) יישארו לפני התוספים.
+  static const int userOrderToolTabOffset = 1000;
+
+  /// הסדר האפקטיבי שבו יוצג התוסף ברשימת הכלים. אם המשתמש קבע סדר ידני
+  /// משתמשים בו (עם [userOrderToolTabOffset] כדי להישאר אחרי הכלים המובנים);
+  /// אחרת משתמשים בערך מהמניפסט.
+  int get effectiveToolTabOrder => userOrder != null
+      ? userOrderToolTabOffset + userOrder!
+      : manifest.toolTabOrder;
 
   bool get isDevelopment => sourceType == 'development';
   String get resolvedRootPath => isDevelopment ? devRootPath! : installPath;
@@ -34,11 +58,13 @@ class InstalledPlugin {
     required this.enabled,
     required this.pinned,
     this.pinnedToNavRail = false,
+    this.hiddenFromTools = false,
     required this.manifest,
     required this.installedAt,
     required this.updatedAt,
     this.sourceType = 'packaged',
     this.devRootPath,
+    this.userOrder,
   });
 
   factory InstalledPlugin.fromDbMap(Map<String, dynamic> map) {
@@ -52,11 +78,13 @@ class InstalledPlugin {
       enabled: (map['enabled'] as int) != 0,
       pinned: (map['pinned'] as int) != 0,
       pinnedToNavRail: ((map['pinned_to_nav_rail'] as int?) ?? 0) != 0,
+      hiddenFromTools: ((map['hidden_from_tools'] as int?) ?? 0) != 0,
       manifest: PluginManifest.fromJson(jsonDecode(map['manifest_json'] as String)),
       installedAt: DateTime.parse(map['installed_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
       sourceType: map['source_type'] as String? ?? 'packaged',
       devRootPath: map['dev_root_path'] as String?,
+      userOrder: map['user_order'] as int?,
     );
   }
 
@@ -71,11 +99,13 @@ class InstalledPlugin {
       'enabled': enabled ? 1 : 0,
       'pinned': pinned ? 1 : 0,
       'pinned_to_nav_rail': pinnedToNavRail ? 1 : 0,
+      'hidden_from_tools': hiddenFromTools ? 1 : 0,
       'manifest_json': jsonEncode(manifest.toJson()),
       'installed_at': installedAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
       'source_type': sourceType,
       'dev_root_path': devRootPath,
+      'user_order': userOrder,
     };
   }
 
@@ -89,12 +119,15 @@ class InstalledPlugin {
     bool? enabled,
     bool? pinned,
     bool? pinnedToNavRail,
+    bool? hiddenFromTools,
     PluginManifest? manifest,
     DateTime? installedAt,
     DateTime? updatedAt,
     String? sourceType,
     String? devRootPath,
     bool clearDevRootPath = false,
+    int? userOrder,
+    bool clearUserOrder = false,
   }) {
     return InstalledPlugin(
       pluginId: pluginId ?? this.pluginId,
@@ -106,11 +139,13 @@ class InstalledPlugin {
       enabled: enabled ?? this.enabled,
       pinned: pinned ?? this.pinned,
       pinnedToNavRail: pinnedToNavRail ?? this.pinnedToNavRail,
+      hiddenFromTools: hiddenFromTools ?? this.hiddenFromTools,
       manifest: manifest ?? this.manifest,
       installedAt: installedAt ?? this.installedAt,
       updatedAt: updatedAt ?? this.updatedAt,
       sourceType: sourceType ?? this.sourceType,
       devRootPath: clearDevRootPath ? null : (devRootPath ?? this.devRootPath),
+      userOrder: clearUserOrder ? null : (userOrder ?? this.userOrder),
     );
   }
 }
