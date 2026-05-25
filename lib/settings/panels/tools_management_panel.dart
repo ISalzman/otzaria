@@ -149,14 +149,21 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                   SettingsCard(
                     title: 'תוספים מותקנים',
                     subtitle:
-                        'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה.',
+                        'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
                     children: [
                       for (final plugin in plugins)
-                        _PluginRow(
+                        _DraggableSettingsPluginRow(
+                          key: ValueKey(plugin.pluginId),
                           plugin: plugin,
                           selected: _selectedIds.contains(plugin.pluginId),
                           onSelectChanged: (v) =>
                               _toggle(plugin.pluginId, v),
+                          onAcceptSource: (sourceId) => _handleReorder(
+                            context: context,
+                            allPlugins: plugins,
+                            sourcePluginId: sourceId,
+                            targetPluginId: plugin.pluginId,
+                          ),
                         ),
                     ],
                   ),
@@ -167,6 +174,23 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
         );
       },
     );
+  }
+
+  void _handleReorder({
+    required BuildContext context,
+    required List<InstalledPlugin> allPlugins,
+    required String sourcePluginId,
+    required String targetPluginId,
+  }) {
+    final sourceIdx = allPlugins.indexWhere((p) => p.pluginId == sourcePluginId);
+    final targetIdx = allPlugins.indexWhere((p) => p.pluginId == targetPluginId);
+    if (sourceIdx < 0 || targetIdx < 0) return;
+    final reordered = List.of(allPlugins);
+    final src = reordered.removeAt(sourceIdx);
+    reordered.insert(targetIdx, src);
+    context.read<PluginSystemBloc>().add(
+          ReorderPluginsRequested(reordered.map((p) => p.pluginId).toList()),
+        );
   }
 
   /// מנקה מזהים נבחרים שאינם רלוונטיים עוד (תוסף שהוסר וכו'). חייב לקרות
@@ -611,15 +635,80 @@ class _BuiltInToolRow extends StatelessWidget {
   }
 }
 
+class _DraggableSettingsPluginRow extends StatelessWidget {
+  final InstalledPlugin plugin;
+  final bool selected;
+  final ValueChanged<bool?> onSelectChanged;
+  final ValueChanged<String> onAcceptSource;
+
+  const _DraggableSettingsPluginRow({
+    super.key,
+    required this.plugin,
+    required this.selected,
+    required this.onSelectChanged,
+    required this.onAcceptSource,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (details) => details.data != plugin.pluginId,
+      onAcceptWithDetails: (details) => onAcceptSource(details.data),
+      builder: (context, candidateData, _) {
+        final isHovering = candidateData.isNotEmpty;
+        final cs = Theme.of(context).colorScheme;
+        return Container(
+          decoration: isHovering
+              ? BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.08),
+                  border: Border(
+                    top: BorderSide(color: cs.primary, width: 2),
+                  ),
+                )
+              : null,
+          child: Material(
+            color: Colors.transparent,
+            child: _PluginRow(
+              plugin: plugin,
+              selected: selected,
+              onSelectChanged: onSelectChanged,
+              dragHandle: Draggable<String>(
+              data: plugin.pluginId,
+              dragAnchorStrategy: pointerDragAnchorStrategy,
+              feedback: _SettingsDragFeedback(plugin: plugin),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.grab,
+                child: Tooltip(
+                  message: 'גרור ושחרר לשינוי סדר',
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                    child: Icon(
+                      FluentIcons.re_order_dots_vertical_24_regular,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      },
+    );
+  }
+}
+
 class _PluginRow extends StatelessWidget {
   final InstalledPlugin plugin;
   final bool selected;
   final ValueChanged<bool?> onSelectChanged;
+  final Widget? dragHandle;
 
   const _PluginRow({
     required this.plugin,
     required this.selected,
     required this.onSelectChanged,
+    this.dragHandle,
   });
 
   @override
@@ -639,8 +728,54 @@ class _PluginRow extends StatelessWidget {
         disabled: !plugin.enabled,
         networkDeclared: plugin.manifest.networkEnabled,
       ),
-      trailing: Icon(icon),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon),
+          if (dragHandle != null) dragHandle!,
+        ],
+      ),
       onTap: () => onSelectChanged(!selected),
+    );
+  }
+}
+
+class _SettingsDragFeedback extends StatelessWidget {
+  final InstalledPlugin plugin;
+
+  const _SettingsDragFeedback({required this.plugin});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: cs.shadow.withValues(alpha: 0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(fluentIconFromName(plugin.manifest.toolTabIconName) ??
+                FluentIcons.puzzle_piece_24_regular),
+            const SizedBox(width: 8),
+            Text(
+              plugin.name,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
