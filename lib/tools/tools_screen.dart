@@ -497,6 +497,21 @@ class ToolsScreenState extends State<ToolsScreen>
     }
     _lastDescriptorsSignature = newSignature;
 
+    if (newDescriptors.isEmpty) {
+      void applyEmpty() {
+        _descriptors = [];
+        _pages = [];
+        _setSelectedToolId(null);
+      }
+
+      if (notify) {
+        setState(applyEmpty);
+      } else {
+        applyEmpty();
+      }
+      return;
+    }
+
     String newToolId = _selectedToolId ?? newDescriptors.first.toolId;
     if (!newDescriptors.any((d) => d.toolId == newToolId)) {
       newToolId = newDescriptors.first.toolId;
@@ -624,24 +639,46 @@ class ToolsScreenState extends State<ToolsScreen>
       return;
     }
 
-    // ה-descriptor לא נמצא בלשוניות הנוכחיות. בודקים אם מדובר בתוסף שכן מותקן
-    // אבל סונן מהתצוגה בגלל מצב מנותק — כדי להחזיר שגיאה תיאורית במקום
-    // "הכלי לא נמצא" המטעה.
-    final isOfflineMode = context.read<SettingsBloc>().state.isOfflineMode;
-    if (isOfflineMode) {
-      final blocState = context.read<PluginSystemBloc>().state;
-      if (blocState is PluginSystemLoaded) {
-        InstalledPlugin? hiddenPlugin;
-        for (final p in blocState.plugins) {
-          if (p.pluginId == toolId) {
-            hiddenPlugin = p;
-            break;
-          }
+    // ה-descriptor לא נמצא בלשוניות הנוכחיות. בודקים אם מדובר בכלי קיים
+    // שסונן מהתצוגה — כדי להחזיר שגיאה תיאורית במקום "הכלי לא נמצא" המטעה.
+
+    // בדיקה: כלי מובנה מוסתר
+    final settingsState = context.read<SettingsBloc>().state;
+    final allBuiltIns = _buildAllBuiltInDescriptors();
+    final hiddenBuiltIn = allBuiltIns.cast<BuiltInToolDescriptor?>().firstWhere(
+          (d) => d?.toolId == toolId,
+          orElse: () => null,
+        );
+    if (hiddenBuiltIn != null &&
+        settingsState.hiddenBuiltInToolIds.contains(toolId)) {
+      _clearPendingTool();
+      UiSnack.showError(
+          'הכלי "${hiddenBuiltIn.label}" מוסתר. ניתן להציג אותו דרך הגדרות → ניהול כלים');
+      return;
+    }
+
+    // בדיקה: תוסף מוסתר (hiddenFromTools) או שדורש אינטרנט במצב מנותק
+    final isOfflineMode = settingsState.isOfflineMode;
+    final blocState = context.read<PluginSystemBloc>().state;
+    if (blocState is PluginSystemLoaded) {
+      InstalledPlugin? matchedPlugin;
+      for (final p in blocState.plugins) {
+        if (p.pluginId == toolId) {
+          matchedPlugin = p;
+          break;
         }
-        if (hiddenPlugin != null && hiddenPlugin.requiresNetwork) {
+      }
+      if (matchedPlugin != null) {
+        if (matchedPlugin.hiddenFromTools) {
           _clearPendingTool();
           UiSnack.showError(
-              'התוסף "${hiddenPlugin.name}" דורש חיבור אינטרנט ולא ניתן לפתוח אותו במצב מנותק');
+              'התוסף "${matchedPlugin.name}" מוסתר. ניתן להציג אותו דרך הגדרות → ניהול כלים');
+          return;
+        }
+        if (isOfflineMode && matchedPlugin.requiresNetwork) {
+          _clearPendingTool();
+          UiSnack.showError(
+              'התוסף "${matchedPlugin.name}" דורש חיבור אינטרנט ולא ניתן לפתוח אותו במצב מנותק');
           return;
         }
       }
@@ -1066,7 +1103,11 @@ class ToolsScreenState extends State<ToolsScreen>
                 final updatedTransient = state.plugins.firstWhere(
                     (p) => p.pluginId == _transientPlugin!.pluginId,
                     orElse: () => _transientPlugin!);
-                _transientPlugin = updatedTransient;
+                if (updatedTransient.hiddenFromTools) {
+                  _transientPlugin = null;
+                } else {
+                  _transientPlugin = updatedTransient;
+                }
               }
               final isOfflineMode =
                   context.read<SettingsBloc>().state.isOfflineMode;

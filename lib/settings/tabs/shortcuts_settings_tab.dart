@@ -174,6 +174,62 @@ class ShortcutsSettingsTab extends StatelessWidget {
       cardId: 'shortcuts.main',
       keywords: ['מפרשים', 'כרטיסייה', 'טאב', 'מקלדת'],
     ),
+    SettingsSearchEntry(
+      id: 'shortcuts.book.toggle_pdf_view',
+      title: 'קיצור להחלפת מצב תצוגה PDF/טקסט',
+      subtitle: 'מעבר בין תצוגת PDF לתצוגת טקסט',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['PDF', 'טקסט', 'תצוגה', 'מקלדת', 'ctrl+shift+p'],
+    ),
+    SettingsSearchEntry(
+      id: 'shortcuts.calendar.toggle_times',
+      title: 'קיצור לפתיחה/סגירה זמני היום בלוח שנה',
+      subtitle: 'הצגה/הסתרה של זמני היום',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['לוח שנה', 'זמנים', 'זמני היום', 'מקלדת'],
+    ),
+    SettingsSearchEntry(
+      id: 'shortcuts.calendar.toggle_events',
+      title: 'קיצור לפתיחה/סגירה אירועים בלוח שנה',
+      subtitle: 'הצגה/הסתרה של אירועים',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['לוח שנה', 'אירועים', 'מקלדת'],
+    ),
+    SettingsSearchEntry(
+      id: 'shortcuts.calendar.today',
+      title: 'קיצור למעבר להיום בלוח שנה',
+      subtitle: 'ניווט מהיר לתאריך היום',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['לוח שנה', 'היום', 'מקלדת'],
+    ),
+    SettingsSearchEntry(
+      id: 'shortcuts.calendar.create_event',
+      title: 'קיצור ליצירת אירוע בלוח שנה',
+      subtitle: 'פתיחת חלון יצירת אירוע',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['לוח שנה', 'אירוע', 'יצירה', 'מקלדת'],
+    ),
+    SettingsSearchEntry(
+      id: 'shortcuts.calendar.toggle_view',
+      title: 'קיצור למעבר בין תצוגות לוח שנה',
+      subtitle: 'החלפה בין תצוגות שונות',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['לוח שנה', 'תצוגה', 'מקלדת'],
+    ),
+    SettingsSearchEntry(
+      id: 'shortcuts.shamor_zachor.cycle_filter',
+      title: 'קיצור למעבר בין סינונים בשמור וזכור',
+      subtitle: 'מחזור בין הסינונים השונים',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['שמור וזכור', 'סינון', 'מקלדת'],
+    ),
   ];
 
   static const Map<String, String> _shortcutsList = {
@@ -216,7 +272,10 @@ class ShortcutsSettingsTab extends StatelessWidget {
     'ctrl+comma': 'CTRL + ,',
     'ctrl+shift+b': 'CTRL + SHIFT + B',
     'ctrl+shift+c': 'CTRL + SHIFT + C',
+    'ctrl+shift+e': 'CTRL + SHIFT + E',
     'ctrl+shift+l': 'CTRL + SHIFT + L',
+    'ctrl+shift+n': 'CTRL + SHIFT + N',
+    'ctrl+shift+p': 'CTRL + SHIFT + P',
     'ctrl+shift+w': 'CTRL + SHIFT + W',
   };
 
@@ -409,10 +468,68 @@ class ShortcutsSettingsTab extends StatelessWidget {
               allShortcuts: _shortcutsList,
             ),
             _ShortcutTile(
+              settingKey: 'key-shortcut-toggle-pdf-view',
+              label: 'החלף מצב תצוגה (PDF/טקסט)',
+              defaultShortcut: 'ctrl+shift+p',
+              icon: FluentIcons.document_pdf_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
               settingKey: 'key-shortcut-open-commentators-tab',
               label: 'פתח כרטיסיית מפרשים',
               defaultShortcut: '',
               icon: FluentIcons.open_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+          ]),
+        ),
+
+        kSettingsCardSpacing,
+
+        // ── לוח שנה ושמור וזכור ───────────────────────────────────────
+        SettingsCard(
+          title: 'לוח שנה ושמור וזכור',
+          children: _onlyConfigured([
+            _ShortcutTile(
+              settingKey: 'key-shortcut-calendar-toggle-times',
+              label: 'לוח שנה: פתיחה/סגירה זמני היום',
+              defaultShortcut: 'ctrl+e',
+              icon: FluentIcons.clock_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
+              settingKey: 'key-shortcut-calendar-toggle-events',
+              label: 'לוח שנה: פתיחה/סגירה אירועים',
+              defaultShortcut: 'ctrl+n',
+              icon: FluentIcons.calendar_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
+              settingKey: 'key-shortcut-calendar-today',
+              label: 'לוח שנה: מעבר להיום',
+              defaultShortcut: 'ctrl+d',
+              icon: FluentIcons.calendar_today_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
+              settingKey: 'key-shortcut-calendar-create-event',
+              label: 'לוח שנה: יצירת אירוע',
+              defaultShortcut: 'ctrl+shift+n',
+              icon: FluentIcons.calendar_add_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
+              settingKey: 'key-shortcut-calendar-toggle-view',
+              label: 'לוח שנה: מעבר בין תצוגות',
+              defaultShortcut: 'ctrl+shift+e',
+              icon: FluentIcons.calendar_multiple_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
+              settingKey: 'key-shortcut-shamor-zachor-cycle-filter',
+              label: 'שמור וזכור: מעבר בין הסינונים',
+              defaultShortcut: 'ctrl+e',
+              icon: FluentIcons.filter_24_regular,
               allShortcuts: _shortcutsList,
             ),
           ]),

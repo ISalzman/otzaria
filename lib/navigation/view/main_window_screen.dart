@@ -339,7 +339,14 @@ class MainWindowScreenState extends State<MainWindowScreen>
         return true;
       }
     }
-    return false;
+    // גם rebuild כשמשתנה מספר הפלאגינים הגלויים (לטובת _isAllToolsHidden)
+    final prevVisible = prev is PluginSystemLoaded
+        ? prev.plugins.where((p) => p.enabled && !p.hiddenFromTools).length
+        : -1;
+    final currVisible = curr is PluginSystemLoaded
+        ? curr.plugins.where((p) => p.enabled && !p.hiddenFromTools).length
+        : -1;
+    return prevVisible != currVisible;
   }
 
   /// מחזיר את רשימת התוספים המוצמדים-לסרגל מתוך ה-state, או רשימה ריקה כשאין.
@@ -351,6 +358,28 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (state is! PluginSystemLoaded) return const <InstalledPlugin>[];
     return state.pluginsPinnedToNavRail.filterForOfflineMode(isOfflineMode);
   }
+
+  /// מחזיר `true` כאשר כל הכלים המובנים מוסתרים וגם אין תוסף מותקן ומופעל
+  /// שאינו מסומן כ-[InstalledPlugin.hiddenFromTools]. במצב זה אין טעם להציג
+  /// את פריט "כלים" בסרגל הניווט / בבר הניווט.
+  static bool _isAllToolsHidden(
+    SettingsState settingsState,
+    PluginSystemState pluginState,
+  ) {
+    final allBuiltInsHidden = kBuiltInToolsCatalog
+        .every((m) => settingsState.hiddenBuiltInToolIds.contains(m.toolId));
+    if (!allBuiltInsHidden) return false;
+    // כל הכלים המובנים מוסתרים; בדיקה אם גם כל הפלאגינים מוסתרים.
+    // אם ה-state עדיין לא נטען — אין פלאגינים גלויים עדיין, מסתירים.
+    if (pluginState is! PluginSystemLoaded) return true;
+    return pluginState.plugins
+        .where((p) => p.enabled && !p.hiddenFromTools)
+        .isEmpty;
+  }
+
+  /// אינדקס "הגדרות" בפועל בתוך ה-bar destinations, בהתחשב בהסתרת כלים.
+  static int _effectiveSettingsNavIndex(bool hideTools) =>
+      hideTools ? _toolsNavIndex : _settingsNavIndex;
 
   /// מאחד כלים מובנים מוצמדים לסרגל ותוספים מוצמדים לסרגל לרשימה אחת
   /// לפי הסדר: כלים מובנים תחילה, אחריהם תוספים. כלים מובנים מסוננים
@@ -884,8 +913,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 
   List<NavigationDestination> _buildBarDestinations(
-    List<_PinnedToolNavItem> pinnedItems,
-  ) {
+    List<_PinnedToolNavItem> pinnedItems, {
+    required bool hideTools,
+  }) {
     NavigationDestination buildNavDataDestination(int i) {
       final item = _navData[i];
       return NavigationDestination(
@@ -911,7 +941,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
 
     return [
-      for (int i = 0; i < _settingsNavIndex; i++) buildNavDataDestination(i),
+      for (int i = 0; i < _settingsNavIndex; i++)
+        if (i != _toolsNavIndex || !hideTools) buildNavDataDestination(i),
       for (final item in pinnedItems) buildPinnedItemDestination(item),
       buildNavDataDestination(_settingsNavIndex),
     ];
@@ -2120,6 +2151,36 @@ class MainWindowScreenState extends State<MainWindowScreen>
               }
             },
           ),
+          // מנווט ממסך "כלים" לספרייה אם כל הכלים הוסתרו דרך תצורת תוספים
+          BlocListener<PluginSystemBloc, PluginSystemState>(
+            listenWhen: (prev, curr) =>
+                prev is PluginSystemLoaded && curr is PluginSystemLoaded,
+            listener: (context, pluginState) {
+              final navState = context.read<NavigationBloc>().state;
+              if (navState.currentScreen != Screen.more) return;
+              final settingsState = context.read<SettingsBloc>().state;
+              if (_isAllToolsHidden(settingsState, pluginState)) {
+                context
+                    .read<NavigationBloc>()
+                    .add(const NavigateToScreen(Screen.library));
+              }
+            },
+          ),
+          // מנווט ממסך "כלים" לספרייה אם כל הכלים המובנים הוסתרו דרך הגדרות
+          BlocListener<SettingsBloc, SettingsState>(
+            listenWhen: (prev, curr) =>
+                prev.hiddenBuiltInToolIds != curr.hiddenBuiltInToolIds,
+            listener: (context, settingsState) {
+              final navState = context.read<NavigationBloc>().state;
+              if (navState.currentScreen != Screen.more) return;
+              final pluginState = context.read<PluginSystemBloc>().state;
+              if (_isAllToolsHidden(settingsState, pluginState)) {
+                context
+                    .read<NavigationBloc>()
+                    .add(const NavigateToScreen(Screen.library));
+              }
+            },
+          ),
         ],
         child: BlocBuilder<NavigationBloc, NavigationState>(
           builder: (context, state) {
@@ -2271,6 +2332,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                               activeToolIdNotifier,
                                                           builder: (context,
                                                               activeToolId, _) {
+                                                            final hideTools =
+                                                                _isAllToolsHidden(
+                                                                    settingsState,
+                                                                    pluginState);
                                                             final activePinnedIndex = state
                                                                             .currentScreen ==
                                                                         Screen
@@ -2284,7 +2349,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                 : -1;
                                                             // "כלים" מודגש רק כשאין פריט-מוצמד-לסרגל פעיל
                                                             final isToolsSelected =
-                                                                state.currentScreen ==
+                                                                !hideTools &&
+                                                                    state.currentScreen ==
                                                                         Screen
                                                                             .more &&
                                                                     activePinnedIndex ==
@@ -2296,8 +2362,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                     60.0;
                                                                 const minSpacerHeight =
                                                                     20.0;
-                                                                final totalItems = _navData
-                                                                        .length +
+                                                                final totalItems = (_navData
+                                                                            .length -
+                                                                        (hideTools
+                                                                            ? 1
+                                                                            : 0)) +
                                                                     pinnedItems
                                                                         .length;
                                                                 final needsScroll = totalItems *
@@ -2318,14 +2387,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                       state
                                                                           .currentScreen,
                                                                     ),
-                                                                  _buildNavRailItem(
-                                                                    context,
-                                                                    _toolsNavIndex,
-                                                                    state
-                                                                        .currentScreen,
-                                                                    selectedOverride:
-                                                                        isToolsSelected,
-                                                                  ),
+                                                                  if (!hideTools)
+                                                                    _buildNavRailItem(
+                                                                      context,
+                                                                      _toolsNavIndex,
+                                                                      state
+                                                                          .currentScreen,
+                                                                      selectedOverride:
+                                                                          isToolsSelected,
+                                                                    ),
                                                                   for (int i =
                                                                           0;
                                                                       i <
@@ -2407,6 +2477,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                               isOfflineMode:
                                                   settingsState.isOfflineMode,
                                             );
+                                            final hideTools =
+                                                _isAllToolsHidden(
+                                                    settingsState,
+                                                    pluginState);
                                             return ValueListenableBuilder<
                                                 String?>(
                                               valueListenable:
@@ -2422,12 +2496,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                       Colors.transparent,
                                                   destinations:
                                                       _buildBarDestinations(
-                                                          pinnedItems),
+                                                    pinnedItems,
+                                                    hideTools: hideTools,
+                                                  ),
                                                   selectedIndex:
                                                       _getBarSelectedIndex(
                                                     state.currentScreen,
                                                     pinnedItems,
                                                     activeToolId,
+                                                    hideTools: hideTools,
                                                   ),
                                                   onDestinationSelected:
                                                       (index) async {
@@ -2436,6 +2513,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                       index,
                                                       state.currentScreen,
                                                       pinnedItems,
+                                                      hideTools: hideTools,
                                                     );
                                                   },
                                                 );
@@ -2621,8 +2699,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
   int _getBarSelectedIndex(
     Screen currentScreen,
     List<_PinnedToolNavItem> pinnedItems,
-    String? activeToolId,
-  ) {
+    String? activeToolId, {
+    required bool hideTools,
+  }) {
+    final effectiveSettingsIdx = _effectiveSettingsNavIndex(hideTools);
     if (_isFindRefOpen) return 1;
     if (_isSearchOpen) return 3;
     switch (currentScreen) {
@@ -2635,6 +2715,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case Screen.search:
         return 3;
       case Screen.more:
+        if (hideTools) return -1;
         if (activeToolId != null) {
           final idx =
               pinnedItems.indexWhere((item) => item.toolId == activeToolId);
@@ -2643,7 +2724,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
         }
         return _toolsNavIndex;
       case Screen.settings:
-        return _settingsNavIndex + pinnedItems.length;
+        return effectiveSettingsIdx + pinnedItems.length;
     }
   }
 
@@ -2651,15 +2732,17 @@ class MainWindowScreenState extends State<MainWindowScreen>
     BuildContext context,
     int index,
     Screen currentScreen,
-    List<_PinnedToolNavItem> pinnedItems,
-  ) async {
-    if (index < _settingsNavIndex) {
+    List<_PinnedToolNavItem> pinnedItems, {
+    required bool hideTools,
+  }) async {
+    final effectiveSettingsIdx = _effectiveSettingsNavIndex(hideTools);
+    if (index < effectiveSettingsIdx) {
       await _onNavTap(context, index, currentScreen);
       return;
     }
-    final pinnedEnd = _settingsNavIndex + pinnedItems.length;
+    final pinnedEnd = effectiveSettingsIdx + pinnedItems.length;
     if (index < pinnedEnd) {
-      final item = pinnedItems[index - _settingsNavIndex];
+      final item = pinnedItems[index - effectiveSettingsIdx];
       _openPinnedItemInTools(context, item);
       return;
     }
