@@ -9,6 +9,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show FrameCallback;
 import 'package:flutter/services.dart';
 import 'package:flutter_single_instance/flutter_single_instance.dart';
 import 'package:window_manager/window_manager.dart';
@@ -631,6 +632,21 @@ Future<void> _ensureBootstrapInitialized() {
       .then((_) => _initializeRestartableRuntime());
 }
 
+@visibleForTesting
+void scheduleAfterTwoFrames(
+  VoidCallback action, {
+  WidgetsBinding? binding,
+  void Function(FrameCallback callback)? scheduleFrameCallback,
+}) {
+  final schedule =
+      scheduleFrameCallback ?? (binding ?? WidgetsBinding.instance).addPostFrameCallback;
+  schedule((_) {
+    schedule((_) {
+      action();
+    });
+  });
+}
+
 Future<void> _enqueueExternalActivationArgs(List<String> args) async {
   final activationUris = <String>[];
 
@@ -830,10 +846,8 @@ class _AppBootstrapState extends State<AppBootstrap> {
               // ל-ReadingScreen להיבנות ולהיצבע לפני שהטעינה מתחילה.
               // LibraryBrowser בכל מקרה לא נטען מיד (המשתמש ב-Reading) — הוא
               // יקבל את ה-state ברגע שיגיע.
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  bloc.add(LoadLibrary());
-                });
+              scheduleAfterTwoFrames(() {
+                bloc.add(LoadLibrary());
               });
               return bloc;
             },
