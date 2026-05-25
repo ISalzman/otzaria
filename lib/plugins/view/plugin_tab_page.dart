@@ -581,7 +581,18 @@ class _PluginTabPageState extends State<PluginTabPage> {
       },
     );
 
-    return webView;
+    if (!Platform.isWindows) return webView;
+
+    return Listener(
+      onPointerPanZoomUpdate: (event) {
+        final ctrl = webViewController;
+        if (ctrl == null) return;
+        ctrl.evaluateJavascript(
+          source: buildTrackpadScrollJs(event.panDelta),
+        );
+      },
+      child: webView,
+    );
   }
 
   static bool get _needsWebViewPrerequisites {
@@ -601,3 +612,11 @@ class _PluginTabPageState extends State<PluginTabPage> {
     }
   }
 }
+
+/// בונה פקודת JavaScript לגלילת WebView בתגובה ל-PointerPanZoomUpdate.
+///
+/// [panDelta] — כמות הגלילה בפיקסלים (תנועת האצבעות בלוח המגע).
+/// ערך חיובי ב-dy גורם לגלילה למטה; חיובי ב-dx — גלילה ימינה.
+@visibleForTesting
+String buildTrackpadScrollJs(Offset panDelta) =>
+    'window.scrollBy(${panDelta.dx.toStringAsFixed(2)},${panDelta.dy.toStringAsFixed(2)});';
