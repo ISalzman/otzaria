@@ -11,6 +11,8 @@ import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
@@ -587,6 +589,46 @@ class _CustomTitleBarState extends State<CustomTitleBar>
               ),
             );
           },
+        );
+      }
+
+      if (tab is PdfCommentatorsTab) {
+        return ValueListenableBuilder<String>(
+          valueListenable: tab.sourceTab.currentTitle,
+          builder: (context, currentTitleValue, child) {
+            final tooltipMessage = currentTitleValue.isNotEmpty
+                ? '${tab.title}, $currentTitleValue'
+                : tab.title;
+            return Tooltip(
+              message: tooltipMessage,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Icon(FluentIcons.document_pdf_24_regular, size: 16),
+                  ),
+                  Text(truncate(tab.title, 12)),
+                ],
+              ),
+            );
+          },
+        );
+      }
+
+      if (tab is CommentatorsTab) {
+        return Tooltip(
+          message: tab.title,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Icon(FluentIcons.book_24_regular, size: 16),
+              ),
+              Text(truncate(tab.title, 20)),
+            ],
+          ),
         );
       }
 

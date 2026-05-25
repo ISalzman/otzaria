@@ -86,7 +86,7 @@ class SettingsCard extends StatelessWidget {
       BuildContext context, Color cardColor) {
     return [
       for (int i = 0; i < children.length; i++) ...[
-        ColoredBox(color: cardColor, child: children[i]),
+        Material(color: cardColor, child: children[i]),
         if (i < children.length - 1) const SizedBox(height: 1.5),
       ],
     ];

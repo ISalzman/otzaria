@@ -32,11 +32,33 @@ class BookmarksDialog extends StatelessWidget {
   }
 }
 
-class BookmarkView extends StatelessWidget {
+class BookmarkView extends StatefulWidget {
   /// אם מסופק, מסונן לרשימה רק סימניות שזהות הספר שלהן זהה לזו של [bookFilter].
   final Book? bookFilter;
 
   const BookmarkView({super.key, this.bookFilter});
+
+  @override
+  State<BookmarkView> createState() => _BookmarkViewState();
+}
+
+class _BookmarkViewState extends State<BookmarkView> {
+  /// קאש לספירת הסימניות לפי ספר — נמנע מחישוב בכל קריאה ל-build
+  /// כשרשימת הסימניות לא משתנה.
+  List<Bookmark>? _cachedBookmarks;
+  Map<String, int>? _cachedCountPerBook;
+
+  Map<String, int> _getCountPerBook(List<Bookmark> bookmarks) {
+    if (identical(_cachedBookmarks, bookmarks)) return _cachedCountPerBook!;
+    final counts = <String, int>{};
+    for (final bm in bookmarks) {
+      final id = bookIdentity(bm.book);
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+    _cachedBookmarks = bookmarks;
+    _cachedCountPerBook = counts;
+    return counts;
+  }
 
   static int _compareBookmarks(Bookmark a, Bookmark b) {
     final aPath = a.book.categoryPath ?? '';
@@ -80,16 +102,13 @@ class BookmarkView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bookFilter = widget.bookFilter;
     final filterIdentity =
-        bookFilter == null ? null : bookIdentity(bookFilter!);
+        bookFilter == null ? null : bookIdentity(bookFilter);
     return BlocBuilder<BookmarkBloc, BookmarkState>(
       builder: (context, state) {
-        // מנה כמה סימניות יש לכל ספר — ספר עם 2+ סימניות יקבל קבוצה משלו
-        final countPerBook = <String, int>{};
-        for (final bm in state.bookmarks) {
-          final id = bookIdentity(bm.book);
-          countPerBook[id] = (countPerBook[id] ?? 0) + 1;
-        }
+        // ספר עם 2+ סימניות יקבל קבוצה משלו
+        final countPerBook = _getCountPerBook(state.bookmarks);
 
         String bookmarkGroupKey(Bookmark bm) {
           final id = bookIdentity(bm.book);
@@ -137,7 +156,7 @@ class BookmarkView extends StatelessWidget {
               // ייתכן שתוצג "סימניות הספר נמחקו" גם כשלא היו לספר סימניות
               // (לחיצת כפתור בעת מצב ריק).
               final removed =
-                  ctx.read<BookmarkBloc>().clearBookmarksForBook(bookFilter!);
+                  ctx.read<BookmarkBloc>().clearBookmarksForBook(bookFilter);
               if (removed) {
                 UiSnack.show('סימניות הספר נמחקו');
               }

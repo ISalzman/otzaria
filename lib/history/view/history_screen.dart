@@ -46,6 +46,19 @@ class HistoryView extends StatefulWidget {
 class _HistoryViewState extends State<HistoryView> {
   String? _selectedWorkspace;
 
+  /// קאש למפתחות הקיבוץ — נמנע מחישוב run-length encoding בכל קריאה ל-build
+  /// כשרשימת ההיסטוריה לא משתנה.
+  List<dynamic>? _cachedHistoryForRunKeys;
+  Map<dynamic, String>? _cachedRunKeys;
+
+  Map<dynamic, String> _getRunKeys(List<dynamic> history) {
+    if (identical(_cachedHistoryForRunKeys, history)) return _cachedRunKeys!;
+    final runKeys = _computeRunKeys(history);
+    _cachedHistoryForRunKeys = history;
+    _cachedRunKeys = runKeys;
+    return runKeys;
+  }
+
   List<String> _workspaceNames(List<dynamic> history) {
     return history
         .map((item) => item.workspaceName)
@@ -151,7 +164,7 @@ class _HistoryViewState extends State<HistoryView> {
         final workspaceNames = _workspaceNames(state.history);
         final effectiveSelectedWorkspace =
             _effectiveSelectedWorkspace(workspaceNames);
-        final runKeys = _computeRunKeys(state.history);
+        final runKeys = _getRunKeys(state.history);
 
         return Column(
           children: [

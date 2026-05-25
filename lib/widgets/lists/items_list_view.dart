@@ -20,6 +20,10 @@ class ItemsListView extends StatefulWidget {
   final String Function(dynamic item)? searchKeyBuilder;
   final bool Function(dynamic item)? additionalFilter;
 
+  /// כשמסופק, מחזיר את הכותרת הראשית של הפריט. ברירת מחדל — `item.book.title`.
+  /// תן callback כדי לתמוך בפריטים שאינם בנויים סביב `book`.
+  final String Function(dynamic item)? titleBuilder;
+
   /// כשמסופק, הפריטים יקובצו לפי המפתח המוחזר.
   /// מפתח null מטופל כמחרוזת ריקה.
   final String? Function(dynamic item)? groupKeyBuilder;
@@ -50,6 +54,7 @@ class ItemsListView extends StatefulWidget {
     this.groupKeyBuilder,
     this.groupTitleBuilder,
     this.itemSortComparator,
+    this.titleBuilder,
   });
 
   /// כותרת המיקום בתוך הספר — חותך את שם הספר מ-ref.
@@ -85,6 +90,28 @@ class _ItemsListViewState extends State<ItemsListView> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = '';
+
+  /// קאש לרשימה הממוינת — חישוב המיון (O(n log n)) רץ רק כשהקלט משתנה,
+  /// לא בכל הקלדה בשדה החיפוש (שעושה רק filter על הקאש).
+  List<dynamic>? _cachedItemsForSort;
+  Comparator<dynamic>? _cachedComparator;
+  List<MapEntry<int, dynamic>>? _cachedSortedEntries;
+
+  List<MapEntry<int, dynamic>> _getSortedEntries() {
+    final comparator = widget.itemSortComparator;
+    if (identical(_cachedItemsForSort, widget.items) &&
+        identical(_cachedComparator, comparator)) {
+      return _cachedSortedEntries!;
+    }
+    final entries = widget.items.asMap().entries.toList();
+    if (comparator != null) {
+      entries.sort((a, b) => comparator(a.value, b.value));
+    }
+    _cachedItemsForSort = widget.items;
+    _cachedComparator = comparator;
+    _cachedSortedEntries = entries;
+    return entries;
+  }
 
   Widget _buildInlineSubtitle(
     BuildContext context,
@@ -163,7 +190,8 @@ class _ItemsListViewState extends State<ItemsListView> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    item.book.title as String,
+                    widget.titleBuilder?.call(item) ??
+                        item.book.title as String,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -296,22 +324,20 @@ class _ItemsListViewState extends State<ItemsListView> {
       );
     }
 
-    final filteredEntries = widget.items.asMap().entries.where((entry) {
+    // המיון מבוצע פעם אחת על widget.items (מקושש), והסינון רץ מעליו
+    // בכל הקלדה — O(n) במקום O(n log n) על כל תו.
+    final sortedEntries = _getSortedEntries();
+    final lowerQuery = _searchQuery.toLowerCase();
+    final displayEntries = sortedEntries.where((entry) {
       final item = entry.value;
       if (widget.additionalFilter != null && !widget.additionalFilter!(item)) {
         return false;
       }
-      if (_searchQuery.isEmpty) return true;
+      if (lowerQuery.isEmpty) return true;
       final searchText =
           widget.searchKeyBuilder?.call(item) ?? item.ref?.toString() ?? '';
-      return searchText.toLowerCase().contains(_searchQuery.toLowerCase());
+      return searchText.toLowerCase().contains(lowerQuery);
     }).toList();
-
-    // מיון תוך שמירה על האינדקס המקורי
-    final displayEntries = widget.itemSortComparator != null
-        ? ([...filteredEntries]
-          ..sort((a, b) => widget.itemSortComparator!(a.value, b.value)))
-        : filteredEntries;
 
     return Column(
       children: [
