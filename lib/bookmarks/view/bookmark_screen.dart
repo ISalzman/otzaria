@@ -36,21 +36,55 @@ class BookmarksDialog extends StatelessWidget {
   }
 }
 
-class BookmarkView extends StatelessWidget {
+class BookmarkView extends StatefulWidget {
   /// אם מסופק, מסונן לרשימה רק סימניות שזהות הספר שלהן זהה לזו של [bookFilter].
   final Book? bookFilter;
 
   const BookmarkView({super.key, this.bookFilter});
 
-  OpenedTab _buildTabForBookmark(
-    Bookmark bookmark,
-  ) {
+  @override
+  State<BookmarkView> createState() => _BookmarkViewState();
+}
+
+class _BookmarkViewState extends State<BookmarkView> {
+  /// קאש לספירת הסימניות לפי ספר — נמנע מחישוב בכל קריאה ל-build
+  /// כשרשימת הסימניות לא משתנה.
+  List<Bookmark>? _cachedBookmarks;
+  Map<String, int>? _cachedCountPerBook;
+
+  Map<String, int> _getCountPerBook(List<Bookmark> bookmarks) {
+    if (identical(_cachedBookmarks, bookmarks)) return _cachedCountPerBook!;
+    final counts = <String, int>{};
+    for (final bm in bookmarks) {
+      final id = bookIdentity(bm.book);
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+    _cachedBookmarks = bookmarks;
+    _cachedCountPerBook = counts;
+    return counts;
+  }
+
+  static int _compareBookmarks(Bookmark a, Bookmark b) {
+    final aPath = a.book.categoryPath ?? '';
+    final bPath = b.book.categoryPath ?? '';
+    final pathCmp = aPath.compareTo(bPath);
+    if (pathCmp != 0) return pathCmp;
+    final aCmp = bookIdentity(a.book).compareTo(bookIdentity(b.book));
+    if (aCmp != 0) return aCmp;
+    return a.index.compareTo(b.index);
+  }
+
+  /// בונה את ה-Tab המתאים לסימניה. עבור [BookmarkTargetKind.commentators]
+  /// יוצרים sourceTab בלתי-תלוי וגורסה אותו ל-PdfCommentatorsTab/CommentatorsTab,
+  /// בדומה לזרימה ב-HistoryScreen.
+  OpenedTab _buildTabForBookmark(Bookmark bookmark) {
+    final openLeftPane = shouldAutoOpenReadingLeftPane();
     if (bookmark.targetKind == BookmarkTargetKind.commentators) {
       if (bookmark.book is PdfBook) {
         final sourceTab = PdfBookTab(
           book: bookmark.book as PdfBook,
           pageNumber: bookmark.index,
-          openLeftPane: shouldAutoOpenReadingLeftPane(),
+          openLeftPane: openLeftPane,
         )..activeCommentators = bookmark.commentatorsToShow.toSet();
         return PdfCommentatorsTab(sourceTab: sourceTab);
       }
@@ -59,7 +93,7 @@ class BookmarkView extends StatelessWidget {
         bookmark.book,
         bookmark.index,
         commentators: bookmark.commentatorsToShow,
-        openLeftPane: shouldAutoOpenReadingLeftPane(),
+        openLeftPane: openLeftPane,
       ) as TextBookTab;
       return CommentatorsTab(sourceTab: sourceTab);
     }
@@ -68,7 +102,7 @@ class BookmarkView extends StatelessWidget {
       bookmark.book,
       bookmark.index,
       commentators: bookmark.commentatorsToShow,
-      openLeftPane: shouldAutoOpenReadingLeftPane(),
+      openLeftPane: openLeftPane,
     );
   }
 
@@ -95,28 +129,42 @@ class BookmarkView extends StatelessWidget {
     }
   }
 
-  String _locationSubtitle(Bookmark bookmark) {
-    if (bookmark.book is PdfBook) {
-      return bookmark.targetKind == BookmarkTargetKind.commentators
-          ? 'כרטיסיית מפרשים · עמוד ${bookmark.index}'
-          : 'עמוד ${bookmark.index}';
-    }
-    return bookmark.targetKind == BookmarkTargetKind.commentators
-        ? 'כרטיסיית מפרשים · פסקה ${bookmark.index}'
-        : 'פסקה ${bookmark.index}';
-  }
-
   @override
   Widget build(BuildContext context) {
+    final bookFilter = widget.bookFilter;
     final filterIdentity =
-        bookFilter == null ? null : bookIdentity(bookFilter!);
+        bookFilter == null ? null : bookIdentity(bookFilter);
     return BlocBuilder<BookmarkBloc, BookmarkState>(
       builder: (context, state) {
+        // ספר עם 2+ סימניות יקבל קבוצה משלו
+        final countPerBook = _getCountPerBook(state.bookmarks);
+
+        String bookmarkGroupKey(Bookmark bm) {
+          final id = bookIdentity(bm.book);
+          if ((countPerBook[id] ?? 0) > 1) return 'book:$id';
+          return 'folder:${bm.book.categoryPath ?? id}';
+        }
+
+        String? bookmarkGroupTitle(Bookmark bm) {
+          final id = bookIdentity(bm.book);
+          if ((countPerBook[id] ?? 0) > 1) return bm.book.title;
+          final path = bm.book.categoryPath;
+          if (path == null || path.isEmpty) return bm.book.title;
+          final segments =
+              path.split(', ').where((s) => s.isNotEmpty).toList();
+          return segments.isNotEmpty ? segments.last : bm.book.title;
+        }
+
         return ItemsListView(
           items: state.bookmarks,
+          itemSortComparator: (a, b) =>
+              _compareBookmarks(b as Bookmark, a as Bookmark),
           additionalFilter: filterIdentity == null
               ? null
               : (item) => bookIdentity(item.book) == filterIdentity,
+          groupKeyBuilder: (item) => bookmarkGroupKey(item as Bookmark),
+          groupTitleBuilder: (item) =>
+              bookmarkGroupTitle(item as Bookmark),
           onItemTap: (ctx, item, originalIndex) => _openBook(
             ctx,
             item,
@@ -135,7 +183,7 @@ class BookmarkView extends StatelessWidget {
               // ייתכן שתוצג "סימניות הספר נמחקו" גם כשלא היו לספר סימניות
               // (לחיצת כפתור בעת מצב ריק).
               final removed =
-                  ctx.read<BookmarkBloc>().clearBookmarksForBook(bookFilter!);
+                  ctx.read<BookmarkBloc>().clearBookmarksForBook(bookFilter);
               if (removed) {
                 UiSnack.show('סימניות הספר נמחקו');
               }
@@ -149,7 +197,7 @@ class BookmarkView extends StatelessWidget {
           leadingIconBuilder: (item) => item.book is PdfBook
               ? const Icon(FluentIcons.document_pdf_24_regular)
               : null,
-          subtitleBuilder: (item) => _locationSubtitle(item),
+          subtitleBuilder: (item) => ItemsListView.locationSubtitle(item),
         );
       },
     );

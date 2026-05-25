@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/theme/layout_tokens.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 
 class ReusableItemsDialog extends StatelessWidget {
   final String title;
@@ -22,6 +22,7 @@ class ReusableItemsDialog extends StatelessWidget {
 
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
+      backgroundColor: AppSurfaces.panelBackground(context),
       child: Container(
         width: width,
         height: size.height * 0.8,
@@ -30,13 +31,19 @@ class ReusableItemsDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                const SizedBox(width: 48),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      textDirection: TextDirection.rtl,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
                 IconButton(

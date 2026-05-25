@@ -36,6 +36,12 @@ class AppTokens {
   // ── Drag Handle ——————————————————————————————
   static const double dragHandleCompactHitSize = 18;
   static const double dragHandleRegularHitSize = 24;
+
+  // ── Panel Tab ————————————————————————————————
+  static const double panelTabHeight = 44;
+  static const double panelTabIconSize = 16;
+  static const double panelTabFontSize = 11;
+  static const EdgeInsets panelTabIconMargin = EdgeInsets.only(bottom: 1);
 }
 
 /// סגנונות טקסט מובנים לשימוש עקבי בכל האפליקציה

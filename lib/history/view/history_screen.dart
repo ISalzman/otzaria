@@ -46,6 +46,19 @@ class HistoryView extends StatefulWidget {
 class _HistoryViewState extends State<HistoryView> {
   String? _selectedWorkspace;
 
+  /// קאש למפתחות הקיבוץ — נמנע מחישוב run-length encoding בכל קריאה ל-build
+  /// כשרשימת ההיסטוריה לא משתנה.
+  List<dynamic>? _cachedHistoryForRunKeys;
+  Map<dynamic, String>? _cachedRunKeys;
+
+  Map<dynamic, String> _getRunKeys(List<dynamic> history) {
+    if (identical(_cachedHistoryForRunKeys, history)) return _cachedRunKeys!;
+    final runKeys = _computeRunKeys(history);
+    _cachedHistoryForRunKeys = history;
+    _cachedRunKeys = runKeys;
+    return runKeys;
+  }
+
   List<String> _workspaceNames(List<dynamic> history) {
     return history
         .map((item) => item.workspaceName)
@@ -151,6 +164,7 @@ class _HistoryViewState extends State<HistoryView> {
         final workspaceNames = _workspaceNames(state.history);
         final effectiveSelectedWorkspace =
             _effectiveSelectedWorkspace(workspaceNames);
+        final runKeys = _getRunKeys(state.history);
 
         return Column(
           children: [
@@ -197,6 +211,8 @@ class _HistoryViewState extends State<HistoryView> {
                     ? null
                     : (item) =>
                         item.workspaceName == effectiveSelectedWorkspace,
+                groupKeyBuilder: (item) => runKeys[item] ?? '',
+                groupTitleBuilder: (item) => item.workspaceName as String?,
                 searchKeyBuilder: (item) {
                   final parts = [item.ref as String];
                   final ws = item.workspaceName as String?;
@@ -271,22 +287,20 @@ class _HistoryViewState extends State<HistoryView> {
                 leadingIconBuilder: (item) =>
                     _getLeadingIcon(item.book, item.isSearch),
                 subtitleBuilder: (item) {
-                  final parts = <String>[];
-                  final facets = item.searchScopeFacets;
-                  if (facets != null && facets.isNotEmpty) {
+                  if (item.isSearch as bool) {
+                    final facets = item.searchScopeFacets as List<String>?;
+                    if (facets == null || facets.isEmpty) return null;
                     final allNames = _facetDisplayNames(facets);
                     final displayed = allNames.length > 2
                         ? '${allNames.take(2).join(', ')}...'
                         : allNames.join(', ');
-                    parts.add('חיפוש בקטגוריות: $displayed');
+                    return 'חיפוש בקטגוריות: $displayed';
                   }
-                  if (item.workspaceName != null) {
-                    parts.add(item.workspaceName!);
-                  }
-                  return parts.isEmpty ? null : parts.join(' | ');
+                  return ItemsListView.locationSubtitle(item);
                 },
                 subtitleTooltipBuilder: (item) {
-                  final facets = item.searchScopeFacets;
+                  if (!(item.isSearch as bool)) return null;
+                  final facets = item.searchScopeFacets as List<String>?;
                   if (facets == null || facets.length <= 2) return null;
                   return 'חיפוש בקטגוריות: ${_facetDisplayNames(facets).join(', ')}';
                 },
@@ -303,5 +317,24 @@ class _HistoryViewState extends State<HistoryView> {
       final segments = facet.split('/').where((segment) => segment.isNotEmpty);
       return segments.isNotEmpty ? segments.last : facet;
     }).toList();
+  }
+
+  /// קיבוץ לפי ריצות רציפות של אותו שולחן עבודה (run-length encoding).
+  /// שולחן A שמופיע פעמיים לא-רציפות יקבל שתי קבוצות נפרדות.
+  static Map<dynamic, String> _computeRunKeys(List<dynamic> history) {
+    final runKeys = Map<dynamic, String>.identity();
+    bool isFirst = true;
+    String? lastWorkspace;
+    int runIndex = 0;
+    for (final item in history) {
+      final ws = item.workspaceName as String?;
+      if (isFirst || ws != lastWorkspace) {
+        runIndex++;
+        lastWorkspace = ws;
+        isFirst = false;
+      }
+      runKeys[item] = '${ws ?? ''}_$runIndex';
+    }
+    return runKeys;
   }
 }

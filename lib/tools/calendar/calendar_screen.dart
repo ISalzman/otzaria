@@ -543,26 +543,9 @@ class CalendarWidgetState extends State<CalendarWidget> {
           isOpen: _isSettingsPanelOpen,
           onClose: _toggleSettingsPanel,
           width: 400,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Text(
-                      'הגדרות',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-              const Expanded(
-                child: CalendarSettingsPanel(),
-              ),
-            ],
+          title: 'הגדרות',
+          child: const Expanded(
+            child: CalendarSettingsPanel(),
           ),
         ),
       ],

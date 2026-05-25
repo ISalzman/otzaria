@@ -36,7 +36,6 @@ class SettingsState extends Equatable {
   final bool enablePerBookSettings;
   final bool pdfBookViewByDefault;
   final bool isOfflineMode;
-  final bool alignTabsToRight;
   final bool enableHtmlLinks;
   final bool personalNotesCollapsedByDefault;
   final bool protectedModeEnabled;
@@ -83,7 +82,6 @@ class SettingsState extends Equatable {
     required this.enablePerBookSettings,
     required this.pdfBookViewByDefault,
     required this.isOfflineMode,
-    required this.alignTabsToRight,
     required this.enableHtmlLinks,
     required this.personalNotesCollapsedByDefault,
     required this.protectedModeEnabled,
@@ -129,7 +127,6 @@ class SettingsState extends Equatable {
       enablePerBookSettings: false,
       pdfBookViewByDefault: false,
       isOfflineMode: false,
-      alignTabsToRight: false,
       enableHtmlLinks: true,
       personalNotesCollapsedByDefault: true,
       protectedModeEnabled: false,
@@ -171,7 +168,6 @@ class SettingsState extends Equatable {
     bool? enablePerBookSettings,
     bool? pdfBookViewByDefault,
     bool? isOfflineMode,
-    bool? alignTabsToRight,
     bool? enableHtmlLinks,
     bool? personalNotesCollapsedByDefault,
     bool? protectedModeEnabled,
@@ -217,7 +213,6 @@ class SettingsState extends Equatable {
           enablePerBookSettings ?? this.enablePerBookSettings,
       pdfBookViewByDefault: pdfBookViewByDefault ?? this.pdfBookViewByDefault,
       isOfflineMode: isOfflineMode ?? this.isOfflineMode,
-      alignTabsToRight: alignTabsToRight ?? this.alignTabsToRight,
       enableHtmlLinks: enableHtmlLinks ?? this.enableHtmlLinks,
       personalNotesCollapsedByDefault: personalNotesCollapsedByDefault ??
           this.personalNotesCollapsedByDefault,
@@ -272,7 +267,6 @@ class SettingsState extends Equatable {
         enablePerBookSettings,
         pdfBookViewByDefault,
         isOfflineMode,
-        alignTabsToRight,
         enableHtmlLinks,
         personalNotesCollapsedByDefault,
         protectedModeEnabled,

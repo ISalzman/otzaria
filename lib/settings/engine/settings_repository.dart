@@ -61,7 +61,6 @@ class SettingsRepository {
   static const String keyHebrewBooksPath = 'key-hebrew-books-path';
   static const String keyDevChannel = 'key-dev-channel';
   static const String keyCustomFolders = 'key-custom-folders';
-  static const String keyAlignTabsToRight = 'key-align-tabs-to-right';
   static const String keyEnableHtmlLinks = 'key-enable-html-links';
   static const String keyPersonalNotesCollapsedByDefault =
       'key-personal-notes-collapsed';
@@ -250,10 +249,6 @@ class SettingsRepository {
       'softwareAndBookUpdatesEnabled': _settings.getValue<bool>(
         keySoftwareAndBookUpdatesEnabled,
         defaultValue: true,
-      ),
-      'alignTabsToRight': _settings.getValue<bool>(
-        keyAlignTabsToRight,
-        defaultValue: false,
       ),
       'enableHtmlLinks': _settings.getValue<bool>(
         keyEnableHtmlLinks,
@@ -485,10 +480,6 @@ class SettingsRepository {
 
   Future<void> updateSoftwareAndBookUpdatesEnabled(bool value) async {
     await _settings.setValue(keySoftwareAndBookUpdatesEnabled, value);
-  }
-
-  Future<void> updateAlignTabsToRight(bool value) async {
-    await _settings.setValue(keyAlignTabsToRight, value);
   }
 
   Future<void> updateEnableHtmlLinks(bool value) async {
@@ -771,7 +762,6 @@ class SettingsRepository {
     await _settings.setValue(keySoftwareAndBookUpdatesEnabled, true);
     await _settings.setValue(keyErrorReportSenderEmail, '');
     await _settings.setValue(keyQueueErrorReportsWhenOffline, true);
-    await _settings.setValue(keyAlignTabsToRight, false);
     await _settings.setValue(keyPersonalNotesCollapsedByDefault, true);
 
     // Calendar Notification Settings

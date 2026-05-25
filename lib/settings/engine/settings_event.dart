@@ -326,15 +326,6 @@ class UpdateSoftwareAndBookUpdatesEnabled extends SettingsEvent {
   List<Object?> get props => [enabled];
 }
 
-class UpdateAlignTabsToRight extends SettingsEvent {
-  final bool alignTabsToRight;
-
-  const UpdateAlignTabsToRight(this.alignTabsToRight);
-
-  @override
-  List<Object?> get props => [alignTabsToRight];
-}
-
 class UpdateEnableHtmlLinks extends SettingsEvent {
   final bool enableHtmlLinks;
 
