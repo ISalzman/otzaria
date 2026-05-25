@@ -40,8 +40,7 @@ class AppSurfaces {
   /// צבע מפריד פנימי בין שורות בתוך כרטיס תוכן.
   ///
   /// משמש ב-[AppCard.section] וב-[AppCard.sectionDivider]:
-  /// צבע זה מתאים לרווח (SizedBox) הגלוי בין ColoredBox-ים — שניהם
-  /// מראים את אותו הצבע בין השורות ומייצרים קו הפרדה עקבי.
+  /// נצבע ב-Container בגובה [AppCard.sectionSpacing] בין הילדים.
   ///
   /// **שימוש:**
   /// ```dart
@@ -49,6 +48,13 @@ class AppSurfaces {
   /// ```
   static Color cardRowDivider(BuildContext context) =>
       Theme.of(context).scaffoldBackgroundColor;
+
+  /// שכבת בחירה לכרטיסי תוכן.
+  ///
+  /// מוגדרת בשכבת ה-theme כדי למנוע overrides מקומיים של שקיפות
+  /// מחוץ ל-`lib/theme/`.
+  static Color cardSelectionOverlay(BuildContext context) =>
+      Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.3);
 
   /// רקע פריט נבחר ברשימת ניווט (TOC, מפרשים וכד').
   ///
