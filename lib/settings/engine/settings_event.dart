@@ -379,3 +379,21 @@ class UpdateProtectedModePassword extends SettingsEvent {
   @override
   List<Object?> get props => [password];
 }
+
+class UpdateHiddenBuiltInToolIds extends SettingsEvent {
+  final Set<String> hiddenBuiltInToolIds;
+
+  const UpdateHiddenBuiltInToolIds(this.hiddenBuiltInToolIds);
+
+  @override
+  List<Object?> get props => [hiddenBuiltInToolIds];
+}
+
+class UpdateBuiltInToolsPinnedToNavRail extends SettingsEvent {
+  final Set<String> builtInToolsPinnedToNavRail;
+
+  const UpdateBuiltInToolsPinnedToNavRail(this.builtInToolsPinnedToNavRail);
+
+  @override
+  List<Object?> get props => [builtInToolsPinnedToNavRail];
+}

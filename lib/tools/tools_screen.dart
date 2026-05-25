@@ -30,6 +30,13 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 
+/// בדיקה האם שני סטים מכילים את אותם הערכים. שימושי ב-`listenWhen`.
+bool _setEquals(Set<String> a, Set<String> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  return a.containsAll(b);
+}
+
 /// מזהה הכלי שפעיל כרגע ב-ToolsScreen, או `null` אם המסך לא מוצג.
 /// משמש את ה-MainWindowScreen כדי להדגיש את התוסף שבחרת בסרגל הניווט/הבר
 /// כשנבחרה לשונית של תוסף-מוצמד-לסרגל.
@@ -335,7 +342,9 @@ class ToolsScreenState extends State<ToolsScreen>
 
   // ─── Tab / descriptor management ────────────────────────────────────────────
 
-  List<ToolDescriptor> _buildBaseDescriptors() {
+  /// בונה את כל הכלים המובנים, ללא סינון. רשימה זו מהווה את המקור הסמכותי
+  /// לזיהוי כלים מובנים תקפים גם עבור מסך הגדרות הניהול.
+  List<BuiltInToolDescriptor> _buildAllBuiltInDescriptors() {
     return [
       BuiltInToolDescriptor(
         toolId: 'builtin.calendar',
@@ -395,6 +404,14 @@ class ToolsScreenState extends State<ToolsScreen>
         pageBuilder: () => const AcronymsDictionaryScreen(),
       ),
     ];
+  }
+
+  List<ToolDescriptor> _buildBaseDescriptors() {
+    final hiddenIds =
+        context.read<SettingsBloc>().state.hiddenBuiltInToolIds;
+    return _buildAllBuiltInDescriptors()
+        .where((d) => !hiddenIds.contains(d.toolId))
+        .toList();
   }
 
   void _closeTransientPanelsForToolId(String? toolId) {
@@ -1022,7 +1039,10 @@ class ToolsScreenState extends State<ToolsScreen>
     return MultiBlocListener(
       listeners: [
         BlocListener<SettingsBloc, SettingsState>(
-          listenWhen: (prev, curr) => prev.isOfflineMode != curr.isOfflineMode,
+          listenWhen: (prev, curr) =>
+              prev.isOfflineMode != curr.isOfflineMode ||
+              !_setEquals(
+                  prev.hiddenBuiltInToolIds, curr.hiddenBuiltInToolIds),
           listener: (context, settingsState) {
             final blocState = context.read<PluginSystemBloc>().state;
             if (blocState is! PluginSystemLoaded) return;
