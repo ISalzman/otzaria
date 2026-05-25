@@ -90,14 +90,6 @@ class DesignSettingsTab extends StatelessWidget {
       ],
     ),
     SettingsSearchEntry(
-      id: 'design.tabs.align_right',
-      title: 'הצגת כרטיסיות בימין',
-      subtitle: 'הצגת כרטיסיות הספרים בימין החלון',
-      tab: SettingsTab.design,
-      cardId: 'design.tabs',
-      keywords: ['ימין', 'מרכז', 'כרטיסיות', 'מופעל', 'לא מופעל'],
-    ),
-    SettingsSearchEntry(
       id: 'design.layout.sidebar_mode',
       title: 'חלונית ניווט בין כותרות',
       subtitle: 'הצגה / אוטומטי / הסתרה של חלונית הניווט',

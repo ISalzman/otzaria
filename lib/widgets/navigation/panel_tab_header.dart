@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 
 /// טאב סטנדרטי לפנלים הימניים (ללא אייקון filled).
@@ -89,8 +90,7 @@ class _PanelOpenHandleState extends State<PanelOpenHandle> {
           width: _isHovering ? 48 : 20,
           height: 80,
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest
-                .withValues(alpha: _isHovering ? 0.95 : 0.8),
+            color: AppSurfaces.panelOpenHandle(cs, isHovering: _isHovering),
             borderRadius: const BorderRadius.only(
               topRight: Radius.circular(40),
               bottomRight: Radius.circular(40),
