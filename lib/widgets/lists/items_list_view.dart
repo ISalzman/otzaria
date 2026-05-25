@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/theme/layout_tokens.dart';
+import 'package:otzaria/models/books.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
@@ -19,6 +20,22 @@ class ItemsListView extends StatefulWidget {
   final String Function(dynamic item)? searchKeyBuilder;
   final bool Function(dynamic item)? additionalFilter;
 
+  /// כשמסופק, מחזיר את הכותרת הראשית של הפריט. ברירת מחדל — `item.book.title`.
+  /// תן callback כדי לתמוך בפריטים שאינם בנויים סביב `book`.
+  final String Function(dynamic item)? titleBuilder;
+
+  /// כשמסופק, הפריטים יקובצו לפי המפתח המוחזר.
+  /// מפתח null מטופל כמחרוזת ריקה.
+  final String? Function(dynamic item)? groupKeyBuilder;
+
+  /// מחזיר את כותרת הקבוצה לפי הפריט הראשון בה.
+  /// null = ללא כותרת עבור אותה קבוצה.
+  final String? Function(dynamic firstItemInGroup)? groupTitleBuilder;
+
+  /// כשמסופק, הפריטים ימוינו לפי הפונקציה הזו לפני קיבוץ והצגה.
+  /// האינדקס המקורי (originalIndex) נשמר גם אחרי מיון.
+  final Comparator<dynamic>? itemSortComparator;
+
   const ItemsListView({
     super.key,
     required this.items,
@@ -34,7 +51,36 @@ class ItemsListView extends StatefulWidget {
     this.subtitleTooltipBuilder,
     this.searchKeyBuilder,
     this.additionalFilter,
+    this.groupKeyBuilder,
+    this.groupTitleBuilder,
+    this.itemSortComparator,
+    this.titleBuilder,
   });
+
+  /// כותרת המיקום בתוך הספר — חותך את שם הספר מ-ref.
+  /// fallback: "תחילת הספר" (index 0), "עמוד X" (PDF), "פסקה X" (טקסט).
+  static String? locationSubtitle(dynamic item) {
+    final ref = item.ref as String;
+    final bookTitle = item.book.title as String;
+
+    String location;
+    if (ref == bookTitle) {
+      location = '';
+    } else if (ref.startsWith('$bookTitle, ')) {
+      location = ref.substring('$bookTitle, '.length);
+    } else if (ref.startsWith('$bookTitle ')) {
+      location = ref.substring('$bookTitle '.length);
+    } else {
+      location = ref;
+    }
+
+    if (location.isEmpty) {
+      if (item.index as int == 0) return 'תחילת הספר';
+      if (item.book is PdfBook) return 'עמוד ${item.index as int}';
+      return 'פסקה ${item.index as int}';
+    }
+    return location;
+  }
 
   @override
   State<ItemsListView> createState() => _ItemsListViewState();
@@ -45,31 +91,46 @@ class _ItemsListViewState extends State<ItemsListView> {
   final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = '';
 
-  Widget _buildSubtitle(
+  /// קאש לרשימה הממוינת — חישוב המיון (O(n log n)) רץ רק כשהקלט משתנה,
+  /// לא בכל הקלדה בשדה החיפוש (שעושה רק filter על הקאש).
+  List<dynamic>? _cachedItemsForSort;
+  Comparator<dynamic>? _cachedComparator;
+  List<MapEntry<int, dynamic>>? _cachedSortedEntries;
+
+  List<MapEntry<int, dynamic>> _getSortedEntries() {
+    final comparator = widget.itemSortComparator;
+    if (identical(_cachedItemsForSort, widget.items) &&
+        identical(_cachedComparator, comparator)) {
+      return _cachedSortedEntries!;
+    }
+    final entries = widget.items.asMap().entries.toList();
+    if (comparator != null) {
+      entries.sort((a, b) => comparator(a.value, b.value));
+    }
+    _cachedItemsForSort = widget.items;
+    _cachedComparator = comparator;
+    _cachedSortedEntries = entries;
+    return entries;
+  }
+
+  Widget _buildInlineSubtitle(
     BuildContext context,
-    String centerText,
-    String? centerTooltip, {
-    required bool isNarrow,
-  }) {
+    String text,
+    String? tooltip,
+  ) {
     final cs = Theme.of(context).colorScheme;
 
-    final subtitle = Padding(
-      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 0 : 16.0),
-      child: Text(
-        centerText,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 14,
-          color: cs.onSurface.withValues(alpha: 0.6),
-        ),
-        textDirection: TextDirection.rtl,
-      ),
+    final subtitleWidget = Text(
+      text,
+      style: const TextStyle(fontSize: 16),
+      textDirection: TextDirection.rtl,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
     );
 
-    final tooltipMessage = centerTooltip?.trim();
+    final tooltipMessage = tooltip?.trim();
     if (tooltipMessage == null || tooltipMessage.isEmpty) {
-      return subtitle;
+      return subtitleWidget;
     }
 
     return Tooltip(
@@ -100,7 +161,130 @@ class _ItemsListViewState extends State<ItemsListView> {
           ),
         ],
       ),
-      child: subtitle,
+      child: subtitleWidget,
+    );
+  }
+
+  Widget _buildItemRow(
+    BuildContext context,
+    dynamic item,
+    int originalIndex,
+  ) {
+    final subtitle = widget.subtitleBuilder?.call(item);
+    final subtitleTooltip = widget.subtitleTooltipBuilder?.call(item);
+
+    return InkWell(
+      onTap: () => widget.onItemTap(context, item, originalIndex),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        child: Row(
+          children: [
+            if (widget.leadingIconBuilder?.call(item) case final leadingIcon?)
+              Padding(
+                padding: const EdgeInsets.only(left: 12.0),
+                child: leadingIcon,
+              ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.titleBuilder?.call(item) ??
+                        item.book.title as String,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textDirection: TextDirection.rtl,
+                  ),
+                  if (subtitle != null)
+                    _buildInlineSubtitle(context, subtitle, subtitleTooltip),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(FluentIcons.delete_24_regular),
+              tooltip: 'מחק',
+              onPressed: () => widget.onDelete(context, originalIndex),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGroupCard(
+    BuildContext context,
+    List<MapEntry<int, dynamic>> entries,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: AppSurfaces.card(context),
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+      ),
+      child: Column(
+        children: [
+          for (int i = 0; i < entries.length; i++) ...[
+            _buildItemRow(context, entries[i].value, entries[i].key),
+            if (i < entries.length - 1)
+              Divider(
+                height: 1,
+                thickness: 1.5,
+                indent: 0,
+                endIndent: 0,
+                color: cs.surfaceContainerHighest,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroupedList(
+    BuildContext context,
+    List<MapEntry<int, dynamic>> filteredEntries,
+  ) {
+    final theme = Theme.of(context);
+
+    // קיבוץ תוך שמירה על סדר ההופעה הראשון
+    final groups = <String, List<MapEntry<int, dynamic>>>{};
+    for (final entry in filteredEntries) {
+      final key = widget.groupKeyBuilder!(entry.value) ?? '';
+      (groups[key] ??= []).add(entry);
+    }
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 8),
+      children: [
+        for (final group in groups.entries) ...[
+          Builder(
+            builder: (context) {
+              final title = widget.groupTitleBuilder
+                  ?.call(group.value.first.value);
+              if (title == null || title.isEmpty) {
+                return const SizedBox(height: 12);
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: 16, bottom: 8),
+                child: Text(
+                  title,
+                  textDirection: TextDirection.rtl,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              );
+            },
+          ),
+          _buildGroupCard(context, group.value),
+        ],
+      ],
     );
   }
 
@@ -113,7 +297,6 @@ class _ItemsListViewState extends State<ItemsListView> {
       });
     });
 
-    // Auto-focus the search field when the screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _searchFocusNode.requestFocus();
     });
@@ -128,9 +311,6 @@ class _ItemsListViewState extends State<ItemsListView> {
 
   @override
   Widget build(BuildContext context) {
-    // מצב ריק: אם אין פריטים בכלל - או שיש additionalFilter שלא משאיר אף
-    // פריט - מציגים את emptyText (למשל "אין סימניות בספר זה") בלי שדה חיפוש
-    // וכפתורים. רק כשיש פריטים שעוברים את הסינון נטפל בחיפוש המשתמש.
     final additionalFilter = widget.additionalFilter;
     final hasAnyMatching = additionalFilter == null
         ? widget.items.isNotEmpty
@@ -144,16 +324,19 @@ class _ItemsListViewState extends State<ItemsListView> {
       );
     }
 
-    // Filter items based on search query and additionalFilter
-    final filteredEntries = widget.items.asMap().entries.where((entry) {
+    // המיון מבוצע פעם אחת על widget.items (מקושש), והסינון רץ מעליו
+    // בכל הקלדה — O(n) במקום O(n log n) על כל תו.
+    final sortedEntries = _getSortedEntries();
+    final lowerQuery = _searchQuery.toLowerCase();
+    final displayEntries = sortedEntries.where((entry) {
       final item = entry.value;
       if (widget.additionalFilter != null && !widget.additionalFilter!(item)) {
         return false;
       }
-      if (_searchQuery.isEmpty) return true;
+      if (lowerQuery.isEmpty) return true;
       final searchText =
           widget.searchKeyBuilder?.call(item) ?? item.ref?.toString() ?? '';
-      return searchText.toLowerCase().contains(_searchQuery.toLowerCase());
+      return searchText.toLowerCase().contains(lowerQuery);
     }).toList();
 
     return Column(
@@ -172,94 +355,26 @@ class _ItemsListViewState extends State<ItemsListView> {
           ),
         ),
         Expanded(
-          child: filteredEntries.isEmpty
+          child: displayEntries.isEmpty
               ? Center(
                   child: Text(
                     widget.notFoundText,
                     textDirection: TextDirection.rtl,
                   ),
                 )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isNarrow =
-                        constraints.maxWidth < LayoutBreakpoints.compact;
-                    return ListView.builder(
-                      itemCount: filteredEntries.length,
+              : widget.groupKeyBuilder != null
+                  ? _buildGroupedList(context, displayEntries)
+                  : ListView.builder(
+                      itemCount: displayEntries.length,
                       itemBuilder: (context, index) {
-                        final entry = filteredEntries[index];
-                        final item = entry.value;
-                        final originalIndex = entry.key;
-                        final centerText = widget.subtitleBuilder?.call(item);
-                        final centerTooltip =
-                            widget.subtitleTooltipBuilder?.call(item);
-                        final leading = widget.leadingIconBuilder?.call(item);
-                        return InkWell(
-                          onTap: () =>
-                              widget.onItemTap(context, item, originalIndex),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16.0, vertical: 12.0),
-                            child: Row(
-                              crossAxisAlignment: isNarrow
-                                  ? CrossAxisAlignment.start
-                                  : CrossAxisAlignment.center,
-                              children: [
-                                if (leading != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 12.0),
-                                    child: leading,
-                                  ),
-                                Expanded(
-                                  child: isNarrow
-                                      ? Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            Text(
-                                              item.ref,
-                                              style:
-                                                  const TextStyle(fontSize: 16),
-                                              textDirection: TextDirection.rtl,
-                                            ),
-                                            if (centerText != null) ...[
-                                              const SizedBox(height: 4),
-                                              _buildSubtitle(
-                                                context,
-                                                centerText,
-                                                centerTooltip,
-                                                isNarrow: true,
-                                              ),
-                                            ],
-                                          ],
-                                        )
-                                      : Text(
-                                          item.ref,
-                                          style: const TextStyle(fontSize: 16),
-                                          textDirection: TextDirection.rtl,
-                                        ),
-                                ),
-                                if (!isNarrow && centerText != null)
-                                  _buildSubtitle(
-                                    context,
-                                    centerText,
-                                    centerTooltip,
-                                    isNarrow: false,
-                                  ),
-                                IconButton(
-                                  icon:
-                                      const Icon(FluentIcons.delete_24_regular),
-                                  tooltip: 'מחק',
-                                  onPressed: () =>
-                                      widget.onDelete(context, originalIndex),
-                                ),
-                              ],
-                            ),
-                          ),
+                        final entry = displayEntries[index];
+                        return _buildItemRow(
+                          context,
+                          entry.value,
+                          entry.key,
                         );
                       },
-                    );
-                  },
-                ),
+                    ),
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),

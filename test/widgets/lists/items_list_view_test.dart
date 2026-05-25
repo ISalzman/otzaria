@@ -2,10 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/lists/items_list_view.dart';
 
+class _Book {
+  final String title;
+  const _Book(this.title);
+}
+
 class _Item {
   final String ref;
   final String? workspaceName;
   const _Item(this.ref, {this.workspaceName});
+  _Book get book => _Book(ref);
 }
 
 void main() {
@@ -177,6 +183,176 @@ void main() {
       expect(find.text('הלכות שבת'), findsNothing);
     });
 
+    group('groupKeyBuilder ו-groupTitleBuilder', () {
+      Widget buildGrouped({
+        required List<_Item> testItems,
+        String? Function(dynamic)? groupKeyBuilder,
+        String? Function(dynamic)? groupTitleBuilder,
+        Comparator<dynamic>? itemSortComparator,
+        void Function(BuildContext, dynamic, int)? onItemTap,
+      }) {
+        return MaterialApp(
+          home: Scaffold(
+            body: ItemsListView(
+              items: testItems,
+              onItemTap: onItemTap ?? (_, __, ___) {},
+              onDelete: (_, __) {},
+              onClearAll: (_) {},
+              hintText: 'חיפוש',
+              emptyText: 'ריק',
+              notFoundText: 'לא נמצא',
+              clearAllText: 'נקה',
+              groupKeyBuilder: groupKeyBuilder,
+              groupTitleBuilder: groupTitleBuilder,
+              itemSortComparator: itemSortComparator,
+            ),
+          ),
+        );
+      }
+
+      testWidgets('groupKeyBuilder מקבץ פריטים בכרטיסים נפרדים לפי מפתח',
+          (tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(buildGrouped(
+          testItems: items,
+          groupKeyBuilder: (item) => (item as _Item).workspaceName,
+        ));
+        await tester.pump();
+
+        // גמרא + הלכה = 2 קבוצות → 2 Card widgets
+        expect(find.byType(Card), findsNWidgets(2));
+        expect(find.text('שבת עד:'), findsOneWidget);
+        expect(find.text('ברכות ב.'), findsOneWidget);
+        expect(find.text('הלכות שבת'), findsOneWidget);
+      });
+
+      testWidgets('groupTitleBuilder מציג כותרת מעל כל קבוצה', (tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(buildGrouped(
+          testItems: items,
+          groupKeyBuilder: (item) => (item as _Item).workspaceName,
+          groupTitleBuilder: (item) => (item as _Item).workspaceName,
+        ));
+        await tester.pump();
+
+        expect(find.text('גמרא'), findsOneWidget);
+        expect(find.text('הלכה'), findsOneWidget);
+      });
+
+      testWidgets('groupTitleBuilder שמחזיר null לא מציג כותרת', (tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(buildGrouped(
+          testItems: items,
+          groupKeyBuilder: (item) => (item as _Item).workspaceName,
+          groupTitleBuilder: (_) => null,
+        ));
+        await tester.pump();
+
+        expect(find.byType(Card), findsNWidgets(2));
+        expect(find.text('גמרא'), findsNothing);
+        expect(find.text('הלכה'), findsNothing);
+      });
+
+      testWidgets('פריטים עם אותו groupKey מקובצים לכרטיס אחד', (tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        // 3 פריטים לאותה קבוצה → כרטיס אחד
+        const allGemara = [
+          _Item('שבת עד:', workspaceName: 'גמרא'),
+          _Item('ברכות ב.', workspaceName: 'גמרא'),
+          _Item('ברכות ג.', workspaceName: 'גמרא'),
+        ];
+
+        await tester.pumpWidget(buildGrouped(
+          testItems: allGemara,
+          groupKeyBuilder: (item) => (item as _Item).workspaceName,
+        ));
+        await tester.pump();
+
+        expect(find.byType(Card), findsOneWidget);
+      });
+    });
+
+    group('itemSortComparator', () {
+      testWidgets('ממיין פריטים לפי הקריטריון לפני הצגה', (tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        const unsorted = [
+          _Item('ג-שלישי'),
+          _Item('א-ראשון'),
+          _Item('ב-שני'),
+        ];
+
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: ItemsListView(
+              items: unsorted,
+              onItemTap: (_, __, ___) {},
+              onDelete: (_, __) {},
+              onClearAll: (_) {},
+              hintText: 'חיפוש',
+              emptyText: 'ריק',
+              notFoundText: 'לא נמצא',
+              clearAllText: 'נקה',
+              itemSortComparator: (a, b) =>
+                  (a.ref as String).compareTo(b.ref as String),
+            ),
+          ),
+        ));
+        await tester.pump();
+
+        expect(find.text('א-ראשון'), findsOneWidget);
+        expect(find.text('ב-שני'), findsOneWidget);
+        expect(find.text('ג-שלישי'), findsOneWidget);
+      });
+
+      testWidgets('שומר את originalIndex אחרי מיון', (tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        // לפני מיון: index 0='ג', 1='א', 2='ב'
+        const unsorted = [
+          _Item('ג-שלישי'),
+          _Item('א-ראשון'),
+          _Item('ב-שני'),
+        ];
+
+        int? tappedIndex;
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: ItemsListView(
+              items: unsorted,
+              onItemTap: (_, __, i) => tappedIndex = i,
+              onDelete: (_, __) {},
+              onClearAll: (_) {},
+              hintText: 'חיפוש',
+              emptyText: 'ריק',
+              notFoundText: 'לא נמצא',
+              clearAllText: 'נקה',
+              itemSortComparator: (a, b) =>
+                  (a.ref as String).compareTo(b.ref as String),
+            ),
+          ),
+        ));
+        await tester.pump();
+
+        // אחרי מיון: א-ראשון (originalIndex=1) מופיע ראשון
+        await tester.tap(find.text('א-ראשון'));
+        await tester.pump();
+
+        expect(tappedIndex, 1,
+            reason: 'originalIndex צריך להיות 1 (מיקום לפני מיון), לא 0');
+      });
+    });
+
     testWidgets(
         'onItemTap מקבל את originalIndex הנכון גם כשאותו אובייקט מופיע פעמיים',
         (tester) async {
@@ -202,14 +378,14 @@ void main() {
     });
   });
 
-  group('ItemsListView — פריסה רספונסיבית', () {
-    // הבעיה שמנעו: ב-Row(ref|subtitle|delete) ה-subtitle בלי הגבלת רוחב
-    // חוטף את כל המקום של ref, וטקסט ארוך מתקפל לתו-לשורה. במסך צר עוברים
-    // למבנה Column(ref, subtitle), במסך רחב נשארת שורה אחת.
+  group('ItemsListView — פריסת ref ו-subtitle', () {
+    // ref ו-subtitle מוצגים זה מתחת לזה (Column) בכל גודל מסך — בלי זה,
+    // ב-Row(ref|subtitle|delete) ה-subtitle בלי הגבלת רוחב חוטף את כל המקום
+    // של ref וטקסט ארוך מתקפל לתו-לשורה.
     const longRef = 'חזון איש, יורה דעה, סימן יב, סעיף ג';
     const subtitleText = 'שולחן עבודה 1';
 
-    testWidgets('מסך רחב: ref ו-subtitle באותה שורה (y זהה)', (tester) async {
+    testWidgets('מסך רחב: subtitle מתחת ל-ref (Column)', (tester) async {
       await tester.binding.setSurfaceSize(const Size(1024, 768));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -219,10 +395,11 @@ void main() {
       ));
       await tester.pump();
 
-      final refTop = tester.getTopLeft(find.text(longRef)).dy;
+      final refBottom = tester.getBottomLeft(find.text(longRef)).dy;
       final subtitleTop = tester.getTopLeft(find.text(subtitleText)).dy;
-      // מותר הפרש קטן בגלל גובה שונה בין הטקסטים, אבל הם באותו row.
-      expect((refTop - subtitleTop).abs(), lessThan(8));
+      expect(subtitleTop, greaterThanOrEqualTo(refBottom),
+          reason: 'גם במסך רחב subtitle מוצג מתחת ל-ref כדי שלא ייאסף לרוחב '
+              'ויקצץ את ref לכמה שורות');
     });
 
     testWidgets('מסך צר: subtitle מתחת ל-ref (y גדול יותר)', (tester) async {

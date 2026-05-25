@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
 
 /// TabBar גלילה עם חיצים לשמאל/ימין ועיצוב יפה יותר.
 class ScrollableTabBarWithArrows extends StatefulWidget {
@@ -10,8 +11,6 @@ class ScrollableTabBarWithArrows extends StatefulWidget {
   final ValueChanged<bool>? onOverflowChanged;
   // האם להסתיר את החיצים כשאין גלילה (לצמצום רווחים)
   final bool hideArrowsWhenNotScrollable;
-  // רוחב קבוע לכל טאב — null = רוחב טבעי
-  final double? tabWidth;
 
   const ScrollableTabBarWithArrows({
     super.key,
@@ -20,7 +19,6 @@ class ScrollableTabBarWithArrows extends StatefulWidget {
     this.tabAlignment,
     this.onOverflowChanged,
     this.hideArrowsWhenNotScrollable = false,
-    this.tabWidth,
   });
 
   @override
@@ -125,7 +123,7 @@ class _ScrollableTabBarWithArrowsState
     return AlignmentDirectional.bottomStart;
   }
 
-  Widget _buildTabBar() {
+  Widget _buildTabBar({bool shrinkWrap = false}) {
     return NotificationListener<ScrollMetricsNotification>(
       onNotification: (metricsNotification) {
         final metrics = metricsNotification.metrics;
@@ -154,28 +152,23 @@ class _ScrollableTabBarWithArrowsState
                 _attachAndSyncPosition();
               });
             }
-            final resolvedTabs = widget.tabWidth != null
-                ? widget.tabs
-                    .map((tab) => SizedBox(width: widget.tabWidth, child: tab))
-                    .toList()
-                : widget.tabs;
-
             final tabBar = TabBar(
               controller: widget.controller,
               isScrollable: true,
-              tabs: resolvedTabs,
+              tabs: widget.tabs,
               tabAlignment: widget.tabAlignment ?? TabAlignment.start,
               padding: EdgeInsets.zero,
               labelPadding: EdgeInsets.zero,
               indicatorPadding: EdgeInsets.zero,
-              dividerColor: Colors.transparent,
               indicator: const BoxDecoration(),
               splashFactory: NoSplash.splashFactory,
+              overlayColor: AppSurfaces.tabBarNoOverlay,
             );
 
             return Align(
               alignment: _tabBarAlignment(),
-              child: tabBar,
+              widthFactor: shrinkWrap ? 1.0 : null,
+              child: shrinkWrap ? IntrinsicWidth(child: tabBar) : tabBar,
             );
           },
         ),
@@ -229,20 +222,9 @@ class _ScrollableTabBarWithArrowsState
     final bool showArrows = !widget.hideArrowsWhenNotScrollable || hasOverflow;
 
     if (!hasOverflow) {
-      if (widget.tabWidth != null && widget.tabs.isNotEmpty) {
-        final totalWidth = widget.tabWidth! * widget.tabs.length;
-        return Align(
-          alignment: _nonOverflowAlignment(),
-          child: SizedBox(
-            width: totalWidth,
-            child: _buildTabBar(),
-          ),
-        );
-      }
-
       return Align(
         alignment: _nonOverflowAlignment(),
-        child: _buildTabBar(),
+        child: _buildTabBar(shrinkWrap: true),
       );
     }
 

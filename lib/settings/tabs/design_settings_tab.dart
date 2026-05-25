@@ -90,14 +90,6 @@ class DesignSettingsTab extends StatelessWidget {
       ],
     ),
     SettingsSearchEntry(
-      id: 'design.tabs.align_right',
-      title: 'הצגת כרטיסיות בימין',
-      subtitle: 'הצגת כרטיסיות הספרים בימין החלון',
-      tab: SettingsTab.design,
-      cardId: 'design.tabs',
-      keywords: ['ימין', 'מרכז', 'כרטיסיות', 'מופעל', 'לא מופעל'],
-    ),
-    SettingsSearchEntry(
       id: 'design.layout.sidebar_mode',
       title: 'חלונית ניווט בין כותרות',
       subtitle: 'הצגה / אוטומטי / הסתרה של חלונית הניווט',
@@ -313,22 +305,6 @@ class DesignSettingsTab extends StatelessWidget {
                                 .add(UpdateCompactMenuMode(value));
                           },
                         ),
-                      SwitchSettingsTile(
-                        leading: const Icon(FluentIcons.tab_24_regular),
-                        title: const Text('הצגת כרטיסיות בימין',
-                            style: kSettingsTitleStyle),
-                        subtitle: Text(
-                            state.alignTabsToRight
-                                ? 'הכרטיסיות יהיו בצד ימין'
-                                : 'הכרטיסיות יהיו במרכז החלון',
-                            style: kSettingsSubtitleStyle),
-                        value: state.alignTabsToRight,
-                        onChanged: (value) {
-                          context
-                              .read<SettingsBloc>()
-                              .add(UpdateAlignTabsToRight(value));
-                        },
-                      ),
                     ],
                   ),
                 ),

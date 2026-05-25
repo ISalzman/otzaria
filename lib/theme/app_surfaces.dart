@@ -52,4 +52,13 @@ class AppSurfaces {
   /// מבלי לכבות את הנוסח על גביה.
   static Color selectedItem(ColorScheme cs) =>
       cs.primaryContainer.withValues(alpha: 0.3);
+
+  /// רקע רצועת [PanelOpenHandle] — מתפוגג מעט במצב רגיל, אטום יותר ב-hover.
+  static Color panelOpenHandle(ColorScheme cs, {required bool isHovering}) =>
+      cs.surfaceContainerHighest.withValues(alpha: isHovering ? 0.95 : 0.8);
+
+  /// overlayColor ל-TabBar שמצייר hover מותאם אישית (foregroundPainter)
+  /// ולכן רוצה לבטל את ה-hover/focus הגלובלי של [TabBarTheme].
+  static final WidgetStateProperty<Color?> tabBarNoOverlay =
+      WidgetStateProperty.all(Colors.transparent);
 }

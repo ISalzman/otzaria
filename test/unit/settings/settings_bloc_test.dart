@@ -119,8 +119,6 @@ void main() {
                 mockSettings['autoSyncCatalogs'] as bool? ?? false,
             softwareAndBookUpdatesEnabled:
                 mockSettings['softwareAndBookUpdatesEnabled'] as bool? ?? true,
-            alignTabsToRight:
-                mockSettings['alignTabsToRight'] as bool? ?? false,
             enableHtmlLinks: mockSettings['enableHtmlLinks'] as bool? ?? true,
             personalNotesCollapsedByDefault:
                 mockSettings['personalNotesCollapsedByDefault'] as bool? ??

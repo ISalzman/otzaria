@@ -1038,8 +1038,6 @@ class _TabbedReportDialogState extends State<TabbedReportDialog>
             ),
             TabBar(
               controller: _tabController,
-              dividerColor: Colors.transparent,
-              dividerHeight: 0,
               splashBorderRadius: BorderRadius.circular(AppTokens.radiusMD),
               tabs: const [
                 Tab(text: 'שליחת דיווח'),

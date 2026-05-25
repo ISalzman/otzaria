@@ -404,29 +404,11 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
       isOpen: _showingSettings,
       onClose: _toggleSettings,
       width: _settingsPanelWidth,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Text(
-                  'הגדרות',
-                  textDirection: TextDirection.rtl,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-          const Expanded(
-            child: SingleChildScrollView(
-              child: GematriaSettingsTab(),
-            ),
-          ),
-        ],
+      title: 'הגדרות',
+      child: const Expanded(
+        child: SingleChildScrollView(
+          child: GematriaSettingsTab(),
+        ),
       ),
     );
   }
