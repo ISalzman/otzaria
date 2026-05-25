@@ -7,6 +7,7 @@ import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/panels/calendar_settings_panel.dart';
 import 'package:otzaria/settings/panels/gematria_settings_panel.dart';
 import 'package:otzaria/settings/panels/library_settings_panel.dart';
+import 'package:otzaria/settings/panels/tools_management_panel.dart';
 import 'package:otzaria/settings/tabs/about_dev_tab.dart';
 import 'package:otzaria/settings/tabs/design_settings_tab.dart';
 import 'package:otzaria/settings/tabs/library_settings_tab.dart';
@@ -25,4 +26,5 @@ const List<SettingsSearchEntry> kGeneratedSettingsSearchEntries = [
   ...TextSettingsTab.searchEntries,
   ...CalendarSettingsTab.searchEntries,
   ...GematriaSettingsTab.searchEntries,
+  ...ToolsManagementPanel.searchEntries,
 ];

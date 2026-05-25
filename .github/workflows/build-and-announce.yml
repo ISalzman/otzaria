@@ -36,6 +36,21 @@ jobs:
   build_windows:
     if: github.event_name != 'release' && github.event_name != 'pull_request'
     runs-on: windows-2022
+    env:
+      # גרסה קפואה של VC++ Redistributable. ה-URL הוא הקישור הישיר הקבוע
+      # של מיקרוסופט (download.visualstudio.microsoft.com) ולא aka.ms שזז,
+      # כך שכל בנייה — היום או בעוד שנה — מקבלת אותו vc_redist.x64.exe
+      # בדיוק. SHA-256 מאומת אחרי כל הורדה (תופס בלאי / שינוי תוכן ב-CDN).
+      # ה-VERSION משמש כ-assertion על System32 של ה-runner אחרי ההתקנה —
+      # ראה ההערה בשלב "Bundle latest VC++ Redistributable" להסבר מלא.
+      # לעדכון גרסה: לפתור את aka.ms/vc14/vc_redist.x64.exe ידנית (זה
+      # ה-permalink היציב לגרסה האחרונה הנתמכת של MSVC v14, כפי שמופיע
+      # בתיעוד הרשמי learn.microsoft.com/cpp/windows/latest-supported-vc-redist),
+      # להעתיק את ה-URL הסופי, את ה-SHA-256 (מופיע בנתיב ה-URL עצמו)
+      # ואת מספר הגרסה (מ-Get-Item ...VersionInfo.FileVersion).
+      VC_REDIST_URL: 'https://download.visualstudio.microsoft.com/download/pr/c1bd4f2c-3672-468e-8480-7ed419dbb641/90E48ADE404E4576D023ABFA374F323555F233982A8805EA9AC63DCA9491A16B/VC_redist.x64.exe'
+      VC_REDIST_SHA256: '90E48ADE404E4576D023ABFA374F323555F233982A8805EA9AC63DCA9491A16B'
+      VC_REDIST_VERSION: '14.51.36231.0'
     # env:
     #   RUSTUP_HOME: ${{ github.workspace }}\.rustup
     #   CARGO_HOME:  ${{ github.workspace }}\.cargo
@@ -47,7 +62,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.41.9
+          flutter-version: 3.44.0
           cache: true
 
       - name: Create Google Calendar Credentials
@@ -121,6 +136,101 @@ jobs:
           dart run pdfrx:remove_wasm_modules
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
+
+      - name: Bundle latest VC++ Redistributable runtime DLLs (app-local)
+        shell: pwsh
+        run: |
+          # מטרה: לארוז את ה-DLLs של MSVC runtime (MSVCP140 וחבריו) ליד
+          # otzaria.exe כך שיינטענו ע"י סדר חיפוש ה-DLL של ויינדוס במקום
+          # הגרסה שמותקנת ב-System32 אצל המשתמש. רקע: גרסה ספציפית של
+          # MSVCP140.dll (14.36.32532.0 שהגיעה עם VS 2022 17.6, יוני 2023)
+          # מכילה NULL-deref ב-+0x12f58 שמקריס כל std::string concat
+          # בקוד החם של flutter_inappwebview, ובלי שדרוג מבחוץ הוא נשאר
+          # תקוע במכונת המשתמש. בנדול app-local פותר את זה לכל ארבעת מסלולי
+          # ההפצה (regular installer, silent installer, full installer, ו-
+          # portable ZIP) — אף אחד מהם כבר לא מריץ vc_redist.x64.exe בהתקנה
+          # (גם FULL הוסר אחרי שהוכח שה-bundling app-local מספיק).
+          #
+          # הגרסה מקובעת ב-env (VC_REDIST_URL + VC_REDIST_SHA256 + VC_REDIST_VERSION)
+          # ולא מוורדת מ-aka.ms הזז, כך שאותו vc_redist.x64.exe יורד בכל
+          # בנייה. אחרי ההורדה מתבצע אימות SHA-256. מתקינים אותו על ה-runner
+          # (שהוא VM זמני) ואז מעתיקים את ה-DLLs מ-System32 ל-installer\vcredist\x64.
+          # ה-install(DIRECTORY) ב-CMakeLists קולט אותם משם וממקם ליד otzaria.exe
+          # בתיקיית Release; כל מסלולי ההפצה אחר כך מורידים מאותה Release\*.
+          #
+          # נקודה עדינה: windows-2022 כבר מותקנת מראש עם VC Redist, ולפעמים
+          # היא חדשה משלנו. במצב כזה ה-/install שלנו מחזיר 1638
+          # (newer-already-installed) ו-System32 *לא* מתעדכנת — כלומר נעתיק
+          # DLLs של הגרסה שעל ה-runner, לא של ה-vc_redist שהורדנו ואימתנו.
+          # זה היה הופך את ה"קיבוע" ללא דטרמיניסטי. הפתרון: אחרי ההתקנה
+          # מבצעים assert שגרסת MSVCP140.dll ב-System32 שווה ל-VC_REDIST_VERSION;
+          # אם לא — fail loud, וצריך לעדכן את הפין (או לקבע את גרסת הראנר).
+          # כך התחייבות הקיבוע הופכת מהבטחה ריקה לאמת ניתנת לבדיקה: אם הבנייה
+          # עוברת, ה-DLLs הם בדיוק מהגרסה שב-env, ולא משהו שתלוי בראנר.
+          $ErrorActionPreference = 'Stop'
+          if (-not (Test-Path "installer\vc_redist.x64.exe")) {
+            Write-Host "Downloading pinned vc_redist.x64.exe ($env:VC_REDIST_URL)..."
+            Invoke-WebRequest -Uri $env:VC_REDIST_URL -OutFile "installer\vc_redist.x64.exe"
+          } else {
+            Write-Host "vc_redist.x64.exe already present, reusing"
+          }
+          $actualHash = (Get-FileHash "installer\vc_redist.x64.exe" -Algorithm SHA256).Hash
+          if ($actualHash -ne $env:VC_REDIST_SHA256) {
+            throw "vc_redist.x64.exe SHA-256 mismatch — expected $env:VC_REDIST_SHA256 but got $actualHash"
+          }
+          Write-Host "vc_redist.x64.exe SHA-256 verified: $actualHash"
+          Write-Host "Installing vc_redist.x64.exe on the runner..."
+          $proc = Start-Process -FilePath "installer\vc_redist.x64.exe" `
+            -ArgumentList '/install','/quiet','/norestart' -Wait -PassThru
+          # exit codes: 0=success, 1638=newer-version-already-installed, 3010=ok-needs-reboot
+          if ($proc.ExitCode -notin @(0, 1638, 3010)) {
+            throw "vc_redist.x64.exe install failed with exit code $($proc.ExitCode)"
+          }
+          Write-Host "vc_redist exit code: $($proc.ExitCode)"
+          # Assert ש-System32 באמת מחזיקה את הגרסה שאנחנו מקבעים. אם
+          # ה-runner היה כבר עם גרסה חדשה יותר, /install החזיר 1638 (legal
+          # ⇒ "no-op") אבל System32 נשארה ללא שינוי — כלומר נעתיק את הגרסה
+          # של ה-runner, לא של ה-pin. אז עוצרים כאן ומבקשים לעדכן את ה-env.
+          $msvcpPath = Join-Path $env:SystemRoot 'System32\msvcp140.dll'
+          if (-not (Test-Path $msvcpPath)) {
+            throw "msvcp140.dll missing from $msvcpPath after vc_redist install — something is wrong with the runner image"
+          }
+          $actualMsvcpVersion = (Get-Item $msvcpPath).VersionInfo.FileVersion
+          if ($actualMsvcpVersion -ne $env:VC_REDIST_VERSION) {
+            throw @"
+VC++ runtime version mismatch on runner.
+  System32\msvcp140.dll:  $actualMsvcpVersion
+  pinned VC_REDIST_VERSION: $env:VC_REDIST_VERSION
+
+This usually means the windows-2022 runner image now ships with a newer
+VC Redist than our pin, so /install returned 1638 (no-op) and the DLLs
+we are about to bundle are NOT the ones we promised in the pin.
+
+Either bump VC_REDIST_URL / VC_REDIST_SHA256 / VC_REDIST_VERSION to the
+runner's newer version (after verifying it works), or pin the runner
+image to an older sha (runs-on: ghcr.io/actions/runner-images@sha256:...).
+"@
+          }
+          Write-Host "System32 msvcp140.dll version matches pin: $actualMsvcpVersion"
+          $destDir = "installer\vcredist\x64"
+          New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+          $dlls = @(
+            'msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll',
+            'msvcp140_atomic_wait.dll', 'msvcp140_codecvt_ids.dll',
+            'vcruntime140.dll', 'vcruntime140_1.dll', 'vcruntime140_threads.dll',
+            'concrt140.dll', 'vccorlib140.dll'
+          )
+          foreach ($d in $dlls) {
+            $src = Join-Path $env:SystemRoot "System32\$d"
+            if (Test-Path $src) {
+              Copy-Item -Path $src -Destination (Join-Path $destDir $d) -Force
+              $ver = (Get-Item $src).VersionInfo.FileVersion
+              Write-Host "  copied $d (v$ver)"
+            } else {
+              Write-Host "::warning::$d not found in System32 — skipping"
+            }
+          }
+          Write-Host "VC++ runtime DLLs staged in $destDir"
 
       - name: Build Flutter Windows app
         shell: pwsh
@@ -288,11 +398,10 @@ jobs:
         if: true
         shell: pwsh
         run: |
-          Write-Host "Downloading Visual C++ Redistributable (official Microsoft)..."
-          Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "installer\vc_redist.x64.exe"
-          $size = [math]::Round((Get-Item "installer\vc_redist.x64.exe").Length / 1MB, 2)
-          Write-Host "vc_redist.x64.exe downloaded successfully ($size MB)"
-
+          # הערה: vc_redist.x64.exe כבר לא נדרש למתקין FULL — ה-DLLs נארזים
+          # app-local ע"י השלב "Bundle latest VC++ Redistributable runtime DLLs"
+          # שרץ קודם, וה-Source ב-otzaria_full.iss הוסר. השלב הזה מוריד רק
+          # את WebView2 bootstrapper.
           Write-Host "Downloading WebView2 Bootstrapper (Microsoft)..."
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile "installer\MicrosoftEdgeWebview2Setup.exe"
           $size = [math]::Round((Get-Item "installer\MicrosoftEdgeWebview2Setup.exe").Length / 1MB, 2)
@@ -403,7 +512,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.41.9
+          flutter-version: 3.44.0
           cache: true
 
       - name: Create Google Calendar Credentials
@@ -707,7 +816,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.41.9
+          flutter-version: 3.44.0
           cache: true
 
       - name: Install Rust (stable)
@@ -958,7 +1067,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.41.9
+          flutter-version: 3.44.0
           cache: true
 
       - name: Create Google Calendar Credentials

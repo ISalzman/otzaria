@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
+import 'package:otzaria/text_book/utils/reading_segments.dart';
+
 /// אינדקס הפריט העליון הנראה.
 ///
 /// `ItemPositionsListener.itemPositions.value` מוחזק כ-`Set` שסדר האיטרציה
@@ -18,4 +20,49 @@ int topmostVisibleIndex(Iterable<ItemPosition> positions) {
 int bottommostVisibleIndex(Iterable<ItemPosition> positions) {
   if (positions.isEmpty) return 0;
   return positions.map((p) => p.index).reduce(max);
+}
+
+/// **תמיד מחזיר שורת מקור**, גם במצב רצף שבו ה-itemIndex של ה-
+/// `ScrollablePositionedList` הוא segmentIndex (פסקה) ולא שורה.
+///
+/// צרכנים שעובדים מול ה-TOC, סימניות, deep links או PDF דורשים שורת מקור.
+/// צרכני גלילה (`scrollToPreviousSegment` וכו') ממשיכים להשתמש ב-
+/// [topmostVisibleIndex] הגולמי, כי "הסעיף הקודם" = "הפסקה הקודמת" במצב רצף.
+int resolveTopmostSourceLine({
+  required Iterable<ItemPosition> positions,
+  required bool continuousReadingMode,
+  required List<ReadingSegment> readingSegments,
+}) {
+  if (positions.isEmpty) return 0;
+  final topmost = topmostVisibleIndex(positions);
+  if (!continuousReadingMode || readingSegments.isEmpty) {
+    return topmost;
+  }
+  if (topmost < 0 || topmost >= readingSegments.length) return 0;
+  return readingSegments[topmost].startLineIndex;
+}
+
+/// המקבילה ל-[resolveTopmostSourceLine] בקצה התחתון של ה-viewport.
+int resolveBottommostSourceLine({
+  required Iterable<ItemPosition> positions,
+  required bool continuousReadingMode,
+  required List<ReadingSegment> readingSegments,
+}) {
+  if (positions.isEmpty) return 0;
+  final bottommost = bottommostVisibleIndex(positions);
+  if (!continuousReadingMode || readingSegments.isEmpty) {
+    return bottommost;
+  }
+  if (bottommost < 0 || bottommost >= readingSegments.length) return 0;
+  return readingSegments[bottommost].sourceLineIndices.last;
+}
+
+/// ממיר שורת מקור ל-itemIndex של ה-`ScrollablePositionedList`.
+/// במצב הרגיל זה זהות; במצב רצף זה segmentIndex של הפסקה שמכילה את השורה.
+int resolveItemIndexForSourceLine({
+  required int lineIndex,
+  required List<ReadingSegment> readingSegments,
+}) {
+  if (readingSegments.isEmpty) return lineIndex;
+  return segmentIndexForLine(readingSegments, lineIndex);
 }

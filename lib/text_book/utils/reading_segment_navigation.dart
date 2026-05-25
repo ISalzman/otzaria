@@ -2,6 +2,12 @@ import 'package:flutter/widgets.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
+/// גלילה לשורת מקור [lineIndex] תוך תרגום אוטומטי לסגמנט.
+///
+/// במצב הרגיל segments הוא 1:1 ל-source lines וההתנהגות זהה ל-
+/// `scrollController.scrollTo`. במצב רציף, מבצע תחילה גלילה לסגמנט,
+/// ואז דיוק עדין על-ידי `scrollOffsetController.animateScroll` למיקום
+/// היחסי של השורה בתוך הפסקה (חישוב על-פי `lineFractionWithinSegment`).
 Future<void> scrollToSourceLine({
   required ItemScrollController scrollController,
   required ScrollOffsetController? scrollOffsetController,

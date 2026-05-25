@@ -19,10 +19,10 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_se
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
-import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/text_book/utils/link_processing.dart';
 import 'package:otzaria/text_book/utils/he_categories_enricher.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
+import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as notes;
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -71,7 +71,33 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   List<String>? _cachedPageShapeTargetBookTitles;
   bool _isLoadingLinks = false;
   bool _pendingLinksReload = false;
+  List<int>? _pendingForceLoadIndices;
+  bool _pendingForceLoadAll = false;
   bool _awaitingInitialPageShapeVisibleSync = false;
+
+  /// סימון אם המשתמש שינה ידנית את בחירת המפרשים. בשונה מ-`activeCommentators.isEmpty`,
+  /// הדגל הזה מבחין בין "עוד לא נבחר כלום" (false) לבין "המשתמש ריקן את הבחירה
+  /// במכוון" (true) — וכך מונע אוטו-בחירה חוזרת של 'הערות' אחרי שהמשתמש כיבה אותן.
+  bool _userTouchedCommentators = false;
+
+  /// true אחרי שסרקנו את כל ה-content (ApplyFullBookContent) — מאפשר לדלג
+  /// על סריקות עתידיות גם אם 'הערות' לא נוסף ל-availableCommentators.
+  bool _inlineNotesFullScanDone = false;
+
+  /// מאפס את הדגלים הספציפיים-לספר. נקרא מ-_onLoadContent כשבלוק עובר
+  /// לטעון ספר חדש (כיום בייצור bloc נוצר חדש לכל תא, אבל הקריאה כאן
+  /// מגינה מפני דליפת state בין ספרים אם זה ישתנה בעתיד).
+  @visibleForTesting
+  void resetInlineNotesStateForNewBook() {
+    _userTouchedCommentators = false;
+    _inlineNotesFullScanDone = false;
+  }
+
+  @visibleForTesting
+  bool get userTouchedCommentatorsForTesting => _userTouchedCommentators;
+
+  @visibleForTesting
+  bool get inlineNotesFullScanDoneForTesting => _inlineNotesFullScanDone;
 
   TextBookBloc({
     required this.repository,
@@ -97,9 +123,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<UpdateCommentators>(_onUpdateCommentators);
     on<ToggleNikud>(_onToggleNikud);
     on<TogglePunctuation>(_onTogglePunctuation);
-    on<UpdateTextBookContinuousReadingMode>(
-        _onUpdateTextBookContinuousReadingMode);
-    on<UpdateTextBookShowSubtitles>(_onUpdateTextBookShowSubtitles);
+    on<ToggleContinuousReadingMode>(_onToggleContinuousReadingMode);
     on<UpdateVisibleIndecies>(_onUpdateVisibleIndecies);
     on<UpdateSelectedIndex>(_onUpdateSelectedIndex);
     on<HighlightLine>(_onHighlightLine);
@@ -112,8 +136,40 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<CreateNoteFromToolbar>(_onCreateNoteFromToolbar);
     on<UpdateSelectedTextForNote>(_onUpdateSelectedTextForNote);
     on<UpdateLinks>(_onUpdateLinks);
+    on<SetLinksLoading>(_onSetLinksLoading);
     on<UpdateAvailableCommentators>(_onUpdateAvailableCommentators);
     on<RefreshLinksForCurrentWindow>(_onRefreshLinksForCurrentWindow);
+    on<LoadAllLinksForIndices>(_onLoadAllLinksForIndices);
+  }
+
+  /// מחזירה את הערך האפקטיבי של מצב הרצף לאחר אירוע
+  /// [ToggleContinuousReadingMode].
+  ///
+  /// ספר שלא תומך → תמיד false (גם אם בקשו true ידנית — דרך קיצור מקלדת
+  /// או plugin).
+  @visibleForTesting
+  static bool computeEffectiveContinuousReading({
+    required bool requestedEnabled,
+    required bool stateSupportsContinuous,
+  }) =>
+      requestedEnabled && stateSupportsContinuous;
+
+  /// קובעת את הערך של `continuousReadingMode` ב-`emit` של `_onLoadContent`.
+  ///
+  /// - ספר שלא תומך → תמיד false.
+  /// - אם הדגל [preserveFlag] פעיל ו-currentState הוא Loaded → שומרים
+  ///   את הערך הקודם של המשתמש.
+  /// - אחרת — default (false). זה המסלול שמאפס בעת `_resetPerBookSettings`.
+  @visibleForTesting
+  static bool resolvePreservedContinuousReadingMode({
+    required bool supportsContinuous,
+    required bool preserveFlag,
+    required TextBookState? currentState,
+  }) {
+    if (!supportsContinuous) return false;
+    if (!preserveFlag) return false;
+    if (currentState is! TextBookLoaded) return false;
+    return currentState.continuousReadingMode;
   }
 
   @visibleForTesting
@@ -193,34 +249,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     _awaitingInitialPageShapeVisibleSync = value;
   }
 
-  Future<Map<int, List<String>>> _loadSubtitleHeadingsByLine(
-    TextBook book,
-  ) async {
-    try {
-      final structures = await DatabaseLibraryProvider.instance
-          .getAlternativeStructuresForBook(book.title);
-      if (structures.isEmpty) {
-        return const {};
-      }
-
-      final headingsByLine = <int, List<String>>{};
-      for (final structure in structures) {
-        final entries = await DatabaseLibraryProvider.instance
-            .getAltTocLineIndices(structure.id);
-        for (final entry in entries) {
-          headingsByLine
-              .putIfAbsent(entry.lineIndex, () => <String>[])
-              .add(entry.text);
-        }
-      }
-
-      return headingsByLine;
-    } catch (e) {
-      debugPrint('Error loading alternative headings: $e');
-      return const {};
-    }
-  }
-
   @visibleForTesting
   static List<Link> mergeLinksForTesting(
           List<Link> existing, List<Link> incoming) =>
@@ -275,6 +303,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       pinpointHighlightIndex = currentState.pinpointHighlightIndex;
       pinpointHighlightText = currentState.pinpointHighlightText;
     } else if (state is TextBookInitial) {
+      // איפוס דגלי ה-inline-notes כשמתחילים טעינה של ספר חדש דרך ה-BLoC.
+      // הדגלים האלה תלויים בספר ספציפי ולא צריכים לדלוף בין ספרים, גם
+      // אם בעתיד מישהו ישתמש שוב באותו instance של BLoC לספר אחר.
+      resetInlineNotesStateForNewBook();
+
       final initial = state as TextBookInitial;
       book = initial.book;
       searchText = initial.searchText;
@@ -383,20 +416,23 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         isTanach: isTanach,
       );
 
-      const List<Link> emptyLinks = [];
-      const List<Link> emptyVisibleLinks = [];
-      final subtitleHeadingsByLine = await _loadSubtitleHeadingsByLine(book);
-      final showSubtitles = state is TextBookLoaded
-          ? (state as TextBookLoaded).showSubtitles
-          : true;
-      final effectiveContinuousReading =
-          supportsContinuousReading && event.continuousReadingMode;
+      // מצב הרצף שומר את הערך הנוכחי רק כש-preserveContinuousReadingMode=true.
+      // הלוגיקה הזו מנופית ל-`resolvePreservedContinuousReadingMode` כדי
+      // שתוכל להיבדק טהורה: _resetPerBookSettings סומך על default=false,
+      // וה-listener על שינוי גופן/ניקוד מעביר preserveFlag=true כדי לא
+      // לכבות מצב רצף שהמשתמש בחר.
+      final effectiveContinuousReading = resolvePreservedContinuousReadingMode(
+        supportsContinuous: supportsContinuousReading,
+        preserveFlag: event.preserveContinuousReadingMode,
+        currentState: state,
+      );
       final readingSegments = buildReadingSegments(
         contentLines,
         continuous: effectiveContinuousReading,
-        subtitleHeadingsByLine:
-            showSubtitles ? subtitleHeadingsByLine : const {},
       );
+
+      const List<Link> emptyLinks = [];
+      const List<Link> emptyVisibleLinks = [];
 
       if (_positionListenerCallback != null) {
         positionsListener.itemPositions
@@ -501,9 +537,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         isTanach: isTanach,
         supportsContinuousReadingMode: supportsContinuousReading,
         continuousReadingMode: effectiveContinuousReading,
-        showSubtitles: showSubtitles,
-        subtitleHeadingsByLine: subtitleHeadingsByLine,
         readingSegments: readingSegments,
+        linksLoading: false,
         visibleIndices: visibleIndices,
         pinLeftPane: preservedPinLeftPane ??
             (Settings.getValue<bool>('key-pin-sidebar') ?? false),
@@ -693,6 +728,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) async {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
+      _userTouchedCommentators = true;
 
       final updatedState = currentState.copyWith(
         activeCommentators: event.commentators,
@@ -737,8 +773,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
   }
 
-  void _onUpdateTextBookContinuousReadingMode(
-    UpdateTextBookContinuousReadingMode event,
+  void _onToggleContinuousReadingMode(
+    ToggleContinuousReadingMode event,
     Emitter<TextBookState> emit,
   ) {
     if (state is! TextBookLoaded) {
@@ -746,8 +782,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     final currentState = state as TextBookLoaded;
-    final effectiveEnabled =
-        event.enabled && currentState.supportsContinuousReadingMode;
+    // אם הספר לא תומך — מתעלמים. הכפתור ב-UI ממילא לא מוצג, אבל זה מגן
+    // גם מקריאות תוכנתיות (קיצורי מקלדת, plugins).
+    final effectiveEnabled = computeEffectiveContinuousReading(
+      requestedEnabled: event.enabled,
+      stateSupportsContinuous: currentState.supportsContinuousReadingMode,
+    );
     if (currentState.continuousReadingMode == effectiveEnabled) {
       return;
     }
@@ -757,33 +797,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       readingSegments: buildReadingSegments(
         currentState.content,
         continuous: effectiveEnabled,
-        subtitleHeadingsByLine: currentState.showSubtitles
-            ? currentState.subtitleHeadingsByLine
-            : const {},
-      ),
-    ));
-  }
-
-  void _onUpdateTextBookShowSubtitles(
-    UpdateTextBookShowSubtitles event,
-    Emitter<TextBookState> emit,
-  ) {
-    if (state is! TextBookLoaded) {
-      return;
-    }
-
-    final currentState = state as TextBookLoaded;
-    if (currentState.showSubtitles == event.show) {
-      return;
-    }
-
-    emit(currentState.copyWith(
-      showSubtitles: event.show,
-      readingSegments: buildReadingSegments(
-        currentState.content,
-        continuous: currentState.continuousReadingMode,
-        subtitleHeadingsByLine:
-            event.show ? currentState.subtitleHeadingsByLine : const {},
       ),
     ));
   }
@@ -1007,7 +1020,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   List<String> _normalizeCommentaryTargets(Iterable<String> titles) {
     return titles
         .map((title) => title.trim())
-        .where((title) => title.isNotEmpty)
+        .where((title) => title.isNotEmpty && title != kNotesCommentatorTitle)
         .toSet()
         .toList()
       ..sort();
@@ -1085,16 +1098,24 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     TextBookLoaded state,
     Iterable<ItemPosition> visibleItemPositions,
   ) {
-    final itemPositions = visibleItemPositions.toList();
-    if (itemPositions.isEmpty) {
+    final allItemPositions = visibleItemPositions.toList();
+    if (allItemPositions.isEmpty) {
       return const [];
     }
+
+    // גלילה ע"י ניווט משתמשת ב-alignment: 0.05, כך שהקטע הקודם נשאר גלוי
+    // ב-5% העליונים של ה-viewport. בלי סינון, visibleIndices.first נופל על
+    // השורה האחרונה של הקטע הקודם, וזיהוי הכותרת (currentTitle ו-
+    // closestTocEntryIndex) מצביע על הסעיף הקודם במקום על זה שאליו ניווטו.
+    final itemPositions = _filterBarelyVisiblePositions(allItemPositions);
 
     if (!state.continuousReadingMode) {
       return itemPositions.map((position) => position.index).toSet().toList()
         ..sort();
     }
 
+    // במצב רציף: ה-positions הם segmentIndex. ממירים בחזרה לשורות מקור
+    // כדי ש-visibleIndices ב-state יישאר תמיד ברמת שורות.
     return sourceLineIndicesForSegmentViewports(
       state.readingSegments,
       itemPositions.map(
@@ -1105,6 +1126,34 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         ),
       ),
     );
+  }
+
+  /// סינון item positions שגלויים מאוד מעט (פחות מ-15% מה-segment גלוי). כך
+  /// "שיירי" הסעיף הקודם, שגלויים לרוב 5% מה-viewport אחרי גלילה עם
+  /// alignment: 0.05, לא נספרים כחלק מהמיקום הנוכחי בספר.
+  ///
+  /// אם הסינון מותיר רשימה ריקה (כל ה-positions גלויים פחות מהסף - לא צפוי
+  /// בפועל), חוזרים לרשימה המקורית כ-fallback.
+  @visibleForTesting
+  static List<ItemPosition> filterBarelyVisiblePositionsForTesting(
+    List<ItemPosition> positions,
+  ) =>
+      _filterBarelyVisiblePositions(positions);
+
+  static List<ItemPosition> _filterBarelyVisiblePositions(
+    List<ItemPosition> positions,
+  ) {
+    if (positions.length <= 1) return positions;
+    final filtered = positions.where((p) {
+      final extent = p.itemTrailingEdge - p.itemLeadingEdge;
+      if (extent <= 0) return false;
+      final visibleTop = p.itemLeadingEdge.clamp(0.0, 1.0);
+      final visibleBottom = p.itemTrailingEdge.clamp(0.0, 1.0);
+      final visiblePortion = visibleBottom - visibleTop;
+      if (visiblePortion <= 0) return false;
+      return visiblePortion / extent >= 0.15;
+    }).toList();
+    return filtered.isEmpty ? positions : filtered;
   }
 
   void _onUpdateSelectedIndex(
@@ -1246,13 +1295,18 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       return;
     }
 
-    emit(currentState.copyWith(
+    final updatedState = _withInlineNotesCommentator(currentState.copyWith(
       content: event.content,
       readingSegments: buildReadingSegments(
         event.content,
         continuous: currentState.continuousReadingMode,
       ),
     ));
+    // אחרי שסרקנו את התוכן המלא, אין יותר טעם בסריקה נוספת על הרחבות
+    // טווח עתידיות — או שכבר הוסף 'הערות' ל-availableCommentators (ואז
+    // early-return שומר עלינו), או שאין הערות בכלל בספר.
+    _inlineNotesFullScanDone = true;
+    emit(updatedState);
     _markLoadedContentRange(
       currentState.book,
       0,
@@ -1295,13 +1349,85 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       event.startLine + event.lines.length - 1,
       totalLines: event.totalLines,
     );
-    emit(currentState.copyWith(
-      content: nextContent,
-      readingSegments: buildReadingSegments(
-        nextContent,
-        continuous: currentState.continuousReadingMode,
+    emit(_withInlineNotesCommentator(
+      currentState.copyWith(
+        content: nextContent,
+        readingSegments: buildReadingSegments(
+          nextContent,
+          continuous: currentState.continuousReadingMode,
+        ),
       ),
+      // אופטימיזציה: לסרוק רק את השורות החדשות במקום את כל ה-content
+      // המצטבר (מונע עבודה ריבועית במהלך warming הדרגתי של ספר ארוך).
+      scanOnly: event.lines,
     ));
+  }
+
+  /// בודק אם בתוכן העדכני יש הערות inline. אם כן ועדיין לא הוסף המפרש
+  /// הוירטואלי 'הערות' ל-availableCommentators - מוסיף אותו ובוחר אותו
+  /// אוטומטית רק אם המשתמש עדיין לא נגע ידנית בבחירת המפרשים.
+  ///
+  /// נדרש כי בעת `_loadCommentatorsInBackground` ה-content עלול להיות
+  /// חלון חלקי בלבד, וההערות יכולות להיות מחוץ לחלון. ההרחבה הבאה של
+  /// התוכן (ApplyBookContentRange / ApplyFullBookContent) חייבת לרענן.
+  ///
+  /// [scanOnly] - אם ניתן, סורקים רק את השורות האלו (אופטימיזציה: על
+  /// הרחבת טווח אנחנו מקבלים רק את השורות החדשות, אין סיבה לסרוק שוב
+  /// את כל ה-content).
+  TextBookLoaded _withInlineNotesCommentator(
+    TextBookLoaded state, {
+    List<String>? scanOnly,
+  }) {
+    if (state.availableCommentators.contains(kNotesCommentatorTitle)) {
+      return state;
+    }
+    if (_inlineNotesFullScanDone) {
+      return state;
+    }
+    final linesToScan = scanOnly ?? state.content;
+    if (!notes.hasInlineNotes(linesToScan)) {
+      return state;
+    }
+    final updatedAvailable = [
+      ...state.availableCommentators,
+      kNotesCommentatorTitle,
+    ];
+    final updatedGroups = _addNotesToOtherCommentatorsGroup(
+      state.commentatorGroups,
+    );
+    final shouldAutoSelect =
+        state.activeCommentators.isEmpty && !_userTouchedCommentators;
+    return state.copyWith(
+      availableCommentators: updatedAvailable,
+      commentatorGroups: updatedGroups,
+      activeCommentators: shouldAutoSelect
+          ? const [kNotesCommentatorTitle]
+          : state.activeCommentators,
+    );
+  }
+
+  List<CommentatorGroup> _addNotesToOtherCommentatorsGroup(
+    List<CommentatorGroup> groups,
+  ) {
+    const otherGroupTitle = 'שאר מפרשים';
+    var inserted = false;
+    final next = groups.map((group) {
+      if (group.title == otherGroupTitle &&
+          !group.commentators.contains(kNotesCommentatorTitle)) {
+        inserted = true;
+        return group.copyWith(
+          commentators: [...group.commentators, kNotesCommentatorTitle],
+        );
+      }
+      return group;
+    }).toList();
+    if (!inserted) {
+      next.add(const CommentatorGroup(
+        title: otherGroupTitle,
+        commentators: [kNotesCommentatorTitle],
+      ));
+    }
+    return next;
   }
 
   void _onCreateNoteFromToolbar(
@@ -1536,6 +1662,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     List<int> visibleIndices, {
     bool force = false,
     Iterable<String>? targetBookTitlesOverride,
+    bool forceLoadAll = false,
   }) async {
     final runtimeStateBeforeWindowCheck = state;
     if (!force &&
@@ -1548,12 +1675,21 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     if (_isLoadingLinks) {
       _pendingLinksReload = true;
+      // שמור את ה-indices המבוקשים אם זו טעינה מאולצת (forceLoadAll)
+      if (forceLoadAll) {
+        _pendingForceLoadIndices = List<int>.of(visibleIndices);
+        _pendingForceLoadAll = true;
+      }
       return;
     }
 
     List<String>? targetBookTitles;
     var targetBookTitlesSignature = _allTargetBookTitlesSignature;
-    if (targetBookTitlesOverride != null) {
+    if (forceLoadAll) {
+      // null = ללא פילטר — מחזיר את כל הקישורים כולל מפרשים
+      targetBookTitles = null;
+      targetBookTitlesSignature = _allTargetBookTitlesSignature;
+    } else if (targetBookTitlesOverride != null) {
       targetBookTitles = _normalizeTargetBookTitles(targetBookTitlesOverride);
       targetBookTitlesSignature = _targetBookTitlesSignature(targetBookTitles);
     } else {
@@ -1578,6 +1714,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     _isLoadingLinks = true;
     _pendingLinksReload = false;
+    add(const SetLinksLoading(true));
 
     try {
       final links = await repository.getBookLinksInRange(
@@ -1622,14 +1759,32 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           targetBookTitlesSignature,
         );
         if (_pendingLinksReload || windowOutdated) {
-          _loadLinksInBackground(
-            latestState.book,
-            latestState.visibleIndices,
-          );
+          // אם ממתין טעינה מאולצת (LoadAllLinksForIndices), השתמש ב-indices שנשמרו
+          final pendingIndices = _pendingForceLoadIndices;
+          final pendingForce = _pendingForceLoadAll;
+          _pendingForceLoadIndices = null;
+          _pendingForceLoadAll = false;
+          if (pendingForce && pendingIndices != null) {
+            _loadLinksInBackground(
+              latestState.book,
+              pendingIndices,
+              force: true,
+              forceLoadAll: true,
+            );
+          } else if (!forceLoadAll) {
+            // במצב forceLoadAll (כרטסיית מפרשים עצמאית), אין לבצע תיקון windowOutdated
+            // כי visibleIndices תקוע ב-startIndex ותיקון כזה יחליף את ה-commentary
+            // links שנטענו זה עתה ב-links ריקים (targetBookTitles=[]).
+            _loadLinksInBackground(
+              latestState.book,
+              latestState.visibleIndices,
+            );
+          }
         }
       }
     } catch (e) {
       _isLoadingLinks = false;
+      add(const SetLinksLoading(false));
       if (kDebugMode) {
         debugPrint(
           '⚠️ TextBookBloc::loadLinks failed for ${book.title} '
@@ -1661,9 +1816,20 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       links: processedLinks.links,
       linksByLine: processedLinks.linksByLine,
       visibleLinks: processedLinks.visibleLinks,
+      linksLoading: false,
     ));
     _activeLinksTargetBookTitlesSignature =
         event.targetBookTitlesSignature ?? _allTargetBookTitlesSignature;
+  }
+
+  void _onSetLinksLoading(
+    SetLinksLoading event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is! TextBookLoaded) return;
+    final currentState = state as TextBookLoaded;
+    if (currentState.linksLoading == event.isLoading) return;
+    emit(currentState.copyWith(linksLoading: event.isLoading));
   }
 
   void _onUpdateAvailableCommentators(
@@ -1673,10 +1839,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
 
-      final updatedState = currentState.copyWith(
+      final updatedState = _withInlineNotesCommentator(currentState.copyWith(
         availableCommentators: event.availableCommentators,
         commentatorGroups: event.commentatorGroups.cast<CommentatorGroup>(),
-      );
+      ));
       emit(updatedState);
 
       if (updatedState.showPageShapeView) {
@@ -1701,6 +1867,20 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     );
   }
 
+  void _onLoadAllLinksForIndices(
+    LoadAllLinksForIndices event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is! TextBookLoaded) return;
+    final currentState = state as TextBookLoaded;
+    _loadLinksInBackground(
+      currentState.book,
+      event.indices,
+      force: true,
+      forceLoadAll: true,
+    );
+  }
+
   void _loadCommentatorsInBackground(TextBook book) async {
     try {
       final availableCommentators =
@@ -1713,11 +1893,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         return;
       }
 
-      final currentState = state as TextBookLoaded;
-      if (currentState.book.title != book.title) {
+      final loaded = state as TextBookLoaded;
+      if (loaded.book.title != book.title) {
         return;
       }
 
+      // הזיהוי של 'הערות' כמפרש וירטואלי נעשה בנפרד דרך
+      // _withInlineNotesCommentator שמופעל בכל עדכון של ה-content.
       add(UpdateAvailableCommentators(availableCommentators, groups));
     } catch (e) {
       debugPrint('⚠️ Failed to load commentators in background: $e');

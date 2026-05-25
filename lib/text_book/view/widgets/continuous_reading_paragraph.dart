@@ -314,7 +314,6 @@ TextStyle _styleForElement(dom.Element element, TextStyle parentStyle) {
   }
   if (localName == 'i' ||
       localName == 'em' ||
-      element.classes.contains('footnote') ||
       _hasFontStyle(element, 'italic')) {
     style = style.copyWith(fontStyle: FontStyle.italic);
   }
@@ -322,7 +321,75 @@ TextStyle _styleForElement(dom.Element element, TextStyle parentStyle) {
     style = style.copyWith(fontWeight: FontWeight.bold);
   }
 
+  // הדגשת תוצאות חיפוש מגיעות כ-`<span style="color: red">` או
+  // `<span style="color: blue; background-color: yellow">` (התוצאה הנוכחית).
+  // המפרסר חייב לכבד את ה-styles האלה אחרת תוצאות חיפוש לא יסומנו במצב רציף.
+  final inlineColor = _inlineColor(element);
+  if (inlineColor != null) {
+    style = style.copyWith(color: inlineColor);
+  }
+  final inlineBackground = _inlineBackgroundColor(element);
+  if (inlineBackground != null) {
+    style = style.copyWith(backgroundColor: inlineBackground);
+  }
+
   return style;
+}
+
+Color? _inlineColor(dom.Element element) {
+  final inlineStyle = element.attributes['style'] ?? '';
+  // לוכד `color: <value>` אך לא `background-color:` (שלפניו `-`).
+  final match = RegExp(
+    r'(?:^|[\s;])color\s*:\s*([^;]+)',
+    caseSensitive: false,
+  ).firstMatch(inlineStyle);
+  if (match == null) return null;
+  return _parseCssColor(match.group(1)!.trim());
+}
+
+Color? _inlineBackgroundColor(dom.Element element) {
+  final inlineStyle = element.attributes['style'] ?? '';
+  final match = RegExp(
+    r'background-color\s*:\s*([^;]+)',
+    caseSensitive: false,
+  ).firstMatch(inlineStyle);
+  if (match == null) return null;
+  return _parseCssColor(match.group(1)!.trim());
+}
+
+Color? _parseCssColor(String value) {
+  final v = value.toLowerCase().trim();
+  // צבעים פשוטים שהחיפוש משתמש בהם.
+  switch (v) {
+    case 'red':
+      return const Color(0xFFFF0000);
+    case 'blue':
+      return const Color(0xFF0000FF);
+    case 'yellow':
+      return const Color(0xFFFFFF00);
+    case 'green':
+      return const Color(0xFF008000);
+    case 'black':
+      return const Color(0xFF000000);
+    case 'white':
+      return const Color(0xFFFFFFFF);
+  }
+  // #rgb / #rrggbb
+  if (v.startsWith('#')) {
+    var hex = v.substring(1);
+    if (hex.length == 3) {
+      hex = hex.split('').map((c) => '$c$c').join();
+    }
+    if (hex.length == 6) {
+      final n = int.tryParse(hex, radix: 16);
+      if (n != null) return Color(0xFF000000 | n);
+    }
+    if (hex.length == 8) {
+      final n = int.tryParse(hex, radix: 16);
+      if (n != null) return Color(n);
+    }
+  }
+  return null;
 }
 
 double? _inlineFontSize(dom.Element element, double parentFontSize) {

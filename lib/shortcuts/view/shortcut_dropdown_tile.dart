@@ -191,22 +191,19 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
 
     if (finalValue == null || !mounted) return;
 
-    settingsBloc.add(UpdateShortcut(widget.settingKey, finalValue));
-
-    final conflicts = ShortcutValidator.checkConflicts();
-    if (conflicts.isNotEmpty && conflicts.containsKey(finalValue)) {
-      final conflictingKeys = conflicts[finalValue]!;
-      final conflictingNames = conflictingKeys
-          .where((k) => k != widget.settingKey)
-          .map((k) => ShortcutValidator.shortcutNames[k] ?? k)
-          .join(', ');
-
-      if (conflictingNames.isNotEmpty) {
-        UiSnack.showWarning(
-          'אזהרה: קיצור זה כבר בשימוש עבור: $conflictingNames',
-          duration: const Duration(seconds: 3),
-        );
+    for (final key in ShortcutValidator.shortcutKeys) {
+      if (key != widget.settingKey &&
+          !ShortcutValidator.canShareShortcut(widget.settingKey, key)) {
+        final usedValue = ShortcutValidator.getShortcutValue(key);
+        if (usedValue == finalValue) {
+          final conflictingName =
+              ShortcutValidator.shortcutNames[key] ?? key;
+          UiSnack.showError('קיצור זה כבר בשימוש עבור: $conflictingName');
+          return;
+        }
       }
     }
+
+    settingsBloc.add(UpdateShortcut(widget.settingKey, finalValue));
   }
 }

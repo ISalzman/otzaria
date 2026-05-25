@@ -1127,6 +1127,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
         fileName: '${_sanitizeFileName(widget.bookId)}.$selectedExtension',
         type: FileType.custom,
         allowedExtensions: [selectedExtension],
+        lockParentWindow: true,
       );
       if (path == null) return;
 

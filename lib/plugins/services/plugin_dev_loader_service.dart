@@ -42,11 +42,17 @@ class PluginDevLoaderService {
       throw Exception('כבר קיים תוסף מותקן (רגיל) עם אותו מזהה. מחק או שנה id.');
     }
 
+    // טעינה-מחדש של תוסף פיתוח: שומרים את הסדר הידני.
+    // טעינה ראשונה: אם כבר יש תוספים שסודרו ידנית, מצטרפים לסוף הסדר.
+    final newUserOrder = existingPlugin != null
+        ? existingPlugin.userOrder
+        : await _repository.getNextUserOrderForNewPlugin();
+
     final plugin = InstalledPlugin(
       pluginId: manifest.id,
       name: manifest.name,
       version: manifest.version,
-      installPath: directoryPath, 
+      installPath: directoryPath,
       entrypointPath: manifest.entrypoint,
       iconPath: manifest.icon,
       enabled: existingPlugin?.enabled ?? true,
@@ -57,6 +63,7 @@ class PluginDevLoaderService {
       updatedAt: DateTime.now(),
       sourceType: 'development',
       devRootPath: directoryPath,
+      userOrder: newUserOrder,
     );
 
     await _repository.saveDevelopmentPlugin(plugin);

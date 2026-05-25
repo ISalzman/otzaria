@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
@@ -41,7 +43,6 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   ) async {
     emit(state.copyWith(isLoading: true));
     try {
-      await _pruneRemovedCustomFoldersIfNeeded();
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
       DataRepository.instance.invalidateExternalBooksCache();
       Library library = await _repository.library;
@@ -54,6 +55,20 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         searchQuery: null,
         selectedTopics: null,
       ));
+
+      // prune של תיקיות מותאמות שנמחקו מהדיסק הוא משימת תחזוקה — לא חיוני
+      // להצגת הספרייה הראשונית. הוא כולל I/O סינכרוני כבד (File.exists,
+      // פתיחת user_books DB, יצירת FileSyncService) שיכול לחסום את ה-UI thread
+      // במשך 1500ms+. מעבירים אותו לרקע אחרי שה-state כבר עודכן ל-UI.
+      // אם prune ימצא תיקיות שהוסרו, המשתמש יראה את השינוי בהפעלה הבאה או
+      // ב-RefreshLibrary הבא (שעדיין מבצע prune סינכרוני בכוונה).
+      launchBackgroundLibraryMaintenance(
+        _pruneRemovedCustomFoldersIfNeeded,
+        onError: (Object e) {
+          developer.log('Background prune failed: $e', name: 'LibraryBloc');
+        },
+      );
+
       developer.log('📚 LibraryBloc: State emitted with isLoading=false',
           name: 'LibraryBloc');
     } catch (e) {
@@ -513,4 +528,14 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       searchResults: state.searchResults,
     ));
   }
+}
+
+@visibleForTesting
+void launchBackgroundLibraryMaintenance(
+  Future<void> Function() task, {
+  void Function(Object error)? onError,
+}) {
+  unawaited(task().catchError((Object error) {
+    onError?.call(error);
+  }));
 }

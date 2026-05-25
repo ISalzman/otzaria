@@ -64,7 +64,6 @@ void main() {
         'autoSyncCatalogs': true,
         'softwareAndBookUpdatesEnabled': true,
         'personalNotesCollapsedByDefault': true,
-        'continuousReadingMode': true,
       };
 
       blocTest<SettingsBloc, SettingsState>(
@@ -128,8 +127,6 @@ void main() {
                     true,
             protectedModeEnabled:
                 mockSettings['protectedModeEnabled'] as bool? ?? false,
-            continuousReadingMode:
-                mockSettings['continuousReadingMode'] as bool? ?? false,
           ),
         ],
         verify: (_) {
@@ -323,18 +320,80 @@ void main() {
       );
     });
 
-    group('UpdateContinuousReadingMode', () {
+    group('UpdateHiddenBuiltInToolIds', () {
       blocTest<SettingsBloc, SettingsState>(
-        'emits updated state when UpdateContinuousReadingMode is added',
-        build: () => settingsBloc,
-        act: (bloc) => bloc.add(const UpdateContinuousReadingMode(true)),
+        'persists the new set and emits state with updated hiddenBuiltInToolIds',
+        build: () {
+          when(mockRepository.updateHiddenBuiltInToolIds(
+                  const {'builtin.calendar', 'builtin.gematria'}))
+              .thenAnswer((_) async {});
+          return settingsBloc;
+        },
+        act: (bloc) => bloc.add(
+          const UpdateHiddenBuiltInToolIds(
+            {'builtin.calendar', 'builtin.gematria'},
+          ),
+        ),
         expect: () => [
-          settingsBloc.state.copyWith(continuousReadingMode: true),
+          settingsBloc.state.copyWith(
+            hiddenBuiltInToolIds: const {
+              'builtin.calendar',
+              'builtin.gematria',
+            },
+          ),
         ],
         verify: (_) {
-          verify(mockRepository.updateContinuousReadingMode(true)).called(1);
+          verify(mockRepository.updateHiddenBuiltInToolIds(
+            {'builtin.calendar', 'builtin.gematria'},
+          )).called(1);
+        },
+      );
+
+      blocTest<SettingsBloc, SettingsState>(
+        'empty set clears all hidden tools',
+        build: () {
+          when(mockRepository.updateHiddenBuiltInToolIds(<String>{}))
+              .thenAnswer((_) async {});
+          return settingsBloc;
+        },
+        seed: () => SettingsState.initial().copyWith(
+          hiddenBuiltInToolIds: const {'builtin.calendar'},
+        ),
+        act: (bloc) => bloc.add(const UpdateHiddenBuiltInToolIds(<String>{})),
+        expect: () => [
+          isA<SettingsState>().having(
+            (s) => s.hiddenBuiltInToolIds,
+            'hiddenBuiltInToolIds',
+            isEmpty,
+          ),
+        ],
+      );
+    });
+
+    group('UpdateBuiltInToolsPinnedToNavRail', () {
+      blocTest<SettingsBloc, SettingsState>(
+        'persists the new set and emits state with updated pinned set',
+        build: () {
+          when(mockRepository
+                  .updateBuiltInToolsPinnedToNavRail(const {'builtin.calendar'}))
+              .thenAnswer((_) async {});
+          return settingsBloc;
+        },
+        act: (bloc) => bloc.add(
+          const UpdateBuiltInToolsPinnedToNavRail({'builtin.calendar'}),
+        ),
+        expect: () => [
+          settingsBloc.state.copyWith(
+            builtInToolsPinnedToNavRail: const {'builtin.calendar'},
+          ),
+        ],
+        verify: (_) {
+          verify(mockRepository.updateBuiltInToolsPinnedToNavRail(
+            {'builtin.calendar'},
+          )).called(1);
         },
       );
     });
+
   });
 }

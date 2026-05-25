@@ -21,6 +21,7 @@ InstalledPlugin _plugin({
   required bool enabled,
   required bool pinned,
   required bool pinnedToNavRail,
+  bool hiddenFromTools = false,
 }) {
   return InstalledPlugin(
     pluginId: id,
@@ -31,6 +32,7 @@ InstalledPlugin _plugin({
     enabled: enabled,
     pinned: pinned,
     pinnedToNavRail: pinnedToNavRail,
+    hiddenFromTools: hiddenFromTools,
     manifest: _manifest(id),
     installedAt: DateTime.utc(2026, 1, 1),
     updatedAt: DateTime.utc(2026, 1, 1),
@@ -122,6 +124,41 @@ void main() {
       expect(
         state.pluginsPinnedToNavRail.map((p) => p.pluginId),
         isNot(contains('tabs-only')),
+      );
+    });
+
+    test(
+        'hiddenFromTools excludes plugin from pinnedPlugins / nav rail / visible',
+        () {
+      final state = PluginSystemLoaded([
+        _plugin(
+          id: 'hidden',
+          enabled: true,
+          pinned: true,
+          pinnedToNavRail: true,
+          hiddenFromTools: true,
+        ),
+        _plugin(
+          id: 'visible',
+          enabled: true,
+          pinned: true,
+          pinnedToNavRail: true,
+        ),
+      ]);
+      expect(
+        state.pinnedPlugins.map((p) => p.pluginId),
+        equals(['visible']),
+        reason: 'hidden plugins must not appear as tools-tab tabs',
+      );
+      expect(
+        state.pluginsPinnedToNavRail.map((p) => p.pluginId),
+        equals(['visible']),
+        reason: 'hidden plugins must not appear in the nav rail',
+      );
+      expect(
+        state.visiblePlugins.map((p) => p.pluginId),
+        equals(['visible']),
+        reason: 'hidden plugins must not appear in the side panel list',
       );
     });
   });

@@ -192,17 +192,6 @@ class MockSettingsRepository extends _i1.Mock
       ) as _i3.Future<void>);
 
   @override
-  _i3.Future<void> updateContinuousReadingMode(bool value) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #updateContinuousReadingMode,
-          [value],
-        ),
-        returnValue: _i3.Future<void>.value(),
-        returnValueForMissingStub: _i3.Future<void>.value(),
-      ) as _i3.Future<void>);
-
-  @override
   _i3.Future<void> updateDefaultRemoveNikud(bool? value) => (super.noSuchMethod(
         Invocation.method(
           #updateDefaultRemoveNikud,
@@ -475,6 +464,28 @@ class MockSettingsRepository extends _i1.Mock
             key,
             value,
           ],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> updateHiddenBuiltInToolIds(Set<String>? value) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateHiddenBuiltInToolIds,
+          [value],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> updateBuiltInToolsPinnedToNavRail(Set<String>? value) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateBuiltInToolsPinnedToNavRail,
+          [value],
         ),
         returnValue: _i3.Future<void>.value(),
         returnValueForMissingStub: _i3.Future<void>.value(),

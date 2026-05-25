@@ -417,23 +417,14 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       );
     }
 
-    // אייקון לוח שנה — תמיד בשורה העליונה
-    trailingItems.add(
-      AppTopBarItem(
-        widget: ToolbarActionButton(
-          compact: isCompact,
-          tooltip: 'פתח לוח שנה',
-          icon: FluentIcons.calendar_24_regular,
-          emphasis: ToolbarActionButtonEmphasis.subtle,
-          onPressed: () {
-            (moreScreenKey.currentState as dynamic)?.resetToCalendar();
-            context.read<NavigationBloc>().add(
-                  const NavigateToScreen(Screen.more),
-                );
-          },
+    // אייקון לוח שנה — בשורה העליונה כשהדף היומי שם, אחרת יורד לשורה השנייה
+    if (dafYomiInline) {
+      trailingItems.add(
+        AppTopBarItem(
+          widget: _buildCalendarButton(context, isCompact: isCompact),
         ),
-      ),
-    );
+      );
+    }
 
     trailingItems.addAll([
       AppTopBarItem(
@@ -486,6 +477,45 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
+  // ── Calendar button ──────────────────────────────────────────────────────
+
+  Widget _buildCalendarButton(
+    BuildContext context, {
+    required bool isCompact,
+  }) {
+    return ToolbarActionButton(
+      compact: isCompact,
+      tooltip: 'פתח לוח שנה',
+      icon: FluentIcons.calendar_24_regular,
+      emphasis: ToolbarActionButtonEmphasis.subtle,
+      onPressed: () {
+        context.read<NavigationBloc>().add(
+              const NavigateToScreen(Screen.more),
+            );
+        // ToolsScreen נבנה lazy ב-PageView, ולכן בלחיצה הראשונה ייתכן ש-
+        // moreScreenKey.currentState עדיין null. ניסיונות חוזרים עם hop קצר
+        // מבטיחים שהלוח ייפתח גם בפעם הראשונה שנכנסים למסך הכלים.
+        _resetCalendarWhenAvailable();
+      },
+    );
+  }
+
+  void _resetCalendarWhenAvailable({int attemptsLeft = 6}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final toolsState = moreScreenKey.currentState;
+      if (toolsState != null) {
+        toolsState.resetToCalendar();
+        return;
+      }
+      if (attemptsLeft <= 0) return;
+      Future<void>.delayed(const Duration(milliseconds: 50), () {
+        if (!mounted) return;
+        _resetCalendarWhenAvailable(attemptsLeft: attemptsLeft - 1);
+      });
+    });
+  }
+
   // ── Secondary row ─────────────────────────────────────────────────────────
 
   Widget? _buildSecondaryRow(
@@ -516,6 +546,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 onDafYomiTap: (tractate, daf) =>
                     openDafYomiBook(context, tractate, ' $daf.'),
               ),
+              _buildCalendarButton(context, isCompact: isCompact),
             ],
           ),
         ),

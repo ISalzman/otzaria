@@ -1,6 +1,6 @@
 # פיתוח תוספים לאוצריא
 
-מערכת התוספים של אוצריא מאפשרת למפתחי צד-שלישי להרחיב את יכולות האפליקציה באמצעות מבוססות רשת (HTML, CSS, JS). תיקיית ה־SDK מכילה את קבצי התשתית: `otzaria_plugin.js`, `otzaria_plugin.d.ts`, ודוגמה עובדת (לוח שנה עברי).
+מערכת התוספים של אוצריא מאפשרת למפתחי צד-שלישי להרחיב את יכולות האפליקציה באמצעות טכנולוגיות מבוססות רשת (HTML, CSS, JS). ה־host של אוצריא מזריק אוטומטית אובייקט גלובלי `Otzaria` לתוך כל WebView של תוסף — אין צורך לייבא ספריית JS, רק לקרוא ל-`Otzaria.call(...)` ו-`Otzaria.on(...)`.
 
 ## מצב פיתוח (Development Mode)
 
@@ -131,18 +131,8 @@ dart tool/plugins/package_plugin.dart <path/to/your/plugin/folder> [--force]
 
 ---
 
-## קבצי תשתית
-
-הקבצים הטכניים הדרושים לתוסף נמצאים ב-`assets/plugin-sdk/`:
+## קבצי עזר למפתחים
 
 | קובץ | תוכן |
 |------|------|
-| `otzaria_plugin.js` | ספריית ה-JS שכל תוסף מייבא |
-| `otzaria_plugin.d.ts` | הגדרות TypeScript לאותה ספרייה (לנוחות מפתחים) |
-
-תוסף הדמו (לוח שנה עברי) נמצא ב-`assets/plugin-sdk/example/`:
-
-| קובץ | תוכן |
-|------|------|
-| `example/manifest.json` | manifest של תוסף הדמו |
-| `example/index.html` | קוד ה-HTML/JS המלא של תוסף הדמו |
+| [`otzaria_plugin.d.ts`](otzaria_plugin.d.ts) | הגדרות TypeScript עבור האובייקט הגלובלי `Otzaria`. ניתן לכלול בפרויקטי TypeScript של תוספים לקבלת השלמה אוטומטית (autocomplete) ב-IDE. אינו נטען בריצה — האובייקט עצמו מוזרק על-ידי ה-host. |

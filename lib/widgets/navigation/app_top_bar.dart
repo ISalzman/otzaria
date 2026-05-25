@@ -253,7 +253,7 @@ class _AppTopBarState extends State<AppTopBar>
             if (widget.secondaryRow != null)
               SizeTransition(
                 sizeFactor: _progress,
-                axisAlignment: -1.0,
+                alignment: AlignmentDirectional.topStart,
                 child: FadeTransition(
                   opacity: _progress,
                   child: SizedBox(

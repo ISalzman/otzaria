@@ -2,7 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:mockito/mockito.dart';
+import 'package:otzaria/data/data_providers/book_composite_key.dart';
+import 'package:otzaria/data/data_providers/library_provider.dart';
+import 'package:otzaria/data/data_providers/library_provider_manager.dart';
+import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
@@ -359,6 +365,368 @@ void main() {
       expect(data['currentIndex'], 42);
     });
   });
+
+  group('PluginBridgeAdapter.library.getBookContent', () {
+    late PluginBridgeAdapter adapter;
+    late _FakeBookProvider fakeProvider;
+
+    setUp(() {
+      // 1. הזרקת ספריית קטלוג מותאמת: TextBook עם fileType='docx' (מקרה הבאג),
+      //    TextBook עם fileType='txt' (לוודא שגם הדרך הרגילה עובדת), ו-PdfBook
+      //    שצריך לפול-בק (כי הוא לא TextBook).
+      final textBookDocx = TextBook(
+        title: 'ספר-docx',
+        categoryId: 100,
+        fileType: 'docx',
+      );
+      final textBookTxt = TextBook(
+        title: 'ספר-txt',
+        categoryId: 200,
+        fileType: 'txt',
+      );
+      final pdfBookEntry = PdfBook(
+        title: 'ספר-pdf',
+        path: '/tmp/pdf.pdf',
+        categoryId: 300,
+        fileType: 'pdf',
+      );
+
+      final library = Library(categories: [
+        Category(
+          title: 'בדיקה',
+          description: '',
+          shortDescription: '',
+          order: 0,
+          subCategories: const [],
+          books: [textBookDocx, textBookTxt, pdfBookEntry],
+          parent: null,
+        ),
+      ]);
+      DataRepository.instance.library = Future.value(library);
+
+      // 2. תוספי תוכן ל-LibraryProviderManager: נשים מיפויים שמדמים מצב של
+      //    משתמש עם seforim.db בלבד (אין קבצי טקסט נפרדים בדיסק). הבאג היה
+      //    ש-DataRepository.getBookText ניגש עם fileType='txt' כברירת מחדל
+      //    גם כשה-TextBook הוא docx.
+      final docxKey = BookCompositeKey.create(
+        title: 'ספר-docx',
+        categoryId: 100,
+        fileType: 'docx',
+      );
+      final docxFakeTxtKey = BookCompositeKey.create(
+        title: 'ספר-docx',
+        categoryId: 100,
+        fileType: 'txt',
+      );
+      final txtKey = BookCompositeKey.create(
+        title: 'ספר-txt',
+        categoryId: 200,
+        fileType: 'txt',
+      );
+      final pdfFallbackKey = BookCompositeKey.create(
+        title: 'ספר-pdf',
+        categoryId: 300,
+        fileType: 'txt',
+      );
+      final loneTxtKey = BookCompositeKey.create(
+        title: 'שלא-בקטלוג',
+        categoryId: 999,
+        fileType: 'txt',
+      );
+      final sliceableKey = BookCompositeKey.create(
+        title: 'ספר-לחיתוך',
+        categoryId: 400,
+        fileType: 'txt',
+      );
+
+      fakeProvider = _FakeBookProvider({
+        docxKey: 'תוכן docx של הספר - נכון',
+        docxFakeTxtKey:
+            'תוכן TXT שגוי - לא היה צריך להגיע לכאן עבור ספר-docx',
+        txtKey: 'תוכן txt רגיל',
+        pdfFallbackKey: 'תוכן fallback של ה-pdf',
+        loneTxtKey: 'תוכן fallback של ספר שאינו בקטלוג',
+        sliceableKey: 'ABCDEFGHIJKLMNOP',
+      });
+
+      LibraryProviderManager.instance.seedMappingsForTesting(
+        mapping: {
+          docxKey: fakeProvider,
+          docxFakeTxtKey: fakeProvider,
+          txtKey: fakeProvider,
+          pdfFallbackKey: fakeProvider,
+          loneTxtKey: fakeProvider,
+          sliceableKey: fakeProvider,
+        },
+        providers: [fakeProvider],
+      );
+
+      adapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(permissions: const ['library.read']),
+        dependencies: PluginBridgeDependencies(
+          historyBloc: _MockHistoryBloc(),
+          tabsBloc: _StubTabsBloc(),
+          navigationBloc: _MockNavigationBloc(),
+          calendarCubit: _StubCalendarCubit(
+            _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+          ),
+          workspaceBloc: _MockWorkspaceBloc(),
+          searchRepository: _MockSearchRepository(),
+          personalNotesRepository: _MockPersonalNotesRepository(),
+          bookOpenCoordinator: _MockBookOpenCoordinator(),
+          themePayloadBuilder: () => <String, dynamic>{},
+          showConfirmDialog: ({required title, required content}) async => true,
+          showWarningDialog: ({
+            required title,
+            required content,
+            required subtitle,
+          }) async =>
+              true,
+        ),
+        pluginRepository: _StubPluginRegistryRepository(),
+      );
+    });
+
+    tearDown(() {
+      LibraryProviderManager.instance.resetForTesting();
+    });
+
+    test('זורק כש-bookId חסר', () async {
+      expect(
+        () => adapter.execute('library', 'getBookContent', const {}),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test(
+        'TextBook עם fileType=docx מנותב דרך TextBookRepository עם ה-fileType '
+        'הנכון (תיקון d94133731)', () async {
+      // הבאג: הקוד הישן קרא ל-DataRepository.getBookText שמשתמש ב-fileType=
+      // 'txt' כברירת מחדל. עבור משתמש עם seforim.db בלבד, זה היה מחזיר
+      // נתון שגוי (או תוכן txt שאינו קיים, או כשל). התיקון: שימוש ב-
+      // TextBookRepository שלוקח את ה-fileType מ-metadata של ה-TextBook.
+      final result = await adapter.execute(
+          'library', 'getBookContent', const {'bookId': 'ספר-docx'});
+
+      expect(result, 'תוכן docx של הספר - נכון');
+      expect(result, isNot(contains('שגוי')),
+          reason: 'אסור שהקוד יפול חזרה ל-fileType=txt לספר docx');
+    });
+
+    test('TextBook עם fileType=txt עובר דרך TextBookRepository כרגיל',
+        () async {
+      final result = await adapter.execute(
+          'library', 'getBookContent', const {'bookId': 'ספר-txt'});
+
+      expect(result, 'תוכן txt רגיל');
+    });
+
+    test(
+        'ספר שאינו בקטלוג נופל ל-DataRepository.getBookText (ברירת המחדל '
+        'fileType=txt)', () async {
+      final result = await adapter.execute('library', 'getBookContent',
+          const {'bookId': 'שלא-בקטלוג'});
+
+      expect(result, 'תוכן fallback של ספר שאינו בקטלוג');
+    });
+
+    test(
+        'PdfBook בקטלוג (לא TextBook) נופל ל-DataRepository.getBookText',
+        () async {
+      // ה-discriminator הוא `cataloged is TextBook`. PdfBook נכשל בבדיקה
+      // ולכן נכנס לענף ה-else במקום ל-TextBookRepository.
+      final result = await adapter.execute(
+          'library', 'getBookContent', const {'bookId': 'ספר-pdf'});
+
+      expect(result, 'תוכן fallback של ה-pdf');
+    });
+
+    test('title כ-alias ל-bookId נתמך (תאימות לאחור)', () async {
+      final result = await adapter.execute(
+          'library', 'getBookContent', const {'title': 'ספר-txt'});
+
+      expect(result, 'תוכן txt רגיל');
+    });
+
+    test('offset חותך מתחילת הטקסט כשלא ניתן section', () async {
+      // טקסט "ABCDEFGHIJKLMNOP" באורך 16, offset=4 — מתחיל מ-'E'.
+      final result = await adapter.execute(
+          'library',
+          'getBookContent',
+          const {'bookId': 'ספר-לחיתוך', 'offset': 4, 'limit': 5});
+
+      expect(result, 'EFGHI');
+    });
+
+    test('limit שולט בגודל המקטע המוחזר', () async {
+      final result = await adapter.execute('library', 'getBookContent',
+          const {'bookId': 'ספר-לחיתוך', 'limit': 3});
+
+      expect(result, 'ABC');
+    });
+
+    test(
+        'section + offset: ה-offset נספר יחסית למיקום ה-section, לא לתחילת '
+        'הטקסט (תיקון 00ccfa63d)', () async {
+      // טקסט "ABCDEFGHIJKLMNOP". section='C' נמצא ב-index 2.
+      // offset=3 פירושו 3 תווים אחרי 'C', כלומר מתחילים מ-index 5 ('F').
+      // הקוד הישן התעלם מה-offset כש-section ניתן (startIndex = idx בלבד).
+      final result = await adapter.execute(
+        'library',
+        'getBookContent',
+        const {
+          'bookId': 'ספר-לחיתוך',
+          'section': 'C',
+          'offset': 3,
+          'limit': 4,
+        },
+      );
+
+      expect(result, 'FGHI',
+          reason: 'section ב-index 2 + offset 3 → התחלה ב-index 5');
+    });
+
+    test(
+        'section ב-offset=0 מתחיל מהמיקום של section (התנהגות שלא השתנתה)',
+        () async {
+      final result = await adapter.execute(
+        'library',
+        'getBookContent',
+        const {
+          'bookId': 'ספר-לחיתוך',
+          'section': 'D',
+          'offset': 0,
+          'limit': 3,
+        },
+      );
+
+      expect(result, 'DEF');
+    });
+
+    test('section שלא נמצא מתעלם וחוזר ל-offset רגיל מתחילת הטקסט',
+        () async {
+      final result = await adapter.execute(
+        'library',
+        'getBookContent',
+        const {
+          'bookId': 'ספר-לחיתוך',
+          'section': 'XYZ',
+          'offset': 2,
+          'limit': 3,
+        },
+      );
+
+      expect(result, 'CDE',
+          reason: 'section שלא נמצא → startIndex נשאר offset (2)');
+    });
+
+    test('limit > 5000 חתוך ל-5000', () async {
+      // לוקחים תוכן קצר ולכן באמת הקליפ יהיה אורך הטקסט.
+      final result = await adapter.execute('library', 'getBookContent',
+          const {'bookId': 'ספר-לחיתוך', 'limit': 99999});
+
+      // limit מקבוע ל-5000, end = (0 + 5000).clamp(0, 16) = 16 → כל הטקסט
+      expect(result, 'ABCDEFGHIJKLMNOP');
+    });
+
+    test('offset החורג מהאורך מקובע לסוף הטקסט (clamp)', () async {
+      final result = await adapter.execute('library', 'getBookContent',
+          const {'bookId': 'ספר-לחיתוך', 'offset': 999, 'limit': 5});
+
+      expect(result, '');
+    });
+  });
+}
+
+/// Provider פיקטיבי שמחזיר טקסט לפי מפתחות מוגדרים מראש.
+/// משמש לבדיקת ה-routing דרך LibraryProviderManager בלי לגשת ל-DB אמיתי.
+class _FakeBookProvider implements LibraryProvider {
+  final Map<BookCompositeKey, String> _bookTextByKey;
+
+  _FakeBookProvider(this._bookTextByKey);
+
+  @override
+  String get providerId => 'fake';
+
+  @override
+  String get displayName => 'Fake';
+
+  @override
+  String get sourceIndicator => 'F';
+
+  @override
+  int get priority => 1;
+
+  @override
+  bool get isInitialized => true;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<Map<String, List<Book>>> loadBooks(
+      Map<String, Map<String, dynamic>> metadata) async {
+    return const {};
+  }
+
+  @override
+  Future<bool> hasBook(String title, int categoryId, String fileType) async {
+    final key = BookCompositeKey.create(
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+    );
+    return _bookTextByKey.containsKey(key);
+  }
+
+  @override
+  Future<String?> getBookText(
+    String title,
+    int categoryId,
+    String fileType, {
+    bool preferUserBooks = false,
+  }) async {
+    final key = BookCompositeKey.create(
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+    );
+    return _bookTextByKey[key];
+  }
+
+  @override
+  Future<List<TocEntry>?> getBookToc(
+    String title,
+    int categoryId,
+    String fileType, {
+    bool preferUserBooks = false,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<Set<String>> getAvailableBookTitles() async {
+    return _bookTextByKey.keys.map((k) => k.toStorageKey()).toSet();
+  }
+
+  @override
+  Future<Library> buildLibraryCatalog(
+    Map<String, Map<String, dynamic>> metadata,
+    String rootPath,
+  ) async {
+    return Library(categories: const []);
+  }
+
+  @override
+  Future<List<Link>> getAllLinksForBook(
+      String title, int categoryId, String fileType) async {
+    return const [];
+  }
+
+  @override
+  Future<String> getLinkContent(Link link) async {
+    return '';
+  }
 }
 
 class _MemoryCacheProvider extends CacheProvider {

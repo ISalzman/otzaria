@@ -27,7 +27,6 @@ import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/utils/text/global_search_helper.dart';
-import 'package:otzaria/utils/text/html_link_handler.dart';
 import 'package:otzaria/utils/text/text_with_inline_links.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
@@ -45,9 +44,10 @@ import 'package:otzaria/utils/text/word_at_position.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
-import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
+import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
+import 'package:otzaria/utils/text/html_link_handler.dart';
 
 class CombinedView extends StatefulWidget {
   const CombinedView({
@@ -147,26 +147,6 @@ bool shouldShowSelectCommentatorsEntry({
   return hasOpenCommentatorsPaneWithFilterCallback && !isCommentatorsTabActive;
 }
 
-/// קובע האם צריך לבנות מחדש את ה-SelectionArea החיצוני בתגובה לשינוי בעלות
-/// ב-[SelectionSyncController]. הבנייה מחדש מתבצעת על-ידי קידום ערך
-/// `_selectionAreaRevision` ששימש כ-`ValueKey` של ה-SelectionArea — ולכן
-/// היא משחזרת את כל עץ הצאצאים, כולל `_CommentaryCard` במצב 'מפרשים מתחת'.
-///
-/// מטרת הבנייה היא לנקות בחירה ויזואלית של ה-SelectionArea שלנו כשאזור אחר
-/// תפס בעלות. אם אין לנו בחירה משלנו — אין מה לנקות, ו-rebuild רק יהרוס
-/// את עץ הצאצאים (במצב 'מפרשים מתחת' זה גורם לטעינה מחדש של המפרשים בכל
-/// פעם שמנסים לסמן בהם טקסט).
-@visibleForTesting
-bool shouldRebuildSelectionAreaOnExternalChange({
-  required Object? activeOwner,
-  required Object selfOwner,
-  required bool hasOwnSelection,
-}) {
-  if (activeOwner == null) return false;
-  if (identical(activeOwner, selfOwner)) return false;
-  return hasOwnSelection;
-}
-
 class _CombinedViewState extends State<CombinedView> {
   // שמירת הטקסט הנבחר האחרון
   final ValueNotifier<String?> _savedSelectedText =
@@ -208,9 +188,6 @@ class _CombinedViewState extends State<CombinedView> {
 
   // שמירת גובה הבלוק בפועל לחישובים דינאמיים
   double _viewportHeight = 0;
-  List<String>? _cachedReadingSegmentContent;
-  bool? _cachedReadingSegmentContinuous;
-  List<ReadingSegment> _cachedReadingSegments = const [];
 
   ScrollController? _previewScrollController;
   final DictionaryLookupRepository _dictionaryLookupRepository =
@@ -255,7 +232,7 @@ class _CombinedViewState extends State<CombinedView> {
         debugPrint('DEBUG: גלילה אוטומטית למיקום שמור: $initialIndex');
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && widget.tab.scrollController.isAttached) {
-            unawaited(_scrollToSourceLine(initialIndex));
+            unawaited(_scrollToSourceLine(state, initialIndex));
           }
         });
       }
@@ -336,69 +313,46 @@ class _CombinedViewState extends State<CombinedView> {
     widget.onSelectedTextChanged?.call(null);
   }
 
-  // עדכון האינדקס הנוכחי ב-tab
+  // עדכון האינדקס הנוכחי ב-tab — חייב להמיר segmentIndex לשורת מקור.
   void _updateTabIndex() {
     final positions = widget.tab.positionsListener.itemPositions.value;
-    if (positions.isNotEmpty) {
-      // שומר את האינדקס של הפריט הראשון הנראה
-      final segments = _readingSegmentsForCurrentMode();
-      final visiblePositions = positions
-          .where(
-            (position) =>
-                position.itemTrailingEdge > 0 && position.itemLeadingEdge < 1,
-          )
-          .toList()
-        ..sort((a, b) => a.itemLeadingEdge.compareTo(b.itemLeadingEdge));
-      final sourceIndices = sourceLineIndicesForSegmentViewports(
-        segments,
-        (visiblePositions.isNotEmpty ? visiblePositions : positions).map(
-          (position) => ReadingSegmentViewport(
-            segmentIndex: position.index,
-            leadingEdge: position.itemLeadingEdge,
-            trailingEdge: position.itemTrailingEdge,
-          ),
-        ),
-      );
-      if (sourceIndices.isNotEmpty) {
-        widget.tab.index = sourceIndices.first;
-      }
+    if (positions.isEmpty) return;
+
+    final state = _textBookBloc.state;
+    if (state is! TextBookLoaded) return;
+
+    final visiblePositions = positions
+        .where(
+          (position) =>
+              position.itemTrailingEdge > 0 && position.itemLeadingEdge < 1,
+        )
+        .toList()
+      ..sort((a, b) => a.itemLeadingEdge.compareTo(b.itemLeadingEdge));
+    final source = visiblePositions.isNotEmpty ? visiblePositions : positions;
+
+    if (!state.continuousReadingMode || state.readingSegments.isEmpty) {
+      widget.tab.index = source.first.index;
+      return;
+    }
+    // במצב רציף — translate segmentIndex לשורת מקור ראשונה
+    final segmentIndex = source.first.index;
+    if (segmentIndex >= 0 && segmentIndex < state.readingSegments.length) {
+      widget.tab.index = state.readingSegments[segmentIndex].startLineIndex;
     }
   }
 
-  List<ReadingSegment> _readingSegmentsForCurrentMode() {
-    final continuous = context.read<SettingsBloc>().state.continuousReadingMode;
-    return _readingSegmentsForMode(continuous);
-  }
-
-  List<ReadingSegment> _readingSegmentsForMode(bool continuous) {
-    if (!identical(_cachedReadingSegmentContent, widget.data) ||
-        _cachedReadingSegmentContinuous != continuous) {
-      _cachedReadingSegmentContent = widget.data;
-      _cachedReadingSegmentContinuous = continuous;
-      _cachedReadingSegments = buildReadingSegments(
-        widget.data,
-        continuous: continuous,
-      );
-    }
-    return _cachedReadingSegments;
-  }
-
-  Future<void> _scrollToSourceLine(
-    int lineIndex, {
-    double alignment = 0.05,
-    Duration duration = const Duration(milliseconds: 300),
-  }) {
+  Future<void> _scrollToSourceLine(TextBookLoaded state, int lineIndex) {
     return scrollToSourceLine(
       scrollController: widget.tab.scrollController,
       scrollOffsetController: widget.tab.mainOffsetController,
       positionsListener: widget.tab.positionsListener,
-      segments: _readingSegmentsForCurrentMode(),
+      segments: state.readingSegments,
       lineIndex: lineIndex,
       viewportExtent: _viewportHeight > 0
           ? _viewportHeight
           : (context.size?.height ?? MediaQuery.sizeOf(context).height),
-      alignment: alignment,
-      duration: duration,
+      alignment: 0.05,
+      duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
   }
@@ -465,8 +419,7 @@ class _CombinedViewState extends State<CombinedView> {
     return [
       AppContextMenuEntry(
         label: 'הצג את כל $groupName',
-        trailing:
-            groupActive ? const Icon(FluentIcons.checkmark_24_regular) : null,
+        isSelected: groupActive,
         onTap: () {
           _selectParagraphForContextMenu(paragraphIndex);
           final current = List<String>.from(st.activeCommentators);
@@ -486,8 +439,7 @@ class _CombinedViewState extends State<CombinedView> {
         final bool isActive = st.activeCommentators.contains(title);
         return AppContextMenuEntry(
           label: title,
-          trailing:
-              isActive ? const Icon(FluentIcons.checkmark_24_regular) : null,
+          isSelected: isActive,
           onTap: () {
             _selectParagraphForContextMenu(paragraphIndex);
             final current = List<String>.from(st.activeCommentators);
@@ -553,7 +505,9 @@ class _CombinedViewState extends State<CombinedView> {
     final commentatorChildren = <AppContextMenuEntry>[
       if (shouldShowOpenPaneEntry)
         AppContextMenuEntry(
-          label: 'פתח מפרשים בחלונית צד',
+          label: 'פתח את חלונית המפרשים',
+          icon: FluentIcons.panel_right_24_regular,
+          isHighlighted: true,
           onTap: () {
             _selectParagraphForContextMenu(paragraphIndex);
             _openCommentatorsPane(isAdding: true);
@@ -561,7 +515,9 @@ class _CombinedViewState extends State<CombinedView> {
         ),
       if (shouldShowSelectEntry)
         AppContextMenuEntry(
-          label: 'פתח בחירת מפרשים בחלונית צד',
+          label: 'בחר מפרשים מרובים',
+          icon: FluentIcons.filter_24_regular,
+          isHighlighted: true,
           onTap: () {
             _selectParagraphForContextMenu(paragraphIndex);
             widget.onOpenCommentatorsPaneWithFilter!();
@@ -571,8 +527,7 @@ class _CombinedViewState extends State<CombinedView> {
         const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
         label: 'הצג את כל המפרשים',
-        trailing:
-            allActive ? const Icon(FluentIcons.checkmark_24_regular) : null,
+        isSelected: allActive,
         onTap: () {
           _selectParagraphForContextMenu(paragraphIndex);
           context.read<TextBookBloc>().add(
@@ -674,12 +629,20 @@ class _CombinedViewState extends State<CombinedView> {
               ? [
                   AppContextMenuEntry(
                     label: "חפש '$preview' בספר זה",
+                    labelWidget: buildSearchMenuLabel(
+                      selectedText: cleanedText,
+                      suffix: 'בספר זה',
+                    ),
                     icon: FluentIcons.book_search_24_regular,
                     onTap: () =>
                         widget.openLeftPaneTab(1, searchText: cleanedText),
                   ),
                   AppContextMenuEntry(
                     label: "חפש '$preview' בכל הספרים",
+                    labelWidget: buildSearchMenuLabel(
+                      selectedText: cleanedText,
+                      suffix: 'בכל הספרים',
+                    ),
                     icon: FluentIcons.library_24_regular,
                     onTap: () => openGlobalSearch(
                       context,
@@ -726,14 +689,15 @@ class _CombinedViewState extends State<CombinedView> {
         icon: FluentIcons.note_add_24_regular,
         onTap: () => _showNoteEditor(selectedText),
       ),
-      AppContextMenuEntry(
-        label: 'דווח על טעות בספר',
-        icon: FluentIcons.error_circle_24_regular,
-        onTap: () => _openErrorReportDialog(
-          selectedText ?? '',
-          fallbackLineIndex: paragraphIndex,
+      if (!state.book.isUserBook)
+        AppContextMenuEntry(
+          label: 'דווח על טעות בספר',
+          icon: FluentIcons.error_circle_24_regular,
+          onTap: () => _openErrorReportDialog(
+            selectedText ?? '',
+            fallbackLineIndex: paragraphIndex,
+          ),
         ),
-      ),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
         label: 'העתק',
@@ -1065,9 +1029,7 @@ class _CombinedViewState extends State<CombinedView> {
           builder: (context, constraints) {
             // שומר את גובה הבלוק בפועל לשימוש בחישובי הגלילה
             _viewportHeight = constraints.maxHeight;
-            final settingsState = context.watch<SettingsBloc>().state;
-            final readingSegments =
-                _readingSegmentsForMode(settingsState.continuousReadingMode);
+            context.watch<SettingsBloc>().state;
 
             return SelectionArea(
               key: ValueKey('combined_selection_$_selectionAreaRevision'),
@@ -1220,15 +1182,16 @@ class _CombinedViewState extends State<CombinedView> {
                               radius: const Radius.circular(4.0),
                               child: ListView.builder(
                                 controller: _previewScrollController,
-                                itemCount: readingSegments.length,
+                                itemCount: state.readingSegments.isNotEmpty
+                                    ? state.readingSegments.length
+                                    : widget.data.length,
                                 itemBuilder: (context, index) {
                                   return buildExpansiomTile(
-                                      ExpansibleController(),
-                                      index,
-                                      state,
-                                      const <int, List<PersonalNote>>{},
-                                      readingSegments[index],
-                                      settingsState.continuousReadingMode);
+                                    ExpansibleController(),
+                                    index,
+                                    state,
+                                    const <int, List<PersonalNote>>{},
+                                  );
                                 },
                               ),
                             )
@@ -1236,7 +1199,9 @@ class _CombinedViewState extends State<CombinedView> {
                               scrollController: widget.tab.scrollController,
                               itemPositionsListener:
                                   widget.tab.positionsListener,
-                              itemCount: readingSegments.length,
+                              itemCount: state.readingSegments.isNotEmpty
+                                  ? state.readingSegments.length
+                                  : widget.data.length,
                               child: ProgressiveScroll(
                                 focusNode: _focusNode,
                                 maxSpeed: 10000.0,
@@ -1261,8 +1226,6 @@ class _CombinedViewState extends State<CombinedView> {
                                     return buildOuterList(
                                       state,
                                       noteMap,
-                                      readingSegments,
-                                      settingsState.continuousReadingMode,
                                     );
                                   },
                                 ),
@@ -1282,17 +1245,26 @@ class _CombinedViewState extends State<CombinedView> {
   Widget buildOuterList(
     TextBookLoaded state,
     Map<int, List<PersonalNote>> noteMap,
-    List<ReadingSegment> readingSegments,
-    bool continuous,
   ) {
+    // ה-ListView מאכלס itemCount=segments — במצב הרגיל זה 1:1 לשורות,
+    // במצב רציף זה מספר הפסקאות. תרגום widget.tab.index (שורת מקור) →
+    // segmentIndex לפני העברה ל-`initialScrollIndex`.
+    final initialIndex = state.readingSegments.isNotEmpty
+        ? segmentIndexForLine(state.readingSegments, widget.tab.index)
+        : widget.tab.index;
+    final itemCount = state.readingSegments.isNotEmpty
+        ? state.readingSegments.length
+        : widget.data.length;
+    final clampedInitial =
+        itemCount == 0 ? 0 : initialIndex.clamp(0, itemCount - 1);
+
     return ScrollablePositionedList.builder(
       key: ValueKey('combined-${widget.tab.book.title}'),
-      initialScrollIndex:
-          segmentIndexForLine(readingSegments, widget.tab.index),
+      initialScrollIndex: clampedInitial,
       itemPositionsListener: widget.tab.positionsListener,
       itemScrollController: widget.tab.scrollController,
       scrollOffsetController: widget.tab.mainOffsetController,
-      itemCount: readingSegments.length,
+      itemCount: itemCount,
       itemBuilder: (context, index) {
         ExpansibleController controller = ExpansibleController();
         return buildExpansiomTile(
@@ -1300,8 +1272,6 @@ class _CombinedViewState extends State<CombinedView> {
           index,
           state,
           noteMap,
-          readingSegments[index],
-          continuous,
         );
       },
     );
@@ -1312,19 +1282,28 @@ class _CombinedViewState extends State<CombinedView> {
     int index,
     TextBookLoaded state,
     Map<int, List<PersonalNote>> noteMap,
-    ReadingSegment segment,
-    bool continuous,
   ) {
-    final primaryLineIndex = segment.startLineIndex;
+    // [index] הוא segmentIndex; ה-segment הזה עשוי לעטוף כמה שורות מקור.
+    // במצב הרגיל זה 1:1 (segment.startLineIndex == index, sourceLineIndices=[index]).
+    final segment =
+        state.readingSegments.isNotEmpty && index < state.readingSegments.length
+            ? state.readingSegments[index]
+            : null;
+    final primaryLineIndex = segment?.startLineIndex ?? index;
+    final isContinuousParagraph = state.continuousReadingMode &&
+        segment != null &&
+        !segment.isHeader &&
+        segment.sourceLineIndices.length > 1;
+
     final isSelected = state.selectedIndex != null &&
-        segment.containsLine(state.selectedIndex!);
+        (segment?.containsLine(state.selectedIndex!) ??
+            state.selectedIndex == primaryLineIndex);
     final selectedLineIndex = isSelected && state.selectedIndex != null
         ? state.selectedIndex!
         : primaryLineIndex;
     int actionLineIndex() {
       final currentIndex = _currentSelectedIndex.value;
-      if (continuous &&
-          !segment.isHeader &&
+      if (isContinuousParagraph &&
           currentIndex != null &&
           segment.containsLine(currentIndex)) {
         return currentIndex;
@@ -1333,23 +1312,28 @@ class _CombinedViewState extends State<CombinedView> {
     }
 
     final isHighlighted = state.highlightedLine != null &&
-        segment.containsLine(state.highlightedLine!);
+        (segment?.containsLine(state.highlightedLine!) ??
+            state.highlightedLine == primaryLineIndex);
     final notesForLine =
         noteMap[primaryLineIndex + 1] ?? const <PersonalNote>[];
 
     final theme = Theme.of(context);
     final backgroundColor = () {
-      if (!continuous && isHighlighted) {
+      // במצב רציף ההדגשה תיעשה בתוך הפסקה (לכל שורה הצבע שלה),
+      // כך שאין צבע רקע לכלל ה-tile.
+      if (isContinuousParagraph) return null;
+      if (isHighlighted) {
         return theme.colorScheme.secondaryContainer.withValues(alpha: 0.4);
       }
-      if (!continuous && isSelected) {
+      if (isSelected) {
         return theme.colorScheme.primary.withValues(alpha: 0.08);
       }
       return null;
     }();
 
     return Column(
-      key: PageStorageKey('segment-${segment.startLineIndex}'),
+      key: PageStorageKey(
+          'segment-${segment?.startLineIndex ?? primaryLineIndex}'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // הטקסט של הספר - ללא SelectionArea נפרד, כי יש SelectionArea כללי
@@ -1368,7 +1352,9 @@ class _CombinedViewState extends State<CombinedView> {
               }
             },
             onSingleTap: () {
-              if (continuous && !segment.isHeader) {
+              // במצב רציף, לחיצה רגילה על פסקה לא בוחרת שורה — הלחיצה
+              // הספציפית מטופלת בתוך ContinuousReadingParagraph (recognizer לכל שורה).
+              if (isContinuousParagraph) {
                 return;
               }
               _focusNode.requestFocus();
@@ -1439,9 +1425,7 @@ class _CombinedViewState extends State<CombinedView> {
             child: ValueListenableBuilder<String?>(
               valueListenable: _savedSelectedText,
               child: Padding(
-                padding: EdgeInsets.symmetric(
-                  vertical: continuous ? 0.0 : 4.0,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     return BlocBuilder<SettingsBloc, SettingsState>(
@@ -1456,7 +1440,8 @@ class _CombinedViewState extends State<CombinedView> {
                           textMaxWidth = constraints.maxWidth * widthPercent;
                         }
 
-                        if (continuous && !segment.isHeader) {
+                        // במצב רציף — פסקה מכמה שורות מקור.
+                        if (isContinuousParagraph) {
                           final segmentText = _buildContinuousSegmentText(
                             segment: segment,
                             state: state,
@@ -1468,7 +1453,6 @@ class _CombinedViewState extends State<CombinedView> {
                               color: Theme.of(context).colorScheme.onSurface,
                             ),
                           );
-
                           final constrainedText = textMaxWidth > 0
                               ? Center(
                                   child: ConstrainedBox(
@@ -1478,7 +1462,6 @@ class _CombinedViewState extends State<CombinedView> {
                                   ),
                                 )
                               : segmentText;
-
                           return Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -1639,16 +1622,10 @@ class _CombinedViewState extends State<CombinedView> {
                 ),
               ),
               builder: (context, selectedText, child) {
-                final contextMenuIndex = continuous && !segment.isHeader
-                    ? _currentSelectedIndex.value
-                    : primaryLineIndex;
                 return AppContextMenuRegion(
                   menuBuilder: (menuCtx, tapPos) => _buildContextMenuForIndex(
                     state,
-                    contextMenuIndex != null &&
-                            segment.containsLine(contextMenuIndex)
-                        ? contextMenuIndex
-                        : primaryLineIndex,
+                    primaryLineIndex,
                     menuCtx,
                     selectedText,
                     tapPos,
@@ -1675,6 +1652,11 @@ class _CombinedViewState extends State<CombinedView> {
     );
   }
 
+  // ─── מצב קריאה רציף — רינדור פסקה מ-segment ────────────────────────────
+  // הערה: כל הלוגיקה כאן היא רינדור בלבד. החיפוש/קישורים/הניקוד מופעלים
+  // על הטקסט המקורי של כל שורה (לפני המיזוג), ורק התוצאות (HTML) מוצגות
+  // יחד. כך החיפוש פר-שורה ממשיך לעבוד.
+
   Widget _buildContinuousSegmentText({
     required ReadingSegment segment,
     required TextBookLoaded state,
@@ -1691,11 +1673,14 @@ class _CombinedViewState extends State<CombinedView> {
     return ContinuousReadingParagraph(
       lines: paragraphLines,
       baseStyle: baseTextStyle,
-      onTapUrl: (url) => HtmlLinkHandler.handleLink(
-        context,
-        url,
-        (tab) => widget.openBookCallback(tab),
-      ),
+      onTapUrl: (url) async {
+        await HtmlLinkHandler.handleLink(
+          context,
+          url,
+          (tab) => widget.openBookCallback(tab),
+        );
+        return true;
+      },
       onLineTap: (lineIndex) {
         final isLineSelected = state.selectedIndex == lineIndex;
         _focusNode.requestFocus();

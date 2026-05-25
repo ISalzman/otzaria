@@ -17,6 +17,7 @@ import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
+import 'package:otzaria/settings/dialogs/books_list_dialog.dart';
 import 'package:otzaria/settings/services/safer_mode/password_verification_dialog.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
@@ -348,6 +349,20 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     });
   }
 
+  Future<void> _openBooksListDialog(BuildContext context) async {
+    try {
+      final library = await DataRepository.instance.library;
+      if (!context.mounted) return;
+      await showBooksListDialog(
+        context: context,
+        books: library.getAllBooks(),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      UiSnack.showError('שגיאה בטעינת רשימת הספרים: $e');
+    }
+  }
+
   bool _shouldInclude(String key) =>
       _selectedBackupMode == _BackupMode.all ||
       (Settings.getValue<bool>(key) ?? true);
@@ -580,6 +595,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       initialDirectory: downloadsDirectory?.path,
       allowedExtensions: ['bat'],
       type: FileType.custom,
+      lockParentWindow: true,
     );
     if (path == null || !mounted) {
       return;
@@ -829,28 +845,75 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       title: 'דיווחי טעויות',
       subtitle: 'שליחה ישירה לצוות אוצריא, כולל תור אוטומטי במצב אופליין.',
       children: [
-        ListTile(
-          leading: const Icon(FluentIcons.mail_24_regular),
-          title: const Text('כתובת מייל לזיהוי', style: kSettingsTitleStyle),
-          subtitle: Text(
-            senderEmail.isEmpty ? 'עדיין לא הוגדרה כתובת זיהוי' : senderEmail,
-            style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.ltr,
-          ),
-          trailing: Wrap(
-            spacing: 8,
-            children: [
-              if (senderEmail.isNotEmpty)
-                NeutralActionButton(
-                  text: 'נקה',
-                  onPressed: _clearSenderEmail,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < LayoutBreakpoints.compact;
+            const titleWidget =
+                Text('כתובת מייל לזיהוי', style: kSettingsTitleStyle);
+            final subtitleWidget = Text(
+              senderEmail.isEmpty ? 'עדיין לא הוגדרה כתובת זיהוי' : senderEmail,
+              style: kSettingsSubtitleStyle,
+              textDirection: TextDirection.ltr,
+            );
+            final actionsRow = Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (senderEmail.isNotEmpty)
+                  NeutralActionButton(
+                    text: 'נקה',
+                    onPressed: _clearSenderEmail,
+                  ),
+                RecommendedActionButton(
+                  text: senderEmail.isEmpty ? 'הגדר' : 'ערוך',
+                  onPressed: _editSenderEmail,
                 ),
-              RecommendedActionButton(
-                text: senderEmail.isEmpty ? 'הגדר' : 'ערוך',
-                onPressed: _editSenderEmail,
+              ],
+            );
+
+            if (!isNarrow) {
+              return ListTile(
+                leading: const Icon(FluentIcons.mail_24_regular),
+                title: titleWidget,
+                subtitle: subtitleWidget,
+                trailing: actionsRow,
+              );
+            }
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 2, left: 16),
+                        child: Icon(FluentIcons.mail_24_regular),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            titleWidget,
+                            const SizedBox(height: 4),
+                            subtitleWidget,
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: actionsRow,
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
         SwitchListTile(
           secondary: const Icon(FluentIcons.cloud_arrow_up_24_regular),
@@ -923,47 +986,66 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                                   top: 8,
                                   bottom: 16,
                                 ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildManagedActionButton(
-                                        enabled: !state.isOfflineMode,
-                                        child: RecommendedActionButton(
-                                          text: 'שלח עכשיו',
-                                          icon:
-                                              FluentIcons.arrow_sync_24_regular,
-                                          onPressed: _flushPendingReports,
-                                          isLoading: _isFlushingPendingReports,
-                                        ),
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final isNarrow = constraints.maxWidth <
+                                        LayoutBreakpoints.compact;
+                                    final sendButton =
+                                        _buildManagedActionButton(
+                                      enabled: !state.isOfflineMode,
+                                      child: RecommendedActionButton(
+                                        text: 'שלח עכשיו',
+                                        icon: FluentIcons.arrow_sync_24_regular,
+                                        onPressed: _flushPendingReports,
+                                        isLoading: _isFlushingPendingReports,
                                       ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _buildManagedActionButton(
-                                        enabled: hasReports,
-                                        child: NeutralActionButton(
-                                          text: 'נקה דיווחים',
-                                          icon: FluentIcons.delete_24_regular,
-                                          onPressed: _clearPendingReports,
-                                          isLoading: _isClearingPendingReports,
-                                        ),
+                                    );
+                                    final clearButton =
+                                        _buildManagedActionButton(
+                                      enabled: hasReports,
+                                      child: NeutralActionButton(
+                                        text: 'נקה דיווחים',
+                                        icon: FluentIcons.delete_24_regular,
+                                        onPressed: _clearPendingReports,
+                                        isLoading: _isClearingPendingReports,
                                       ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _buildManagedActionButton(
-                                        enabled: hasReports,
-                                        child: NeutralActionButton(
-                                          text: 'הורד לשליחה במחשב מחובר',
-                                          icon: FluentIcons
-                                              .arrow_download_24_regular,
-                                          onPressed:
-                                              _exportPendingReportsScript,
-                                          isLoading: _isExportingPendingReports,
-                                        ),
+                                    );
+                                    final exportButton =
+                                        _buildManagedActionButton(
+                                      enabled: hasReports,
+                                      child: NeutralActionButton(
+                                        text: 'הורד לשליחה במחשב מחובר',
+                                        icon: FluentIcons
+                                            .arrow_download_24_regular,
+                                        onPressed: _exportPendingReportsScript,
+                                        isLoading: _isExportingPendingReports,
                                       ),
-                                    ),
-                                  ],
+                                    );
+
+                                    if (isNarrow) {
+                                      return Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          sendButton,
+                                          const SizedBox(height: 8),
+                                          clearButton,
+                                          const SizedBox(height: 8),
+                                          exportButton,
+                                        ],
+                                      );
+                                    }
+
+                                    return Row(
+                                      children: [
+                                        Expanded(child: sendButton),
+                                        const SizedBox(width: 12),
+                                        Expanded(child: clearButton),
+                                        const SizedBox(width: 12),
+                                        Expanded(child: exportButton),
+                                      ],
+                                    );
+                                  },
                                 ),
                               ),
                             if (state.isOfflineMode)
@@ -1196,12 +1278,20 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           // ),
         ),
         ListTile(
+          hoverColor: Colors.transparent,
           leading: const Icon(FluentIcons.book_24_regular),
           title: const Text('מספר ספרים', style: kSettingsTitleStyle),
           subtitle: Text(
             _bookCount != null ? '${_bookCount!} ספרים' : 'טוען...',
             style: kSettingsSubtitleStyle,
           ),
+          trailing: _bookCount == null
+              ? null
+              : TextButton.icon(
+                  icon: const Icon(FluentIcons.list_24_regular, size: 16),
+                  label: const Text('הצג רשימה'),
+                  onPressed: () => _openBooksListDialog(context),
+                ),
         ),
       ],
     );
@@ -1281,7 +1371,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   Future<void> _restoreBackup() async {
     final result = await FilePicker.pickFiles(
-        type: FileType.custom, allowedExtensions: ['json']);
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        lockParentWindow: true);
     final filePath = result?.files.single.path;
     if (filePath == null) return;
     if (!mounted) return;

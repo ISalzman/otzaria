@@ -9,6 +9,7 @@ void main() {
         containsAll(<String>[
           'key-shortcut-toggle-nav-pane',
           'key-shortcut-toggle-commentators-pane',
+          'key-shortcut-open-commentators-tab',
         ]),
       );
     });
@@ -25,6 +26,14 @@ void main() {
       );
     });
 
+    test('פתיחת כרטיסיית מפרשים — ללא ברירת מחדל (המשתמש יבחר)', () {
+      expect(
+        ShortcutValidator
+            .defaultShortcuts['key-shortcut-open-commentators-tab'],
+        '',
+      );
+    });
+
     test('שמות תצוגה בעברית קיימים', () {
       expect(
         ShortcutValidator.shortcutNames['key-shortcut-toggle-nav-pane'],
@@ -34,6 +43,10 @@ void main() {
         ShortcutValidator
             .shortcutNames['key-shortcut-toggle-commentators-pane'],
         'פתח/סגור חלונית מפרשים',
+      );
+      expect(
+        ShortcutValidator.shortcutNames['key-shortcut-open-commentators-tab'],
+        'פתח כרטיסיית מפרשים',
       );
     });
 

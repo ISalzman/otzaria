@@ -73,11 +73,28 @@ Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; צילומי מסך להצגה בדף ההתקנה (במקרה שהמתקין מציג ממשק — ראה InitializeSlideshow)
+Source: "feature1.bmp"; Flags: dontcopy
+Source: "feature2.bmp"; Flags: dontcopy
+Source: "feature3.bmp"; Flags: dontcopy
+Source: "feature4.bmp"; Flags: dontcopy
 
 [INI]
 Filename: "{app}\system_install.marker"; Section: "Install"; Key: "Mode"; String: "Admin"; Check: IsAdminInstallMode
 
 [Code]
+var
+  SlideshowImage: TBitmapImage;
+  SlideshowTimerId: LongWord;
+  SlideshowTimerCallback: LongWord;
+  SlideshowIndex: Integer;
+
+// TTimer לא זמין ב-Pascal Script של Inno Setup; נשתמש ב-Windows API.
+function SetTimer(hWnd, nIDEvent, uElapse, lpTimerFunc: LongWord): LongWord;
+  external 'SetTimer@user32.dll stdcall';
+function KillTimer(hWnd, nIDEvent: LongWord): LongWord;
+  external 'KillTimer@user32.dll stdcall';
+
 function TryGetInstallDirFromRegistry(RootKey: Integer; const SubKey: String; var InstallDir: String): Boolean;
 begin
   Result := RegQueryStringValue(RootKey, SubKey, 'Inno Setup: App Path', InstallDir);
@@ -91,28 +108,92 @@ begin
   Result := False;
 end;
 
-function FindPreviousInstallDir(): String;
+function PathStartsWith(PathValue: String; Prefix: String): Boolean;
+var
+  NormalizedPath: String;
+  NormalizedPrefix: String;
+begin
+  NormalizedPath := Lowercase(PathValue);
+  if (NormalizedPath <> '') and (Copy(NormalizedPath, Length(NormalizedPath), 1) <> '\') then
+    NormalizedPath := NormalizedPath + '\';
+
+  NormalizedPrefix := Lowercase(Prefix);
+  if (NormalizedPrefix <> '') and (Copy(NormalizedPrefix, Length(NormalizedPrefix), 1) <> '\') then
+    NormalizedPrefix := NormalizedPrefix + '\';
+
+  Result := Pos(NormalizedPrefix, NormalizedPath) = 1;
+end;
+
+// מזהה נתיבים מערכתיים שמחייבים UAC לשדרוג. זה נותן לנו לבקש הרשאות
+// מראש עבור התקנות ישנות שנרשמו ב-HKCU אבל הותקנו בפועל תחת Program Files.
+// הסיווג הוא לפי מיקום ידוע, לא לפי ניסיון כתיבה, כדי להימנע מ-false-positive
+// בגלל AV / מנעולי קבצים / דיסק מלא.
+function PathLikelyRequiresAdmin(PathDir: String): Boolean;
+begin
+  Result :=
+    PathStartsWith(PathDir, ExpandConstant('{commonpf}')) or
+    PathStartsWith(PathDir, ExpandConstant('{commonpf32}')) or
+    PathStartsWith(PathDir, ExpandConstant('{commonpf64}'));
+end;
+
+function RelaunchSetupElevated(Params: String; var ErrorCode: Integer): Boolean;
+var
+  CmdLine: String;
+begin
+  // Inno Setup לא מאפשר להריץ את Setup עצמו דרך ShellExec מתוך
+  // InitializeSetup. לכן מרימים את cmd.exe, והוא מפעיל את המתקין.
+  CmdLine :=
+    '/c start "" "' + ExpandConstant('{srcexe}') + '" ' + Params;
+  Result := ShellExec(
+    'runas',
+    ExpandConstant('{sys}\cmd.exe'),
+    CmdLine,
+    '',
+    SW_SHOWNORMAL,
+    ewNoWait,
+    ErrorCode);
+end;
+
+// מחזירה את תיקיית ההתקנה הקודמת. RequiresAdmin נקבע לפי מקור הזיהוי
+// ובמקרי HKCU גם לפי הנתיב בפועל, כדי לבקש UAC לפני כשל בכתיבה.
+function FindPreviousInstallDir(var RequiresAdmin: Boolean): String;
 var
   InstallDir: String;
   LegacyDir: String;
   UninstallKey: String;
 begin
+  RequiresAdmin := False;
   UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{EEC4F712-CD05-4D15-A753-509E840A51A5}_is1';
 
-  if TryGetInstallDirFromRegistry(HKLM64, UninstallKey, InstallDir) or
-     TryGetInstallDirFromRegistry(HKCU, UninstallKey, InstallDir) then
+  // HKLM64 = התקנה מערכתית קודמת ⇒ דורשת מנהל לשדרוג.
+  if TryGetInstallDirFromRegistry(HKLM64, UninstallKey, InstallDir) then
   begin
     Result := InstallDir;
+    RequiresAdmin := True;
     exit;
   end;
 
+  // בדרך כלל HKCU = התקנת משתמש. אם הנתיב בפועל תחת Program Files,
+  // מבקשים UAC מראש כדי לא ליפול לכשל כתיבה מאוחר יותר.
+  if TryGetInstallDirFromRegistry(HKCU, UninstallKey, InstallDir) then
+  begin
+    Result := InstallDir;
+    RequiresAdmin := PathLikelyRequiresAdmin(InstallDir);
+    exit;
+  end;
+
+  // C:\אוצריא = שורש דרייב מערכתי ⇒ יצירה/שכתוב דורשים מנהל.
   LegacyDir := 'C:\אוצריא';
   if DirExists(LegacyDir) then
   begin
     Result := LegacyDir;
+    RequiresAdmin := True;
     exit;
   end;
 
+  // {autopf} בריצת non-admin מתפענח ל-%LocalAppData%\Programs (נתיב משתמש).
+  // בריצת admin זה Program Files, אבל אז IsAdmin=True ב-InitializeSetup
+  // ולא נכנסים לענף ההסלמה ממילא — כך ש-RequiresAdmin נשאר False בבטחה.
   LegacyDir := ExpandConstant('{autopf}\אוצריא');
   if DirExists(LegacyDir) then
   begin
@@ -131,8 +212,10 @@ begin
 end;
 
 function GetDefaultInstallDir(Param: String): String;
+var
+  Dummy: Boolean;
 begin
-  Result := FindPreviousInstallDir();
+  Result := FindPreviousInstallDir(Dummy);
   if Result = '' then
     Result := ExpandConstant('{autopf}\אוצריא');
 end;
@@ -181,11 +264,77 @@ begin
   RemoveDir(Path);
 end;
 
+procedure OnSlideshowTimer(H: LongWord; Msg: LongWord; IdEvent: LongWord; Time: LongWord);
+var
+  NextFile: String;
+begin
+  if SlideshowImage = nil then
+    exit;
+  SlideshowIndex := (SlideshowIndex + 1) mod 4;
+  case SlideshowIndex of
+    0: NextFile := 'feature1.bmp';
+    1: NextFile := 'feature2.bmp';
+    2: NextFile := 'feature3.bmp';
+    3: NextFile := 'feature4.bmp';
+  end;
+  SlideshowImage.Bitmap.LoadFromFile(ExpandConstant('{tmp}\') + NextFile);
+end;
+
+procedure InitializeSlideshow;
+var
+  GaugeBottom, AvailH, ImgH: Integer;
+begin
+  if WizardForm = nil then
+    exit;
+  SlideshowIndex := 0;
+  ExtractTemporaryFile('feature1.bmp');
+  ExtractTemporaryFile('feature2.bmp');
+  ExtractTemporaryFile('feature3.bmp');
+  ExtractTemporaryFile('feature4.bmp');
+  GaugeBottom := WizardForm.ProgressGauge.Top + WizardForm.ProgressGauge.Height;
+  AvailH := WizardForm.InstallingPage.Height - GaugeBottom;
+  if AvailH < ScaleY(60) then
+    exit;
+  ImgH := AvailH - ScaleY(10);
+  SlideshowImage := TBitmapImage.Create(WizardForm.InstallingPage);
+  SlideshowImage.Parent := WizardForm.InstallingPage;
+  SlideshowImage.Stretch := True;
+  SlideshowImage.Left := 0;
+  SlideshowImage.Top := GaugeBottom + ScaleY(8);
+  SlideshowImage.Width := WizardForm.InstallingPage.Width;
+  SlideshowImage.Height := ImgH;
+  SlideshowImage.Bitmap.LoadFromFile(ExpandConstant('{tmp}\feature1.bmp'));
+  SlideshowTimerCallback := CreateCallback(@OnSlideshowTimer);
+end;
+
+procedure InitializeWizard;
+begin
+  InitializeSlideshow;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if SlideshowTimerCallback = 0 then
+    exit;
+  if CurPageID = wpInstalling then
+  begin
+    if SlideshowTimerId = 0 then
+      SlideshowTimerId := SetTimer(0, 0, 1500, SlideshowTimerCallback);
+  end
+  else if SlideshowTimerId <> 0 then
+  begin
+    KillTimer(0, SlideshowTimerId);
+    SlideshowTimerId := 0;
+  end;
+end;
+
 function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
   PrivilegeFlag: String;
   Launched: Boolean;
+  RequiresAdmin: Boolean;
+  PreviousDir: String;
 begin
   Result := True;
 
@@ -194,10 +343,43 @@ begin
   // והקוד הזה לא ירוץ שוב.
   if not WizardSilent then
   begin
+    PreviousDir := FindPreviousInstallDir(RequiresAdmin);
+
     if IsAdmin then
-      PrivilegeFlag := '/ALLUSERS'
+    begin
+      PrivilegeFlag := '/ALLUSERS';
+    end
+    else if RequiresAdmin then
+    begin
+      // ההתקנה הקודמת בנתיב הדורש הרשאות מנהל. משגרים מחדש עם 'runas'
+      // כדי לקבל UAC; cmd.exe המורם יפעיל את המתקין עם /ALLUSERS.
+      PrivilegeFlag := '/ALLUSERS';
+      Launched := RelaunchSetupElevated(
+        '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART ' + PrivilegeFlag,
+        ResultCode);
+
+      if Launched then
+      begin
+        Result := False;
+        exit;
+      end;
+
+      // אם גם השיגור המורם נכשל, המשתמש דחה את ה-UAC (ERROR_CANCELLED)
+      // או שהייתה שגיאת מערכת. לא נופלים ל-/CURRENTUSER, כי ההתקנה
+      // הייתה נכשלת בכתיבה לנתיב המוגן.
+      MsgBox(
+        'אוצריא הותקנה בעבר בנתיב הדורש הרשאות מנהל:' + #13#10 +
+        PreviousDir + #13#10 + #13#10 +
+        'כדי לשדרג, יש להפעיל את המתקין כמנהל' + #13#10 +
+        '(קליק ימני על קובץ ההתקנה ↦ "Run as administrator").',
+        mbError, MB_OK);
+      Result := False;
+      exit;
+    end
     else
+    begin
       PrivilegeFlag := '/CURRENTUSER';
+    end;
 
     Launched := Exec(ExpandConstant('{srcexe}'),
          '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART ' + PrivilegeFlag,
@@ -333,9 +515,18 @@ begin
     if DirExists(AppDataPath) then
       DelTreeExceptBooks(AppDataPath);
 
-    // הגדרות והערות אישיות ישנות (com.example)
+    // הגדרות ישנות בשם com.example (לפני שינוי מזהה החבילה)
     AppDataPath := ExpandConstant('{userappdata}\com.example');
     if DirExists(AppDataPath) then
       DelTreeExceptBooks(AppDataPath);
+
+    // נתיבים ישנים מאוד: LocalAppData בעברית (לפני גרסה 0.9.x)
+    AppDataPath := ExpandConstant('{localappdata}\אוצריא');
+    if DirExists(AppDataPath) then
+      DelTree(AppDataPath, True, True, True);
+
+    AppDataPath := ExpandConstant('{localappdata}\אוצריא\Data');
+    if DirExists(AppDataPath) then
+      DelTree(AppDataPath, True, True, True);
   end;
 end;

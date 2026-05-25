@@ -27,22 +27,41 @@ class WorkspaceRepository {
       final box = _getBox();
       final rawWorkspaces = box.get(_workspacesKey, defaultValue: []) as List;
 
-      final workspaces = rawWorkspaces
-          .map((e) => Workspace.fromJson(castMap(e)))
-          .toList();
+      // Decode each workspace independently so one bad entry doesn't lose all.
+      // Keep the full decoded list (with nulls) so legacy-index migration can
+      // map directly into the original positions — not into the filtered list.
+      final decoded = rawWorkspaces.map((e) {
+        try {
+          return Workspace.fromJson(castMap(e));
+        } catch (wsErr, wsSt) {
+          developer.log(
+            'Skipping corrupted workspace entry',
+            error: wsErr,
+            stackTrace: wsSt,
+            name: 'WorkspaceRepository',
+          );
+          return null;
+        }
+      }).toList();
+
+      final workspaces = decoded.whereType<Workspace>().toList();
 
       // Try new ID-based key first
       String? currentId = box.get(_currentWorkspaceIdKey) as String?;
 
-      // If no ID stored, try to migrate from old index-based storage
+      // If no ID stored, try to migrate from old index-based storage.
+      // Use `decoded` (original positions) so corrupted entries before the
+      // active workspace don't shift the index.
       if (currentId == null && workspaces.isNotEmpty) {
         final legacyIndex =
             box.get(_legacyCurrentWorkspaceKey, defaultValue: 0) as int;
-        if (legacyIndex >= 0 && legacyIndex < workspaces.length) {
-          currentId = workspaces[legacyIndex].id;
-          // Save migrated ID
-          unawaited(box.put(_currentWorkspaceIdKey, currentId));
-        }
+        final workspaceAtLegacy = (legacyIndex >= 0 &&
+                legacyIndex < decoded.length)
+            ? decoded[legacyIndex]
+            : null;
+        currentId =
+            (workspaceAtLegacy ?? workspaces.first).id;
+        unawaited(box.put(_currentWorkspaceIdKey, currentId));
       }
 
       // Validate that the ID exists in the list

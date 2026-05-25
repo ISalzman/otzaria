@@ -10,6 +10,11 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/bloc/tabs_state.dart';
+import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -28,8 +33,12 @@ void main() {
     int? initialTabIndex,
     Function(int)? onTabChanged,
     bool showSplitView = true,
+    TextBookTab? tab,
+    _RecordingTabsBloc? tabsBloc,
+    List<String> activeCommentators = const [],
   }) {
-    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final textBookBloc = _TestTextBookBloc(
+        _loadedState(activeCommentators: activeCommentators));
     final personalNotesBloc =
         _TestPersonalNotesBloc(const PersonalNotesState.initial());
     final settingsBloc = _TestSettingsBloc(SettingsState.initial());
@@ -40,6 +49,7 @@ void main() {
           BlocProvider<TextBookBloc>.value(value: textBookBloc),
           BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
           BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          if (tabsBloc != null) BlocProvider<TabsBloc>.value(value: tabsBloc),
         ],
         child: Scaffold(
           body: TabbedCommentaryPanel(
@@ -49,6 +59,7 @@ void main() {
             initialTabIndex: initialTabIndex,
             onTabChanged: onTabChanged,
             showSplitView: showSplitView,
+            tab: tab,
           ),
         ),
       ),
@@ -153,6 +164,39 @@ void main() {
     // הטאב צריך להישאר על 1 (בחירת המשתמש) ולא לחזור ל-0
     expect(reportedIndex, 1);
   });
+
+  testWidgets('כפתור ההרחבה מוסיף CommentatorsTab ל-TabsBloc', (tester) async {
+    // הגדרת רוחב מסוים כדי שכל הלחצנים ייכנסו בלי תפריט גלישה
+    await tester.binding.setSurfaceSize(const Size(800, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final sourceTab = TextBookTab(
+      book: TextBook(title: 'ספר בדיקה'),
+      index: 0,
+      blocOverride: _TestTextBookBloc(
+          _loadedState(activeCommentators: const ['רש"י'])),
+    );
+    addTearDown(sourceTab.dispose);
+
+    final tabsBloc = _RecordingTabsBloc();
+    addTearDown(tabsBloc.close);
+
+    await tester.pumpWidget(buildPanel(
+      tab: sourceTab,
+      tabsBloc: tabsBloc,
+      activeCommentators: const ['רש"י'],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('פתח כרטסיית מפרשים'));
+    await tester.pump();
+
+    expect(tabsBloc.recordedEvents, hasLength(1));
+    final event = tabsBloc.recordedEvents.single;
+    expect(event, isA<AddTab>());
+    expect((event as AddTab).tab, isA<CommentatorsTab>());
+    expect((event.tab as CommentatorsTab).sourceTab, same(sourceTab));
+  });
 }
 
 // ===== Wrapper widget לבדיקת דינמיקת initialTabIndex =====
@@ -214,16 +258,19 @@ class _TabSwitcherWrapperState extends State<_TabSwitcherWrapper> {
 
 // ===== Helpers =====
 
-TextBookLoaded _loadedState() => TextBookLoaded(
+TextBookLoaded _loadedState({
+  List<String> activeCommentators = const [],
+}) =>
+    TextBookLoaded(
       book: TextBook(title: 'ספר בדיקה'),
       showLeftPane: false,
       content: const ['שורה א', 'שורה ב'],
       fontSize: 18,
       showSplitView: true,
       showPageShapeView: false,
-      activeCommentators: const [],
+      activeCommentators: activeCommentators,
       commentatorGroups: const [],
-      availableCommentators: const [],
+      availableCommentators: activeCommentators,
       links: const <Link>[],
       visibleLinks: const <Link>[],
       linksByLine: const {},
@@ -263,6 +310,19 @@ class _TestSettingsBloc extends Bloc<SettingsEvent, SettingsState>
   _TestSettingsBloc(super.initialState) {
     on<SettingsEvent>((event, emit) {});
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _RecordingTabsBloc extends Bloc<TabsEvent, TabsState> implements TabsBloc {
+  _RecordingTabsBloc() : super(TabsState.initial()) {
+    on<TabsEvent>((event, emit) {
+      recordedEvents.add(event);
+    });
+  }
+
+  final List<TabsEvent> recordedEvents = [];
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

@@ -61,6 +61,8 @@ applyTheme(theme);
 
 > **שים לב:** `fontSize` שונה ממשתמש למשתמש (טווח רגיל: 16–36). עצב את הפריסה כך שתעבוד בכל גודל.
 
+> **הגופנים זמינים אוטומטית ב-WebView:** הגופנים המובנים של אוצריא (`FrankRuhlCLM`, `TaameyDavidCLM`, `Shofar`, `NotoRashiHebrew`, `KeterYG`, `NotoSerifHebrew`, `Tinos`, `Rubik`, `TaameyAshkenaz`) מוזרקים כ-`@font-face` ל-WebView עוד לפני ה-`plugin.boot`, עבור הגופן הראשי וגופן המפרשים שנבחרו בהגדרות. אין צורך לארוז קבצי גופן בתוסף — מספיק להגדיר `font-family: 'FrankRuhlCLM', 'David', serif;` ב-CSS, ולעדכן בזמן אמת מתוך `theme.typography.fontFamily`. גופני מערכת שהמשתמש בחר ידנית (מתוך גופני ההפעלה) אינם מוזרקים — במצב כזה ה-WebView ייפול חזרה ל-fallback שמוגדר ב-CSS, כך שכדאי לשמור `'David', serif` בסוף השרשרת.
+
 ---
 
 ## יישום הצבעים — CSS Variables

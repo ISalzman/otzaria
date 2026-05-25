@@ -22,9 +22,15 @@ class PluginSystemLoaded extends PluginSystemState {
   List<Object?> get props => [plugins];
   
   List<InstalledPlugin> get activePlugins => plugins.where((p) => p.enabled).toList();
-  List<InstalledPlugin> get pinnedPlugins => plugins.where((p) => p.pinned && p.enabled).toList();
-  List<InstalledPlugin> get pluginsPinnedToNavRail =>
-      plugins.where((p) => p.pinnedToNavRail && p.enabled).toList();
+  List<InstalledPlugin> get pinnedPlugins =>
+      plugins.where((p) => p.pinned && p.enabled && !p.hiddenFromTools).toList();
+  List<InstalledPlugin> get pluginsPinnedToNavRail => plugins
+      .where((p) => p.pinnedToNavRail && p.enabled && !p.hiddenFromTools)
+      .toList();
+
+  /// תוספים שעוברים סינון "מוסתר" — בשימוש בפאנל הצד של הכלים.
+  List<InstalledPlugin> get visiblePlugins =>
+      plugins.where((p) => !p.hiddenFromTools).toList();
 }
 
 class PluginSystemError extends PluginSystemState {

@@ -183,12 +183,14 @@ class TextBookPerBookSettings {
   final bool? commentatorsBelow; // true = מתחת, false = בצד
   final bool? removeNikud;
   final bool? removePunctuation;
+  final bool? continuousReadingMode;
 
   TextBookPerBookSettings({
     this.fontSize,
     this.commentatorsBelow,
     this.removeNikud,
     this.removePunctuation,
+    this.continuousReadingMode,
   });
 
   Map<String, dynamic> toJson() => {
@@ -196,6 +198,8 @@ class TextBookPerBookSettings {
         if (commentatorsBelow != null) 'commentatorsBelow': commentatorsBelow,
         if (removeNikud != null) 'removeNikud': removeNikud,
         if (removePunctuation != null) 'removePunctuation': removePunctuation,
+        if (continuousReadingMode != null)
+          'continuousReadingMode': continuousReadingMode,
       };
 
   factory TextBookPerBookSettings.fromJson(Map<String, dynamic> json) {
@@ -204,6 +208,7 @@ class TextBookPerBookSettings {
       commentatorsBelow: json['commentatorsBelow'] as bool?,
       removeNikud: json['removeNikud'] as bool?,
       removePunctuation: json['removePunctuation'] as bool?,
+      continuousReadingMode: json['continuousReadingMode'] as bool?,
     );
   }
 

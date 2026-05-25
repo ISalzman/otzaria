@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -25,10 +24,27 @@ import 'package:otzaria/widgets/feedback/app_future_builder.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:otzaria/services/commentary_service.dart';
+import 'package:otzaria/text_book/utils/inline_notes_utils.dart'
+    as inline_notes;
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
+import 'package:otzaria/widgets/smart_text/render_settings.dart';
+import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
 
 // Type alias לתאימות לאחור - משתמש ב-LinkGroup מה-Service
 typedef CommentaryGroup = LinkGroup;
+
+/// מייצג תוצאת חיפוש בודדת עם קטע טקסט וכתובת גלובלית לניווט
+class CommentarySearchSnippet {
+  final String path;
+  final String snippet;
+  final int globalIndex;
+
+  const CommentarySearchSnippet({
+    required this.path,
+    required this.snippet,
+    required this.globalIndex,
+  });
+}
 
 class CommentaryListBase extends StatefulWidget {
   final Function(TextBookTab) openBookCallback;
@@ -44,6 +60,34 @@ class CommentaryListBase extends StatefulWidget {
   final ValueChanged<List<String>>? onSelectedCommentatorsOverrideChanged;
   final SelectionSyncController? selectionSyncController;
   final ValueListenable<int>? openFilterRequest;
+  final ValueNotifier<int>? openFilterNotifier;
+  final ValueNotifier<int>? closeFilterNotifier;
+  // כאשר מסופק, CommentaryListBase ישתמש בו לחיפוש ולא יציג שורת חיפוש פנימית
+  final TextEditingController? externalSearchController;
+  final ValueNotifier<int>? externalCurrentIndexNotifier;
+  final ValueNotifier<int>? externalTotalResultsNotifier;
+
+  /// מפה חיצונית: path של מפרש → מספר תוצאות חיפוש בו (ריק אם אין חיפוש)
+  final ValueNotifier<Map<String, int>>? externalSearchResultsByPathNotifier;
+
+  /// רשימת קטעי חיפוש חיצונית עם מידע לניווט (ריקה אם אין חיפוש)
+  final ValueNotifier<List<CommentarySearchSnippet>>?
+      externalSearchSnippetsNotifier;
+
+  /// כשהדגל מופעל, ישתמש ב-availableCommentators (כל מפרשי הספר) ולא ב-activeCommentators
+  final bool useAvailableCommentators;
+
+  /// קולבק לפתיחת המפרשים בכרטיסייה חדשה. כש-null הלחצן לא יוצג.
+  final VoidCallback? onOpenInNewTab;
+
+  /// נוטיפייר חיצוני שמשתקף ממצב הכיווץ הגלובלי. שימוש: הורה רוצה להציג
+  /// מחוץ לפאנל כפתור כווץ/הרחב מסונכרן.
+  final ValueNotifier<bool>? externalAllExpandedNotifier;
+
+  /// אם סופק, יקרא במקום פתיחת חלון בחירת המפרשים הפנימי (פופ-אפ).
+  /// מאפשר להורה (למשל CommentatorsTabScreen) להפנות בחירת מפרשים ללשונית
+  /// בסרגל הצד במקום פופ-אפ.
+  final VoidCallback? onFilterOpenRequested;
 
   const CommentaryListBase({
     super.key,
@@ -60,6 +104,17 @@ class CommentaryListBase extends StatefulWidget {
     this.onSelectedCommentatorsOverrideChanged,
     this.selectionSyncController,
     this.openFilterRequest,
+    this.openFilterNotifier,
+    this.closeFilterNotifier,
+    this.externalSearchController,
+    this.externalCurrentIndexNotifier,
+    this.externalTotalResultsNotifier,
+    this.externalSearchResultsByPathNotifier,
+    this.externalSearchSnippetsNotifier,
+    this.useAvailableCommentators = false,
+    this.onOpenInNewTab,
+    this.externalAllExpandedNotifier,
+    this.onFilterOpenRequested,
   });
 
   @override
@@ -78,7 +133,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   final ValueNotifier<int> _totalSearchResultsNotifier = ValueNotifier<int>(0);
   final Map<String, int> _searchResultsPerLink = {};
   int _lastScrollIndex = 0; // שומר את מיקום הגלילה האחרון
-  bool _allExpanded = true; // מצב גלובלי של פתיחה/סגירה של כל המפרשים
+  // מצב גלובלי של פתיחה/סגירה של כל המפרשים — חשוף ככ-ValueListenable כדי
+  // שצרכנים חיצוניים (למשל CommentatorsTabScreen) יוכלו להאזין ולעדכן UI.
+  final ValueNotifier<bool> _allExpandedNotifier = ValueNotifier<bool>(true);
+  bool get _allExpanded => _allExpandedNotifier.value;
+  set _allExpanded(bool value) => _allExpandedNotifier.value = value;
   final Map<String, bool> _expansionStates =
       {}; // מעקב אחרי מצב כל קבוצת מפרשים
   String? _cachedGroupingSignature;
@@ -87,23 +146,27 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   // Anti-jitter search stats
   Timer? _searchUpdateDebounce;
   final Map<String, int> _pendingCounts = {};
+  // מפה: link key → path2 (לצורך קיבוץ תוצאות לפי מפרש)
+  final Map<String, String> _linkKeyToPath = {};
+  // מפה: link key → קטעי טקסט (snippets) לתוצאות החיפוש
+  final Map<String, List<String>> _searchSnippetsPerLink = {};
 
   final ValueNotifier<String?> _savedSelectedText =
       ValueNotifier<String?>(null); // טקסט נבחר לתפריט הקשר
   final ValueNotifier<Link?> _lastSelectedLink =
       ValueNotifier<Link?>(null); // ה-link האחרון שנוגעו בו (לכותרות בהעתקה)
+  final Object _selectionOwner = Object(); // מזהה ייחודי לבעלות על הבחירה
+  int _selectionRevision = 0; // גרסה לאיפוס SelectionArea כשבחירה חיצונית מנקה
   bool _showCommentatorsFilter = false; // האם להציג את מסך בחירת המפרשים
   bool _filterWasAutoOpened = false; // האם מסך הסינון נפתח אוטומטית (לא ידנית)
   bool _userInteractedWithFilter =
       false; // האם המשתמש בחר בעצמו בתוך פאנל הסינון
-  // ערך הבסיס של counter ה-openFilterRequest שראינו ב-init. רק עליות מעבר
-  // לערך הזה מטריגרות פתיחה — כך counter "ישן" מבקשת קודמת לא ייספג שוב
-  // ביצירה מחודשת של ה-state.
-  int _lastSeenFilterRequest = 0;
   final FocusNode _focusNode = FocusNode();
   final FocusNode _searchFocusNode = FocusNode();
-  final Object _selectionOwner = Object();
-  int _selectionRevision = 0;
+  int _lastSeenFilterRequest = 0;
+  bool _snippetsRebuildScheduled = false;
+  // האם להציג את שדה החיפוש (true) או את שורת ארבעת הלחצנים (false)
+  bool _showSearchField = false;
 
   String _getLinkKey(Link link) =>
       '${link.index1}_${link.path2}_${link.index2}';
@@ -111,8 +174,19 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   // רשימה של כל ה-links לפי סדר הופעתם (נבנית מחדש בכל build)
   List<Link> _orderedLinks = [];
 
+  List<String> _allSelectedCommentators(TextBookLoaded state) {
+    if (widget.selectedCommentatorsOverride != null) {
+      return widget.selectedCommentatorsOverride!;
+    }
+    if (widget.useAvailableCommentators) {
+      return state.availableCommentators;
+    }
+    return state.activeCommentators;
+  }
+
   List<String> _selectedCommentators(TextBookLoaded state) {
-    return widget.selectedCommentatorsOverride ?? state.activeCommentators;
+    final selected = _allSelectedCommentators(state);
+    return selected.where((title) => title != kNotesCommentatorTitle).toList();
   }
 
   String _buildGroupingSignature(List<Link> links) {
@@ -166,6 +240,292 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     return -1;
   }
 
+  // מתודות ציבוריות לניווט בחיפוש (למשל מ-CommentatorsTabScreen)
+  void navigateSearchPrev() {
+    if (_currentSearchIndexNotifier.value > 0) {
+      _currentSearchIndexNotifier.value--;
+      _scrollToSearchResult();
+    }
+  }
+
+  void navigateSearchNext() {
+    if (_currentSearchIndexNotifier.value <
+        _totalSearchResultsNotifier.value - 1) {
+      _currentSearchIndexNotifier.value++;
+      _scrollToSearchResult();
+    }
+  }
+
+  ValueNotifier<int> get totalSearchResultsNotifier =>
+      _totalSearchResultsNotifier;
+  ValueNotifier<int> get currentSearchIndexNotifier =>
+      _currentSearchIndexNotifier;
+
+  /// האזנה למצב הגלובלי של פתיחה/כיווץ כל המפרשים. שימושי לרכיבי הורה
+  /// (כגון [CommentatorsTabScreen]) שמציגים לחצן כווץ/הרחב מחוץ לפאנל זה.
+  ValueListenable<bool> get allExpandedListenable => _allExpandedNotifier;
+
+  /// מתג מצב הכיווץ הגלובלי של כל המפרשים. מעדכן את כל הקבוצות בהתאם.
+  void toggleAllExpanded() {
+    setState(() {
+      _allExpanded = !_allExpanded;
+      for (final key in _expansionStates.keys) {
+        _expansionStates[key] = _allExpanded;
+      }
+    });
+  }
+
+  /// ניווט לתוצאת חיפוש לפי אינדקס גלובלי (לשימוש חיצוני)
+  void navigateToGlobalIndex(int index) {
+    if (index < 0 || index >= _totalSearchResultsNotifier.value) return;
+    _currentSearchIndexNotifier.value = index;
+    _scrollToSearchResult();
+  }
+
+  void _onExternalSearchChanged() {
+    final text = widget.externalSearchController!.text;
+    if (_searchQueryNotifier.value != text) {
+      _searchQueryNotifier.value = text;
+      if (text.isNotEmpty) {
+        setState(() {
+          _allExpanded = true;
+          for (final key in _expansionStates.keys) {
+            _expansionStates[key] = true;
+          }
+        });
+      }
+      _currentSearchIndexNotifier.value = 0;
+      _totalSearchResultsNotifier.value = 0;
+      _searchResultsPerLink.clear();
+      _pendingCounts.clear();
+      _linkKeyToPath.clear();
+      _searchSnippetsPerLink.clear();
+      widget.externalSearchResultsByPathNotifier?.value = {};
+      widget.externalSearchSnippetsNotifier?.value = [];
+    }
+  }
+
+  void _handleSearchFocusChange() {
+    if (!mounted) return;
+    // אם איבדנו פוקוס והשדה ריק — חזור למצב לחצנים
+    if (!_searchFocusNode.hasFocus &&
+        _showSearchField &&
+        _searchController.text.isEmpty) {
+      setState(() => _showSearchField = false);
+    }
+  }
+
+  void _openInlineSearch() {
+    setState(() => _showSearchField = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _searchFocusNode.requestFocus();
+    });
+  }
+
+  void _clearSearchAndCloseField() {
+    _searchController.clear();
+    _searchQueryNotifier.value = '';
+    _currentSearchIndexNotifier.value = 0;
+    _totalSearchResultsNotifier.value = 0;
+    _searchResultsPerLink.clear();
+    _pendingCounts.clear();
+    setState(() => _showSearchField = false);
+  }
+
+  Widget _buildClosePaneButton() {
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: IconButton(
+        iconSize: 18,
+        padding: const EdgeInsets.all(8),
+        constraints: const BoxConstraints(
+          minWidth: 36,
+          minHeight: 36,
+        ),
+        icon: const Icon(FluentIcons.dismiss_24_regular),
+        onPressed: widget.onClosePane,
+      ),
+    );
+  }
+
+  Widget _buildButtonsRow(List<String> selectedCommentators) {
+    const double gap = 16;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // 1. בחירת מפרשים
+        CommentatorsFilterButton(
+          isActive: false,
+          onPressed: _openCommentatorsFilter,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+          ),
+          iconSize: 20,
+        ),
+        // 2. הרחב/כווץ הכל — רק כשיש מפרשים נבחרים (לוגיקה מקורית)
+        if (selectedCommentators.isNotEmpty) ...[
+          const SizedBox(width: gap),
+          IconButton(
+            icon: Icon(
+              _allExpanded
+                  ? FluentIcons.arrow_collapse_all_24_regular
+                  : FluentIcons.arrow_expand_all_24_regular,
+            ),
+            tooltip: _allExpanded
+                ? 'כווץ את כל המפרשים'
+                : 'הרחב את כל המפרשים',
+            onPressed: () {
+              setState(() {
+                _allExpanded = !_allExpanded;
+                for (var key in _expansionStates.keys) {
+                  _expansionStates[key] = _allExpanded;
+                }
+              });
+            },
+          ),
+        ],
+        // 3. פתיחה בכרטיסייה חדשה
+        if (widget.onOpenInNewTab != null) ...[
+          const SizedBox(width: gap),
+          IconButton(
+            icon: const Icon(FluentIcons.open_24_regular),
+            tooltip: 'פתח כרטסיית מפרשים',
+            onPressed: widget.onOpenInNewTab,
+          ),
+        ],
+        const SizedBox(width: gap),
+        // 4. הפעלת שדה החיפוש
+        IconButton(
+          icon: const Icon(FluentIcons.search_24_regular),
+          tooltip: 'חיפוש',
+          onPressed: _openInlineSearch,
+        ),
+        // לחצן סגירת הפאנל — נשאר רק אם הקולבק קיים
+        if (widget.onClosePane != null) ...[
+          const SizedBox(width: gap),
+          _buildClosePaneButton(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSearchFieldRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: ValueListenableBuilder<String>(
+            valueListenable: _searchQueryNotifier,
+            builder: (context, query, _) {
+              return ValueListenableBuilder<int>(
+                valueListenable: _totalSearchResultsNotifier,
+                builder: (context, total, __) {
+                  return ValueListenableBuilder<int>(
+                    valueListenable: _currentSearchIndexNotifier,
+                    builder: (context, currentIndex, ___) {
+                      return RtlTextField(
+                        focusNode: _searchFocusNode,
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'חפש בתוך המפרשים המוצגים...',
+                          prefixIcon:
+                              const Icon(FluentIcons.search_24_regular),
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (query.isNotEmpty && total > 1) ...[
+                                Text(
+                                  '${currentIndex + 1}/$total',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall,
+                                ),
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  icon: const Icon(
+                                      FluentIcons.chevron_up_24_regular),
+                                  iconSize: 20,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 24,
+                                    minHeight: 24,
+                                  ),
+                                  onPressed: currentIndex > 0
+                                      ? () {
+                                          _currentSearchIndexNotifier.value =
+                                              currentIndex - 1;
+                                          _scrollToSearchResult();
+                                        }
+                                      : null,
+                                ),
+                                IconButton(
+                                  icon: const Icon(FluentIcons
+                                      .chevron_down_24_regular),
+                                  iconSize: 20,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 24,
+                                    minHeight: 24,
+                                  ),
+                                  onPressed: currentIndex < total - 1
+                                      ? () {
+                                          _currentSearchIndexNotifier.value =
+                                              currentIndex + 1;
+                                          _scrollToSearchResult();
+                                        }
+                                      : null,
+                                ),
+                              ],
+                              IconButton(
+                                icon: const Icon(
+                                    FluentIcons.dismiss_24_regular),
+                                tooltip: 'סגור חיפוש',
+                                onPressed: _clearSearchAndCloseField,
+                              ),
+                            ],
+                          ),
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8.0),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          if (_searchQueryNotifier.value != value) {
+                            _searchQueryNotifier.value = value;
+                            _currentSearchIndexNotifier.value = 0;
+                            _totalSearchResultsNotifier.value = 0;
+                            _searchResultsPerLink.clear();
+                            _pendingCounts.clear();
+                          }
+                        },
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        if (widget.onClosePane != null) ...[
+          const SizedBox(width: 8),
+          _buildClosePaneButton(),
+        ],
+      ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -174,6 +534,30 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     widget.selectionSyncController?.addListener(_handleExternalSelectionChange);
     widget.openFilterRequest?.addListener(_handleOpenFilterRequest);
     _lastSeenFilterRequest = widget.openFilterRequest?.value ?? 0;
+    widget.openFilterNotifier?.addListener(_onOpenFilterRequest);
+    widget.closeFilterNotifier?.addListener(_onCloseFilterRequest);
+    _searchFocusNode.addListener(_handleSearchFocusChange);
+    // חיפוש חיצוני
+    widget.externalSearchController?.addListener(_onExternalSearchChanged);
+    if (widget.externalTotalResultsNotifier != null) {
+      _totalSearchResultsNotifier.addListener(() {
+        widget.externalTotalResultsNotifier!.value =
+            _totalSearchResultsNotifier.value;
+      });
+    }
+    if (widget.externalCurrentIndexNotifier != null) {
+      _currentSearchIndexNotifier.addListener(() {
+        widget.externalCurrentIndexNotifier!.value =
+            _currentSearchIndexNotifier.value;
+      });
+    }
+    // סנכרון מצב הכיווץ הגלובלי לנוטיפייר חיצוני (אם סופק)
+    if (widget.externalAllExpandedNotifier != null) {
+      widget.externalAllExpandedNotifier!.value = _allExpanded;
+      _allExpandedNotifier.addListener(() {
+        widget.externalAllExpandedNotifier!.value = _allExpanded;
+      });
+    }
   }
 
   @override
@@ -188,9 +572,15 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (oldWidget.openFilterRequest != widget.openFilterRequest) {
       oldWidget.openFilterRequest?.removeListener(_handleOpenFilterRequest);
       widget.openFilterRequest?.addListener(_handleOpenFilterRequest);
-      // איפוס ה-baseline ל-notifier החדש — אחרת ערך גבוה מה-notifier הקודם
-      // עלול לחסום פתיחות עתידיות עד שה-counter החדש "ישיג" אותו.
       _lastSeenFilterRequest = widget.openFilterRequest?.value ?? 0;
+    }
+    if (oldWidget.openFilterNotifier != widget.openFilterNotifier) {
+      oldWidget.openFilterNotifier?.removeListener(_onOpenFilterRequest);
+      widget.openFilterNotifier?.addListener(_onOpenFilterRequest);
+    }
+    if (oldWidget.closeFilterNotifier != widget.closeFilterNotifier) {
+      oldWidget.closeFilterNotifier?.removeListener(_onCloseFilterRequest);
+      widget.closeFilterNotifier?.addListener(_onCloseFilterRequest);
     }
     // סגירה אוטומטית של מסך הסינון כאשר המפרשים עוברים מריק לא-ריק
     // (קורה כאשר המשתמש בוחר "כל המפרשים" מהתפריט הימני)
@@ -219,7 +609,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   void _updateLastScrollIndex() {
     final positions = _itemPositionsListener.itemPositions.value;
     if (positions.isNotEmpty) {
-      _lastScrollIndex = topmostVisibleIndex(positions);
+      // שומר את האינדקס של הפריט הראשון הנראה
+      _lastScrollIndex = positions.first.index;
     }
   }
 
@@ -245,6 +636,26 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     });
   }
 
+  void _onOpenFilterRequest() {
+    // אם ההורה ביקש להפנות בקשות פתיחה אליו (למשל לפתיחת לשונית בסרגל הצד),
+    // קוראים לקולבק במקום לפתוח פופ-אפ פנימי.
+    if (widget.onFilterOpenRequested != null) {
+      widget.onFilterOpenRequested!();
+      return;
+    }
+    setState(() {
+      _showCommentatorsFilter = true;
+      _userInteractedWithFilter = false;
+    });
+  }
+
+  void _onCloseFilterRequest() {
+    setState(() {
+      _showCommentatorsFilter = false;
+      _userInteractedWithFilter = false;
+    });
+  }
+
   @override
   void dispose() {
     _searchUpdateDebounce?.cancel();
@@ -252,12 +663,17 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     widget.selectionSyncController
         ?.removeListener(_handleExternalSelectionChange);
     widget.openFilterRequest?.removeListener(_handleOpenFilterRequest);
+    widget.openFilterNotifier?.removeListener(_onOpenFilterRequest);
+    widget.closeFilterNotifier?.removeListener(_onCloseFilterRequest);
+    widget.externalSearchController?.removeListener(_onExternalSearchChanged);
+    _searchFocusNode.removeListener(_handleSearchFocusChange);
     _searchController.dispose();
     _savedSelectedText.dispose();
     _lastSelectedLink.dispose();
     _searchQueryNotifier.dispose();
     _currentSearchIndexNotifier.dispose();
     _totalSearchResultsNotifier.dispose();
+    _allExpandedNotifier.dispose();
     _focusNode.dispose();
     _searchFocusNode.dispose();
     super.dispose();
@@ -270,11 +686,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         identical(controller.activeOwner, _selectionOwner)) {
       return;
     }
-
-    if (!mounted) {
-      return;
-    }
-
+    if (!mounted) return;
     _savedSelectedText.value = null;
     _lastSelectedLink.value = null;
     setState(() {
@@ -415,6 +827,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (!mounted) return;
 
     final key = _getLinkKey(link);
+    // שמור את ה-path2 לצורך קיבוץ לפי מפרש
+    _linkKeyToPath[key] = link.path2;
     // אם הכמות לא השתנתה, אין צורך לעשות כלום
     if (_searchResultsPerLink[key] == count) return;
 
@@ -431,12 +845,68 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       _totalSearchResultsNotifier.value =
           _searchResultsPerLink.values.fold(0, (sum, count) => sum + count);
 
+      // עדכון נוטיפייר חיצוני לתוצאות לפי מפרש
+      if (widget.externalSearchResultsByPathNotifier != null) {
+        final byPath = <String, int>{};
+        for (final entry in _searchResultsPerLink.entries) {
+          final path = _linkKeyToPath[entry.key] ?? '';
+          if (path.isNotEmpty && entry.value > 0) {
+            byPath[path] = (byPath[path] ?? 0) + entry.value;
+          }
+        }
+        widget.externalSearchResultsByPathNotifier!.value = byPath;
+      }
+
+      // עדכון נוטיפייר קטעי החיפוש (snippets)
+      _scheduleSnippetsNotifierRebuild();
+
       // תיקון אינדקס אם חרגנו מהגבולות
       if (_currentSearchIndexNotifier.value >=
               _totalSearchResultsNotifier.value &&
           _totalSearchResultsNotifier.value > 0) {
         _currentSearchIndexNotifier.value = 0;
       }
+    });
+  }
+
+  void _updateSearchSnippets(Link link, List<String> snippets) {
+    if (!mounted) return;
+    final key = _getLinkKey(link);
+    _searchSnippetsPerLink[key] = snippets;
+    _scheduleSnippetsNotifierRebuild();
+  }
+
+  void _rebuildSnippetsNotifier() {
+    if (widget.externalSearchSnippetsNotifier == null) return;
+    final List<CommentarySearchSnippet> result = [];
+    int globalIndex = 0;
+    for (final link in _orderedLinks) {
+      final key = _getLinkKey(link);
+      final count = _searchResultsPerLink[key] ?? 0;
+      final snippets = _searchSnippetsPerLink[key] ?? [];
+      for (int i = 0; i < snippets.length; i++) {
+        result.add(CommentarySearchSnippet(
+          path: link.path2,
+          snippet: snippets[i],
+          globalIndex: globalIndex,
+        ));
+      }
+      globalIndex += count;
+    }
+    widget.externalSearchSnippetsNotifier!.value = result;
+  }
+
+  void _scheduleSnippetsNotifierRebuild() {
+    if (widget.externalSearchSnippetsNotifier == null ||
+        _snippetsRebuildScheduled ||
+        !mounted) {
+      return;
+    }
+    _snippetsRebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _snippetsRebuildScheduled = false;
+      if (!mounted) return;
+      _rebuildSnippetsNotifier();
     });
   }
 
@@ -486,14 +956,14 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       totalSearchResultsListenable: _totalSearchResultsNotifier,
       getItemSearchIndex: _getItemSearchIndex,
       updateSearchResultsCount: _updateSearchResultsCount,
+      updateSearchSnippets: widget.externalSearchSnippetsNotifier != null
+          ? _updateSearchSnippets
+          : null,
       itemKeys: _itemKeys,
       getLinkKey: _getLinkKey,
       indexesKey: indexesKey,
       savedSelectedTextListenable: _savedSelectedText,
       lastSelectedLinkListenable: _lastSelectedLink,
-      selectionSyncController: widget.selectionSyncController,
-      selectionOwner: _selectionOwner,
-      selectionRevision: _selectionRevision,
       onExpansionChanged: (expanded) {
         _expansionStates[groupKey] = expanded;
         // בודק אם כל המפרשים פתוחים או סגורים ומעדכן את המצב הגלובלי
@@ -508,14 +978,15 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       onLinkSelected: (link, text) {
         _savedSelectedText.value = text;
         _lastSelectedLink.value = link;
-        if (!_searchFocusNode.hasFocus) {
-          _focusNode.requestFocus();
-        }
+        _focusNode.requestFocus();
       },
       onLinkSelectionCleared: () {
         _savedSelectedText.value = null;
         _lastSelectedLink.value = null;
       },
+      selectionSyncController: widget.selectionSyncController,
+      selectionOwner: _selectionOwner,
+      selectionRevision: _selectionRevision,
     );
   }
 
@@ -529,6 +1000,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           }
           return !listEquals(
                   previous.activeCommentators, current.activeCommentators) ||
+              !listEquals(previous.availableCommentators,
+                  current.availableCommentators) ||
               previous.links != current.links || // השוואת רפרנס לביצועים
               !listEquals(previous.visibleIndices, current.visibleIndices) ||
               previous.selectedIndex != current.selectedIndex ||
@@ -539,26 +1012,49 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         loadingWidget: const Center(),
         builder: (context, state) {
           final selectedCommentators = _selectedCommentators(state);
+          final notesIsActive =
+              _allSelectedCommentators(state).contains(kNotesCommentatorTitle);
           final shouldAutoOpenOverrideFilter = widget.showSearch &&
               widget.onSelectedCommentatorsOverrideChanged != null &&
               selectedCommentators.isEmpty &&
+              !notesIsActive &&
               !_showCommentatorsFilter;
 
           if (shouldAutoOpenOverrideFilter) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                setState(() {
-                  _showCommentatorsFilter = true;
-                  _filterWasAutoOpened = true;
-                });
+              if (!mounted || _showCommentatorsFilter) return;
+              // בדיקה מחדש: אם המפרשים הזמינים כבר נטענו מאז תזמון הקריאה, לא פותחים את הסינון
+              final currentBlocState = context.read<TextBookBloc>().state;
+              if (currentBlocState is TextBookLoaded) {
+                final currentSelected = _selectedCommentators(currentBlocState);
+                if (currentSelected.isNotEmpty) return;
               }
+              // אם ההורה רוצה לטפל בעצמו (לפתוח לשונית בסרגל הצד), מעבירים אליו.
+              if (widget.onFilterOpenRequested != null) {
+                widget.onFilterOpenRequested!();
+                return;
+              }
+              setState(() {
+                _showCommentatorsFilter = true;
+                _filterWasAutoOpened = true;
+              });
             });
-            return const Center(child: CircularProgressIndicator());
+            // כאשר ההורה מטפל בפתיחה, אין סיבה להחזיר ספינר טעינה — נמשיך לבנות
+            // את התצוגה הרגילה (שתציג הודעת "אין מפרשים נבחרים" בהמשך).
+            if (widget.onFilterOpenRequested == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
           }
 
           Widget buildList() {
             return Builder(
               builder: (context) {
+                // כשמשתמשים ב-availableCommentators, ממתינים שהם ייטענו
+                if (widget.useAvailableCommentators &&
+                    state.availableCommentators.isEmpty) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
                 // בודק מראש אם יש קישורים רלוונטיים לאינדקסים הנוכחיים
                 final currentIndexesRaw = widget.indexes ??
                     (state.selectedIndex != null
@@ -575,6 +1071,36 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                 ? state.visibleIndices.first
                                 : 0)
                       ];
+
+                Widget? notesWidget;
+                if (notesIsActive) {
+                  final relevantNotes =
+                      inline_notes.notesForLines(state.content, currentIndexes);
+                  if (relevantNotes.isNotEmpty) {
+                    notesWidget = _NotesCommentaryWidget(
+                      notes: relevantNotes,
+                      fontSize: widget.fontSize,
+                      removeNikud: state.removeNikud,
+                      openBookCallback: widget.openBookCallback,
+                    );
+                  } else if (selectedCommentators.isEmpty) {
+                    notesWidget = Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'אין הערות לקטע זה',
+                          style: TextStyle(
+                            fontSize: widget.fontSize * 0.7,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          textAlign: TextAlign.center,
+                          textDirection: TextDirection.rtl,
+                        ),
+                      ),
+                    );
+                  }
+                }
 
                 // בדיקה אם יש בכלל קישורים לאינדקסים הנוכחיים (ללא סינון מפרשים)
                 final hasAnyCommentaryLinks = currentIndexes.any((idx) {
@@ -596,8 +1122,28 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
                 // אם אין קישורים רלוונטיים
                 if (!hasRelevantLinks) {
+                  if (state.linksLoading) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'טוען מפרשים...',
+                          style: TextStyle(
+                            fontSize: widget.fontSize * 0.7,
+                            color: Colors.grey,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  }
+                  if (notesWidget != null) {
+                    return notesWidget;
+                  }
                   // אם יש מפרשים זמינים אבל לא נבחרו בכלל - פתח אוטומטית את מסך הבחירה
+                  // (לא במצב useAvailableCommentators — שם מוצג הכל אוטומטית)
                   if (widget.showSearch &&
+                      !widget.useAvailableCommentators &&
                       hasAnyCommentaryLinks &&
                       selectedCommentators.isEmpty &&
                       !_showCommentatorsFilter) {
@@ -757,7 +1303,20 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                   },
                 );
 
-                return commentaryWidget;
+                if (notesWidget == null) {
+                  return commentaryWidget;
+                }
+
+                return Column(
+                  children: [
+                    Flexible(
+                      fit: FlexFit.loose,
+                      child: notesWidget,
+                    ),
+                    const Divider(height: 1),
+                    Expanded(child: commentaryWidget),
+                  ],
+                );
               },
             );
           }
@@ -786,200 +1345,24 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
               );
             }
 
+            // כאשר חיפוש חיצוני — מסתיר שורת חיפוש פנימית, רק רשימה
+            if (widget.externalSearchController != null) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(fit: FlexFit.loose, child: buildList()),
+                ],
+              );
+            }
+
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    children: [
-                      // כפתור בחירת מפרשים - בצד ימין
-                      CommentatorsFilterButton(
-                        isActive: false,
-                        onPressed: _openCommentatorsFilter,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 40,
-                          minHeight: 40,
-                        ),
-                        iconSize: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ValueListenableBuilder<String>(
-                          valueListenable: _searchQueryNotifier,
-                          builder: (context, query, _) {
-                            return ValueListenableBuilder<int>(
-                              valueListenable: _totalSearchResultsNotifier,
-                              builder: (context, total, __) {
-                                return ValueListenableBuilder<int>(
-                                  valueListenable: _currentSearchIndexNotifier,
-                                  builder: (context, currentIndex, ___) {
-                                    return RtlTextField(
-                                      focusNode: _searchFocusNode,
-                                      controller: _searchController,
-                                      decoration: InputDecoration(
-                                        hintText: 'חפש בתוך המפרשים המוצגים...',
-                                        prefixIcon: const Icon(
-                                            FluentIcons.search_24_regular),
-                                        suffixIcon: query.isNotEmpty
-                                            ? Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  if (total > 1) ...[
-                                                    Text(
-                                                      '${currentIndex + 1}/$total',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodySmall,
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    IconButton(
-                                                      icon: const Icon(FluentIcons
-                                                          .chevron_up_24_regular),
-                                                      iconSize: 20,
-                                                      padding: EdgeInsets.zero,
-                                                      constraints:
-                                                          const BoxConstraints(
-                                                        minWidth: 24,
-                                                        minHeight: 24,
-                                                      ),
-                                                      onPressed:
-                                                          currentIndex > 0
-                                                              ? () {
-                                                                  _currentSearchIndexNotifier
-                                                                          .value =
-                                                                      currentIndex -
-                                                                          1;
-                                                                  _scrollToSearchResult();
-                                                                }
-                                                              : null,
-                                                    ),
-                                                    IconButton(
-                                                      icon: const Icon(FluentIcons
-                                                          .chevron_down_24_regular),
-                                                      iconSize: 20,
-                                                      padding: EdgeInsets.zero,
-                                                      constraints:
-                                                          const BoxConstraints(
-                                                        minWidth: 24,
-                                                        minHeight: 24,
-                                                      ),
-                                                      onPressed: currentIndex <
-                                                              total - 1
-                                                          ? () {
-                                                              _currentSearchIndexNotifier
-                                                                      .value =
-                                                                  currentIndex +
-                                                                      1;
-                                                              _scrollToSearchResult();
-                                                            }
-                                                          : null,
-                                                    ),
-                                                  ],
-                                                  IconButton(
-                                                    icon: const Icon(FluentIcons
-                                                        .dismiss_24_regular),
-                                                    onPressed: () {
-                                                      _searchController.clear();
-                                                      _searchQueryNotifier
-                                                          .value = '';
-                                                      _currentSearchIndexNotifier
-                                                          .value = 0;
-                                                      _totalSearchResultsNotifier
-                                                          .value = 0;
-                                                      _searchResultsPerLink
-                                                          .clear();
-                                                      _pendingCounts.clear();
-                                                    },
-                                                  ),
-                                                ],
-                                              )
-                                            : null,
-                                        isDense: true,
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8.0),
-                                        ),
-                                      ),
-                                      onChanged: (value) {
-                                        if (_searchQueryNotifier.value !=
-                                            value) {
-                                          _searchQueryNotifier.value = value;
-                                          _currentSearchIndexNotifier.value = 0;
-                                          _totalSearchResultsNotifier.value = 0;
-                                          _searchResultsPerLink.clear();
-                                          _pendingCounts.clear();
-                                          WidgetsBinding.instance
-                                              .addPostFrameCallback((_) {
-                                            if (mounted) {
-                                              _searchFocusNode.requestFocus();
-                                            }
-                                          });
-                                        }
-                                      },
-                                    );
-                                  },
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // כפתור סגירה/פתיחה גלובלית של כל המפרשים - מוצג רק אם יש מפרשים פעילים
-                      if (selectedCommentators.isNotEmpty)
-                        IconButton(
-                          icon: Icon(
-                            _allExpanded
-                                ? FluentIcons.arrow_collapse_all_24_regular
-                                : FluentIcons.arrow_expand_all_24_regular,
-                          ),
-                          tooltip: _allExpanded
-                              ? 'כווץ את כל המפרשים'
-                              : 'הרחב את כל המפרשים',
-                          onPressed: () {
-                            setState(() {
-                              _allExpanded = !_allExpanded;
-                              // מעדכן את כל המצבים של הקבוצות
-                              for (var key in _expansionStates.keys) {
-                                _expansionStates[key] = _allExpanded;
-                              }
-                            });
-                          },
-                        ),
-                      // מציג את לחצן הסגירה רק אם יש callback
-                      if (widget.onClosePane != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surface
-                                .withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: IconButton(
-                            iconSize: 18,
-                            padding: const EdgeInsets.all(8),
-                            constraints: const BoxConstraints(
-                              minWidth: 36,
-                              minHeight: 36,
-                            ),
-                            icon: const Icon(FluentIcons.dismiss_24_regular),
-                            onPressed: widget.onClosePane,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                  child: _showSearchField
+                      ? _buildSearchFieldRow()
+                      : _buildButtonsRow(selectedCommentators),
                 ),
                 Flexible(
                   fit: FlexFit.loose,
@@ -1126,17 +1509,18 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   final ValueListenable<int> totalSearchResultsListenable;
   final int Function(Link) getItemSearchIndex;
   final void Function(Link, int) updateSearchResultsCount;
+  final void Function(Link, List<String>)? updateSearchSnippets;
   final Map<String, GlobalKey> itemKeys;
   final String Function(Link) getLinkKey;
   final String indexesKey;
   final ValueListenable<String?> savedSelectedTextListenable;
   final ValueListenable<Link?> lastSelectedLinkListenable;
-  final SelectionSyncController? selectionSyncController;
-  final Object selectionOwner;
-  final int selectionRevision;
   final void Function(bool) onExpansionChanged;
   final void Function(Link link, String text) onLinkSelected;
   final VoidCallback onLinkSelectionCleared;
+  final SelectionSyncController? selectionSyncController;
+  final Object? selectionOwner;
+  final int selectionRevision;
 
   const _CollapsibleCommentaryGroup({
     super.key,
@@ -1152,17 +1536,18 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     required this.totalSearchResultsListenable,
     required this.getItemSearchIndex,
     required this.updateSearchResultsCount,
+    this.updateSearchSnippets,
     required this.itemKeys,
     required this.getLinkKey,
     required this.indexesKey,
     required this.savedSelectedTextListenable,
     required this.lastSelectedLinkListenable,
-    required this.selectionSyncController,
-    required this.selectionOwner,
-    required this.selectionRevision,
     required this.onExpansionChanged,
     required this.onLinkSelected,
     required this.onLinkSelectionCleared,
+    this.selectionSyncController,
+    this.selectionOwner,
+    this.selectionRevision = 0,
   });
 
   @override
@@ -1254,12 +1639,17 @@ class _CollapsibleCommentaryGroupState
               },
               onSelectionChanged: (selection) {
                 if (selection != null && selection.plainText.isNotEmpty) {
-                  widget.selectionSyncController
-                      ?.activate(widget.selectionOwner);
+                  final owner = widget.selectionOwner;
+                  if (owner != null) {
+                    widget.selectionSyncController?.activate(owner);
+                  }
                   widget.onLinkSelected(link, selection.plainText);
                 } else if (selection == null ||
                     selection.plainText.trim().isEmpty) {
-                  widget.selectionSyncController?.clear(widget.selectionOwner);
+                  final owner = widget.selectionOwner;
+                  if (owner != null) {
+                    widget.selectionSyncController?.clear(owner);
+                  }
                   widget.onLinkSelectionCleared();
                 }
               },
@@ -1349,6 +1739,11 @@ class _CollapsibleCommentaryGroupState
                                         count,
                                       )
                                   : null,
+                              onSearchSnippetsChanged: widget.showSearch &&
+                                      widget.updateSearchSnippets != null
+                                  ? (snippets) => widget.updateSearchSnippets!(
+                                      link, snippets)
+                                  : null,
                             ),
                           );
                         },
@@ -1368,4 +1763,74 @@ class _CollapsibleCommentaryGroupState
 
 class _CopyCommentaryIntent extends Intent {
   const _CopyCommentaryIntent();
+}
+
+/// תצוגת המפרש הוירטואלי 'הערות' — מציגה את גוף ההערות ה-inline
+/// (<i class="footnote">) של השורות הנבחרות כאילו היו רשימת מפרשים.
+class _NotesCommentaryWidget extends StatelessWidget {
+  final List<String> notes;
+  final double fontSize;
+  final bool removeNikud;
+  final Function(TextBookTab) openBookCallback;
+
+  const _NotesCommentaryWidget({
+    required this.notes,
+    required this.fontSize,
+    required this.removeNikud,
+    required this.openBookCallback,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<SettingsBloc, SettingsState>(
+      builder: (context, settingsState) {
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 12.0),
+                child: Text(
+                  kNotesCommentatorTitle,
+                  style: TextStyle(
+                    fontSize: fontSize * 0.85,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: settingsState.commentatorsFontFamily,
+                  ),
+                  textDirection: TextDirection.rtl,
+                ),
+              ),
+              ...notes.map((note) {
+                return Padding(
+                  padding: const EdgeInsets.only(
+                      right: 32.0, left: 16.0, bottom: 12.0),
+                  child: SmartTextWidget(
+                    text: note,
+                    settings: RenderSettings(
+                      removeNikud: removeNikud,
+                      removePunctuation: false,
+                      removeTeamim: false,
+                      replaceHolyNames: settingsState.replaceHolyNames,
+                      searchText: '',
+                      currentSearchIndex: -1,
+                      fontSize: fontSize * 0.85,
+                      fontFamily: settingsState.commentatorsFontFamily,
+                      lineHeight: settingsState.lineHeight,
+                    ),
+                    onOpenBook: (tab) {
+                      if (tab is TextBookTab) {
+                        openBookCallback(tab);
+                      }
+                    },
+                  ),
+                );
+              }),
+              const Divider(height: 1),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

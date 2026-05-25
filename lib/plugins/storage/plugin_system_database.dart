@@ -37,6 +37,16 @@ class PluginSystemDatabase {
       db.execute(
           'ALTER TABLE plugin_installation ADD COLUMN pinned_to_nav_rail INTEGER NOT NULL DEFAULT 0');
     }
+    final hasUserOrderCol = cols.any((c) => c['name'] == 'user_order');
+    if (!hasUserOrderCol) {
+      db.execute(
+          'ALTER TABLE plugin_installation ADD COLUMN user_order INTEGER');
+    }
+    final hasHiddenCol = cols.any((c) => c['name'] == 'hidden_from_tools');
+    if (!hasHiddenCol) {
+      db.execute(
+          'ALTER TABLE plugin_installation ADD COLUMN hidden_from_tools INTEGER NOT NULL DEFAULT 0');
+    }
   }
 
   void _createSchema(Database db) {
@@ -52,11 +62,13 @@ class PluginSystemDatabase {
         enabled INTEGER NOT NULL,
         pinned INTEGER NOT NULL DEFAULT 1,
         pinned_to_nav_rail INTEGER NOT NULL DEFAULT 0,
+        hidden_from_tools INTEGER NOT NULL DEFAULT 0,
         manifest_json TEXT NOT NULL,
         installed_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         source_type TEXT NOT NULL DEFAULT 'packaged',
-        dev_root_path TEXT
+        dev_root_path TEXT,
+        user_order INTEGER
       )
     ''');
 
@@ -164,6 +176,18 @@ class PluginSystemDatabase {
         [pinned ? 1 : 0, DateTime.now().toIso8601String(), pluginId]);
   }
 
+  Future<void> updatePluginHiddenState(
+      String pluginId, bool hiddenFromTools) async {
+    final db = await database;
+    db.execute(
+        'UPDATE plugin_installation SET hidden_from_tools = ?, updated_at = ? WHERE plugin_id = ?',
+        [
+          hiddenFromTools ? 1 : 0,
+          DateTime.now().toIso8601String(),
+          pluginId,
+        ]);
+  }
+
   Future<void> updatePluginNavRailPinState(
       String pluginId, bool pinnedToNavRail) async {
     final db = await database;
@@ -174,6 +198,51 @@ class PluginSystemDatabase {
           DateTime.now().toIso8601String(),
           pluginId,
         ]);
+  }
+
+  /// שומר סדר מותאם אישית של תוספים.
+  ///
+  /// המפתחות הם plugin_id והערכים הם מספרי סדר (קטן יותר = מוקדם יותר).
+  /// העדכון מתבצע ב-transaction כדי לשמור על עקביות.
+  ///
+  /// הערה: אין עדכון של `updated_at` — סדר התצוגה אינו מאפיין של ההתקנה
+  /// עצמה, ועדכון `updated_at` היה גורם ל-`ToolsScreen` לבנות מחדש את כל
+  /// ה-`PluginTabPage` (כולל ה-WebView), מה שגרם לקריסה בעת dispose
+  /// ב-Windows.
+  Future<void> updatePluginsUserOrder(Map<String, int> ordering) async {
+    if (ordering.isEmpty) return;
+    final db = await database;
+    applyUserOrderUpdates(db, ordering);
+  }
+
+  /// הלוגיקה הטהורה של [updatePluginsUserOrder] על Database נתון.
+  /// חשוף לבדיקות שלא צריכות לעבור דרך ה-singleton וה-FS.
+  ///
+  /// משתמש ב-SAVEPOINT ולא ב-`BEGIN TRANSACTION` כדי שהקריאה תעבוד גם
+  /// בתוך טרנזקציה חיצונית פתוחה (SQLite לא תומך בטרנזקציות מקוננות
+  /// אבל כן ב-savepoints מקוננים).
+  @visibleForTesting
+  static void applyUserOrderUpdates(
+      Database db, Map<String, int> ordering) {
+    if (ordering.isEmpty) return;
+    const savepoint = 'sp_plugin_user_order';
+    db.execute('SAVEPOINT $savepoint');
+    try {
+      for (final entry in ordering.entries) {
+        db.execute(
+          'UPDATE plugin_installation SET user_order = ? WHERE plugin_id = ?',
+          [entry.value, entry.key],
+        );
+      }
+      db.execute('RELEASE SAVEPOINT $savepoint');
+    } catch (e, stackTrace) {
+      // מתעדים לפני ה-rethrow כדי שלא נאבד את הסיבה
+      // (database locked, constraint violation, SQL syntax וכו').
+      debugPrint('applyUserOrderUpdates failed: $e\n$stackTrace');
+      db.execute('ROLLBACK TO SAVEPOINT $savepoint');
+      db.execute('RELEASE SAVEPOINT $savepoint');
+      rethrow;
+    }
   }
 
   // --- CRUD for Permissions ---

@@ -60,6 +60,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       PickDirectoryRequested event, Emitter<EmptyLibraryState> emit) async {
     final result = await FilePicker.getDirectoryPath(
       dialogTitle: 'בחר את תיקיית הספרייה (התיקייה שמכילה את seforim.db)',
+      lockParentWindow: true,
     );
 
     if (result == null) return;
@@ -74,6 +75,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       type: FileType.custom,
       allowedExtensions: ['zip', 'zst'],
       dialogTitle: 'בחר קובץ דחוס (ZIP או ZST)',
+      lockParentWindow: true,
     );
 
     if (result == null || result.files.isEmpty) return;
@@ -340,6 +342,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         allowMultiple: false,
         type: FileType.any,
         dialogTitle: 'בחר את קובץ ${DatabaseConstants.databaseFileName}',
+        lockParentWindow: true,
       );
 
       if (result == null || result.files.isEmpty) {

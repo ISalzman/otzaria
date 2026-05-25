@@ -27,13 +27,6 @@ String _alternativeWordsSignature(Map<int, List<String>> words) {
   return keys.map((key) => '$key:${words[key]!.join(',')}').join('|');
 }
 
-String _subtitleHeadingsSignature(Map<int, List<String>> headings) {
-  if (headings.isEmpty) return '';
-
-  final keys = headings.keys.toList()..sort();
-  return keys.map((key) => '$key:${headings[key]!.join(',')}').join('|');
-}
-
 String _spacingValuesSignature(Map<String, String> values) {
   if (values.isEmpty) return '';
 
@@ -150,6 +143,13 @@ class TextBookLoaded extends TextBookState {
   final bool removePunctuation;
   final bool isTanach;
   final bool supportsContinuousReadingMode;
+  final bool continuousReadingMode;
+
+  /// נגזר מ-[content] + [continuousReadingMode]. ה-bloc מחזיק אותו רק כדי
+  /// שהרינדור לא ייאלץ לחשב מחדש בכל build. **אסור** להזליג segmentIndex
+  /// אל ה-state הלוגי — selectedIndex/highlightedLine/searchText נשארים
+  /// ברמת שורות מקור.
+  final List<ReadingSegment> readingSegments;
   final List<int> visibleIndices;
   final int? selectedIndex;
   final bool pinLeftPane;
@@ -164,10 +164,7 @@ class TextBookLoaded extends TextBookState {
   final int? selectedTextStart;
   final int? selectedTextEnd;
   final int? highlightedLine;
-  final bool continuousReadingMode;
-  final bool showSubtitles;
-  final Map<int, List<String>> subtitleHeadingsByLine;
-  final List<ReadingSegment> readingSegments;
+  final bool linksLoading;
 
   /// אינדקס הסעיף שבו מבוצעת הדגשה ממוקדת (deep link). null = אין.
   final int? pinpointHighlightIndex;
@@ -210,6 +207,8 @@ class TextBookLoaded extends TextBookState {
     this.removePunctuation = false,
     this.isTanach = false,
     this.supportsContinuousReadingMode = false,
+    this.continuousReadingMode = false,
+    this.readingSegments = const [],
     required this.visibleIndices,
     this.selectedIndex,
     required this.pinLeftPane,
@@ -227,10 +226,7 @@ class TextBookLoaded extends TextBookState {
     this.selectedTextStart,
     this.selectedTextEnd,
     this.highlightedLine,
-    this.continuousReadingMode = false,
-    this.showSubtitles = true,
-    this.subtitleHeadingsByLine = const {},
-    this.readingSegments = const [],
+    this.linksLoading = false,
     this.pinpointHighlightIndex,
     this.pinpointHighlightText,
     this.isEditorOpen = false,
@@ -264,6 +260,9 @@ class TextBookLoaded extends TextBookState {
       linksByLine: const {},
       tableOfContents: const [],
       removeNikud: false,
+      supportsContinuousReadingMode: false,
+      continuousReadingMode: false,
+      readingSegments: const [],
       pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
       searchText: '',
       scrollController: ItemScrollController(),
@@ -274,10 +273,7 @@ class TextBookLoaded extends TextBookState {
       selectedTextStart: null,
       selectedTextEnd: null,
       highlightedLine: null,
-      continuousReadingMode: false,
-      showSubtitles: true,
-      subtitleHeadingsByLine: const {},
-      readingSegments: const [],
+      linksLoading: false,
       isEditorOpen: false,
       editorIndex: null,
       editorSectionId: null,
@@ -306,6 +302,8 @@ class TextBookLoaded extends TextBookState {
     bool? removePunctuation,
     bool? isTanach,
     bool? supportsContinuousReadingMode,
+    bool? continuousReadingMode,
+    List<ReadingSegment>? readingSegments,
     int? selectedIndex,
     bool clearSelectedIndex = false,
     List<int>? visibleIndices,
@@ -325,10 +323,7 @@ class TextBookLoaded extends TextBookState {
     int? selectedTextEnd,
     int? highlightedLine,
     bool clearHighlight = false,
-    bool? continuousReadingMode,
-    bool? showSubtitles,
-    Map<int, List<String>>? subtitleHeadingsByLine,
-    List<ReadingSegment>? readingSegments,
+    bool? linksLoading,
     int? pinpointHighlightIndex,
     String? pinpointHighlightText,
     bool clearPinpointHighlight = false,
@@ -360,6 +355,9 @@ class TextBookLoaded extends TextBookState {
       isTanach: isTanach ?? this.isTanach,
       supportsContinuousReadingMode:
           supportsContinuousReadingMode ?? this.supportsContinuousReadingMode,
+      continuousReadingMode:
+          continuousReadingMode ?? this.continuousReadingMode,
+      readingSegments: readingSegments ?? this.readingSegments,
       visibleIndices: visibleIndices ?? this.visibleIndices,
       selectedIndex:
           clearSelectedIndex ? null : (selectedIndex ?? this.selectedIndex),
@@ -380,12 +378,7 @@ class TextBookLoaded extends TextBookState {
       selectedTextEnd: selectedTextEnd ?? this.selectedTextEnd,
       highlightedLine:
           clearHighlight ? null : (highlightedLine ?? this.highlightedLine),
-      continuousReadingMode:
-          continuousReadingMode ?? this.continuousReadingMode,
-      showSubtitles: showSubtitles ?? this.showSubtitles,
-      subtitleHeadingsByLine:
-          subtitleHeadingsByLine ?? this.subtitleHeadingsByLine,
-      readingSegments: readingSegments ?? this.readingSegments,
+      linksLoading: linksLoading ?? this.linksLoading,
       pinpointHighlightIndex: clearPinpointHighlight
           ? null
           : (pinpointHighlightIndex ?? this.pinpointHighlightIndex),
@@ -420,6 +413,8 @@ class TextBookLoaded extends TextBookState {
         removePunctuation,
         isTanach,
         supportsContinuousReadingMode,
+        continuousReadingMode,
+        readingSegments.length,
         visibleIndices,
         selectedIndex,
         pinLeftPane,
@@ -434,10 +429,7 @@ class TextBookLoaded extends TextBookState {
         selectedTextStart,
         selectedTextEnd,
         highlightedLine,
-        continuousReadingMode,
-        showSubtitles,
-        _subtitleHeadingsSignature(subtitleHeadingsByLine),
-        readingSegments.length,
+        linksLoading,
         pinpointHighlightIndex,
         pinpointHighlightText,
         isEditorOpen,
