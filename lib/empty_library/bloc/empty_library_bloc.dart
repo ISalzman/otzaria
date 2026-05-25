@@ -933,24 +933,39 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     String archivePath,
     String outputPath,
   ) async {
+    // חילוץ streaming על כל הפלטפורמות. ה-DB הדחוס של הספרייה הוא
+    // 1.5 GB דחוס ו-6.5 GB פרוס; טעינה לזיכרון RAM ב-`Zstandard().decompress`
+    // קרסה ב-Microsoft Store certification על Surface Laptop 5 עם 8 GB RAM
+    // (FAST_FAIL 0xc0000409 בעת ההרצה של שלב "הורדת ספרייה"). שימוש ב-
+    // ZSTD_decompressStream דרך FFI מעבד נתחים של ~128 KB ולא חורג מ-
+    // כמה מאות KB של RAM. רץ ב-isolate נפרד כדי לא לחסום את ה-UI.
+    await Isolate.run(
+      () => _decompressZstStreaming(archivePath, outputPath),
+    );
+  }
+
+  /// מחזיר את ה-DynamicLibrary של zstandard לפלטפורמה הנוכחית.
+  ///
+  /// כל פלאגין פלטפורמה של `zstandard` בונה DLL/dylib/SO עם זרות שונה;
+  /// השמות תואמים את `zstandard_<platform>` package.
+  static DynamicLibrary _openZstandardLib() {
     if (Platform.isAndroid) {
-      // ב-Android טוענים את כל הקובץ לזיכרון RAM (1.5 GB דחוס + 6.5 GB פרוס)
-      // גורם לקריסה על מכשירים עם 4-6 GB RAM.
-      // במקום זאת, משתמשים ב-ZSTD streaming API שמעבד בנתחים של ~128 KB.
-      await Isolate.run(
-          () => _decompressZstStreaming(archivePath, outputPath));
-      return;
+      return DynamicLibrary.open('libzstandard_android.so');
     }
-    final compressedBytes = await File(archivePath).readAsBytes();
-    final decompressed = await Zstandard().decompress(compressedBytes);
-    if (decompressed == null) {
-      throw Exception('חילוץ קובץ ZST נכשל: $archivePath');
+    if (Platform.isWindows) {
+      return DynamicLibrary.open('zstandard_windows.dll');
     }
-    final outputFile = File(outputPath);
-    if (await outputFile.exists()) {
-      await outputFile.delete();
+    if (Platform.isLinux) {
+      return DynamicLibrary.open('libzstandard_linux_plugin.so');
     }
-    await outputFile.writeAsBytes(decompressed, flush: true);
+    if (Platform.isMacOS) {
+      return DynamicLibrary.open('zstandard_macos.framework/zstandard_macos');
+    }
+    if (Platform.isIOS) {
+      return DynamicLibrary.open('zstandard_ios.framework/zstandard_ios');
+    }
+    throw UnsupportedError(
+        'Platform not supported: ${Platform.operatingSystem}');
   }
 
   /// חילוץ ZST streaming דרך ZSTD FFI — רץ ב-isolate נפרד.
@@ -958,7 +973,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   /// שימוש ב-RAM: כמה מאות KB בלבד (במקום ~8 GB).
   static void _decompressZstStreaming(
       String archivePath, String outputPath) {
-    final dylib = DynamicLibrary.open('libzstandard_android.so');
+    final dylib = _openZstandardLib();
     final bindings = ZstandardNativeBindings(dylib);
 
     final inBufSize = bindings.ZSTD_DStreamInSize();
