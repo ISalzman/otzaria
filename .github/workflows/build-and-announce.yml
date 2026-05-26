@@ -1565,8 +1565,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
 
   trigger_google_play_deploy:
-    if: "!cancelled() && needs.check_version.outputs.is_version == 'true' && github.event_name != 'release' && github.event_name != 'pull_request'"
-    needs: [check_version, create_release]
+    if: "!cancelled() && needs.check_version.outputs.is_version == 'true' && needs.build_android.result == 'success' && github.event_name != 'release' && github.event_name != 'pull_request'"
+    needs: [check_version, build_android]
     uses: ./.github/workflows/deploy-google-play.yml
     secrets: inherit
 
