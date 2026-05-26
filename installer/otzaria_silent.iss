@@ -1,11 +1,11 @@
-; מתקין שקט עבור אוצריא.
+﻿; מתקין שקט עבור אוצריא.
 ; המשתמש רק מפעיל את ה-EXE — הוא משגר את עצמו מחדש ב-/VERYSILENT ויוצא בשקט.
 ; אם התהליך רץ עם הרשאות מנהל (Run as administrator) — התקנה לכל המשתמשים;
 ; אחרת — התקנה למשתמש הנוכחי בלבד (ללא UAC, כי PrivilegesRequired=lowest).
 ; ההתקנה תמיד מאפסת את ההגדרות הקודמות, וסיומה משיק את אוצריא אוטומטית.
 
 #define MyAppName "אוצריא"
-#define MyAppVersion "0.9.92"
+#define MyAppVersion "0.9.93"
 #define MyAppPublisher "sivan22"
 #define MyAppURL "https://github.com/otzaria/otzaria"
 #define MyAppExeName "otzaria.exe"
