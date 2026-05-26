@@ -743,6 +743,248 @@ void main() {
     });
 
     test(
+        'buildLibraryCatalog ממזג ספרים אישיים לעץ הראשי לפי שם כשההגדרה מופעלת',
+        () async {
+      final tempDir = await Directory.systemTemp
+          .createTemp('otzaria_user_books_root_merge');
+      final libraryPath = path.join(tempDir.path, 'library');
+      final dataRootPath = path.join(tempDir.path, 'data_root');
+      final dbPath = path.join(libraryPath, DatabaseConstants.databaseFileName);
+      final database = MyDatabase.withPath(dbPath);
+      final repository = SeforimRepository(database);
+      final provider = DatabaseLibraryProvider.instance;
+      final previousLibraryPath =
+          Settings.getValue<String>(SettingsRepository.keyLibraryPath);
+      final previousFolderName =
+          Settings.getValue<String>(SettingsRepository.keyLibraryFolderName);
+      final previousEffectiveDbPath =
+          Settings.getValue<String>(SettingsRepository.keyDbEffectivePath);
+      final previousMergeFlag = Settings.getValue<bool>(
+          SettingsRepository.keyMergeUserBooksIntoLibrary);
+      final previousDataRootPath = AppPaths.cachedDataRootPath;
+
+      addTearDown(() => tempDir.delete(recursive: true));
+      addTearDown(() => database.close());
+      addTearDown(() => provider.clearCache());
+      addTearDown(() => provider.sqliteProvider.dispose());
+      addTearDown(
+          () => AppPaths.debugOverrideDataRootPath(previousDataRootPath));
+      addTearDown(() => UserBooksDatabaseHolder.instance.close());
+      addTearDown(() async {
+        await Settings.setValue<bool>(
+          SettingsRepository.keyMergeUserBooksIntoLibrary,
+          previousMergeFlag ?? false,
+        );
+      });
+      addTearDown(() async {
+        await Settings.setValue<String>(
+          SettingsRepository.keyDbEffectivePath,
+          previousEffectiveDbPath ?? '',
+        );
+      });
+      addTearDown(() async {
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryFolderName,
+          previousFolderName ?? '',
+        );
+      });
+      addTearDown(() async {
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryPath,
+          previousLibraryPath ?? '',
+        );
+      });
+
+      await Directory(libraryPath).create(recursive: true);
+      await provider.sqliteProvider.dispose();
+      provider.clearCache();
+      await UserBooksDatabaseHolder.instance.close();
+      AppPaths.debugOverrideDataRootPath(dataRootPath);
+      await repository.ensureInitialized();
+
+      await Settings.setValue<String>(
+        SettingsRepository.keyLibraryPath,
+        libraryPath,
+      );
+      await Settings.setValue<String>(
+        SettingsRepository.keyLibraryFolderName,
+        '',
+      );
+      await Settings.setValue<String>(
+        SettingsRepository.keyDbEffectivePath,
+        '',
+      );
+      // הפעלת מצב המיזוג שאנו רוצים לבדוק.
+      await Settings.setValue<bool>(
+        SettingsRepository.keyMergeUserBooksIntoLibrary,
+        true,
+      );
+
+      // seforim.db: קטגוריית-שורש "חסידות" עם תת "ברסלב" וספר ראשי בתוכה.
+      final sourceId = await repository.insertSource('local-test', -10);
+      final hasidutCategoryId = await repository.insertCategory(
+        const migration_models.Category(
+          title: 'חסידות',
+          parentId: null,
+          level: 0,
+          orderIndex: 1,
+        ),
+      );
+      final breslevCategoryId = await repository.insertCategory(
+        migration_models.Category(
+          title: 'ברסלב',
+          parentId: hasidutCategoryId,
+          level: 1,
+          orderIndex: 1,
+        ),
+      );
+      await repository.insertBook(
+        migration_models.Book(
+          id: 1,
+          categoryId: breslevCategoryId,
+          sourceId: sourceId,
+          title: 'ליקוטי מוהר"ן',
+          filePath: path.join(tempDir.path, 'main_book.txt'),
+          fileType: 'txt',
+        ),
+      );
+
+      // user_books.db: המשתמש בחר תיקיית-שורש "מסמכים" (זו לא צריכה
+      // להופיע בעץ במצב מיזוג). בתוכה:
+      //   חסידות/ברסלב/ספר ברסלב אישי  →  אמור להתמזג עם "חסידות/ברסלב"
+      //   שיעורים/שיעור שבועי         →  אמור להופיע בשורש (אין התאמה)
+      //   קובץ ישיר בתוך "מסמכים"      →  אמור להופיע בשורש הספרייה
+      final userBooksRepository =
+          await UserBooksDatabaseHolder.instance.repository;
+      final userSourceId =
+          await userBooksRepository.insertSource('user-test', -20);
+      final userPersonalCategoryId = await userBooksRepository.insertCategory(
+        const migration_models.Category(
+          title: 'ספרים אישיים',
+          parentId: null,
+          level: 0,
+          orderIndex: 1,
+        ),
+      );
+      // "מסמכים" — התיקייה שהמשתמש בחר.
+      final pickedFolderId = await userBooksRepository.insertCategory(
+        migration_models.Category(
+          title: 'מסמכים',
+          parentId: userPersonalCategoryId,
+          level: 1,
+          orderIndex: 1,
+        ),
+      );
+      final userHasidutId = await userBooksRepository.insertCategory(
+        migration_models.Category(
+          title: 'חסידות',
+          parentId: pickedFolderId,
+          level: 2,
+          orderIndex: 1,
+        ),
+      );
+      final userBreslevId = await userBooksRepository.insertCategory(
+        migration_models.Category(
+          title: 'ברסלב',
+          parentId: userHasidutId,
+          level: 3,
+          orderIndex: 1,
+        ),
+      );
+      final unmatchedCategoryId = await userBooksRepository.insertCategory(
+        migration_models.Category(
+          title: 'שיעורים',
+          parentId: pickedFolderId,
+          level: 2,
+          orderIndex: 2,
+        ),
+      );
+      await userBooksRepository.insertBook(
+        migration_models.Book(
+          categoryId: userBreslevId,
+          sourceId: userSourceId,
+          title: 'ספר ברסלב אישי',
+          filePath: path.join(tempDir.path, 'user_breslev_book.txt'),
+          fileType: 'txt',
+        ),
+      );
+      await userBooksRepository.insertBook(
+        migration_models.Book(
+          categoryId: unmatchedCategoryId,
+          sourceId: userSourceId,
+          title: 'שיעור שבועי',
+          filePath: path.join(tempDir.path, 'shiur.txt'),
+          fileType: 'txt',
+        ),
+      );
+      // קובץ שיושב ישירות בתוך "מסמכים" — צריך להגיע לשורש הספרייה.
+      await userBooksRepository.insertBook(
+        migration_models.Book(
+          categoryId: pickedFolderId,
+          sourceId: userSourceId,
+          title: 'מכתב אישי',
+          filePath: path.join(tempDir.path, 'letter.txt'),
+          fileType: 'txt',
+        ),
+      );
+
+      await provider.initialize();
+      final library = await provider.buildLibraryCatalog({}, libraryPath);
+
+      // אין קטגוריית "ספרים אישיים" וגם לא "מסמכים" — שתיהן נעקפו.
+      expect(
+        library.subCategories.where((c) => c.title == 'ספרים אישיים'),
+        isEmpty,
+        reason: 'במצב מיזוג אין צומת "ספרים אישיים" עליון',
+      );
+      expect(
+        library.subCategories.where((c) => c.title == 'מסמכים'),
+        isEmpty,
+        reason: 'התיקייה שהמשתמש בחר ("מסמכים") לא אמורה להופיע בעץ',
+      );
+
+      // "חסידות" מהמשתמש מוזגה ל-"חסידות" הקיימת ב-seforim — ללא כפילות.
+      final hasidutCategories =
+          library.subCategories.where((c) => c.title == 'חסידות');
+      expect(hasidutCategories, hasLength(1));
+      final hasidutCategory = hasidutCategories.single;
+
+      // "ברסלב" — קטגוריה ממוזגת אחת המכילה את שני הספרים.
+      final breslevCategories =
+          hasidutCategory.subCategories.where((c) => c.title == 'ברסלב');
+      expect(breslevCategories, hasLength(1));
+      final breslevCategory = breslevCategories.single;
+      expect(
+        breslevCategory.books.map((b) => b.title),
+        containsAll(['ליקוטי מוהר"ן', 'ספר ברסלב אישי']),
+      );
+
+      // הספר האישי מסומן ב-isUserBook=true.
+      final userBook = breslevCategory.books
+          .firstWhere((b) => b.title == 'ספר ברסלב אישי');
+      expect(userBook.isUserBook, isTrue);
+      final mainBook = breslevCategory.books
+          .firstWhere((b) => b.title == 'ליקוטי מוהר"ן');
+      expect(mainBook.isUserBook, isFalse);
+
+      // תיקייה ללא התאמה בעץ הראשי — מופיעה בשורש הספרייה (לא תחת "מסמכים").
+      final unmatchedCategories =
+          library.subCategories.where((c) => c.title == 'שיעורים');
+      expect(unmatchedCategories, hasLength(1),
+          reason: 'תיקייה ללא התאמה אמורה להופיע בשורש הספרייה');
+      final unmatchedCategory = unmatchedCategories.single;
+      expect(unmatchedCategory.books.map((b) => b.title),
+          contains('שיעור שבועי'));
+
+      // קובץ שיושב ישירות בתוך התיקייה הנבחרת — מופיע בשורש הספרייה.
+      expect(
+        library.books.map((b) => b.title),
+        contains('מכתב אישי'),
+        reason: 'קובץ ישירות תחת התיקייה הנבחרת אמור להגיע לשורש הספרייה',
+      );
+    });
+
+    test(
         'populateUserBooksCategoryForTesting ממלא קטגוריה קיימת בלי לשבור parent ו-category',
         () {
       final provider = DatabaseLibraryProvider.instance;

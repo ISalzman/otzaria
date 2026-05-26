@@ -42,6 +42,9 @@ class SettingsState extends Equatable {
   final bool autoSyncCatalogs;
   final bool compactMenuMode;
 
+  /// מיזוג תיקיות מותאמות אישית לתוך עץ הספרייה הראשי לפי שם.
+  final bool mergeUserBooksIntoLibrary;
+
   /// מזהי כלים מובנים שהמשתמש בחר להסתיר מהממשק.
   final Set<String> hiddenBuiltInToolIds;
 
@@ -87,6 +90,7 @@ class SettingsState extends Equatable {
     required this.protectedModeEnabled,
     required this.autoSyncCatalogs,
     this.compactMenuMode = false,
+    this.mergeUserBooksIntoLibrary = false,
     this.hiddenBuiltInToolIds = const <String>{},
     this.builtInToolsPinnedToNavRail = const <String>{},
     bool? softwareAndBookUpdatesEnabled,
@@ -132,6 +136,7 @@ class SettingsState extends Equatable {
       protectedModeEnabled: false,
       autoSyncCatalogs: false,
       softwareAndBookUpdatesEnabled: true,
+      mergeUserBooksIntoLibrary: false,
     );
   }
 
@@ -173,6 +178,7 @@ class SettingsState extends Equatable {
     bool? protectedModeEnabled,
     bool? autoSyncCatalogs,
     bool? compactMenuMode,
+    bool? mergeUserBooksIntoLibrary,
     Set<String>? hiddenBuiltInToolIds,
     Set<String>? builtInToolsPinnedToNavRail,
     bool? softwareAndBookUpdatesEnabled,
@@ -219,6 +225,8 @@ class SettingsState extends Equatable {
       protectedModeEnabled: protectedModeEnabled ?? this.protectedModeEnabled,
       autoSyncCatalogs: autoSyncCatalogs ?? this.autoSyncCatalogs,
       compactMenuMode: compactMenuMode ?? this.compactMenuMode,
+      mergeUserBooksIntoLibrary:
+          mergeUserBooksIntoLibrary ?? this.mergeUserBooksIntoLibrary,
       hiddenBuiltInToolIds: hiddenBuiltInToolIds ?? this.hiddenBuiltInToolIds,
       builtInToolsPinnedToNavRail:
           builtInToolsPinnedToNavRail ?? this.builtInToolsPinnedToNavRail,
@@ -272,6 +280,7 @@ class SettingsState extends Equatable {
         protectedModeEnabled,
         autoSyncCatalogs,
         compactMenuMode,
+        mergeUserBooksIntoLibrary,
         hiddenBuiltInToolIds,
         builtInToolsPinnedToNavRail,
         softwareAndBookUpdatesEnabled,
