@@ -29,6 +29,21 @@ import 'package:otzaria/search/utils/snippet_builder.dart';
 
 const _kAllChapter = -1;
 
+/// קובע אם ה-listener של מסך המפרשים צריך לפעול עבור מעבר state נתון.
+///
+/// חובה לפעול במעבר הראשון למצב טעון (`TextBookLoading → TextBookLoaded`)
+/// כדי לפתור את הפרק ההתחלתי — אחרת `effectiveIndexes` נשאר null והמפרשים
+/// לא נטענים על המיקום הנוכחי. בנוסף פועל בכל שינוי של [TextBookLoaded.selectedIndex].
+@visibleForTesting
+bool shouldNotifyCommentatorsTabListener(
+  TextBookState prev,
+  TextBookState curr,
+) {
+  if (curr is! TextBookLoaded) return false;
+  if (prev is! TextBookLoaded) return true;
+  return prev.selectedIndex != curr.selectedIndex;
+}
+
 class CommentatorsTabScreen extends StatefulWidget {
   final CommentatorsTab tab;
   final Function(OpenedTab) openBookCallback;
@@ -312,12 +327,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       value: widget.tab.bloc,
       child: Builder(builder: (context) {
         return BlocConsumer<TextBookBloc, TextBookState>(
-          listenWhen: (prev, curr) {
-            if (prev is! TextBookLoaded || curr is! TextBookLoaded) {
-              return false;
-            }
-            return prev.selectedIndex != curr.selectedIndex;
-          },
+          listenWhen: shouldNotifyCommentatorsTabListener,
           listener: (context, state) {
             if (state is! TextBookLoaded) return;
             _resolveInitialChapter(state);
@@ -442,52 +452,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     alignment: AlignmentDirectional.centerEnd,
                     paneWidth: 320,
                     minMainContentWidth: 400,
-                    mainContent: NotificationListener<UserScrollNotification>(
-                      onNotification: (notification) {
-                        if (notification.direction != ScrollDirection.idle &&
-                            _navPaneOpen &&
-                            !_pinLeftPane &&
-                            !_navPaneAutoCloseQueued) {
-                          _navPaneAutoCloseQueued = true;
-                          Future.microtask(() {
-                            if (!mounted) {
-                              _navPaneAutoCloseQueued = false;
-                              return;
-                            }
-                            if (_navPaneOpen && !_pinLeftPane) {
-                              setState(() {
-                                _navPaneOpen = false;
-                                _navPaneAutoCloseQueued = false;
-                              });
-                            } else {
-                              _navPaneAutoCloseQueued = false;
-                            }
-                          });
-                        }
-                        return false;
-                      },
-                      child: CommentaryListBase(
-                        key: _commentaryKey,
-                        openBookCallback: widget.openBookCallback,
-                        fontSize: state.fontSize,
-                        indexes: effectiveIndexes,
-                        showSearch: true,
-                        useAvailableCommentators:
-                            _selectedCommentatorsOverride == null,
-                        selectedCommentatorsOverride:
-                            _selectedCommentatorsOverride,
-                        onSelectedCommentatorsOverrideChanged: (list) {
-                          setState(() => _selectedCommentatorsOverride = list);
-                        },
-                        onFilterOpenRequested: _openCommentatorsSelectionPane,
-                        externalSearchController: _commentarySearchController,
-                        externalCurrentIndexNotifier: _externalCurrentIndex,
-                        externalTotalResultsNotifier: _externalTotalResults,
-                        externalSearchResultsByPathNotifier:
-                            _externalSearchResultsByPath,
-                        externalSearchSnippetsNotifier: _externalSearchSnippets,
-                        externalAllExpandedNotifier: _allExpandedInChild,
-                      ),
+                    mainContent: _buildCommentaryMainContent(
+                      context,
+                      state,
+                      effectiveIndexes,
                     ),
                     paneContent: _buildNavPanel(
                       context,
@@ -501,6 +469,90 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           },
         );
       }),
+    );
+  }
+
+  /// בונה את תוכן המפרשים הראשי: עטוף ב-[SelectionArea] לאפשור בחירת טקסט
+  /// בכל הרשימה הנגללת (בלעדיו מחוות הגרירה נבלעת ע"י הגלילה, כמו בפאנל
+  /// המפוצל וב-PdfCommentaryPanel), וממורכז לפי הגדרת רוחב הטקסט.
+  Widget _buildCommentaryMainContent(
+    BuildContext context,
+    TextBookLoaded state,
+    List<int>? effectiveIndexes,
+  ) {
+    final listContent = NotificationListener<UserScrollNotification>(
+      onNotification: (notification) {
+        if (notification.direction != ScrollDirection.idle &&
+            _navPaneOpen &&
+            !_pinLeftPane &&
+            !_navPaneAutoCloseQueued) {
+          _navPaneAutoCloseQueued = true;
+          Future.microtask(() {
+            if (!mounted) {
+              _navPaneAutoCloseQueued = false;
+              return;
+            }
+            if (_navPaneOpen && !_pinLeftPane) {
+              setState(() {
+                _navPaneOpen = false;
+                _navPaneAutoCloseQueued = false;
+              });
+            } else {
+              _navPaneAutoCloseQueued = false;
+            }
+          });
+        }
+        return false;
+      },
+      child: SelectionArea(
+        contextMenuBuilder: (context, _) => const SizedBox.shrink(),
+        child: CommentaryListBase(
+          key: _commentaryKey,
+          openBookCallback: widget.openBookCallback,
+          fontSize: state.fontSize,
+          indexes: effectiveIndexes,
+          showSearch: true,
+          useAvailableCommentators: _selectedCommentatorsOverride == null,
+          selectedCommentatorsOverride: _selectedCommentatorsOverride,
+          onSelectedCommentatorsOverrideChanged: (list) {
+            setState(() => _selectedCommentatorsOverride = list);
+          },
+          onFilterOpenRequested: _openCommentatorsSelectionPane,
+          externalSearchController: _commentarySearchController,
+          externalCurrentIndexNotifier: _externalCurrentIndex,
+          externalTotalResultsNotifier: _externalTotalResults,
+          externalSearchResultsByPathNotifier: _externalSearchResultsByPath,
+          externalSearchSnippetsNotifier: _externalSearchSnippets,
+          externalAllExpandedNotifier: _allExpandedInChild,
+        ),
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return BlocBuilder<SettingsBloc, SettingsState>(
+          builder: (context, settingsState) {
+            // אותו חישוב כמו בתצוגת הטקסט הראשית (combined_book_screen):
+            // ערך שלילי = רמה (95%/90%/...), ערך 0 = ללא הגבלה.
+            var textMaxWidth = settingsState.textMaxWidth;
+            if (textMaxWidth < 0) {
+              final level = (-textMaxWidth).toInt();
+              final widthPercent = 1.0 - (level * 0.05);
+              textMaxWidth = constraints.maxWidth * widthPercent;
+            }
+
+            if (textMaxWidth > 0) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: textMaxWidth),
+                  child: listContent,
+                ),
+              );
+            }
+            return listContent;
+          },
+        );
+      },
     );
   }
 
