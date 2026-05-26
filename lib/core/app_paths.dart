@@ -13,6 +13,19 @@ class AppPaths {
   static String? _cachedDataRootPath;
   static String? _cachedTantivyLockPathFor;
   static String? _cachedTantivyLockPathResult;
+  static String? _cachedBundledLibraryPath;
+  static bool _bundledLibraryProbed = false;
+  static String? _resolvedExecutableOverride;
+
+  /// קובץ marker שמסמן שתיקייה היא "ספרייה מצורפת" של חבילת FULL.
+  /// נוצר ע"י ה-CI workflow בתוך תיקיית "אוצריא" של ה-bundle, וקיומו נדרש
+  /// כדי שתיקיית "אוצריא" שאקראית קיימת ליד ה-executable לא תיתפס בטעות
+  /// כספרייה מצורפת.
+  static const String _bundledLibraryMarkerFileName =
+      '.otzaria_bundled_library';
+
+  /// שם תיקיית הספרייה בתוך חבילות FULL ל-Linux ו-macOS.
+  static const String _bundledLibraryFolderName = 'אוצריא';
 
   @visibleForTesting
   static void debugOverrideDataRootPath(String? path) {
@@ -21,6 +34,18 @@ class AppPaths {
     _cachedTantivyLockPathFor = null;
     _cachedTantivyLockPathResult = null;
   }
+
+  /// דורס את [Platform.resolvedExecutable] לצורכי בדיקה — נדרש כדי לדמות
+  /// מבנה תיקיות של חבילת FULL ב-tmpdir.
+  @visibleForTesting
+  static void debugOverrideResolvedExecutable(String? path) {
+    _resolvedExecutableOverride = path;
+    _bundledLibraryProbed = false;
+    _cachedBundledLibraryPath = null;
+  }
+
+  static String get _resolvedExecutable =>
+      _resolvedExecutableOverride ?? Platform.resolvedExecutable;
 
   /// מאפס את הקאש של נתיב ה-Hive box של האינדקס.
   /// נדרש אחרי שינוי [SettingsRepository.keyIndexPath] בזמן ריצה
@@ -82,13 +107,65 @@ class AppPaths {
   ///
   /// On system-wide desktop installs this remains in the shared data root.
   /// Otherwise it lives under the user-scoped app data root.
+  ///
+  /// On Linux and macOS, if the app is launched from a FULL bundle (אוצריא/
+  /// folder sitting next to the executable with a marker file inside), that
+  /// bundled library wins over the per-user default. Windows handles this
+  /// case via the Inno Setup installer, so detection is skipped there.
   static Future<String> getDefaultLibraryPath() async {
+    final bundled = await _detectBundledLibraryPath();
+    if (bundled != null) {
+      return bundled;
+    }
+
     final systemWideRoot = await _getSystemWideLibraryRootIfNeeded();
     if (systemWideRoot != null) {
       return p.join(systemWideRoot, 'books');
     }
 
     return p.join(await getDataRootPath(), 'books');
+  }
+
+  /// מזהה תיקיית ספרייה מצורפת ליד ה-executable עבור חבילות FULL.
+  ///
+  ///   Linux:  bundle/app/otzaria             → bundle/אוצריא/
+  ///   macOS:  bundle/אוצריא.app/Contents/MacOS/exe → bundle/אוצריא/
+  ///
+  /// הזיהוי מותנה בקובץ marker שנוצר ע"י ה-CI workflow, כדי למנוע
+  /// false-positive על תיקייה בשם "אוצריא" שאקראית קיימת בנתיב.
+  /// ב-Windows יש installer שמטפל בנתיב בעצמו (כותב ל-shared_preferences),
+  /// ב-Android/iOS אין משמעות ל-resolvedExecutable מבחינת sandbox.
+  static Future<String?> _detectBundledLibraryPath() async {
+    if (_bundledLibraryProbed) return _cachedBundledLibraryPath;
+    _bundledLibraryProbed = true;
+    _cachedBundledLibraryPath = null;
+
+    if (Platform.isWindows || Platform.isAndroid || Platform.isIOS) {
+      return null;
+    }
+
+    final exeDir = p.dirname(_resolvedExecutable);
+    final candidates = <String>[];
+    if (Platform.isLinux) {
+      candidates.add(
+        p.normalize(p.join(exeDir, '..', _bundledLibraryFolderName)),
+      );
+    } else if (Platform.isMacOS) {
+      candidates.add(
+        p.normalize(
+            p.join(exeDir, '..', '..', '..', _bundledLibraryFolderName)),
+      );
+    }
+
+    for (final dir in candidates) {
+      final marker = File(p.join(dir, _bundledLibraryMarkerFileName));
+      final db = File(p.join(dir, 'seforim.db'));
+      if (await marker.exists() && await db.exists()) {
+        _cachedBundledLibraryPath = dir;
+        return dir;
+      }
+    }
+    return null;
   }
 
   static Future<String?> _getSystemWideLibraryRootIfNeeded() async {
@@ -136,9 +213,46 @@ class AppPaths {
 
   /// Gets the main library path from settings, or gracefully falls back to default paths.
   static Future<String> getLibraryPath() async {
-    // Check existing library path setting
     final currentPath =
         Settings.getValue<String>(SettingsRepository.keyLibraryPath);
+
+    // אם ה-executable הנוכחי שייך ל-FULL bundle, הספרייה המצורפת אמורה
+    // לנצח על keyLibraryPath שמור — אבל רק אם השמור לא מייצג בחירה ידנית
+    // תקפה של המשתמש. זה מבטיח שני דברים הפוכים:
+    //   1) משתמש שהעביר/החליף את ה-bundle לא נשאר תקוע על נתיב ישן ושבור.
+    //   2) משתמש שבחר במפורש תיקיית ספרייה אחרת (דרך ההגדרות) ימשיך לעבוד
+    //      איתה גם כשהוא מפעיל מ-bundle.
+    // ההבחנה: נתיב נחשב "בחירה ידנית" אם יש בו seforim.db ואין בו את ה-
+    // marker של FULL bundle. נתיב bundle ישן מזוהה ע"י קיום ה-marker;
+    // נתיב שבור מזוהה ע"י היעדר ה-DB.
+    final bundled = await _detectBundledLibraryPath();
+    if (bundled != null) {
+      if (currentPath != null && currentPath.isNotEmpty) {
+        if (await _isUserChosenLibraryPath(currentPath)) {
+          return currentPath;
+        }
+      }
+      // אין בחירה ידנית תקפה — ה-bundle הנוכחי מנצח, ומתעדכן ב-settings כדי
+      // שקריאות ישירות ל-Settings.getValue (למשל מ-DatabaseConstants) יקבלו
+      // את הנתיב הנכון.
+      //
+      // איפוס ה-folderName חייב להיבדק *בנפרד* מ-currentPath. דוגמה לתרחיש
+      // שמחמיץ אחרת: currentPath == bundled (משמירה קודמת) אבל
+      // keyLibraryFolderName הוא ערך stale כמו 'Otzaria'. במצב כזה לא נשמור
+      // נתיב מחדש, אבל ה-folderName הישן יישאר וגורם ל-DatabaseConstants
+      // לחשב bundled/Otzaria/seforim.db במקום bundled/seforim.db.
+      if (currentPath != bundled) {
+        await Settings.setValue(SettingsRepository.keyLibraryPath, bundled);
+      }
+      final currentFolderName = Settings.getValue<String>(
+              SettingsRepository.keyLibraryFolderName) ??
+          '';
+      if (currentFolderName.isNotEmpty) {
+        await Settings.setValue(
+            SettingsRepository.keyLibraryFolderName, '');
+      }
+      return bundled;
+    }
 
     if (currentPath != null && currentPath.isNotEmpty) {
       return currentPath;
@@ -149,6 +263,33 @@ class AppPaths {
 
     await Settings.setValue(SettingsRepository.keyLibraryPath, libraryPath);
     return libraryPath;
+  }
+
+  /// מחזיר true אם [libraryPath] נראה כבחירה ידנית תקפה של המשתמש —
+  /// תיקייה שמכילה את ה-DB אבל אינה ספריית FULL bundle (אין בה marker).
+  ///
+  /// בהתאם ל-DatabaseConstants._buildDbPath, הנתיב האפקטיבי של ה-DB
+  /// תלוי גם ב-keyLibraryFolderName: אם הוא ריק ה-DB נמצא ישירות תחת
+  /// [libraryPath], ואחרת תחת תת-תיקייה. הבדיקה חייבת לחקות את אותה
+  /// לוגיקה כדי לא להחשיב תצורת משתמש חוקית כ-stale.
+  static Future<bool> _isUserChosenLibraryPath(String libraryPath) async {
+    final folderName =
+        Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
+            '';
+    final dbDir = folderName.isEmpty
+        ? libraryPath
+        : p.join(libraryPath, folderName);
+
+    final db = File(p.join(dbDir, 'seforim.db'));
+    if (!await db.exists()) {
+      return false;
+    }
+    // ה-marker יושב באותה רמה כמו ה-DB (זה מבנה ה-FULL bundle שה-CI יוצר).
+    final marker = File(p.join(dbDir, _bundledLibraryMarkerFileName));
+    if (await marker.exists()) {
+      return false;
+    }
+    return true;
   }
 
   /// Gets the search index path.
@@ -218,11 +359,11 @@ class AppPaths {
       return _cachedTantivyLockPathResult!;
     }
 
-    final preferredDir = Directory(p.join(p.dirname(indexPath), 'tantivy.lock'));
+    final preferredDir =
+        Directory(p.join(p.dirname(indexPath), 'tantivy.lock'));
     final fallbackDir =
         Directory(p.join(await getDataRootPath(), 'tantivy_state'));
-    final fallbackBox =
-        File(p.join(fallbackDir.path, 'books_indexed.hive'));
+    final fallbackBox = File(p.join(fallbackDir.path, 'books_indexed.hive'));
 
     String result;
     if (await fallbackBox.exists()) {
