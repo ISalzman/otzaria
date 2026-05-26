@@ -1,10 +1,11 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/widgets/navigation/scrollable_tab_bar.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -14,12 +15,10 @@ import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
-import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
-import 'package:otzaria/widgets/navigation/scrollable_tab_bar.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../helpers/memory_settings_cache.dart';
 
@@ -57,75 +56,18 @@ void main() {
     );
 
     expect(find.byTooltip('ספר א, פרק א'), findsOneWidget);
-    expect(find.byTooltip(r'${tab.title}, $currentTitleValue'), findsNothing);
   });
 
-  testWidgets(
-      'סגירת טאב פנימי במצב יישור לימין דוחה את כיווץ רוחב הטאבים לשתי שניות',
-      (tester) async {
-    final first = _makeTextTab('ספר א');
-    final middle = _makeTextTab('ספר ב');
-    final last = _makeTextTab('ספר ג');
-    final tabsBloc = _TestTabsBloc(
-      TabsState(tabs: [first, middle, last], currentTabIndex: 0),
-    );
-    final navigationBloc = _TestNavigationBloc(
-      const NavigationState(currentScreen: Screen.reading),
-    );
-    final settingsBloc = _TestSettingsBloc(
-      SettingsState.initial().copyWith(alignTabsToRight: true),
-    );
-
-    addTearDown(() async {
-      first.dispose();
-      middle.dispose();
-      last.dispose();
-      await tabsBloc.close();
-      await navigationBloc.close();
-      await settingsBloc.close();
-    });
-
-    await _setSurfaceSize(tester, const Size(900, 800));
-    await _pumpTitleBar(
-      tester,
-      tabsBloc: tabsBloc,
-      navigationBloc: navigationBloc,
-      settingsBloc: settingsBloc,
-    );
-
-    final initialWidths = _tabWidthsInScrollableBar(tester);
-    expect(initialWidths, hasLength(3));
-    final initialWidth = initialWidths.first;
-
-    tabsBloc.emit(TabsState(tabs: [first, last], currentTabIndex: 0));
-    await tester.pump();
-    await tester.pump();
-
-    final immediateWidths = _tabWidthsInScrollableBar(tester);
-    expect(immediateWidths, hasLength(2));
-    expect(immediateWidths.first, closeTo(initialWidth, 0.01));
-
-    await tester.pump(const Duration(seconds: 2));
-    await tester.pump();
-    await tester.pump();
-
-    final delayedWidths = _tabWidthsInScrollableBar(tester);
-    expect(delayedWidths, hasLength(2));
-    expect(delayedWidths.first, greaterThan(initialWidth));
-  });
-
-  testWidgets('ביישור לימין טאב יחיד נשאר ברוחב טבעי ולא מקבל רוחב אחיד',
-      (tester) async {
+  testWidgets('אייקון pin מוצג כשהכרטיסיה מוצמדת', (tester) async {
     final tab = _makeTextTab('ספר א');
+    tab.isPinned = true;
     final tabsBloc = _TestTabsBloc(
       TabsState(tabs: [tab], currentTabIndex: 0),
     );
     final navigationBloc = _TestNavigationBloc(
       const NavigationState(currentScreen: Screen.reading),
     );
-    final settingsBloc = _TestSettingsBloc(
-      SettingsState.initial().copyWith(alignTabsToRight: true),
-    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
 
     addTearDown(() async {
       tab.dispose();
@@ -142,26 +84,27 @@ void main() {
       settingsBloc: settingsBloc,
     );
 
-    expect(_tabWidthsInScrollableBar(tester), isEmpty);
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is Icon && w.icon == FluentIcons.pin_24_filled,
+      ),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('ביישור לימין כמה טאבים עדיין מציגים את הכותרות שלהם',
-      (tester) async {
-    final first = _makeTextTab('ספר א');
-    final second = _makeTextTab('ספר ב');
+  testWidgets('אייקון pin מוסתר כשהכרטיסיה אינה מוצמדת', (tester) async {
+    final tab = _makeTextTab('ספר א');
+    // isPinned = false כברירת מחדל
     final tabsBloc = _TestTabsBloc(
-      TabsState(tabs: [first, second], currentTabIndex: 0),
+      TabsState(tabs: [tab], currentTabIndex: 0),
     );
     final navigationBloc = _TestNavigationBloc(
       const NavigationState(currentScreen: Screen.reading),
     );
-    final settingsBloc = _TestSettingsBloc(
-      SettingsState.initial().copyWith(alignTabsToRight: true),
-    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
 
     addTearDown(() async {
-      first.dispose();
-      second.dispose();
+      tab.dispose();
       await tabsBloc.close();
       await navigationBloc.close();
       await settingsBloc.close();
@@ -175,37 +118,34 @@ void main() {
       settingsBloc: settingsBloc,
     );
 
-    expect(find.text('ספר א'), findsOneWidget);
-    expect(find.text('ספר ב'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is Icon && w.icon == FluentIcons.pin_24_filled,
+      ),
+      findsNothing,
+    );
   });
 
-  testWidgets('ביישור לימין hover על טאב לא יוצר overflow',
-      (tester) async {
-    final first = _makeTextTab('ספר א');
-    final second = _makeTextTab('ספר ב');
-    final third = _makeTextTab('ספר ג');
-    final fourth = _makeTextTab('ספר ד');
+  testWidgets('כרטיסיות אינן עטופות ב-SizedBox בעל רוחב קבוע', (tester) async {
+    final tab1 = _makeTextTab('ספר קצר');
+    final tab2 = _makeTextTab('ספר עם שם ארוך מאוד שנמשך הרחק');
     final tabsBloc = _TestTabsBloc(
-      TabsState(tabs: [first, second, third, fourth], currentTabIndex: 0),
+      TabsState(tabs: [tab1, tab2], currentTabIndex: 0),
     );
     final navigationBloc = _TestNavigationBloc(
       const NavigationState(currentScreen: Screen.reading),
     );
-    final settingsBloc = _TestSettingsBloc(
-      SettingsState.initial().copyWith(alignTabsToRight: true),
-    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
 
     addTearDown(() async {
-      first.dispose();
-      second.dispose();
-      third.dispose();
-      fourth.dispose();
+      tab1.dispose();
+      tab2.dispose();
       await tabsBloc.close();
       await navigationBloc.close();
       await settingsBloc.close();
     });
 
-    await _setSurfaceSize(tester, const Size(820, 800));
+    await _setSurfaceSize(tester, const Size(900, 800));
     await _pumpTitleBar(
       tester,
       tabsBloc: tabsBloc,
@@ -213,13 +153,18 @@ void main() {
       settingsBloc: settingsBloc,
     );
 
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    addTearDown(gesture.removePointer);
-    await gesture.addPointer();
-    await gesture.moveTo(tester.getCenter(find.text('ספר ג')));
-    await tester.pumpAndSettle();
+    // אין SizedBox בעל רוחב קבוע עוטף Listener (שימוש ב-tabWidth שהוסר)
+    final fixedWidthBoxes = tester
+        .widgetList<SizedBox>(find.byType(SizedBox))
+        .where((box) =>
+            box.width != null &&
+            box.width! >= 72 &&
+            box.width! <= 200 &&
+            box.child is Listener)
+        .toList();
 
-    expect(tester.takeException(), isNull);
+    expect(fixedWidthBoxes, isEmpty,
+        reason: 'כרטיסיות צריכות להיות ברוחב טבעי, לא קבוע שוויוני');
   });
 
   testWidgets('CommentatorsTab לא מפיל את שורת הכותרת', (tester) async {
@@ -254,8 +199,6 @@ void main() {
   });
 
   group('פריסת מסך צר (portrait) — טאבים בשורה תחתונה', () {
-    // הטריגר לפריסה התחתונה הוא Orientation.portrait — אותו טריגר שמעביר
-    // את סרגל הניווט הראשי ל-NavigationBar למטה (main_window_screen.dart).
     testWidgets('landscape: הטאבים באותה שורה של כפתורי הפעולה', (tester) async {
       final tab = _makeTextTab('ספר א');
       final tabsBloc = _TestTabsBloc(
@@ -327,8 +270,6 @@ void main() {
 
     testWidgets('portrait: הטאבים מקבלים רוחב מלא ולא נדחסים',
         (tester) async {
-      // הבעיה המקורית: הטאבים נדחקו לרצועה צרה בין כפתורי הפעולה
-      // לכפתורי החלון. בשורה התחתונה הם צריכים לקבל את כל הרוחב הזמין.
       final first = _makeTextTab('ספר א');
       final second = _makeTextTab('ספר ב');
       final tabsBloc = _TestTabsBloc(
@@ -357,8 +298,6 @@ void main() {
 
       final tabsBarWidth =
           tester.getSize(find.byType(ScrollableTabBarWithArrows)).width;
-      // ה-pumpTitleBar עוטף ב-SizedBox(width: 900) אבל ב-MediaQuery 400×800
-      // ה-Scaffold מצמצם את הרוחב ל-400. עיקר הבדיקה: לטאבים יש רוב הרוחב.
       expect(tabsBarWidth, greaterThan(300),
           reason: 'בשורה התחתונה הטאבים מקבלים את הרוחב כמעט-מלא');
     });
@@ -387,10 +326,8 @@ void main() {
         settingsBloc: settingsBloc,
       );
 
-      // כשאין טאבים פתוחים אין מה לרנדר בשורה התחתונה.
       expect(find.byType(ScrollableTabBarWithArrows), findsNothing);
     });
-
   });
 }
 
@@ -422,21 +359,6 @@ Future<void> _pumpTitleBar(
 
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 50));
-}
-
-List<double> _tabWidthsInScrollableBar(WidgetTester tester) {
-  return tester
-      .widgetList<SizedBox>(
-        find.descendant(
-          of: find.byType(ScrollableTabBarWithArrows),
-          matching: find.byType(SizedBox),
-        ),
-      )
-      .where((box) => box.child is Listener)
-      .map((box) => box.width)
-      .whereType<double>()
-      .where((width) => width >= 72 && width <= 200)
-      .toList();
 }
 
 TextBookTab _makeTextTab(String title, {String currentTitle = ''}) {

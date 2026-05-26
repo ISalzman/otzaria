@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
@@ -467,6 +468,45 @@ void main() {
           reason:
               'revoke must send granted:false — was a P1 bug where panel '
               'always sent granted:true');
+    },
+  );
+
+  testWidgets(
+    'dragging a plugin row to another row dispatches ReorderPluginsRequested',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final pluginBloc = _FakePluginSystemBloc([
+        _plugin(id: 'p1', name: 'תוסף-A'),
+        _plugin(id: 'p2', name: 'תוסף-B'),
+      ]);
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: pluginBloc,
+      ));
+      await tester.pumpAndSettle();
+
+      final handles =
+          find.byIcon(FluentIcons.re_order_dots_vertical_24_regular);
+      expect(handles, findsNWidgets(2));
+
+      final srcCenter = tester.getCenter(handles.first);
+      final dstCenter = tester.getCenter(handles.last);
+
+      await tester.timedDrag(
+        handles.first,
+        Offset(0, dstCenter.dy - srcCenter.dy),
+        const Duration(milliseconds: 200),
+      );
+      await tester.pumpAndSettle();
+
+      final events =
+          pluginBloc.dispatched.whereType<ReorderPluginsRequested>().toList();
+      expect(events, hasLength(1));
+      // p1 (index 0) dragged to p2 (index 1) → p1 inserted after p2
+      expect(events.single.orderedPluginIds, orderedEquals(['p2', 'p1']));
     },
   );
 

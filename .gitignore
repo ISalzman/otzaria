@@ -115,3 +115,4 @@ temp/
 seforim.db-shm
 .gitignore
 seforim.db-wal
+installer/otzaria-0.9.93-windows-silent.exe

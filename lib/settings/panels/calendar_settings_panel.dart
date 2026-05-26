@@ -243,18 +243,16 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                   },
                 ),
                 if (state.calendarNotificationsEnabled) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(right: 16.0, left: 16.0),
-                    child: SwitchSettingsTile(
-                      title: const Text('השמע צליל בהתראה',
-                          style: kSettingsTitleStyle),
-                      value: state.calendarNotificationSound,
-                      onChanged: (value) {
-                        context
-                            .read<CalendarCubit>()
-                            .changeCalendarNotificationSound(value);
-                      },
-                    ),
+                  SwitchSettingsTile(
+                    leading: const Icon(FluentIcons.speaker_2_24_regular),
+                    title: const Text('השמע צליל בהתראה',
+                        style: kSettingsTitleStyle),
+                    value: state.calendarNotificationSound,
+                    onChanged: (value) {
+                      context
+                          .read<CalendarCubit>()
+                          .changeCalendarNotificationSound(value);
+                    },
                   ),
                   _buildResponsiveDropdownTile<int>(
                     icon: FluentIcons.alert_snooze_24_regular,
