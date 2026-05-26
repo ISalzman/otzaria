@@ -12,6 +12,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -717,6 +718,23 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         message: 'מחלץ קובץ DB דחוס...',
       ));
 
+      // SqliteDataProvider פותח את seforim.db ב-WAL mode בעלייה אם הקובץ
+      // קיים — גם אם הוא חלקי/פגום משריד הורדה קודמת. הסגירה כאן משחררת
+      // את ה-handle כדי שהסטרימינג יוכל לדרוס את הקובץ. מחיקת shm/wal
+      // מונעת מ-SQLite לקרוא WAL ישן ולבלבל את ה-DB החדש.
+      await SqliteDataProvider.instance.dispose();
+      for (final suffix in const ['', '-shm', '-wal', '-journal']) {
+        final f = File('$outputPath$suffix');
+        if (await f.exists()) {
+          try {
+            await f.delete();
+          } catch (_) {
+            // הסטרימינג יטפל בשארית — אם המחיקה כשלה גם כאן, השגיאה
+            // האמיתית תעלה משם עם הודעה ברורה יותר.
+          }
+        }
+      }
+
       await _extractCompressedDatabase(tempArchivePath, outputPath);
 
       // מחיקת קובץ ה-temp לאחר חילוץ מוצלח
@@ -1042,6 +1060,18 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       final initRet = bindings.ZSTD_initDStream(dStream);
       if (bindings.ZSTD_isError(initRet) != 0) {
         throw Exception('ZSTD_initDStream נכשל: $initRet');
+      }
+
+      // ברירת המחדל של ה-streaming decompressor מגבילה את חלון הדחיסה ל-
+      // 128MB (windowLog=27). קובץ ה-seforim.db.zst נדחס עם `--long` ולכן
+      // נכשל עם ZSTD_error_frameParameter_windowTooLarge (קוד 16). 31 =
+      // חלון עד 2GB, המקסימום הסטנדרטי של zstd. אין לזה השפעה על שימוש
+      // RAM בפועל — זו רק תקרה שמתירה לדקומפרסור להתאים את עצמו לחלון.
+      final paramRet = bindings.ZSTD_DCtx_setParameter(
+          dStream, ZSTD_dParameter.ZSTD_d_windowLogMax, 31);
+      if (bindings.ZSTD_isError(paramRet) != 0) {
+        throw Exception(
+            'ZSTD_DCtx_setParameter(windowLogMax) נכשל: $paramRet');
       }
 
       final inNative = malloc.allocate<Uint8>(inBufSize);
