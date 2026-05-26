@@ -58,6 +58,9 @@ class NavRailItem extends StatelessWidget {
   /// מפתח לפריט הניווט כולו, כולל התווית.
   final Key? tourItemKey;
 
+  /// האם להפוך את האייקון אופקית (לספרים בעברית)
+  final bool mirrorIcon;
+
   const NavRailItem({
     super.key,
     this.icon,
@@ -70,6 +73,7 @@ class NavRailItem extends StatelessWidget {
     this.tourTargetKey,
     this.tourItemKey,
     this.isTourHighlighted = false,
+    this.mirrorIcon = false,
   }) : assert(icon != null || imageAsset != null,
             'NavRailItem requires either icon or imageAsset');
 
@@ -107,6 +111,10 @@ class NavRailItem extends StatelessWidget {
         message: tooltip!,
         child: iconWidget,
       );
+    }
+
+    if (mirrorIcon) {
+      iconWidget = Transform.scale(scaleX: -1, child: iconWidget);
     }
 
     return SizedBox(

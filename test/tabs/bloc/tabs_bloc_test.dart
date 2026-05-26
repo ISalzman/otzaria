@@ -543,18 +543,15 @@ void main() {
     });
   });
 
-  group('OpenOrFocusTab עם pinpointHighlight על טאב קיים', () {
+  group('OpenOrFocusTab עם highlight על טאב קיים', () {
     setUp(() async {
       await Settings.init(cacheProvider: _MemoryCacheProvider());
     });
 
-    test(
-        'מחיל ApplyPinpointHighlight על ה-bloc של הטאב הקיים במקום לפתוח טאב חדש',
+    test('מחיל ApplyMarkHighlight על ה-bloc של הטאב הקיים במקום לפתוח טאב חדש',
         () async {
       final tabsBloc = TabsBloc(repository: _FakeTabsRepository());
 
-      // טאב קיים: bloc מוזרק עם repository מזויף שמביא ל‑Loaded מיידית.
-      // האינדקס תואם ל‑incoming כי `_titlesMatch` נופל ל‑index כשאין TOC.
       final existingBloc = _createLoadedTextBookBloc(
         book: TextBook(id: 42, title: 'בראשית'),
         initialIndex: 5,
@@ -574,20 +571,19 @@ void main() {
       final incomingTab = TextBookTab(
         book: TextBook(id: 42, title: 'בראשית'),
         index: 5,
-        pinpointHighlight: 'אור',
-        pinpointHighlightSectionIndex: 5,
+        highlightText: 'אור',
+        permanentHighlightLine: 5,
       );
 
       tabsBloc.add(OpenOrFocusTab(incomingTab));
 
-      // ה-bloc של הטאב הקיים אמור לקבל ApplyPinpointHighlight ולעדכן state.
+      // ה-bloc של הטאב הקיים אמור לקבל ApplyMarkHighlight ולעדכן state.
       final updated = await existingBloc.stream
-          .firstWhere(
-              (s) => s is TextBookLoaded && s.pinpointHighlightText == 'אור')
+          .firstWhere((s) => s is TextBookLoaded && s.highlightText == 'אור')
           .timeout(const Duration(seconds: 2)) as TextBookLoaded;
 
-      expect(updated.pinpointHighlightIndex, 5);
-      expect(updated.pinpointHighlightText, 'אור');
+      expect(updated.permanentHighlightLine, 5);
+      expect(updated.highlightText, 'אור');
       expect(tabsBloc.state.tabs, hasLength(1),
           reason: 'אסור להוסיף טאב חדש; הטאב הקיים אמור להתעדכן.');
       expect(tabsBloc.state.currentTabIndex, 0);
@@ -596,7 +592,7 @@ void main() {
     });
 
     test(
-        'מחיל ApplyPinpointHighlight כש‑bloc הקיים עדיין ב‑Initial וטוען רק אחרי כן',
+        'מחיל ApplyMarkHighlight כש‑bloc הקיים עדיין ב‑Initial וטוען רק אחרי כן',
         () async {
       final tabsBloc = TabsBloc(repository: _FakeTabsRepository());
 
@@ -622,18 +618,17 @@ void main() {
       tabsBloc.add(AddTab(existingTab));
       await tabsBloc.stream.firstWhere((s) => s.tabs.length == 1);
 
-      // ההדגשה הממוקדת נשלחת לפני שה‑bloc הגיע ל‑Loaded — חייב להישאר ולהיות
+      // ההדגשה נשלחת לפני שה‑bloc הגיע ל‑Loaded — חייב להישאר ולהיות
       // מוחל ברגע שה‑Loaded מגיע.
       final incomingTab = TextBookTab(
         book: TextBook(id: 99, title: 'שמות'),
         index: 3,
-        pinpointHighlight: 'משה',
-        pinpointHighlightSectionIndex: 3,
+        highlightText: 'משה',
+        permanentHighlightLine: 3,
       );
       tabsBloc.add(OpenOrFocusTab(incomingTab));
 
-      // עכשיו טוענים את התוכן — ה‑bloc יעבור ל‑Loaded וה‑listener יזריק את
-      // ApplyPinpointHighlight.
+      // עכשיו טוענים את התוכן — ה‑bloc יעבור ל‑Loaded וה‑pending יוחל.
       existingBloc.add(const LoadContent(
         fontSize: 20,
         showSplitView: false,
@@ -642,13 +637,132 @@ void main() {
       ));
 
       final updated = await existingBloc.stream
-          .firstWhere(
-              (s) => s is TextBookLoaded && s.pinpointHighlightText == 'משה')
+          .firstWhere((s) => s is TextBookLoaded && s.highlightText == 'משה')
           .timeout(const Duration(seconds: 2)) as TextBookLoaded;
 
-      expect(updated.pinpointHighlightIndex, 3);
-      expect(updated.pinpointHighlightText, 'משה');
+      expect(updated.permanentHighlightLine, 3);
+      expect(updated.highlightText, 'משה');
       expect(tabsBloc.state.tabs, hasLength(1));
+
+      await _closeBlocAndAllowDeferredDispose(tabsBloc);
+    });
+
+    // הגנה על האיחוד של שני מסלולי ה-highlight ב-_propagatePinpointHighlightToExistingTab.
+    // הטסטים מעלינו מכסים רק את highlightText/permanentHighlightLine. כאן
+    // בודקים שגם pinpointHighlight (המסלול שהיה נפרד לפני האיחוד) ממשיך לעבוד.
+    // הערה: בזרימה אמיתית tab.index == pinpointHighlightSectionIndex (ראה
+    // book_open_coordinator.dart) ולכן הטאבים תואמים ב-_findMatchingTopLevelTabIndex.
+    test(
+        'pinpointHighlight על טאב קיים — מוחל באמצעות pinpointHighlightSectionIndex',
+        () async {
+      final tabsBloc = TabsBloc(repository: _FakeTabsRepository());
+
+      final existingBloc = _createLoadedTextBookBloc(
+        book: TextBook(id: 77, title: 'ויקרא'),
+        initialIndex: 8,
+      );
+      await existingBloc.stream.firstWhere((s) => s is TextBookLoaded);
+
+      final existingTab = TextBookTab(
+        book: TextBook(id: 77, title: 'ויקרא'),
+        index: 8,
+        blocOverride: existingBloc,
+      );
+      tabsBloc.add(AddTab(existingTab));
+      await tabsBloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      // pinpoint לסעיף 8 (כפי שזורם מ-coordinator: tab.index == sectionIndex).
+      final incomingTab = TextBookTab(
+        book: TextBook(id: 77, title: 'ויקרא'),
+        index: 8,
+        pinpointHighlight: 'אהרן',
+        pinpointHighlightSectionIndex: 8,
+      );
+      tabsBloc.add(OpenOrFocusTab(incomingTab));
+
+      final updated = await existingBloc.stream
+          .firstWhere((s) => s is TextBookLoaded && s.highlightText == 'אהרן')
+          .timeout(const Duration(seconds: 2)) as TextBookLoaded;
+
+      expect(updated.highlightText, 'אהרן');
+      expect(updated.permanentHighlightLine, 8);
+      expect(tabsBloc.state.tabs, hasLength(1));
+
+      await _closeBlocAndAllowDeferredDispose(tabsBloc);
+    });
+
+    test('pinpointHighlight בלי sectionIndex — נופל ל-incomingTab.index',
+        () async {
+      final tabsBloc = TabsBloc(repository: _FakeTabsRepository());
+
+      final existingBloc = _createLoadedTextBookBloc(
+        book: TextBook(id: 88, title: 'במדבר'),
+        initialIndex: 4,
+      );
+      await existingBloc.stream.firstWhere((s) => s is TextBookLoaded);
+
+      final existingTab = TextBookTab(
+        book: TextBook(id: 88, title: 'במדבר'),
+        index: 4,
+        blocOverride: existingBloc,
+      );
+      tabsBloc.add(AddTab(existingTab));
+      await tabsBloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      // pinpointHighlight ללא sectionIndex — fallback ל-incomingTab.index.
+      // מגן על הענף `?? incomingTab.index` ב-_propagatePinpointHighlightToExistingTab.
+      final incomingTab = TextBookTab(
+        book: TextBook(id: 88, title: 'במדבר'),
+        index: 4,
+        pinpointHighlight: 'מסע',
+      );
+      tabsBloc.add(OpenOrFocusTab(incomingTab));
+
+      final updated = await existingBloc.stream
+          .firstWhere((s) => s is TextBookLoaded && s.highlightText == 'מסע')
+          .timeout(const Duration(seconds: 2)) as TextBookLoaded;
+
+      expect(updated.permanentHighlightLine, 4,
+          reason: 'כשאין sectionIndex, נופלים ל-incomingTab.index');
+
+      await _closeBlocAndAllowDeferredDispose(tabsBloc);
+    });
+
+    test('pinpointHighlight גובר על highlightText כששניהם קיימים', () async {
+      final tabsBloc = TabsBloc(repository: _FakeTabsRepository());
+
+      final existingBloc = _createLoadedTextBookBloc(
+        book: TextBook(id: 55, title: 'דברים'),
+      );
+      await existingBloc.stream.firstWhere((s) => s is TextBookLoaded);
+
+      final existingTab = TextBookTab(
+        book: TextBook(id: 55, title: 'דברים'),
+        index: 0,
+        blocOverride: existingBloc,
+      );
+      tabsBloc.add(AddTab(existingTab));
+      await tabsBloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      // שניהם קיימים — pinpoint אמור לזכות (סדר עדיפות).
+      final incomingTab = TextBookTab(
+        book: TextBook(id: 55, title: 'דברים'),
+        index: 0,
+        pinpointHighlight: 'pinpoint-value',
+        pinpointHighlightSectionIndex: 3,
+        highlightText: 'mark-value',
+        permanentHighlightLine: 9,
+      );
+      tabsBloc.add(OpenOrFocusTab(incomingTab));
+
+      final updated = await existingBloc.stream
+          .firstWhere((s) => s is TextBookLoaded && s.highlightText.isNotEmpty)
+          .timeout(const Duration(seconds: 2)) as TextBookLoaded;
+
+      expect(updated.highlightText, 'pinpoint-value',
+          reason: 'pinpoint גובר על mark');
+      expect(updated.permanentHighlightLine, 3,
+          reason: 'sectionIndex של pinpoint גובר על permanentHighlightLine');
 
       await _closeBlocAndAllowDeferredDispose(tabsBloc);
     });
@@ -675,7 +789,8 @@ TextBookBloc _createLoadedTextBookBloc({
 }
 
 class _PinpointFakeTextBookRepository extends TextBookRepository {
-  _PinpointFakeTextBookRepository() : super(fileSystem: FileSystemData.instance);
+  _PinpointFakeTextBookRepository()
+      : super(fileSystem: FileSystemData.instance);
 
   @override
   Future<String> getBookContent(TextBook book) async {

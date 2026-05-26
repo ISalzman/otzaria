@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -652,7 +653,8 @@ Widget buildAppMenuRowContent(
       );
 
   final row = Row(
-    mainAxisSize: (isSelected || trailing != null) ? MainAxisSize.max : MainAxisSize.min,
+    mainAxisSize:
+        (isSelected || trailing != null) ? MainAxisSize.max : MainAxisSize.min,
     children: [
       if (icon != null) ...[
         Icon(icon, size: metrics.iconSize, color: foregroundColor),
@@ -840,60 +842,236 @@ PopupMenuEntry<T> buildAppSubmenuPopupMenuItem<T>({
     context: context,
     metrics: metrics,
     enabled: onSelected != null,
-    child: Builder(
-      builder: (innerContext) => InkWell(
-        onTap: onSelected == null
-            ? null
-            : () async {
-                final renderBox = innerContext.findRenderObject() as RenderBox?;
-                if (renderBox == null) return;
-                final overlayState = Overlay.maybeOf(innerContext);
-                if (overlayState == null) return;
-                final overlay =
-                    overlayState.context.findRenderObject() as RenderBox;
-                final overlaySize = overlay.size;
-                final itemRect = MatrixUtils.transformRect(
-                  renderBox.getTransformTo(overlay),
-                  Offset.zero & renderBox.size,
-                );
-                // חשב את צד הפתיחה לפי מיקום הפריט במסך:
-                // אם הפריט בחצי הימני של המסך — פתח שמאלה, אחרת ימינה
-                final openToRight = itemRect.center.dx < overlaySize.width / 2;
-                final xPos = openToRight ? itemRect.right : itemRect.left;
-                final selected = await showMenu<T>(
-                  context: innerContext,
-                  position: RelativeRect.fromRect(
-                    Rect.fromLTWH(xPos, itemRect.top, 0, 0),
-                    Offset.zero & overlaySize,
+    child: _SubmenuItemWidget<T>(
+      metrics: metrics,
+      label: label,
+      icon: icon,
+      menuChildren: menuChildren,
+      onSelected: onSelected,
+    ),
+  );
+}
+
+/// ווידג'ט פנימי לפריט תת-תפריט שתומך בפתיחה גם בלחיצה וגם ב-hover.
+class _SubmenuItemWidget<T> extends StatefulWidget {
+  final AppMenuMetrics metrics;
+  final String label;
+  final IconData? icon;
+  final List<PopupMenuEntry<T>> menuChildren;
+  final ValueChanged<T>? onSelected;
+
+  const _SubmenuItemWidget({
+    required this.metrics,
+    required this.label,
+    this.icon,
+    required this.menuChildren,
+    this.onSelected,
+  });
+
+  @override
+  State<_SubmenuItemWidget<T>> createState() => _SubmenuItemWidgetState<T>();
+}
+
+class _SubmenuItemWidgetState<T> extends State<_SubmenuItemWidget<T>> {
+  bool _submenuOpen = false;
+  Timer? _hoverTimer;
+  Timer? _closeTimer;
+  OverlayEntry? _overlayEntry;
+  Completer<T?>? _completer;
+
+  void _scheduleSubmenuOnHover(BuildContext innerContext) {
+    // חילוץ כל המידע מה-context לפני ה-async gap
+    final renderBox = innerContext.findRenderObject() as RenderBox?;
+    final overlayState = Overlay.maybeOf(innerContext);
+    if (renderBox == null || overlayState == null) return;
+    final overlay = overlayState.context.findRenderObject() as RenderBox;
+
+    _closeTimer?.cancel();
+    _closeTimer = null;
+    _hoverTimer?.cancel();
+    _hoverTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        _openSubmenuFromData(renderBox, overlay);
+      }
+    });
+  }
+
+  void _cancelHoverDelay() {
+    _hoverTimer?.cancel();
+    _hoverTimer = null;
+    // סגירת הסאבמנו כשיוצאים מהפריט (אם לא נכנסים לסאבמנו עצמו)
+    // נשתמש בעיכוב ארוך יותר כדי לאפשר כניסה לסאבמנו
+    _closeTimer?.cancel();
+    _closeTimer = Timer(const Duration(milliseconds: 400), () {
+      if (mounted && _submenuOpen) {
+        _closeSubmenu();
+      }
+    });
+  }
+
+  void _closeSubmenu() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    _completer?.complete(null);
+    _completer = null;
+    _submenuOpen = false;
+  }
+
+  @override
+  void dispose() {
+    _hoverTimer?.cancel();
+    _closeTimer?.cancel();
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    super.dispose();
+  }
+
+  Future<void> _openSubmenuFromData(
+    RenderBox renderBox,
+    RenderBox overlay,
+  ) async {
+    if (_submenuOpen) return;
+    final overlaySize = overlay.size;
+    if (!renderBox.attached) return;
+    final itemRect = MatrixUtils.transformRect(
+      renderBox.getTransformTo(overlay),
+      Offset.zero & renderBox.size,
+    );
+
+    // showMenu תמיד פותח למטה/מעלה — לא הצידה.
+    // כדי לפתוח הצידה, נשתמש ב-OverlayEntry ישירות.
+    const double estimatedSubmenuWidth = 250.0;
+    final spaceToRight = overlaySize.width - itemRect.right;
+    final spaceToLeft = itemRect.left;
+    final openToRight =
+        spaceToRight >= estimatedSubmenuWidth || spaceToRight >= spaceToLeft;
+
+    // צבע רקע מה-theme (כמו showMenu)
+    final menuColor = Theme.of(context).popupMenuTheme.color ??
+        Theme.of(context).colorScheme.surface;
+    final menuBorderRadius =
+        BorderRadius.circular(widget.metrics.menuBorderRadius);
+    final menuPadding = widget.metrics.menuPadding;
+
+    _submenuOpen = true;
+    _completer = Completer<T?>();
+
+    final menuLeft = openToRight
+        ? itemRect.right
+        : (itemRect.left - estimatedSubmenuWidth)
+            .clamp(0.0, overlaySize.width - estimatedSubmenuWidth);
+    final menuTop = itemRect.top.clamp(0.0, overlaySize.height - 10.0);
+
+    _overlayEntry = OverlayEntry(
+      builder: (overlayContext) {
+        // לא משתמשים ב-Positioned.fill עם GestureDetector כשכבת סגירה: היא
+        // הייתה גוזלת את הקליק הראשון מכל פריט בתפריט-האב, ויוצרת חוויית
+        // "קליק אחד לסגירה, קליק שני לבחירה". בלעדיה, קליק על פריט אב יעבור
+        // ישירות לתפריט האב, שיסגור בעצמו את עצמו (וב-dispose ינוקה גם
+        // ה-overlay הזה). סגירה ביציאה מהעכבר עדיין מתבצעת ע"י _closeTimer.
+        return Stack(
+          children: [
+            Positioned(
+              left: menuLeft,
+              top: menuTop,
+              child: MouseRegion(
+                // כניסה לסאבמנו מבטלת את סגירת ה-hover
+                onEnter: (_) {
+                  _hoverTimer?.cancel();
+                  _hoverTimer = null;
+                  _closeTimer?.cancel();
+                  _closeTimer = null;
+                },
+                onExit: (_) {
+                  // יציאה מהסאבמנו — סגור אחרי עיכוב קצר
+                  _closeTimer?.cancel();
+                  _closeTimer = Timer(const Duration(milliseconds: 400), () {
+                    if (mounted && _submenuOpen) {
+                      _closeSubmenu();
+                    }
+                  });
+                },
+                child: Material(
+                  elevation: 8,
+                  borderRadius: menuBorderRadius,
+                  color: menuColor,
+                  child: Padding(
+                    padding: menuPadding,
+                    child: IntrinsicWidth(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: widget.menuChildren.map((menuEntry) {
+                          if (menuEntry is PopupMenuItem<T>) {
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(
+                                  widget.metrics.itemBorderRadius),
+                              onTap: menuEntry.enabled
+                                  ? () {
+                                      final value = menuEntry.value;
+                                      _closeSubmenu();
+                                      if (value != null) {
+                                        if (mounted) {
+                                          Navigator.of(context).pop();
+                                        }
+                                        widget.onSelected?.call(value);
+                                      }
+                                    }
+                                  : null,
+                              child: menuEntry.child ?? const SizedBox.shrink(),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        }).toList(),
+                      ),
+                    ),
                   ),
-                  items: menuChildren,
-                );
-                if (selected != null) {
-                  // סוגרים קודם את התפריט הראשי, ורק אז מריצים את הפעולה.
-                  // הסדר ההפוך עלול לפוצץ דיאלוגים שה-callback פותח
-                  // (showBookSourceDialog, _handlePrintPress וכד'),
-                  // כי ה-pop היה סוגר את הדיאלוג במקום את התפריט.
-                  if (innerContext.mounted) {
-                    Navigator.of(innerContext).pop();
-                  }
-                  onSelected.call(selected);
-                }
-              },
-        borderRadius: BorderRadius.circular(metrics.itemBorderRadius),
-        child: buildAppMenuRowContent(
-          context,
-          metrics,
-          label: label,
-          icon: icon,
-          trailing: Icon(
-            // החץ מצביע לכיוון פתיחת התת-תפריט (ימינה)
-            FluentIcons.chevron_right_24_regular,
-            size: metrics.iconSize * 0.75,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+    await _completer!.future;
+    _submenuOpen = false;
+  }
+
+  Future<void> _openSubmenu(BuildContext innerContext) async {
+    if (_submenuOpen) return;
+    final renderBox = innerContext.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final overlayState = Overlay.maybeOf(innerContext);
+    if (overlayState == null) return;
+    final overlay = overlayState.context.findRenderObject() as RenderBox;
+    await _openSubmenuFromData(renderBox, overlay);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Builder(
+      builder: (innerContext) => MouseRegion(
+        onEnter: (_) => _scheduleSubmenuOnHover(innerContext),
+        onExit: (_) => _cancelHoverDelay(),
+        child: InkWell(
+          onTap: () => _openSubmenu(innerContext),
+          borderRadius: BorderRadius.circular(widget.metrics.itemBorderRadius),
+          child: buildAppMenuRowContent(
+            context,
+            widget.metrics,
+            label: widget.label,
+            icon: widget.icon,
+            trailing: Icon(
+              // החץ מצביע לכיוון פתיחת התת-תפריט (ימינה)
+              FluentIcons.chevron_right_24_regular,
+              size: widget.metrics.iconSize * 0.75,
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

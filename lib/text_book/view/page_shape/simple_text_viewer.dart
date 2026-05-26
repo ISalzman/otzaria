@@ -1,6 +1,8 @@
 import 'dart:async';
-import 'package:flutter/cupertino.dart' show cupertinoTextSelectionHandleControls;
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/cupertino.dart'
+    show cupertinoTextSelectionHandleControls;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
@@ -31,6 +33,7 @@ import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
@@ -1025,6 +1028,20 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     ]);
 
     if (widget.isMainText) {
+      // העתק קישור ישיר — מוצג רק בטקסט ראשי ואם יש book_id
+      if (state.book.id != null) {
+        entries.add(const AppContextMenuEntry.divider());
+        entries.add(AppContextMenuEntry(
+          label: 'העתק קישור ישיר',
+          icon: FluentIcons.link_24_regular,
+          childrenBuilder: () => buildDirectLinkContextMenuEntries(
+            bookId: state.book.id!,
+            index: index,
+            selectedText: capturedText,
+          ),
+        ));
+      }
+
       final pluginItems = ContextMenuRegistry.instance.getAll();
       if (pluginItems.isNotEmpty) {
         entries.add(const AppContextMenuEntry.divider());
@@ -1473,6 +1490,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         state.highlightedLine != null &&
         (segment?.containsLine(state.highlightedLine!) ??
             state.highlightedLine == primaryLineIndex);
+    // permanentHighlightLine מדגיש רקע צהוב כאשר אין highlightText (?mark בלבד)
+    final isPermanentHighlight = widget.isMainText &&
+        state.permanentHighlightLine != null &&
+        (segment?.containsLine(state.permanentHighlightLine!) ??
+            state.permanentHighlightLine == primaryLineIndex) &&
+        state.highlightText.isEmpty;
     // נתפס בזמן BUILD (כמו selectedText ב-ValueListenableBuilder של Combined),
     // כך שגם אם onSelectionChanged(null) ירוץ לפני menuBuilder, ה-closure
     // כבר סגור על הערך הנכון מהבנייה האחרונה.
@@ -1484,6 +1507,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     final theme = Theme.of(context);
     final backgroundColor = () {
+      if (isPermanentHighlight) {
+        return const Color(0xFFFFFF00).withAlpha((0.5 * 255).round());
+      }
       if (isHighlighted) {
         return theme.colorScheme.secondaryContainer
             .withAlpha((0.4 * 255).round());
@@ -1608,21 +1634,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                           ),
                         ));
 
-              // הדגשה ממוקדת מקישור עומק (רק בטקסט המרכזי, רק על הסעיף שצוין)
-              final isPinpointTarget = widget.isMainText &&
-                  state.pinpointHighlightIndex == index &&
-                  state.pinpointHighlightText != null &&
-                  state.pinpointHighlightText!.isNotEmpty;
-              final hasPinpoint =
-                  widget.isMainText && state.pinpointHighlightIndex != null;
-              final searchText = isPinpointTarget
-                  ? state.pinpointHighlightText!
-                  : (hasPinpoint
-                      ? ''
-                      : (widget.isMainText ? state.searchText : ''));
-              final useStateSearchSettings = widget.isMainText && !hasPinpoint;
-              final effectiveSearchMode =
-                  useStateSearchSettings ? state.searchMode : SearchMode.exact;
+              // הדגשת טקסט ממוקד: highlightText מופעל רק בשורה permanentHighlightLine
+              final searchText = widget.isMainText
+                  ? ((state.highlightText.isNotEmpty &&
+                          state.permanentHighlightLine == index)
+                      ? state.highlightText
+                      : state.searchText)
+                  : '';
 
               final textWidget = FutureBuilder<bool>(
                 future: removeNikudFuture,
@@ -1637,19 +1655,22 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                       removeTeamim: !settingsState.showTeamim,
                       replaceHolyNames: settingsState.replaceHolyNames,
                       searchText: searchText,
-                      searchOptions: useStateSearchSettings
-                          ? state.searchOptions
-                          : const {},
-                      alternativeWords: useStateSearchSettings
-                          ? state.alternativeWords
-                          : const {},
-                      spacingValues: useStateSearchSettings
-                          ? state.spacingValues
-                          : const {},
-                      isFuzzySearch: effectiveSearchMode == SearchMode.fuzzy,
-                      searchMode: effectiveSearchMode,
+                      highlightYellowBackground: widget.isMainText &&
+                          state.highlightText.isNotEmpty &&
+                          state.permanentHighlightLine == index,
+                      searchOptions:
+                          widget.isMainText ? state.searchOptions : const {},
+                      alternativeWords:
+                          widget.isMainText ? state.alternativeWords : const {},
+                      spacingValues:
+                          widget.isMainText ? state.spacingValues : const {},
+                      isFuzzySearch: widget.isMainText &&
+                          state.searchMode == SearchMode.fuzzy,
+                      searchMode: widget.isMainText
+                          ? state.searchMode
+                          : SearchMode.exact,
                       searchDistance:
-                          useStateSearchSettings ? state.searchDistance : 0,
+                          widget.isMainText ? state.searchDistance : 0,
                       fontSize: widget.fontSize,
                       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
                       lineHeight: settingsState.lineHeight,

@@ -182,13 +182,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     required OpenedTab incomingTab,
   }) {
     if (incomingTab is! TextBookTab) return;
-    final pinpoint = incomingTab.pinpointHighlight;
-    if (pinpoint == null || pinpoint.isEmpty) return;
-    // pinpointHighlightSectionIndex נשמר על הטאב מהקואורדינטור עם הסעיף
-    // המקורי שהמשתמש ביקש בקישור; ה‑index של הטאב כבר עלול להשתנות אם
-    // הקואורדינטור החיל fallback להיסטוריה (במסלול שאינו pinpoint).
-    final sectionIndex =
-        incomingTab.pinpointHighlightSectionIndex ?? incomingTab.index;
 
     final TextBookTab? targetText = _resolveTextBookTab(
       existingTab,
@@ -196,10 +189,29 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     );
     if (targetText == null) return;
 
+    // בוחרים את ערכי ההדגשה לפי סדר עדיפות: pinpoint (deep link עם highlight
+    // ממוקד לסעיף) מקבל קדימות. אחרת, highlightText/permanentHighlightLine
+    // (deep link ?mark). אם אין כלום — אין מה להחיל.
+    final pinpoint = incomingTab.pinpointHighlight;
+    final String effectiveHighlight;
+    final int? effectiveLine;
+    if (pinpoint != null && pinpoint.isNotEmpty) {
+      effectiveHighlight = pinpoint;
+      effectiveLine =
+          incomingTab.pinpointHighlightSectionIndex ?? incomingTab.index;
+    } else if (incomingTab.highlightText.isNotEmpty ||
+        incomingTab.permanentHighlightLine != null) {
+      effectiveHighlight = incomingTab.highlightText;
+      effectiveLine = incomingTab.permanentHighlightLine;
+    } else {
+      return;
+    }
+
     void dispatch() {
-      targetText.bloc.add(ApplyPinpointHighlight(
-        sectionIndex: sectionIndex,
-        text: pinpoint,
+      targetText.bloc.add(ApplyMarkHighlight(
+        highlightText: effectiveHighlight,
+        permanentHighlightLine: effectiveLine,
+        scrollToIndex: effectiveLine,
       ));
     }
 
@@ -208,14 +220,12 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       return;
     }
 
-    // הטאב הקיים אולי עדיין בטעינה ראשונית — נמתין להגעה ל‑Loaded פעם אחת.
-    late StreamSubscription<TextBookState> sub;
-    sub = targetText.bloc.stream.listen((state) {
-      if (state is TextBookLoaded) {
-        dispatch();
-        sub.cancel();
-      }
-    });
+    // הטאב הקיים עוד לא נטען — נחכה לטעינה ואז נחיל. .catchError() מטפל
+    // בסגירת ה-bloc מוקדמת (למשל כשהמשתמש סגר את הטאב).
+    targetText.bloc.stream
+        .firstWhere((state) => state is TextBookLoaded)
+        .then((_) => dispatch())
+        .catchError((_) {});
   }
 
   TextBookTab? _resolveTextBookTab(

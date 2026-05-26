@@ -29,8 +29,11 @@ class BookOpenCoordinator {
     bool ignoreHistory = false,
     bool requiresStableLayout = false,
     String? pinpointHighlight,
+    bool markSection = false,
+    String? markText,
     bool insertAdjacent = false,
     List<String>? initialCommentators,
+    bool navigateToPositionIfReused = false,
   }) {
     final tabsState = tabsBloc.state;
     if (tabsState.hasOpenTabs) {
@@ -42,14 +45,15 @@ class BookOpenCoordinator {
     // הלא נכון ביחס לסעיף שהמשתמש ביקש.
     final hasPinpoint =
         pinpointHighlight != null && pinpointHighlight.isNotEmpty;
+    final hasMarkText = markText != null && markText.isNotEmpty;
+    final hasAnyHighlight = hasPinpoint || hasMarkText || markSection;
 
     final historyState = historyBloc.state;
-    final lastOpened = (ignoreHistory || hasPinpoint)
+    final lastOpened = (ignoreHistory || hasAnyHighlight)
         ? null
         : historyState.history
             .firstWhereOrNull((b) => b.book.title == book.title);
-
-    final initialIndex = (ignoreHistory || hasPinpoint || index != 0)
+    final initialIndex = (ignoreHistory || hasAnyHighlight || index != 0)
         ? index
         : (lastOpened?.index ?? 0);
     // סמנטיקה של [initialCommentators]:
@@ -60,26 +64,43 @@ class BookOpenCoordinator {
         initialCommentators ?? lastOpened?.commentatorsToShow;
 
     final shouldOpenLeftPane = shouldAutoOpenReadingLeftPane();
-
     final savedViewMode =
         PageShapeSettingsManager.getViewModePreference(book.title);
+
+    // חישוב highlightText ו-permanentHighlightLine לפי סדר עדיפות:
+    // markText > markSection > pinpointHighlight
+    final String effectiveHighlightText;
+    if (hasMarkText) {
+      effectiveHighlightText = markText;
+    } else if (hasPinpoint) {
+      effectiveHighlightText = pinpointHighlight;
+    } else {
+      effectiveHighlightText = '';
+    }
+    final int? effectivePermanentHighlightLine =
+        (hasMarkText || markSection || hasPinpoint) ? initialIndex : null;
+    final String? effectivePinpoint =
+        hasPinpoint && !hasMarkText && !markSection ? pinpointHighlight : null;
 
     final tab = OpenedTab.fromBook(
       book,
       initialIndex,
       searchText: searchQuery,
+      highlightText: effectiveHighlightText,
+      permanentHighlightLine: effectivePermanentHighlightLine,
       commentators: resolvedCommentators,
       openLeftPane: shouldOpenLeftPane,
       showPageShapeView: savedViewMode,
       requiresStableLayout: requiresStableLayout,
-      pinpointHighlight: pinpointHighlight,
-      // שמירת הסעיף שהמשתמש ביקש בפירוש; משמש את מסלול ה‑reuse של TabsBloc
-      // כדי לדעת על איזה סעיף להחיל את ההדגשה גם אם הטאב הקיים נפתח באינדקס
-      // אחר.
-      pinpointHighlightSectionIndex: hasPinpoint ? initialIndex : null,
+      pinpointHighlight: effectivePinpoint,
+      pinpointHighlightSectionIndex:
+          effectivePinpoint != null ? initialIndex : null,
     );
-    tabsBloc.add(OpenOrFocusTab(tab, insertAdjacent: insertAdjacent));
-
+    tabsBloc.add(OpenOrFocusTab(
+      tab,
+      insertAdjacent: insertAdjacent,
+      navigateToPositionIfReused: navigateToPositionIfReused,
+    ));
     navigationBloc.add(const NavigateToScreen(Screen.reading));
   }
 }

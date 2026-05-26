@@ -1,7 +1,7 @@
 import 'dart:async';
+import 'package:flutter/animation.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -99,6 +99,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   @visibleForTesting
   bool get inlineNotesFullScanDoneForTesting => _inlineNotesFullScanDone;
 
+  // pinpoint highlight ממתין להחלה כשה-bloc יגיע ל-Loaded
+  ({String text, int? sectionIndex})? _pendingPinpoint;
+
   TextBookBloc({
     required this.repository,
     Future<String?> Function(
@@ -128,7 +131,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<UpdateSelectedIndex>(_onUpdateSelectedIndex);
     on<HighlightLine>(_onHighlightLine);
     on<ClearHighlightedLine>(_onClearHighlightedLine);
-    on<ApplyPinpointHighlight>(_onApplyPinpointHighlight);
+    on<ApplyMarkHighlight>(_onApplyMarkHighlight);
     on<TogglePinLeftPane>(_onTogglePinLeftPane);
     on<UpdateSearchText>(_onUpdateSearchText);
     on<ApplyFullBookContent>(_onApplyFullBookContent);
@@ -265,6 +268,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) async {
     TextBook book;
     String searchText;
+    String highlightText = '';
+    int? permanentHighlightLine;
     Map<String, Map<String, bool>> searchOptions = {};
     Map<int, List<String>> alternativeWords = {};
     Map<String, String> spacingValues = {};
@@ -287,6 +292,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final currentState = state as TextBookLoaded;
       book = currentState.book;
       searchText = currentState.searchText;
+      highlightText = currentState.highlightText;
+      permanentHighlightLine = currentState.permanentHighlightLine;
       searchOptions = currentState.searchOptions;
       alternativeWords = currentState.alternativeWords;
       spacingValues = currentState.spacingValues;
@@ -311,6 +318,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final initial = state as TextBookInitial;
       book = initial.book;
       searchText = initial.searchText;
+      highlightText = initial.highlightText;
+      permanentHighlightLine = initial.permanentHighlightLine;
       searchOptions = initial.searchOptions;
       alternativeWords = initial.alternativeWords;
       spacingValues = initial.spacingValues;
@@ -562,9 +571,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         selectedTextEnd: state is TextBookLoaded
             ? (state as TextBookLoaded).selectedTextEnd
             : null,
+        highlightText: _pendingPinpoint?.text ?? highlightText,
+        permanentHighlightLine: _pendingPinpoint != null
+            ? _pendingPinpoint!.sectionIndex
+            : permanentHighlightLine,
         pinpointHighlightIndex: pinpointHighlightIndex,
         pinpointHighlightText: pinpointHighlightText,
       ));
+
+      _pendingPinpoint = null;
 
       _resetLoadedLinksWindow(book);
 
@@ -1212,34 +1227,34 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     emit(currentState.copyWith(clearHighlight: true));
   }
 
-  void _onApplyPinpointHighlight(
-    ApplyPinpointHighlight event,
+  /// מחיל highlight מ-deep link על לוגיקת קיימת.
+  /// אם ה-bloc עדיין ב-Initial/Loading, שומר כ-pending ומחיל כשמגיע ל-Loaded.
+  void _onApplyMarkHighlight(
+    ApplyMarkHighlight event,
     Emitter<TextBookState> emit,
   ) {
-    if (state is! TextBookLoaded) return;
-    final currentState = state as TextBookLoaded;
-    final text = event.text;
-    if (text.isEmpty) return;
-
-    emit(currentState.copyWith(
-      pinpointHighlightIndex: event.sectionIndex,
-      pinpointHighlightText: text,
-      // ניקוי searchText כדי שההדגשה הממוקדת לא תתנגש עם חיפוש קיים
-      searchText: '',
-      searchOptions: const {},
-      alternativeWords: const {},
-      spacingValues: const {},
-      searchMode: SearchMode.exact,
-      searchDistance: 0,
-    ));
-
-    // גלילה לסעיף המבוקש כדי שההדגשה תהיה גלויה. השימוש ב‑isAttached מגן
-    // מפני מצב מירוץ שבו הקונטרולר עוד לא מחובר לרשימה.
-    if (scrollController.isAttached) {
-      scrollController.scrollTo(
-        index: event.sectionIndex,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+    if (state is TextBookLoaded) {
+      final currentState = state as TextBookLoaded;
+      emit(currentState.copyWith(
+        highlightText: event.highlightText,
+        permanentHighlightLine: event.permanentHighlightLine,
+        clearPermanentHighlight: event.permanentHighlightLine == null,
+        searchText: '',
+      ));
+      // גלילה לסעיף המבוקש כדי שההדגשה תהיה גלויה
+      final scrollIndex = event.scrollToIndex ?? event.permanentHighlightLine;
+      if (scrollIndex != null && scrollController.isAttached) {
+        scrollController.scrollTo(
+          index: scrollIndex,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    } else {
+      // Initial או Loading — שומרים כ-pending, יוחל ב-_onLoadContent
+      _pendingPinpoint = (
+        text: event.highlightText,
+        sectionIndex: event.permanentHighlightLine,
       );
     }
   }
