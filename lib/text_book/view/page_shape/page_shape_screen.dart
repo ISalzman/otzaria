@@ -589,9 +589,14 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         BlocListener<PersonalNotesBloc, PersonalNotesState>(
           // מאזינים גם לשינוי newNoteBookId, כדי לתפוס מעבר ישיר מטיוטה
           // של ספר אחד לטיוטה של ספר אחר (isCreatingNewNote נשאר true).
+          // וגם לשינוי newNoteLineNumber, כדי לתפוס מעבר ישיר מטיוטה של
+          // שורה לטיוטה של שורה אחרת באותו ספר — אחרת הקלקה על "הוסף
+          // הערה" בתפריט הימני בזמן שיש כבר טיוטה פתוחה לא היתה פותחת
+          // את הסיידבר אם הוא היה סגור.
           listenWhen: (previous, current) =>
               previous.isCreatingNewNote != current.isCreatingNewNote ||
-              previous.newNoteBookId != current.newNoteBookId,
+              previous.newNoteBookId != current.newNoteBookId ||
+              previous.newNoteLineNumber != current.newNoteLineNumber,
           listener: (context, state) {
             // פותחים את חלונית ההערות רק אם הטיוטה שייכת לספר של מסך זה.
             // אחרת — בטאבים אחרים (keepAlive) היה נפתח sidebar של ספר זר.
