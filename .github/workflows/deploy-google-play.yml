@@ -191,9 +191,6 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Remove PDFium WASM modules
-        run: dart run pdfrx:remove_wasm_modules
-
       - name: Generate settings search index
         run: dart run tool/generate_search_index.dart
 
