@@ -132,8 +132,6 @@ jobs:
         shell: pwsh
         run: |
           flutter pub get
-          # Prevent bundling the PDFium WASM assets into non-Web release builds.
-          dart run pdfrx:remove_wasm_modules
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
 
@@ -590,8 +588,6 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
-          # Prevent bundling the PDFium WASM assets into non-Web release builds.
-          dart run pdfrx:remove_wasm_modules
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
 
@@ -983,8 +979,6 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           flutter pub get
-          # Prevent bundling the PDFium WASM assets into non-Web release builds.
-          dart run pdfrx:remove_wasm_modules
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
           flutter build apk
@@ -1114,8 +1108,6 @@ jobs:
       - name: Prepare Flutter dependencies for macOS release
         run: |
           flutter pub get
-          # Prevent bundling the PDFium WASM assets into non-Web release builds.
-          dart run pdfrx:remove_wasm_modules
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
 
