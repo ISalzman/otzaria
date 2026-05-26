@@ -71,17 +71,20 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
   Future<void> _onPickArchiveFileRequested(
       PickArchiveFileRequested event, Emitter<EmptyLibraryState> emit) async {
-    final result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['zip', 'zst'],
-      dialogTitle: 'בחר קובץ דחוס (ZIP או ZST)',
-      lockParentWindow: true,
-    );
+    String? selectedFile = event.overrideFilePath;
+    if (selectedFile == null) {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['zip', 'zst'],
+        dialogTitle: 'בחר קובץ דחוס (ZIP או ZST)',
+        lockParentWindow: true,
+      );
 
-    if (result == null || result.files.isEmpty) return;
+      if (result == null || result.files.isEmpty) return;
 
-    final selectedFile = result.files.first.path;
-    if (selectedFile == null) return;
+      selectedFile = result.files.first.path;
+      if (selectedFile == null) return;
+    }
 
     emit(EmptyLibraryLoading(selectedPath: selectedFile));
 
@@ -424,8 +427,9 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   Future<void> _handleZstFile(
       String zstFilePath, Emitter<EmptyLibraryState> emit) async {
     try {
+      final outputDir = path.dirname(zstFilePath);
       final outputPath = path.join(
-        path.dirname(zstFilePath),
+        outputDir,
         DatabaseConstants.databaseFileName,
       );
 
@@ -437,6 +441,14 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
       await _extractCompressedDatabase(zstFilePath, outputPath);
 
+      // אם הקובץ שנבחר הוא ה-DB הראשי, חפש את 2 הקבצים האחרים של חבילת FULL
+      // (קטלוג ו-תלמוד בבלי) באותה תיקייה וחלץ גם אותם. זה חוסך למשתמש
+      // הורדה מהרשת של ~3GB אחרי שהוא כבר הוריד אותם בחבילת ה-FULL.
+      final basename = path.basename(zstFilePath).toLowerCase();
+      if (basename == DatabaseConstants.databaseArchiveFileName.toLowerCase()) {
+        await _extractBundleSiblings(outputDir, emit);
+      }
+
       emit(EmptyLibraryExtracting(
         selectedPath: zstFilePath,
         progress: 1.0,
@@ -445,13 +457,57 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
       emit(EmptyLibraryAskingDeleteZip(
         zipPath: zstFilePath,
-        extractedPath: path.dirname(zstFilePath),
+        extractedPath: outputDir,
       ));
     } catch (e) {
       emit(_error(
         errorMessage: 'שגיאה בחילוץ קובץ דחוס: $e',
         selectedPath: zstFilePath,
       ));
+    }
+  }
+
+  /// מחלץ קבצי FULL bundle נלווים (קטלוג חיצוני ו-תלמוד בבלי) אם הם
+  /// נמצאים באותה תיקייה כמו ה-DB הראשי. best-effort: כישלון בקובץ אחד
+  /// לא עוצר את האחרים, כי ה-DB הראשי כבר נחלץ בהצלחה והאפליקציה תוכל
+  /// לעבוד גם בלי הקבצים הנלווים (הם יורדו דרך הזרימה הרגילה בעת הצורך).
+  Future<void> _extractBundleSiblings(
+      String dir, Emitter<EmptyLibraryState> emit) async {
+    final catalogArchive = File(path.join(
+      dir,
+      DatabaseConstants.externalCatalogArchiveFileName,
+    ));
+    if (await catalogArchive.exists()) {
+      try {
+        emit(EmptyLibraryExtracting(
+          selectedPath: catalogArchive.path,
+          progress: 0.0,
+          message: 'מחלץ קטלוג אוצר החכמה...',
+        ));
+        await _extractCompressedDatabase(
+          catalogArchive.path,
+          path.join(dir, DatabaseConstants.externalCatalogDatabaseFileName),
+        );
+      } catch (e) {
+        debugPrint('Failed to extract bundled catalog archive: $e');
+      }
+    }
+
+    final talmudArchive = File(path.join(
+      dir,
+      DatabaseConstants.talmudBavliArchiveFileName,
+    ));
+    if (await talmudArchive.exists()) {
+      try {
+        emit(EmptyLibraryExtracting(
+          selectedPath: talmudArchive.path,
+          progress: 0.0,
+          message: 'מחלץ ספרי תלמוד בבלי...',
+        ));
+        await _extractTarArchive(talmudArchive.path, dir);
+      } catch (e) {
+        debugPrint('Failed to extract bundled Talmud Bavli archive: $e');
+      }
     }
   }
 

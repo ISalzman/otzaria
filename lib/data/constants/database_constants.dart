@@ -6,6 +6,9 @@ class DatabaseConstants {
   /// The name of the main database file
   static const String databaseFileName = 'seforim.db';
 
+  /// The name of the compressed main database archive (as published on releases).
+  static const String databaseArchiveFileName = 'seforim.db.zst';
+
   /// The name of the external catalogs database file
   static const String externalCatalogDatabaseFileName = 'otzar-HB_catalog.db';
 
@@ -15,6 +18,10 @@ class DatabaseConstants {
 
   /// The bundled PDF directory name for Talmud Bavli.
   static const String talmudBavliFolderName = 'תלמוד בבלי';
+
+  /// The name of the compressed Talmud Bavli PDF archive (tar.zst).
+  static const String talmudBavliArchiveFileName =
+      'talmud_bavli_latest.tar.zst';
 
   /// The name of the external catalogs version file in GitHub releases
   static const String externalCatalogVersionFileName = 'version.txt';
