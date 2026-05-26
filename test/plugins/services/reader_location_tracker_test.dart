@@ -16,6 +16,8 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'reader_location_tracker_test.mocks.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUpAll(() async {
     await Settings.init(cacheProvider: _MemoryCacheProvider());
   });
@@ -88,7 +90,8 @@ void main() {
       tracker.dispose();
     });
 
-    test('dispatches reader.current_ref_changed with correct payload for text tab',
+    test(
+        'dispatches reader.current_ref_changed with correct payload for text tab',
         () async {
       final textTab = TextBookTab(
         book: TextBook(title: 'בראשית'),
@@ -112,7 +115,8 @@ void main() {
       tracker.dispose();
     });
 
-    test('dispatches reader.current_ref_changed with correct payload for pdf tab',
+    test(
+        'dispatches reader.current_ref_changed with correct payload for pdf tab',
         () async {
       final pdfTab = PdfBookTab(
         book: PdfBook(title: 'מסילת ישרים', path: '/tmp/mesilat.pdf'),
@@ -165,7 +169,8 @@ void main() {
       tracker.dispose();
     });
 
-    test('dispatches again after active tab becomes null and returns', () async {
+    test('dispatches again after active tab becomes null and returns',
+        () async {
       final textTab = TextBookTab(
         book: TextBook(title: 'בראשית'),
         index: 42,

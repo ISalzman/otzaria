@@ -1,10 +1,19 @@
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/pdf_book/view/pdf_book_screen.dart';
 import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 
+import '../helpers/memory_settings_cache.dart';
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    await Settings.init(cacheProvider: MemorySettingsCache());
+  });
+
   group('resolveInitialPdfPrintPage', () {
     test('מחזירה את אותו עמוד בתצוגה רגילה', () {
       expect(
@@ -88,7 +97,8 @@ void main() {
       );
     });
 
-    test('מציגה גם בלי מפרשים נבחרים — בניגוד ל-shouldShowOpenPdfCommentaryPaneEntry',
+    test(
+        'מציגה גם בלי מפרשים נבחרים — בניגוד ל-shouldShowOpenPdfCommentaryPaneEntry',
         () {
       // הפריט הזה לא תלוי ב-hasSelectedCommentators, כדי לאפשר בחירה ראשונית
       // גם כשהבחירה ריקה (תיקון עקביות מול מסך הטקסט).
@@ -167,12 +177,10 @@ void main() {
       );
 
       expect(entry.childrenBuilder, isNotNull,
-          reason:
-              'התת-תפריט חייב להיבנות בעצלתיים (childrenBuilder), אחרת '
+          reason: 'התת-תפריט חייב להיבנות בעצלתיים (childrenBuilder), אחרת '
               'הזמן של פתיחת התפריט הראשי תלוי בכל הקישורים בעמוד');
       expect(entry.children, isNull,
-          reason:
-              'children מיידיים מאלצים בנייה upfront של כל פריטי הקישורים '
+          reason: 'children מיידיים מאלצים בנייה upfront של כל פריטי הקישורים '
               'כולל ה-FutureBuilders של displayReference');
     });
 
@@ -199,7 +207,8 @@ void main() {
       expect(entry.enabled, isTrue);
     });
 
-    test('childrenBuilder מחזיר פריט "פתח חלונית" + divider כש-showOpenLinksPaneEntry=true',
+    test(
+        'childrenBuilder מחזיר פריט "פתח חלונית" + divider כש-showOpenLinksPaneEntry=true',
         () {
       final entry = buildPdfLinksContextMenuEntry(
         relevantLinks: [makeLink()],
@@ -216,7 +225,8 @@ void main() {
       expect(children[2].isDivider, isFalse);
     });
 
-    test('childrenBuilder ללא פריט "פתח חלונית" כש-showOpenLinksPaneEntry=false',
+    test(
+        'childrenBuilder ללא פריט "פתח חלונית" כש-showOpenLinksPaneEntry=false',
         () {
       final entry = buildPdfLinksContextMenuEntry(
         relevantLinks: [makeLink(), makeLink(heRef: 'בראשית א:ב', index2: 2)],

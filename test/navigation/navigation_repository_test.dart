@@ -46,8 +46,7 @@ class _FakeProvider implements LibraryProvider {
   Future<String?> getBookText(
     String title,
     int categoryId,
-    String fileType,
-    {
+    String fileType, {
     bool preferUserBooks = false,
   }) async {
     return null;
@@ -57,8 +56,7 @@ class _FakeProvider implements LibraryProvider {
   Future<List<TocEntry>?> getBookToc(
     String title,
     int categoryId,
-    String fileType,
-    {
+    String fileType, {
     bool preferUserBooks = false,
   }) async {
     return null;
@@ -100,6 +98,8 @@ class _FakeProvider implements LibraryProvider {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   final providerManager = LibraryProviderManager.instance;
   final fileSystemProvider = FileSystemLibraryProvider.instance;
   late NavigationRepository navigationRepository;

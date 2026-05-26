@@ -72,6 +72,8 @@ BookOpenCoordinator _makeCoordinator(_CapturingTabsBloc tabsBloc) =>
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUpAll(() async {
     await Settings.init(cacheProvider: MemorySettingsCache());
   });
