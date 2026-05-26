@@ -561,8 +561,10 @@ jobs:
             libwpewebkit-1.0-dev \
             libwpebackend-fdo-1.0-dev \
             libwebkit2gtk-4.1-dev
-          # שדרוג clang ל-15 כדי שיכיר את הדגל -Wno-deprecated-literal-operator
-          # שמשתמשים בו ב-sentry-native (תלות של sentry_flutter).
+          # Pin ל-clang-15 כדי לייצב את ה-toolchain על Ubuntu 22.04.
+          # הערה: sentry-native מוסיף כיום גם דגלי warning שמוכרים רק ב-Clang
+          # חדש יותר, ולכן בשלבי הבנייה עצמם אנחנו מרככים unknown-warning-option
+          # מ-error ל-warning.
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-15 100
           sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-15 100
           # Fallback אם מסיבה כלשהי cargo לא קיים (למשל כשל זמני ב-rustup)
@@ -595,6 +597,12 @@ jobs:
         env:
           CC: clang-15
           CXX: clang++-15
+          # sentry-native (תלות של sentry_flutter) משתמש בדגלי warning שהוכרו רק
+          # ב-Clang 17+ (למשל -Wno-deprecated-literal-operator). ב-Ubuntu 22.04
+          # יש לכל היותר clang-15, וכשהוא נתקל בדגל warning לא מוכר עם -Werror
+          # זה הופך לשגיאה. הדגל הזה מבטל את ההסלמה לשגיאה ומאפשר לבנות בכל clang.
+          CFLAGS: -Wno-error=unknown-warning-option
+          CXXFLAGS: -Wno-error=unknown-warning-option
         run: |
           set -e
           tries=0
@@ -617,6 +625,8 @@ jobs:
         env:
           CC: clang-15
           CXX: clang++-15
+          CFLAGS: -Wno-error=unknown-warning-option
+          CXXFLAGS: -Wno-error=unknown-warning-option
         run: |
           set -e
 
@@ -662,6 +672,8 @@ jobs:
         env:
           CC: clang-15
           CXX: clang++-15
+          CFLAGS: -Wno-error=unknown-warning-option
+          CXXFLAGS: -Wno-error=unknown-warning-option
         run: |
           set -e
 
