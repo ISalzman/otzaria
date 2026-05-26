@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:math';
 import 'dart:async';
 import 'dart:ui' as ui;
@@ -2477,20 +2477,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       widget.tab.currentTextLineNumber = resolved.start;
       widget.tab.currentTextLineNumberEnd = resolved.end;
 
-        if (mounted) {
-          _linksLoading = false;
-          widget.tab.linksLoadingNotifier.value = false;
-          _maybeRegisterPdfCommentaryOpportunity();
-          setState(() {});
-        }
+      if (mounted) {
+        _linksLoading = false;
+        widget.tab.linksLoadingNotifier.value = false;
+        _maybeRegisterPdfCommentaryOpportunity();
+        setState(() {});
+      }
     } catch (e, stackTrace) {
       debugPrint(
           '📚 [PDF-DEBUG] ERROR in _loadPdfHeadingsAndLinks: $e\n$stackTrace');
-        if (mounted) {
-          _linksLoading = false;
-          widget.tab.linksLoadingNotifier.value = false;
-          setState(() {});
-        }
+      if (mounted) {
+        _linksLoading = false;
+        widget.tab.linksLoadingNotifier.value = false;
+        setState(() {});
+      }
     }
   }
 
@@ -2959,15 +2959,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           builder: (context, pinLeftPanel, child) => SidebarTabHeader(
             controller: _leftPaneTabController!,
             tabs: const [
-              (icon: FluentIcons.navigation_24_regular,
+              (
+                icon: FluentIcons.navigation_24_regular,
                 iconFilled: FluentIcons.navigation_24_filled,
-                label: 'ניווט'),
-              (icon: FluentIcons.search_24_regular,
+                label: 'ניווט'
+              ),
+              (
+                icon: FluentIcons.search_24_regular,
                 iconFilled: FluentIcons.search_24_filled,
-                label: 'חיפוש'),
-              (icon: FluentIcons.document_multiple_24_regular,
+                label: 'חיפוש'
+              ),
+              (
+                icon: FluentIcons.document_multiple_24_regular,
                 iconFilled: FluentIcons.document_multiple_24_filled,
-                label: 'דפים'),
+                label: 'דפים'
+              ),
             ],
             isPinned: pinLeftPanel,
             onTogglePin: MediaQuery.of(context).size.width >= 600
@@ -3751,10 +3757,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     return PopupMenuButton<PdfLayoutMode>(
       tooltip: 'בחר מצב תצוגה',
-      icon: Icon(
-        isBookViewMode
-            ? FluentIcons.book_open_24_regular
-            : FluentIcons.book_24_regular,
+      icon: Transform.scale(
+        scaleX: isBookViewMode ? 1.0 : -1.0,
+        child: Icon(
+          isBookViewMode
+              ? FluentIcons.book_open_24_regular
+              : FluentIcons.book_24_regular,
+        ),
       ),
       position: PopupMenuPosition.under,
       onSelected: (layoutMode) {
@@ -3783,7 +3792,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             value: value,
             child: Row(
               children: [
-                Icon(icon, color: isSelected ? primaryColor : null),
+                Transform.scale(
+                  scaleX: value == PdfLayoutMode.regularView ? -1.0 : 1.0,
+                  child: Icon(icon, color: isSelected ? primaryColor : null),
+                ),
                 const SizedBox(width: 12),
                 Text(text, style: style, textDirection: TextDirection.rtl),
                 if (isSelected) ...[

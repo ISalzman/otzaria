@@ -56,6 +56,12 @@ class TextBookInitial extends TextBookState {
   final bool splitedView;
   final bool showPageShapeView;
 
+  /// טקסט להדגשה בלבד — לא מפעיל חלונית חיפוש.
+  final String highlightText;
+
+  /// שורה להדגשת רקע קבועה — משמש ל-?mark deep link.
+  final int? permanentHighlightLine;
+
   /// אינדקס הסעיף שבו מותר לבצע הדגשה ממוקדת (deep link). null = אין הדגשה כזו.
   final int? pinpointHighlightIndex;
 
@@ -72,6 +78,8 @@ class TextBookInitial extends TextBookState {
       this.searchDistance = 0,
       this.splitedView = true,
       this.showPageShapeView = false,
+      this.highlightText = '',
+      this.permanentHighlightLine,
       this.pinpointHighlightIndex,
       this.pinpointHighlightText]);
 
@@ -89,14 +97,18 @@ class TextBookInitial extends TextBookState {
     this.searchDistance = 0,
     bool? splitedView,
     this.showPageShapeView = false,
+    this.highlightText = '',
+    this.permanentHighlightLine,
     this.pinpointHighlightIndex,
     this.pinpointHighlightText,
-  }) : splitedView = splitedView ?? false; // ברירת מחדל: מפרשים מתחת
+  }) : splitedView = splitedView ?? false;
 
   @override
   List<Object?> get props => [
         book.title,
         searchText,
+        highlightText,
+        permanentHighlightLine,
         _searchOptionsSignature(searchOptions),
         _alternativeWordsSignature(alternativeWords),
         _spacingValuesSignature(spacingValues),
@@ -188,6 +200,13 @@ class TextBookLoaded extends TextBookState {
   final ItemPositionsListener positionsListener;
   final ScrollOffsetController? scrollOffsetController;
 
+  /// טקסט להדגשה בלבד — לא מפעיל חלונית חיפוש.
+  final String highlightText;
+
+  /// שורה להדגשת רקע קבועה (ללא timer ניקוי) — משמש ל-?mark deep link.
+  /// מדגיש את רקע השורה בצבע secondaryContainer.
+  final int? permanentHighlightLine;
+
   const TextBookLoaded({
     required TextBook book,
     required bool showLeftPane,
@@ -235,6 +254,8 @@ class TextBookLoaded extends TextBookState {
     this.editorText,
     this.hasDraft = false,
     this.hasLinksFile = false,
+    this.highlightText = '',
+    this.permanentHighlightLine,
   }) : super(book, selectedIndex ?? 0, showLeftPane, activeCommentators);
 
   factory TextBookLoaded.initial({
@@ -333,6 +354,10 @@ class TextBookLoaded extends TextBookState {
     String? editorText,
     bool? hasDraft,
     bool? hasLinksFile,
+    // לאיפוס highlightText ו-permanentHighlightLine יש להעביר ערכים מפורשים
+    String? highlightText,
+    int? permanentHighlightLine,
+    bool clearPermanentHighlight = false,
   }) {
     return TextBookLoaded(
       book: book ?? this.book,
@@ -391,8 +416,27 @@ class TextBookLoaded extends TextBookState {
       editorText: editorText ?? this.editorText,
       hasDraft: hasDraft ?? this.hasDraft,
       hasLinksFile: hasLinksFile ?? this.hasLinksFile,
+      highlightText: highlightText ?? this.highlightText,
+      permanentHighlightLine: clearPermanentHighlight
+          ? null
+          : (permanentHighlightLine ?? this.permanentHighlightLine),
     );
   }
+
+  /// האם השורה [index] מודגשת כרקע קבוע (ללא highlightText פעיל).
+  bool isPermanentHighlight(int index) =>
+      permanentHighlightLine == index && highlightText.isEmpty;
+
+  /// האם השורה [index] מודגשת ברקע צהוב (highlightText + permanentHighlightLine).
+  bool isHighlightYellowBackground(int index) =>
+      highlightText.isNotEmpty && permanentHighlightLine == index;
+
+  /// מחרוזת החיפוש האפקטיבית לשורה [index]:
+  /// אם יש highlightText ממוקד לשורה זו — מחזיר אותו, אחרת את searchText הרגיל.
+  String getEffectiveSearchText(int index) =>
+      (highlightText.isNotEmpty && permanentHighlightLine == index)
+          ? highlightText
+          : searchText;
 
   @override
   List<Object?> get props => [
@@ -438,5 +482,7 @@ class TextBookLoaded extends TextBookState {
         editorText,
         hasDraft,
         hasLinksFile,
+        highlightText,
+        permanentHighlightLine,
       ];
 }

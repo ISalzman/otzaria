@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
+import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -716,6 +717,19 @@ class _CombinedViewState extends State<CombinedView> {
         icon: FluentIcons.document_copy_24_regular,
         onTap: _copyVisibleText,
       ),
+      // העתק קישור ישיר — מוצג רק אם יש book_id
+      if (state.book.id != null) ...[
+        const AppContextMenuEntry.divider(),
+        AppContextMenuEntry(
+          label: 'העתק קישור ישיר',
+          icon: FluentIcons.link_24_regular,
+          childrenBuilder: () => buildDirectLinkContextMenuEntries(
+            bookId: state.book.id!,
+            index: paragraphIndex,
+            selectedText: selectedText,
+          ),
+        ),
+      ],
       // פריטי תפריט מפלאגינים
       ...() {
         final pluginItems = ContextMenuRegistry.instance.getAll();
@@ -1314,6 +1328,11 @@ class _CombinedViewState extends State<CombinedView> {
     final isHighlighted = state.highlightedLine != null &&
         (segment?.containsLine(state.highlightedLine!) ??
             state.highlightedLine == primaryLineIndex);
+    // permanentHighlightLine מדגיש רקע צהוב כאשר אין highlightText (?mark בלבד)
+    final isPermanentHighlight = state.permanentHighlightLine != null &&
+        (segment?.containsLine(state.permanentHighlightLine!) ??
+            state.permanentHighlightLine == primaryLineIndex) &&
+        state.highlightText.isEmpty;
     final notesForLine =
         noteMap[primaryLineIndex + 1] ?? const <PersonalNote>[];
 
@@ -1322,6 +1341,9 @@ class _CombinedViewState extends State<CombinedView> {
       // במצב רציף ההדגשה תיעשה בתוך הפסקה (לכל שורה הצבע שלה),
       // כך שאין צבע רקע לכלל ה-tile.
       if (isContinuousParagraph) return null;
+      if (isPermanentHighlight) {
+        return const Color(0xFFFFFF00).withValues(alpha: 0.5);
+      }
       if (isHighlighted) {
         return theme.colorScheme.secondaryContainer.withValues(alpha: 0.4);
       }
@@ -1495,31 +1517,7 @@ class _CombinedViewState extends State<CombinedView> {
                           }
                         }
 
-                        // הדגשה ממוקדת מקישור עומק: רק על הסעיף שצוין, ובלי
-                        // להפעיל את שאר אפשרויות החיפוש (כתיב מלא/חסר וכו').
-                        final isPinpointTarget =
-                            state.pinpointHighlightIndex == index &&
-                                state.pinpointHighlightText != null &&
-                                state.pinpointHighlightText!.isNotEmpty;
-                        final hasPinpoint =
-                            state.pinpointHighlightIndex != null;
-                        final effectiveSearchText = isPinpointTarget
-                            ? state.pinpointHighlightText!
-                            : (hasPinpoint ? '' : state.searchText);
-                        final effectiveSearchMode =
-                            hasPinpoint ? SearchMode.exact : state.searchMode;
-                        final effectiveSearchOptions = hasPinpoint
-                            ? const <String, Map<String, bool>>{}
-                            : state.searchOptions;
-                        final effectiveAlternativeWords = hasPinpoint
-                            ? const <int, List<String>>{}
-                            : state.alternativeWords;
-                        final effectiveSpacingValues = hasPinpoint
-                            ? const <String, String>{}
-                            : state.spacingValues;
-                        final effectiveSearchDistance =
-                            hasPinpoint ? 0 : state.searchDistance;
-
+                        // הדגשת טקסט ממוקד: highlightText מופעל רק בשורה permanentHighlightLine
                         final textWidget = SmartTextWidget(
                           text: dataWithLinks,
                           widgetKey: ValueKey(
@@ -1529,14 +1527,19 @@ class _CombinedViewState extends State<CombinedView> {
                             removePunctuation: state.removePunctuation,
                             removeTeamim: !settingsState.showTeamim,
                             replaceHolyNames: settingsState.replaceHolyNames,
-                            searchText: effectiveSearchText,
-                            searchOptions: effectiveSearchOptions,
-                            alternativeWords: effectiveAlternativeWords,
-                            spacingValues: effectiveSpacingValues,
-                            isFuzzySearch:
-                                effectiveSearchMode == SearchMode.fuzzy,
-                            searchMode: effectiveSearchMode,
-                            searchDistance: effectiveSearchDistance,
+                            searchText: (state.highlightText.isNotEmpty &&
+                                    state.permanentHighlightLine == index)
+                                ? state.highlightText
+                                : state.searchText,
+                            highlightYellowBackground:
+                                state.highlightText.isNotEmpty &&
+                                    state.permanentHighlightLine == index,
+                            searchOptions: state.searchOptions,
+                            alternativeWords: state.alternativeWords,
+                            spacingValues: state.spacingValues,
+                            isFuzzySearch: state.searchMode == SearchMode.fuzzy,
+                            searchMode: state.searchMode,
+                            searchDistance: state.searchDistance,
                             fontSize: widget.textSize,
                             fontFamily: settingsState.fontFamily,
                             lineHeight: settingsState.lineHeight,

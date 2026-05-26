@@ -327,8 +327,8 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                                         children: [
                                           for (final idx in group.indices)
                                             ListTile(
-                                              key:
-                                                  tourSettingsTabTargetKeys[idx],
+                                              key: tourSettingsTabTargetKeys[
+                                                  idx],
                                               leading: Icon(
                                                 _tabsData[idx].icon,
                                                 color: colorScheme.primary,
@@ -462,6 +462,8 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                                     label: _tabsData[index].label,
                                     isSelected: _selectedIndex == index,
                                     onTap: () => _changeTab(index),
+                                    mirrorIcon: _tabsData[index].icon ==
+                                        FluentIcons.book_24_regular,
                                   ),
                                 ),
                               ),

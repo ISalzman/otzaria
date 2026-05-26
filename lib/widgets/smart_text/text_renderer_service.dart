@@ -53,6 +53,7 @@ class TextRendererService {
         spacingValues: settings.spacingValues,
         isFuzzy: settings.isFuzzySearch,
         searchDistance: settings.searchDistance,
+        yellowBackground: settings.highlightYellowBackground,
       );
     }
 

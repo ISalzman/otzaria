@@ -25,6 +25,12 @@ class TextBookTab extends OpenedTab {
 
   /// The initial search text for this tab.
   final String searchText;
+
+  /// טקסט להדגשה בלבד — לא מפעיל חלונית חיפוש.
+  final String highlightText;
+
+  /// שורה להדגשת רקע קבועה — מ-?mark deep link.
+  final int? permanentHighlightLine;
   final Map<String, Map<String, bool>> searchOptions;
   final Map<int, List<String>> alternativeWords;
   final Map<String, String> spacingValues;
@@ -83,6 +89,8 @@ class TextBookTab extends OpenedTab {
     required this.book,
     required this.index,
     this.searchText = '',
+    this.highlightText = '',
+    this.permanentHighlightLine,
     this.searchOptions = const {},
     this.alternativeWords = const {},
     this.spacingValues = const {},
@@ -129,6 +137,8 @@ class TextBookTab extends OpenedTab {
             searchMode: searchMode,
             splitedView: effectiveSplitedView,
             showPageShapeView: effectiveShowPageShapeView,
+            highlightText: highlightText,
+            permanentHighlightLine: permanentHighlightLine,
             pinpointHighlightIndex:
                 pinpointHighlight != null && pinpointHighlight!.isNotEmpty
                     ? (pinpointHighlightSectionIndex ?? index)

@@ -407,8 +407,7 @@ class ToolsScreenState extends State<ToolsScreen>
   }
 
   List<ToolDescriptor> _buildBaseDescriptors() {
-    final hiddenIds =
-        context.read<SettingsBloc>().state.hiddenBuiltInToolIds;
+    final hiddenIds = context.read<SettingsBloc>().state.hiddenBuiltInToolIds;
     return _buildAllBuiltInDescriptors()
         .where((d) => !hiddenIds.contains(d.toolId))
         .toList();
@@ -792,13 +791,14 @@ class ToolsScreenState extends State<ToolsScreen>
             onPressed: () => showModalBottomSheet(
               context: context,
               isScrollControlled: true,
-              builder: (_) => SizedBox(
+              builder: (modalContext) => SizedBox(
                 height: MediaQuery.of(context).size.height * 0.6,
                 child: PluginSidePanel(
                   onPluginSelected: (plugin) {
                     Navigator.of(context).pop();
                     openPluginTransiently(plugin);
                   },
+                  onClose: () => Navigator.of(context).pop(),
                 ),
               ),
             ),
@@ -1052,6 +1052,8 @@ class ToolsScreenState extends State<ToolsScreen>
                               onPluginSelected: (plugin) {
                                 openPluginTransiently(plugin);
                               },
+                              onClose: () =>
+                                  setState(() => _isPanelOpen = false),
                             ),
                           ),
                         ],
@@ -1078,8 +1080,7 @@ class ToolsScreenState extends State<ToolsScreen>
         BlocListener<SettingsBloc, SettingsState>(
           listenWhen: (prev, curr) =>
               prev.isOfflineMode != curr.isOfflineMode ||
-              !_setEquals(
-                  prev.hiddenBuiltInToolIds, curr.hiddenBuiltInToolIds),
+              !_setEquals(prev.hiddenBuiltInToolIds, curr.hiddenBuiltInToolIds),
           listener: (context, settingsState) {
             final blocState = context.read<PluginSystemBloc>().state;
             if (blocState is! PluginSystemLoaded) return;

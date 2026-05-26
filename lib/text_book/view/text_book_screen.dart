@@ -546,7 +546,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     // אם יש טקסט חיפוש (searchText), נתחיל בלשונית 'חיפוש' (שנמצאת במקום ה-2)
     // אחרת, נתחיל בלשונית 'ניווט' (שנמצאת במקום ה-0)
-    // הערה: נעדכן את זה שוב אחרי הבדיקה של כותרות
+    // highlightText לא פותח את חלונית החיפוש
     final int initialIndex = widget.tab.searchText.isNotEmpty ? 2 : 0;
 
     // יוצרים את בקר הלשוניות עם האינדקס ההתחלתי שקבענו
@@ -1848,9 +1848,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       icon: Icon(state.continuousReadingMode
           ? FluentIcons.text_align_justify_24_filled
           : FluentIcons.text_align_justify_24_regular),
-      tooltip: state.continuousReadingMode
-          ? 'הצג כשורות בודדות'
-          : 'הצג כטקסט רציף',
+      tooltip:
+          state.continuousReadingMode ? 'הצג כשורות בודדות' : 'הצג כטקסט רציף',
     );
   }
 
@@ -2404,16 +2403,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         SidebarTabHeader(
           controller: tabController,
           tabs: [
-            (icon: FluentIcons.navigation_24_regular,
+            (
+              icon: FluentIcons.navigation_24_regular,
               iconFilled: FluentIcons.navigation_24_filled,
-              label: 'ניווט'),
+              label: 'ניווט'
+            ),
             if (_hasAltTitles)
-              (icon: FluentIcons.list_24_regular,
+              (
+                icon: FluentIcons.list_24_regular,
                 iconFilled: FluentIcons.list_24_filled,
-                label: 'כותרות'),
-            (icon: FluentIcons.search_24_regular,
+                label: 'כותרות'
+              ),
+            (
+              icon: FluentIcons.search_24_regular,
               iconFilled: FluentIcons.search_24_filled,
-              label: 'חיפוש'),
+              label: 'חיפוש'
+            ),
           ],
           isPinned: state.pinLeftPane,
           onTogglePin: MediaQuery.of(context).size.width >= 600
@@ -2494,8 +2499,7 @@ int _bottommostVisibleIndex(TextBookLoaded state) =>
 // (`resolveTopmostSourceLine`/`resolveBottommostSourceLine`/`resolveItemIndexForSourceLine`).
 // הלוגיקה נבדקת ב-test/text_book/utils/visible_index_test.dart.
 
-int _topmostVisibleSourceLine(TextBookLoaded state) =>
-    resolveTopmostSourceLine(
+int _topmostVisibleSourceLine(TextBookLoaded state) => resolveTopmostSourceLine(
       positions: state.positionsListener.itemPositions.value,
       continuousReadingMode: state.continuousReadingMode,
       readingSegments: state.readingSegments,

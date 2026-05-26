@@ -91,6 +91,8 @@ import 'package:otzaria/tour/view/tour_overlay_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/plugins/view/plugin_background_host.dart';
 import 'package:otzaria/plugins/view/plugin_install_screen.dart';
+import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
+import 'package:otzaria/utils/navigation/external_action_dispatcher.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
 
 /// פריט מאוחד לסרגל הניווט הראשי — מייצג תוסף או כלי-מובנה שהוצמד לסרגל.
@@ -193,6 +195,8 @@ LibraryPageBuildDecision resolveLibraryPageBuildDecision({
 final GlobalKey<ToolsScreenState> moreScreenKey = GlobalKey<ToolsScreenState>();
 final GlobalKey<State<LibraryBrowser>> libraryBrowserKey =
     GlobalKey<State<LibraryBrowser>>();
+final GlobalKey<MainWindowScreenState> mainWindowScreenKey =
+    GlobalKey<MainWindowScreenState>();
 
 class MainWindowScreenState extends State<MainWindowScreen>
     with TickerProviderStateMixin {
@@ -718,27 +722,34 @@ class MainWindowScreenState extends State<MainWindowScreen>
     await _processPendingExternalActivations();
   }
 
-  Future<void> _handleExternalActivationUriString(String uriString) async {
+  Future<bool> _handleExternalActivationUriString(String uriString) async {
     if (!mounted) {
-      return;
+      return false;
     }
 
     try {
       final uri = Uri.tryParse(uriString);
-      if (uri == null) return;
+      if (uri == null) return false;
 
       final action = ExternalUriRouter.parseUri(uri);
-      if (action == null) return;
+      if (action == null) return false;
 
       await _bringWindowToFront();
-      if (!mounted) return;
-      _dispatchExternalUriAction(action);
+      if (!mounted) return false;
+      return await _dispatchExternalUriAction(action);
     } catch (e, stackTrace) {
       debugPrint(
         'Failed to process external activation "$uriString": $e\n$stackTrace',
       );
+      return false;
     }
   }
+
+  /// מטפל בקישור otzaria:// שהגיע ממקור פנימי (למשל שדה חיפוש בספרייה).
+  /// ניתן לקרוא לפונקציה זו דרך [mainWindowScreenKey]. מחזיר `true` אם הקישור
+  /// טופל בהצלחה — שדה החיפוש בספרייה משתמש בערך הזה כדי להחליט אם לנקות.
+  Future<bool> handleInternalDeepLink(String uriString) =>
+      _handleExternalActivationUriString(uriString);
 
   Future<void> _bringWindowToFront() async {
     if (!kIsWeb &&
@@ -748,30 +759,25 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
   }
 
-  void _dispatchExternalUriAction(ExternalUriAction action) {
+  /// מחזיר `true` כאשר הפעולה בוצעה במלואה (לדוגמה: ספר אומת ונפתח). חשוב
+  /// במיוחד עבור book/pdf — אם ה-id לא קיים בספרייה, מחזיר `false` כדי ששדה
+  /// החיפוש בספרייה לא ינקה את הקישור שהמשתמש הדביק.
+  Future<bool> _dispatchExternalUriAction(ExternalUriAction action) async {
     switch (action) {
       case OpenScreenAction(:final screen):
         context.read<NavigationBloc>().add(NavigateToScreen(screen));
+        return true;
       case OpenToolAction(:final toolId):
         context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
         // ToolsScreen נבנה lazy בעת המעבר ל־Screen.more, ולכן ייתכן
         // ש־moreScreenKey.currentState עדיין null בפריים הראשון. ניסיונות חוזרים
         // עם hop קצר מבטיחים שהלשונית תיפתח גם בפעם הראשונה שנכנסים אליה.
         _openToolWhenAvailable(toolId);
-      case OpenBookAction(
-          :final bookId,
-          :final index,
-          :final searchQuery,
-          :final pinpointHighlight
-        ):
-        unawaited(_openBookByExternalId(
-          bookId,
-          index: index,
-          searchQuery: searchQuery,
-          pinpointHighlight: pinpointHighlight,
-        ));
-      case OpenPdfBookAction(:final bookId, :final page):
-        unawaited(_openPdfBookByExternalId(bookId, page: page));
+        return true;
+      case OpenBookAction():
+        return await _openBookByExternalId(action);
+      case OpenPdfBookAction():
+        return await _openPdfBookByExternalId(action);
       case InstallPluginAction(:final request):
         context.read<PluginSystemBloc>().add(
               InstallRemotePluginRequested(
@@ -779,12 +785,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 forceOverwrite: request.forceOverwrite,
               ),
             );
+        return true;
       case InstallLocalPluginAction(:final archivePath):
         context
             .read<PluginSystemBloc>()
             .add(InstallPluginRequested(archivePath));
+        return true;
       case RunSearchAction(:final query):
         _runExternalSearch(query);
+        return true;
     }
   }
 
@@ -797,34 +806,47 @@ class MainWindowScreenState extends State<MainWindowScreen>
     // ברגע שהלשונית מוצגת לראשונה. ראה tantivy_full_text_search.dart:130-134.
   }
 
-  Future<void> _openBookByExternalId(
-    int bookId, {
-    int? index,
-    String? searchQuery,
-    String? pinpointHighlight,
-  }) async {
+  Future<bool> _openBookByExternalId(OpenBookAction action) async {
     final library = await DataRepository.instance.library;
-    if (!mounted) return;
-    final book = library.getAllBooks().firstWhereOrNull((b) => b.id == bookId);
+    if (!mounted) return false;
+    final book =
+        library.getAllBooks().firstWhereOrNull((b) => b.id == action.bookId);
     if (book == null) {
-      UiSnack.showError('הספר עם המזהה $bookId לא נמצא בספרייה');
-      return;
+      UiSnack.showError('הספר עם המזהה ${action.bookId} לא נמצא בספרייה');
+      return false;
     }
-    openBook(context, book, index ?? 0, searchQuery ?? '',
-        requiresStableLayout: true, pinpointHighlight: pinpointHighlight);
+    dispatchOpenBookAction(
+      action: action,
+      book: book,
+      coordinator: BookOpenCoordinator(
+        tabsBloc: context.read<TabsBloc>(),
+        historyBloc: context.read<HistoryBloc>(),
+        navigationBloc: context.read<NavigationBloc>(),
+      ),
+    );
+    return true;
   }
 
-  Future<void> _openPdfBookByExternalId(int bookId, {int? page}) async {
+  Future<bool> _openPdfBookByExternalId(OpenPdfBookAction action) async {
     final library = await DataRepository.instance.library;
-    if (!mounted) return;
+    if (!mounted) return false;
     final book = library.getAllBooks().firstWhereOrNull(
-          (b) => b is PdfBook && b.id == bookId,
+          (b) => b is PdfBook && b.id == action.bookId,
         );
     if (book == null) {
-      UiSnack.showError('ספר ה-PDF עם המזהה $bookId לא נמצא בספרייה');
-      return;
+      UiSnack.showError('ספר ה-PDF עם המזהה ${action.bookId} לא נמצא בספרייה');
+      return false;
     }
-    openBook(context, book, page ?? 1, '', requiresStableLayout: true);
+    dispatchOpenPdfBookAction(
+      action: action,
+      book: book,
+      coordinator: BookOpenCoordinator(
+        tabsBloc: context.read<TabsBloc>(),
+        historyBloc: context.read<HistoryBloc>(),
+        navigationBloc: context.read<NavigationBloc>(),
+      ),
+    );
+    return true;
   }
 
   void _openToolWhenAvailable(String toolId, {int attemptsLeft = 6}) {
@@ -2463,10 +2485,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                               isOfflineMode:
                                                   settingsState.isOfflineMode,
                                             );
-                                            final hideTools =
-                                                _isAllToolsHidden(
-                                                    settingsState,
-                                                    pluginState);
+                                            final hideTools = _isAllToolsHidden(
+                                                settingsState, pluginState);
                                             return ValueListenableBuilder<
                                                 String?>(
                                               valueListenable:
@@ -2806,6 +2826,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       tourTargetKey: tourMainNavigationTargetKeys[index],
       tourItemKey: tourMainNavigationItemTargetKeys[index],
       isTourHighlighted: isTourHighlighted,
+      mirrorIcon: item.screen == Screen.find,
     );
   }
 
