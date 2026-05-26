@@ -7,6 +7,8 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUpAll(() async {
     await Settings.init(cacheProvider: _MemoryCacheProvider());
   });
