@@ -51,6 +51,9 @@ const double _kCommentaryPaneWidthFactor = 0.17;
 /// רוחב הכותרת האנכית + רווחים + מפריד (20 לכותרת + 4 לרווח + 8 למפריד)
 const double _kCommentaryLabelAndSpacingWidth = 32.0;
 
+/// אינדקס לשונית "קישורים" ב-[LinksNotesSidebar] (0 = קישורים, 1 = הערות)
+const int _kLinksTabIndex = 0;
+
 /// מסך תצוגת צורת הדף - מציג את הטקסט המרכזי עם מפרשים מסביב
 class PageShapeScreen extends StatefulWidget {
   final Function(OpenedTab) openBookCallback;
@@ -512,10 +515,27 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     widget.sidebarTabNotifier?.value = null;
   }
 
+  /// טוגל חלונית הצד (קישורים/הערות) מקיצור Ctrl+Shift+C:
+  /// סגורה או פתוחה על "הערות" → פתח על "קישורים".
+  /// פתוחה על "קישורים" → סגור.
+  void _onToggleCommentatorsPaneRequest() {
+    if (!mounted) return;
+    setState(() {
+      if (_isLeftSidebarOpen && _leftSidebarTabIndex == _kLinksTabIndex) {
+        _isLeftSidebarOpen = false;
+      } else {
+        _isLeftSidebarOpen = true;
+        _leftSidebarTabIndex = _kLinksTabIndex;
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     widget.sidebarTabNotifier?.addListener(_handleSidebarTabRequest);
+    widget.tab?.toggleCommentatorsPaneNotifier
+        .addListener(_onToggleCommentatorsPaneRequest);
   }
 
   @override
@@ -525,11 +545,19 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       oldWidget.sidebarTabNotifier?.removeListener(_handleSidebarTabRequest);
       widget.sidebarTabNotifier?.addListener(_handleSidebarTabRequest);
     }
+    if (oldWidget.tab != widget.tab) {
+      oldWidget.tab?.toggleCommentatorsPaneNotifier
+          .removeListener(_onToggleCommentatorsPaneRequest);
+      widget.tab?.toggleCommentatorsPaneNotifier
+          .addListener(_onToggleCommentatorsPaneRequest);
+    }
   }
 
   @override
   void dispose() {
     widget.sidebarTabNotifier?.removeListener(_handleSidebarTabRequest);
+    widget.tab?.toggleCommentatorsPaneNotifier
+        .removeListener(_onToggleCommentatorsPaneRequest);
     _selectionSyncController.dispose();
     super.dispose();
   }
