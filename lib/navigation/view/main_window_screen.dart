@@ -1400,8 +1400,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (_isFindRefOpen) {
       Navigator.of(context, rootNavigator: true).pop();
     }
-    // סגירת טאבי TextBook קיימים כדי למנוע כפילות GlobalKeys
-    _closeExistingTextBookTabsForTour();
+    // לא סוגרים טאבים פתוחים: התוצאה נפתחת בסוף רשימת הטאבים (ללא
+    // insertAdjacent), כך שטאבי טקסט קיימים מעובדים לפניה ומשחררים את מפתחות
+    // הסיור לפני שהיא מקבלת אותם — בלי כפילות GlobalKeys.
     final frameCompleter = Completer<void>();
     WidgetsBinding.instance
         .addPostFrameCallback((_) => frameCompleter.complete());
@@ -1740,10 +1741,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 
   Future<void> _openTourGenesisInReader() async {
-    _closeExistingTextBookTabsForTour();
-    // Wait for the old TextBookScreen to fully deactivate before mounting a new
-    // one with the same tour GlobalKeys — avoids "Duplicate GlobalKeys" assertion
-    // and the resulting layout mutations during _RenderLayoutBuilder.performLayout.
+    // לא סוגרים טאבים פתוחים: הסיור פותח את בראשית בסוף רשימת הטאבים (ללא
+    // insertAdjacent), כך שכל טאב טקסט קיים מעובד לפניו ב-PageView ומשחרר את
+    // מפתחות הסיור לפני שבראשית מקבל אותם — בלי כפילות GlobalKeys.
+    // אם בראשית כבר פתוח, openBook יתמקד בו במקום לפתוח טאב כפול.
     final frameCompleter = Completer<void>();
     WidgetsBinding.instance
         .addPostFrameCallback((_) => frameCompleter.complete());
@@ -1764,14 +1765,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
         '',
         ignoreHistory: true,
       );
-    }
-  }
-
-  void _closeExistingTextBookTabsForTour() {
-    final tabsBloc = context.read<TabsBloc>();
-    final tabsToClose = tabsBloc.state.tabs.whereType<TextBookTab>().toList();
-    for (final tab in tabsToClose) {
-      tabsBloc.add(RemoveTab(tab));
     }
   }
 

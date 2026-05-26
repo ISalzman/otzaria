@@ -405,6 +405,76 @@ void main() {
     });
   });
 
+  // הגנת רגרסיה על הסיור המודרך: בעבר שלב "איתור מהיר" והקריאה סגרו את כל טאבי
+  // הטקסט הפתוחים לפני פתיחת "בראשית" (כדי למנוע כפילות GlobalKeys). הסגירה
+  // הוסרה מ-main_window_screen, והבטיחות מתבססת על כך שפתיחת הספר (ללא
+  // insertAdjacent) משמרת את הטאבים הקיימים ומוסיפה את הספר בסוף הרשימה — כך
+  // שב-PageView הוא מעובד אחרון וטאבי הטקסט הקיימים משחררים את מפתחות הסיור לפניו.
+  group('TabsBloc — פתיחת ספר לסיור משמרת טאבים פתוחים', () {
+    setUp(() async {
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+    });
+
+    test('פתיחת בראשית לסיור לא סוגרת טאבי טקסט פתוחים ומוסיפה אותו בסוף',
+        () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final first = _createTextTab('ספר א', categoryId: 1);
+      final second = _createTextTab('ספר ב', categoryId: 2);
+
+      bloc.add(AddTab(first));
+      bloc.add(AddTab(second));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+
+      // כך הסיור פותח את בראשית: openBook → OpenOrFocusTab ללא insertAdjacent.
+      final genesis = _createTextTab('בראשית', categoryId: 99);
+      bloc.add(OpenOrFocusTab(genesis));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 3);
+
+      expect(
+        bloc.state.tabs.map((t) => t.title),
+        containsAllInOrder(['ספר א', 'ספר ב']),
+        reason: 'הטאבים שהמשתמש פתח לפני הסיור חייבים להישמר',
+      );
+      expect(
+        bloc.state.tabs.last.title,
+        'בראשית',
+        reason: 'בראשית מתווסף בסוף → מעובד אחרון ב-PageView ולא יוצר '
+            'כפילות GlobalKeys',
+      );
+      expect(bloc.state.currentTabIndex, 2);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('פתיחת בראשית כשהוא כבר פתוח ממקדת אותו בלי לסגור או לשכפל', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final other = _createTextTab('ספר א', categoryId: 1);
+      final genesis = _createTextTab('בראשית', index: 0, categoryId: 99);
+
+      bloc.add(AddTab(other));
+      bloc.add(AddTab(genesis));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+
+      // ממקדים טאב אחר כדי לוודא שהפוקוס אכן חוזר לבראשית הקיים.
+      bloc.add(const SetCurrentTab(0));
+      await bloc.stream.firstWhere((s) => s.currentTabIndex == 0);
+
+      // הסיור פותח שוב את בראשית (אותו ספר, אותו אינדקס) → התמקדות בקיים.
+      final reopen = _createTextTab('בראשית', index: 0, categoryId: 99);
+      bloc.add(OpenOrFocusTab(reopen));
+      await bloc.stream.firstWhere((s) => s.currentTabIndex == 1);
+
+      expect(
+        bloc.state.tabs,
+        hasLength(2),
+        reason: 'אסור לשכפל את בראשית או לסגור את הטאב האחר',
+      );
+      expect(bloc.state.currentTabIndex, 1);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+  });
+
   group('TabsBloc deferred dispose', () {
     setUp(() async {
       await Settings.init(cacheProvider: _MemoryCacheProvider());
