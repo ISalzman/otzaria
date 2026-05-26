@@ -197,19 +197,20 @@ jobs:
           }
           $actualMsvcpVersion = (Get-Item $msvcpPath).VersionInfo.FileVersion
           if ($actualMsvcpVersion -ne $env:VC_REDIST_VERSION) {
-            throw @"
-VC++ runtime version mismatch on runner.
-  System32\msvcp140.dll:  $actualMsvcpVersion
-  pinned VC_REDIST_VERSION: $env:VC_REDIST_VERSION
-
-This usually means the windows-2022 runner image now ships with a newer
-VC Redist than our pin, so /install returned 1638 (no-op) and the DLLs
-we are about to bundle are NOT the ones we promised in the pin.
-
-Either bump VC_REDIST_URL / VC_REDIST_SHA256 / VC_REDIST_VERSION to the
-runner's newer version (after verifying it works), or pin the runner
-image to an older sha (runs-on: ghcr.io/actions/runner-images@sha256:...).
-"@
+            $msg = @(
+              'VC++ runtime version mismatch on runner.',
+              "  System32\msvcp140.dll:  $actualMsvcpVersion",
+              "  pinned VC_REDIST_VERSION: $env:VC_REDIST_VERSION",
+              '',
+              'This usually means the windows-2022 runner image now ships with a newer',
+              'VC Redist than our pin, so /install returned 1638 (no-op) and the DLLs',
+              'we are about to bundle are NOT the ones we promised in the pin.',
+              '',
+              'Either bump VC_REDIST_URL / VC_REDIST_SHA256 / VC_REDIST_VERSION to the',
+              "runner's newer version (after verifying it works), or pin the runner",
+              'image to an older sha (runs-on: ghcr.io/actions/runner-images@sha256:...).'
+            ) -join "`n"
+            throw $msg
           }
           Write-Host "System32 msvcp140.dll version matches pin: $actualMsvcpVersion"
           $destDir = "installer\vcredist\x64"
