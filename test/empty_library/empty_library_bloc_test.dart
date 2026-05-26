@@ -35,6 +35,129 @@ void main() {
       expect(asset.downloadUrl, 'https://example.com/seforim.db.zst');
     });
 
+    test(
+        'בחירת seforim.db.zst מחבילת FULL מחלצת גם קטלוג ותלמוד בבלי באותה תיקייה',
+        () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'otzaria-bundle-extract-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      // יצירת 3 קבצי zst דמה כפי שמוצאים אחרי חילוץ otzaria-android-full.zip:
+      final seforimZst = File(
+        path.join(tempDir.path, DatabaseConstants.databaseArchiveFileName),
+      );
+      await seforimZst.writeAsString('fake-seforim-zst');
+
+      final catalogZst = File(
+        path.join(
+          tempDir.path,
+          DatabaseConstants.externalCatalogArchiveFileName,
+        ),
+      );
+      await catalogZst.writeAsString('fake-catalog-zst');
+
+      final talmudZst = File(
+        path.join(
+          tempDir.path,
+          DatabaseConstants.talmudBavliArchiveFileName,
+        ),
+      );
+      await talmudZst.writeAsString('fake-talmud-tar-zst');
+
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+
+      final compressedExtractions = <String>[];
+      final tarExtractions = <String>[];
+
+      final bloc = EmptyLibraryBloc(
+        extractCompressedDatabase: (archivePath, outputPath) async {
+          compressedExtractions
+              .add('${path.basename(archivePath)}→${path.basename(outputPath)}');
+          await File(outputPath).writeAsBytes(const [1, 2, 3]);
+        },
+        extractTarArchive: (archivePath, outputDir) async {
+          tarExtractions
+              .add('${path.basename(archivePath)}→${path.basename(outputDir)}');
+        },
+      );
+      addTearDown(bloc.close);
+
+      final askDeleteFuture = bloc.stream
+          .where((state) => state is EmptyLibraryAskingDeleteZip)
+          .cast<EmptyLibraryAskingDeleteZip>()
+          .first;
+
+      bloc.add(PickArchiveFileRequested(overrideFilePath: seforimZst.path));
+
+      final askState = await askDeleteFuture.timeout(
+        const Duration(seconds: 5),
+      );
+
+      expect(askState.zipPath, seforimZst.path);
+      expect(askState.extractedPath, tempDir.path);
+
+      // כל 3 הקבצים חולצו ב-tap אחד:
+      expect(compressedExtractions, [
+        '${DatabaseConstants.databaseArchiveFileName}→${DatabaseConstants.databaseFileName}',
+        '${DatabaseConstants.externalCatalogArchiveFileName}→${DatabaseConstants.externalCatalogDatabaseFileName}',
+      ]);
+      expect(tarExtractions, [
+        '${DatabaseConstants.talmudBavliArchiveFileName}→${path.basename(tempDir.path)}',
+      ]);
+    });
+
+    test(
+        'בחירת seforim.db.zst לבד (בלי קבצים נלווים) מחלצת רק את ה-DB',
+        () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'otzaria-single-zst-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final seforimZst = File(
+        path.join(tempDir.path, DatabaseConstants.databaseArchiveFileName),
+      );
+      await seforimZst.writeAsString('fake-seforim-zst');
+
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+
+      final compressedExtractions = <String>[];
+      final tarExtractions = <String>[];
+
+      final bloc = EmptyLibraryBloc(
+        extractCompressedDatabase: (archivePath, outputPath) async {
+          compressedExtractions.add(path.basename(archivePath));
+          await File(outputPath).writeAsBytes(const [1, 2, 3]);
+        },
+        extractTarArchive: (archivePath, outputDir) async {
+          tarExtractions.add(path.basename(archivePath));
+        },
+      );
+      addTearDown(bloc.close);
+
+      final askDeleteFuture = bloc.stream
+          .where((state) => state is EmptyLibraryAskingDeleteZip)
+          .cast<EmptyLibraryAskingDeleteZip>()
+          .first;
+
+      bloc.add(PickArchiveFileRequested(overrideFilePath: seforimZst.path));
+
+      await askDeleteFuture.timeout(const Duration(seconds: 5));
+
+      // רק ה-DB הראשי חולץ; אין ניסיון לחלץ קבצים שאינם נמצאים.
+      expect(compressedExtractions, [DatabaseConstants.databaseArchiveFileName]);
+      expect(tarExtractions, isEmpty);
+    });
+
     test('DownloadLibraryRequested מוריד DB מהרליס האחרון ומחלץ אותו',
         () async {
       final tempDir = await Directory.systemTemp.createTemp(
