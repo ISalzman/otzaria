@@ -35,6 +35,28 @@ void main() {
     expect(steps.last.title, 'הסיור המקוצר הסתיים');
   });
 
+  test('הסיור מדלג על שלבי כלים שהוסתרו בהגדרות', () async {
+    await Settings.setValue<String>(
+      'key-hidden-builtin-tool-ids',
+      'builtin.calendar,builtin.gematria',
+    );
+
+    final steps = TourSteps.build(libraryLoaded: true);
+
+    expect(steps.any((step) => step.id == 'calendar'), isFalse);
+    expect(steps.any((step) => step.id == 'gematria'), isFalse);
+    expect(steps.any((step) => step.id == 'notes'), isTrue);
+    expect(steps.any((step) => step.id == 'tools'), isTrue);
+  });
+
+  test('הסיור מציג את כל שלבי הכלים כברירת מחדל', () {
+    final steps = TourSteps.build(libraryLoaded: true);
+
+    expect(steps.any((step) => step.id == 'calendar'), isTrue);
+    expect(steps.any((step) => step.id == 'gematria'), isTrue);
+    expect(steps.any((step) => step.id == 'notes'), isTrue);
+  });
+
   test('מציג קיצורי מקלדת לפי Settings ולא לפי ברירת מחדל קבועה', () async {
     await Settings.setValue<String>(
       'key-shortcut-open-settings',
