@@ -61,6 +61,11 @@ class SettingsRepository {
   static const String keyHebrewBooksPath = 'key-hebrew-books-path';
   static const String keyDevChannel = 'key-dev-channel';
   static const String keyCustomFolders = 'key-custom-folders';
+
+  /// כאשר מופעל, תיקיות מותאמות אישית ימוזגו לתוך עץ הספרייה הראשי
+  /// לפי שם (במקום להופיע תחת קטגוריית "ספרים אישיים"). ברירת מחדל: כבוי.
+  static const String keyMergeUserBooksIntoLibrary =
+      'key-merge-user-books-into-library';
   static const String keyEnableHtmlLinks = 'key-enable-html-links';
   static const String keyPersonalNotesCollapsedByDefault =
       'key-personal-notes-collapsed';
@@ -266,6 +271,10 @@ class SettingsRepository {
       ),
       'compactMenuMode': _settings.getValue<bool>(
         keyCompactMenuMode,
+        defaultValue: false,
+      ),
+      'mergeUserBooksIntoLibrary': _settings.getValue<bool>(
+        keyMergeUserBooksIntoLibrary,
         defaultValue: false,
       ),
       'hiddenBuiltInToolIds': _parseToolIdSet(_settings.getValue<String>(
@@ -503,6 +512,10 @@ class SettingsRepository {
 
   Future<void> updateCompactMenuMode(bool value) async {
     await _settings.setValue(keyCompactMenuMode, value);
+  }
+
+  Future<void> updateMergeUserBooksIntoLibrary(bool value) async {
+    await _settings.setValue(keyMergeUserBooksIntoLibrary, value);
   }
 
   Future<void> updateHiddenBuiltInToolIds(Set<String> value) async {
@@ -806,6 +819,9 @@ class SettingsRepository {
 
     // Protected Mode defaults
     await _settings.setValue(keyProtectedModeEnabled, false);
+
+    // מיזוג תיקיות מותאמות אישית לעץ הספרייה — ברירת מחדל כבוי
+    await _settings.setValue(keyMergeUserBooksIntoLibrary, false);
 
     await _settings.setValue('settings_initialized', true);
   }

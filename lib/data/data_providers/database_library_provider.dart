@@ -26,6 +26,8 @@ import 'package:otzaria/migration/models/alt_toc_entry.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/utils/file/docx_to_otzaria.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1819,84 +1821,190 @@ class DatabaseLibraryProvider implements LibraryProvider {
         return;
       }
 
-      // איתור / יצירה של קטגוריית "ספרים אישיים" ב-Library.
-      Category? personalCategoryInLibrary = library.subCategories
-          .where((c) => c.title == 'ספרים אישיים')
-          .firstOrNull;
-      personalCategoryInLibrary ??= () {
-        final created = Category(
-          title: 'ספרים אישיים',
-          description: metadata['ספרים אישיים']?['heDesc'] ?? '',
-          shortDescription: metadata['ספרים אישיים']?['heShortDesc'] ?? '',
-          order: personalRootInUserDb.orderIndex,
-          subCategories: [],
-          books: [],
-          parent: library,
-        );
-        library.subCategories.add(created);
-        return created;
-      }();
-
       // ID טבעי (לא offset) של "ספרים אישיים" מ-user_books.db.
       final personalRootId = personalRootInUserDb.id;
       _userBooksCategoryIds.add(personalRootId);
 
-      // ספרים שיושבים ישירות תחת "ספרים אישיים" (בד"כ אין כאלה — תיקיות
-      // הן רמה אחת מתחת — אבל מטפלים ליתר ביטחון).
-      final directBooks = (booksByCategory[personalRootInUserDb.id] ?? [])
-        ..sort((a, b) {
-          final orderA = (a['orderIndex'] as num?)?.toDouble() ?? 999.0;
-          final orderB = (b['orderIndex'] as num?)?.toDouble() ?? 999.0;
-          return orderA.compareTo(orderB);
-        });
-      for (final dbBook in directBooks) {
-        final book = _convertMinimalBookMapToBook(
-          dbBook,
-          personalCategoryInLibrary,
-          metadata,
-          authorFromDatabase: userAuthors[dbBook['id'] as int? ?? 0],
-          isUserBook: true,
-          idOverride: dbBook['id'] as int? ?? 0,
-          categoryIdOverride: personalRootId,
-        );
-        if (book == null) continue;
-        personalCategoryInLibrary.books.add(book);
-        _userBooksCachedKeys.add(BookCompositeKey.create(
-          title: book.title,
-          categoryId: personalRootId,
-          fileType: book.fileType,
-          isUserBook: true,
-        ));
-      }
+      // הגדרה: האם למזג תיקיות מותאמות אישית ישירות לעץ הראשי לפי שם
+      // (במקום להציג אותן תחת קטגוריית "ספרים אישיים" נפרדת).
+      final mergeIntoLibraryRoot = Settings.getValue<bool>(
+            SettingsRepository.keyMergeUserBooksIntoLibrary,
+            defaultValue: false,
+          ) ??
+          false;
 
-      // תתי-קטגוריות (תיקייה לכל folder מותאם אישית).
-      final children = [
+      // ילדים ישירים של "ספרים אישיים" — אלו התיקיות שהמשתמש בחר בדיאלוג
+      // הוספת תיקייה (למשל "מסמכים", "הורדות"). השם שלהן כשלעצמו אינו
+      // מהווה קטגוריה מבחינת המשתמש — הוא רק מצביע על מיקום בדיסק.
+      final pickedFolders = [
         ...?categoriesByParent[personalRootInUserDb.id],
       ]..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-      for (final child in children) {
-        final existing = personalCategoryInLibrary.subCategories
-            .where((c) => c.title == child.title)
+
+      // ספרים שיושבים ישירות תחת "ספרים אישיים" (בד"כ אין כאלה — תיקיות
+      // הן רמה אחת מתחת — אבל מטפלים ליתר ביטחון).
+      final directBooksUnderRoot =
+          (booksByCategory[personalRootInUserDb.id] ?? [])
+            ..sort((a, b) {
+              final orderA = (a['orderIndex'] as num?)?.toDouble() ?? 999.0;
+              final orderB = (b['orderIndex'] as num?)?.toDouble() ?? 999.0;
+              return orderA.compareTo(orderB);
+            });
+
+      if (mergeIntoLibraryRoot) {
+        // במצב מיזוג: גם "ספרים אישיים" וגם שם התיקייה שהמשתמש בחר
+        // (pickedFolder) לא יופיעו בעץ. הבנייה מתחילה מתת-התיקיות של
+        // התיקייה הנבחרת, וקטגוריות מתמזגות בשורש הספרייה לפי שם.
+        // ספרים שיושבים ישירות תחת "ספרים אישיים" או תחת תיקייה נבחרת
+        // נכנסים לרשימת ספרי השורש של הספרייה (`library.books`).
+        for (final dbBook in directBooksUnderRoot) {
+          final book = _convertMinimalBookMapToBook(
+            dbBook,
+            library,
+            metadata,
+            authorFromDatabase: userAuthors[dbBook['id'] as int? ?? 0],
+            isUserBook: true,
+            idOverride: dbBook['id'] as int? ?? 0,
+            categoryIdOverride: personalRootId,
+          );
+          if (book == null) continue;
+          library.books.add(book);
+          _userBooksCachedKeys.add(BookCompositeKey.create(
+            title: book.title,
+            categoryId: personalRootId,
+            fileType: book.fileType,
+            isUserBook: true,
+          ));
+        }
+
+        for (final pickedFolder in pickedFolders) {
+          _userBooksCategoryIds.add(pickedFolder.id);
+
+          // ספרים בתוך התיקייה הנבחרת עצמה — לשורש הספרייה.
+          final booksInPickedFolder =
+              (booksByCategory[pickedFolder.id] ?? [])
+                ..sort((a, b) {
+                  final orderA =
+                      (a['orderIndex'] as num?)?.toDouble() ?? 999.0;
+                  final orderB =
+                      (b['orderIndex'] as num?)?.toDouble() ?? 999.0;
+                  return orderA.compareTo(orderB);
+                });
+          for (final dbBook in booksInPickedFolder) {
+            final book = _convertMinimalBookMapToBook(
+              dbBook,
+              library,
+              metadata,
+              authorFromDatabase: userAuthors[dbBook['id'] as int? ?? 0],
+              isUserBook: true,
+              idOverride: dbBook['id'] as int? ?? 0,
+              categoryIdOverride: pickedFolder.id,
+            );
+            if (book == null) continue;
+            library.books.add(book);
+            _userBooksCachedKeys.add(BookCompositeKey.create(
+              title: book.title,
+              categoryId: pickedFolder.id,
+              fileType: book.fileType,
+              isUserBook: true,
+            ));
+          }
+
+          // תת-תיקיות של התיקייה הנבחרת — מתמזגות בשורש הספרייה לפי שם.
+          final grandchildren = [
+            ...?categoriesByParent[pickedFolder.id],
+          ]..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+          for (final grandchild in grandchildren) {
+            final existing = library.subCategories
+                .where((c) => c.title == grandchild.title)
+                .firstOrNull;
+            if (existing == null) {
+              final built = _buildUserBooksCatalogCategoryRecursive(
+                grandchild,
+                booksByCategory,
+                categoriesByParent,
+                userAuthors,
+                library,
+                metadata,
+              );
+              library.subCategories.add(built);
+            } else {
+              existing.parent = library;
+              _appendUserBooksContentToCategoryRecursive(
+                existing,
+                grandchild,
+                booksByCategory,
+                categoriesByParent,
+                userAuthors,
+                metadata,
+              );
+            }
+          }
+        }
+      } else {
+        // הזרימה הקיימת — עוטף את כל ספרי המשתמש תחת "ספרים אישיים".
+        Category? personalCategoryInLibrary = library.subCategories
+            .where((c) => c.title == 'ספרים אישיים')
             .firstOrNull;
-        if (existing == null) {
-          final builtSubCategory = _buildUserBooksCatalogCategoryRecursive(
-            child,
-            booksByCategory,
-            categoriesByParent,
-            userAuthors,
+        personalCategoryInLibrary ??= () {
+          final created = Category(
+            title: 'ספרים אישיים',
+            description: metadata['ספרים אישיים']?['heDesc'] ?? '',
+            shortDescription:
+                metadata['ספרים אישיים']?['heShortDesc'] ?? '',
+            order: personalRootInUserDb.orderIndex,
+            subCategories: [],
+            books: [],
+            parent: library,
+          );
+          library.subCategories.add(created);
+          return created;
+        }();
+
+        for (final dbBook in directBooksUnderRoot) {
+          final book = _convertMinimalBookMapToBook(
+            dbBook,
             personalCategoryInLibrary,
             metadata,
+            authorFromDatabase: userAuthors[dbBook['id'] as int? ?? 0],
+            isUserBook: true,
+            idOverride: dbBook['id'] as int? ?? 0,
+            categoryIdOverride: personalRootId,
           );
-          personalCategoryInLibrary.subCategories.add(builtSubCategory);
-        } else {
-          existing.parent = personalCategoryInLibrary;
-          _appendUserBooksContentToCategoryRecursive(
-            existing,
-            child,
-            booksByCategory,
-            categoriesByParent,
-            userAuthors,
-            metadata,
-          );
+          if (book == null) continue;
+          personalCategoryInLibrary.books.add(book);
+          _userBooksCachedKeys.add(BookCompositeKey.create(
+            title: book.title,
+            categoryId: personalRootId,
+            fileType: book.fileType,
+            isUserBook: true,
+          ));
+        }
+
+        for (final child in pickedFolders) {
+          final existing = personalCategoryInLibrary.subCategories
+              .where((c) => c.title == child.title)
+              .firstOrNull;
+          if (existing == null) {
+            final builtSubCategory = _buildUserBooksCatalogCategoryRecursive(
+              child,
+              booksByCategory,
+              categoriesByParent,
+              userAuthors,
+              personalCategoryInLibrary,
+              metadata,
+            );
+            personalCategoryInLibrary.subCategories.add(builtSubCategory);
+          } else {
+            existing.parent = personalCategoryInLibrary;
+            _appendUserBooksContentToCategoryRecursive(
+              existing,
+              child,
+              booksByCategory,
+              categoriesByParent,
+              userAuthors,
+              metadata,
+            );
+          }
         }
       }
     } catch (e, stackTrace) {

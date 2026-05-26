@@ -392,44 +392,82 @@ class _BookGridMediaColumn extends StatelessWidget {
     const double iconBoxSize = 32.0;
     const double iconSize = 16.0;
 
+    final iconContainer = Container(
+      width: iconBoxSize,
+      height: iconBoxSize,
+      decoration: BoxDecoration(
+        color: cs.secondaryContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Center(
+        child: (book is PdfBook || book.fileType == 'pdf')
+            ? Icon(
+                FluentIcons.document_pdf_24_regular,
+                color: cs.onSecondaryContainer,
+                size: iconSize,
+              )
+            : book is ExternalLibraryBook
+                ? Image.asset(
+                    (book as ExternalLibraryBook)
+                            .link
+                            .toString()
+                            .contains('tablet.otzar.org')
+                        ? 'assets/logos/otzar.ico'
+                        : 'assets/logos/hebrew_books.png',
+                    width: iconSize,
+                    height: iconSize,
+                    fit: BoxFit.contain,
+                  )
+                : Icon(
+                    book.fileType == 'docx'
+                        ? FluentIcons.document_one_page_24_regular
+                        : FluentIcons.document_text_24_regular,
+                    color: cs.onSecondaryContainer,
+                    size: iconSize,
+                  ),
+      ),
+    );
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: iconBoxSize,
-          height: iconBoxSize,
-          decoration: BoxDecoration(
-            color: cs.secondaryContainer,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Center(
-            child: (book is PdfBook || book.fileType == 'pdf')
-                ? Icon(
-                    FluentIcons.document_pdf_24_regular,
-                    color: cs.onSecondaryContainer,
-                    size: iconSize,
-                  )
-                : book is ExternalLibraryBook
-                    ? Image.asset(
-                        (book as ExternalLibraryBook)
-                                .link
-                                .toString()
-                                .contains('tablet.otzar.org')
-                            ? 'assets/logos/otzar.ico'
-                            : 'assets/logos/hebrew_books.png',
-                        width: iconSize,
-                        height: iconSize,
-                        fit: BoxFit.contain,
-                      )
-                    : Icon(
-                        book.fileType == 'docx'
-                            ? FluentIcons.document_one_page_24_regular
-                            : FluentIcons.document_text_24_regular,
-                        color: cs.onSecondaryContainer,
-                        size: iconSize,
+        book.isUserBook
+            ? Tooltip(
+                message: 'ספר אישי',
+                waitDuration: const Duration(milliseconds: 400),
+                child: SizedBox(
+                  width: iconBoxSize,
+                  height: iconBoxSize,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      iconContainer,
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: cs.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppSurfaces.card(context),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Icon(
+                            FluentIcons.person_24_regular,
+                            size: 8,
+                            color: cs.onPrimary,
+                          ),
+                        ),
                       ),
-          ),
-        ),
+                    ],
+                  ),
+                ),
+              )
+            : iconContainer,
       ],
     );
   }

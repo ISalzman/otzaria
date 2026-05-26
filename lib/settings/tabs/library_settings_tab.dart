@@ -60,6 +60,24 @@ class LibrarySettingsTab extends StatefulWidget {
       keywords: ['תיקיות', 'מותאם'],
     ),
     SettingsSearchEntry(
+      id: 'library.custom_folders.merge_into_library',
+      title: 'מיזוג ספרים אישיים לעץ הספרייה',
+      subtitle:
+          'תת-התיקיות של התיקייה הנבחרת ימוזגו לקטגוריות הראשיות לפי שם',
+      tab: SettingsTab.library,
+      cardId: 'library.custom_folders',
+      keywords: [
+        'מיזוג',
+        'ספרים אישיים',
+        'תיקיות',
+        'מותאם',
+        'מוזג',
+        'ממוזג',
+        'ספריה',
+        'עץ',
+      ],
+    ),
+    SettingsSearchEntry(
       id: 'library.search.auto_index',
       title: 'עדכון אינדקס אוטומטי',
       subtitle: 'אינדקס החיפוש יתעדכן אוטומטית',
@@ -282,7 +300,16 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
         unawaited(_refreshManualReindexRequirement(libraryState));
       },
       builder: (context, libraryState) {
-        return BlocBuilder<SettingsBloc, SettingsState>(
+        return BlocConsumer<SettingsBloc, SettingsState>(
+          // הרענון מופעל רק אחרי שה-BLoC סיים `await` של הכתיבה
+          // ל-`Settings` ופלט state חדש — אחרת `RefreshLibrary` היה
+          // עלול לרוץ לפני שהערך החדש זמין ל-`Settings.getValue`
+          // בתוך `_appendUserBooksToLibrary`.
+          listenWhen: (prev, curr) =>
+              prev.mergeUserBooksIntoLibrary != curr.mergeUserBooksIntoLibrary,
+          listener: (context, state) {
+            context.read<LibraryBloc>().add(RefreshLibrary());
+          },
           builder: (context, state) {
             // בניית כפתור בחירת תיקייה רק בדסקטופ והעברה לפאנל
             final hebrewPathWidget = !(Platform.isAndroid || Platform.isIOS)
@@ -324,8 +351,30 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                         cardId: 'library.custom_folders',
                         child: SettingsCard(
                           title: 'תיקיות מותאמות אישית',
-                          children: const [
-                            CustomFoldersTile(),
+                          children: [
+                            const CustomFoldersTile(),
+                            SwitchSettingsTile(
+                              leading: const Icon(FluentIcons.person_24_regular),
+                              title: const Text(
+                                'מיזוג ספרים אישיים לעץ הספרייה',
+                                style: kSettingsTitleStyle,
+                              ),
+                              subtitle: Text(
+                                state.mergeUserBooksIntoLibrary
+                                    ? 'תת-התיקיות של התיקייה הנבחרת ימוזגו לקטגוריות הראשיות לפי שם'
+                                    : 'תיקיות אישיות יוצגו תחת קטגוריית "ספרים אישיים"',
+                                style: kSettingsSubtitleStyle,
+                              ),
+                              value: state.mergeUserBooksIntoLibrary,
+                              onChanged: (value) {
+                                // ה-RefreshLibrary מופעל ב-listener למעלה,
+                                // אחרי שהערך החדש נשמר ב-`Settings`. אחרת
+                                // הספרייה היתה נבנית עם הערך הישן.
+                                context
+                                    .read<SettingsBloc>()
+                                    .add(UpdateMergeUserBooksIntoLibrary(value));
+                              },
+                            ),
                           ],
                         ),
                       ),
