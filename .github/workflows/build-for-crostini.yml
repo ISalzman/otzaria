@@ -40,9 +40,6 @@ jobs:
         run: |
           flutter pub get
 
-          # Prevent bundling the PDFium WASM assets into non-Web release builds.
-          dart run pdfrx:remove_wasm_modules
-
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
 
