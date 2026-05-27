@@ -159,6 +159,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   int _selectionRevision = 0; // גרסה לאיפוס SelectionArea כשבחירה חיצונית מנקה
   bool _showCommentatorsFilter = false; // האם להציג את מסך בחירת המפרשים
   bool _filterWasAutoOpened = false; // האם מסך הסינון נפתח אוטומטית (לא ידנית)
+  // latch חד-פעמי: מסמן שהפתיחה האוטומטית דרך onFilterOpenRequested כבר נשלחה.
+  // בלעדיו הקולבק היה נקרא בכל rebuild שבו עדיין אין מפרשים נבחרים (כי המסלול
+  // הזה אינו משנה את _showCommentatorsFilter), מה שמציף את ההורה ב-side effect
+  // ועלול ליצור לולאת rebuild. מתאפס כשהבחירה אינה ריקה — כדי שריקון עתידי
+  // יפתח שוב את הבחירה.
+  bool _autoFilterOpenNotified = false;
   bool _userInteractedWithFilter =
       false; // האם המשתמש בחר בעצמו בתוך פאנל הסינון
   final FocusNode _focusNode = FocusNode();
@@ -1006,17 +1012,32 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         loadingWidget: const Center(),
         builder: (context, state) {
           final selectedCommentators = _selectedCommentators(state);
+          // איפוס ה-latch: ברגע שיש בחירה לא-ריקה, ריקון עתידי שלה צריך
+          // לפתוח שוב את הבחירה (אך לא בכל rebuild בזמן שהבחירה נשארת ריקה).
+          if (selectedCommentators.isNotEmpty) {
+            _autoFilterOpenNotified = false;
+          }
           final notesIsActive =
               _allSelectedCommentators(state).contains(kNotesCommentatorTitle);
+          // כש'הערות' פעיל הוא משמש מפרש ברירת מחדל, ולכן בדרך כלל אין לפתוח
+          // אוטומטית את בחירת המפרשים. חריג: כרטיסיית המפרשים מעבירה
+          // onFilterOpenRequested ופותחת את הבחירה בלשונית צד נפרדת שאינה
+          // מסתירה את ההערות — שם יש לפתוח גם כש'הערות' פעיל, אחרת כשאין
+          // מפרשים נבחרים המשתמש נתקע על הודעת "אין הערות לקטע זה".
           final shouldAutoOpenOverrideFilter = widget.showSearch &&
               widget.onSelectedCommentatorsOverrideChanged != null &&
               selectedCommentators.isEmpty &&
-              !notesIsActive &&
+              (widget.onFilterOpenRequested != null || !notesIsActive) &&
+              !_autoFilterOpenNotified &&
               !_showCommentatorsFilter;
 
           if (shouldAutoOpenOverrideFilter) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted || _showCommentatorsFilter) return;
+              if (!mounted ||
+                  _showCommentatorsFilter ||
+                  _autoFilterOpenNotified) {
+                return;
+              }
               // בדיקה מחדש: אם המפרשים הזמינים כבר נטענו מאז תזמון הקריאה, לא פותחים את הסינון
               final currentBlocState = context.read<TextBookBloc>().state;
               if (currentBlocState is TextBookLoaded) {
@@ -1024,7 +1045,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                 if (currentSelected.isNotEmpty) return;
               }
               // אם ההורה רוצה לטפל בעצמו (לפתוח לשונית בסרגל הצד), מעבירים אליו.
+              // מסמנים את ה-latch לפני הקריאה כדי שלא נשלח שוב באותו rebuild-cycle.
               if (widget.onFilterOpenRequested != null) {
+                _autoFilterOpenNotified = true;
                 widget.onFilterOpenRequested!();
                 return;
               }
