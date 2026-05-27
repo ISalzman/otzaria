@@ -157,8 +157,7 @@ void main() {
       expect(find.text('טוען קישורים...'), findsOneWidget);
     });
 
-    testWidgets(
-        'קישור מחוץ לטווח (index1 > currentTextLineNumberEnd) לא מוצג',
+    testWidgets('קישור מחוץ לטווח (index1 > currentTextLineNumberEnd) לא מוצג',
         (tester) async {
       final tab = _tab(
         currentLine: 10,
@@ -271,8 +270,7 @@ void main() {
           openFilterRequest: notifier,
         );
 
-    testWidgets('עליה ב-counter פותחת את חלונית בחירת המפרשים',
-        (tester) async {
+    testWidgets('עליה ב-counter פותחת את חלונית בחירת המפרשים', (tester) async {
       final tab = _tab(currentLine: 10, links: [_commentaryLink(index1: 10)]);
       // מסמן מפרש פעיל כדי למנוע auto-open של ה-filter בעת build
       // (כשאין מפרשים נבחרים והם זמינים, ה-build פותח אותו אוטומטית).
@@ -365,7 +363,8 @@ void main() {
   });
 }
 
-class _RecordingTabsBloc extends Bloc<TabsEvent, TabsState> implements TabsBloc {
+class _RecordingTabsBloc extends Bloc<TabsEvent, TabsState>
+    implements TabsBloc {
   _RecordingTabsBloc() : super(TabsState.initial()) {
     on<TabsEvent>((event, emit) {
       recordedEvents.add(event);

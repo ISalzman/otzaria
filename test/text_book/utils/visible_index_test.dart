@@ -201,8 +201,7 @@ void main() {
 
   group('resolveBottommostSourceLine', () {
     test('מצב רגיל — מחזיר את ה-itemIndex המקסימלי', () {
-      final segments =
-          buildReadingSegments(['א', 'ב', 'ג'], continuous: false);
+      final segments = buildReadingSegments(['א', 'ב', 'ג'], continuous: false);
       expect(
         resolveBottommostSourceLine(
           positions: [_pos(0), _pos(1), _pos(2)],
@@ -216,8 +215,7 @@ void main() {
     test('מצב רצף — מחזיר את שורת המקור האחרונה של הפסקה האחרונה הנראית', () {
       // ['a', 'b', 'c'] במצב רצף → פסקה אחת [0,1,2].
       // segmentIndex 0 → sourceLineIndices.last = 2.
-      final segments =
-          buildReadingSegments(['a', 'b', 'c'], continuous: true);
+      final segments = buildReadingSegments(['a', 'b', 'c'], continuous: true);
       expect(
         resolveBottommostSourceLine(
           positions: [_pos(0)],
@@ -252,8 +250,7 @@ void main() {
     });
 
     test('מצב רגיל — שורה N היא segmentIndex N', () {
-      final segments =
-          buildReadingSegments(['א', 'ב', 'ג'], continuous: false);
+      final segments = buildReadingSegments(['א', 'ב', 'ג'], continuous: false);
       expect(
         resolveItemIndexForSourceLine(
           lineIndex: 1,

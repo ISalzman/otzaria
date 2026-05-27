@@ -21,7 +21,8 @@ class CopyUtils {
 
   /// מחיל העדפות העתקה על plain text ועל HTML יחד,
   /// ושומר על עקביות ביניהם גם אם ה-HTML מפוצל ע"י תגיות inline.
-  static ({String plainText, String htmlText}) applyCopyPreferencesForClipboard({
+  static ({String plainText, String htmlText})
+      applyCopyPreferencesForClipboard({
     required String plainText,
     required String htmlText,
     required bool replaceHolyNames,
@@ -82,7 +83,8 @@ class CopyUtils {
       final Map<int, String> lastByLevel = {};
       for (final entry in toc) {
         if (entry.index <= currentIndex) {
-          if (entry.level <= 1) continue; // רמה 1 = שם הספר, כבר מכוסה ע"י bookName
+          if (entry.level <= 1)
+            continue; // רמה 1 = שם הספר, כבר מכוסה ע"י bookName
           final clean = _cleanHtml(entry.text);
           if (clean.isNotEmpty) {
             lastByLevel[entry.level] = clean;

@@ -358,8 +358,8 @@ void main() {
       // הטקסט באינדקס: `הרב פלוני ז"ל` ⇒ Tantivy מפצל ל-`הרב`,`פלוני`,`ז`,`ל`.
       // השאילתה צריכה לבקש שני טוקנים סמוכים, בדיוק `ז` ו-`ל`,
       // כך שטקסטים כמו `למה זה` (טוקנים `למה`,`זה`) לא יתפסו.
-      final params =
-          SearchQueryBuilder.prepareQueryParams('ז"ל', false, 0, null, null, null);
+      final params = SearchQueryBuilder.prepareQueryParams(
+          'ז"ל', false, 0, null, null, null);
       final regexTerms = params['regexTerms'] as List<String>;
       expect(regexTerms, ['ז', 'ל']);
       expect(params['effectiveSlop'], 0);

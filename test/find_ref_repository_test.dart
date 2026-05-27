@@ -22,8 +22,9 @@ List<Map<String, dynamic>> _filterTocHierarchically(
     final level = entry['level'] as int;
     String ownPart;
     if (level <= 1) {
-      ownPart =
-          ref.startsWith('$bookTitle ') ? ref.substring(bookTitle.length + 1) : ref;
+      ownPart = ref.startsWith('$bookTitle ')
+          ? ref.substring(bookTitle.length + 1)
+          : ref;
     } else {
       final parent = entries.firstWhere(
         (e) =>
@@ -40,7 +41,8 @@ List<Map<String, dynamic>> _filterTocHierarchically(
   }
 
   // כל הצאצאים (רקורסיבי)
-  List<Map<String, dynamic>> allDescendants(List<Map<String, dynamic>> parents) {
+  List<Map<String, dynamic>> allDescendants(
+      List<Map<String, dynamic>> parents) {
     final result = <Map<String, dynamic>>[];
     for (final parent in parents) {
       final parentRef = parent['reference'] as String;
@@ -61,15 +63,18 @@ List<Map<String, dynamic>> _filterTocHierarchically(
     if (token.length == 2) {
       final c0 = token.codeUnitAt(0);
       final c1 = token.codeUnitAt(1);
-      if (c0 >= 0x05D0 && c0 <= 0x05EA && c1 >= 0x05D0 && c1 <= 0x05EA && c0 != c1) {
+      if (c0 >= 0x05D0 &&
+          c0 <= 0x05EA &&
+          c1 >= 0x05D0 &&
+          c1 <= 0x05EA &&
+          c0 != c1) {
         return [token, '${token[1]}${token[0]}'];
       }
     }
     return [token];
   }
 
-  var searchScope =
-      entries.where((e) => (e['level'] as int) == 1).toList();
+  var searchScope = entries.where((e) => (e['level'] as int) == 1).toList();
   var currentMatches = <Map<String, dynamic>>[];
 
   for (final token in queryTokens) {
@@ -79,8 +84,8 @@ List<Map<String, dynamic>> _filterTocHierarchically(
         .toList();
     if (found.isEmpty) break;
 
-    var minLevel = found.fold(
-        (found.first['level'] as int), (m, e) => (e['level'] as int) < m ? (e['level'] as int) : m);
+    var minLevel = found.fold((found.first['level'] as int),
+        (m, e) => (e['level'] as int) < m ? (e['level'] as int) : m);
     currentMatches =
         found.where((e) => (e['level'] as int) == minLevel).toList();
 
@@ -350,7 +355,8 @@ void main() {
 
     // "בראשית א" matches phrase "בראשית א" → should find "בראשית אמר" book
     expect(results.map((r) => r.title), contains('בראשית אמר'),
-        reason: 'Book whose second token starts with the query token must appear');
+        reason:
+            'Book whose second token starts with the query token must appear');
   });
 
   // ─── ספרי יסוד (foundational tier) ─────────────────────────────────────────
@@ -372,7 +378,8 @@ void main() {
     test('תנ"ך: תורה/נביאים/כתובים → tier 1', () {
       expect(FindRefRepository.classifyFoundationalTier('תנ"ך, תורה', 'בראשית'),
           1);
-      expect(FindRefRepository.classifyFoundationalTier('תנ"ך, נביאים', 'יהושע'),
+      expect(
+          FindRefRepository.classifyFoundationalTier('תנ"ך, נביאים', 'יהושע'),
           1);
       expect(
           FindRefRepository.classifyFoundationalTier('תנ"ך, כתובים', 'תהילים'),
@@ -390,7 +397,8 @@ void main() {
 
     test('משנה: "סדר X" → tier 2', () {
       expect(
-          FindRefRepository.classifyFoundationalTier('משנה, סדר מועד', 'משנה שבת'),
+          FindRefRepository.classifyFoundationalTier(
+              'משנה, סדר מועד', 'משנה שבת'),
           2);
       expect(
           FindRefRepository.classifyFoundationalTier(
@@ -407,7 +415,8 @@ void main() {
       );
       expect(
         FindRefRepository.classifyFoundationalTier(
-            'משנה, אחרונים, תוספות יום טוב, סדר מועד', 'תוספות יום טוב על משנה שבת'),
+            'משנה, אחרונים, תוספות יום טוב, סדר מועד',
+            'תוספות יום טוב על משנה שבת'),
         isNull,
       );
     });
@@ -438,14 +447,15 @@ void main() {
     test('תלמוד ירושלמי עם פירוש → null', () {
       expect(
         FindRefRepository.classifyFoundationalTier(
-            'תלמוד ירושלמי, מפרשים, פני משה, סדר מועד', 'פני משה על ירושלמי שבת'),
+            'תלמוד ירושלמי, מפרשים, פני משה, סדר מועד',
+            'פני משה על ירושלמי שבת'),
         isNull,
       );
     });
 
     test('מדרשי הלכה: tier 5', () {
-      expect(FindRefRepository.classifyFoundationalTier('מדרש, הלכה', 'ספרא'),
-          5);
+      expect(
+          FindRefRepository.classifyFoundationalTier('מדרש, הלכה', 'ספרא'), 5);
       expect(
           FindRefRepository.classifyFoundationalTier(
               'מדרש, הלכה', 'מכילתא דרבי ישמעאל'),
@@ -493,7 +503,8 @@ void main() {
         isNull,
       );
       expect(
-        FindRefRepository.classifyFoundationalTier('קבלה, זהר', 'יהל אור על ספר הזהר'),
+        FindRefRepository.classifyFoundationalTier(
+            'קבלה, זהר', 'יהל אור על ספר הזהר'),
         isNull,
       );
     });
@@ -558,7 +569,8 @@ void main() {
     });
 
     test('categoryPath ריק / null → null', () {
-      expect(FindRefRepository.classifyFoundationalTier(null, 'בראשית'), isNull);
+      expect(
+          FindRefRepository.classifyFoundationalTier(null, 'בראשית'), isNull);
       expect(FindRefRepository.classifyFoundationalTier('', 'בראשית'), isNull);
     });
 
@@ -686,8 +698,7 @@ void main() {
   // ─── הגנת hasExactNextTokenMatch ────────────────────────────────────────────
 
   group('FindRef — hasExactNextTokenMatch', () {
-    test(
-        'כשטוקן הבא הוא ספר עצמאי מדויק — TOC לא נשלף עבור הספר החיצוני',
+    test('כשטוקן הבא הוא ספר עצמאי מדויק — TOC לא נשלף עבור הספר החיצוני',
         () async {
       // תרחיש: query "תורה אור" → "תורה" הוא ספר, "אור" גם ספר עצמאי (rank=0).
       // הציפייה: TOC של "תורה" לא מסונן לפי "אור" כדי שלא ניצור פסוקים מזויפים.
@@ -706,7 +717,9 @@ void main() {
           }
           if (query == 'אור') {
             // טוקן הבא מתאים בדיוק לספר אחר → matchRank=0
-            return [_hit(bookId: 2, title: 'אור', matchRank: 0, orderIndex: 2.0)];
+            return [
+              _hit(bookId: 2, title: 'אור', matchRank: 0, orderIndex: 2.0)
+            ];
           }
           return const <ReferenceBookHit>[];
         },
@@ -721,8 +734,7 @@ void main() {
       await repo.findRefs('תורה אור');
 
       expect(tocCalled, isFalse,
-          reason:
-              'כשהטוקן הבא הוא ספר מדויק, יש לדלג על חיפוש TOC מסונן');
+          reason: 'כשהטוקן הבא הוא ספר מדויק, יש לדלג על חיפוש TOC מסונן');
     });
   });
 
@@ -766,8 +778,7 @@ void main() {
       final results = await repo.findRefs('תורה אור');
       final refs = results.map((r) => r.reference).toList();
 
-      expect(refs, contains('תורה אור'),
-          reason: 'הספר עצמו תמיד מופיע ראשון');
+      expect(refs, contains('תורה אור'), reason: 'הספר עצמו תמיד מופיע ראשון');
       expect(refs, contains('תורה אור פרשת בראשית'));
       expect(refs, contains('תורה אור פרשת נח'));
       expect(refs.contains('תורה אור פתיחה'), isFalse,
@@ -926,9 +937,7 @@ void main() {
           reason: 'נופלים ל-2 טוקן כשה-3-טוקן ריק');
     });
 
-    test(
-        'כש-2 טוקנים גם נכשלים, נופלים ל-1 טוקן',
-        () async {
+    test('כש-2 טוקנים גם נכשלים, נופלים ל-1 טוקן', () async {
       var seenQueries = <String>[];
 
       final repo = FindRefRepository(
@@ -950,7 +959,8 @@ void main() {
 
       await repo.findRefs('בראשית רבה א');
 
-      expect(seenQueries, containsAllInOrder(['בראשית רבה א', 'בראשית רבה', 'בראשית']),
+      expect(seenQueries,
+          containsAllInOrder(['בראשית רבה א', 'בראשית רבה', 'בראשית']),
           reason: 'הסולם פונה מ-3 ל-2 ל-1');
     });
   });
@@ -1170,8 +1180,8 @@ void main() {
       final results = await repo.findRefs('שבת עא ב');
 
       expect(
-        results.any((r) => r.reference.contains('עמוד ב') &&
-            r.reference.contains('עא')),
+        results.any((r) =>
+            r.reference.contains('עמוד ב') && r.reference.contains('עא')),
         isTrue,
         reason: 'חייב למצוא את עמוד ב של דף עא',
       );
@@ -1218,9 +1228,7 @@ void main() {
       final refs = results.map((r) => r.reference).toList();
 
       expect(
-        refs.any((r) =>
-            r.contains('סימן יב') &&
-            r.contains('סק ג')),
+        refs.any((r) => r.contains('סימן יב') && r.contains('סק ג')),
         isTrue,
         reason: 'חייב למצוא ס"ק ג של סימן יב',
       );
@@ -1353,7 +1361,8 @@ void main() {
         expect(
           results.any((r) => r.isAltToc && r.reference.contains('עליה ו')),
           isTrue,
-          reason: '"לך ו" ללא שם הספר חייב למצוא "עליה ו" דרך global AltToc fallback',
+          reason:
+              '"לך ו" ללא שם הספר חייב למצוא "עליה ו" דרך global AltToc fallback',
         );
       });
 
@@ -1379,8 +1388,7 @@ void main() {
   // ─── נקודות רגישות ב-AltToc ────────────────────────────────────────────────
 
   group('FindRef — AltToc נקודות רגישות', () {
-    test(
-        'global fallback מופעל כשספר אחר נמצא אבל AltToc שלו לא מתאים',
+    test('global fallback מופעל כשספר אחר נמצא אבל AltToc שלו לא מתאים',
         () async {
       // "תולדות עליה ב": "תולדות יצחק" נמצא כספר (bookHits לא ריק),
       // אבל AltToc שלו לא מחזיר תוצאות. ה-fallback חייב לרוץ ולמצוא בבראשית.
@@ -1391,18 +1399,25 @@ void main() {
         searchReferenceBooks: (query, {int limit = 50}) {
           if (query == 'תולדות') {
             return [
-              _hit(bookId: 1, title: 'תולדות יצחק', normalizedTitle: 'תולדות יצחק'),
+              _hit(
+                  bookId: 1,
+                  title: 'תולדות יצחק',
+                  normalizedTitle: 'תולדות יצחק'),
             ];
           }
           if (query == 'בראשית') {
-            return [_hit(bookId: 2, title: 'בראשית', normalizedTitle: 'בראשית')];
+            return [
+              _hit(bookId: 2, title: 'בראשית', normalizedTitle: 'בראשית')
+            ];
           }
           return const <ReferenceBookHit>[];
         },
         getTocEntriesForReference: (id, title, {queryTokens}) async => const [],
         getAltTocEntriesForReference: (id, title, {queryTokens}) async {
           if (title == 'בראשית') {
-            return [{'reference': 'תולדות עליה ב', 'segment': 100, 'level': 2}];
+            return [
+              {'reference': 'תולדות עליה ב', 'segment': 100, 'level': 2}
+            ];
           }
           return const [];
         },
@@ -1468,7 +1483,11 @@ void main() {
         searchReferenceBooks: (query, {int limit = 50}) {
           if (query == 'נח') {
             return [
-              _hit(bookId: 1, title: 'נחל שורק', normalizedTitle: 'נחל שורק', matchRank: 1),
+              _hit(
+                  bookId: 1,
+                  title: 'נחל שורק',
+                  normalizedTitle: 'נחל שורק',
+                  matchRank: 1),
             ];
           }
           return const <ReferenceBookHit>[];
@@ -1488,14 +1507,16 @@ void main() {
       );
     });
 
-    test('global fallback — מאצ\' חלקי ב-AltToc נחסם על-ידי token filter', () async {
+    test('global fallback — מאצ\' חלקי ב-AltToc נחסם על-ידי token filter',
+        () async {
       // bookHits ריק; הקאש הגלובלי כולל ערך "הפטרת נח" של "נחל שורק".
       // queryTokens filter חייב לחסום — "עליה" ו-"ב" לא ב-reference.
       final repo = FindRefRepository(
         dataRepository: MockDataRepository(),
         isReferenceBooksCacheLoaded: () => true,
         warmUpReferenceBooksCache: () async {},
-        searchReferenceBooks: (query, {int limit = 50}) => const <ReferenceBookHit>[],
+        searchReferenceBooks: (query, {int limit = 50}) =>
+            const <ReferenceBookHit>[],
         getTocEntriesForReference: (id, title, {queryTokens}) async => const [],
         getAllAltTocFlatEntries: () async => const [
           {
@@ -1584,7 +1605,9 @@ void main() {
         warmUpReferenceBooksCache: () async {},
         searchReferenceBooks: (query, {int limit = 50}) {
           if (query == 'בראשית') {
-            return [_hit(bookId: 1, title: 'בראשית', normalizedTitle: 'בראשית')];
+            return [
+              _hit(bookId: 1, title: 'בראשית', normalizedTitle: 'בראשית')
+            ];
           }
           return const <ReferenceBookHit>[];
         },
@@ -1740,13 +1763,15 @@ void main() {
       final results = await repo.findRefs('תולדות עליה ב');
 
       expect(flatCacheCalled, isFalse,
-          reason: 'TOC L2 ב-per-book → הגלובלי מדולג ע"י perBookHasSpecificMatch');
+          reason:
+              'TOC L2 ב-per-book → הגלובלי מדולג ע"י perBookHasSpecificMatch');
       expect(results.any((r) => r.isAltToc), isFalse,
           reason:
               'AltToc הגלובלי של "בראשית" לא מופיע — trade-off מודע של ההחלטה הזו');
     });
 
-    test('global flat cache: ערכי NULL בשדות אופציונליים — לא קורסים', () async {
+    test('global flat cache: ערכי NULL בשדות אופציונליים — לא קורסים',
+        () async {
       // ה-cast ב-`_getAltTocFlatCache` חייב להיות סלחני: `bookOrderIndex` /
       // `segment` / `level` / `dbLineId` יכולים להיות null מ-DB ישן/חלקי
       // ולא להפיל את כל המסלול.
@@ -1814,8 +1839,7 @@ void main() {
           return const <ReferenceBookHit>[];
         },
         getTocEntriesForReference: (id, title, {queryTokens}) async {
-          final all =
-              id == 10 ? talmudToc(title) : mishnaToc(title);
+          final all = id == 10 ? talmudToc(title) : mishnaToc(title);
           if (queryTokens == null || queryTokens.isEmpty) return all;
           return _filterTocHierarchically(all, queryTokens, title);
         },
@@ -1843,10 +1867,8 @@ void main() {
       final results = await repo.findRefs('שבת');
       expect(results, isNotEmpty);
 
-      final mishnaIdx =
-          results.indexWhere((r) => r.title.contains('משנה'));
-      final talmudIdx =
-          results.indexWhere((r) => !r.title.contains('משנה'));
+      final mishnaIdx = results.indexWhere((r) => r.title.contains('משנה'));
+      final talmudIdx = results.indexWhere((r) => !r.title.contains('משנה'));
 
       expect(mishnaIdx, isNot(-1), reason: 'משנה חייבת להופיע');
       expect(talmudIdx, isNot(-1), reason: 'גמרא חייבת להופיע');
@@ -1920,7 +1942,8 @@ void main() {
       final midrashIdx = results.indexWhere((r) => r.title == 'בראשית רבה');
       if (tanachIdx != -1 && midrashIdx != -1) {
         expect(tanachIdx, lessThan(midrashIdx),
-            reason: '"בראשית א ב" לא מוכר כגמרא — תנ"ך (orderIndex 100) לפני מדרש (5000)');
+            reason:
+                '"בראשית א ב" לא מוכר כגמרא — תנ"ך (orderIndex 100) לפני מדרש (5000)');
       }
     });
 
@@ -1964,8 +1987,7 @@ void main() {
           reason: 'ראשונים (orderIndex 4000) לפני אחרונים (orderIndex 8000)');
     });
 
-    test(
-        'ספרי יסוד עולים מעל מפרשים גם כש-orderIndex של מפרש נמוך יותר',
+    test('ספרי יסוד עולים מעל מפרשים גם כש-orderIndex של מפרש נמוך יותר',
         () async {
       // התרחיש: שאילתה "שבת יג". בספרייה יש:
       //   - "משנה שבת" (tier 2 — יסוד), orderIndex גבוה (יחסית).
@@ -2018,7 +2040,8 @@ void main() {
       expect(mishnaIdx, isNot(-1), reason: 'משנה שבת חייבת להופיע');
       expect(commentaryIdx, isNot(-1), reason: 'הפירוש חייב להופיע');
       expect(mishnaIdx, lessThan(commentaryIdx),
-          reason: 'tier 2 (משנה) קודם ל-tier=null (פירוש), ללא תלות ב-orderIndex');
+          reason:
+              'tier 2 (משנה) קודם ל-tier=null (פירוש), ללא תלות ב-orderIndex');
     });
 
     test(
@@ -2091,8 +2114,7 @@ void main() {
       // מאוחר יותר.
       final mishnaIdx = results.indexWhere((r) => r.title == 'משנה שבת');
       final bavliIdx = results.indexWhere((r) => r.title == 'שבת');
-      final yerushalmiIdx =
-          results.indexWhere((r) => r.title == 'ירושלמי שבת');
+      final yerushalmiIdx = results.indexWhere((r) => r.title == 'ירושלמי שבת');
       final rambamIdx =
           results.indexWhere((r) => r.title == 'משנה תורה, הלכות שבת');
 
@@ -2190,8 +2212,7 @@ void main() {
           getCategoryPath: (_) async => '',
         );
 
-    test(
-        'remainingTokens ריק — מחזיר כותרת הספר + כל פרקי ה-outline',
+    test('remainingTokens ריק — מחזיר כותרת הספר + כל פרקי ה-outline',
         () async {
       final repo = buildPdfRepo(outlineBuilder: (_) => outline);
 
@@ -2199,8 +2220,7 @@ void main() {
       final results = await repo.findRefs('ספר אטלס');
       final refs = results.map((r) => r.reference).toList();
 
-      expect(refs, contains('ספר אטלס'),
-          reason: 'כותרת הספר חייבת להיכלל');
+      expect(refs, contains('ספר אטלס'), reason: 'כותרת הספר חייבת להיכלל');
       expect(refs, contains('ספר אטלס פרק א'));
       expect(refs, contains('ספר אטלס פרק ב'));
       expect(refs, contains('ספר אטלס פרק ג'));
@@ -2227,8 +2247,8 @@ void main() {
 
       expect(refs, contains('ספר אטלס פרק ב'),
           reason: '"פרק ב" תואם ל-remainingToken "ב"');
-      expect(refs.any((r) => r.contains('פרק א') || r.contains('פרק ג')),
-          isFalse,
+      expect(
+          refs.any((r) => r.contains('פרק א') || r.contains('פרק ג')), isFalse,
           reason: 'פרק א ו-פרק ג לא מכילים את הטוקן "ב"');
     });
 
@@ -2247,7 +2267,8 @@ void main() {
 
       final results = await repo.findRefs('ספר אטלס פרק');
       expect(results, isEmpty,
-          reason: 'outline ריק ללא התאמה — כמו ספר DB שה-TOC שלו לא מחזיר תוצאות');
+          reason:
+              'outline ריק ללא התאמה — כמו ספר DB שה-TOC שלו לא מחזיר תוצאות');
     });
 
     test('outline entries מקבלים tocLevel=2', () async {
@@ -2306,8 +2327,7 @@ void main() {
       expect(results, hasLength(2),
           reason: 'שני קבצי PDF שונים לא יכולים להתאחד ע"י dedupe');
       final filePaths = results.map((r) => r.filePath).toSet();
-      expect(filePaths,
-          equals({'/books/atlas-v1.pdf', '/books/atlas-v2.pdf'}));
+      expect(filePaths, equals({'/books/atlas-v1.pdf', '/books/atlas-v2.pdf'}));
     });
   });
 
@@ -2391,8 +2411,7 @@ void main() {
       );
 
       final results = await repo.findRefs('נח עליה ב');
-      final altResult =
-          results.where((r) => r.isAltToc).toList();
+      final altResult = results.where((r) => r.isAltToc).toList();
 
       expect(altResult, isNotEmpty,
           reason: 'global fallback חייב להחזיר תוצאת AltToc');
@@ -2520,8 +2539,7 @@ void main() {
     test('שאילתת מילה בודדת — מחזיר כותרת ספר עם bookPath=ספרים אישיים',
         () async {
       final repo = buildPersonalRepo();
-      final results =
-          await repo.findRefs('ספר', includePersonalBooks: true);
+      final results = await repo.findRefs('ספר', includePersonalBooks: true);
       final personal = results.where((r) => r.bookPath == 'ספרים אישיים');
       expect(personal, isNotEmpty);
       expect(personal.first.title, equals('ספר פרטי'));
@@ -2551,17 +2569,15 @@ void main() {
       ]);
       final results =
           await repo.findRefs('ספר פרטי פרק', includePersonalBooks: true);
-      final personal = results
-          .where((r) => r.bookPath == 'ספרים אישיים')
-          .toList();
+      final personal =
+          results.where((r) => r.bookPath == 'ספרים אישיים').toList();
       expect(personal, hasLength(1));
       expect(personal.first.reference, equals('ספר פרטי פרק א'));
     });
 
     test('ספר שלא מתאים לשאילתה — לא מוחזר', () async {
       final repo = buildPersonalRepo();
-      final results =
-          await repo.findRefs('בראשית', includePersonalBooks: true);
+      final results = await repo.findRefs('בראשית', includePersonalBooks: true);
       expect(results.where((r) => r.bookPath == 'ספרים אישיים'), isEmpty);
     });
 
@@ -2587,8 +2603,7 @@ void main() {
       );
       final results =
           await repo.findRefs('ספר אישי', includePersonalBooks: true);
-      final personal =
-          results.where((r) => r.title == 'ספר אישי').toList();
+      final personal = results.where((r) => r.title == 'ספר אישי').toList();
       expect(personal, isNotEmpty);
       expect(personal.first.bookPath, equals('ספרים אישיים'),
           reason: 'bookPath של ספר אישי לא צריך להידרס ע"י getCategoryPath');
@@ -2604,10 +2619,8 @@ void main() {
         getAllUserBooks: () async => [],
         getUserBookTocEntries: (_, __, {queryTokens}) async => const [],
       );
-      final results =
-          await repo.findRefs('ספר', includePersonalBooks: true);
+      final results = await repo.findRefs('ספר', includePersonalBooks: true);
       expect(results.where((r) => r.bookPath == 'ספרים אישיים'), isEmpty);
     });
   });
 }
-

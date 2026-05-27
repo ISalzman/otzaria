@@ -231,16 +231,14 @@ void main() {
 
       expect(repository.savedPlugins, hasLength(1));
       expect(repository.savedPlugins.single.userOrder, 7,
-          reason:
-              'userOrder of the previously installed plugin must be '
+          reason: 'userOrder of the previously installed plugin must be '
               'preserved across updates — otherwise the user loses their '
               'manual ordering on every reinstall.');
     });
 
     test(
         'finalizeInstall leaves userOrder=null on a fresh first-time install '
-        'when no other plugin has a manual order yet',
-        () async {
+        'when no other plugin has a manual order yet', () async {
       // אין plugin קיים — repository.plugin = null
       // וגם אין סדר ידני בשום תוסף אחר — nextUserOrderForNewPlugin = null
       const pluginId = 'test.fresh.install';

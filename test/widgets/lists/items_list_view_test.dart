@@ -243,7 +243,8 @@ void main() {
         expect(find.text('הלכה'), findsOneWidget);
       });
 
-      testWidgets('groupTitleBuilder שמחזיר null לא מציג כותרת', (tester) async {
+      testWidgets('groupTitleBuilder שמחזיר null לא מציג כותרת',
+          (tester) async {
         await tester.binding.setSurfaceSize(const Size(800, 600));
         addTearDown(() => tester.binding.setSurfaceSize(null));
 

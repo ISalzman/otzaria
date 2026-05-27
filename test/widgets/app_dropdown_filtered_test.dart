@@ -41,8 +41,7 @@ void main() {
         matching: find.text(text),
       );
 
-  testWidgets(
-      'תפריט "מ-" אחרי סינון endIndex=2 מציג רק את 3 הראשונים מתוך 5',
+  testWidgets('תפריט "מ-" אחרי סינון endIndex=2 מציג רק את 3 הראשונים מתוך 5',
       (tester) async {
     const allHeaders = [
       AppMenuEntry<int>(value: 0, label: 'פרק א'),
@@ -101,8 +100,7 @@ void main() {
     expect(popupItem('פרק ה'), findsOneWidget);
   });
 
-  testWidgets('כש-end לא נבחר (null), "מ-" מציג את כל הפריטים',
-      (tester) async {
+  testWidgets('כש-end לא נבחר (null), "מ-" מציג את כל הפריטים', (tester) async {
     const allHeaders = [
       AppMenuEntry<int>(value: 0, label: 'פרק א'),
       AppMenuEntry<int>(value: 1, label: 'פרק ב'),

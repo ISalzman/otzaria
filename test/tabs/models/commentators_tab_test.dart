@@ -134,7 +134,8 @@ void main() {
       expect(json['type'], 'CommentatorsTab');
       expect(json['bookTitle'], 'ספר בדיקה');
       expect(json['sourceTab'], isA<Map<String, dynamic>>());
-      expect((json['sourceTab'] as Map<String, dynamic>)['type'], 'TextBookTab');
+      expect(
+          (json['sourceTab'] as Map<String, dynamic>)['type'], 'TextBookTab');
     });
   });
 }

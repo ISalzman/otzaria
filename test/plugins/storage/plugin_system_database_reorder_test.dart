@@ -109,8 +109,7 @@ void main() {
     test('empty ordering is a no-op (does not begin a transaction)', () {
       _seed(db, 'a', userOrder: 5);
 
-      expect(
-          () => PluginSystemDatabase.applyUserOrderUpdates(db, {}),
+      expect(() => PluginSystemDatabase.applyUserOrderUpdates(db, {}),
           returnsNormally);
 
       expect(_readUserOrder(db, 'a'), 5,
@@ -152,8 +151,8 @@ void main() {
       ''');
 
       expect(
-          () => PluginSystemDatabase.applyUserOrderUpdates(
-              db, {'a': 0, 'b': 1}),
+          () =>
+              PluginSystemDatabase.applyUserOrderUpdates(db, {'a': 0, 'b': 1}),
           throwsA(anything));
 
       // ה-rollback צריך להחזיר את 'a' לערך המקורי 100, לא לערך שנכתב באמצע.
@@ -220,10 +219,8 @@ void main() {
       }
       // למרות שה-savepoint התגלגל אחורה, הטרנזקציה החיצונית עדיין פעילה
       // ויכולה לעשות commit. ה-commit הזה צריך להצליח (לא לזרוק).
-      expect(
-          () => db.execute('COMMIT'), returnsNormally,
-          reason:
-              'outer transaction must still be live after inner SAVEPOINT '
+      expect(() => db.execute('COMMIT'), returnsNormally,
+          reason: 'outer transaction must still be live after inner SAVEPOINT '
               'rollback');
 
       expect(innerFailed, isTrue);

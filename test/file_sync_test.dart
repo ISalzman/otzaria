@@ -158,7 +158,6 @@ void main() {
 
       expect(chain, isEmpty);
     });
-
   });
 
   group('FileSyncRepository.splitSqlStatements', () {
@@ -234,8 +233,7 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
       }
     });
 
-    test('checkForUpdates returns the contiguous diff chain',
-        () async {
+    test('checkForUpdates returns the contiguous diff chain', () async {
       final repository = FileSyncRepository(
         githubOwner: 'Otzaria',
         repositoryName: 'SeforimLibrary',

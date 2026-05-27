@@ -214,8 +214,7 @@ void main() {
       expect(copiedText, contains('HTML'));
     });
 
-    testWidgets(
-        'כאשר replaceHolyNames פעיל, הטקסט המועתק כולל החלפת שמות קודש',
+    testWidgets('כאשר replaceHolyNames פעיל, הטקסט המועתק כולל החלפת שמות קודש',
         (tester) async {
       final holyNamesSettingsBloc = MockSettingsBloc();
       addTearDown(holyNamesSettingsBloc.close);

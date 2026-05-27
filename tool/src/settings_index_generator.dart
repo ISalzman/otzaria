@@ -83,7 +83,8 @@ GenerateResult generateSettingsSearchIndex(Directory packageRoot) {
     ..writeln('// GENERATED CODE — DO NOT MODIFY BY HAND.')
     ..writeln('//')
     ..writeln('// אינדקס חיפוש מאוחד של ההגדרות. נוצר אוטומטית מתוך')
-    ..writeln('// הצהרות `static const searchEntries` בקבצים תחת lib/settings/.')
+    ..writeln(
+        '// הצהרות `static const searchEntries` בקבצים תחת lib/settings/.')
     ..writeln('')
     ..writeln(
         "import 'package:$packageName/settings/search/settings_search_models.dart';");
@@ -127,8 +128,7 @@ GenerateResult generateSettingsSearchIndex(Directory packageRoot) {
 /// במקום לקודד שם קשיח. נכשל בקול אם השדה לא נמצא — עדיף שגיאה ברורה
 /// מאשר אינדקס שגוי בשקט.
 String _readPackageName(Directory packageRoot) {
-  final pubspec =
-      File.fromUri(packageRoot.uri.resolve(pubspecRelativePath));
+  final pubspec = File.fromUri(packageRoot.uri.resolve(pubspecRelativePath));
   if (!pubspec.existsSync()) {
     throw StateError('pubspec.yaml not found at: ${pubspec.path}');
   }
@@ -177,14 +177,12 @@ List<_FoundDecl> _findDeclarations(
     ).firstMatch(classBody);
     if (entriesDecl == null) continue;
 
-    final tabMatch =
-        RegExp(r'tab:\s*SettingsTab\.(\w+)').firstMatch(classBody);
+    final tabMatch = RegExp(r'tab:\s*SettingsTab\.(\w+)').firstMatch(classBody);
     final tabValue = tabMatch?.group(1) ?? 'zzz';
 
     final libIndex = relPath.indexOf('lib/');
-    final libRelPath = libIndex >= 0
-        ? relPath.substring(libIndex + 'lib/'.length)
-        : relPath;
+    final libRelPath =
+        libIndex >= 0 ? relPath.substring(libIndex + 'lib/'.length) : relPath;
 
     results.add(_FoundDecl(
       className: className,

@@ -310,7 +310,8 @@ void main() {
       // בלי categoryId, ה-resolver עובר ב-findIn לפי הסדר — וכש-preferUserBooks
       // אמת, הוא מסנן רק user_books בקריאה הראשונה.
       expect(userBook, 'תוכן משתמש',
-          reason: 'preferUserBooks=true בוחר את הוריאנט המתאים גם בלי categoryId');
+          reason:
+              'preferUserBooks=true בוחר את הוריאנט המתאים גם בלי categoryId');
       // ולהפך — בלי preferUserBooks, יכול לחזור כל מפתח שתואם. כאן עם
       // findIn((_) => true) המעבר עובר על המפתחות לפי סדר המפה — בלי דרישה
       // מי הראשון. הנקודה היא שלפחות אחד מהם חוזר ולא null.

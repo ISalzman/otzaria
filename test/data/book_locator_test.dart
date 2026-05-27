@@ -38,8 +38,7 @@ void main() {
         SettingsRepository.keyLibraryPath, libraryPath);
     await Settings.setValue<String>(
         SettingsRepository.keyLibraryFolderName, '');
-    await Settings.setValue<String>(
-        SettingsRepository.keyDbEffectivePath, '');
+    await Settings.setValue<String>(SettingsRepository.keyDbEffectivePath, '');
 
     final dbPath = path.join(libraryPath, DatabaseConstants.databaseFileName);
     seforimDb = MyDatabase.withPath(dbPath);
@@ -82,8 +81,7 @@ void main() {
 
   group('BookLocator.locateBook', () {
     test('מאתר ספר ב-seforim DB לפי categoryId', () async {
-      final catId =
-          await insertBookFor(repo: seforimRepo, title: 'בראשית');
+      final catId = await insertBookFor(repo: seforimRepo, title: 'בראשית');
 
       final location = await BookLocator.locateBook(
         'בראשית',
@@ -96,8 +94,7 @@ void main() {
       expect(location.repository, isNotNull);
     });
 
-    test(
-        'עם categoryId — מתעלם מקטגוריית "ספרים אישיים" כשאין categoryPath',
+    test('עם categoryId — מתעלם מקטגוריית "ספרים אישיים" כשאין categoryPath',
         () async {
       // נשתמש בקטגוריה ברירת מחדל (לא ספרים אישיים) → מחפש ב-seforim כברירה.
       final userBooksRepo = await UserBooksDatabaseHolder.instance.repository;
@@ -115,13 +112,11 @@ void main() {
       expect(location!.book?.title, 'ספר משתמש');
     });
 
-    test(
-        'עם category שהיא "ספרים אישיים" → preferUserBooks=true בחיפוש',
+    test('עם category שהיא "ספרים אישיים" → preferUserBooks=true בחיפוש',
         () async {
       // מכניסים ספר בשני ה-DBs באותה כותרת — צריך לבחור ב-user_books.
       final userBooksRepo = await UserBooksDatabaseHolder.instance.repository;
-      final userCatId =
-          await insertBookFor(repo: userBooksRepo, title: 'כפול');
+      final userCatId = await insertBookFor(repo: userBooksRepo, title: 'כפול');
       await insertBookFor(
           repo: seforimRepo, title: 'כפול', categoryTitle: 'הלכה');
 
@@ -160,8 +155,7 @@ void main() {
       expect(location.book?.title, 'רק כותרת');
     });
 
-    test('ספר שלא קיים בשום DB — מחזיר null (כי גם File System ריק)',
-        () async {
+    test('ספר שלא קיים בשום DB — מחזיר null (כי גם File System ריק)', () async {
       final location = await BookLocator.locateBook('לא קיים');
 
       expect(location, isNull);
@@ -170,11 +164,9 @@ void main() {
 
   group('BookLocator.bookExists / getBookFromDatabase', () {
     test('bookExists=true עבור ספר ב-DB', () async {
-      final catId =
-          await insertBookFor(repo: seforimRepo, title: 'ויקרא');
+      final catId = await insertBookFor(repo: seforimRepo, title: 'ויקרא');
 
-      final exists =
-          await BookLocator.bookExists('ויקרא', categoryId: catId);
+      final exists = await BookLocator.bookExists('ויקרא', categoryId: catId);
 
       expect(exists, isTrue);
     });
@@ -186,8 +178,7 @@ void main() {
     });
 
     test('getBookFromDatabase מחזיר את הרשומה מ-DB', () async {
-      final catId =
-          await insertBookFor(repo: seforimRepo, title: 'במדבר');
+      final catId = await insertBookFor(repo: seforimRepo, title: 'במדבר');
 
       final book =
           await BookLocator.getBookFromDatabase('במדבר', categoryId: catId);

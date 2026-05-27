@@ -35,7 +35,8 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        expect(widgetKey.currentState!.controller, isNot(same(initialController)));
+        expect(
+            widgetKey.currentState!.controller, isNot(same(initialController)));
         expect(find.text('page-2'), findsOneWidget);
         expect(find.text('page-1'), findsNothing);
         expect(find.text('page-3'), findsNothing);
@@ -104,8 +105,9 @@ class _OrientationAwarePageViewState extends State<_OrientationAwarePageView> {
 
         return PageView(
           controller: _controller,
-          scrollDirection:
-              orientation == Orientation.landscape ? Axis.vertical : Axis.horizontal,
+          scrollDirection: orientation == Orientation.landscape
+              ? Axis.vertical
+              : Axis.horizontal,
           physics: const NeverScrollableScrollPhysics(),
           children: List.generate(
             5,

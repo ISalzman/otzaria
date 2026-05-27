@@ -70,8 +70,7 @@ void main() {
         expect(
           source.contains(handler),
           isFalse,
-          reason:
-              'אסור להשתמש ב-$handler ב-PdfBookScreen. '
+          reason: 'אסור להשתמש ב-$handler ב-PdfBookScreen. '
               'גלילת טראקפד צריכה להיות מטופלת ע"י pdfrx (handlePointerSignalEvent) '
               'ולא ע"י translate ידני על ה-matrix.',
         );
@@ -97,8 +96,7 @@ void main() {
         expect(
           source.contains(symbol),
           isFalse,
-          reason:
-              'הסמל $symbol הוא חלק ממימוש גלילה עצמאית שהוסר בקומיט '
+          reason: 'הסמל $symbol הוא חלק ממימוש גלילה עצמאית שהוסר בקומיט '
               '3f6600693335d04d38754abf7ab8cbfb21d1c032. '
               'אסור להחזיר אותו — אם יש בעיה בגלילה, פתור אותה דרך פרמטרים '
               'של pdfrx (scrollByMouseWheel וכו\').',
@@ -106,7 +104,8 @@ void main() {
       }
     });
 
-    test('onPointerSignal רק מאציל ל-handlePointerSignalEvent, ולא מבצע translate ידני',
+    test(
+        'onPointerSignal רק מאציל ל-handlePointerSignalEvent, ולא מבצע translate ידני',
         () {
       // המימוש הלגיטימי היחיד הוא להאציל ל-API של pdfrx
       // (handlePointerSignalEvent) — לא לחשב delta ולקרוא ל-goTo.
@@ -142,8 +141,7 @@ void main() {
         expect(
           RegExp(r'pdfViewerController\.goTo\s*\(').hasMatch(slice),
           isFalse,
-          reason:
-              'תוך onPointerSignal אסור לקרוא ל-pdfViewerController.goTo — '
+          reason: 'תוך onPointerSignal אסור לקרוא ל-pdfViewerController.goTo — '
               'יש להעביר את האירוע ל-handlePointerSignalEvent.',
         );
       }
@@ -159,8 +157,7 @@ void main() {
       expect(
         hasGesturesImport,
         isFalse,
-        reason:
-            'אין צורך ב-package:flutter/gestures.dart ב-PdfBookScreen. '
+        reason: 'אין צורך ב-package:flutter/gestures.dart ב-PdfBookScreen. '
             'הוא היה דרוש רק עבור PointerScrollEvent / PointerPanZoomUpdateEvent '
             'במימוש הגלילה העצמאית שהוסר.',
       );

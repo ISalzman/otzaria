@@ -100,7 +100,8 @@ void main() {
       expect(find.widgetWithText(FilterChip, 'הלכה'), findsOneWidget);
     });
 
-    testWidgets('לחיצה על צ\'יפ מסננת את הרשימה לאותו workspace', (tester) async {
+    testWidgets('לחיצה על צ\'יפ מסננת את הרשימה לאותו workspace',
+        (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 

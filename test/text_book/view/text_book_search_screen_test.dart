@@ -451,7 +451,8 @@ void main() {
       await tester.pump();
 
       expect(find.text('כתובת_0'), findsOneWidget,
-          reason: 'הכותרת הראשונה אמורה להישאר גלויה כשכל התוצאות בתוך הוויופורט');
+          reason:
+              'הכותרת הראשונה אמורה להישאר גלויה כשכל התוצאות בתוך הוויופורט');
       expect(tester.getTopLeft(find.text('כתובת_0')), initialTopLeft,
           reason: 'אסור לגלול את רשימת התוצאות אם היעד כבר גלוי');
     },

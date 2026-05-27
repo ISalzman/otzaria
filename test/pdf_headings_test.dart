@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/pdf_headings.dart';
-import 'package:otzaria/migration/models/toc_entry.dart'
-    as migration_models;
+import 'package:otzaria/migration/models/toc_entry.dart' as migration_models;
 
 void main() {
   group('PdfHeadings DB map builder', () {

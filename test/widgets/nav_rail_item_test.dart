@@ -49,8 +49,8 @@ void main() {
         // ה-tree צריך להכיל ImageIcon, לא Icon רגיל עם IconData fallback.
         expect(find.byType(ImageIcon), findsOneWidget);
         expect(
-          find.byWidgetPredicate((w) =>
-              w is Icon && w.icon == FluentIcons.wrench_24_regular),
+          find.byWidgetPredicate(
+              (w) => w is Icon && w.icon == FluentIcons.wrench_24_regular),
           findsNothing,
           reason:
               'P3 regression: image-based built-in tools must NOT fall back '
@@ -85,8 +85,7 @@ void main() {
         expect(unselectedColor, isNotNull);
         expect(selectedColor, isNotNull);
         expect(selectedColor, isNot(equals(unselectedColor)),
-            reason:
-                'selected and unselected states must use different colors '
+            reason: 'selected and unselected states must use different colors '
                 'so the user sees which item is active');
       },
     );
@@ -112,8 +111,8 @@ void main() {
         expect(find.byType(ImageIcon), findsOneWidget);
         // ה-Icon לא צריך להתרנדר — ImageIcon מחליף אותו לחלוטין
         expect(
-          find.byWidgetPredicate((w) =>
-              w is Icon && w.icon == FluentIcons.wrench_24_regular),
+          find.byWidgetPredicate(
+              (w) => w is Icon && w.icon == FluentIcons.wrench_24_regular),
           findsNothing,
         );
       },

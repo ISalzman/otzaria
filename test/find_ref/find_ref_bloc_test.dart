@@ -97,7 +97,8 @@ void main() {
       wait: _kPastDebounce,
       expect: () => [
         isA<FindRefLoading>(),
-        isA<FindRefError>().having((s) => s.message, 'message', contains('DB error')),
+        isA<FindRefError>()
+            .having((s) => s.message, 'message', contains('DB error')),
       ],
     );
   });

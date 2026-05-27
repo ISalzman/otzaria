@@ -88,7 +88,8 @@ void main() {
       expect(result.first['v'], 'hello');
     });
 
-    test('try/catch סביב WAL - מדמה DB שממשיך לפעול גם ללא הצלחת WAL', () async {
+    test('try/catch סביב WAL - מדמה DB שממשיך לפעול גם ללא הצלחת WAL',
+        () async {
       // אין דרך קלה לנעול DB בצורה שתגרום ל-PRAGMA WAL להיכשל.
       // הטסט מוודא שהלוגיקה של try/catch עצמה נכונה:
       // אם זורקים שגיאה, ממשיכים לפעול.

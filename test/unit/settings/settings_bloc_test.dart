@@ -372,9 +372,8 @@ void main() {
       blocTest<SettingsBloc, SettingsState>(
         'persists the new set and emits state with updated pinned set',
         build: () {
-          when(mockRepository
-                  .updateBuiltInToolsPinnedToNavRail(const {'builtin.calendar'}))
-              .thenAnswer((_) async {});
+          when(mockRepository.updateBuiltInToolsPinnedToNavRail(
+              const {'builtin.calendar'})).thenAnswer((_) async {});
           return settingsBloc;
         },
         act: (bloc) => bloc.add(
@@ -392,6 +391,5 @@ void main() {
         },
       );
     });
-
   });
 }

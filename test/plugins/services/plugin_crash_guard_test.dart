@@ -84,8 +84,7 @@ void main() {
       expect(decoded['blocked'], ['com.a.plugin', 'com.b.plugin']);
     });
 
-    test('survives a corrupted file (silently falls back to empty)',
-        () async {
+    test('survives a corrupted file (silently falls back to empty)', () async {
       final file = File(p.join(tempDir.path, 'plugin_crash_guard.json'));
       await file.writeAsString('this is not valid json');
 
@@ -112,8 +111,7 @@ void main() {
       // as long as it's not '0.9.91+90910', the canary should be ignored.
       await PluginCrashGuard.ensureInitialized();
       expect(PluginCrashGuard.isBlocked('com.crashed.plugin'), false,
-          reason:
-              'plugin quarantined under a previous app version should not '
+          reason: 'plugin quarantined under a previous app version should not '
               'block on a newer version — the upgrade might have fixed the '
               'crash, so we give it another chance automatically');
     });
@@ -150,7 +148,8 @@ void main() {
       expect(PluginCrashGuard.isBlocked('com.legacy.plugin'), false);
     });
 
-    test('end-to-end: crash → quarantine on next launch → user retry → '
+    test(
+        'end-to-end: crash → quarantine on next launch → user retry → '
         'next crash again', () async {
       // First launch: attempt to load plugin, then "crash" (no success call)
       await PluginCrashGuard.markLoadAttempt('com.crash.plugin');

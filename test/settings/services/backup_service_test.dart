@@ -94,7 +94,8 @@ void main() {
   test('restoreFromBackup משחזר currentWorkspace חדש לפי מזהה', () async {
     final backupDir = Directory(p.join(tempDir.path, 'workspace_backups'));
     await backupDir.create(recursive: true);
-    final backupFile = File(p.join(backupDir.path, 'restore_workspace_id.json'));
+    final backupFile =
+        File(p.join(backupDir.path, 'restore_workspace_id.json'));
 
     const firstWorkspaceId = 'workspace-a';
     const secondWorkspaceId = 'workspace-b';
@@ -132,15 +133,18 @@ void main() {
 
     await BackupService.restoreFromBackup(backupFile.path);
 
-    final (workspaces, currentWorkspaceId) = WorkspaceRepository().loadWorkspaces();
+    final (workspaces, currentWorkspaceId) =
+        WorkspaceRepository().loadWorkspaces();
     expect(workspaces, hasLength(2));
     expect(currentWorkspaceId, secondWorkspaceId);
   });
 
   test('restoreFromBackup תומך ב-currentWorkspace ישן כאינדקס', () async {
-    final backupDir = Directory(p.join(tempDir.path, 'workspace_backups_legacy'));
+    final backupDir =
+        Directory(p.join(tempDir.path, 'workspace_backups_legacy'));
     await backupDir.create(recursive: true);
-    final backupFile = File(p.join(backupDir.path, 'restore_workspace_index.json'));
+    final backupFile =
+        File(p.join(backupDir.path, 'restore_workspace_index.json'));
 
     const firstWorkspaceId = 'workspace-a';
     const secondWorkspaceId = 'workspace-b';
@@ -178,8 +182,10 @@ void main() {
 
     await BackupService.restoreFromBackup(backupFile.path);
 
-    final (workspaces, currentWorkspaceId) = WorkspaceRepository().loadWorkspaces();
-    expect(workspaces.map((workspace) => workspace.id), [firstWorkspaceId, secondWorkspaceId]);
+    final (workspaces, currentWorkspaceId) =
+        WorkspaceRepository().loadWorkspaces();
+    expect(workspaces.map((workspace) => workspace.id),
+        [firstWorkspaceId, secondWorkspaceId]);
     expect(currentWorkspaceId, secondWorkspaceId);
   });
 

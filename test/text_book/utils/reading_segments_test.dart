@@ -135,8 +135,7 @@ void main() {
   group('segmentIndexForLine', () {
     test('שורה שנמצאת בסגמנט מחזירה את האינדקס שלו', () {
       // continuous: כל שורה לא-כותרת באותה פסקה
-      final segments =
-          buildReadingSegments(['א', 'ב', 'ג'], continuous: true);
+      final segments = buildReadingSegments(['א', 'ב', 'ג'], continuous: true);
       // פסקה אחת לכל השורות
       expect(segmentIndexForLine(segments, 0), 0);
       expect(segmentIndexForLine(segments, 1), 0);
@@ -155,14 +154,12 @@ void main() {
     });
 
     test('שורה לפני הסגמנט הראשון מחזירה 0', () {
-      final segments =
-          buildReadingSegments(['א', 'ב'], continuous: false);
+      final segments = buildReadingSegments(['א', 'ב'], continuous: false);
       expect(segmentIndexForLine(segments, -5), 0);
     });
 
     test('שורה מעבר לסוף מחזירה את האחרון', () {
-      final segments =
-          buildReadingSegments(['א', 'ב'], continuous: false);
+      final segments = buildReadingSegments(['א', 'ב'], continuous: false);
       expect(segmentIndexForLine(segments, 100), 1);
     });
 
@@ -192,8 +189,7 @@ void main() {
 
   group('sourceLineIndicesForSegmentViewports', () {
     test('סגמנט שורה אחת מחזיר את שורת המקור שלו', () {
-      final segments =
-          buildReadingSegments(['א', 'ב', 'ג'], continuous: false);
+      final segments = buildReadingSegments(['א', 'ב', 'ג'], continuous: false);
       final result = sourceLineIndicesForSegmentViewports(
         segments,
         [
@@ -247,8 +243,7 @@ void main() {
     });
 
     test('extent לא תקין — נופל ל-startLineIndex', () {
-      final segments =
-          buildReadingSegments(['a', 'b', 'c'], continuous: true);
+      final segments = buildReadingSegments(['a', 'b', 'c'], continuous: true);
       final result = sourceLineIndicesForSegmentViewports(
         segments,
         [

@@ -191,7 +191,8 @@ void main() {
   // בdesktop, ה-contentFocusNode מחובר ↠ canRestore=true.
   // במobile, ה-node לא מחובר ↠ canRestore=false.
   group('layout-aware restorer', () {
-    testWidgets('Settings narrow: node לא מחובר → canRestore=false', (tester) async {
+    testWidgets('Settings narrow: node לא מחובר → canRestore=false',
+        (tester) async {
       final node = FocusNode();
       addTearDown(node.dispose);
 
@@ -226,7 +227,8 @@ void main() {
       );
     });
 
-    testWidgets('More: canRestore תלוי בחיבור node לעץ, לא ב-showMobileMenu', (tester) async {
+    testWidgets('More: canRestore תלוי בחיבור node לעץ, לא ב-showMobileMenu',
+        (tester) async {
       final node = FocusNode();
       addTearDown(node.dispose);
 
@@ -258,7 +260,8 @@ void main() {
       expect(
         repo.screenCanRestoreForTesting(),
         true,
-        reason: 'Node מחובר לעץ → canRestore=true (גם אם showMobileMenu==true כ-state ישן)',
+        reason:
+            'Node מחובר לעץ → canRestore=true (גם אם showMobileMenu==true כ-state ישן)',
       );
     });
   });

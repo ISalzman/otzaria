@@ -118,8 +118,8 @@ void main() {
 
       expect(
         () => PluginPackager.packDirectory(directoryPath: dir.path),
-        throwsA(isA<PluginPackagerException>().having(
-            (e) => e.message, 'message', contains('manifest.json'))),
+        throwsA(isA<PluginPackagerException>()
+            .having((e) => e.message, 'message', contains('manifest.json'))),
       );
     });
 
@@ -133,8 +133,8 @@ void main() {
           directoryPath: pluginDir,
           outputPath: outPath,
         ),
-        throwsA(isA<PluginPackagerException>().having(
-            (e) => e.message, 'message', contains('--force'))),
+        throwsA(isA<PluginPackagerException>()
+            .having((e) => e.message, 'message', contains('--force'))),
       );
     });
 
@@ -248,7 +248,8 @@ void main() {
       expect(result.validation.hasErrors, isFalse);
       expect(result.validation.hasWarnings, isTrue);
       expect(
-        result.validation.warnings.any((w) => w.contains('totally.fake_method')),
+        result.validation.warnings
+            .any((w) => w.contains('totally.fake_method')),
         isTrue,
       );
     });

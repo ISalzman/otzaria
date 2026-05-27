@@ -26,8 +26,7 @@ void main() {
     late SeforimRepository seforimRepo;
 
     setUp(() async {
-      tempDir =
-          await Directory.systemTemp.createTemp('otzaria-he-categories-');
+      tempDir = await Directory.systemTemp.createTemp('otzaria-he-categories-');
       libraryPath = path.join(tempDir.path, 'library');
       dataRootPath = path.join(tempDir.path, 'data_root');
       await Directory(libraryPath).create(recursive: true);
@@ -82,8 +81,7 @@ void main() {
         const migration_models.Category(title: 'תנ"ך'),
       );
       final torahId = await seforimRepo.insertCategory(
-        migration_models.Category(
-            title: 'תורה', parentId: rootId, level: 1),
+        migration_models.Category(title: 'תורה', parentId: rootId, level: 1),
       );
       final sourceId = await seforimRepo.insertSource('test-src', -1);
       await seforimRepo.insertBook(
@@ -115,8 +113,7 @@ void main() {
         migration_models.Category(
             title: 'תיקיית עבודה', parentId: personalId, level: 1),
       );
-      final sourceId =
-          await userBooksRepo.insertSource('Personal::test', -1);
+      final sourceId = await userBooksRepo.insertSource('Personal::test', -1);
       await userBooksRepo.insertBook(
         migration_models.Book(
           categoryId: folderId,

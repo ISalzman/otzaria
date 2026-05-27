@@ -58,9 +58,8 @@ class _FakeRepo implements PluginRegistryRepository {
       reordered.add(p.copyWith(userOrder: i));
     }
     // תוספים שלא ברשימה — נשמרים כמו שהם בסוף.
-    final remaining = plugins
-        .where((p) => !orderedPluginIds.contains(p.pluginId))
-        .toList();
+    final remaining =
+        plugins.where((p) => !orderedPluginIds.contains(p.pluginId)).toList();
     plugins = [...reordered, ...remaining];
   }
 
@@ -108,8 +107,7 @@ void main() {
       bloc.add(const ReorderPluginsRequested(['c', 'a', 'b']));
 
       // מחכים לעדכון ה-Bloc — Loaded יופץ אחרי LoadPlugins הפנימי.
-      await expectLater(
-          bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
+      await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
 
       expect(repo.reorderCalls, hasLength(1));
       expect(repo.reorderCalls.single, ['c', 'a', 'b']);
@@ -145,8 +143,7 @@ void main() {
 
       bloc.add(const ReorderPluginsRequested([]));
 
-      await expectLater(
-          bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
+      await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
 
       expect(repo.reorderCalls.single, isEmpty);
     });

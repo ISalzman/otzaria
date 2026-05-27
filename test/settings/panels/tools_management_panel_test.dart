@@ -28,12 +28,10 @@ class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
     on<SettingsEvent>((event, emit) {
       dispatched.add(event);
       if (event is UpdateHiddenBuiltInToolIds) {
-        emit(state.copyWith(
-            hiddenBuiltInToolIds: event.hiddenBuiltInToolIds));
+        emit(state.copyWith(hiddenBuiltInToolIds: event.hiddenBuiltInToolIds));
       } else if (event is UpdateBuiltInToolsPinnedToNavRail) {
         emit(state.copyWith(
-            builtInToolsPinnedToNavRail:
-                event.builtInToolsPinnedToNavRail));
+            builtInToolsPinnedToNavRail: event.builtInToolsPinnedToNavRail));
       }
     });
   }
@@ -42,8 +40,7 @@ class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
-class _FakePluginSystemBloc
-    extends Bloc<PluginSystemEvent, PluginSystemState>
+class _FakePluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState>
     implements PluginSystemBloc {
   final List<PluginSystemEvent> dispatched = [];
   _FakePluginSystemBloc(List<InstalledPlugin> plugins)
@@ -465,8 +462,7 @@ void main() {
           .toList();
       expect(events, hasLength(1));
       expect(events.single.granted, isFalse,
-          reason:
-              'revoke must send granted:false — was a P1 bug where panel '
+          reason: 'revoke must send granted:false — was a P1 bug where panel '
               'always sent granted:true');
     },
   );

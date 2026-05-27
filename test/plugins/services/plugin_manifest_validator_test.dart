@@ -8,9 +8,11 @@ import 'package:path/path.dart' as p;
 void main() {
   group('PluginManifestValidator', () {
     test('accepts current app version with prerelease suffix', () async {
-      final tempDir = await Directory.systemTemp.createTemp('plugin_validator_');
+      final tempDir =
+          await Directory.systemTemp.createTemp('plugin_validator_');
       addTearDown(() => tempDir.delete(recursive: true));
-      await File(p.join(tempDir.path, 'index.html')).writeAsString('<html></html>');
+      await File(p.join(tempDir.path, 'index.html'))
+          .writeAsString('<html></html>');
 
       final manifest = PluginManifest(
         schemaVersion: 1,

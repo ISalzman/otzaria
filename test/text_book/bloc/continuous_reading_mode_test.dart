@@ -67,8 +67,7 @@ void main() {
       );
     });
 
-    test('preserveFlag=false → false (זה המסלול של _resetPerBookSettings)',
-        () {
+    test('preserveFlag=false → false (זה המסלול של _resetPerBookSettings)', () {
       // הבאג שתוקן: לפני התיקון, _resetPerBookSettings לא איפס את מצב
       // הרצף כי ה-bloc תמיד שמר אותו. עכשיו ברירת המחדל היא לאפס,
       // והשמירה אקטיבית רק כש-listener של הגדרות גלובליות מבקש זאת.

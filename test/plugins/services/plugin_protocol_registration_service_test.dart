@@ -6,18 +6,20 @@ void main() {
     test('resolveWindowsRegistryExecutable prefers WINDIR', () {
       final executable =
           PluginProtocolRegistrationService.resolveWindowsRegistryExecutable({
-            'WINDIR': r'D:\Windows',
-            'SystemRoot': r'C:\Windows',
-          });
+        'WINDIR': r'D:\Windows',
+        'SystemRoot': r'C:\Windows',
+      });
 
       expect(executable, r'D:\Windows\System32\reg.exe');
     });
 
-    test('buildWindowsRegistrationCommands uses executable for icon and open command', () {
+    test(
+        'buildWindowsRegistrationCommands uses executable for icon and open command',
+        () {
       final commands =
           PluginProtocolRegistrationService.buildWindowsRegistrationCommands(
-            r'C:\Program Files\Otzaria\otzaria.exe',
-          );
+        r'C:\Program Files\Otzaria\otzaria.exe',
+      );
 
       expect(commands.length, greaterThanOrEqualTo(4));
       expect(commands[2], [
@@ -41,8 +43,8 @@ void main() {
     test('buildWindowsRegistrationCommands כולל שיוך קובץ .otzplugin', () {
       final commands =
           PluginProtocolRegistrationService.buildWindowsRegistrationCommands(
-            r'C:\Program Files\Otzaria\otzaria.exe',
-          );
+        r'C:\Program Files\Otzaria\otzaria.exe',
+      );
 
       // ProgID open command — `reg add` שפותח את אוצריא כשמשתמש פותח קובץ ‎.otzplugin
       expect(

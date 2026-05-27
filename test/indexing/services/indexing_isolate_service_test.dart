@@ -22,7 +22,8 @@ void main() {
       expect(documents[2].text, 'סימן א');
       expect(documents[3].reference, 'פרק א, סימן א');
       expect(documents[3].text, 'שורה שניה');
-      expect(documents.map((document) => document.ordinal).toList(), [0, 1, 2, 3]);
+      expect(
+          documents.map((document) => document.ordinal).toList(), [0, 1, 2, 3]);
     });
 
     test('replaces previous header branch when same level appears again', () {

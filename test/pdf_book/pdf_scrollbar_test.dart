@@ -190,7 +190,8 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('קריסות חוזרות בפריימים רצופים לא גורמות לקריסה', (tester) async {
+    testWidgets('קריסות חוזרות בפריימים רצופים לא גורמות לקריסה',
+        (tester) async {
       final controller = _UnreadyController();
       await tester.pumpWidget(
         MaterialApp(
@@ -277,7 +278,8 @@ void main() {
 
   // ─── עיצוב וצבעים ─────────────────────────────────────────────────────────
   group('PdfScrollbar - עיצוב', () {
-    testWidgets('PdfScrollbar עם trackColor ו-thumbColor מותאמים', (tester) async {
+    testWidgets('PdfScrollbar עם trackColor ו-thumbColor מותאמים',
+        (tester) async {
       final controller = PdfViewerController();
       await tester.pumpWidget(
         MaterialApp(
@@ -297,7 +299,8 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('PdfHorizontalScrollbar עם trackThickness מותאם', (tester) async {
+    testWidgets('PdfHorizontalScrollbar עם trackThickness מותאם',
+        (tester) async {
       final controller = PdfViewerController();
       await tester.pumpWidget(
         MaterialApp(

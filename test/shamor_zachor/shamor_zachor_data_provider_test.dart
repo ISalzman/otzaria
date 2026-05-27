@@ -29,8 +29,10 @@ void main() {
     database.close();
 
     await Settings.init(cacheProvider: MemoryCacheProvider());
-    await Settings.setValue<String>(SettingsRepository.keyLibraryPath, tempDir.path);
-    await Settings.setValue<String>(SettingsRepository.keyLibraryFolderName, '');
+    await Settings.setValue<String>(
+        SettingsRepository.keyLibraryPath, tempDir.path);
+    await Settings.setValue<String>(
+        SettingsRepository.keyLibraryFolderName, '');
     await Settings.setValue<String>(SettingsRepository.keyDbEffectivePath, '');
     await Settings.setValue<String>(
       'sz:tracked_books',
@@ -113,7 +115,8 @@ void main() {
     expect(details.sections!.single.title, 'פרק א');
   });
 
-  test('loadAllData falls back to sqlite provider when loader throws', () async {
+  test('loadAllData falls back to sqlite provider when loader throws',
+      () async {
     final provider = ShamorZachorDataProvider(
       sqliteDataProvider: SqliteDataProvider.instance,
       categoryTreeLoader: ({

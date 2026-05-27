@@ -68,8 +68,7 @@ void main() {
     test('toDbMap serializes pinnedToNavRail as 0/1', () {
       expect(
           _plugin(pinnedToNavRail: false).toDbMap()['pinned_to_nav_rail'], 0);
-      expect(
-          _plugin(pinnedToNavRail: true).toDbMap()['pinned_to_nav_rail'], 1);
+      expect(_plugin(pinnedToNavRail: true).toDbMap()['pinned_to_nav_rail'], 1);
     });
 
     test('fromDbMap reads pinned_to_nav_rail = 1 as true', () {
@@ -92,7 +91,8 @@ void main() {
       legacyMap.remove('pinned_to_nav_rail');
       final restored = InstalledPlugin.fromDbMap(legacyMap);
       expect(restored.pinnedToNavRail, isFalse,
-          reason: 'A pre-migration row must not crash and must default to false');
+          reason:
+              'A pre-migration row must not crash and must default to false');
     });
 
     test('round-trip toDbMap → fromDbMap preserves both pin flags', () {
@@ -150,12 +150,10 @@ void main() {
         'userOrder=0 maps to userOrderToolTabOffset (1000), not to 0 — '
         'this keeps reordered plugins after the built-in tools (orders 10-100)',
         () {
-      final plugin =
-          _plugin(userOrder: 0, manifestToolTabOrder: 50);
-      expect(plugin.effectiveToolTabOrder,
-          InstalledPlugin.userOrderToolTabOffset);
-      expect(plugin.effectiveToolTabOrder,
-          greaterThan(100),
+      final plugin = _plugin(userOrder: 0, manifestToolTabOrder: 50);
+      expect(
+          plugin.effectiveToolTabOrder, InstalledPlugin.userOrderToolTabOffset);
+      expect(plugin.effectiveToolTabOrder, greaterThan(100),
           reason: 'must stay after built-in tools (10..100)');
     });
 
@@ -165,14 +163,13 @@ void main() {
           InstalledPlugin.userOrderToolTabOffset + 5);
     });
 
-    test(
-        'userOrder overrides manifest.toolTabOrder even when manifest is high',
+    test('userOrder overrides manifest.toolTabOrder even when manifest is high',
         () {
       // לתוסף manifest order של 9999 (אחרון בסדר ברירת מחדל), אבל המשתמש
       // קבע userOrder=0 כדי שיהיה ראשון בין התוספים.
       final plugin = _plugin(userOrder: 0, manifestToolTabOrder: 9999);
-      expect(plugin.effectiveToolTabOrder,
-          InstalledPlugin.userOrderToolTabOffset);
+      expect(
+          plugin.effectiveToolTabOrder, InstalledPlugin.userOrderToolTabOffset);
     });
 
     test('relative order between plugins reflects userOrder ordering', () {
@@ -214,8 +211,7 @@ void main() {
       legacyMap.remove('user_order');
       final restored = InstalledPlugin.fromDbMap(legacyMap);
       expect(restored.userOrder, isNull,
-          reason:
-              'pre-migration row must not crash and must default to null');
+          reason: 'pre-migration row must not crash and must default to null');
     });
 
     test('copyWith updates userOrder', () {
@@ -241,8 +237,7 @@ void main() {
         'copyWith with both userOrder=X and clearUserOrder=true clears '
         '(clear flag wins)', () {
       final original = _plugin(userOrder: 9);
-      final updated =
-          original.copyWith(userOrder: 3, clearUserOrder: true);
+      final updated = original.copyWith(userOrder: 3, clearUserOrder: true);
       expect(updated.userOrder, isNull,
           reason: 'clearUserOrder must take precedence over userOrder');
     });
@@ -267,8 +262,7 @@ void main() {
     });
 
     test('toDbMap serializes hiddenFromTools as 0/1', () {
-      expect(
-          _plugin(hiddenFromTools: false).toDbMap()['hidden_from_tools'], 0);
+      expect(_plugin(hiddenFromTools: false).toDbMap()['hidden_from_tools'], 0);
       expect(_plugin(hiddenFromTools: true).toDbMap()['hidden_from_tools'], 1);
     });
 
@@ -305,8 +299,7 @@ void main() {
           reason: 'hide must not disable the plugin');
     });
 
-    test(
-        'copyWith without hiddenFromTools preserves the existing value', () {
+    test('copyWith without hiddenFromTools preserves the existing value', () {
       final original = _plugin(hiddenFromTools: true);
       final updated = original.copyWith(pinned: false);
       expect(updated.hiddenFromTools, isTrue,

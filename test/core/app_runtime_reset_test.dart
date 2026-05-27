@@ -51,8 +51,7 @@ class _FakeProvider implements LibraryProvider {
   Future<List<TocEntry>?> getBookToc(
     String title,
     int categoryId,
-    String fileType,
-    {
+    String fileType, {
     bool preferUserBooks = false,
   }) {
     return Future.value(null);

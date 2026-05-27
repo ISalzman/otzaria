@@ -62,10 +62,12 @@ void main() {
       );
 
       final sourceLineId = await seforimRepo.insertLine(
-        migration_models.Line(bookId: bereshitId, lineIndex: 0, content: 'בראשית ברא'),
+        migration_models.Line(
+            bookId: bereshitId, lineIndex: 0, content: 'בראשית ברא'),
       );
       final targetLineId = await seforimRepo.insertLine(
-        migration_models.Line(bookId: rashiId, lineIndex: 0, content: 'פירוש רש"י'),
+        migration_models.Line(
+            bookId: rashiId, lineIndex: 0, content: 'פירוש רש"י'),
       );
 
       // יש לוודא שסוג הקישור 'COMMENTARY' (אותיות גדולות, כפי שנוצר ב-initializeConnectionTypes)
@@ -104,7 +106,8 @@ void main() {
           categoryId: 1,
         );
 
-        final commentators = await repository.getAvailableCommentators(userBook);
+        final commentators =
+            await repository.getAvailableCommentators(userBook);
 
         expect(
           commentators,
@@ -124,7 +127,8 @@ void main() {
           fileType: 'txt',
         );
 
-        final commentators = await repository.getAvailableCommentators(officialBook);
+        final commentators =
+            await repository.getAvailableCommentators(officialBook);
 
         expect(
           commentators,

@@ -44,8 +44,7 @@ void main() {
 
     test('סופר את כל הרמות, גם עמוקות', () {
       // עץ עם 1 אב + 100 ילדים
-      final children =
-          List.generate(100, (i) => _e('c$i', i + 1, 2));
+      final children = List.generate(100, (i) => _e('c$i', i + 1, 2));
       final entries = [_e('root', 0, 1, children: children)];
       expect(countAllTocEntries(entries), 101);
     });
@@ -173,8 +172,8 @@ void main() {
         ]),
       ];
       final flat = flattenVisibleToc(entries, const {});
-      expect(flat.map((f) => f.entry.text).toList(),
-          ['A', 'A1', 'A2', 'B', 'B1']);
+      expect(
+          flat.map((f) => f.entry.text).toList(), ['A', 'A1', 'A2', 'B', 'B1']);
     });
   });
 
@@ -234,8 +233,8 @@ void main() {
 
       // כווץ את a
       final flatACollapsed = flattenVisibleToc(entries, const {0: false});
-      expect(flatACollapsed.map((f) => f.entry.text).toList(),
-          ['a', 'b', 'b1']);
+      expect(
+          flatACollapsed.map((f) => f.entry.text).toList(), ['a', 'b', 'b1']);
 
       // כווץ את שניהם
       final flatBothCollapsed =
@@ -289,8 +288,8 @@ void main() {
       final simanim = List.generate(100, (s) {
         final base = s * 100;
         return _e('siman$s', base, 1,
-            children: List.generate(
-                99, (i) => _e('seif${s}_$i', base + 1 + i, 2)));
+            children:
+                List.generate(99, (i) => _e('seif${s}_$i', base + 1 + i, 2)));
       });
       final entries = [_e('book', -1, 0, children: simanim)];
       // -1 ייחודי כדי לא להתנגש עם ילדים שמתחילים מ-0
@@ -329,7 +328,8 @@ void main() {
       // מדמה את המבנה האמיתי של "כף החיים על שו"ע יורה דעה"
       // 134 simanim, כל אחד ~63 se'ifim
       final simanim = List.generate(134, (s) {
-        final seifim = List.generate(63, (sf) => _e('seif $sf', s * 100 + sf, 2));
+        final seifim =
+            List.generate(63, (sf) => _e('seif $sf', s * 100 + sf, 2));
         return _e('siman $s', s * 100, 1, children: seifim);
       });
       final entries = [_e('book', 0, 1, children: simanim)];

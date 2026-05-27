@@ -9,7 +9,8 @@ void main() {
   });
 
   group('calculateMoladForDate', () {
-    test('returns null on a regular day (not r"ch, shabbos mevorchim, '
+    test(
+        'returns null on a regular day (not r"ch, shabbos mevorchim, '
         'or molad day)', () {
       // 15 Sivan 5785 (Wednesday, 11 June 2025) — middle of the month.
       final date = DateTime(2025, 6, 11);
@@ -82,7 +83,8 @@ void main() {
   // inside the card.
   // ==========================================================================
   group('moladDay trigger follows the visible molad', () {
-    test('Jerusalem: card shows on 21 Oct 2025 — the true conjunction day '
+    test(
+        'Jerusalem: card shows on 21 Oct 2025 — the true conjunction day '
         '(mean molad in LMT falls on 23 Oct after midnight)', () {
       // The true conjunction is on 21 Oct 2025 ~15:25 IDT. The mean molad in
       // LMT is on 23 Oct 2025 ~00:54. Before the fix, the card would NOT have
@@ -97,7 +99,8 @@ void main() {
       expect(info.visibleMoladInCity.month, 10);
     });
 
-    test('New York: card shows on 21 Oct 2025 — same true conjunction day '
+    test(
+        'New York: card shows on 21 Oct 2025 — same true conjunction day '
         'in NY local time (08:25 EDT)', () {
       final info = calculateMoladForDate(DateTime(2025, 10, 21), 'ניו יורק');
       expect(info, isNotNull);
@@ -105,7 +108,8 @@ void main() {
       expect(info.visibleMoladInCity.day, 21);
     });
 
-    test('Trigger is city-aware: Jerusalem and LA see the molad on '
+    test(
+        'Trigger is city-aware: Jerusalem and LA see the molad on '
         'different Gregorian days', () {
       // R"ch Nisan 5786: true conjunction 19 Mar 2026 ~01:23 UTC.
       //   - Jerusalem (UTC+2 standard, before Israel DST switch on 27 Mar):
@@ -304,7 +308,8 @@ void main() {
       expect(info.monthName, contains('אדר'));
     });
 
-    test('R"ch Adar II in leap year 5784 (11 Mar 2024) — distinct from '
+    test(
+        'R"ch Adar II in leap year 5784 (11 Mar 2024) — distinct from '
         'Adar I', () {
       // 1 Adar II 5784 = Monday 11 March 2024.
       final date = DateTime(2024, 3, 11);

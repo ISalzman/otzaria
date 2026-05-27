@@ -8,7 +8,8 @@ import 'package:otzaria/utils/file/docx_to_otzaria.dart';
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 // Builds a minimal valid DOCX (ZIP) whose word/document.xml is the given bytes.
-Uint8List _buildDocx(List<int> documentXmlBytes, {List<int>? footnotesXmlBytes}) {
+Uint8List _buildDocx(List<int> documentXmlBytes,
+    {List<int>? footnotesXmlBytes}) {
   final encoder = ZipEncoder();
   final archive = Archive();
   archive.addFile(ArchiveFile(
@@ -32,8 +33,8 @@ List<int> _utf8Xml(String text) => utf8.encode(text);
 // Builds document.xml bytes that declare UTF-8 in the header but embed
 // Hebrew text in Windows-1255 encoding — the exact situation that triggered
 // the original bug with בדיקה.docx.
-List<int> _cp1255Xml(String asciiPrefix, List<int> hebrewCp1255Bytes,
-    String asciiSuffix) {
+List<int> _cp1255Xml(
+    String asciiPrefix, List<int> hebrewCp1255Bytes, String asciiSuffix) {
   return [
     ...utf8.encode(asciiPrefix),
     ...hebrewCp1255Bytes,
@@ -72,12 +73,13 @@ void main() {
       expect(result, contains('בדיקה'));
     });
 
-    test('ממיר DOCX עם עברית Windows-1255 (fallback) ומחזיר טקסט עברי תקין', () {
+    test('ממיר DOCX עם עברית Windows-1255 (fallback) ומחזיר טקסט עברי תקין',
+        () {
       // XML header declares UTF-8 but text bytes are Windows-1255 — the exact
       // bug seen in the real בדיקה.docx file.
       final xmlBytes = _cp1255Xml(
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<w:document $_xmlNs><w:body><w:p><w:r><w:t>',
+            '<w:document $_xmlNs><w:body><w:p><w:r><w:t>',
         _cp1255Bedika,
         '</w:t></w:r></w:p></w:body></w:document>',
       );
@@ -157,11 +159,11 @@ void main() {
       final cp1255FootnoteText = [0xE4, 0xF2, 0xF8, 0xE4]; // "הערה"
       final footnotesBytes = _cp1255Xml(
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<w:footnotes $_xmlNs>'
-        '<w:footnote w:id="1"><w:p><w:r><w:t>',
+            '<w:footnotes $_xmlNs>'
+            '<w:footnote w:id="1"><w:p><w:r><w:t>',
         cp1255FootnoteText,
         '</w:t></w:r></w:p></w:footnote>'
-        '</w:footnotes>',
+            '</w:footnotes>',
       );
       final documentXml = '''
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -174,8 +176,8 @@ void main() {
   </w:body>
 </w:document>''';
 
-      final docx = _buildDocx(_utf8Xml(documentXml),
-          footnotesXmlBytes: footnotesBytes);
+      final docx =
+          _buildDocx(_utf8Xml(documentXml), footnotesXmlBytes: footnotesBytes);
       final result = docxToText(docx, 'בדיקה');
 
       expect(result, contains('הערה'));

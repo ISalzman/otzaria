@@ -43,7 +43,8 @@ void main() {
                 lines: [
                   ContinuousReadingParagraphLine(
                     lineIndex: 0,
-                    text: 'זהו מקטע ארוך מספיק כדי להישבר לכמה שורות בתצוגה צרה',
+                    text:
+                        'זהו מקטע ארוך מספיק כדי להישבר לכמה שורות בתצוגה צרה',
                     style: TextStyle(fontSize: 20),
                   ),
                 ],
@@ -166,7 +167,8 @@ TextSpan? _findColoredSpan(List<InlineSpan> spans) {
         visit(child);
       }
     }
-    if (result == null && (span.style?.color != null || span.style?.backgroundColor != null)) {
+    if (result == null &&
+        (span.style?.color != null || span.style?.backgroundColor != null)) {
       result = span;
     }
   }

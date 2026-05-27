@@ -137,8 +137,7 @@ class _MemoryCacheProvider extends CacheProvider {
   Future<void> setInt(String key, int? value) async => _values[key] = value;
 
   @override
-  Future<void> setObject<T>(String key, T? value) async =>
-      _values[key] = value;
+  Future<void> setObject<T>(String key, T? value) async => _values[key] = value;
 
   @override
   Future<void> setString(String key, String? value) async =>

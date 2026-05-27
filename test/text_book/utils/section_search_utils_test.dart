@@ -15,7 +15,8 @@ void main() {
       expect(results.length, 1);
     });
 
-    test('does not match partial word (query is prefix of longer word)', () async {
+    test('does not match partial word (query is prefix of longer word)',
+        () async {
       final results = await searchInContent(
         content: ['שמעון'],
         query: 'שמע',
@@ -23,7 +24,8 @@ void main() {
       expect(results, isEmpty);
     });
 
-    test('does not match partial word (query is suffix of longer word)', () async {
+    test('does not match partial word (query is suffix of longer word)',
+        () async {
       final results = await searchInContent(
         content: ['ושמע'],
         query: 'שמע',
@@ -31,7 +33,8 @@ void main() {
       expect(results, isEmpty);
     });
 
-    test('does not match partial word (query is infix of longer word)', () async {
+    test('does not match partial word (query is infix of longer word)',
+        () async {
       final results = await searchInContent(
         content: ['ושמעון'],
         query: 'שמע',
@@ -63,7 +66,8 @@ void main() {
       expect(results.length, 1);
     });
 
-    test('does not match when query appears only as partial in all occurrences', () async {
+    test('does not match when query appears only as partial in all occurrences',
+        () async {
       final results = await searchInContent(
         content: ['שמעון ושמעיהו'],
         query: 'שמע',
@@ -71,7 +75,8 @@ void main() {
       expect(results, isEmpty);
     });
 
-    test('finds match when one occurrence is whole word and another is partial', () async {
+    test('finds match when one occurrence is whole word and another is partial',
+        () async {
       final results = await searchInContent(
         content: ['שמע ושמעון'],
         query: 'שמע',

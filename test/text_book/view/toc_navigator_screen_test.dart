@@ -255,11 +255,13 @@ void main() {
     await tester.pump();
 
     // שינוי ה-visibleIndices → activeIndex משתנה ל-second (אינדקס 5).
-    bloc.emitState((bloc.state as TextBookLoaded).copyWith(visibleIndices: [7]));
+    bloc.emitState(
+        (bloc.state as TextBookLoaded).copyWith(visibleIndices: [7]));
     await tester.pump();
 
     // שינוי ל-third
-    bloc.emitState((bloc.state as TextBookLoaded).copyWith(visibleIndices: [15]));
+    bloc.emitState(
+        (bloc.state as TextBookLoaded).copyWith(visibleIndices: [15]));
     await tester.pump();
 
     // הוידג'ט לא קרס — כל הערכים עדיין נראים.
@@ -268,7 +270,8 @@ void main() {
     expect(find.text('third'), findsOneWidget);
   });
 
-  testWidgets('emit חוזר עם אותו state לא קורס ולא משכפל פריטים', (tester) async {
+  testWidgets('emit חוזר עם אותו state לא קורס ולא משכפל פריטים',
+      (tester) async {
     // הגנה מפני באג: אם buildWhen מחזיר true בטעות לאותו state, צריך
     // שהבנייה תהיה idempotent — לא יווצרו כפילויות.
     final toc = [

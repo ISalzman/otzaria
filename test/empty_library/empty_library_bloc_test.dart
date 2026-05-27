@@ -76,8 +76,8 @@ void main() {
 
       final bloc = EmptyLibraryBloc(
         extractCompressedDatabase: (archivePath, outputPath) async {
-          compressedExtractions
-              .add('${path.basename(archivePath)}→${path.basename(outputPath)}');
+          compressedExtractions.add(
+              '${path.basename(archivePath)}→${path.basename(outputPath)}');
           await File(outputPath).writeAsBytes(const [1, 2, 3]);
         },
         extractTarArchive: (archivePath, outputDir) async {
@@ -111,8 +111,7 @@ void main() {
       ]);
     });
 
-    test(
-        'בחירת seforim.db.zst לבד (בלי קבצים נלווים) מחלצת רק את ה-DB',
+    test('בחירת seforim.db.zst לבד (בלי קבצים נלווים) מחלצת רק את ה-DB',
         () async {
       final tempDir = await Directory.systemTemp.createTemp(
         'otzaria-single-zst-',
@@ -154,7 +153,8 @@ void main() {
       await askDeleteFuture.timeout(const Duration(seconds: 5));
 
       // רק ה-DB הראשי חולץ; אין ניסיון לחלץ קבצים שאינם נמצאים.
-      expect(compressedExtractions, [DatabaseConstants.databaseArchiveFileName]);
+      expect(
+          compressedExtractions, [DatabaseConstants.databaseArchiveFileName]);
       expect(tarExtractions, isEmpty);
     });
 

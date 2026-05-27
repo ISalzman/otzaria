@@ -115,17 +115,14 @@ void main() {
       expect(topics, 'נושא א');
     });
 
-    test(
-        'ללא topics ב-DB → נופל לבניית נתיב הקטגוריה מתוך seforim',
-        () async {
+    test('ללא topics ב-DB → נופל לבניית נתיב הקטגוריה מתוך seforim', () async {
       // יוצרים היררכיית קטגוריות ועליה ספר בלי topics — הקוד צריך לבנות
       // categoryPath היררכי.
       final rootId = await seforimRepo.insertCategory(
         const migration_models.Category(title: 'תנ"ך'),
       );
       final torahId = await seforimRepo.insertCategory(
-        migration_models.Category(
-            title: 'תורה', parentId: rootId, level: 1),
+        migration_models.Category(title: 'תורה', parentId: rootId, level: 1),
       );
       final sourceId = await seforimRepo.insertSource('test', -1);
       await seforimRepo.insertBook(
@@ -157,8 +154,7 @@ void main() {
         migration_models.Category(
             title: 'עבודה', parentId: personalId, level: 1),
       );
-      final sourceId =
-          await userBooksRepo.insertSource('Personal::test', -1);
+      final sourceId = await userBooksRepo.insertSource('Personal::test', -1);
       await userBooksRepo.insertBook(
         migration_models.Book(
           categoryId: folderId,

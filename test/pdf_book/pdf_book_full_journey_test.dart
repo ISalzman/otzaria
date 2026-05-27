@@ -240,13 +240,15 @@ void main() {
           (bloc.state as PdfBookLoaded).alternativeWords[0], contains('השם'));
 
       // 6d: תוצאות חיפוש
-      bloc.add(UpdateSearchResults(matches: _fakeMatches(3), currentMatchIndex: 0));
+      bloc.add(
+          UpdateSearchResults(matches: _fakeMatches(3), currentMatchIndex: 0));
       await Future.delayed(Duration.zero);
       expect((bloc.state as PdfBookLoaded).searchMatches, hasLength(3));
       expect((bloc.state as PdfBookLoaded).currentSearchMatchIndex, 0);
 
       // 6e: מעבר לתוצאה הבאה
-      bloc.add(UpdateSearchResults(matches: _fakeMatches(3), currentMatchIndex: 1));
+      bloc.add(
+          UpdateSearchResults(matches: _fakeMatches(3), currentMatchIndex: 1));
       await Future.delayed(Duration.zero);
       expect((bloc.state as PdfBookLoaded).currentSearchMatchIndex, 1);
 
@@ -399,7 +401,8 @@ void main() {
       expect(tab.pdfHeadings, isNull);
     });
 
-    test('LoadHeadingsAndLinks מלאים - headings ו-links נשמרים ב-tab', () async {
+    test('LoadHeadingsAndLinks מלאים - headings ו-links נשמרים ב-tab',
+        () async {
       final tab = _tab();
       final bloc = _makeBloc(tab);
       addTearDown(bloc.close);
@@ -483,7 +486,8 @@ void main() {
         final tab = _tab();
         final bloc = _makeBloc(tab);
         bloc.seed(PdfBookLoading(book: tab.book));
-        bloc.add(DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 50));
+        bloc.add(
+            DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 50));
         return bloc;
       },
       act: (b) async {
@@ -510,13 +514,14 @@ void main() {
         final tab = _tab();
         final bloc = _makeBloc(tab);
         bloc.seed(PdfBookLoading(book: tab.book));
-        bloc.add(DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 50));
+        bloc.add(
+            DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 50));
         return bloc;
       },
       act: (b) async {
         await Future.delayed(Duration.zero);
-        b.add(const UpdateSearchOptions(
-            spacingValues: {'0-1': '3', '1-2': '5'}));
+        b.add(
+            const UpdateSearchOptions(spacingValues: {'0-1': '3', '1-2': '5'}));
       },
       verify: (b) {
         final s = b.state as PdfBookLoaded;
@@ -531,7 +536,8 @@ void main() {
         final tab = _tab();
         final bloc = _makeBloc(tab);
         bloc.seed(PdfBookLoading(book: tab.book));
-        bloc.add(DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 10));
+        bloc.add(
+            DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 10));
         return bloc;
       },
       act: (b) async {
@@ -580,7 +586,8 @@ void main() {
       expect(bloc.state.tabs.first.title, 'ספר בראשית');
     });
 
-    test('ניווט קדימה ואחורה NavigateToPreviousTab/NavigateToNextTab', () async {
+    test('ניווט קדימה ואחורה NavigateToPreviousTab/NavigateToNextTab',
+        () async {
       final bloc = TabsBloc(repository: _FakeTabsRepository());
       addTearDown(bloc.close);
 

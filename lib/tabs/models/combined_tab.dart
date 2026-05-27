@@ -49,9 +49,11 @@ class CombinedTab extends OpenedTab {
   factory CombinedTab.fromJson(Map<String, dynamic> json) {
     OpenedTab decodeTab(Map<String, dynamic> map) {
       if (map['type'] == 'PdfCommentatorsTab') {
-        throw UnsupportedError('PdfCommentatorsTab cannot be restored inside a CombinedTab');
+        throw UnsupportedError(
+            'PdfCommentatorsTab cannot be restored inside a CombinedTab');
       }
-      if (map['type'] == 'CommentatorsTab') return CommentatorsTab.fromJson(map);
+      if (map['type'] == 'CommentatorsTab')
+        return CommentatorsTab.fromJson(map);
       return OpenedTab.fromJson(map);
     }
 

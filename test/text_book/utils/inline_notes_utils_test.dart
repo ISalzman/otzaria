@@ -30,7 +30,8 @@ void main() {
     });
 
     test('מטפל ב-<i> שאינו footnote ולא נוגע בו', () {
-      const input = 'טקסט עם <i>italic רגיל</i> והערה <i class="footnote">הערה</i>';
+      const input =
+          'טקסט עם <i>italic רגיל</i> והערה <i class="footnote">הערה</i>';
       final result = stripInlineNotes(input);
       expect(result, contains('<i>italic רגיל</i>'));
       expect(result, isNot(contains('הערה</i>')));
@@ -86,7 +87,8 @@ void main() {
       expect(result[1], isNot(contains('ראשונה')));
     });
 
-    test('מחלץ 4 הערות עם markers אותיות עבריות שונות (Beit Yaakov pattern)', () {
+    test('מחלץ 4 הערות עם markers אותיות עבריות שונות (Beit Yaakov pattern)',
+        () {
       final content = [
         'גוף<sup class="footnote-marker">א</sup><i class="footnote">A</i>'
             '. עוד<sup class="footnote-marker">ב</sup><i class="footnote">B</i>'
