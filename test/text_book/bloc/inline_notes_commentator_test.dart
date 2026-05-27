@@ -96,6 +96,83 @@ void main() {
   );
 
   blocTest<TextBookBloc, TextBookState>(
+    'InlineNotesDetected(hasNotes:true) מוסיף ובוחר את "הערות" מיד (זיהוי חד-פעמי ברקע)',
+    build: () => bloc,
+    seed: () => _seed(
+      book: book,
+      content: const ['preview ללא הערות'],
+    ),
+    act: (bloc) => bloc.add(const InlineNotesDetected(
+      bookTitle: 'ספר בדיקה',
+      hasNotes: true,
+    )),
+    expect: () => [
+      isA<TextBookLoaded>()
+          .having(
+        (state) => state.availableCommentators,
+        'availableCommentators',
+        contains(kNotesCommentatorTitle),
+      )
+          .having(
+        (state) => state.activeCommentators,
+        'activeCommentators (auto-selected)',
+        const [kNotesCommentatorTitle],
+      ),
+    ],
+  );
+
+  blocTest<TextBookBloc, TextBookState>(
+    'InlineNotesDetected(hasNotes:false) לא מוסיף "הערות" אך מסמן שהסריקה הסתיימה',
+    build: () => bloc,
+    seed: () => _seed(
+      book: book,
+      content: const ['preview ללא הערות'],
+    ),
+    act: (bloc) => bloc.add(const InlineNotesDetected(
+      bookTitle: 'ספר בדיקה',
+      hasNotes: false,
+    )),
+    // hasNotes:false אינו פולט state חדש (אין שינוי במפרשים) — רק מדליק דגל.
+    expect: () => const <TextBookState>[],
+    verify: (bloc) {
+      expect(bloc.inlineNotesFullScanDoneForTesting, isTrue);
+    },
+  );
+
+  blocTest<TextBookBloc, TextBookState>(
+    'אחרי InlineNotesDetected, סריקת ApplyBookContentRange עתידית מדולגת (full-scan flag)',
+    build: () => bloc,
+    seed: () => _seed(
+      book: book,
+      content: const ['preview ללא הערות'],
+    ),
+    act: (bloc) async {
+      bloc.add(const InlineNotesDetected(
+        bookTitle: 'ספר בדיקה',
+        hasNotes: false,
+      ));
+      await Future<void>.delayed(Duration.zero);
+      bloc.add(const ApplyBookContentRange(
+        bookTitle: 'ספר בדיקה',
+        startLine: 100,
+        totalLines: 200,
+        lines: [
+          'שורה<sup class="footnote-marker">א</sup>'
+              '<i class="footnote">תוכן</i>',
+        ],
+      ));
+    },
+    verify: (bloc) {
+      final state = bloc.state as TextBookLoaded;
+      expect(
+        state.availableCommentators,
+        isNot(contains(kNotesCommentatorTitle)),
+        reason: 'אחרי שהדגל נדלק, סריקת per-chunk מדולגת',
+      );
+    },
+  );
+
+  blocTest<TextBookBloc, TextBookState>(
     'ApplyBookContentRange מוסיף את "הערות" כשהערה inline מופיעה רק בהמשך הספר (מחוץ לחלון הראשוני)',
     build: () => bloc,
     seed: () => _seed(
@@ -352,6 +429,7 @@ void main() {
     verify: (bloc) {
       expect(bloc.userTouchedCommentatorsForTesting, isFalse);
       expect(bloc.inlineNotesFullScanDoneForTesting, isFalse);
+      expect(bloc.fullContentLoadInitiatedForTesting, isFalse);
     },
   );
 }

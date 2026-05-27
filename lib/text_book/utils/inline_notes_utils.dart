@@ -31,6 +31,16 @@ bool hasInlineNotes(List<String> content) {
   return false;
 }
 
+/// בודק אם טקסט גולמי (לא מפוצל לשורות) מכיל הערת inline.
+///
+/// משמש לזיהוי חד-פעמי מהיר של "האם לספר יש הערות בכלל", בלי להמתין
+/// לחימום ההדרגתי של התוכן נתח-אחר-נתח. ה-guard על המחרוזת 'footnote'
+/// מונע הרצת regex על ספרים ללא הערות (הרוב המכריע).
+bool rawTextHasInlineNotes(String rawText) {
+  if (!rawText.contains('footnote')) return false;
+  return _footnoteBodyRegExp.hasMatch(rawText);
+}
+
 /// מחלץ את ההערות מסט שורות (לפי האינדקסים שניתנו).
 ///
 /// כל ערך ברשימה הוא מחרוזת HTML שמכילה את ה-<sup>marker</sup> שצמוד
