@@ -459,10 +459,6 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
             },
             height: 50,
             query: widget.searchController.text,
-            searchOptions: _activeSearchParameters.searchOptions,
-            alternativeWords: _activeSearchParameters.alternativeWords,
-            spacingValues: _activeSearchParameters.customSpacing,
-            searchDistance: _searchDistance,
           );
         },
       ),
@@ -572,10 +568,6 @@ class SearchResultTile extends StatelessWidget {
     required this.onTap,
     required this.height,
     required this.query,
-    required this.searchOptions,
-    required this.alternativeWords,
-    required this.spacingValues,
-    required this.searchDistance,
     super.key,
   });
 
@@ -583,10 +575,6 @@ class SearchResultTile extends StatelessWidget {
   final void Function() onTap;
   final double height;
   final String query;
-  final Map<String, Map<String, bool>> searchOptions;
-  final Map<int, List<String>> alternativeWords;
-  final Map<String, String> spacingValues;
-  final int searchDistance;
 
   @override
   Widget build(BuildContext context) {
@@ -629,52 +617,40 @@ class SearchResultTile extends StatelessWidget {
     SettingsState settingsState,
     BuildContext context,
   ) {
-    var displayText = utils.stripHtmlIfNeeded(text);
+    final defaultStyle = TextStyle(
+      fontSize: 16,
+      fontFamily: settingsState.fontFamily,
+      color: Theme.of(context).colorScheme.onSurface,
+      height: 1.5,
+    );
+
+    var html = text;
     if (settingsState.replaceHolyNames) {
-      displayText = utils.replaceHolyNames(displayText);
+      html = utils.replaceHolyNames(html);
     }
 
     if (query.isEmpty) {
       return Text(
-        displayText,
-        style: TextStyle(
-          fontSize: 16,
-          fontFamily: settingsState.fontFamily,
-          color: Theme.of(context).colorScheme.onSurface,
-          height: 1.5,
-        ),
+        utils.stripHtmlIfNeeded(html),
+        style: defaultStyle,
       );
     }
 
-    final spans = SnippetBuilder.buildHighlightSpans(
-      plainText: displayText,
-      query: query,
-      defaultStyle: TextStyle(
-        fontSize: 16,
-        fontFamily: settingsState.fontFamily,
-        color: Theme.of(context).colorScheme.onSurface,
-        height: 1.5,
-      ),
+    // המנוע מחזיר את ההתאמות מסומנות בתגי הדגשה בתוך ה-HTML.
+    final spans = SnippetBuilder.fromHighlightedHtml(
+      html: html,
+      defaultStyle: defaultStyle,
       highlightStyle: TextStyle(
         fontWeight: FontWeight.bold,
         fontSize: 18,
         color: Theme.of(context).colorScheme.error,
       ),
-      searchOptions: searchOptions,
-      alternativeWords: alternativeWords,
-      spacingValues: spacingValues,
-      searchDistance: searchDistance,
     );
 
     return Text.rich(
       TextSpan(
         children: spans,
-        style: TextStyle(
-          fontSize: 16,
-          fontFamily: settingsState.fontFamily,
-          color: Theme.of(context).colorScheme.onSurface,
-          height: 1.5,
-        ),
+        style: defaultStyle,
       ),
     );
   }
