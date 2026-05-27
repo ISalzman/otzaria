@@ -52,8 +52,9 @@ class CombinedTab extends OpenedTab {
         throw UnsupportedError(
             'PdfCommentatorsTab cannot be restored inside a CombinedTab');
       }
-      if (map['type'] == 'CommentatorsTab')
+      if (map['type'] == 'CommentatorsTab') {
         return CommentatorsTab.fromJson(map);
+      }
       return OpenedTab.fromJson(map);
     }
 

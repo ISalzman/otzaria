@@ -83,8 +83,9 @@ class CopyUtils {
       final Map<int, String> lastByLevel = {};
       for (final entry in toc) {
         if (entry.index <= currentIndex) {
-          if (entry.level <= 1)
+          if (entry.level <= 1) {
             continue; // רמה 1 = שם הספר, כבר מכוסה ע"י bookName
+          }
           final clean = _cleanHtml(entry.text);
           if (clean.isNotEmpty) {
             lastByLevel[entry.level] = clean;
