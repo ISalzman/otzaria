@@ -160,6 +160,30 @@ int resolvePageShapeNavigationBaseIndex({
   return selectedIndex ?? 0;
 }
 
+/// שומרת הערת מפרש דרך ה-repository, ממפה את תוצאת העורך לקריאת `addNote`.
+///
+/// מופרדת לפונקציה עצמאית כדי לאפשר בדיקה ישירה של מיפוי הפרמטרים (ה-`bookId`
+/// של המפרש, מספר השורה והתוכן) ללא תלות ב-UI של עורך ה-Quill.
+@visibleForTesting
+Future<void> saveCommentaryNoteToRepository({
+  required PersonalNotesRepository repository,
+  required String bookId,
+  required int lineNumber,
+  required PersonalNoteEditorResult result,
+  String? selectedText,
+  int? categoryId,
+}) {
+  return repository.addNote(
+    bookId: bookId,
+    lineNumber: lineNumber,
+    content: result.content,
+    contentPlain: result.contentPlain,
+    contentFormat: result.contentFormat,
+    selectedText: selectedText,
+    categoryId: categoryId,
+  );
+}
+
 /// תצוגת טקסט פשוטה - משמשת גם לטקסט המרכזי וגם למפרשים
 class SimpleTextViewer extends StatefulWidget {
   final List<String> content;
@@ -179,6 +203,9 @@ class SimpleTextViewer extends StatefulWidget {
       onOpenSearch; // callback לפתיחת חיפוש עם הטקסט הנבחר
   final TextBook? reportBook;
   final SelectionSyncController? selectionSyncController;
+
+  /// repository לשמירת הערות מפרשים. ניתן להזרקה בבדיקות; בייצור נוצר ברירת מחדל.
+  final PersonalNotesRepository? notesRepository;
   const SimpleTextViewer({
     super.key,
     required this.content,
@@ -197,6 +224,7 @@ class SimpleTextViewer extends StatefulWidget {
     this.onOpenSearch,
     this.reportBook,
     this.selectionSyncController,
+    this.notesRepository,
   });
 
   @override
@@ -1101,6 +1129,20 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         ? utils.removeVolwels(selectedText!.trim())
         : widget.content[index];
 
+    // הערה שנוצרת מתוך מפרש (לא הטקסט הראשי) חייבת להישמר תחת ספר המפרש
+    // עצמו, עם מספר השורה המקומי בתוך תוכן המפרש. הסיידבר של צורת הדף קשור
+    // תמיד לספר הראשי, לכן אי אפשר להשתמש בו — פותחים דיאלוג עצמאי ושומרים
+    // ישירות דרך ה-repository, בלי לשבש את ה-PersonalNotesBloc של הספר הראשי.
+    if (!widget.isMainText && widget.bookTitle != null) {
+      await _createCommentaryNote(
+        bookTitle: widget.bookTitle!,
+        lineNumber: index + 1,
+        referenceText: referenceText,
+        selectedText: selectedText?.trim(),
+      );
+      return;
+    }
+
     // טען טיוטה אם קיימת
     final draftService = PersonalNoteDraftService();
     final draft = await draftService.loadDraft(
@@ -1120,6 +1162,63 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           initialFormat:
               draft?.contentFormat ?? PersonalNoteContentFormat.plain,
         ));
+  }
+
+  /// יצירת הערה על מפרש (בצורת הדף) — נשמרת תחת ספר המפרש עצמו.
+  ///
+  /// [bookTitle] - שם ספר המפרש (למשל "רש"י")
+  /// [lineNumber] - מספר השורה המקומי בתוך תוכן המפרש (1-based)
+  /// [referenceText] - טקסט הייחוס המוצג בכותרת ההערה
+  /// [selectedText] - הטקסט שסומן, אם קיים
+  Future<void> _createCommentaryNote({
+    required String bookTitle,
+    required int lineNumber,
+    required String referenceText,
+    String? selectedText,
+  }) async {
+    final categoryId = widget.reportBook?.categoryId;
+
+    // טען טיוטה קיימת (אם יש) כדי לתמוך בשחזור טקסט לא שמור — כמו במסלול הרגיל.
+    final draftService = PersonalNoteDraftService();
+    final draft = await draftService.loadDraft(
+      bookId: bookTitle,
+      categoryId: categoryId,
+      lineNumber: lineNumber,
+    );
+
+    if (!mounted) return;
+
+    final result = await showDialog<PersonalNoteEditorResult>(
+      context: context,
+      builder: (dialogContext) => PersonalNoteEditorDialog(
+        title: 'הערה חדשה - $bookTitle',
+        referenceText: referenceText,
+        icon: FluentIcons.note_add_24_regular,
+        bookId: bookTitle,
+        categoryId: categoryId,
+        // draftLineNumber מאפשר לדיאלוג לשמור/לנקות טיוטה בעת סגירה.
+        draftLineNumber: lineNumber,
+        initialContent: draft?.content ?? '',
+        initialContentFormat:
+            draft?.contentFormat ?? PersonalNoteContentFormat.plain,
+      ),
+    );
+
+    if (result == null || result.contentPlain.trim().isEmpty) return;
+
+    try {
+      await saveCommentaryNoteToRepository(
+        repository: widget.notesRepository ?? PersonalNotesRepository(),
+        bookId: bookTitle,
+        lineNumber: lineNumber,
+        result: result,
+        selectedText: selectedText,
+        categoryId: categoryId,
+      );
+      if (mounted) UiSnack.showSuccess('ההערה נשמרה בהצלחה');
+    } catch (e) {
+      if (mounted) UiSnack.showError('שגיאה בשמירת ההערה: $e');
+    }
   }
 
   /// פתיחת דיאלוג דיווח על טעות בספר
