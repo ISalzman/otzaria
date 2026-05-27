@@ -237,6 +237,51 @@ void main() {
     expect(controller.jumps.first, greaterThan(80));
   });
 
+  testWidgets('לחיצה שמתחילה על האגודל עצמו אינה ממקמת אותו מחדש ומקפיצה',
+      (tester) async {
+    // רגרסיה: onTapDown נורה גם כשהמחווה הופכת מיד לגרירת האגודל. אם הוא
+    // קופץ ללא תנאי, תפיסת האגודל ממרכזת אותו סביב הסמן ומקפיצה את הרשימה
+    // עוד לפני שהגרירה היחסית מתחילה.
+    final listener = ItemPositionsListener.create();
+    final controller = _RecordingItemScrollController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 10,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    // 2 מתוך 10 גלויים בראש → אגודל גדול (~20%) בראש המסילה.
+    (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+        const [
+      ItemPosition(index: 0, itemLeadingEdge: 0, itemTrailingEdge: 0.5),
+      ItemPosition(index: 1, itemLeadingEdge: 0.5, itemTrailingEdge: 1.0),
+    ];
+    await tester.pump();
+
+    final track = find.byType(GestureDetector);
+    final trackTopLeft = tester.getTopLeft(track);
+    final trackBottomRight = tester.getBottomRight(track);
+    final trackHeight = trackBottomRight.dy - trackTopLeft.dy;
+    // נקודה בתוך האגודל (בראש, ~10% מגובה המסילה).
+    final onThumb = Offset(
+      (trackTopLeft.dx + trackBottomRight.dx) / 2,
+      trackTopLeft.dy + trackHeight * 0.1,
+    );
+
+    await tester.tapAt(onThumb);
+    await tester.pump();
+
+    expect(controller.jumps, isEmpty);
+  });
+
   testWidgets('listener ישן לא מעדכן State אחרי החלפת widget ו-dispose',
       (tester) async {
     final firstListener = ItemPositionsListener.create();
