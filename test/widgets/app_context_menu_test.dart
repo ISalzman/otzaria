@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -568,6 +570,70 @@ void main() {
         reason: 'לחיצה על פריט אחרי openMenuAt חייבת להפעיל את ה-onTap שלו');
     expect(find.text('פעולה א'), findsNothing,
         reason: 'התפריט חייב להיסגר לאחר בחירת פריט');
+  });
+
+  testWidgets(
+      'childrenRefreshStream: פעימה מסירה שורה מתת-התפריט בלי לסגור אותו',
+      (tester) async {
+    // משחזר את רשימת "כרטיסיות פתוחות": לחיצה על X מסירה כרטיסייה ממקור
+    // הנתונים, פעימת הסטרים בונה מחדש את תת-התפריט והשורה נעלמת — התפריט נשאר.
+    final controller = StreamController<Object?>.broadcast();
+    addTearDown(controller.close);
+    final tabs = ['ראב"ד', 'עירובין'];
+    final key = GlobalKey<AppContextMenuRegionState>();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppContextMenuRegion(
+            key: key,
+            menuBuilder: (_, __) => [
+              AppContextMenuEntry(
+                label: 'כרטיסיות פתוחות',
+                childrenRefreshStream: controller.stream,
+                childrenBuilder: () => tabs
+                    .map((t) => AppContextMenuEntry(
+                          label: t,
+                          onTap: () {},
+                          trailing: IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              tabs.remove(t);
+                              controller.add(null);
+                            },
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ],
+            child: const SizedBox(
+              width: 200,
+              height: 200,
+              child: ColoredBox(color: Colors.amber),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await key.currentState!.openMenuAt(const Offset(100, 100));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('כרטיסיות פתוחות'));
+    await tester.pumpAndSettle();
+    expect(find.text('ראב"ד'), findsOneWidget);
+    expect(find.text('עירובין'), findsOneWidget);
+
+    // לחיצה על ה-X של "ראב"ד" — מסירה אותו ופולטת בסטרים
+    await tester.tap(find.byIcon(Icons.close).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('ראב"ד'), findsNothing,
+        reason: 'שורת הכרטיסייה שנסגרה חייבת להיעלם מתת-התפריט');
+    expect(find.text('עירובין'), findsOneWidget,
+        reason: 'שאר הכרטיסיות נשארות');
+    expect(find.text('כרטיסיות פתוחות'), findsOneWidget,
+        reason: 'התפריט נשאר פתוח — רק השורה הוסרה');
   });
 
   testWidgets('openMenuAt: קריאה כפולה אינה פותחת שני תפריטים', (tester) async {

@@ -665,6 +665,9 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton>
   // ה-controller — open() אינו מבקש פוקוס, כך שהבחירה ב-SelectableRegion נשמרת.
   Timer? _hoverOpenTimer;
 
+  // מנוי לרענון תגובתי של הילדים (למשל רשימת "כרטיסיות פתוחות").
+  StreamSubscription<Object?>? _refreshSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -674,13 +677,26 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton>
         _ensureMenuChildrenLoaded();
       }
     });
+    // רענון הילדים בכל פעימה של הסטרים — בונה מחדש מ-entriesBuilder עם נתונים
+    // טריים. הסטרים פולט אחרי עדכון מקור הנתונים, כך שהרשימה מעודכנת.
+    _refreshSubscription =
+        widget.entry.childrenRefreshStream?.listen((_) => _refreshChildren());
   }
 
   @override
   void dispose() {
+    _refreshSubscription?.cancel();
     _hoverOpenTimer?.cancel();
     _submenuButtonFocusNode.dispose();
     super.dispose();
+  }
+
+  void _refreshChildren() {
+    if (!mounted) return;
+    _entries = null;
+    _menuChildren = null;
+    _hasEnabledChildren = null;
+    _ensureMenuChildrenLoaded();
   }
 
   // פתיחה-בריחוף: השהיה קצרה כדי שמעבר עכבר חולף לא יפתח תת-תפריט.
