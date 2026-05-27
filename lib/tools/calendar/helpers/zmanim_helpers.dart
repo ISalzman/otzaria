@@ -78,9 +78,16 @@ Map<String, String> calculateDailyTimes(DateTime date, String city) {
       dt = null; // חישובים מסוימים זורקים בתאריכים חריגים (קידוש לבנה)
     }
     if (dt != null) {
-      times[def.id] = def.showHebrewDate
-          ? formatZmanWithHebrewNight(dt)
-          : formatZmanTime(dt, tzLocation);
+      if (def.showHebrewDate) {
+        final label = formatKidushLevanaNight(
+          dt,
+          city,
+          pushToTzais: def.moladPushToTzais,
+        );
+        if (label != null) times[def.id] = label;
+      } else {
+        times[def.id] = formatZmanTime(dt, tzLocation);
+      }
     }
   }
 
@@ -101,6 +108,13 @@ String formatZmanTime(DateTime dt, tz.Location tzLocation) {
   return '${tzDateTime.hour.toString().padLeft(2, '0')}:${tzDateTime.minute.toString().padLeft(2, '0')}';
 }
 
+final RegExp _clockTimePattern = RegExp(r'^\d{1,2}:\d{2}$');
+
+/// בודק אם מחרוזת זמן היא שעת-שעון (HH:MM) — שעבורה מיון לקסיקוגרפי שקול
+/// למיון כרונולוגי. זמני קידוש לבנה מוצגים כתאריך עברי ("ליל ... HH:MM")
+/// ואינם ברי-מיון כרונולוגי לפי מחרוזת התצוגה.
+bool isClockTime(String time) => _clockTimePattern.hasMatch(time);
+
 const List<String> _hebrewNightNames = [
   '',
   'ליל ראשון',
@@ -112,18 +126,76 @@ const List<String> _hebrewNightNames = [
   'ליל שבת',
 ];
 
-/// מעצב זמן לילי (קידוש לבנה) עם ליל-השבוע ויום-החודש העברי שבו הוא חל,
-/// למשל "ליל שני ט"ו לחודש 20:02". מאחר שזהו זמן לילה, היום העברי הוא זה
-/// שמתחיל באותו ערב (לכן מקדמים יום אחד מהתאריך האזרחי).
+/// מעצב זמן קידוש לבנה כתאריך עברי לילי בזמן המקומי של העיר, למשל
+/// "ליל שני ט"ו לחודש 20:02".
 ///
-/// הזמן מבוסס-מולד ומגיע כ-DateTime נאיבי (שעון-קיר של זמן שעון ירושלים),
-/// ולכן מעצבים אותו ישירות משדותיו בלי המרת timezone.
-String formatZmanWithHebrewNight(DateTime dt) {
+/// [rawMolad] הוא הרגע הגולמי (מולד + ימים) כפי שמחזירה kosher_dart דרך
+/// `JewishCalendar` — DateTime נאיבי בזמן ירושלים סטנדרטי (GMT+2 קבוע, ללא
+/// שעון קיץ). הפונקציה:
+///   1. ממירה אותו ל-instant מוחלט ולזמן המקומי של העיר (תיקון אזור הזמן —
+///      אחרת כל הערים היו מקבלות אותה שעה).
+///   2. דוחה אותו לזמן לילי אם הוא נופל ביום (קידוש לבנה אינו נאמר ביום):
+///      ל[pushToTzais] true → צאת הכוכבים (תחילת הזמן), false → עלות השחר
+///      (סוף הזמן).
+///   3. קובעת את ליל-השבוע ויום-החודש העברי לפי השעה בפועל (קידום ליום העברי
+///      הבא רק אם הרגע חל אחרי השקיעה).
+///
+/// מחזירה null אם נתוני העיר או זמני היום אינם זמינים.
+String? formatKidushLevanaNight(
+  DateTime rawMolad,
+  String city, {
+  required bool pushToTzais,
+}) {
+  final cityData = getCityData(city);
+  if (cityData == null) return null;
+  final tzId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
+  final tzLocation = tz.getLocation(tzId);
+
+  // הרגע מבוטא בזמן ירושלים סטנדרטי (GMT+2) — ממירים ל-instant ואז לזמן העיר.
+  final rawInstant = DateTime.utc(rawMolad.year, rawMolad.month, rawMolad.day,
+          rawMolad.hour, rawMolad.minute, rawMolad.second)
+      .subtract(const Duration(hours: 2));
+  final localMoment = tz.TZDateTime.from(rawInstant, tzLocation);
+
+  // בונים לוח זמנים ליום (האזרחי) שבו הרגע נופל בעיר, לחישוב עלות/צאת/שקיעה.
+  final dayContext = buildZmanimCalendarContext(
+    DateTime(localMoment.year, localMoment.month, localMoment.day),
+    city,
+  );
+  final cal = dayContext?.zmanimCalendar;
+  final alos = cal?.getAlosHashachar();
+  final tzais = cal?.getTzais();
+  final sunset = cal?.getSunset();
+
+  tz.TZDateTime chosen = localMoment;
+  tz.TZDateTime? sunsetLocal;
+  if (alos != null && tzais != null && sunset != null) {
+    final alosLocal = tz.TZDateTime.from(alos, tzLocation);
+    final tzaisLocal = tz.TZDateTime.from(tzais, tzLocation);
+    sunsetLocal = tz.TZDateTime.from(sunset, tzLocation);
+    // אם הרגע נופל בשעות היום (בין עלות השחר לצאת הכוכבים) — דוחים אותו.
+    if (rawInstant.isAfter(alosLocal.toUtc()) &&
+        rawInstant.isBefore(tzaisLocal.toUtc())) {
+      chosen = pushToTzais ? tzaisLocal : alosLocal;
+    }
+  }
+
+  // הרגע שייך ליום העברי הבא רק אם הוא חל אחרי שקיעת אותו יום אזרחי.
+  final isNight = sunsetLocal != null && chosen.isAfter(sunsetLocal);
+  return _formatHebrewNightLabel(chosen, advanceToNextDay: isNight);
+}
+
+/// מעצב תאריך עברי לילי לתצוגה: "ליל <שבוע> <יום-חודש> לחודש HH:MM".
+/// [advanceToNextDay] מקדם את היום העברי (כשהרגע חל אחרי השקיעה).
+String _formatHebrewNightLabel(
+  DateTime moment, {
+  required bool advanceToNextDay,
+}) {
   final time =
-      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      '${moment.hour.toString().padLeft(2, '0')}:${moment.minute.toString().padLeft(2, '0')}';
   final jewishDate =
-      JewishDate.fromDateTime(DateTime(dt.year, dt.month, dt.day));
-  jewishDate.forward(); // הלילה שייך ליום העברי הבא
+      JewishDate.fromDateTime(DateTime(moment.year, moment.month, moment.day));
+  if (advanceToNextDay) jewishDate.forward();
   final formatter = HebrewDateFormatter()..hebrewFormat = true;
   final dayOfMonth =
       formatter.formatHebrewNumber(jewishDate.getJewishDayOfMonth());
@@ -1145,6 +1217,7 @@ final List<ZmanDefinition> kZmanimRegistry = [
     category: 'קידוש לבנה',
     explanation: '''סוף זמן קידוש לבנה לפי אמצע החודש בין המולדות (≈ ט"ו).''',
     showHebrewDate: true,
+    moladPushToTzais: false,
     compute: (c) => c.jewishCalendar.getSofZmanKidushLevanaBetweenMoldos(),
   ),
   ZmanDefinition(
@@ -1154,6 +1227,7 @@ final List<ZmanDefinition> kZmanimRegistry = [
     category: 'קידוש לבנה',
     explanation: '''סוף זמן קידוש לבנה לפי 15 ימים אחרי המולד.''',
     showHebrewDate: true,
+    moladPushToTzais: false,
     compute: (c) => c.jewishCalendar.getSofZmanKidushLevana15Days(),
   ),
 ];

@@ -33,6 +33,11 @@ class CalendarTimeEntry {
   final String? leadingLabel;
   final List<CalendarTimeAlertOption> alertOptions;
 
+  /// האם ניתן להפעיל התראה לזמן זה. זמנים המוצגים כתאריך עברי (קידוש
+  /// לבנה) אינם זמני שעון נקודתיים ולכן לא ניתנים לתזמון — עבורם כפתור
+  /// ההתראה אינו מוצג כלל.
+  final bool canAlert;
+
   const CalendarTimeEntry({
     required this.id,
     required this.name,
@@ -43,6 +48,7 @@ class CalendarTimeEntry {
     this.trailingLabel,
     this.leadingLabel,
     this.alertOptions = const [],
+    this.canAlert = true,
   });
 }
 
@@ -66,15 +72,18 @@ CalendarTimeEntry? entryFromZmanDefinition(
 ) {
   final time = dailyTimes[def.id];
   if (time == null || time.isEmpty) return null;
+  // זמני תאריך עברי (קידוש לבנה) אינם ניתנים לתזמון התראה.
+  final canAlert = !def.showHebrewDate;
   return CalendarTimeEntry(
     id: def.id,
     name: def.title,
     subtitle: def.subtitle,
     time: time,
     isHolidaySpecial: def.isHolidaySpecial,
-    alertOptions: [
-      CalendarTimeAlertOption(id: def.id, name: def.fullName, time: time),
-    ],
+    canAlert: canAlert,
+    alertOptions: canAlert
+        ? [CalendarTimeAlertOption(id: def.id, name: def.fullName, time: time)]
+        : const [],
   );
 }
 
@@ -170,11 +179,19 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
       if (entry != null) entries.add(entry);
     }
 
+    // סדר ההופעה הנוכחי (סדר הרישום) — שובר-שוויון יציב לזמנים שאינם
+    // שעת-שעון (קידוש לבנה), שמחרוזת התצוגה שלהם אינה ברת-מיון כרונולוגי.
+    final order = {for (final (i, e) in entries.indexed) e.id: i};
     entries.sort((a, b) {
       // חצות לילה תמיד בסוף
       if (a.id == 'chatzosLayla') return 1;
       if (b.id == 'chatzosLayla') return -1;
-      return a.time.compareTo(b.time);
+      final aClock = zmanim_helpers.isClockTime(a.time);
+      final bClock = zmanim_helpers.isClockTime(b.time);
+      if (aClock && bClock) return a.time.compareTo(b.time);
+      // שעות-שעון ממוינות כרונולוגית ומופיעות לפני זמני תאריך עברי.
+      if (aClock != bClock) return aClock ? -1 : 1;
+      return (order[a.id] ?? 0).compareTo(order[b.id] ?? 0);
     });
     return entries;
   }
@@ -782,8 +799,8 @@ class _ZmanCard extends StatelessWidget {
               textColor: textColor,
               titleAtStart: false,
               existingAlert: zmanAlerts[alertOptions[leadingIndex].id],
-              onPressed: () =>
-                  _openAlertDialogForOption(context, alertOptions[leadingIndex]),
+              onPressed: () => _openAlertDialogForOption(
+                  context, alertOptions[leadingIndex]),
             ),
           ),
       ],
@@ -933,22 +950,24 @@ class _ZmanCard extends StatelessWidget {
                                   ),
                             ),
                     ),
-                    const SizedBox(width: 8),
-                    _AlertControl(
-                      hasAlert: hasAlert,
-                      existingAlert: existingAlert,
-                      tooltip: hasAlert
-                          ? _tooltipForAlert(
-                              existingAlert, 'הפעל התראה לזמן זה')
-                          : timeData.alertOptions.isEmpty
-                              ? 'הפעל התראה לזמן זה'
-                              : 'בחר זמן להתראה',
-                      foregroundColor: primaryTextColor,
-                      onPressed: onAlertPressed,
-                      menuEntries: timeData.alertOptions,
-                      onOptionSelected: (option) =>
-                          _openAlertDialogForOption(context, option),
-                    ),
+                    if (timeData.canAlert) ...[
+                      const SizedBox(width: 8),
+                      _AlertControl(
+                        hasAlert: hasAlert,
+                        existingAlert: existingAlert,
+                        tooltip: hasAlert
+                            ? _tooltipForAlert(
+                                existingAlert, 'הפעל התראה לזמן זה')
+                            : timeData.alertOptions.isEmpty
+                                ? 'הפעל התראה לזמן זה'
+                                : 'בחר זמן להתראה',
+                        foregroundColor: primaryTextColor,
+                        onPressed: onAlertPressed,
+                        menuEntries: timeData.alertOptions,
+                        onOptionSelected: (option) =>
+                            _openAlertDialogForOption(context, option),
+                      ),
+                    ],
                   ],
                 ),
             ],

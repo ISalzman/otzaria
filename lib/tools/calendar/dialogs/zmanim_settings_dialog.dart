@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -29,22 +31,45 @@ class ZmanimSettingsContent extends StatelessWidget {
       categories.putIfAbsent(def.category, () => []).add(def);
     }
 
+    // גודל רספונסיבי: 440x540 כתקרה בדסקטופ, ובמסכים צרים מצטמצם לפי
+    // המקום הזמין. מנכים את ה-chrome של ה-AlertDialog (insetPadding +
+    // contentPadding, וגם כותרת/כפתורים בציר האנכי) כדי למנוע overflow.
+    final media = MediaQuery.sizeOf(context);
+    // math.max מגן מפני ערך שלילי במסכים צרים/חלון מוקטן (אחרת SizedBox
+    // היה מקבל מידה שלילית).
+    final width = math.min(440.0, math.max(0.0, media.width - 128));
+    final height = math.min(540.0, math.max(0.0, media.height - 200));
+
     return SizedBox(
-      width: 440,
-      height: 540,
+      width: width,
+      height: height,
       child: BlocBuilder<CalendarCubit, CalendarState>(
         buildWhen: (a, b) =>
             a.enabledZmanim != b.enabledZmanim || a.dailyTimes != b.dailyTimes,
         builder: (context, state) {
           final dailyTimes = state.dailyTimes;
-          // מיון כל קטגוריה לפי זמן היום (זמן חסר — בסוף).
+          // סדר הרישום — שובר-שוויון יציב לזמני תאריך עברי (קידוש לבנה),
+          // שמחרוזת התצוגה שלהם אינה ברת-מיון כרונולוגי.
+          final registryOrder = {
+            for (final (i, d) in kZmanimRegistry.indexed) d.id: i
+          };
+          // מיון כל קטגוריה לפי זמן היום (זמן חסר — בסוף). זמני תאריך עברי
+          // אינם ברי-מיון לקסיקוגרפי ולכן ממוינים לפי סדר הרישום.
           int byTime(ZmanDefinition a, ZmanDefinition b) {
             final ta = dailyTimes[a.id] ?? '';
             final tb = dailyTimes[b.id] ?? '';
-            if (ta.isEmpty && tb.isEmpty) return 0;
+            if (ta.isEmpty && tb.isEmpty) {
+              return (registryOrder[a.id] ?? 0)
+                  .compareTo(registryOrder[b.id] ?? 0);
+            }
             if (ta.isEmpty) return 1;
             if (tb.isEmpty) return -1;
-            return ta.compareTo(tb);
+            final aClock = isClockTime(ta);
+            final bClock = isClockTime(tb);
+            if (aClock && bClock) return ta.compareTo(tb);
+            if (aClock != bClock) return aClock ? -1 : 1;
+            return (registryOrder[a.id] ?? 0)
+                .compareTo(registryOrder[b.id] ?? 0);
           }
 
           return Column(

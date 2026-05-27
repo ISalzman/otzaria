@@ -61,6 +61,12 @@ class ZmanDefinition {
   /// תצוגת תאריך עברי (ליל-שבוע + יום-חודש) במקום שעה בלבד — לקידוש לבנה.
   final bool showHebrewDate;
 
+  /// כיוון התאמת זמן-יום עבור זמני קידוש לבנה (רלוונטי רק כש-[showHebrewDate]).
+  /// רגע קידוש הלבנה (מולד + ימים) עלול ליפול בשעות היום, שאז אי-אפשר לקדש;
+  /// כש-true (תחילת הזמן) הרגע נדחה קדימה לצאת הכוכבים, וכש-false (סוף הזמן)
+  /// הוא נדחה אחורה לעלות השחר.
+  final bool moladPushToTzais;
+
   /// זיווג לכרטיס משולב בלוח: שתי הגדרות עם אותו pairId מוצגות יחד.
   /// בטבלה כל אחת מופיעה כשורה נפרדת. null = תמיד כרטיס בודד.
   final String? pairId;
@@ -79,6 +85,7 @@ class ZmanDefinition {
     this.isHolidaySpecial = false,
     this.defaultEnabled = false,
     this.showHebrewDate = false,
+    this.moladPushToTzais = true,
     this.pairId,
     this.pairLabel = '',
   });
