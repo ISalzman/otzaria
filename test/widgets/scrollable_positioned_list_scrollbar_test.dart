@@ -184,6 +184,59 @@ void main() {
     expect(controller.jumps.last, greaterThanOrEqualTo(97));
   });
 
+  testWidgets(
+      'גרירה שמתחילה על המסילה מחוץ לאגודל קופצת ליעד הנלחץ '
+      '(לחיצה שזוהתה כגרירה)', (tester) async {
+    // רגרסיה: כל מיקרו-תזוזה הופכת tap ל-drag, ואז onTapDown אינו נקרא.
+    // לפני התיקון גרירה כזו רק הזיזה את האגודל ביחס למקומו הנוכחי במקום
+    // לקפוץ ליעד שנבחר, ולכן "הטקסט לא נגלל לשם אלא נשאר באותו מקום".
+    final listener = ItemPositionsListener.create();
+    final controller = _RecordingItemScrollController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 100,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    // האגודל קטן ונמצא בראש (פריטים 0-1 גלויים מתוך 100).
+    (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+        const [
+      ItemPosition(index: 0, itemLeadingEdge: 0, itemTrailingEdge: 0.5),
+      ItemPosition(index: 1, itemLeadingEdge: 0.5, itemTrailingEdge: 1.0),
+    ];
+    await tester.pump();
+
+    final track = find.byType(GestureDetector);
+    final trackTopLeft = tester.getTopLeft(track);
+    final trackBottomRight = tester.getBottomRight(track);
+    // מתחילים גרירה סמוך לתחתית המסילה — הרחק מהאגודל שבראש.
+    final startNearBottom = Offset(
+      (trackTopLeft.dx + trackBottomRight.dx) / 2,
+      trackBottomRight.dy - 5,
+    );
+
+    final gesture = await tester.startGesture(startNearBottom);
+    await tester.pump();
+    // תזוזה מעבר ל-touch-slop כדי שתזוהה כגרירה ולא כ-tap.
+    await gesture.moveBy(const Offset(0, 30));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(controller.jumps, isNotEmpty);
+    // הקפיצה הראשונה (בתחילת הגרירה) חייבת להגיע לאזור התחתון של הספר,
+    // ולא להישאר בראש (היכן שהאגודל היה).
+    expect(controller.jumps.first, greaterThan(80));
+  });
+
   testWidgets('listener ישן לא מעדכן State אחרי החלפת widget ו-dispose',
       (tester) async {
     final firstListener = ItemPositionsListener.create();

@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -151,6 +152,23 @@ class _ScrollablePositionedListScrollbarState
     return (ratio * _maxScrollableIndex).round();
   }
 
+  /// קופץ למיקום מוחלט שנלחץ/נגרר על המסילה: ממרכז את האגודל סביב הנקודה
+  /// ומבצע קפיצה של הרשימה ליעד המתאים. משותף ללחיצה (`onTapDown`) ולתחילת
+  /// גרירה על המסילה (`onVerticalDragStart`), כדי שלחיצה שזוהתה כגרירה (כל
+  /// מיקרו-תזוזה הופכת tap ל-drag) עדיין תקפוץ ליעד ולא רק תזוז מעט.
+  void _jumpToTrackPosition(double localDy, double trackHeight) {
+    if (trackHeight <= 0) return;
+    final clickPosition = localDy / trackHeight;
+    final newThumbPos =
+        (clickPosition - (_thumbHeight / 2)).clamp(0.0, 1.0 - _thumbHeight);
+    setState(() {
+      _thumbPosition = newThumbPos;
+    });
+    final int targetIndex = _indexFromThumbPosition(_thumbPosition);
+    _lastFirstIndex = targetIndex;
+    widget.scrollController.jumpTo(index: targetIndex);
+  }
+
   void _onDragUpdate(double delta, double trackHeight) {
     setState(() {
       _isDragging = true;
@@ -190,30 +208,31 @@ class _ScrollablePositionedListScrollbarState
                 final colorScheme = Theme.of(context).colorScheme;
 
                 return GestureDetector(
+                  // down ולא start: מבטיח ש-onVerticalDragStart מקבל את נקודת
+                  // המגע המקורית, כך שההבחנה בין גרירת אגודל לגרירת מסילה
+                  // והקפיצה אליה מדויקות.
+                  dragStartBehavior: DragStartBehavior.down,
                   onVerticalDragStart: (details) {
+                    final dy = details.localPosition.dy;
+                    final thumbTop = trackHeight * _thumbPosition;
+                    final thumbBottom = thumbTop + trackHeight * _thumbHeight;
                     setState(() {
                       _isDragging = true;
                     });
+                    // גרירה שמתחילה מחוץ לאגודל (על המסילה) — קפיצה מיידית
+                    // ליעד הנלחץ. כך גם לחיצה שזוהתה כגרירה זעירה מגיעה ליעד
+                    // במקום רק להזיז את האגודל מעט. גרירת האגודל עצמו נשארת
+                    // יחסית (onVerticalDragUpdate) כמקודם.
+                    if (dy < thumbTop || dy > thumbBottom) {
+                      _jumpToTrackPosition(dy, trackHeight);
+                    }
                   },
                   onVerticalDragUpdate: (details) {
                     _onDragUpdate(details.delta.dy / trackHeight, trackHeight);
                   },
                   onVerticalDragEnd: (_) => _onDragEnd(),
-                  onTapDown: (details) {
-                    // קפיצה לנקודה שנלחצה (אופציונלי, מדמה הקלקה על המסילה)
-                    final clickPosition =
-                        details.localPosition.dy / trackHeight;
-                    double newThumbPos = clickPosition - (_thumbHeight / 2);
-                    newThumbPos = newThumbPos.clamp(0.0, 1.0 - _thumbHeight);
-
-                    setState(() {
-                      _thumbPosition = newThumbPos;
-                    });
-
-                    final int targetIndex =
-                        _indexFromThumbPosition(_thumbPosition);
-                    widget.scrollController.jumpTo(index: targetIndex);
-                  },
+                  onTapDown: (details) => _jumpToTrackPosition(
+                      details.localPosition.dy, trackHeight),
                   child: Container(
                     color: colorScheme.surface.withValues(alpha: 0.92),
                     child: Stack(
