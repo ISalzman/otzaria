@@ -152,6 +152,15 @@ class _ScrollablePositionedListScrollbarState
     return (ratio * _maxScrollableIndex).round();
   }
 
+  /// בודק אם נקודה אנכית על המסילה נמצאת מחוץ לאגודל. רק נקודה כזו מצדיקה
+  /// קפיצה מוחלטת; לחיצה/גרירה שמתחילה על האגודל עצמו נועדה לגרירה יחסית
+  /// ואסור למרכז את האגודל מחדש סביב הסמן (זה היה מקפיץ את הרשימה).
+  bool _isOutsideThumb(double localDy, double trackHeight) {
+    final thumbTop = trackHeight * _thumbPosition;
+    final thumbBottom = thumbTop + trackHeight * _thumbHeight;
+    return localDy < thumbTop || localDy > thumbBottom;
+  }
+
   /// קופץ למיקום מוחלט שנלחץ/נגרר על המסילה: ממרכז את האגודל סביב הנקודה
   /// ומבצע קפיצה של הרשימה ליעד המתאים. משותף ללחיצה (`onTapDown`) ולתחילת
   /// גרירה על המסילה (`onVerticalDragStart`), כדי שלחיצה שזוהתה כגרירה (כל
@@ -214,8 +223,6 @@ class _ScrollablePositionedListScrollbarState
                   dragStartBehavior: DragStartBehavior.down,
                   onVerticalDragStart: (details) {
                     final dy = details.localPosition.dy;
-                    final thumbTop = trackHeight * _thumbPosition;
-                    final thumbBottom = thumbTop + trackHeight * _thumbHeight;
                     setState(() {
                       _isDragging = true;
                     });
@@ -223,7 +230,7 @@ class _ScrollablePositionedListScrollbarState
                     // ליעד הנלחץ. כך גם לחיצה שזוהתה כגרירה זעירה מגיעה ליעד
                     // במקום רק להזיז את האגודל מעט. גרירת האגודל עצמו נשארת
                     // יחסית (onVerticalDragUpdate) כמקודם.
-                    if (dy < thumbTop || dy > thumbBottom) {
+                    if (_isOutsideThumb(dy, trackHeight)) {
                       _jumpToTrackPosition(dy, trackHeight);
                     }
                   },
@@ -231,8 +238,15 @@ class _ScrollablePositionedListScrollbarState
                     _onDragUpdate(details.delta.dy / trackHeight, trackHeight);
                   },
                   onVerticalDragEnd: (_) => _onDragEnd(),
-                  onTapDown: (details) => _jumpToTrackPosition(
-                      details.localPosition.dy, trackHeight),
+                  // קפיצה רק כשהלחיצה על המסילה. לחיצה על האגודל עצמו נורית גם
+                  // כשהמחווה הופכת מיד לגרירה — קפיצה כאן הייתה ממקמת אותו מחדש
+                  // סביב הסמן ומקפיצה את הרשימה לפני שהגרירה התחילה.
+                  onTapDown: (details) {
+                    final dy = details.localPosition.dy;
+                    if (_isOutsideThumb(dy, trackHeight)) {
+                      _jumpToTrackPosition(dy, trackHeight);
+                    }
+                  },
                   child: Container(
                     color: colorScheme.surface.withValues(alpha: 0.92),
                     child: Stack(
