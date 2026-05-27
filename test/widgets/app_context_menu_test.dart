@@ -236,6 +236,119 @@ void main() {
     );
   });
 
+  testWidgets(
+      'ריחוף מעל SubmenuButton פותח את התת-תפריט אחרי השהיה (בלי לחיצה)',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: AppContextMenuRegion(
+              menuBuilder: (_, __) => [
+                AppContextMenuEntry(
+                  label: 'תת-תפריט',
+                  children: [
+                    AppContextMenuEntry(label: 'פנימי', onTap: () {}),
+                  ],
+                ),
+              ],
+              child: const SizedBox(
+                width: 100,
+                height: 100,
+                child: ColoredBox(color: Colors.amber),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // פתיחת תפריט ההקשר עם לחיצה ימנית
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryButton,
+    );
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
+    await gesture.moveTo(regionCenter);
+    await gesture.down(regionCenter);
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('פנימי'), findsNothing,
+        reason: 'התת-תפריט אמור להיות סגור לפני הריחוף');
+
+    // ריחוף מעל פריט התת-תפריט — אמור לפתוח אותו אחרי השהיית 300ms, בלי לחיצה.
+    // (לפני התיקון: השבתת הפוקוס ביטלה את הפתיחה-בריחוף המובנית של SubmenuButton.)
+    await gesture.moveTo(tester.getCenter(find.text('תת-תפריט')));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('פנימי'),
+      findsOneWidget,
+      reason: 'ריחוף מעל פריט התת-תפריט חייב לפתוח אותו בלי צורך בלחיצה',
+    );
+  });
+
+  testWidgets('מעבר עכבר חולף (פחות מההשהיה) אינו פותח את התת-תפריט',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: AppContextMenuRegion(
+              menuBuilder: (_, __) => [
+                AppContextMenuEntry(
+                  label: 'תת-תפריט',
+                  children: [
+                    AppContextMenuEntry(label: 'פנימי', onTap: () {}),
+                  ],
+                ),
+                AppContextMenuEntry(label: 'פריט רגיל', onTap: () {}),
+              ],
+              child: const SizedBox(
+                width: 100,
+                height: 100,
+                child: ColoredBox(color: Colors.amber),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryButton,
+    );
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
+    await gesture.moveTo(regionCenter);
+    await gesture.down(regionCenter);
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    // ריחוף קצר מעל התת-תפריט ויציאה ממנו לפני שההשהיה הסתיימה
+    await gesture.moveTo(tester.getCenter(find.text('תת-תפריט')));
+    await tester.pump(const Duration(milliseconds: 100));
+    await gesture.moveTo(tester.getCenter(find.text('פריט רגיל')));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('פנימי'),
+      findsNothing,
+      reason: 'יציאה מהפריט לפני תום ההשהיה חייבת לבטל את הפתיחה-בריחוף',
+    );
+  });
+
   testWidgets('גרירה לבחירת טקסט מחוץ לתפריט סוגרת את התפריט', (tester) async {
     // בדיקה עצמאית — מנהלת את כל ה-gestures ידנית כדי לשלוט בסדר down/up
     await tester.pumpWidget(
