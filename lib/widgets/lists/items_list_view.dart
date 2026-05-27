@@ -264,8 +264,8 @@ class _ItemsListViewState extends State<ItemsListView> {
         for (final group in groups.entries) ...[
           Builder(
             builder: (context) {
-              final title = widget.groupTitleBuilder
-                  ?.call(group.value.first.value);
+              final title =
+                  widget.groupTitleBuilder?.call(group.value.first.value);
               if (title == null || title.isEmpty) {
                 return const SizedBox(height: 12);
               }

@@ -16,7 +16,8 @@ class CommentatorsTab extends OpenedTab {
   final bool _disposeSourceTabOnDispose;
   late final TextBookBloc bloc;
   final ItemScrollController scrollController = ItemScrollController();
-  final ItemPositionsListener positionsListener = ItemPositionsListener.create();
+  final ItemPositionsListener positionsListener =
+      ItemPositionsListener.create();
 
   /// השורה שנבחרה ב-sourceTab בעת הפתיחה (אם הייתה), null אם לא הייתה בחירה
   final int? initialSelectedLine;
@@ -48,8 +49,8 @@ class CommentatorsTab extends OpenedTab {
       initialState: TextBookInitial.named(
         sourceTab.book,
         startIndex,
-        false,      // openLeftPane
-        const [],   // commentators — ייטען אחרי availableCommentators
+        false, // openLeftPane
+        const [], // commentators — ייטען אחרי availableCommentators
       ),
       scrollController: scrollController,
       positionsListener: positionsListener,
@@ -60,9 +61,8 @@ class CommentatorsTab extends OpenedTab {
   factory CommentatorsTab.fromJson(Map<String, dynamic> json) {
     // Hive מחזיר nested maps כ-Map<dynamic, dynamic> — צריך להמיר
     final rawSourceTab = json['sourceTab'];
-    final Map<String, dynamic>? sourceJson = rawSourceTab is Map
-        ? Map<String, dynamic>.from(rawSourceTab)
-        : null;
+    final Map<String, dynamic>? sourceJson =
+        rawSourceTab is Map ? Map<String, dynamic>.from(rawSourceTab) : null;
     final TextBookTab sourceTab = sourceJson != null
         ? TextBookTab.fromJson(sourceJson)
         : TextBookTab(
@@ -74,13 +74,13 @@ class CommentatorsTab extends OpenedTab {
     final tab = CommentatorsTab(
       sourceTab: sourceTab,
       disposeSourceTabOnDispose: true,
-    )
-      ..isPinned = json['isPinned'] ?? false;
+    )..isPinned = json['isPinned'] ?? false;
     return tab;
   }
 
   @override
-  OpenedTab clone() => CommentatorsTab(sourceTab: sourceTab)..isPinned = isPinned;
+  OpenedTab clone() =>
+      CommentatorsTab(sourceTab: sourceTab)..isPinned = isPinned;
 
   @override
   void dispose() {

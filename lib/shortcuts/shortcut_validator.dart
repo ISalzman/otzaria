@@ -102,8 +102,7 @@ class ShortcutValidator {
     'key-shortcut-calendar-today': 'לוח שנה: מעבר להיום',
     'key-shortcut-calendar-create-event': 'לוח שנה: יצירת אירוע',
     'key-shortcut-calendar-toggle-view': 'לוח שנה: מעבר בין תצוגות',
-    'key-shortcut-shamor-zachor-cycle-filter':
-        'שמור וזכור: מעבר בין הסינונים',
+    'key-shortcut-shamor-zachor-cycle-filter': 'שמור וזכור: מעבר בין הסינונים',
     'key-shortcut-toggle-nav-pane': 'פתח/סגור חלונית ניווט',
     'key-shortcut-toggle-commentators-pane': 'פתח/סגור חלונית מפרשים',
     'key-shortcut-open-commentators-tab': 'פתח כרטיסיית מפרשים',

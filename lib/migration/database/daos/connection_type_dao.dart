@@ -85,4 +85,3 @@ class ConnectionTypeDao {
     return db.updatedRows;
   }
 }
-

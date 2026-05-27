@@ -11,6 +11,7 @@ class LibraryState extends Equatable {
   final String? searchQuery;
   final List<String>? selectedTopics;
   final Book? previewBook;
+
   /// ספרים חדשים שנמצאו ברענון ודורשים אינדוקס. מתאפס אחרי כל copyWith.
   final List<Book>? newBooksToIndex;
 

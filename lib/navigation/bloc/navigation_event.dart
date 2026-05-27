@@ -24,5 +24,3 @@ class CheckLibrary extends NavigationEvent {
 class OpenNewSearchTab extends NavigationEvent {
   const OpenNewSearchTab();
 }
-
-

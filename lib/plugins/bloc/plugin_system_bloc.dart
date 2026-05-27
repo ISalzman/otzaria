@@ -59,10 +59,10 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       } else {
         unawaited(
           PluginRuntimeDispatcher.instance.reloadPlugin(change.pluginId).then(
-            (_) {},
-            onError: (e) =>
-                debugPrint('Plugin dev reload error [${change.pluginId}]: $e'),
-          ),
+                (_) {},
+                onError: (e) => debugPrint(
+                    'Plugin dev reload error [${change.pluginId}]: $e'),
+              ),
         );
       }
     });
@@ -108,8 +108,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     }
   }
 
-  Future<void> _onPinPluginToNavRailRequested(
-      PinPluginToNavRailRequested event,
+  Future<void> _onPinPluginToNavRailRequested(PinPluginToNavRailRequested event,
       Emitter<PluginSystemState> emit) async {
     try {
       await repository.updateNavRailPinState(event.pluginId, true);
@@ -132,16 +131,14 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   }
 
   Future<void> _onSetPluginHiddenRequested(
-      SetPluginHiddenRequested event,
-      Emitter<PluginSystemState> emit) async {
+      SetPluginHiddenRequested event, Emitter<PluginSystemState> emit) async {
     try {
       await repository.updateHiddenState(event.pluginId, event.hidden);
       add(LoadPlugins());
     } catch (e) {
-      UiSnack.showError(
-          event.hidden
-              ? 'שגיאה בהסתרת התוסף: ${e.toString()}'
-              : 'שגיאה בהצגת התוסף: ${e.toString()}');
+      UiSnack.showError(event.hidden
+          ? 'שגיאה בהסתרת התוסף: ${e.toString()}'
+          : 'שגיאה בהצגת התוסף: ${e.toString()}');
     }
   }
 

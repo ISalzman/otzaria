@@ -55,12 +55,11 @@ class WorkspaceRepository {
       if (currentId == null && workspaces.isNotEmpty) {
         final legacyIndex =
             box.get(_legacyCurrentWorkspaceKey, defaultValue: 0) as int;
-        final workspaceAtLegacy = (legacyIndex >= 0 &&
-                legacyIndex < decoded.length)
-            ? decoded[legacyIndex]
-            : null;
-        currentId =
-            (workspaceAtLegacy ?? workspaces.first).id;
+        final workspaceAtLegacy =
+            (legacyIndex >= 0 && legacyIndex < decoded.length)
+                ? decoded[legacyIndex]
+                : null;
+        currentId = (workspaceAtLegacy ?? workspaces.first).id;
         unawaited(box.put(_currentWorkspaceIdKey, currentId));
       }
 

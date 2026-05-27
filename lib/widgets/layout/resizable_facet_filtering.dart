@@ -32,7 +32,8 @@ class _ResizableFacetFilteringState extends State<ResizableFacetFiltering> {
     super.initState();
     // טעינת הרוחב מההגדרות
     final settingsState = context.read<SettingsBloc>().state;
-    _currentWidth = settingsState.facetFilteringWidth.clamp(widget.minWidth, widget.maxWidth);
+    _currentWidth = settingsState.facetFilteringWidth
+        .clamp(widget.minWidth, widget.maxWidth);
   }
 
   @override
@@ -42,7 +43,8 @@ class _ResizableFacetFilteringState extends State<ResizableFacetFiltering> {
         // עדכון הרוחב כאשר ההגדרות משתנות מבחוץ
         if (state.facetFilteringWidth != _currentWidth) {
           setState(() {
-            _currentWidth = state.facetFilteringWidth.clamp(widget.minWidth, widget.maxWidth);
+            _currentWidth = state.facetFilteringWidth
+                .clamp(widget.minWidth, widget.maxWidth);
           });
         }
       },

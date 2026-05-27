@@ -72,8 +72,7 @@ class PluginPackager {
     try {
       manifestJson = jsonDecode(manifestStr) as Map<String, dynamic>;
     } catch (e) {
-      throw PluginPackagerException(
-          'הקובץ manifest.json אינו JSON תקין: $e');
+      throw PluginPackagerException('הקובץ manifest.json אינו JSON תקין: $e');
     }
 
     PluginManifest manifest;
@@ -113,8 +112,7 @@ class PluginPackager {
     final outFile = File(resolvedOutPath);
 
     if (outFile.existsSync() && !force) {
-      throw PluginPackagerException(
-          'קובץ הפלט כבר קיים: $resolvedOutPath\n'
+      throw PluginPackagerException('קובץ הפלט כבר קיים: $resolvedOutPath\n'
           'יש להשתמש בדגל --force כדי לדרוס אותו.');
     }
 

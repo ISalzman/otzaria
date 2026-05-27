@@ -132,8 +132,7 @@ class _BookmarkViewState extends State<BookmarkView> {
   @override
   Widget build(BuildContext context) {
     final bookFilter = widget.bookFilter;
-    final filterIdentity =
-        bookFilter == null ? null : bookIdentity(bookFilter);
+    final filterIdentity = bookFilter == null ? null : bookIdentity(bookFilter);
     return BlocBuilder<BookmarkBloc, BookmarkState>(
       builder: (context, state) {
         // ספר עם 2+ סימניות יקבל קבוצה משלו
@@ -150,8 +149,7 @@ class _BookmarkViewState extends State<BookmarkView> {
           if ((countPerBook[id] ?? 0) > 1) return bm.book.title;
           final path = bm.book.categoryPath;
           if (path == null || path.isEmpty) return bm.book.title;
-          final segments =
-              path.split(', ').where((s) => s.isNotEmpty).toList();
+          final segments = path.split(', ').where((s) => s.isNotEmpty).toList();
           return segments.isNotEmpty ? segments.last : bm.book.title;
         }
 
@@ -163,8 +161,7 @@ class _BookmarkViewState extends State<BookmarkView> {
               ? null
               : (item) => bookIdentity(item.book) == filterIdentity,
           groupKeyBuilder: (item) => bookmarkGroupKey(item as Bookmark),
-          groupTitleBuilder: (item) =>
-              bookmarkGroupTitle(item as Bookmark),
+          groupTitleBuilder: (item) => bookmarkGroupTitle(item as Bookmark),
           onItemTap: (ctx, item, originalIndex) => _openBook(
             ctx,
             item,

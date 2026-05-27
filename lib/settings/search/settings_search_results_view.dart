@@ -152,7 +152,8 @@ class _SearchResultTile extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: colorScheme.primary.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(20),
@@ -332,4 +333,3 @@ String _tabLabel(SettingsTab tab) {
       return 'אודות';
   }
 }
-

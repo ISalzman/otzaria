@@ -266,7 +266,6 @@ class FileSyncService {
     return normalizedBookPath.startsWith(folderWithSeparator);
   }
 
-
   Future<bool> _categoryBelongsToAnyConfiguredFolder(
     int categoryId,
     List<CustomFolder> customFolders,

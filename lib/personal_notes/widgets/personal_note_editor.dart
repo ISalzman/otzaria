@@ -18,17 +18,14 @@ import 'package:otzaria/personal_notes/widgets/personal_note_link_dialog.dart';
 const _rtlArrowShortcuts = <ShortcutActivator, Intent>{
   // Horizontal navigation (RTL-swapped)
   SingleActivator(LogicalKeyboardKey.arrowRight):
-      ExtendSelectionByCharacterIntent(
-          forward: false, collapseSelection: true),
+      ExtendSelectionByCharacterIntent(forward: false, collapseSelection: true),
   SingleActivator(LogicalKeyboardKey.arrowLeft):
-      ExtendSelectionByCharacterIntent(
-          forward: true, collapseSelection: true),
+      ExtendSelectionByCharacterIntent(forward: true, collapseSelection: true),
   SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
       ExtendSelectionByCharacterIntent(
           forward: false, collapseSelection: false),
   SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
-      ExtendSelectionByCharacterIntent(
-          forward: true, collapseSelection: false),
+      ExtendSelectionByCharacterIntent(forward: true, collapseSelection: false),
   SingleActivator(LogicalKeyboardKey.arrowRight, control: true):
       ExtendSelectionToNextWordBoundaryIntent(
           forward: false, collapseSelection: true),

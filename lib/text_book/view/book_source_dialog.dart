@@ -13,14 +13,23 @@ const _sourceMappings = {
   'benyehuda': (text: 'פרוייקט בן-יהודה', url: 'https://benyehuda.org/'),
   'dicta': (text: 'ספריית דיקטה', url: 'https://library.dicta.org.il/'),
   'onyourway': (text: 'ובלכתך בדרך', url: 'https://mobile.tora.ws/'),
-  'orayta': (text: 'אורייתא', url: 'https://github.com/MosheWagner/Orayta-Books'),
+  'orayta': (
+    text: 'אורייתא',
+    url: 'https://github.com/MosheWagner/Orayta-Books'
+  ),
   'tashma': (text: 'תא שמע', url: 'https://tashma.co.il/'),
   'pninim': (text: 'פנינים', url: 'https://pninim.org/'),
   'wikisource': (text: 'ויקיטקסט', url: 'https://he.wikisource.org/wiki'),
-  'wikijewishbooks': (text: 'אוצר הספרים היהודי השיתופי', url: 'https://wiki.jewishbooks.org.il/'),
+  'wikijewishbooks': (
+    text: 'אוצר הספרים היהודי השיתופי',
+    url: 'https://wiki.jewishbooks.org.il/'
+  ),
   'morebooks': (text: 'ספרים פרטיים או מקורות נוספים', url: ''),
   'tootzaria': (text: 'מקורות שהועברו לאוצריא', url: ''),
-  'toratemet': (text: 'תורת אמת', url: 'http://www.toratemetfreeware.com/index.html?downloads;1;'),
+  'toratemet': (
+    text: 'תורת אמת',
+    url: 'http://www.toratemetfreeware.com/index.html?downloads;1;'
+  ),
   'unknown': (text: 'מקור לא ידוע', url: ''),
 };
 
@@ -28,10 +37,11 @@ const _sourceMappings = {
 /// תומך בשמות המקורות כפי שהם מאוחסנים ב-DB (case-insensitive)
 ({String text, String url}) getSourceDisplayInfo(String source) {
   // נרמול המחרוזת: הסרת רווחים, המרה לאותיות קטנות והסרת תווים מפרידים
-  final normalized = source.toLowerCase().replaceAll(_sourceNormalizationRegex, '');
-  
+  final normalized =
+      source.toLowerCase().replaceAll(_sourceNormalizationRegex, '');
+
   var key = normalized;
-  
+
   // טיפול מיוחד ב-ToratEmet (בגלל בעיה עם תווים)
   if (key.contains('toratemet')) {
     key = 'toratemet';
@@ -40,7 +50,7 @@ const _sourceMappings = {
   else if (key.endsWith('tootzaria') && key != 'tootzaria') {
     key = key.substring(0, key.length - 'tootzaria'.length);
   }
-  
+
   // חיפוש במיפוי, אם לא נמצא - מחזירים את המקור המקורי
   return _sourceMappings[key] ?? (text: source, url: '');
 }

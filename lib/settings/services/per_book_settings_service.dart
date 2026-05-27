@@ -264,15 +264,16 @@ class PdfBookPerBookSettings {
 
   Map<String, dynamic> toJson() => {
         if (zoom != null) 'zoom': zoom,
-        if (activeCommentators != null) 'activeCommentators': activeCommentators,
+        if (activeCommentators != null)
+          'activeCommentators': activeCommentators,
         if (layoutMode != null) 'layoutMode': layoutMode!.name,
       };
 
   factory PdfBookPerBookSettings.fromJson(Map<String, dynamic> json) {
     return PdfBookPerBookSettings(
       zoom: json['zoom'] as double?,
-      activeCommentators: (json['activeCommentators'] as List<dynamic>?)
-          ?.cast<String>(),
+      activeCommentators:
+          (json['activeCommentators'] as List<dynamic>?)?.cast<String>(),
       layoutMode: json['layoutMode'] != null
           ? PdfLayoutMode.values.firstWhere(
               (e) => e.name == json['layoutMode'],

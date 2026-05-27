@@ -1158,9 +1158,8 @@ class _MeasurementConverterScreenState
           color: isSelected ? cs.secondaryContainer : cs.surface,
           borderRadius: BorderRadius.circular(AppTokens.radiusSM),
           border: Border.all(
-            color: isSelected
-                ? cs.secondary
-                : cs.outline.withValues(alpha: 0.25),
+            color:
+                isSelected ? cs.secondary : cs.outline.withValues(alpha: 0.25),
             width: isSelected ? 1.5 : 1.0,
           ),
         ),

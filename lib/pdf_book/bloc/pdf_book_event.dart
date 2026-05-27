@@ -39,6 +39,7 @@ class DocumentReady extends PdfBookEvent {
 /// Called when document loading fails
 class DocumentLoadFailed extends PdfBookEvent {
   final String message;
+
   /// כשאמת — הבלוק יפעיל retry אוטומטי שקט במקום להציג כפתור.
   final bool autoRetry;
 

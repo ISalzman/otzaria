@@ -79,7 +79,8 @@ class InstalledPlugin {
       pinned: (map['pinned'] as int) != 0,
       pinnedToNavRail: ((map['pinned_to_nav_rail'] as int?) ?? 0) != 0,
       hiddenFromTools: ((map['hidden_from_tools'] as int?) ?? 0) != 0,
-      manifest: PluginManifest.fromJson(jsonDecode(map['manifest_json'] as String)),
+      manifest:
+          PluginManifest.fromJson(jsonDecode(map['manifest_json'] as String)),
       installedAt: DateTime.parse(map['installed_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
       sourceType: map['source_type'] as String? ?? 'packaged',

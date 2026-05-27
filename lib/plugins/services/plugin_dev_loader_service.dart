@@ -39,7 +39,8 @@ class PluginDevLoaderService {
 
     final existingPlugin = await _repository.getPlugin(manifest.id);
     if (existingPlugin != null && !existingPlugin.isDevelopment) {
-      throw Exception('כבר קיים תוסף מותקן (רגיל) עם אותו מזהה. מחק או שנה id.');
+      throw Exception(
+          'כבר קיים תוסף מותקן (רגיל) עם אותו מזהה. מחק או שנה id.');
     }
 
     // טעינה-מחדש של תוסף פיתוח: שומרים את הסדר הידני.

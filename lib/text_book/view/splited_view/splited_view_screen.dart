@@ -96,8 +96,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     if (!mounted) return;
     // במצב מפרשים מתחת לטקסט הקיצור לא רלוונטי — המפרשים תמיד גלויים inline.
     if (!widget.showSplitView) return;
-    final isOnCommentary =
-        _paneOpen && _currentTabIndex == _commentaryTabIndex;
+    final isOnCommentary = _paneOpen && _currentTabIndex == _commentaryTabIndex;
     if (isOnCommentary) {
       setState(() {
         _paneOpen = false;
@@ -143,9 +142,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
         // סוגרים את החלונית הצדית. חשוב לבדוק שהמצב השתנה — אחרת
         // שינוי טאב פנימי (initialTabIndex) ב-'מפרשים מתחת' היה גורם
         // לסגירת החלונית בכל מעבר בין הלשוניות.
-        if (oldWidget.showSplitView &&
-            !widget.showSplitView &&
-            _paneOpen) {
+        if (oldWidget.showSplitView && !widget.showSplitView && _paneOpen) {
           _paneOpen = false;
         }
       });
@@ -290,7 +287,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                 onClose: () {
                   setState(() {
                     _paneOpen = false;
-                              });
+                  });
                 },
                 paneContent: ValueListenableBuilder<String?>(
                   valueListenable: _savedSelectedText,

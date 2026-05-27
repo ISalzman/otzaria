@@ -38,15 +38,7 @@ class ToolsManagementPanel extends StatefulWidget {
       subtitle: 'הסתר כלים מובנים או תוספים מהממשק',
       tab: SettingsTab.tools,
       cardId: 'tools.management',
-      keywords: [
-        'הסתר',
-        'הסתרה',
-        'הסתרת',
-        'הצג',
-        'מוסתר',
-        'כלים',
-        'תוספים'
-      ],
+      keywords: ['הסתר', 'הסתרה', 'הסתרת', 'הצג', 'מוסתר', 'כלים', 'תוספים'],
     ),
     SettingsSearchEntry(
       id: 'tools.management.pin_nav_rail',
@@ -119,54 +111,53 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                if (_anySelected)
-                  _ActionBar(
-                    selectedIds: _selectedIds.toSet(),
-                    plugins: plugins,
-                    settingsState: settingsState,
-                    onClear: _clearSelection,
-                  ),
-                SettingsCard(
-                  title: 'כלים מובנים',
-                  subtitle:
-                      'בחר כלים כדי להסתיר מהממשק או להצמיד לסרגל הניווט הראשי.',
-                  children: [
-                    for (final meta in kBuiltInToolsCatalog)
-                      _BuiltInToolRow(
-                        meta: meta,
-                        hidden:
-                            settingsState.hiddenBuiltInToolIds.contains(meta.toolId),
-                        pinnedToNavRail: settingsState
-                            .builtInToolsPinnedToNavRail
-                            .contains(meta.toolId),
-                        selected: _selectedIds.contains(meta.toolId),
-                        onSelectChanged: (v) => _toggle(meta.toolId, v),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                if (plugins.isNotEmpty)
+                  if (_anySelected)
+                    _ActionBar(
+                      selectedIds: _selectedIds.toSet(),
+                      plugins: plugins,
+                      settingsState: settingsState,
+                      onClear: _clearSelection,
+                    ),
                   SettingsCard(
-                    title: 'תוספים מותקנים',
+                    title: 'כלים מובנים',
                     subtitle:
-                        'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
+                        'בחר כלים כדי להסתיר מהממשק או להצמיד לסרגל הניווט הראשי.',
                     children: [
-                      for (final plugin in plugins)
-                        _DraggableSettingsPluginRow(
-                          key: ValueKey(plugin.pluginId),
-                          plugin: plugin,
-                          selected: _selectedIds.contains(plugin.pluginId),
-                          onSelectChanged: (v) =>
-                              _toggle(plugin.pluginId, v),
-                          onAcceptSource: (sourceId) => _handleReorder(
-                            context: context,
-                            allPlugins: plugins,
-                            sourcePluginId: sourceId,
-                            targetPluginId: plugin.pluginId,
-                          ),
+                      for (final meta in kBuiltInToolsCatalog)
+                        _BuiltInToolRow(
+                          meta: meta,
+                          hidden: settingsState.hiddenBuiltInToolIds
+                              .contains(meta.toolId),
+                          pinnedToNavRail: settingsState
+                              .builtInToolsPinnedToNavRail
+                              .contains(meta.toolId),
+                          selected: _selectedIds.contains(meta.toolId),
+                          onSelectChanged: (v) => _toggle(meta.toolId, v),
                         ),
                     ],
                   ),
+                  const SizedBox(height: 16),
+                  if (plugins.isNotEmpty)
+                    SettingsCard(
+                      title: 'תוספים מותקנים',
+                      subtitle:
+                          'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
+                      children: [
+                        for (final plugin in plugins)
+                          _DraggableSettingsPluginRow(
+                            key: ValueKey(plugin.pluginId),
+                            plugin: plugin,
+                            selected: _selectedIds.contains(plugin.pluginId),
+                            onSelectChanged: (v) => _toggle(plugin.pluginId, v),
+                            onAcceptSource: (sourceId) => _handleReorder(
+                              context: context,
+                              allPlugins: plugins,
+                              sourcePluginId: sourceId,
+                              targetPluginId: plugin.pluginId,
+                            ),
+                          ),
+                      ],
+                    ),
                 ],
               ),
             );
@@ -182,8 +173,10 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
     required String sourcePluginId,
     required String targetPluginId,
   }) {
-    final sourceIdx = allPlugins.indexWhere((p) => p.pluginId == sourcePluginId);
-    final targetIdx = allPlugins.indexWhere((p) => p.pluginId == targetPluginId);
+    final sourceIdx =
+        allPlugins.indexWhere((p) => p.pluginId == sourcePluginId);
+    final targetIdx =
+        allPlugins.indexWhere((p) => p.pluginId == targetPluginId);
     if (sourceIdx < 0 || targetIdx < 0) return;
     final reordered = List.of(allPlugins);
     final src = reordered.removeAt(sourceIdx);
@@ -372,8 +365,7 @@ class _ActionBar extends StatelessWidget {
   void _onToggleHide(BuildContext context) {
     final shouldHide = !_allSelectedAreHidden;
     // כלים מובנים
-    final newHidden =
-        Set<String>.from(settingsState.hiddenBuiltInToolIds);
+    final newHidden = Set<String>.from(settingsState.hiddenBuiltInToolIds);
     for (final m in _selectedBuiltIns) {
       if (shouldHide) {
         newHidden.add(m.toolId);
@@ -383,9 +375,7 @@ class _ActionBar extends StatelessWidget {
     }
     if (newHidden.length != settingsState.hiddenBuiltInToolIds.length ||
         !newHidden.containsAll(settingsState.hiddenBuiltInToolIds)) {
-      context
-          .read<SettingsBloc>()
-          .add(UpdateHiddenBuiltInToolIds(newHidden));
+      context.read<SettingsBloc>().add(UpdateHiddenBuiltInToolIds(newHidden));
     }
     // תוספים
     final bloc = context.read<PluginSystemBloc>();
@@ -410,10 +400,8 @@ class _ActionBar extends StatelessWidget {
         newPinned.remove(m.toolId);
       }
     }
-    if (newPinned.length !=
-            settingsState.builtInToolsPinnedToNavRail.length ||
-        !newPinned
-            .containsAll(settingsState.builtInToolsPinnedToNavRail)) {
+    if (newPinned.length != settingsState.builtInToolsPinnedToNavRail.length ||
+        !newPinned.containsAll(settingsState.builtInToolsPinnedToNavRail)) {
       context
           .read<SettingsBloc>()
           .add(UpdateBuiltInToolsPinnedToNavRail(newPinned));
@@ -443,12 +431,10 @@ class _ActionBar extends StatelessWidget {
 
   void _setNetworkAccess(BuildContext context, {required bool granted}) {
     final eligible = _selectedPlugins
-        .where((p) =>
-            p.manifest.permissions.contains(_networkAccessPermission))
+        .where((p) => p.manifest.permissions.contains(_networkAccessPermission))
         .toList();
     if (eligible.isEmpty) {
-      UiSnack.showError(
-          'אף תוסף נבחר לא מצהיר על שימוש ברשת — אין מה לעדכן');
+      UiSnack.showError('אף תוסף נבחר לא מצהיר על שימוש ברשת — אין מה לעדכן');
       return;
     }
     final bloc = context.read<PluginSystemBloc>();
@@ -466,12 +452,11 @@ class _ActionBar extends StatelessWidget {
 
   void _setRunOnStartup(BuildContext context, {required bool granted}) {
     final eligible = _selectedPlugins
-        .where((p) => p.manifest.permissions
-            .contains(pluginRunOnStartupPermission))
+        .where((p) =>
+            p.manifest.permissions.contains(pluginRunOnStartupPermission))
         .toList();
     if (eligible.isEmpty) {
-      UiSnack.showError(
-          'אף תוסף נבחר לא תומך בטעינה אוטומטית בעלייה');
+      UiSnack.showError('אף תוסף נבחר לא תומך בטעינה אוטומטית בעלייה');
       return;
     }
     final bloc = context.read<PluginSystemBloc>();
@@ -673,26 +658,26 @@ class _DraggableSettingsPluginRow extends StatelessWidget {
               selected: selected,
               onSelectChanged: onSelectChanged,
               dragHandle: Draggable<String>(
-              data: plugin.pluginId,
-              dragAnchorStrategy: pointerDragAnchorStrategy,
-              feedback: _SettingsDragFeedback(plugin: plugin),
-              child: MouseRegion(
-                cursor: SystemMouseCursors.grab,
-                child: Tooltip(
-                  message: 'גרור ושחרר לשינוי סדר',
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                    child: Icon(
-                      FluentIcons.re_order_dots_vertical_24_regular,
-                      color: cs.onSurfaceVariant,
+                data: plugin.pluginId,
+                dragAnchorStrategy: pointerDragAnchorStrategy,
+                feedback: _SettingsDragFeedback(plugin: plugin),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.grab,
+                  child: Tooltip(
+                    message: 'גרור ושחרר לשינוי סדר',
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: Icon(
+                        FluentIcons.re_order_dots_vertical_24_regular,
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      );
+        );
       },
     );
   }
@@ -820,8 +805,8 @@ class _StatusBadges extends StatelessWidget {
     );
   }
 
-  Widget _badge(BuildContext context, String text, Color bg, Color fg,
-      IconData icon) {
+  Widget _badge(
+      BuildContext context, String text, Color bg, Color fg, IconData icon) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(

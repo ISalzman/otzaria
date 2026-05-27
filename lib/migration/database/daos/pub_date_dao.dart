@@ -75,4 +75,3 @@ class PubDateDao {
     return firstIntValue(db.select(_queries['countAll']!)) ?? 0;
   }
 }
-

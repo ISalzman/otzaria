@@ -57,6 +57,7 @@ class PdfBookTab extends OpenedTab {
   /// גלובלי. המאזין הוא [PdfBookScreen] בלבד; כל הגדלה = toggle יחיד.
   final ValueNotifier<int> toggleCommentatorsPaneNotifier =
       ValueNotifier<int>(0);
+
   /// PDF headings mapping for commentaries and links
   PdfHeadings? pdfHeadings;
 

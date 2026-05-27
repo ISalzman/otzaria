@@ -88,8 +88,7 @@ class _ThumbnailsViewState extends State<ThumbnailsView>
     if (widget.documentRef == null) return const SizedBox.shrink();
     return PdfDocumentViewBuilder(
       documentRef: widget.documentRef!,
-      builder: (context, document) =>
-          NotificationListener<ScrollNotification>(
+      builder: (context, document) => NotificationListener<ScrollNotification>(
         onNotification: (notification) {
           if (notification is ScrollStartNotification &&
               notification.dragDetails != null) {
@@ -116,13 +115,9 @@ class _ThumbnailsViewState extends State<ThumbnailsView>
               height: 250,
               decoration: isSelected
                   ? BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .secondaryContainer,
+                      color: Theme.of(context).colorScheme.secondaryContainer,
                       border: Border.all(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .outlineVariant,
+                        color: Theme.of(context).colorScheme.outlineVariant,
                       ),
                       borderRadius: BorderRadius.circular(4),
                     )

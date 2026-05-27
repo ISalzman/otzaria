@@ -20,10 +20,12 @@ class PluginSystemLoaded extends PluginSystemState {
 
   @override
   List<Object?> get props => [plugins];
-  
-  List<InstalledPlugin> get activePlugins => plugins.where((p) => p.enabled).toList();
-  List<InstalledPlugin> get pinnedPlugins =>
-      plugins.where((p) => p.pinned && p.enabled && !p.hiddenFromTools).toList();
+
+  List<InstalledPlugin> get activePlugins =>
+      plugins.where((p) => p.enabled).toList();
+  List<InstalledPlugin> get pinnedPlugins => plugins
+      .where((p) => p.pinned && p.enabled && !p.hiddenFromTools)
+      .toList();
   List<InstalledPlugin> get pluginsPinnedToNavRail => plugins
       .where((p) => p.pinnedToNavRail && p.enabled && !p.hiddenFromTools)
       .toList();
@@ -60,6 +62,7 @@ class PluginSystemOverwriteRequired extends PluginSystemState {
 class PluginSystemInstallRequiresPermissions extends PluginSystemState {
   final PluginManifest manifest;
   final String tempDirPath;
+
   /// גרסה מותקנת קודמת — null אם זו התקנה ראשונה.
   final String? previousVersion;
 

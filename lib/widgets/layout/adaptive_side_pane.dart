@@ -323,12 +323,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
             padding: EdgeInsetsDirectional.only(
               top: _kWideTopGap,
               bottom: _kWideBottomGap,
-              start: paneOnRight
-                  ? _kWideInnerSideGap
-                  : _kWideOuterSideGap,
-              end: paneOnRight
-                  ? _kWideOuterSideGap
-                  : _kWideInnerSideGap,
+              start: paneOnRight ? _kWideInnerSideGap : _kWideOuterSideGap,
+              end: paneOnRight ? _kWideOuterSideGap : _kWideInnerSideGap,
             ),
             child: SizedBox(
               width: currentWidth,
@@ -397,8 +393,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         : const SizedBox.shrink();
 
     final showHandle = widget.isResizable && widget.onPaneWidthChanged != null;
-    final closedOffset =
-        paneOnRight ? const Offset(1, 0) : const Offset(-1, 0);
+    final closedOffset = paneOnRight ? const Offset(1, 0) : const Offset(-1, 0);
 
     return Stack(
       children: [
@@ -426,7 +421,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                 valueListenable: _livePaneWidth,
                 builder: (context, liveWidth, _) {
                   final currentWidth = liveWidth;
-                  final overhang = showHandle ? handleHitOverhang(context) : 0.0;
+                  final overhang =
+                      showHandle ? handleHitOverhang(context) : 0.0;
 
                   return Stack(
                     children: [
@@ -459,7 +455,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                             child: AnimatedSlide(
                               duration: AppTokens.animPanelSlide,
                               curve: Curves.easeInOut,
-                              offset: widget.isOpen ? Offset.zero : closedOffset,
+                              offset:
+                                  widget.isOpen ? Offset.zero : closedOffset,
                               child: _buildResizeHandle(paneOnRight, false),
                             ),
                           ),

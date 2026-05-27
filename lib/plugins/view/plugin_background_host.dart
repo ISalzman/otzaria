@@ -183,8 +183,7 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
         );
         if (!mounted) return;
         final shouldRun = granted == true;
-        final isRunning =
-            _activeBackgroundPlugins.containsKey(plugin.pluginId);
+        final isRunning = _activeBackgroundPlugins.containsKey(plugin.pluginId);
         if (shouldRun && !isRunning) {
           setState(() {
             _activeBackgroundPlugins[plugin.pluginId] = plugin;
@@ -546,8 +545,8 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         } catch (e, st) {
           debugPrint(
               'Background plugin [${widget.plugin.pluginId}] boot error: $e\n$st');
-          PluginSystemDatabase.instance.writeLog(widget.plugin.pluginId,
-              'ERROR', 'Background boot failed: $e');
+          PluginSystemDatabase.instance.writeLog(
+              widget.plugin.pluginId, 'ERROR', 'Background boot failed: $e');
         }
       },
       onConsoleMessage: (controller, consoleMessage) {

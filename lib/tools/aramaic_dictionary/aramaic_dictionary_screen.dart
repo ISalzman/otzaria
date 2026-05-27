@@ -122,8 +122,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
     return CallbackShortcuts(
       bindings: {
         ShortcutHelper.activatorFromShortcut(searchShortcutSetting) ??
-            const SingleActivator(LogicalKeyboardKey.keyF,
-                control: true): () {
+            const SingleActivator(LogicalKeyboardKey.keyF, control: true): () {
           _searchFocusNode.requestFocus();
         },
       },

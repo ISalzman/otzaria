@@ -52,8 +52,7 @@ class DatabaseGenerator {
   /// Book contents cache: maps library-relative key -> list of lines
   final Map<String, List<String>> _bookContentCache = {};
 
-  DatabaseGenerator(this.sourceDirectory, this.repository,
-      {this.onProgress})
+  DatabaseGenerator(this.sourceDirectory, this.repository, {this.onProgress})
       : _libraryRoot = sourceDirectory;
 
   /// Sets the total books to process for progress reporting.

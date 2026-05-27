@@ -763,8 +763,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               tooltip: _allExpandedInChild.value
                   ? 'כווץ את כל המפרשים'
                   : 'הרחב את כל המפרשים',
-              onPressed: () =>
-                  _commentaryKey.currentState?.toggleAllExpanded(),
+              onPressed: () => _commentaryKey.currentState?.toggleAllExpanded(),
             ),
             ActionButtonData(
               widget: IconButton(
@@ -974,8 +973,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   Widget _buildCommentatorsSelectionPanel(
       BuildContext context, TextBookLoaded state) {
     final groups = state.commentatorGroups;
-    final selected =
-        _selectedCommentatorsOverride ?? state.activeCommentators;
+    final selected = _selectedCommentatorsOverride ?? state.activeCommentators;
     if (groups.isEmpty) {
       return Center(
         child: Padding(
@@ -1136,8 +1134,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               margin: const EdgeInsets.only(bottom: 6),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? AppSurfaces.selectedItem(
-                        Theme.of(context).colorScheme)
+                    ? AppSurfaces.selectedItem(Theme.of(context).colorScheme)
                     : null,
                 border: Border.all(
                   color: isSelected
@@ -1468,9 +1465,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         padding: const EdgeInsets.only(
             right: 16.0 + 24.0, left: 16, top: 10, bottom: 10),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppSurfaces.selectedItem(colorScheme)
-              : null,
+          color: isSelected ? AppSurfaces.selectedItem(colorScheme) : null,
           border: Border(
             bottom: BorderSide(
               color: Theme.of(context).dividerColor,

@@ -52,6 +52,7 @@ class CustomTitleBar extends StatefulWidget {
 const double _kAppBarControlsWidth = 105.0;
 const double _kWindowCaptionButtonsWidth = 138.0;
 const double _kWindowCaptionButtonWidth = 46.0;
+
 /// סגנון משותף לכפתורי האייקון בשורת הכותרת
 final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
   minimumSize: const Size(32, 32),

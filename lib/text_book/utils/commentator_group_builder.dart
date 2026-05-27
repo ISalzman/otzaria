@@ -22,17 +22,14 @@ List<CommentatorGroup> buildCommentatorGroups(
 
   return [
     CommentatorGroup(
-        title: 'תורה שבכתב',
-        commentators: eras['תורה שבכתב'] ?? const []),
-    CommentatorGroup(
-        title: 'חז"ל', commentators: eras['חז"ל'] ?? const []),
+        title: 'תורה שבכתב', commentators: eras['תורה שבכתב'] ?? const []),
+    CommentatorGroup(title: 'חז"ל', commentators: eras['חז"ל'] ?? const []),
     CommentatorGroup(
         title: 'ראשונים', commentators: eras['ראשונים'] ?? const []),
     CommentatorGroup(
         title: 'אחרונים', commentators: eras['אחרונים'] ?? const []),
     CommentatorGroup(
-        title: 'מחברי זמננו',
-        commentators: eras['מחברי זמננו'] ?? const []),
+        title: 'מחברי זמננו', commentators: eras['מחברי זמננו'] ?? const []),
     CommentatorGroup(title: 'שאר מפרשים', commentators: others),
   ];
 }

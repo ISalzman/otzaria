@@ -592,8 +592,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                   ? FluentIcons.arrow_collapse_all_24_regular
                   : FluentIcons.arrow_expand_all_24_regular,
             ),
-            tooltip:
-                _allExpanded ? 'כווץ את כל המפרשים' : 'הרחב את כל המפרשים',
+            tooltip: _allExpanded ? 'כווץ את כל המפרשים' : 'הרחב את כל המפרשים',
             onPressed: () {
               setState(() {
                 final nextExpanded = !_allExpanded;
@@ -652,8 +651,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                 icon: const Icon(FluentIcons.chevron_up_24_regular),
                 iconSize: 20,
                 padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 24, minHeight: 24),
+                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
                 onPressed: _currentSearchIndex > 0
                     ? () {
                         setState(() {
@@ -667,8 +665,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                 icon: const Icon(FluentIcons.chevron_down_24_regular),
                 iconSize: 20,
                 padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 24, minHeight: 24),
+                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
                 onPressed: _currentSearchIndex < _totalSearchResults - 1
                     ? () {
                         setState(() {

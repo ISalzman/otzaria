@@ -138,4 +138,3 @@ class BookHasLinksDao {
     return db.updatedRows;
   }
 }
-

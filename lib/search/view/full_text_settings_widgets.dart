@@ -130,8 +130,8 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
         // בדיקה אם יש מרווחים מותאמים אישית
-        final hasCustomSpacing =
-            state.isAdvancedSearchEnabled && widget.tab.spacingValues.isNotEmpty;
+        final hasCustomSpacing = state.isAdvancedSearchEnabled &&
+            widget.tab.spacingValues.isNotEmpty;
         final isEnabled = !hasCustomSpacing;
 
         return SizedBox(
@@ -162,9 +162,9 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
               value: state.distance.toDouble(),
               onChanged: isEnabled
                   ? (value) => context.read<SearchBloc>().add(
-                    widget.triggerSearch
-                      ? UpdateDistance(value.toInt())
-                      : UpdateDistanceWithoutSearch(value.toInt()),
+                        widget.triggerSearch
+                            ? UpdateDistance(value.toInt())
+                            : UpdateDistanceWithoutSearch(value.toInt()),
                       )
                   : null,
             ),

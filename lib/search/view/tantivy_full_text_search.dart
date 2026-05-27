@@ -42,8 +42,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   Widget _buildIndexingWarning() {
     return IndexingWarningContainer(
       inProgressDismissed: _indexInProgressWarningDismissed,
-      onDismiss: () =>
-          setState(() => _indexInProgressWarningDismissed = true),
+      onDismiss: () => setState(() => _indexInProgressWarningDismissed = true),
     );
   }
 

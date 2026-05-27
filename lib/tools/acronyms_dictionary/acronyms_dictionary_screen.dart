@@ -110,8 +110,7 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
     return CallbackShortcuts(
       bindings: {
         ShortcutHelper.activatorFromShortcut(searchShortcutSetting) ??
-            const SingleActivator(LogicalKeyboardKey.keyF,
-                control: true): () {
+            const SingleActivator(LogicalKeyboardKey.keyF, control: true): () {
           _searchFocusNode.requestFocus();
         },
       },

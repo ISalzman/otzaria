@@ -513,8 +513,7 @@ pw.Widget _buildDayCellPdf(String primaryLabel, String secondaryLabel,
         ),
         for (final je in jewishEvents)
           pw.Text(je,
-              style: pw.TextStyle(
-                  font: font, fontSize: 7),
+              style: pw.TextStyle(font: font, fontSize: 7),
               maxLines: 1,
               overflow: pw.TextOverflow.clip,
               textAlign: pw.TextAlign.right),
@@ -560,8 +559,7 @@ pw.Widget _buildWeekGrid(CalendarState state, pw.Font font) {
               pw.SizedBox(height: 4),
               for (final je in jewishEvents)
                 pw.Text(je,
-                    style: pw.TextStyle(
-                        font: font, fontSize: 7),
+                    style: pw.TextStyle(font: font, fontSize: 7),
                     maxLines: 1,
                     overflow: pw.TextOverflow.clip,
                     textAlign: pw.TextAlign.right),

@@ -47,8 +47,7 @@ class WebViewEnvironmentHolder {
       final webviewDataFolder = p.join(dataRoot, 'webview2');
       await Directory(webviewDataFolder).create(recursive: true);
       _environment = await WebViewEnvironment.create(
-        settings:
-            WebViewEnvironmentSettings(userDataFolder: webviewDataFolder),
+        settings: WebViewEnvironmentSettings(userDataFolder: webviewDataFolder),
       );
     } finally {
       // בהצלחה: _environment מוגדר, ה-guard בכניסה ל-initialize יחזיר

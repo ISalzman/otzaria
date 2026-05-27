@@ -40,7 +40,8 @@ class KeyboardNavigator extends StatelessWidget {
         }
 
         // Backspace - חזרה (רק אם אין TextField ממוקד)
-        if (event.logicalKey == LogicalKeyboardKey.backspace && onBack != null) {
+        if (event.logicalKey == LogicalKeyboardKey.backspace &&
+            onBack != null) {
           final focusedWidget =
               FocusManager.instance.primaryFocus?.context?.widget;
           if (focusedWidget is! EditableText && focusedWidget is! TextField) {

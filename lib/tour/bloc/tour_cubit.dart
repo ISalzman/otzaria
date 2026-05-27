@@ -13,8 +13,7 @@ class TourCubit extends Cubit<TourState> {
   TourCubit() : super(_loadInitialState());
 
   static TourState _loadInitialState() {
-    final stored =
-        Settings.getValue<String>(LiveTipStorage.resolvedTipsKey);
+    final stored = Settings.getValue<String>(LiveTipStorage.resolvedTipsKey);
     final resolved = LiveTipStorage.decode(stored);
     if (resolved.isEmpty) {
       return const TourState.inactive();

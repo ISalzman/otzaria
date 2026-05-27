@@ -139,8 +139,7 @@ MoladInfo? calculateMoladForDate(DateTime date, String city) {
       _cloneForNextMonth(JewishCalendar.fromDateTime(date)),
     ];
     for (final candidate in candidates) {
-      final visibleInCity =
-          _computeVisibleMoladInCity(candidate, tzLocation);
+      final visibleInCity = _computeVisibleMoladInCity(candidate, tzLocation);
       if (visibleInCity.year == date.year &&
           visibleInCity.month == date.month &&
           visibleInCity.day == date.day) {
@@ -211,8 +210,8 @@ MoladInfo _buildMoladInfo(
   );
 
   // המולד הנראה — או שכבר חושב (במסלול moladDay) או שמחושב כעת.
-  final visibleMoladInCity =
-      precomputedVisible ?? _computeVisibleMoladInCity(targetMonthCalendar, tzLocation);
+  final visibleMoladInCity = precomputedVisible ??
+      _computeVisibleMoladInCity(targetMonthCalendar, tzLocation);
 
   return MoladInfo(
     jewishYear: targetMonthCalendar.getJewishYear(),
@@ -358,10 +357,8 @@ double _meeusConjunctionJde(int k) {
       0.00000000073 * t4;
 
   // Sun's mean anomaly (M)
-  final m = _toRad(2.5534 +
-      29.10535670 * kDouble -
-      0.0000014 * t2 -
-      0.00000011 * t3);
+  final m =
+      _toRad(2.5534 + 29.10535670 * kDouble - 0.0000014 * t2 - 0.00000011 * t3);
 
   // Moon's mean anomaly (M')
   final mPrime = _toRad(201.5643 +
@@ -378,10 +375,8 @@ double _meeusConjunctionJde(int k) {
       0.000000011 * t4);
 
   // Longitude of ascending node (Omega)
-  final omega = _toRad(124.7746 -
-      1.56375588 * kDouble +
-      0.0020672 * t2 +
-      0.00000215 * t3);
+  final omega = _toRad(
+      124.7746 - 1.56375588 * kDouble + 0.0020672 * t2 + 0.00000215 * t3);
 
   // Earth orbit eccentricity factor (E)
   final e = 1 - 0.002516 * t - 0.0000074 * t2;

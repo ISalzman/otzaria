@@ -115,8 +115,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
       _progressById = await _progressService.loadProgressDataById();
       _completionDatesById = await _progressService.loadCompletionDatesById();
 
-      _logger.info(
-          'Successfully loaded progress: ${_progressById.length} books');
+      _logger
+          .info('Successfully loaded progress: ${_progressById.length} books');
     } catch (e, stackTrace) {
       if (e is ShamorZachorError) {
         _error = e;
@@ -594,7 +594,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
     BookDetails bookDetails,
   ) {
     final cached = _progressSummaryCache[bookId];
-    if (cached != null && cached.totalItems == bookDetails.totalLearnableItems) {
+    if (cached != null &&
+        cached.totalItems == bookDetails.totalLearnableItems) {
       return cached;
     }
 
