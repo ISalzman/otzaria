@@ -83,6 +83,10 @@ class CalendarState extends Equatable {
   final int calendarNotificationTime;
   final bool calendarNotificationSound;
   final Map<String, ZmanAlertPreference> zmanAlerts;
+
+  /// מזהי הזמנים (ZmanDefinition.id) שהמשתמש בחר להציג בלוח.
+  final Set<String> enabledZmanim;
+
   final bool googleCalendarEnabled;
   final bool googleCalendarConnected;
   final List<String> googleCalendarSelectedIds;
@@ -113,6 +117,7 @@ class CalendarState extends Equatable {
     this.calendarNotificationTime = 60,
     this.calendarNotificationSound = true,
     this.zmanAlerts = const {},
+    this.enabledZmanim = const {},
     this.googleCalendarEnabled = false,
     this.googleCalendarConnected = false,
     this.googleCalendarSelectedIds = const ['primary'],
@@ -139,6 +144,7 @@ class CalendarState extends Equatable {
       calendarView: CalendarView.month,
       dayTransition: CalendarDayTransition.sunset,
       searchInDescriptions: false,
+      enabledZmanim: zmanim_helpers.kDefaultEnabledZmanim,
       inIsrael: true,
       showAllEvents: false,
       googleCalendarEnabled: false,
@@ -171,6 +177,7 @@ class CalendarState extends Equatable {
     int? calendarNotificationTime,
     bool? calendarNotificationSound,
     Map<String, ZmanAlertPreference>? zmanAlerts,
+    Set<String>? enabledZmanim,
     bool? googleCalendarEnabled,
     bool? googleCalendarConnected,
     List<String>? googleCalendarSelectedIds,
@@ -206,6 +213,7 @@ class CalendarState extends Equatable {
       calendarNotificationSound:
           calendarNotificationSound ?? this.calendarNotificationSound,
       zmanAlerts: zmanAlerts ?? this.zmanAlerts,
+      enabledZmanim: enabledZmanim ?? this.enabledZmanim,
       googleCalendarEnabled:
           googleCalendarEnabled ?? this.googleCalendarEnabled,
       googleCalendarConnected:
@@ -258,6 +266,7 @@ class CalendarState extends Equatable {
         calendarNotificationTime,
         calendarNotificationSound,
         zmanAlerts,
+        enabledZmanim,
         googleCalendarEnabled,
         googleCalendarConnected,
         googleCalendarSelectedIds,
@@ -358,6 +367,9 @@ class CalendarCubit extends Cubit<CalendarState> {
     final bool calendarNotificationSound =
         settings['calendarNotificationSound'] as bool;
     final String zmanAlertsJson = settings['calendarZmanAlerts'] as String;
+    final String enabledZmanimJson =
+        settings['calendarEnabledZmanim'] as String;
+    final Set<String> enabledZmanim = _parseEnabledZmanim(enabledZmanimJson);
     final bool googleCalendarEnabled =
         settings['googleCalendarEnabled'] as bool;
     final String googleCalendarSelectedIdsStr =
@@ -409,6 +421,7 @@ class CalendarCubit extends Cubit<CalendarState> {
       calendarNotificationTime: calendarNotificationTime,
       calendarNotificationSound: calendarNotificationSound,
       zmanAlerts: zmanAlerts,
+      enabledZmanim: enabledZmanim,
       googleCalendarEnabled: googleCalendarEnabled,
       googleCalendarSelectedIds: googleCalendarSelectedIds,
       googleCalendarSyncPastDays: googleCalendarSyncPastDays,
@@ -457,6 +470,34 @@ class CalendarCubit extends Cubit<CalendarState> {
     // שנטענו ב-_initializeCalendar בזמן שהמתנו לתשובת ה-DB)
     final userEvents = state.events.where((e) => !e.id.contains(':')).toList();
     emit(state.copyWith(events: [...userEvents, ...pluginEvents]));
+  }
+
+  /// מפענח את רשימת מזהי הזמנים המופעלים. מחרוזת ריקה/לא תקינה →
+  /// ברירת המחדל מתוך רישום הזמנים.
+  static Set<String> _parseEnabledZmanim(String jsonStr) {
+    if (jsonStr.isEmpty) return zmanim_helpers.kDefaultEnabledZmanim;
+    try {
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is! List) return zmanim_helpers.kDefaultEnabledZmanim;
+      return decoded.whereType<String>().toSet();
+    } catch (_) {
+      return zmanim_helpers.kDefaultEnabledZmanim;
+    }
+  }
+
+  /// מפעיל/מכבה הצגת זמן בלוח ושומר את הבחירה. כשמכבים זמן עם התראה
+  /// פעילה — ההתראה נשמרת (כדי שתחזור אם הזמן יופעל שוב), אך הזמן לא
+  /// יוצג עוד ככרטיס.
+  Future<void> setZmanEnabled(String zmanId, bool enabled) async {
+    final updated = Set<String>.from(state.enabledZmanim);
+    if (enabled) {
+      updated.add(zmanId);
+    } else {
+      updated.remove(zmanId);
+    }
+    emit(state.copyWith(enabledZmanim: updated));
+    await _settingsRepository
+        .updateCalendarEnabledZmanim(jsonEncode(updated.toList()));
   }
 
   static Map<String, ZmanAlertPreference> _parseZmanAlertPreferences(
