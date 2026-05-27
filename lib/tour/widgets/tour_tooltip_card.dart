@@ -3,6 +3,7 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/tour/widgets/tour_progress_dots.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 class TourTooltipCard extends StatelessWidget {
@@ -155,7 +156,7 @@ class TourTooltipCard extends StatelessWidget {
                       icon: isLastStep
                           ? FluentIcons.checkmark_24_regular
                           : FluentIcons.arrow_left_24_regular,
-                      mirrorIcon: !isLastStep,
+
                       text: isLastStep
                           ? 'סגור'
                           : isRestartEntry
@@ -178,13 +179,11 @@ class TourTooltipCard extends StatelessWidget {
 
 class _TourNextButton extends StatelessWidget {
   final IconData icon;
-  final bool mirrorIcon;
   final String text;
   final VoidCallback onPressed;
 
   const _TourNextButton({
     required this.icon,
-    this.mirrorIcon = false,
     required this.text,
     required this.onPressed,
   });
@@ -208,12 +207,7 @@ class _TourNextButton extends StatelessWidget {
             textDirection: TextDirection.rtl,
           ),
           const SizedBox(width: 8),
-          mirrorIcon
-              ? Transform.flip(
-                  flipX: true,
-                  child: Icon(icon),
-                )
-              : Icon(icon),
+          RtlIcon(icon),
         ],
       ),
     );

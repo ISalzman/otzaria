@@ -58,13 +58,36 @@ class RtlIcon extends StatelessWidget {
     FluentIcons.arrow_left_24_filled: FluentIcons.arrow_right_24_filled,
   };
 
+  // אייקונים ללא גרסת RTL בספריה — מותר להפוך גאומטרית.
+  // bookmark סימטרי ולא נכלל. אין להוסיף לכאן אייקונים שאינם כיווניים.
+  static final Set<IconData> _flippableIcons = {
+    FluentIcons.book_24_regular,
+    FluentIcons.book_24_filled,
+    FluentIcons.book_open_24_regular,
+    FluentIcons.book_open_24_filled,
+    FluentIcons.book_search_24_regular,
+    FluentIcons.book_search_24_filled,
+  };
+
   @override
   Widget build(BuildContext context) {
     final isRtl = Directionality.of(context) == TextDirection.rtl;
-    final resolvedIcon = isRtl
-        ? (_materialMirrorMap[icon] ?? _fluentMirrorMap[icon] ?? icon)
-        : icon;
-    return Icon(resolvedIcon,
-        size: size, color: color, semanticLabel: semanticLabel);
+
+    final baseIcon =
+        Icon(icon, size: size, color: color, semanticLabel: semanticLabel);
+
+    if (!isRtl) return baseIcon;
+
+    final mirroredIcon = _materialMirrorMap[icon] ?? _fluentMirrorMap[icon];
+    if (mirroredIcon != null) {
+      return Icon(mirroredIcon,
+          size: size, color: color, semanticLabel: semanticLabel);
+    }
+
+    if (_flippableIcons.contains(icon)) {
+      return Transform.flip(flipX: true, child: baseIcon);
+    }
+
+    return baseIcon;
   }
 }

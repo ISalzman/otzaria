@@ -9,6 +9,7 @@ import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/core/ui_snack.dart';
 
@@ -331,7 +332,6 @@ class TextSettingsTab extends StatelessWidget {
                       icon: FluentIcons.book_24_regular,
                       label: 'גופן מפרשים',
                       value: state.commentatorsFontFamily,
-                      mirrorIcon: true,
                       onChanged: (value) {
                         if (value != null) {
                           context
@@ -369,7 +369,6 @@ class TextSettingsTab extends StatelessWidget {
                             icon: FluentIcons.book_24_regular,
                             label: 'גופן מפרשים',
                             value: state.commentatorsFontFamily,
-                            mirrorIcon: true,
                             onChanged: (value) {
                               if (value != null) {
                                 context
@@ -381,7 +380,7 @@ class TextSettingsTab extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
+        ),
 
                 divider,
 
@@ -844,14 +843,12 @@ class _FontDropdown extends StatelessWidget {
   final String label;
   final String value;
   final ValueChanged<String?> onChanged;
-  final bool mirrorIcon;
 
   const _FontDropdown({
     required this.icon,
     required this.label,
     required this.value,
     required this.onChanged,
-    this.mirrorIcon = false,
   });
 
   @override
@@ -870,9 +867,7 @@ class _FontDropdown extends StatelessWidget {
 
     return Row(
       children: [
-        mirrorIcon
-            ? Transform.scale(scaleX: -1, child: Icon(icon))
-            : Icon(icon),
+        RtlIcon(icon),
         const SizedBox(width: 8),
         SizedBox(
           width: 100,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
@@ -436,8 +437,6 @@ class AboutDevTab extends StatelessWidget {
         _ContributorWrap(
           contributors: editors,
           icon: FluentIcons.book_24_regular,
-          // אייקון ספר בלבד — מורר ל-RTL כך שייפתח לכיוון הנכון בעברית.
-          mirrorIcon: true,
         ),
       ],
     );
@@ -491,15 +490,9 @@ class _ContributorWrap extends StatelessWidget {
   final List<Map<String, String>> contributors;
   final IconData icon;
 
-  /// אם `true`, האייקון מוצג ממורר על ציר X — מתאים לאייקון ספר עברי שצריך
-  /// להיפתח לכיוון הנכון. עבור אייקוני person/people אסור — היפוך גורם
-  /// לאייקון "ראש שמאלי" שאינו תואם את המוסכמה.
-  final bool mirrorIcon;
-
   const _ContributorWrap({
     required this.contributors,
     required this.icon,
-    this.mirrorIcon = false,
   });
 
   @override
@@ -513,7 +506,6 @@ class _ContributorWrap extends StatelessWidget {
                 url: c['url'] ?? '',
                 description: c['description'],
                 icon: icon,
-                mirrorIcon: mirrorIcon,
               ))
           .toList(),
     );
@@ -525,14 +517,12 @@ class _ContributorChip extends StatelessWidget {
   final String url;
   final String? description;
   final IconData icon;
-  final bool mirrorIcon;
 
   const _ContributorChip({
     required this.name,
     required this.url,
     this.description,
     required this.icon,
-    this.mirrorIcon = false,
   });
 
   @override
@@ -543,19 +533,11 @@ class _ContributorChip extends StatelessWidget {
         ? kSettingsTitleStyle.copyWith(color: colorScheme.primary)
         : kSettingsTitleStyle;
 
-    final iconWidget = Icon(
-      icon,
-      size: 15,
-      color: colorScheme.onSurfaceVariant,
-    );
-
     Widget content = Row(
       mainAxisSize: MainAxisSize.min,
       textDirection: TextDirection.rtl,
       children: [
-        mirrorIcon
-            ? Transform.scale(scaleX: -1, child: iconWidget)
-            : iconWidget,
+        RtlIcon(icon, size: 15, color: colorScheme.onSurfaceVariant),
         const SizedBox(width: 6),
         Text(name, style: nameStyle),
         if (description != null && description!.isNotEmpty) ...[
