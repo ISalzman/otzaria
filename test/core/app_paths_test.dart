@@ -315,8 +315,7 @@ void main() {
       expect(await AppPaths.getDefaultLibraryPath(), libDir.path);
     });
 
-    test(
-        'AppPaths bundled library — bundle מכבד בחירה ידנית תקפה של המשתמש',
+    test('AppPaths bundled library — bundle מכבד בחירה ידנית תקפה של המשתמש',
         () async {
       if (!Platform.isLinux && !Platform.isMacOS) {
         return;
@@ -431,8 +430,7 @@ void main() {
 
       AppPaths.debugOverrideDataRootPath(dataRoot.path);
       AppPaths.debugOverrideResolvedExecutable(exePath);
-      await Settings.setValue(
-          SettingsRepository.keyLibraryPath, userBase.path);
+      await Settings.setValue(SettingsRepository.keyLibraryPath, userBase.path);
       await Settings.setValue(
           SettingsRepository.keyLibraryFolderName, 'Otzaria');
 

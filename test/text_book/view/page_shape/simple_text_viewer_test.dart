@@ -781,8 +781,7 @@ void main() {
 /// SimpleTextViewer משתמש ב-`GlobalKey<SelectableRegionState>` — מה שמאפשר
 /// לזהות אותו בין שאר ה-SelectableRegion שעשויים להימצא בעץ.
 Element? _findSelectableRegionElement(WidgetTester tester) {
-  for (final element
-      in tester.elementList(find.byType(SelectableRegion))) {
+  for (final element in tester.elementList(find.byType(SelectableRegion))) {
     if ((element.widget as SelectableRegion).key
         is GlobalKey<SelectableRegionState>) {
       return element;

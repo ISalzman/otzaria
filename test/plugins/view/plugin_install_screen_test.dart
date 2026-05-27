@@ -271,8 +271,8 @@ void main() {
   });
 
   testWidgets('עדכון — מוצגת שורת מעבר גרסאות עם חץ', (tester) async {
-    await _openDialog(tester, bloc,
-        _manifest(version: '2.0.0'), previousVersion: '1.0.0');
+    await _openDialog(tester, bloc, _manifest(version: '2.0.0'),
+        previousVersion: '1.0.0');
 
     expect(find.text('1.0.0  →  2.0.0'), findsOneWidget);
     expect(find.text('עדכון גרסה'), findsOneWidget);
@@ -303,8 +303,7 @@ void main() {
 
   // ── הרשאת run_on_startup ──
 
-  testWidgets(
-      'תוסף שמבקש app.run_on_startup — מוצג באנר בולט עם אזהרה',
+  testWidgets('תוסף שמבקש app.run_on_startup — מוצג באנר בולט עם אזהרה',
       (tester) async {
     await _openDialog(
       tester,
@@ -319,8 +318,7 @@ void main() {
     expect(find.byIcon(FluentIcons.warning_24_filled), findsWidgets);
   });
 
-  testWidgets(
-      'תוסף שלא מבקש app.run_on_startup — אין באנר בולט',
+  testWidgets('תוסף שלא מבקש app.run_on_startup — אין באנר בולט',
       (tester) async {
     await _openDialog(
       tester,
@@ -334,8 +332,7 @@ void main() {
     );
   });
 
-  testWidgets(
-      'הרשאת app.run_on_startup — Switch מתחיל כבוי ברירת מחדל',
+  testWidgets('הרשאת app.run_on_startup — Switch מתחיל כבוי ברירת מחדל',
       (tester) async {
     await _openDialog(
       tester,
@@ -353,9 +350,7 @@ void main() {
     expect(switchTile.value, isFalse);
   });
 
-  testWidgets(
-      'הרשאה רגילה — Switch מתחיל דלוק ברירת מחדל',
-      (tester) async {
+  testWidgets('הרשאה רגילה — Switch מתחיל דלוק ברירת מחדל', (tester) async {
     await _openDialog(
       tester,
       bloc,
@@ -443,7 +438,8 @@ void main() {
     expect(confirmEvents, isNotEmpty);
     expect(confirmEvents.first.grantedPermissions[pluginRunOnStartupPermission],
         isTrue,
-        reason: 'לאחר הפעלת ה-Switch, app.run_on_startup חייב להיות true ב-payload');
+        reason:
+            'לאחר הפעלת ה-Switch, app.run_on_startup חייב להיות true ב-payload');
   });
 
   testWidgets(

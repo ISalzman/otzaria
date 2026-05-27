@@ -93,8 +93,8 @@ void main() {
     final bookId = await createBook(catId, title);
     await insertLines(bookId, ['l0', 'l1', 'l2', 'l3']);
 
-    final pereqA = await insertToc(
-        bookId: bookId, lineIndex: 0, text: 'פרק א', level: 1);
+    final pereqA =
+        await insertToc(bookId: bookId, lineIndex: 0, text: 'פרק א', level: 1);
     await insertToc(
         bookId: bookId,
         lineIndex: 0,
@@ -107,8 +107,7 @@ void main() {
         text: 'פסוק ב',
         level: 2,
         parentId: pereqA);
-    await insertToc(
-        bookId: bookId, lineIndex: 2, text: 'פרק ב', level: 1);
+    await insertToc(bookId: bookId, lineIndex: 2, text: 'פרק ב', level: 1);
 
     await repository.updateTocEntryLineIdsByLineIndex(bookId);
     return bookId;
@@ -117,7 +116,8 @@ void main() {
   // ── tests ─────────────────────────────────────────────────────────────────
 
   group('SeforimRepository.getTocEntriesForReference', () {
-    test('ללא queryTokens — מחזיר את כל ערכי TOC מסודרים לפי segment', () async {
+    test('ללא queryTokens — מחזיר את כל ערכי TOC מסודרים לפי segment',
+        () async {
       final bookId = await buildSampleBook('בראשית');
 
       final results =
@@ -140,24 +140,21 @@ void main() {
       final bookId = await buildSampleBook('בראשית');
 
       // "א" — טוקן שלם — אמור לתפוס "פרק א" ו"פסוק א" אבל לא "פרק ב".
-      final results = await repository.getTocEntriesForReference(
-          bookId, 'בראשית',
-          queryTokens: ['א']);
+      final results = await repository
+          .getTocEntriesForReference(bookId, 'בראשית', queryTokens: ['א']);
 
       final refs = results.map((r) => r['reference']).toList();
       expect(refs, contains('בראשית פרק א'));
       expect(refs, isNot(contains('בראשית פרק ב')));
     });
 
-    test('סינון רמה רדודה — level 1 ניצח את level 2 כשגם הוא תואם',
-        () async {
+    test('סינון רמה רדודה — level 1 ניצח את level 2 כשגם הוא תואם', () async {
       final bookId = await buildSampleBook('בראשית');
 
       // "א" תואם גם ל-"פרק א" (level 1) וגם ל-"פסוק א" (level 2).
       // הסינון אמור לשמר רק את level 1.
-      final results = await repository.getTocEntriesForReference(
-          bookId, 'בראשית',
-          queryTokens: ['א']);
+      final results = await repository
+          .getTocEntriesForReference(bookId, 'בראשית', queryTokens: ['א']);
 
       expect(results, hasLength(1));
       expect(results.first['level'], equals(1));
@@ -193,15 +190,13 @@ void main() {
       final bookId = await buildSampleBook('בראשית');
 
       // קריאה ראשונה — בלי סינון.
-      final all =
-          await repository.getTocEntriesForReference(bookId, 'בראשית');
+      final all = await repository.getTocEntriesForReference(bookId, 'בראשית');
       expect(all, hasLength(4));
 
       // קריאה שנייה — עם סינון. אם הקאש הראשון "צרך" את הנתונים, השנייה
       // אמורה עדיין לעבוד.
-      final filtered = await repository.getTocEntriesForReference(
-          bookId, 'בראשית',
-          queryTokens: ['ב']);
+      final filtered = await repository
+          .getTocEntriesForReference(bookId, 'בראשית', queryTokens: ['ב']);
       // "ב" תופס "פרק ב" (level 1) ו"פסוק ב" (level 2) — אבל min-level שומר רק level 1.
       expect(filtered, hasLength(1));
       expect(filtered.first['reference'], equals('בראשית פרק ב'));
@@ -225,9 +220,12 @@ void main() {
       final bResults =
           await repository.getTocEntriesForReference(bookB, 'שמות');
 
-      expect(aResults.every((r) => (r['reference'] as String).startsWith('בראשית')),
+      expect(
+          aResults
+              .every((r) => (r['reference'] as String).startsWith('בראשית')),
           isTrue);
-      expect(bResults.every((r) => (r['reference'] as String).startsWith('שמות')),
+      expect(
+          bResults.every((r) => (r['reference'] as String).startsWith('שמות')),
           isTrue);
     });
 
@@ -240,9 +238,8 @@ void main() {
       await insertToc(bookId: bookId, lineIndex: 1, text: 'פרק א', level: 1);
       await repository.updateTocEntryLineIdsByLineIndex(bookId);
 
-      final results = await repository.getTocEntriesForReference(
-          bookId, 'ירמיהו',
-          queryTokens: ['א']);
+      final results = await repository
+          .getTocEntriesForReference(bookId, 'ירמיהו', queryTokens: ['א']);
 
       // צריך לקבל רק את "פרק א", לא את "פרק יא".
       expect(results, hasLength(1));
@@ -263,8 +260,7 @@ void main() {
 
       // מוטציה: מוסיפים פרק חדש.
       await insertLines(bookId, ['l4']);
-      await insertToc(
-          bookId: bookId, lineIndex: 3, text: 'פרק ג', level: 1);
+      await insertToc(bookId: bookId, lineIndex: 3, text: 'פרק ג', level: 1);
       await repository.updateTocEntryLineIdsByLineIndex(bookId);
 
       // קריאה שנייה — הקאש חייב להיות מבוטל.
@@ -272,8 +268,8 @@ void main() {
           await repository.getTocEntriesForReference(bookId, 'בראשית');
       expect(after, hasLength(5),
           reason: 'הערך החדש חייב להופיע מיד אחרי insertTocEntry');
-      expect(after.map((r) => r['reference']).toList(),
-          contains('בראשית פרק ג'));
+      expect(
+          after.map((r) => r['reference']).toList(), contains('בראשית פרק ג'));
     });
 
     test('deleteBookTocEntries מבטל את הקאש — תוצאות ריקות אחרי המחיקה',
@@ -306,35 +302,32 @@ void main() {
 
       final after =
           await repository.getTocEntriesForReference(bookId, 'בראשית');
-      expect(after, isEmpty,
-          reason: 'clearBookContent → TOC ריק, אין ערכים');
+      expect(after, isEmpty, reason: 'clearBookContent → TOC ריק, אין ערכים');
     });
 
-    test('updateTocEntryLineId מבטל את הקאש — segment חדש מופיע מיד',
-        () async {
+    test('updateTocEntryLineId מבטל את הקאש — segment חדש מופיע מיד', () async {
       final catId = await createCategory();
       final bookId = await createBook(catId, 'ספר');
       await insertLines(bookId, ['l0', 'l1']);
-      final tocId =
-          await insertToc(bookId: bookId, lineIndex: 0, text: 'פרק א', level: 1);
+      final tocId = await insertToc(
+          bookId: bookId, lineIndex: 0, text: 'פרק א', level: 1);
       await repository.updateTocEntryLineIdsByLineIndex(bookId);
 
       // קריאה ראשונה — segment=0 (מתאים ל-lineIndex=0).
-      final before =
-          await repository.getTocEntriesForReference(bookId, 'ספר');
+      final before = await repository.getTocEntriesForReference(bookId, 'ספר');
       expect(before.first['segment'], equals(0));
 
       // מוטציה: מעדכנים את ה-lineId של ערך ה-TOC לשורה אחרת (lineIndex=1).
       final db = await database.database;
       final line1Id = db
-          .select('SELECT id FROM line WHERE bookId=? AND lineIndex=1', [bookId])
+          .select(
+              'SELECT id FROM line WHERE bookId=? AND lineIndex=1', [bookId])
           .toMapList()
           .first['id'] as int;
       await repository.updateTocEntryLineId(tocId, line1Id);
 
       // קריאה שנייה — segment חייב להתעדכן.
-      final after =
-          await repository.getTocEntriesForReference(bookId, 'ספר');
+      final after = await repository.getTocEntriesForReference(bookId, 'ספר');
       expect(after.first['segment'], equals(1),
           reason: 'segment חייב לשקף את ה-lineId המעודכן');
     });
@@ -347,15 +340,13 @@ void main() {
 
       // קריאה ראשונה — לפני updateTocEntryLineIdsByLineIndex (אין lineId).
       // כאן segment ייקח את הערך מ-COALESCE(l.lineIndex, t.lineId).
-      final before =
-          await repository.getTocEntriesForReference(bookId, 'ספר');
+      final before = await repository.getTocEntriesForReference(bookId, 'ספר');
       expect(before, hasLength(1));
 
       // עכשיו מבצעים את ה-update הגלובלי — חייב לבטל את הקאש.
       await repository.updateTocEntryLineIdsByLineIndex(bookId);
 
-      final after =
-          await repository.getTocEntriesForReference(bookId, 'ספר');
+      final after = await repository.getTocEntriesForReference(bookId, 'ספר');
       // עדיין רשומה אחת, אבל הקאש נבנה מחדש (ה-segment עכשיו תואם
       // ל-lineIndex דרך ה-JOIN על line).
       expect(after, hasLength(1));
@@ -411,9 +402,8 @@ void main() {
       test('טוקן יחיד מחזיר entry ברמה 1 בלבד', () async {
         final bookId = await buildSampleBook('בראשית');
 
-        final results = await repository.getTocEntriesForReference(
-            bookId, 'בראשית',
-            queryTokens: ['א']);
+        final results = await repository
+            .getTocEntriesForReference(bookId, 'בראשית', queryTokens: ['א']);
 
         expect(results, hasLength(1));
         expect(results.first['level'], equals(1));
@@ -423,9 +413,8 @@ void main() {
       test('טוקן שאינו קיים כלל — מחזיר רשימה ריקה', () async {
         final bookId = await buildSampleBook('בראשית');
 
-        final results = await repository.getTocEntriesForReference(
-            bookId, 'בראשית',
-            queryTokens: ['קלז']);
+        final results = await repository
+            .getTocEntriesForReference(bookId, 'בראשית', queryTokens: ['קלז']);
 
         expect(results, isEmpty);
       });
@@ -490,8 +479,7 @@ void main() {
 
         final level3Refs =
             all.where((r) => r['level'] == 3).map((r) => r['reference']);
-        expect(level3Refs,
-            contains('משנה ברורה סימן יב סעיף א סק ג'));
+        expect(level3Refs, contains('משנה ברורה סימן יב סעיף א סק ג'));
       });
 
       test('חיפוש ["יב", "סק", "ג"] מגיע ל-ס"ק ג דרך דילוג על סעיף', () async {
@@ -515,8 +503,7 @@ void main() {
             queryTokens: ['יב', 'ב']);
 
         expect(results, hasLength(1));
-        expect(results.first['reference'],
-            equals('משנה ברורה סימן יב סעיף ב'));
+        expect(results.first['reference'], equals('משנה ברורה סימן יב סעיף ב'));
         expect(results.first['level'], equals(2));
       });
     });
@@ -530,10 +517,8 @@ void main() {
         await insertLines(bookId, List.generate(80, (i) => 'l$i'));
 
         // דפים: לט (39) ו-מ (40)
-        await insertToc(
-            bookId: bookId, lineIndex: 38, text: 'דף לט', level: 1);
-        await insertToc(
-            bookId: bookId, lineIndex: 40, text: 'דף מ', level: 1);
+        await insertToc(bookId: bookId, lineIndex: 38, text: 'דף לט', level: 1);
+        await insertToc(bookId: bookId, lineIndex: 40, text: 'דף מ', level: 1);
 
         await repository.updateTocEntryLineIdsByLineIndex(bookId);
         return bookId;
@@ -542,9 +527,8 @@ void main() {
       test('חיפוש "לט" מוצא "דף לט" ישירות', () async {
         final bookId = await buildTractateBook('שבת');
 
-        final results = await repository.getTocEntriesForReference(bookId,
-            'שבת',
-            queryTokens: ['לט']);
+        final results = await repository
+            .getTocEntriesForReference(bookId, 'שבת', queryTokens: ['לט']);
 
         expect(results, hasLength(1));
         expect(results.first['reference'], equals('שבת דף לט'));
@@ -553,9 +537,8 @@ void main() {
       test('חיפוש "טל" (טרנספוזיציה של לט) מוצא "דף לט"', () async {
         final bookId = await buildTractateBook('שבת');
 
-        final results = await repository.getTocEntriesForReference(bookId,
-            'שבת',
-            queryTokens: ['טל']);
+        final results = await repository
+            .getTocEntriesForReference(bookId, 'שבת', queryTokens: ['טל']);
 
         expect(results, hasLength(1),
             reason: '"טל" הוא טרנספוזיציה של "לט" — חייב למצוא את הדף');
@@ -570,8 +553,7 @@ void main() {
       // אחסון בקאש לשני הספרים.
       final aBefore =
           await repository.getTocEntriesForReference(bookA, 'בראשית');
-      final bBefore =
-          await repository.getTocEntriesForReference(bookB, 'שמות');
+      final bBefore = await repository.getTocEntriesForReference(bookB, 'שמות');
       expect(aBefore, hasLength(4));
       expect(bBefore, hasLength(4));
 
@@ -584,8 +566,7 @@ void main() {
       expect(aAfter, isEmpty);
 
       // bookB — נשאר זהה (לא הושפע).
-      final bAfter =
-          await repository.getTocEntriesForReference(bookB, 'שמות');
+      final bAfter = await repository.getTocEntriesForReference(bookB, 'שמות');
       expect(bAfter, hasLength(4));
       expect(bAfter.map((r) => r['reference']).toList(),
           equals(bBefore.map((r) => r['reference']).toList()));

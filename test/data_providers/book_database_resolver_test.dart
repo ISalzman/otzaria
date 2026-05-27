@@ -87,8 +87,7 @@ void main() {
     late SeforimRepository repository;
 
     setUp(() async {
-      tempDir =
-          await Directory.systemTemp.createTemp('otzaria-resolver-path-');
+      tempDir = await Directory.systemTemp.createTemp('otzaria-resolver-path-');
       database = MyDatabase.withPath(path.join(tempDir.path, 'test.db'));
       repository = SeforimRepository(database);
       await repository.ensureInitialized();
@@ -106,12 +105,10 @@ void main() {
         const migration_models.Category(title: 'תנ"ך', level: 0),
       );
       final torahId = await repository.insertCategory(
-        migration_models.Category(
-            title: 'תורה', parentId: rootId, level: 1),
+        migration_models.Category(title: 'תורה', parentId: rootId, level: 1),
       );
       final bereshitId = await repository.insertCategory(
-        migration_models.Category(
-            title: 'בראשית', parentId: torahId, level: 2),
+        migration_models.Category(title: 'בראשית', parentId: torahId, level: 2),
       );
 
       final result =
@@ -147,8 +144,8 @@ void main() {
     late SeforimRepository userBooksRepo;
 
     setUp(() async {
-      tempDir = await Directory.systemTemp
-          .createTemp('otzaria-resolver-candidates-');
+      tempDir =
+          await Directory.systemTemp.createTemp('otzaria-resolver-candidates-');
       seforimDb = MyDatabase.withPath(path.join(tempDir.path, 'seforim.db'));
       userBooksDb =
           MyDatabase.withPath(path.join(tempDir.path, 'user_books.db'));
@@ -334,8 +331,7 @@ void main() {
     late SeforimRepository seforimRepo;
 
     setUp(() async {
-      tempDir =
-          await Directory.systemTemp.createTemp('otzaria-resolver-int-');
+      tempDir = await Directory.systemTemp.createTemp('otzaria-resolver-int-');
       libraryPath = path.join(tempDir.path, 'library');
       dataRootPath = path.join(tempDir.path, 'data_root');
       await Directory(libraryPath).create(recursive: true);
@@ -406,8 +402,7 @@ void main() {
       final catId = await userBooksRepo.insertCategory(
         const migration_models.Category(title: 'ספרים אישיים'),
       );
-      final sourceId =
-          await userBooksRepo.insertSource('Personal::test', -1);
+      final sourceId = await userBooksRepo.insertSource('Personal::test', -1);
       await userBooksRepo.insertBook(
         migration_models.Book(
           categoryId: catId,
@@ -448,8 +443,7 @@ void main() {
       final userCat = await userBooksRepo.insertCategory(
         const migration_models.Category(title: 'ספרים אישיים'),
       );
-      final userSource =
-          await userBooksRepo.insertSource('Personal::dup', -1);
+      final userSource = await userBooksRepo.insertSource('Personal::dup', -1);
       final userBookId = await userBooksRepo.insertBook(
         migration_models.Book(
           categoryId: userCat,

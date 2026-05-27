@@ -25,8 +25,8 @@ void main() {
   late String dbPath;
 
   setUp(() async {
-    tempDir = await Directory.systemTemp
-        .createTemp('otzaria-diff-worker-test-');
+    tempDir =
+        await Directory.systemTemp.createTemp('otzaria-diff-worker-test-');
 
     await Settings.init(cacheProvider: _MemoryCacheProvider());
     await Settings.setValue<String>(
@@ -74,9 +74,9 @@ COMMIT;
       await runDiffSyncLogic(
         dbPath: dbPath,
         assets: [fakeAsset],
-        httpClient: MockClient((_) async =>
-            http.Response.bytes(const [1, 2, 3], 200,
-                headers: {'content-length': '3'})),
+        httpClient: MockClient((_) async => http.Response.bytes(
+            const [1, 2, 3], 200,
+            headers: {'content-length': '3'})),
         decompress: (_) async => Uint8List.fromList(utf8.encode(fakeSql)),
         isCancelled: () => false,
         onProgress: updates.add,
@@ -128,8 +128,8 @@ COMMIT;
       final count = await runDiffSyncLogic(
         dbPath: dbPath,
         assets: assets,
-        httpClient: MockClient((_) async =>
-            http.Response.bytes(const [1], 200)),
+        httpClient:
+            MockClient((_) async => http.Response.bytes(const [1], 200)),
         decompress: fakeDecompress,
         isCancelled: () => false,
         onProgress: updates.add,
@@ -184,8 +184,7 @@ COMMIT;
         runDiffSyncLogic(
           dbPath: dbPath,
           assets: [asset],
-          httpClient:
-              MockClient((_) async => http.Response('Not Found', 404)),
+          httpClient: MockClient((_) async => http.Response('Not Found', 404)),
           decompress: (_) async => null,
           isCancelled: () => false,
           onProgress: (_) {},
@@ -206,18 +205,17 @@ COMMIT;
         releaseName: 'v134',
       );
 
-      final fakeSql = "UPDATE db_meta SET value='134' WHERE key='content_version_int';";
+      final fakeSql =
+          "UPDATE db_meta SET value='134' WHERE key='content_version_int';";
 
       final service = LibraryDiffSyncWorkerService(
-        httpClient: MockClient((_) async =>
-            http.Response.bytes(const [1], 200)),
-        decompressDiff: (_) async =>
-            Uint8List.fromList(utf8.encode(fakeSql)),
+        httpClient:
+            MockClient((_) async => http.Response.bytes(const [1], 200)),
+        decompressDiff: (_) async => Uint8List.fromList(utf8.encode(fakeSql)),
       );
 
-      final updates = await service
-          .start(dbPath: dbPath, assets: [asset])
-          .toList();
+      final updates =
+          await service.start(dbPath: dbPath, assets: [asset]).toList();
 
       expect(
         updates.last,
@@ -247,9 +245,8 @@ COMMIT;
             Uint8List.fromList(utf8.encode('SELECT 1;')),
       );
 
-      final updates = await service
-          .start(dbPath: dbPath, assets: [asset])
-          .toList();
+      final updates =
+          await service.start(dbPath: dbPath, assets: [asset]).toList();
 
       expect(updates.last, isA<LibraryDiffSyncCancelled>());
     });
@@ -265,14 +262,12 @@ COMMIT;
       );
 
       final service = LibraryDiffSyncWorkerService(
-        httpClient: MockClient(
-            (_) async => http.Response('Error', 500)),
+        httpClient: MockClient((_) async => http.Response('Error', 500)),
         decompressDiff: (_) async => null,
       );
 
-      final updates = await service
-          .start(dbPath: dbPath, assets: [asset])
-          .toList();
+      final updates =
+          await service.start(dbPath: dbPath, assets: [asset]).toList();
 
       expect(updates.last, isA<LibraryDiffSyncFailed>());
     });
@@ -298,8 +293,7 @@ COMMIT;
           await service.start(dbPath: dbPath, assets: [asset]).toList();
 
       expect(updates.last, isA<LibraryDiffSyncCompleted>());
-      expect(
-          (updates.last as LibraryDiffSyncCompleted).appliedAssetCount, 1);
+      expect((updates.last as LibraryDiffSyncCompleted).appliedAssetCount, 1);
       expect(_readDbVersion(dbPath), 200);
       expect(updates.whereType<LibraryDiffDownloadProgress>(), isNotEmpty);
     });
@@ -332,8 +326,7 @@ Future<void> _fakeIsolateProgressEntry(Map<String, dynamic> message) async {
   commandPort.listen((_) {});
 
   final db = sqlite3lib.sqlite3.open(dbPath);
-  db.execute(
-      "UPDATE db_meta SET value='200' WHERE key='content_version_int'");
+  db.execute("UPDATE db_meta SET value='200' WHERE key='content_version_int'");
   db.close();
 
   mainSendPort.send({
@@ -384,8 +377,8 @@ void _createMinimalDb(String dbPath, {required int version}) {
 int _readDbVersion(String dbPath) {
   final db = sqlite3.open(dbPath);
   try {
-    final result = db
-        .select("SELECT value FROM db_meta WHERE key='content_version_int'");
+    final result =
+        db.select("SELECT value FROM db_meta WHERE key='content_version_int'");
     return int.parse(result.first['value'] as String);
   } finally {
     db.close();
@@ -444,8 +437,7 @@ class _MemoryCacheProvider extends CacheProvider {
   Future<void> setInt(String key, int? value) async => _values[key] = value;
 
   @override
-  Future<void> setObject<T>(String key, T? value) async =>
-      _values[key] = value;
+  Future<void> setObject<T>(String key, T? value) async => _values[key] = value;
 
   @override
   Future<void> setString(String key, String? value) async =>

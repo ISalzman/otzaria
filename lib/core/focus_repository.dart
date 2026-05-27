@@ -177,7 +177,8 @@ class FocusRepository {
   }
 
   void unregisterMoreScreenFocusRequester(VoidCallback requester) {
-    if (_moreScreenFocusRequester == requester) _moreScreenFocusRequester = null;
+    if (_moreScreenFocusRequester == requester)
+      _moreScreenFocusRequester = null;
   }
 
   void requestMoreScreenFocus() {

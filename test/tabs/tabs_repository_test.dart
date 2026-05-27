@@ -60,7 +60,8 @@ void main() {
 
       expect(loaded, hasLength(1));
       expect(loaded.single, isA<CommentatorsTab>());
-      expect((loaded.single as CommentatorsTab).sourceTab.book.title, 'ספר בדיקה');
+      expect(
+          (loaded.single as CommentatorsTab).sourceTab.book.title, 'ספר בדיקה');
     });
 
     test('PdfCommentatorsTab לא נשמר לדיסק כלל', () async {

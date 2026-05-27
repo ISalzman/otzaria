@@ -516,8 +516,7 @@ void main() {
     );
   });
 
-  testWidgets(
-      'paneColor מפורש מועבר ל-FloatingPanel במקום ברירת המחדל (wide)',
+  testWidgets('paneColor מפורש מועבר ל-FloatingPanel במקום ברירת המחדל (wide)',
       (tester) async {
     // זהו הדפוס המותר: העברת paneColor ל-AdaptiveSidePane עצמו (כמו library_browser).
     const customColor = Color(0xFFAABBCC);
@@ -589,13 +588,11 @@ void main() {
 
     // מוודא שהצבע של ה-ColoredBox הפנימי שונה מהצבע שהוגדר ב-FloatingPanel —
     // זו הוכחה שיש סתירה בין הצבע הפנימי לצבע שמגיע מ-AdaptiveSidePane.
-    final coloredBox =
-        tester.widget<ColoredBox>(coloredBoxFinder);
+    final coloredBox = tester.widget<ColoredBox>(coloredBoxFinder);
     final floatingPanel =
         tester.widget<FloatingPanel>(find.byType(FloatingPanel));
     expect(coloredBox.color, isNot(equals(floatingPanel.color)),
-        reason:
-            'הצבע של ColoredBox הפנימי שונה מצבע FloatingPanel — '
+        reason: 'הצבע של ColoredBox הפנימי שונה מצבע FloatingPanel — '
             'זו ראיה לדריסה ויזואלית אסורה');
   });
 }

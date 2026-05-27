@@ -86,8 +86,7 @@ InstalledPlugin _pluginFor({
   );
 }
 
-class _StaticPluginSystemBloc
-    extends Bloc<PluginSystemEvent, PluginSystemState>
+class _StaticPluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState>
     implements PluginSystemBloc {
   _StaticPluginSystemBloc(super.initial) {
     on<PluginSystemEvent>((_, __) {});
@@ -137,7 +136,8 @@ class FakeFilePickerPlatform extends FilePickerPlatform
     bool readSequential = false,
     bool cancelUploadOnWindowBlur = true,
   }) async {
-    return FilePickerResult([PlatformFile(path: fakeDirectoryPath, name: 'dir', size: 0)]);
+    return FilePickerResult(
+        [PlatformFile(path: fakeDirectoryPath, name: 'dir', size: 0)]);
   }
 
   @override
@@ -150,21 +150,30 @@ class FakeFilePickerPlatform extends FilePickerPlatform
   }
 }
 
-class FakePluginRegistryRepository extends Mock implements PluginRegistryRepository {
+class FakePluginRegistryRepository extends Mock
+    implements PluginRegistryRepository {
   List<InstalledPlugin> plugins = [];
-  
+
   @override
   Future<void> saveDevelopmentPlugin(InstalledPlugin plugin) async {
     plugins.add(plugin);
   }
 
-  @override Future<List<InstalledPlugin>> getAllPlugins() async => plugins;
-  @override Future<List<InstalledPlugin>> getDevelopmentPlugins() async => plugins;
-  @override Future<InstalledPlugin?> getPlugin(String id) async => null;
-  @override Future<bool?> getPermission(String id, String perm) async => true;
-  @override Future<void> setPermission(String id, String perm, bool granted) async {}
-  @override Future<List<PluginPermissionGrant>> getPluginPermissions(String id) async => [];
-  @override Future<int?> getNextUserOrderForNewPlugin() async => null;
+  @override
+  Future<List<InstalledPlugin>> getAllPlugins() async => plugins;
+  @override
+  Future<List<InstalledPlugin>> getDevelopmentPlugins() async => plugins;
+  @override
+  Future<InstalledPlugin?> getPlugin(String id) async => null;
+  @override
+  Future<bool?> getPermission(String id, String perm) async => true;
+  @override
+  Future<void> setPermission(String id, String perm, bool granted) async {}
+  @override
+  Future<List<PluginPermissionGrant>> getPluginPermissions(String id) async =>
+      [];
+  @override
+  Future<int?> getNextUserOrderForNewPlugin() async => null;
 }
 
 void main() {
@@ -179,7 +188,8 @@ void main() {
     );
   });
 
-  testWidgets('PluginSidePanel shows dev tools explicitly when flag is true', (WidgetTester tester) async {
+  testWidgets('PluginSidePanel shows dev tools explicitly when flag is true',
+      (WidgetTester tester) async {
     final mockRepo = FakePluginRegistryRepository();
     final bloc = PluginSystemBloc(repository: mockRepo);
 
@@ -192,7 +202,8 @@ void main() {
     expect(find.byIcon(FluentIcons.folder_add_24_regular), findsOneWidget);
   });
 
-  testWidgets('PluginSidePanel hides dev tools explicitly when flag is false', (WidgetTester tester) async {
+  testWidgets('PluginSidePanel hides dev tools explicitly when flag is false',
+      (WidgetTester tester) async {
     final mockRepo = FakePluginRegistryRepository();
     final bloc = PluginSystemBloc(repository: mockRepo);
 
@@ -205,14 +216,16 @@ void main() {
     expect(find.byIcon(FluentIcons.folder_add_24_regular), findsNothing);
   });
 
-  testWidgets('PluginSidePanel triggers picker and bloc on dev button tap', (WidgetTester tester) async {
+  testWidgets('PluginSidePanel triggers picker and bloc on dev button tap',
+      (WidgetTester tester) async {
     // Pre-cache package info to prevent method channel hang during widget test async pumped frames
     await PackageInfo.fromPlatform();
 
     final mockRepo = FakePluginRegistryRepository();
     final bloc = PluginSystemBloc(repository: mockRepo);
 
-    final tempDir = Directory.systemTemp.createTempSync('otzaria_test_sidepanel');
+    final tempDir =
+        Directory.systemTemp.createTempSync('otzaria_test_sidepanel');
     final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
     manifestFile.writeAsStringSync(jsonEncode({
       'schemaVersion': 1,
@@ -279,8 +292,7 @@ void main() {
         (tester) async {
       final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
         _pluginFor(id: 'local.plugin', name: 'תוסף מקומי'),
-        _pluginFor(
-            id: 'cloud.plugin', name: 'תוסף ענן', networkEnabled: true),
+        _pluginFor(id: 'cloud.plugin', name: 'תוסף ענן', networkEnabled: true),
       ]));
       addTearDown(pluginBloc.close);
 
@@ -294,12 +306,10 @@ void main() {
       expect(find.text('תוסף ענן'), findsOneWidget);
     });
 
-    testWidgets('במצב מנותק מסתיר תוספים שדורשים אינטרנט',
-        (tester) async {
+    testWidgets('במצב מנותק מסתיר תוספים שדורשים אינטרנט', (tester) async {
       final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
         _pluginFor(id: 'local.plugin', name: 'תוסף מקומי'),
-        _pluginFor(
-            id: 'cloud.plugin', name: 'תוסף ענן', networkEnabled: true),
+        _pluginFor(id: 'cloud.plugin', name: 'תוסף ענן', networkEnabled: true),
       ]));
       addTearDown(pluginBloc.close);
 
@@ -317,8 +327,7 @@ void main() {
         'במצב מנותק כשכל התוספים דורשים אינטרנט - מציג הודעת empty state ייעודית',
         (tester) async {
       final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(
-            id: 'cloud.plugin', name: 'תוסף ענן', networkEnabled: true),
+        _pluginFor(id: 'cloud.plugin', name: 'תוסף ענן', networkEnabled: true),
       ]));
       addTearDown(pluginBloc.close);
 
@@ -337,8 +346,7 @@ void main() {
     testWidgets(
         'כשאין תוספים מותקנים - מציג הודעת empty state רגילה גם במצב מנותק',
         (tester) async {
-      final pluginBloc =
-          _StaticPluginSystemBloc(const PluginSystemLoaded([]));
+      final pluginBloc = _StaticPluginSystemBloc(const PluginSystemLoaded([]));
       addTearDown(pluginBloc.close);
 
       await tester.pumpWidget(_wrap(
@@ -370,20 +378,16 @@ void main() {
 
       expect(find.text('תוסף גלוי'), findsOneWidget);
       expect(find.text('תוסף מוסתר'), findsNothing,
-          reason:
-              'hiddenFromTools must remove the plugin from the side panel '
+          reason: 'hiddenFromTools must remove the plugin from the side panel '
               '(P1 bug: previously the panel called state.plugins instead '
               'of state.visiblePlugins).');
     });
 
-    testWidgets(
-        'כשכל התוספים מוסתרים מציג הודעת empty state ייעודית',
+    testWidgets('כשכל התוספים מוסתרים מציג הודעת empty state ייעודית',
         (tester) async {
       final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(
-            id: 'h1', name: 'תוסף אחד', hiddenFromTools: true),
-        _pluginFor(
-            id: 'h2', name: 'תוסף שני', hiddenFromTools: true),
+        _pluginFor(id: 'h1', name: 'תוסף אחד', hiddenFromTools: true),
+        _pluginFor(id: 'h2', name: 'תוסף שני', hiddenFromTools: true),
       ]));
       addTearDown(pluginBloc.close);
 
@@ -408,8 +412,7 @@ void main() {
 
     test('במצב מנותק מסנן רק תוספים עם networkEnabled=true', () {
       final local = _pluginFor(id: 'a', name: 'A');
-      final cloud =
-          _pluginFor(id: 'b', name: 'B', networkEnabled: true);
+      final cloud = _pluginFor(id: 'b', name: 'B', networkEnabled: true);
       final filtered = [local, cloud].filterForOfflineMode(true);
       expect(filtered, [local]);
     });
@@ -422,8 +425,7 @@ void main() {
 
   group('InstalledPlugin.requiresNetwork', () {
     test('מחזיר true כאשר manifest.networkEnabled=true', () {
-      final plugin =
-          _pluginFor(id: 'a', name: 'A', networkEnabled: true);
+      final plugin = _pluginFor(id: 'a', name: 'A', networkEnabled: true);
       expect(plugin.requiresNetwork, isTrue);
     });
 
@@ -448,7 +450,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // לכל תוסף יש drag handle נפרד.
-      expect(find.byIcon(FluentIcons.re_order_dots_vertical_24_regular), findsNWidgets(2));
+      expect(find.byIcon(FluentIcons.re_order_dots_vertical_24_regular),
+          findsNWidgets(2));
     });
 
     testWidgets(
@@ -541,15 +544,15 @@ void main() {
       await tester.pumpAndSettle();
 
       // מאתרים את ה-drag handles ומבצעים גרירה מ-A אל C.
-      final handles = find.byIcon(FluentIcons.re_order_dots_vertical_24_regular);
+      final handles =
+          find.byIcon(FluentIcons.re_order_dots_vertical_24_regular);
       expect(handles, findsNWidgets(3));
 
       final handleA = handles.at(0);
       final handleC = handles.at(2);
       final centerC = tester.getCenter(handleC);
 
-      final gesture =
-          await tester.startGesture(tester.getCenter(handleA));
+      final gesture = await tester.startGesture(tester.getCenter(handleA));
       // pump לפני התזוזה כדי שהדיווח של Draggable יתחיל
       await tester.pump(const Duration(milliseconds: 100));
       await gesture.moveTo(centerC);
@@ -588,7 +591,8 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      final handles = find.byIcon(FluentIcons.re_order_dots_vertical_24_regular);
+      final handles =
+          find.byIcon(FluentIcons.re_order_dots_vertical_24_regular);
       final handleA = handles.at(0);
       final centerA = tester.getCenter(handleA);
 

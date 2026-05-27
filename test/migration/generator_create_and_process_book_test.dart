@@ -75,7 +75,8 @@ void main() {
 
       // await directly — if it throws the test fails; no need for returnsNormally
       // because the inner Future has actual await points that returnsNormally doesn't await.
-      await generator.createAndProcessBook(bookPath, catId, insertContent: true);
+      await generator.createAndProcessBook(bookPath, catId,
+          insertContent: true);
     },
   );
 
@@ -87,13 +88,13 @@ void main() {
 
       // הכנסה ראשונה (ספר חדש)
       final log1 = <String>[];
-      await buildGenerator(log1).createAndProcessBook(bookPath, catId,
-          insertContent: true);
+      await buildGenerator(log1)
+          .createAndProcessBook(bookPath, catId, insertContent: true);
 
       // הכנסה שנייה (ספר קיים → update path)
       final log2 = <String>[];
-      await buildGenerator(log2).createAndProcessBook(bookPath, catId,
-          insertContent: true);
+      await buildGenerator(log2)
+          .createAndProcessBook(bookPath, catId, insertContent: true);
 
       final updateMessages =
           log2.where((m) => m.contains('עודכן ספר')).toList();

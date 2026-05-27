@@ -37,8 +37,8 @@ void main() {
     _RecordingTabsBloc? tabsBloc,
     List<String> activeCommentators = const [],
   }) {
-    final textBookBloc = _TestTextBookBloc(
-        _loadedState(activeCommentators: activeCommentators));
+    final textBookBloc =
+        _TestTextBookBloc(_loadedState(activeCommentators: activeCommentators));
     final personalNotesBloc =
         _TestPersonalNotesBloc(const PersonalNotesState.initial());
     final settingsBloc = _TestSettingsBloc(SettingsState.initial());
@@ -95,7 +95,8 @@ void main() {
     expect(reportedIndex, 1);
   });
 
-  testWidgets('onTabChanged נקרא עם אינדקס 2 כשלוחצים על הערות', (tester) async {
+  testWidgets('onTabChanged נקרא עם אינדקס 2 כשלוחצים על הערות',
+      (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -127,8 +128,8 @@ void main() {
     await tester.pump();
 
     // מעבר פרוגרמטי לטאב 2 (הערות)
-    final state =
-        tester.state<_TabSwitcherWrapperState>(find.byType(_TabSwitcherWrapper));
+    final state = tester
+        .state<_TabSwitcherWrapperState>(find.byType(_TabSwitcherWrapper));
     state.switchTo(2);
     await tester.pumpAndSettle();
 
@@ -156,8 +157,8 @@ void main() {
     expect(reportedIndex, 1);
 
     // הורה שולח שוב אותו initialTabIndex: 0 (לא השתנה)
-    final state =
-        tester.state<_TabSwitcherWrapperState>(find.byType(_TabSwitcherWrapper));
+    final state = tester
+        .state<_TabSwitcherWrapperState>(find.byType(_TabSwitcherWrapper));
     state.switchTo(0); // לא שינוי — אותו ערך
     await tester.pumpAndSettle();
 
@@ -173,8 +174,8 @@ void main() {
     final sourceTab = TextBookTab(
       book: TextBook(title: 'ספר בדיקה'),
       index: 0,
-      blocOverride: _TestTextBookBloc(
-          _loadedState(activeCommentators: const ['רש"י'])),
+      blocOverride:
+          _TestTextBookBloc(_loadedState(activeCommentators: const ['רש"י'])),
     );
     addTearDown(sourceTab.dispose);
 
@@ -315,7 +316,8 @@ class _TestSettingsBloc extends Bloc<SettingsEvent, SettingsState>
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _RecordingTabsBloc extends Bloc<TabsEvent, TabsState> implements TabsBloc {
+class _RecordingTabsBloc extends Bloc<TabsEvent, TabsState>
+    implements TabsBloc {
   _RecordingTabsBloc() : super(TabsState.initial()) {
     on<TabsEvent>((event, emit) {
       recordedEvents.add(event);

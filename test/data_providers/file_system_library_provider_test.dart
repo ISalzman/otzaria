@@ -51,7 +51,8 @@ void main() {
       await provider.initialize();
 
       final booksByCategory = await provider.loadBooks({});
-      final talmudBooks = booksByCategory[DatabaseConstants.talmudBavliFolderName];
+      final talmudBooks =
+          booksByCategory[DatabaseConstants.talmudBavliFolderName];
 
       expect(talmudBooks, isNotNull);
       expect(talmudBooks, hasLength(1));

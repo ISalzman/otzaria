@@ -26,8 +26,7 @@ void main() {
               SettingsRepository.keyFollowSystemTheme,
               defaultValue: false))
           .thenReturn(false);
-      when(mockSettingsWrapper.getValue<int>(
-              SettingsRepository.keySwatchColor,
+      when(mockSettingsWrapper.getValue<int>(SettingsRepository.keySwatchColor,
               defaultValue: AppSeedColors.defaultLight.toARGB32()))
           .thenReturn(AppSeedColors.defaultLight.toARGB32());
       when(mockSettingsWrapper.getValue<int>(
@@ -115,8 +114,7 @@ void main() {
               SettingsRepository.keyFollowSystemTheme,
               defaultValue: false))
           .thenReturn(true);
-      when(mockSettingsWrapper.getValue<int>(
-              SettingsRepository.keySwatchColor,
+      when(mockSettingsWrapper.getValue<int>(SettingsRepository.keySwatchColor,
               defaultValue: AppSeedColors.defaultLight.toARGB32()))
           .thenReturn(const Color(0xff0000ff).toARGB32()); // Blue
       when(mockSettingsWrapper.getValue<int>(
@@ -212,8 +210,8 @@ void main() {
     test('updateSeedColor calls setValue on settings wrapper', () async {
       const color = Colors.red;
       await repository.updateSeedColor(color);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keySwatchColor,
-              color.toARGB32()))
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keySwatchColor, color.toARGB32()))
           .called(1);
     });
 
@@ -265,8 +263,7 @@ void main() {
       when(mockSettingsWrapper.getValue<bool>(SettingsRepository.keyDarkMode,
               defaultValue: false))
           .thenReturn(false);
-      when(mockSettingsWrapper.getValue<int>(
-              SettingsRepository.keySwatchColor,
+      when(mockSettingsWrapper.getValue<int>(SettingsRepository.keySwatchColor,
               defaultValue: AppSeedColors.defaultLight.toARGB32()))
           .thenReturn(AppSeedColors.defaultLight.toARGB32());
       when(mockSettingsWrapper.getValue<int>(
@@ -383,8 +380,7 @@ void main() {
       when(mockSettingsWrapper.getValue<bool>(SettingsRepository.keyDarkMode,
               defaultValue: false))
           .thenReturn(false);
-      when(mockSettingsWrapper.getValue<int>(
-              SettingsRepository.keySwatchColor,
+      when(mockSettingsWrapper.getValue<int>(SettingsRepository.keySwatchColor,
               defaultValue: AppSeedColors.defaultLight.toARGB32()))
           .thenReturn(AppSeedColors.defaultLight.toARGB32());
       when(mockSettingsWrapper.getValue<int>(
@@ -565,8 +561,7 @@ void main() {
       expect(
         settings['builtInToolsPinnedToNavRail'],
         equals(<String>{}),
-        reason:
-            'empty CSV must round-trip to an empty Set, not a Set with an '
+        reason: 'empty CSV must round-trip to an empty Set, not a Set with an '
             'empty string',
       );
     });

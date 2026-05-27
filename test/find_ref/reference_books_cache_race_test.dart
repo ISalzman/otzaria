@@ -28,8 +28,7 @@ void main() {
   });
 
   group('ReferenceBooksCache — race condition מול clear()', () {
-    test(
-        'clear() באמצע warmUp() עוצר את הטעינה — isLoaded נשאר false',
+    test('clear() באמצע warmUp() עוצר את הטעינה — isLoaded נשאר false',
         () async {
       final cache = ReferenceBooksCache.instance;
       expect(cache.isLoaded, isFalse, reason: 'מצב התחלתי');
@@ -192,7 +191,8 @@ void main() {
       expect(cache.isLoaded, isTrue);
       // לא נזרקת חריגה — ה-getter מחזיר null כי אין ספרים, וזה תקין.
       expect(cache.getCategoryPathForBookSync(9999), isNull,
-          reason: 'getter סינכרוני לא קורס אחרי warmUp, מחזיר null למה שלא בקאש');
+          reason:
+              'getter סינכרוני לא קורס אחרי warmUp, מחזיר null למה שלא בקאש');
     });
   });
 

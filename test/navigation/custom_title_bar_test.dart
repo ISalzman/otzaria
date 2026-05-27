@@ -199,7 +199,8 @@ void main() {
   });
 
   group('פריסת מסך צר (portrait) — טאבים בשורה תחתונה', () {
-    testWidgets('landscape: הטאבים באותה שורה של כפתורי הפעולה', (tester) async {
+    testWidgets('landscape: הטאבים באותה שורה של כפתורי הפעולה',
+        (tester) async {
       final tab = _makeTextTab('ספר א');
       final tabsBloc = _TestTabsBloc(
         TabsState(tabs: [tab], currentTabIndex: 0),
@@ -268,8 +269,7 @@ void main() {
               'ב-portrait הטאבים בשורה תחתונה (y ≥ 40, כי השורה העליונה היא 40)');
     });
 
-    testWidgets('portrait: הטאבים מקבלים רוחב מלא ולא נדחסים',
-        (tester) async {
+    testWidgets('portrait: הטאבים מקבלים רוחב מלא ולא נדחסים', (tester) async {
       final first = _makeTextTab('ספר א');
       final second = _makeTextTab('ספר ב');
       final tabsBloc = _TestTabsBloc(

@@ -15,30 +15,30 @@ Uint8List _buildSfnt({required bool hebrewRange}) {
   // cmap format-4 subtable (2 segments = real + 0xFFFF terminator)
   // size = 14 header + 4 endCodes + 2 pad + 4 startCodes + 4 idDeltas + 4 idRangeOffsets = 32
   final sub = ByteData(32)
-    ..setUint16(0, 4)       // format
-    ..setUint16(2, 32)      // length
-    ..setUint16(4, 0)       // language
-    ..setUint16(6, 4)       // segCountX2
-    ..setUint16(8, 4)       // searchRange
-    ..setUint16(10, 1)      // entrySelector
-    ..setUint16(12, 0)      // rangeShift
-    ..setUint16(14, ec)     // endCode[0]
+    ..setUint16(0, 4) // format
+    ..setUint16(2, 32) // length
+    ..setUint16(4, 0) // language
+    ..setUint16(6, 4) // segCountX2
+    ..setUint16(8, 4) // searchRange
+    ..setUint16(10, 1) // entrySelector
+    ..setUint16(12, 0) // rangeShift
+    ..setUint16(14, ec) // endCode[0]
     ..setUint16(16, 0xFFFF) // endCode[1] terminator
-    ..setUint16(18, 0)      // reservedPad
-    ..setUint16(20, sc)     // startCode[0]
+    ..setUint16(18, 0) // reservedPad
+    ..setUint16(20, sc) // startCode[0]
     ..setUint16(22, 0xFFFF) // startCode[1] terminator
-    ..setUint16(24, 0)      // idDelta[0]
-    ..setUint16(26, 1)      // idDelta[1]
-    ..setUint16(28, 0)      // idRangeOffset[0]
-    ..setUint16(30, 0);     // idRangeOffset[1]
+    ..setUint16(24, 0) // idDelta[0]
+    ..setUint16(26, 1) // idDelta[1]
+    ..setUint16(28, 0) // idRangeOffset[0]
+    ..setUint16(30, 0); // idRangeOffset[1]
 
   // cmap table: version(2) + numTables(2) + encoding record(8) + subtable(32) = 44
   // subtable offset relative to cmap start = 4 + 8 = 12
   final cmap = ByteData(44)
-    ..setUint16(0, 0)  // version
-    ..setUint16(2, 1)  // numTables
-    ..setUint16(4, 3)  // platformID = 3 (Windows)
-    ..setUint16(6, 1)  // encodingID = 1 (BMP)
+    ..setUint16(0, 0) // version
+    ..setUint16(2, 1) // numTables
+    ..setUint16(4, 3) // platformID = 3 (Windows)
+    ..setUint16(6, 1) // encodingID = 1 (BMP)
     ..setUint32(8, 12); // subtable offset
   for (int i = 0; i < 32; i++) {
     cmap.setUint8(12 + i, sub.getUint8(i));
@@ -48,15 +48,18 @@ Uint8List _buildSfnt({required bool hebrewRange}) {
   const int cmapOffset = 28;
   final sfnt = ByteData(cmapOffset + 44)
     ..setUint32(0, 0x00010000) // sfVersion (TrueType)
-    ..setUint16(4, 1)          // numTables
-    ..setUint16(6, 16)         // searchRange
-    ..setUint16(8, 0)          // entrySelector
-    ..setUint16(10, 0)         // rangeShift
+    ..setUint16(4, 1) // numTables
+    ..setUint16(6, 16) // searchRange
+    ..setUint16(8, 0) // entrySelector
+    ..setUint16(10, 0) // rangeShift
     // table record: "cmap"
-    ..setUint8(12, 0x63)..setUint8(13, 0x6D)..setUint8(14, 0x61)..setUint8(15, 0x70)
-    ..setUint32(16, 0)           // checksum
-    ..setUint32(20, cmapOffset)  // offset
-    ..setUint32(24, 44);         // length
+    ..setUint8(12, 0x63)
+    ..setUint8(13, 0x6D)
+    ..setUint8(14, 0x61)
+    ..setUint8(15, 0x70)
+    ..setUint32(16, 0) // checksum
+    ..setUint32(20, cmapOffset) // offset
+    ..setUint32(24, 44); // length
   for (int i = 0; i < 44; i++) {
     sfnt.setUint8(cmapOffset + i, cmap.getUint8(i));
   }
@@ -73,9 +76,12 @@ Uint8List _buildTtc(List<Uint8List> fonts) {
     pos += f.length;
   }
   final ttc = ByteData(pos)
-    ..setUint8(0, 0x74)..setUint8(1, 0x74)..setUint8(2, 0x63)..setUint8(3, 0x66) // "ttcf"
-    ..setUint32(4, 0x00010000)       // version
-    ..setUint32(8, fonts.length);    // numFonts
+    ..setUint8(0, 0x74)
+    ..setUint8(1, 0x74)
+    ..setUint8(2, 0x63)
+    ..setUint8(3, 0x66) // "ttcf"
+    ..setUint32(4, 0x00010000) // version
+    ..setUint32(8, fonts.length); // numFonts
   for (int i = 0; i < fonts.length; i++) {
     ttc.setUint32(12 + i * 4, offsets[i]);
   }
@@ -190,7 +196,8 @@ void main() {
     });
 
     test('availableFonts מחזיר bundled + cache כשהקאש מאוכלס', () {
-      const systemFont = FontInfo(value: 'MockSystemFont', label: 'MockSystemFont');
+      const systemFont =
+          FontInfo(value: 'MockSystemFont', label: 'MockSystemFont');
       AppFonts.debugSystemFontsHebrewCache = const [systemFont];
 
       final fonts = AppFonts.availableFonts;
@@ -199,7 +206,8 @@ void main() {
       expect(
         fonts.any((f) => f.value == AppFonts.defaultFont),
         isTrue,
-        reason: 'הגופן המובנה ${AppFonts.defaultFont} צריך להופיע ב-availableFonts',
+        reason:
+            'הגופן המובנה ${AppFonts.defaultFont} צריך להופיע ב-availableFonts',
       );
       expect(
         fonts.any((f) => f.value == AppFonts.defaultCommentatorsFont),

@@ -45,15 +45,14 @@ void main() {
     }
   });
 
-  test(
-      'syncFiles לא מוחק תיקייה מותאמת חדשה עם ספר ברמת השורש',
-      () async {
+  test('syncFiles לא מוחק תיקייה מותאמת חדשה עם ספר ברמת השורש', () async {
     final libraryPath = path.join(tempDir.path, 'library');
     final customFolderPath = path.join(tempDir.path, 'היברו');
     await Directory(libraryPath).create(recursive: true);
     await Directory(path.join(libraryPath, 'אוצריא')).create(recursive: true);
     await Directory(customFolderPath).create(recursive: true);
-    await File(path.join(customFolderPath, 'ספר חדש.txt')).writeAsString('תוכן');
+    await File(path.join(customFolderPath, 'ספר חדש.txt'))
+        .writeAsString('תוכן');
 
     await Settings.setValue<String>(
       SettingsRepository.keyLibraryPath,

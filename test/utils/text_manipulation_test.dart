@@ -139,7 +139,8 @@ void main() {
       expect(result, contains('<span style="color: red">נָבוֹן</span>'));
     });
 
-    test('multi-word with nikud and searchDistance - highlights both words', () {
+    test('multi-word with nikud and searchDistance - highlights both words',
+        () {
       const text = 'וְעַתָּה יֵרֶא פַּרְעֹה אִישׁ נָבוֹן וְחָכָם';
       final result = highLight(
         text,

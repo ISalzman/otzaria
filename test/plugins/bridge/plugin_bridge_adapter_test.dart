@@ -441,8 +441,7 @@ void main() {
 
       fakeProvider = _FakeBookProvider({
         docxKey: 'תוכן docx של הספר - נכון',
-        docxFakeTxtKey:
-            'תוכן TXT שגוי - לא היה צריך להגיע לכאן עבור ספר-docx',
+        docxFakeTxtKey: 'תוכן TXT שגוי - לא היה צריך להגיע לכאן עבור ספר-docx',
         txtKey: 'תוכן txt רגיל',
         pdfFallbackKey: 'תוכן fallback של ה-pdf',
         loneTxtKey: 'תוכן fallback של ספר שאינו בקטלוג',
@@ -505,8 +504,8 @@ void main() {
       // 'txt' כברירת מחדל. עבור משתמש עם seforim.db בלבד, זה היה מחזיר
       // נתון שגוי (או תוכן txt שאינו קיים, או כשל). התיקון: שימוש ב-
       // TextBookRepository שלוקח את ה-fileType מ-metadata של ה-TextBook.
-      final result = await adapter.execute(
-          'library', 'getBookContent', const {'bookId': 'ספר-docx'});
+      final result = await adapter
+          .execute('library', 'getBookContent', const {'bookId': 'ספר-docx'});
 
       expect(result, 'תוכן docx של הספר - נכון');
       expect(result, isNot(contains('שגוי')),
@@ -515,8 +514,8 @@ void main() {
 
     test('TextBook עם fileType=txt עובר דרך TextBookRepository כרגיל',
         () async {
-      final result = await adapter.execute(
-          'library', 'getBookContent', const {'bookId': 'ספר-txt'});
+      final result = await adapter
+          .execute('library', 'getBookContent', const {'bookId': 'ספר-txt'});
 
       expect(result, 'תוכן txt רגיל');
     });
@@ -524,35 +523,32 @@ void main() {
     test(
         'ספר שאינו בקטלוג נופל ל-DataRepository.getBookText (ברירת המחדל '
         'fileType=txt)', () async {
-      final result = await adapter.execute('library', 'getBookContent',
-          const {'bookId': 'שלא-בקטלוג'});
+      final result = await adapter
+          .execute('library', 'getBookContent', const {'bookId': 'שלא-בקטלוג'});
 
       expect(result, 'תוכן fallback של ספר שאינו בקטלוג');
     });
 
-    test(
-        'PdfBook בקטלוג (לא TextBook) נופל ל-DataRepository.getBookText',
+    test('PdfBook בקטלוג (לא TextBook) נופל ל-DataRepository.getBookText',
         () async {
       // ה-discriminator הוא `cataloged is TextBook`. PdfBook נכשל בבדיקה
       // ולכן נכנס לענף ה-else במקום ל-TextBookRepository.
-      final result = await adapter.execute(
-          'library', 'getBookContent', const {'bookId': 'ספר-pdf'});
+      final result = await adapter
+          .execute('library', 'getBookContent', const {'bookId': 'ספר-pdf'});
 
       expect(result, 'תוכן fallback של ה-pdf');
     });
 
     test('title כ-alias ל-bookId נתמך (תאימות לאחור)', () async {
-      final result = await adapter.execute(
-          'library', 'getBookContent', const {'title': 'ספר-txt'});
+      final result = await adapter
+          .execute('library', 'getBookContent', const {'title': 'ספר-txt'});
 
       expect(result, 'תוכן txt רגיל');
     });
 
     test('offset חותך מתחילת הטקסט כשלא ניתן section', () async {
       // טקסט "ABCDEFGHIJKLMNOP" באורך 16, offset=4 — מתחיל מ-'E'.
-      final result = await adapter.execute(
-          'library',
-          'getBookContent',
+      final result = await adapter.execute('library', 'getBookContent',
           const {'bookId': 'ספר-לחיתוך', 'offset': 4, 'limit': 5});
 
       expect(result, 'EFGHI');
@@ -586,8 +582,7 @@ void main() {
           reason: 'section ב-index 2 + offset 3 → התחלה ב-index 5');
     });
 
-    test(
-        'section ב-offset=0 מתחיל מהמיקום של section (התנהגות שלא השתנתה)',
+    test('section ב-offset=0 מתחיל מהמיקום של section (התנהגות שלא השתנתה)',
         () async {
       final result = await adapter.execute(
         'library',
@@ -603,8 +598,7 @@ void main() {
       expect(result, 'DEF');
     });
 
-    test('section שלא נמצא מתעלם וחוזר ל-offset רגיל מתחילת הטקסט',
-        () async {
+    test('section שלא נמצא מתעלם וחוזר ל-offset רגיל מתחילת הטקסט', () async {
       final result = await adapter.execute(
         'library',
         'getBookContent',

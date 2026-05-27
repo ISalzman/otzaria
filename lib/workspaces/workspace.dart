@@ -49,7 +49,8 @@ class Workspace extends Equatable {
   factory Workspace.fromJson(Map<String, dynamic> json) {
     OpenedTab? decodeTab(Map<String, dynamic> map) {
       if (map['type'] == 'PdfCommentatorsTab') return null;
-      if (map['type'] == 'CommentatorsTab') return CommentatorsTab.fromJson(map);
+      if (map['type'] == 'CommentatorsTab')
+        return CommentatorsTab.fromJson(map);
       return OpenedTab.fromJson(map);
     }
 
@@ -73,7 +74,9 @@ class Workspace extends Equatable {
       if (i <= activeTabIndex) remappedIndex = persistedTabs.length;
       persistedTabs.add(tabs[i]);
     }
-    final safeIndex = persistedTabs.isEmpty ? 0 : remappedIndex.clamp(0, persistedTabs.length - 1);
+    final safeIndex = persistedTabs.isEmpty
+        ? 0
+        : remappedIndex.clamp(0, persistedTabs.length - 1);
     return {
       'id': id,
       'name': name,

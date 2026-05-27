@@ -93,8 +93,7 @@ void main() {
 
   // ── tests ────────────────────────────────────────────────────────────────
 
-  test(
-      'regression: ספר ללא שינוי לא מוחזר מהסריקה (ללא parse TOC מיותר)',
+  test('regression: ספר ללא שינוי לא מוחזר מהסריקה (ללא parse TOC מיותר)',
       () async {
     final file = await createTxtFile('unchanged.txt');
     final stat = await file.stat();
@@ -116,8 +115,7 @@ void main() {
     );
   });
 
-  test(
-      'ספר עם metadata ששונה מוחזר עם existingBookId (עדכון בלבד, לא הכנסה)',
+  test('ספר עם metadata ששונה מוחזר עם existingBookId (עדכון בלבד, לא הכנסה)',
       () async {
     final file = await createTxtFile('changed.txt');
     final stat = await file.stat();
@@ -255,7 +253,8 @@ void main() {
       fakeRepo = _FakeRepository();
     });
 
-    test('ספר קיים ב-DB עם metadata זהה → מחזיר true (דלג על insert)', () async {
+    test('ספר קיים ב-DB עם metadata זהה → מחזיר true (דלג על insert)',
+        () async {
       fakeRepo.books['/books/book.txt'] =
           _FakeBook(id: 5, fileSize: 100, lastModified: 1000);
 

@@ -143,8 +143,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           final needed = (dbSize / 1024 / 1024).toStringAsFixed(1);
           final free = (freeSpace / 1024 / 1024).toStringAsFixed(1);
           emit(_error(
-            errorMessage:
-                'אין מספיק מקום פנוי באחסון הפנימי.\n'
+            errorMessage: 'אין מספיק מקום פנוי באחסון הפנימי.\n'
                 'נדרש: $needed MB, פנוי: $free MB.\n'
                 'יש לפנות מקום ידנית ולנסות שוב.',
             selectedPath: directoryPath,
@@ -173,7 +172,9 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         } catch (copyError) {
           // שגיאת I/O שאינה הרשאה (למשל ENOSPC, שגיאת קריאה)
           // מנקים קובץ יעד חלקי אם נוצר
-          try { await File(internalDbPath).delete(); } catch (_) {}
+          try {
+            await File(internalDbPath).delete();
+          } catch (_) {}
           final isNoSpace = copyError.toString().contains('No space') ||
               copyError.toString().contains('ENOSPC');
           emit(_error(
@@ -244,16 +245,20 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   /// מחזיר מידע df עבור נתיב נתון: filesystem ומקום פנוי בבייטים.
   /// מחזיר freeBytes = -1 אם לא ניתן לקבוע.
   static Future<_DfInfo> _getDfInfo(String dirPath) async {
-    if (!Platform.isAndroid) return const _DfInfo(filesystem: null, freeBytes: -1);
+    if (!Platform.isAndroid)
+      return const _DfInfo(filesystem: null, freeBytes: -1);
     try {
       final result =
           await Process.run('df', ['-B1', dirPath], runInShell: false);
-      if (result.exitCode != 0) return const _DfInfo(filesystem: null, freeBytes: -1);
+      if (result.exitCode != 0)
+        return const _DfInfo(filesystem: null, freeBytes: -1);
       final lines = result.stdout.toString().trim().split('\n');
-      if (lines.length < 2) return const _DfInfo(filesystem: null, freeBytes: -1);
+      if (lines.length < 2)
+        return const _DfInfo(filesystem: null, freeBytes: -1);
       // שורת הנתונים של df: Filesystem 1B-blocks Used Available Use% Mount
       final parts = lines.last.trim().split(RegExp(r'\s+'));
-      if (parts.length < 4) return const _DfInfo(filesystem: null, freeBytes: -1);
+      if (parts.length < 4)
+        return const _DfInfo(filesystem: null, freeBytes: -1);
       return _DfInfo(
         filesystem: parts[0],
         freeBytes: int.tryParse(parts[3]) ?? -1,
@@ -753,7 +758,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
       // הורדת תלמוד בבלי
       await _downloadAndExtractAsset(
-        url: 'https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst',
+        url:
+            'https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst',
         tempFileName: 'otzaria_talmud_bavli.tar.zst',
         statusMessage: 'מוריד תלמוד בבלי...',
         outputDir: libraryPath,
@@ -763,7 +769,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
       // הורדת קטלוגים
       await _downloadAndExtractAsset(
-        url: 'https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst',
+        url:
+            'https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst',
         tempFileName: 'otzaria_otzar-HB_catalog.db.zst',
         statusMessage: 'מוריד קטלוגים...',
         outputDir: libraryPath,
@@ -776,7 +783,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     } catch (e) {
       // קובץ ה-temp נשמר בכוונה — ישמש ל-resume בניסיון הבא
       emit(EmptyLibraryError(
-        errorMessage: 'שגיאה בהורדה: $e\nניתן ללחוץ שוב כדי להמשיך מהנקודה שנעצרה.',
+        errorMessage:
+            'שגיאה בהורדה: $e\nניתן ללחוץ שוב כדי להמשיך מהנקודה שנעצרה.',
       ));
     }
   }
@@ -932,8 +940,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   Future<String> _resolveRedirect(String url) async {
     var current = Uri.parse(url);
     for (var i = 0; i < 5; i++) {
-      final request = http.Request('HEAD', current)
-        ..followRedirects = false;
+      final request = http.Request('HEAD', current)..followRedirects = false;
       final response = await _httpClient.send(request);
       if (response.statusCode >= 300 && response.statusCode < 400) {
         final location = response.headers['location'];
@@ -1045,8 +1052,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   /// חילוץ ZST streaming דרך ZSTD FFI — רץ ב-isolate נפרד.
   /// מעבד את הקובץ בנתחים של ~128 KB ישירות לדיסק.
   /// שימוש ב-RAM: כמה מאות KB בלבד (במקום ~8 GB).
-  static void _decompressZstStreaming(
-      String archivePath, String outputPath) {
+  static void _decompressZstStreaming(String archivePath, String outputPath) {
     final dylib = _openZstandardLib();
     final bindings = ZstandardNativeBindings(dylib);
 
@@ -1070,8 +1076,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       final paramRet = bindings.ZSTD_DCtx_setParameter(
           dStream, ZSTD_dParameter.ZSTD_d_windowLogMax, 31);
       if (bindings.ZSTD_isError(paramRet) != 0) {
-        throw Exception(
-            'ZSTD_DCtx_setParameter(windowLogMax) נכשל: $paramRet');
+        throw Exception('ZSTD_DCtx_setParameter(windowLogMax) נכשל: $paramRet');
       }
 
       final inNative = malloc.allocate<Uint8>(inBufSize);
@@ -1104,16 +1109,14 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
               outBuf.ref.size = outBufSize;
               outBuf.ref.pos = 0;
 
-              lastRet =
-                  bindings.ZSTD_decompressStream(dStream, outBuf, inBuf);
+              lastRet = bindings.ZSTD_decompressStream(dStream, outBuf, inBuf);
 
               if (bindings.ZSTD_isError(lastRet) != 0) {
                 throw Exception('שגיאת ZSTD בחילוץ (קוד: $lastRet)');
               }
 
               if (outBuf.ref.pos > 0) {
-                outputRaf
-                    .writeFromSync(outNative.asTypedList(outBuf.ref.pos));
+                outputRaf.writeFromSync(outNative.asTypedList(outBuf.ref.pos));
               }
             }
           }

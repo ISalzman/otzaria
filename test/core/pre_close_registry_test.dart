@@ -38,7 +38,8 @@ void main() {
       }
     });
 
-    test('runAll מבצע retry פעם נוספת אחרי כישלון ולא זורק אם הניסיון השני הצליח',
+    test(
+        'runAll מבצע retry פעם נוספת אחרי כישלון ולא זורק אם הניסיון השני הצליח',
         () async {
       var attempts = 0;
       Future<void> flakyCallback() async {

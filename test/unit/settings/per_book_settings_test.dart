@@ -22,8 +22,7 @@ void main() {
     });
 
     test('toJson משמיט שדות null', () {
-      final settings =
-          TextBookPerBookSettings(continuousReadingMode: true);
+      final settings = TextBookPerBookSettings(continuousReadingMode: true);
       final json = settings.toJson();
 
       expect(json.containsKey('continuousReadingMode'), isTrue);

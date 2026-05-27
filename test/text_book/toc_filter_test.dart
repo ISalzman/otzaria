@@ -22,8 +22,10 @@ TocEntry _entry({
 void main() {
   test('filterTocEntriesForSearch keeps only matching branches', () {
     final root = _entry(text: 'Book', index: 0, level: 1);
-    final chapterA = _entry(text: 'Chapter A', index: 1, level: 2, parent: root);
-    final chapterB = _entry(text: 'Chapter B', index: 2, level: 2, parent: root);
+    final chapterA =
+        _entry(text: 'Chapter A', index: 1, level: 2, parent: root);
+    final chapterB =
+        _entry(text: 'Chapter B', index: 2, level: 2, parent: root);
     root.children = [chapterA, chapterB];
 
     final appendixRoot = _entry(text: 'Appendix', index: 3, level: 1);
@@ -61,7 +63,8 @@ void main() {
     final root = _entry(text: 'ספר', index: 0, level: 1);
     final commentaryMatch =
         _entry(text: 'מאירי על שבת דף ע', index: 2, level: 2, parent: root);
-    final exactMatch = _entry(text: 'שבת דף ע', index: 1, level: 2, parent: root);
+    final exactMatch =
+        _entry(text: 'שבת דף ע', index: 1, level: 2, parent: root);
     root.children = [commentaryMatch, exactMatch];
 
     final filtered = filterTocEntriesForSearch([root], 'שבת דף ע');

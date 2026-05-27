@@ -22,7 +22,9 @@ import 'package:flutter_test/flutter_test.dart';
 ///   * הרשאות ב-inline-code (backticked) כמו `` `library.books.read` ``
 ///   * הרשאות אירוע בפורמט `events.subscribe:event.name`
 void main() {
-  group('API_REFERENCE.md format (consumed by Otzaria_Website pluginValidation.js)', () {
+  group(
+      'API_REFERENCE.md format (consumed by Otzaria_Website pluginValidation.js)',
+      () {
     late String md;
 
     setUpAll(() {
@@ -30,8 +32,7 @@ void main() {
       expect(
         file.existsSync(),
         isTrue,
-        reason:
-            'docs/plugin-sdk/API_REFERENCE.md חייב להתקיים — האתר '
+        reason: 'docs/plugin-sdk/API_REFERENCE.md חייב להתקיים — האתר '
             'מסתמך עליו לוולידציה של כל תוסף. אם הקובץ הועבר/שונה שמו, '
             'יש לעדכן גם את pluginValidation.js (API_REFERENCE_URL).',
       );
@@ -77,12 +78,12 @@ void main() {
         'plugin.storage.write',
         'ui.feedback',
       ];
-      final missing = expectedCore.where((p) => !permissions.contains(p)).toList();
+      final missing =
+          expectedCore.where((p) => !permissions.contains(p)).toList();
       expect(
         missing,
         isEmpty,
-        reason:
-            'הרשאות יסוד חסרות מהפענוח: $missing. ודאו שכל אחת מהן מופיעה '
+        reason: 'הרשאות יסוד חסרות מהפענוח: $missing. ודאו שכל אחת מהן מופיעה '
             'לפחות פעם אחת מצוטטת ב-inline code (backtick). למשל: '
             '"`library.books.read`".',
       );
@@ -107,8 +108,7 @@ void main() {
       expect(
         missing,
         isEmpty,
-        reason:
-            'שיטות API מרכזיות חסרות מהפענוח: $missing. ודאו שכל שיטה '
+        reason: 'שיטות API מרכזיות חסרות מהפענוח: $missing. ודאו שכל שיטה '
             'מופיעה לפחות בכותרת ``### `namespace.method`'
             '`` או בדוגמת ``Otzaria.call(\'namespace.method\', …)``.',
       );
@@ -123,8 +123,7 @@ void main() {
       expect(
         subscribePerms,
         isNotEmpty,
-        reason:
-            'לא נמצאו הרשאות events.subscribe:* במסמך. הרשאות אלה הן '
+        reason: 'לא נמצאו הרשאות events.subscribe:* במסמך. הרשאות אלה הן '
             'מקור חיוני לרשימת האירועים שה-website מאשר.',
       );
 
@@ -133,8 +132,7 @@ void main() {
         expect(
           events,
           contains(eventName),
-          reason:
-              'ההרשאה $perm קיימת אבל ה-event $eventName לא נכלל ברשימת '
+          reason: 'ההרשאה $perm קיימת אבל ה-event $eventName לא נכלל ברשימת '
               'האירועים שנפענחה — מצב לא עקבי.',
         );
       }
@@ -158,8 +156,7 @@ void main() {
       expect(
         methods,
         isNot(contains('namespace.method')),
-        reason:
-            'pluginValidation.js מסנן placeholder "namespace.method" מתוך '
+        reason: 'pluginValidation.js מסנן placeholder "namespace.method" מתוך '
             'Otzaria.call, אבל אם הוא הוכנס לכותרת ``### `namespace.method``` '
             'הוא ייכנס לרשימה והאתר יכריז עליו כשיטה תקפה.',
       );

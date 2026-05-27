@@ -158,8 +158,7 @@ void main() {
     expect(descendantsOfLeaf, [ids.last]);
 
     // הצאצאים של רמה 5 הם 5..9.
-    final descendantsOfMid =
-        await repository.getDescendantCategoryIds(ids[5]);
+    final descendantsOfMid = await repository.getDescendantCategoryIds(ids[5]);
     expect(descendantsOfMid.toSet(), ids.sublist(5).toSet());
   });
 
@@ -180,8 +179,7 @@ void main() {
     // לכל אח: יש לו רק את עצמו כצאצא — לא את האחים.
     for (final sId in siblingIds) {
       final desc = await repository.getDescendantCategoryIds(sId);
-      expect(desc, [sId],
-          reason: 'sibling $sId לא אמור לראות את אחיו כצאצאים');
+      expect(desc, [sId], reason: 'sibling $sId לא אמור לראות את אחיו כצאצאים');
     }
   });
 
@@ -189,18 +187,18 @@ void main() {
       () async {
     // מבנה דמוי-מציאות עם הסתעפויות לא-טריוויאליות.
     final aId = await repository.insertCategory(const Category(title: 'A'));
-    final bId = await repository.insertCategory(
-        Category(title: 'B', parentId: aId, level: 1));
-    final cId = await repository.insertCategory(
-        Category(title: 'C', parentId: aId, level: 1));
-    final dId = await repository.insertCategory(
-        Category(title: 'D', parentId: bId, level: 2));
-    final eId = await repository.insertCategory(
-        Category(title: 'E', parentId: bId, level: 2));
-    final fId = await repository.insertCategory(
-        Category(title: 'F', parentId: cId, level: 2));
-    final gId = await repository.insertCategory(
-        Category(title: 'G', parentId: dId, level: 3));
+    final bId = await repository
+        .insertCategory(Category(title: 'B', parentId: aId, level: 1));
+    final cId = await repository
+        .insertCategory(Category(title: 'C', parentId: aId, level: 1));
+    final dId = await repository
+        .insertCategory(Category(title: 'D', parentId: bId, level: 2));
+    final eId = await repository
+        .insertCategory(Category(title: 'E', parentId: bId, level: 2));
+    final fId = await repository
+        .insertCategory(Category(title: 'F', parentId: cId, level: 2));
+    final gId = await repository
+        .insertCategory(Category(title: 'G', parentId: dId, level: 3));
     // משתמשים בשמות כדי שהכלי לא ירגיש שלא משתמשים במשתנים.
     expect({aId, bId, cId, dId, eId, fId, gId}, hasLength(7));
 
@@ -226,14 +224,14 @@ void main() {
     // תרחיש: יוצרים A→B→C, ואז מוסיפים D תחת C. סף הוכחה לכך שגם הוספה
     // *מאוחרת* יורשת נכון את כל ההיררכיה הקיימת.
     final aId = await repository.insertCategory(const Category(title: 'A'));
-    final bId = await repository.insertCategory(
-        Category(title: 'B', parentId: aId, level: 1));
-    final cId = await repository.insertCategory(
-        Category(title: 'C', parentId: bId, level: 2));
+    final bId = await repository
+        .insertCategory(Category(title: 'B', parentId: aId, level: 1));
+    final cId = await repository
+        .insertCategory(Category(title: 'C', parentId: bId, level: 2));
 
     // הוספה מאוחרת של בן ל-C.
-    final dId = await repository.insertCategory(
-        Category(title: 'D', parentId: cId, level: 3));
+    final dId = await repository
+        .insertCategory(Category(title: 'D', parentId: cId, level: 3));
 
     final descendantsOfA = await repository.getDescendantCategoryIds(aId);
     expect(descendantsOfA, containsAll([aId, bId, cId, dId]));

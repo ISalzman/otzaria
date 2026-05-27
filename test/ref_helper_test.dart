@@ -3,8 +3,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 
 /// בונה TocEntry עם ילדים. עוזר לקיצור הטסטים של closestTocEntryIndex.
-TocEntry _entry(String text, int index, int level,
-    {List<TocEntry>? children}) {
+TocEntry _entry(String text, int index, int level, {List<TocEntry>? children}) {
   final e = TocEntry(text: text, index: index, level: level);
   if (children != null) {
     for (final c in children) {
@@ -165,14 +164,15 @@ void main() {
       expect(
         formatDisplayReference(
           bookTitle: 'לבני מחולקת על כרכות',
-          resolvedRef:
-              'לבני מחולקת על כרכות, לבני מחולקת על כרכות, כרכות',
+          resolvedRef: 'לבני מחולקת על כרכות, לבני מחולקת על כרכות, כרכות',
         ),
         'לבני מחולקת על כרכות, כרכות',
       );
     });
 
-    test('falls back to the existing link reference when TOC ref is unavailable', () {
+    test(
+        'falls back to the existing link reference when TOC ref is unavailable',
+        () {
       expect(
         formatDisplayReference(
           bookTitle: 'בראשית',

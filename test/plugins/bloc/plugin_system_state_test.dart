@@ -48,16 +48,14 @@ void main() {
 
     test('excludes disabled plugins even if pinnedToNavRail is true', () {
       final state = PluginSystemLoaded([
-        _plugin(
-            id: 'a', enabled: false, pinned: true, pinnedToNavRail: true),
+        _plugin(id: 'a', enabled: false, pinned: true, pinnedToNavRail: true),
       ]);
       expect(state.pluginsPinnedToNavRail, isEmpty);
     });
 
     test('excludes plugins where pinnedToNavRail is false', () {
       final state = PluginSystemLoaded([
-        _plugin(
-            id: 'a', enabled: true, pinned: true, pinnedToNavRail: false),
+        _plugin(id: 'a', enabled: true, pinned: true, pinnedToNavRail: false),
       ]);
       expect(state.pluginsPinnedToNavRail, isEmpty);
     });
@@ -101,11 +99,7 @@ void main() {
             pinned: false,
             pinnedToNavRail: true),
         // שניהם
-        _plugin(
-            id: 'both',
-            enabled: true,
-            pinned: true,
-            pinnedToNavRail: true),
+        _plugin(id: 'both', enabled: true, pinned: true, pinnedToNavRail: true),
       ]);
 
       expect(

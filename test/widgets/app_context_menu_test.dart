@@ -71,7 +71,8 @@ void main() {
     );
   });
 
-  testWidgets('SubmenuButton בתפריט הקשר משתמש ב-FocusNode שלא יכול לגזול פוקוס',
+  testWidgets(
+      'SubmenuButton בתפריט הקשר משתמש ב-FocusNode שלא יכול לגזול פוקוס',
       (tester) async {
     await openContextMenu(
       tester,
@@ -230,15 +231,12 @@ void main() {
     expect(
       externalFocusNode.hasFocus,
       isTrue,
-      reason:
-          'ריחוף מעל SubmenuButton אסור לגזול פוקוס מ-FocusNode חיצוני, '
+      reason: 'ריחוף מעל SubmenuButton אסור לגזול פוקוס מ-FocusNode חיצוני, '
           'גם כשהוא פותח את התת-תפריט',
     );
   });
 
-  testWidgets(
-      'גרירה לבחירת טקסט מחוץ לתפריט סוגרת את התפריט',
-      (tester) async {
+  testWidgets('גרירה לבחירת טקסט מחוץ לתפריט סוגרת את התפריט', (tester) async {
     // בדיקה עצמאית — מנהלת את כל ה-gestures ידנית כדי לשלוט בסדר down/up
     await tester.pumpWidget(
       MaterialApp(
@@ -325,7 +323,8 @@ void main() {
           body: StatefulBuilder(
             builder: (context, setState) {
               outerSetState = setState;
-              final valueAtBuild = liveValue; // כמו savedTextAtBuild ב-_buildLine
+              final valueAtBuild =
+                  liveValue; // כמו savedTextAtBuild ב-_buildLine
               return AppContextMenuRegion(
                 menuBuilder: (_, __) => [
                   AppContextMenuEntry(
@@ -374,8 +373,7 @@ void main() {
     expect(
       capturedInAction,
       'טקסט נבחר',
-      reason:
-          'הפעולה חייבת להשתמש ב-capturedText שנלכד בזמן הבנייה, '
+      reason: 'הפעולה חייבת להשתמש ב-capturedText שנלכד בזמן הבנייה, '
           'גם אחרי ניקוי הערך ע"י onSelectionChanged(null)',
     );
   });
@@ -420,8 +418,7 @@ void main() {
     );
   });
 
-  testWidgets(
-      'openMenuAt: לחיצה על פריט מפעילה את onTap ומכסה את התפריט',
+  testWidgets('openMenuAt: לחיצה על פריט מפעילה את onTap ומכסה את התפריט',
       (tester) async {
     final key = GlobalKey<AppContextMenuRegionState>();
     var tapped = false;
@@ -432,8 +429,7 @@ void main() {
           body: AppContextMenuRegion(
             key: key,
             menuBuilder: (_, __) => [
-              AppContextMenuEntry(
-                  label: 'פעולה א', onTap: () => tapped = true),
+              AppContextMenuEntry(label: 'פעולה א', onTap: () => tapped = true),
               AppContextMenuEntry(label: 'פעולה ב', onTap: () {}),
             ],
             child: const SizedBox(
@@ -461,9 +457,7 @@ void main() {
         reason: 'התפריט חייב להיסגר לאחר בחירת פריט');
   });
 
-  testWidgets(
-      'openMenuAt: קריאה כפולה אינה פותחת שני תפריטים',
-      (tester) async {
+  testWidgets('openMenuAt: קריאה כפולה אינה פותחת שני תפריטים', (tester) async {
     final key = GlobalKey<AppContextMenuRegionState>();
 
     await tester.pumpWidget(

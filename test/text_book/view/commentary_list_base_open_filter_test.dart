@@ -54,8 +54,7 @@ void main() {
   });
 
   group('CommentaryListBase - openFilterRequest', () {
-    testWidgets('עליה ב-counter פותחת את חלונית בחירת המפרשים',
-        (tester) async {
+    testWidgets('עליה ב-counter פותחת את חלונית בחירת המפרשים', (tester) async {
       final notifier = ValueNotifier<int>(0);
       addTearDown(notifier.dispose);
 
@@ -152,8 +151,8 @@ void main() {
     testWidgets(
         'activeCommentators=[הערות] + onSelectedCommentatorsOverrideChanged: לא נפתח אוטומטית',
         (tester) async {
-      final notesOnlyBloc =
-          _TestTextBookBloc(_loadedStateWithCommentators([kNotesCommentatorTitle]));
+      final notesOnlyBloc = _TestTextBookBloc(
+          _loadedStateWithCommentators([kNotesCommentatorTitle]));
       addTearDown(() async => notesOnlyBloc.close());
 
       await _pumpWithOverride(

@@ -272,8 +272,7 @@ void main() {
     // רגרסיה לבאג שנוצר ב-31af97e60: refreshPluginEvents קרא את state.events
     // לפני ה-await, כך שאם _initializeCalendar הסתיים ו-emit בזמן ה-await,
     // הוא היה דורס את האירועים בחזרה לרשימה ריקה.
-    test(
-        'שומר אירועי משתמש מהאחסון כאשר נקרא במקביל ל-_initializeCalendar',
+    test('שומר אירועי משתמש מהאחסון כאשר נקרא במקביל ל-_initializeCalendar',
         () async {
       final userEvent = _buildUserEvent();
       final storedJson = '[${_encodeEvent(userEvent)}]';
@@ -295,13 +294,15 @@ void main() {
       expect(
         cubit.state.events.any((e) => e.id == userEvent.id),
         isTrue,
-        reason: 'אירוע המשתמש חייב להישמר גם כאשר refreshPluginEvents רץ במקביל',
+        reason:
+            'אירוע המשתמש חייב להישמר גם כאשר refreshPluginEvents רץ במקביל',
       );
 
       cubit.close();
     });
 
-    test('רק הקריאה האחרונה עושה emit — קריאה ישנה מבוטלת ע"י generation counter',
+    test(
+        'רק הקריאה האחרונה עושה emit — קריאה ישנה מבוטלת ע"י generation counter',
         () async {
       final userEvent = _buildUserEvent();
       final storedJson = '[${_encodeEvent(userEvent)}]';

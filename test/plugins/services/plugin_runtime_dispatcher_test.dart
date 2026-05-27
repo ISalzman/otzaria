@@ -159,7 +159,8 @@ void main() {
       expect(result, isEmpty);
     });
 
-    test('instance נוסף (לא default/background) — נבחר גם הוא בהיעדר foreground',
+    test(
+        'instance נוסף (לא default/background) — נבחר גם הוא בהיעדר foreground',
         () {
       final instances = {'background': 'bg', 'extra': 'ex'};
       final result = selectTargets(instances);

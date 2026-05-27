@@ -22,8 +22,7 @@ void main() {
   });
 
   group('buildSearchMenuLabel', () {
-    testWidgets(
-        'מציג את הקידומת "חפש \'", הטקסט שנבחר והסיומת בנפרד',
+    testWidgets('מציג את הקידומת "חפש \'", הטקסט שנבחר והסיומת בנפרד',
         (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -60,8 +59,7 @@ void main() {
       expect(flexibleAncestor, findsOneWidget);
 
       // הגדרות חיתוך נכונות
-      final selectedTextWidget =
-          tester.widget<Text>(selectedTextFinder);
+      final selectedTextWidget = tester.widget<Text>(selectedTextFinder);
       expect(selectedTextWidget.overflow, TextOverflow.ellipsis);
       expect(selectedTextWidget.softWrap, isFalse);
       expect(selectedTextWidget.maxLines, 1);
@@ -111,8 +109,7 @@ void main() {
       expect(flexibleAncestor, findsNothing);
     });
 
-    testWidgets('Row מצויר עם RTL ומתכווץ ל-MainAxisSize.min',
-        (tester) async {
+    testWidgets('Row מצויר עם RTL ומתכווץ ל-MainAxisSize.min', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -121,8 +118,7 @@ void main() {
         ),
       );
 
-      final row =
-          tester.widget<Row>(find.ancestor(
+      final row = tester.widget<Row>(find.ancestor(
         of: find.text('בראשית'),
         matching: find.byType(Row),
       ));

@@ -118,8 +118,7 @@ void main() {
 
       final result = await repo.getAllPlugins();
 
-      expect(result.map((p) => p.pluginId).toList(),
-          ['early', 'mid', 'late']);
+      expect(result.map((p) => p.pluginId).toList(), ['early', 'mid', 'late']);
     });
 
     test('userOrder beats manifest order (always pushed after built-ins)',
@@ -136,8 +135,7 @@ void main() {
       final result = await repo.getAllPlugins();
 
       expect(result.map((p) => p.pluginId).toList(), ['b', 'a'],
-          reason:
-              'plugins without userOrder (relying on manifest) sort by '
+          reason: 'plugins without userOrder (relying on manifest) sort by '
               'manifest order; userOrder is offset by 1000 to stay after '
               'built-in tools');
     });
@@ -153,8 +151,8 @@ void main() {
 
       final result = await repo.getAllPlugins();
 
-      expect(result.map((p) => p.pluginId).toList(),
-          ['first', 'second', 'third']);
+      expect(
+          result.map((p) => p.pluginId).toList(), ['first', 'second', 'third']);
     });
 
     test('empty plugin list returns empty', () async {
@@ -195,14 +193,8 @@ void main() {
         'even when timestamps collide', () async {
       final sameTime = DateTime.utc(2026, 1, 1, 12);
       final fake = _FakeDb([
-        _plugin(
-            id: 'beta',
-            manifestToolTabOrder: 900,
-            installedAt: sameTime),
-        _plugin(
-            id: 'alpha',
-            manifestToolTabOrder: 900,
-            installedAt: sameTime),
+        _plugin(id: 'beta', manifestToolTabOrder: 900, installedAt: sameTime),
+        _plugin(id: 'alpha', manifestToolTabOrder: 900, installedAt: sameTime),
       ]);
       final repo = PluginRegistryRepository(database: fake);
 
@@ -282,8 +274,7 @@ void main() {
       await repo.updateHiddenState('plugin.x', false);
 
       expect(fake.hiddenCalls.single.hidden, isFalse,
-          reason:
-              'unhide path must preserve the boolean — was a P1 concern: '
+          reason: 'unhide path must preserve the boolean — was a P1 concern: '
               'the panel must round-trip both directions');
     });
 
@@ -297,8 +288,7 @@ void main() {
       await repo.updateHiddenState('a', false);
 
       expect(fake.hiddenCalls, hasLength(3));
-      expect(fake.hiddenCalls.map((c) => c.pluginId).toList(),
-          ['a', 'b', 'a']);
+      expect(fake.hiddenCalls.map((c) => c.pluginId).toList(), ['a', 'b', 'a']);
     });
   });
 }

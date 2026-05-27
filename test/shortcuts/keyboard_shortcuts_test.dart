@@ -177,7 +177,8 @@ void main() {
       await tester.pump();
     }
 
-    Future<void> sendCtrlShift(WidgetTester tester, LogicalKeyboardKey key) async {
+    Future<void> sendCtrlShift(
+        WidgetTester tester, LogicalKeyboardKey key) async {
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
       await tester.sendKeyDownEvent(key);

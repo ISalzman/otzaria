@@ -90,8 +90,7 @@ InstalledPlugin _plugin({
 
 /// מחשבת את ה-ValueKey שנבנה בפועל ב-PluginBackgroundHost עבור תוסף נתון.
 /// חייבת להיות זהה לנוסחה ב-plugin_background_host.dart.
-String backgroundKey(InstalledPlugin p) =>
-    'background_${p.pluginId}'
+String backgroundKey(InstalledPlugin p) => 'background_${p.pluginId}'
     '_${p.version}'
     '_${p.installPath}'
     '_${p.entrypointPath}'
@@ -149,8 +148,7 @@ void main() {
     expect(find.byType(PluginBackgroundHost), findsOneWidget);
   });
 
-  testWidgets(
-      'BlocListener — מסנכרן כשמתקבל PluginSystemLoaded לאחר mount',
+  testWidgets('BlocListener — מסנכרן כשמתקבל PluginSystemLoaded לאחר mount',
       (tester) async {
     // הבלוק מתחיל ב-initial state
     await tester.pumpWidget(

@@ -32,7 +32,8 @@ void main() {
       final second = await UserBooksDatabaseHolder.instance.repository;
 
       expect(identical(first, second), isTrue,
-          reason: 'הקריאה השנייה חייבת להחזיר את אותו repository, בלי לאתחל מחדש');
+          reason:
+              'הקריאה השנייה חייבת להחזיר את אותו repository, בלי לאתחל מחדש');
     });
 
     test('close() משחרר את ה-state — אתחול עוקב יוצר instance חדש', () async {

@@ -92,8 +92,8 @@ void main() {
 
       PluginSystemDatabase.ensureSchemaUpgrades(db);
       // קריאה שנייה לא צריכה לזרוק על ALTER כפול:
-      expect(() => PluginSystemDatabase.ensureSchemaUpgrades(db),
-          returnsNormally);
+      expect(
+          () => PluginSystemDatabase.ensureSchemaUpgrades(db), returnsNormally);
 
       final cols =
           db.select('PRAGMA table_info(plugin_installation)').toMapList();
@@ -106,7 +106,8 @@ void main() {
       db.execute(_legacyCreateTable);
       _seedLegacyRow(db, 'p');
       // נכריח pinned=0 כדי לוודא שהמיגרציה לא דורסת ערכים קיימים
-      db.execute('UPDATE plugin_installation SET pinned = 0 WHERE plugin_id = ?',
+      db.execute(
+          'UPDATE plugin_installation SET pinned = 0 WHERE plugin_id = ?',
           ['p']);
 
       PluginSystemDatabase.ensureSchemaUpgrades(db);
@@ -138,8 +139,7 @@ void main() {
           'SELECT user_order FROM plugin_installation WHERE plugin_id = ?',
           ['legacy.a']);
       expect(rows.first['user_order'], isNull,
-          reason:
-              'legacy rows must default to NULL so manifest.toolTabOrder '
+          reason: 'legacy rows must default to NULL so manifest.toolTabOrder '
               'is used until the user explicitly reorders');
     });
 
@@ -147,8 +147,8 @@ void main() {
       db.execute(_legacyCreateTable);
 
       PluginSystemDatabase.ensureSchemaUpgrades(db);
-      expect(() => PluginSystemDatabase.ensureSchemaUpgrades(db),
-          returnsNormally);
+      expect(
+          () => PluginSystemDatabase.ensureSchemaUpgrades(db), returnsNormally);
 
       final cols =
           db.select('PRAGMA table_info(plugin_installation)').toMapList();
@@ -190,8 +190,8 @@ void main() {
       db.execute(_legacyCreateTable);
 
       PluginSystemDatabase.ensureSchemaUpgrades(db);
-      expect(() => PluginSystemDatabase.ensureSchemaUpgrades(db),
-          returnsNormally);
+      expect(
+          () => PluginSystemDatabase.ensureSchemaUpgrades(db), returnsNormally);
 
       final cols =
           db.select('PRAGMA table_info(plugin_installation)').toMapList();

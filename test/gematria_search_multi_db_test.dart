@@ -26,7 +26,8 @@ void main() {
     late SeforimRepository seforimRepo;
 
     setUp(() async {
-      tempDir = await Directory.systemTemp.createTemp('otzaria-gimatria-multi-');
+      tempDir =
+          await Directory.systemTemp.createTemp('otzaria-gimatria-multi-');
       libraryPath = path.join(tempDir.path, 'library');
       dataRootPath = path.join(tempDir.path, 'data_root');
       await Directory(libraryPath).create(recursive: true);
@@ -113,8 +114,7 @@ void main() {
           isTrue);
     });
 
-    test(
-        'כשספר נמצא רק ב-user_books — תוצאות נמשכות מ-user_books דרך resolver',
+    test('כשספר נמצא רק ב-user_books — תוצאות נמשכות מ-user_books דרך resolver',
         () async {
       final userBooksRepo = await UserBooksDatabaseHolder.instance.repository;
       // ספר אישי בלבד — לא קיים ב-seforim. הקוד מקבץ אותו ל-repository
@@ -136,8 +136,7 @@ void main() {
       expect(results.first.file, 'ספר אישי');
     });
 
-    test(
-        'שני ספרים: אחד ב-seforim ואחד ב-user_books — מאחד תוצאות מ-שניהם',
+    test('שני ספרים: אחד ב-seforim ואחד ב-user_books — מאחד תוצאות מ-שניהם',
         () async {
       await insertBookWithLines(
         repo: seforimRepo,

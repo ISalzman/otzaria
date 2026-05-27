@@ -28,8 +28,7 @@ void main() {
     final provider = DatabaseLibraryProvider.instance;
 
     setUp(() async {
-      tempDir =
-          await Directory.systemTemp.createTemp('otzaria-has-book-');
+      tempDir = await Directory.systemTemp.createTemp('otzaria-has-book-');
       libraryPath = path.join(tempDir.path, 'library');
       dataRootPath = path.join(tempDir.path, 'data_root');
       await Directory(libraryPath).create(recursive: true);
@@ -69,8 +68,7 @@ void main() {
         () async {
       provider.seedCacheForTesting(
         keys: const [
-          BookCompositeKey(
-              title: 'מטמון רשמי', categoryId: 5, fileType: 'txt'),
+          BookCompositeKey(title: 'מטמון רשמי', categoryId: 5, fileType: 'txt'),
         ],
       );
 
@@ -80,8 +78,7 @@ void main() {
       expect(exists, isTrue);
     });
 
-    test(
-        'cache hit ב-_userBooksCachedKeys: מחזיר true גם כש-seforim DB ריק',
+    test('cache hit ב-_userBooksCachedKeys: מחזיר true גם כש-seforim DB ריק',
         () async {
       // טעינת ה-user_books cache דרך populateUserBooksCategoryForTesting.
       final library = library_models.Library(categories: []);
@@ -120,8 +117,8 @@ void main() {
         metadata: const {},
       );
 
-      final exists =
-          await provider.hasBook('ספר במטמון user_books', userCategoryId, 'txt');
+      final exists = await provider.hasBook(
+          'ספר במטמון user_books', userCategoryId, 'txt');
 
       expect(exists, isTrue);
     });

@@ -148,8 +148,7 @@ void main() {
       );
     });
 
-    test('מחזיר את pdfEndPage כשהוא שווה ל-totalPdfPages (העמוד האחרון)',
-        () {
+    test('מחזיר את pdfEndPage כשהוא שווה ל-totalPdfPages (העמוד האחרון)', () {
       // הבאג שתוקן: <= במקום <
       expect(
         computePdfPrintEndPage(
@@ -172,8 +171,7 @@ void main() {
       );
     });
 
-    test('סומך על pdfEndPage כש-totalPdfPages עדיין 0 (טרם נטען המסמך)',
-        () {
+    test('סומך על pdfEndPage כש-totalPdfPages עדיין 0 (טרם נטען המסמך)', () {
       // נדרש כדי שה-render הראשון ב-initState יצליח לפני שהמסמך נפתח.
       expect(
         computePdfPrintEndPage(

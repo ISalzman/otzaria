@@ -52,14 +52,12 @@ void main() {
     });
 
     test('openLeftPane=true → showLeftPane מתחיל true', () {
-      final tab = PdfBookTab(
-          book: _book(), pageNumber: 1, openLeftPane: true);
+      final tab = PdfBookTab(book: _book(), pageNumber: 1, openLeftPane: true);
       expect(tab.showLeftPane.value, isTrue);
     });
 
     test('searchText מועבר ל-searchController', () {
-      final tab = PdfBookTab(
-          book: _book(), pageNumber: 1, searchText: 'תורה');
+      final tab = PdfBookTab(book: _book(), pageNumber: 1, searchText: 'תורה');
       expect(tab.searchController.text, 'תורה');
       expect(tab.searchText, 'תורה');
     });
@@ -134,8 +132,7 @@ void main() {
     });
 
     test('toJson שומר showLeftPane=true', () {
-      final tab = PdfBookTab(
-          book: _book(), pageNumber: 1, openLeftPane: true);
+      final tab = PdfBookTab(book: _book(), pageNumber: 1, openLeftPane: true);
       expect(tab.toJson()['showLeftPane'], isTrue);
     });
   });
@@ -164,8 +161,7 @@ void main() {
     });
 
     test('fromJson עם showLeftPane=true → showLeftPane.value=true', () {
-      final tab =
-          PdfBookTab(book: _book(), pageNumber: 1, openLeftPane: true);
+      final tab = PdfBookTab(book: _book(), pageNumber: 1, openLeftPane: true);
       final restored = PdfBookTab.fromJson(tab.toJson());
       expect(restored.showLeftPane.value, isTrue);
     });
@@ -201,8 +197,6 @@ void main() {
       expect(() => tab.dispose(), returnsNormally);
     });
 
-
-
     test('setupPageTracking לא קורס כשה-controller לא מוכן', () {
       final tab = _tab();
       expect(() => tab.setupPageTracking(), returnsNormally);
@@ -225,14 +219,12 @@ void main() {
     });
 
     test('isPinned=true נשמר ב-toJson', () {
-      final tab = PdfBookTab(
-          book: _book(), pageNumber: 1, isPinned: true);
+      final tab = PdfBookTab(book: _book(), pageNumber: 1, isPinned: true);
       expect(tab.toJson()['isPinned'], isTrue);
     });
 
     test('isPinned משוחזר מ-fromJson', () {
-      final tab =
-          PdfBookTab(book: _book(), pageNumber: 1, isPinned: true);
+      final tab = PdfBookTab(book: _book(), pageNumber: 1, isPinned: true);
       final restored = PdfBookTab.fromJson(tab.toJson());
       expect(restored.isPinned, isTrue);
     });

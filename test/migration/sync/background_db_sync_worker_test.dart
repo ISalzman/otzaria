@@ -22,8 +22,7 @@ void main() {
   late SeforimRepository userBooksRepository;
 
   setUp(() async {
-    tempDir =
-        await Directory.systemTemp.createTemp('otzaria-worker-test-');
+    tempDir = await Directory.systemTemp.createTemp('otzaria-worker-test-');
     dbPath = p.join(tempDir.path, 'test.db');
     userBooksDbPath = p.join(tempDir.path, 'user_books.db');
 
@@ -142,8 +141,10 @@ void main() {
         userBooksDbPath: userBooksDbPath,
         libraryPath: libPath(),
         customFolders: [
-          CustomFolder(path: f1, addToDatabase: false, addedAt: DateTime(2026, 1, 1)),
-          CustomFolder(path: f2, addToDatabase: false, addedAt: DateTime(2026, 1, 1)),
+          CustomFolder(
+              path: f1, addToDatabase: false, addedAt: DateTime(2026, 1, 1)),
+          CustomFolder(
+              path: f2, addToDatabase: false, addedAt: DateTime(2026, 1, 1)),
         ],
       );
 
@@ -185,8 +186,7 @@ void main() {
 
       expect(await userBooksRepository.getCategory(folderCatId), isNull,
           reason: 'קטגוריית התיקייה נמחקה');
-      expect(
-          await userBooksRepository.getBooksByCategory(folderCatId), isEmpty,
+      expect(await userBooksRepository.getBooksByCategory(folderCatId), isEmpty,
           reason: 'ספרי התיקייה נמחקו');
     });
 
@@ -291,8 +291,7 @@ void main() {
         );
       }
 
-      final total =
-          results.fold<int>(0, (sum, r) => sum + r.addedBooks);
+      final total = results.fold<int>(0, (sum, r) => sum + r.addedBooks);
       expect(total, equals(2), reason: 'כל worker הוסיף ספר אחד');
     });
   });

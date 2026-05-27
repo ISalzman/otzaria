@@ -144,8 +144,7 @@ void main() {
 
     test('headingLevel=2 → Heading2', () {
       final archive = _buildArchive(const [
-        PrintBlock(
-            kind: PrintBlockKind.heading, text: 'סעיף', headingLevel: 2),
+        PrintBlock(kind: PrintBlockKind.heading, text: 'סעיף', headingLevel: 2),
       ]);
       final xml = _readArchiveFile(archive, 'word/document.xml');
       expect(xml, contains('<w:pStyle w:val="Heading2"/>'));
@@ -153,8 +152,7 @@ void main() {
 
     test('headingLevel=3 → Heading3', () {
       final archive = _buildArchive(const [
-        PrintBlock(
-            kind: PrintBlockKind.heading, text: 'פרק', headingLevel: 3),
+        PrintBlock(kind: PrintBlockKind.heading, text: 'פרק', headingLevel: 3),
       ]);
       final xml = _readArchiveFile(archive, 'word/document.xml');
       expect(xml, contains('<w:pStyle w:val="Heading3"/>'));
@@ -162,8 +160,7 @@ void main() {
 
     test('headingLevel=4 → Heading4', () {
       final archive = _buildArchive(const [
-        PrintBlock(
-            kind: PrintBlockKind.heading, text: 'פרק', headingLevel: 4),
+        PrintBlock(kind: PrintBlockKind.heading, text: 'פרק', headingLevel: 4),
       ]);
       final xml = _readArchiveFile(archive, 'word/document.xml');
       expect(xml, contains('<w:pStyle w:val="Heading4"/>'));
@@ -339,7 +336,9 @@ void main() {
       expect(footnotes, contains('הערת שוליים מיוחדת'));
     });
 
-    test('ללא הערות שוליים → footnotes.xml מכיל רק separator ו-continuationSeparator', () {
+    test(
+        'ללא הערות שוליים → footnotes.xml מכיל רק separator ו-continuationSeparator',
+        () {
       final archive = _buildArchive(const [
         PrintBlock(kind: PrintBlockKind.text, text: 'טקסט'),
       ]);
@@ -426,8 +425,10 @@ void main() {
         format: PdfPageFormat.a4,
         isLandscape: true,
       );
-      final portraitXml = _readArchiveFile(portraitArchive, 'word/document.xml');
-      final landscapeXml = _readArchiveFile(landscapeArchive, 'word/document.xml');
+      final portraitXml =
+          _readArchiveFile(portraitArchive, 'word/document.xml');
+      final landscapeXml =
+          _readArchiveFile(landscapeArchive, 'word/document.xml');
       // גדלי הדף ב-twips צריכים להיות שונים
       expect(portraitXml, isNot(equals(landscapeXml)));
     });
@@ -507,8 +508,7 @@ void main() {
       expect(
         () => _buildArchive(const [
           PrintBlock(
-              kind: PrintBlockKind.text,
-              text: 'א\nב\nג\nד\nה\nו\nז\nח\nט\nי'),
+              kind: PrintBlockKind.text, text: 'א\nב\nג\nד\nה\nו\nז\nח\nט\nי'),
         ]),
         returnsNormally,
       );
@@ -524,8 +524,7 @@ void main() {
               kind: PrintBlockKind.heading, text: 'פרק א', headingLevel: 1),
           PrintBlock(kind: PrintBlockKind.text, text: 'גוף'),
           PrintBlock(kind: PrintBlockKind.commentaryTitle, text: 'מפרשים'),
-          PrintBlock(
-              kind: PrintBlockKind.commentaryGroupTitle, text: 'רש"י'),
+          PrintBlock(kind: PrintBlockKind.commentaryGroupTitle, text: 'רש"י'),
           PrintBlock(kind: PrintBlockKind.commentary, text: 'פירוש'),
         ]),
         returnsNormally,

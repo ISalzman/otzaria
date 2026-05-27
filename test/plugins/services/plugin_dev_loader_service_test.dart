@@ -354,8 +354,7 @@ void main() {
 
     test(
         'loadDevelopmentPlugin leaves userOrder=null on a first-time load '
-        'when no other plugin has a manual order yet',
-        () async {
+        'when no other plugin has a manual order yet', () async {
       // אין mockExistingPlugin ואין סדר ידני שמור — userOrder צריך להישאר null
       await devLoader.loadDevelopmentPlugin(tempDir.path);
 

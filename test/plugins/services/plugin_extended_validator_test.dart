@@ -177,8 +177,7 @@ void main() {
       );
     });
 
-    test(
-        'warns when known API is used but its required permission is missing',
+    test('warns when known API is used but its required permission is missing',
         () {
       final report = _runOn(
         tempDir,
@@ -188,8 +187,7 @@ void main() {
         },
       );
       expect(
-        report.warnings
-            .any((w) => w.contains('library.books.read')),
+        report.warnings.any((w) => w.contains('library.books.read')),
         isTrue,
       );
     });
@@ -205,8 +203,7 @@ void main() {
         },
       );
       expect(
-        report.warnings
-            .any((w) => w.contains('library.books.read')),
+        report.warnings.any((w) => w.contains('library.books.read')),
         isFalse,
       );
     });
@@ -255,8 +252,7 @@ void main() {
         },
       );
       expect(
-        report.warnings
-            .any((w) => w.contains('totally.fake_method')),
+        report.warnings.any((w) => w.contains('totally.fake_method')),
         isFalse,
       );
       expect(
@@ -289,8 +285,7 @@ void main() {
       );
     });
 
-    test(
-        'regex literals containing `//` do not blow away the rest of the line',
+    test('regex literals containing `//` do not blow away the rest of the line',
         () {
       // רגרסיה: regex literal עם `\/\/` בתוכו (URL pattern). אם המסיר
       // לא מגן על regex literals, הוא יחתוך מ-`//` הראשון שב-regex עד
@@ -309,8 +304,7 @@ void main() {
       // הקריאה ל-library.findBooks אמורה להיתפס (לא לקבל warning
       // "API לא מוכר"), והרשאה הוכרזה.
       expect(
-        report.warnings
-            .any((w) => w.contains('library.findBooks')),
+        report.warnings.any((w) => w.contains('library.findBooks')),
         isFalse,
       );
     });
@@ -378,8 +372,7 @@ void main() {
       );
     });
 
-    test(
-        'string literals containing `//` (URLs/regex) are not mistakenly cut',
+    test('string literals containing `//` (URLs/regex) are not mistakenly cut',
         () {
       // אם _stripCommentsForScan חותך // אגרסיבית מדי, היא תפגע ב-URL
       // וגם תתעלם מקריאה אמיתית אחריו. נוודא שזה לא קורה.
@@ -402,8 +395,7 @@ void main() {
       );
       // וגם לא warning של ההרשאה החסרה (היא הוכרזה).
       expect(
-        report.warnings
-            .any((w) => w.contains('library.books.read')),
+        report.warnings.any((w) => w.contains('library.books.read')),
         isFalse,
       );
     });

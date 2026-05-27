@@ -80,8 +80,7 @@ void main() {
   });
 
   group('ShortcutDropDownTile - מניעת שמירת קיצורים כפולים', () {
-    testWidgets(
-        'אינו שומר קיצור שכבר שייך להגדרה אחרת (ברירת מחדל)',
+    testWidgets('אינו שומר קיצור שכבר שייך להגדרה אחרת (ברירת מחדל)',
         (tester) async {
       // ברירת מחדל: key-shortcut-open-library-browser משתמש ב-ctrl+l
       await tester.pumpWidget(_buildTile(
@@ -115,12 +114,11 @@ void main() {
       field.onSelected?.call(_unusedShortcut1);
       await tester.pump();
 
-      verify(() => settingsBloc.add(any(that: isA<UpdateShortcut>()))).called(1);
+      verify(() => settingsBloc.add(any(that: isA<UpdateShortcut>())))
+          .called(1);
     });
 
-    testWidgets(
-        'מאפשר שיתוף קיצור בין הגדרות מקבוצה תואמת',
-        (tester) async {
+    testWidgets('מאפשר שיתוף קיצור בין הגדרות מקבוצה תואמת', (tester) async {
       // key-shortcut-add-note ו-key-shortcut-calendar-toggle-events תואמות
       // שתיהן משתמשות ב-ctrl+n כברירת מחדל
       await tester.pumpWidget(_buildTile(
@@ -137,7 +135,8 @@ void main() {
       field.onSelected?.call('ctrl+n');
       await tester.pump();
 
-      verify(() => settingsBloc.add(any(that: isA<UpdateShortcut>()))).called(1);
+      verify(() => settingsBloc.add(any(that: isA<UpdateShortcut>())))
+          .called(1);
     });
 
     testWidgets(
@@ -166,7 +165,8 @@ void main() {
 
   group('ShortcutValidator - זיהוי קיצורים כפולים', () {
     test('checkConflicts מגלה ערכים זהים בין הגדרות שאינן תואמות', () async {
-      await cache.setString('key-shortcut-open-library-browser', _unusedShortcut1);
+      await cache.setString(
+          'key-shortcut-open-library-browser', _unusedShortcut1);
       await cache.setString('key-shortcut-close-tab', _unusedShortcut1);
 
       final conflicts = ShortcutValidator.checkConflicts();
@@ -281,7 +281,8 @@ void main() {
       await tester.tap(find.text('אישור'));
       await tester.pumpAndSettle();
 
-      verify(() => settingsBloc.add(any(that: isA<UpdateShortcut>()))).called(1);
+      verify(() => settingsBloc.add(any(that: isA<UpdateShortcut>())))
+          .called(1);
     });
   });
 }

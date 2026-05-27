@@ -67,8 +67,7 @@ void main() {
   }
 
   /// מוסיף tocEntry ומחזיר את ה-id שלו.
-  Future<int> insertToc(int bookId, int lineIndex) =>
-      repository.insertTocEntry(
+  Future<int> insertToc(int bookId, int lineIndex) => repository.insertTocEntry(
         TocEntry(
           id: 0,
           bookId: bookId,
@@ -97,9 +96,7 @@ void main() {
 
   // ── tests ─────────────────────────────────────────────────────────────────
 
-  test(
-      '1. ספר עם שורה ריקה לפני h1 — rebuildLineTocForBook לא קורס',
-      () async {
+  test('1. ספר עם שורה ריקה לפני h1 — rebuildLineTocForBook לא קורס', () async {
     final catId = await createCategory();
     final bookId = await createBook(catId, 'ספר 1');
 
@@ -116,9 +113,7 @@ void main() {
     await repository.rebuildLineTocForBook(bookId);
   });
 
-  test(
-      '2. שורות לפני heading ראשון לא נמצאות ב-line_toc',
-      () async {
+  test('2. שורות לפני heading ראשון לא נמצאות ב-line_toc', () async {
     final catId = await createCategory();
     final bookId = await createBook(catId, 'ספר 2');
 
@@ -140,9 +135,7 @@ void main() {
         reason: 'שורה לפני heading ראשון לא אמורה להיות ב-line_toc');
   });
 
-  test(
-      '3. שורות מאחרי heading ממופות ל-tocEntry הנכון',
-      () async {
+  test('3. שורות מאחרי heading ממופות ל-tocEntry הנכון', () async {
     final catId = await createCategory();
     final bookId = await createBook(catId, 'ספר 3');
 
@@ -160,9 +153,7 @@ void main() {
     }
   });
 
-  test(
-      '4. ספר שמתחיל ב-h1 — כל שורה קיימת ב-line_toc',
-      () async {
+  test('4. ספר שמתחיל ב-h1 — כל שורה קיימת ב-line_toc', () async {
     final catId = await createCategory();
     final bookId = await createBook(catId, 'ספר 4');
 
@@ -176,9 +167,7 @@ void main() {
     expect(rows, hasLength(3), reason: 'כל 3 שורות אמורות להיות ב-line_toc');
   });
 
-  test(
-      '5. מספר headings — כל שורה ממופה ל-heading האחרון שקדם לה',
-      () async {
+  test('5. מספר headings — כל שורה ממופה ל-heading האחרון שקדם לה', () async {
     final catId = await createCategory();
     final bookId = await createBook(catId, 'ספר 5');
 

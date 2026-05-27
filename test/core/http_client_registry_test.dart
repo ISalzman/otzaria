@@ -87,10 +87,12 @@ void main() {
       // closeAll לא אמור לזרוק — אסור שיציאה תיחסם על closer בודד.
       await expectLater(HttpClientRegistry.closeAll(), completes);
       expect(goodCalled, isTrue,
-          reason: 'closer לאחר זורק חייב לרוץ — בידוד שגיאות הוא הליבה של החוזה');
+          reason:
+              'closer לאחר זורק חייב לרוץ — בידוד שגיאות הוא הליבה של החוזה');
     });
 
-    test('closeAll נחתך ב-timeout כש-closer נתקע, ולא חוסם את היציאה', () async {
+    test('closeAll נחתך ב-timeout כש-closer נתקע, ולא חוסם את היציאה',
+        () async {
       var hangingStarted = false;
       var fastCalled = false;
       final hangingCompleter = Completer<void>();
@@ -141,7 +143,8 @@ void main() {
               'שסגירה כוללת תיגמר בתוך budget קצר');
     });
 
-    test('snapshot של ה-closers בזמן closeAll: register במהלך הריצה לא משנה', () async {
+    test('snapshot של ה-closers בזמן closeAll: register במהלך הריצה לא משנה',
+        () async {
       var firstCalled = false;
       var lateRegisteredCalled = false;
 

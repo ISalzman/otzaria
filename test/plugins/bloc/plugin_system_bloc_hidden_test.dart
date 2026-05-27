@@ -90,8 +90,7 @@ void main() {
         hidden: true,
       ));
 
-      await expectLater(
-          bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
+      await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
 
       expect(repo.hiddenCalls, hasLength(1));
       expect(repo.hiddenCalls.single.pluginId, 'p1');
@@ -108,8 +107,7 @@ void main() {
         hidden: false,
       ));
 
-      await expectLater(
-          bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
+      await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
 
       expect(repo.hiddenCalls.single.hidden, isFalse);
     });
@@ -136,8 +134,8 @@ void main() {
         if (s is PluginSystemLoaded) {
           lastLoaded = s;
           // ה-handler גורם לטעינה אחת בלבד אחרי hidden-update
-          if (!s.plugins.any((p) =>
-              p.pluginId == 'will-hide' && !p.hiddenFromTools)) {
+          if (!s.plugins
+              .any((p) => p.pluginId == 'will-hide' && !p.hiddenFromTools)) {
             break;
           }
         }
@@ -156,8 +154,7 @@ void main() {
       );
     });
 
-    test(
-        'toggling the same plugin twice writes both directions in order',
+    test('toggling the same plugin twice writes both directions in order',
         () async {
       final repo = _FakeRepo([_plugin(id: 'p1')]);
       final bloc = PluginSystemBloc(repository: repo);

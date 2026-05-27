@@ -87,7 +87,8 @@ void main() {
       expect(lastSelection, isNull);
     });
 
-    testWidgets('כיבוי חיפוש בכל הקטגוריות מפיץ scope ידני ריק', (tester) async {
+    testWidgets('כיבוי חיפוש בכל הקטגוריות מפיץ scope ידני ריק',
+        (tester) async {
       final emittedSelections = <Set<String>>[];
 
       await tester.pumpWidget(
@@ -245,8 +246,7 @@ void main() {
       expect(
         finalSelection,
         equals({'/מדרש/אגדה'}),
-        reason:
-            'אחרי ביטול "הלכה", רק "אגדה" צריכה להישאר. הקטגוריות העליונות '
+        reason: 'אחרי ביטול "הלכה", רק "אגדה" צריכה להישאר. הקטגוריות העליונות '
             'האחרות לא היו מסומנות מלכתחילה ולכן לא היו אמורות לקפוץ לסימון.',
       );
       expect(finalSelection.contains('/תנ״ך'), isFalse);

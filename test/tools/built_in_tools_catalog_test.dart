@@ -32,8 +32,7 @@ void main() {
     test('every entry has either icon or imageIcon (visual identity)', () {
       for (final m in kBuiltInToolsCatalog) {
         expect(m.icon != null || m.imageIcon != null, isTrue,
-            reason:
-                'tool "${m.toolId}" has no visual — it would render as a '
+            reason: 'tool "${m.toolId}" has no visual — it would render as a '
                 'blank space in the nav rail and tools tab');
       }
     });
@@ -61,8 +60,7 @@ void main() {
       // order ≥ 1000, הוא ערבב עם תוספים בלשונית הכלים.
       for (final m in kBuiltInToolsCatalog) {
         expect(m.order, lessThan(1000),
-            reason:
-                'built-in tool order must stay below the plugin userOrder '
+            reason: 'built-in tool order must stay below the plugin userOrder '
                 'offset (1000); see InstalledPlugin.userOrderToolTabOffset');
       }
     });
@@ -73,8 +71,7 @@ void main() {
       final shamor = kBuiltInToolsCatalog
           .firstWhere((m) => m.toolId == 'builtin.shamor_zachor');
       expect(shamor.imageIcon, isNotNull,
-          reason:
-              'shamor_zachor uses its own logo image; if this becomes null '
+          reason: 'shamor_zachor uses its own logo image; if this becomes null '
               'the nav rail will fall back to a generic wrench icon (P3 bug)');
       expect(shamor.icon, isNull,
           reason:

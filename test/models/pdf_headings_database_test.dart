@@ -38,8 +38,7 @@ void main() {
         SettingsRepository.keyLibraryPath, libraryPath);
     await Settings.setValue<String>(
         SettingsRepository.keyLibraryFolderName, '');
-    await Settings.setValue<String>(
-        SettingsRepository.keyDbEffectivePath, '');
+    await Settings.setValue<String>(SettingsRepository.keyDbEffectivePath, '');
 
     final dbPath = path.join(libraryPath, DatabaseConstants.databaseFileName);
     seforimDb = MyDatabase.withPath(dbPath);
@@ -113,8 +112,7 @@ void main() {
       expect(result.getLineNumberForHeading('פרק ב'), 30);
     });
 
-    test(
-        'preferUserBooks=true מאתר את הספר ב-user_books.db ולא ב-seforim',
+    test('preferUserBooks=true מאתר את הספר ב-user_books.db ולא ב-seforim',
         () async {
       // אותו שם ספר בשני ה-DBs עם headings שונים. preferUserBooks=true חייב
       // לבחור את ה-user_books.
@@ -190,8 +188,7 @@ void main() {
       final entries = <migration_models.TocEntry>[
         const migration_models.TocEntry(
             bookId: 1, text: '', level: 1, lineIndex: 0),
-        const migration_models.TocEntry(
-            bookId: 1, text: 'בלי שורה', level: 1),
+        const migration_models.TocEntry(bookId: 1, text: 'בלי שורה', level: 1),
         const migration_models.TocEntry(
             bookId: 1, text: 'תקין', level: 1, lineIndex: 7),
       ];

@@ -30,7 +30,8 @@ void main() {
     expect(path, p.join(r'C:\Temp', 'logs', 'errors.txt'));
   });
 
-  test('formatEntry includes version, details and stack trace when provided', () {
+  test('formatEntry includes version, details and stack trace when provided',
+      () {
     ErrorLogFile.setAppVersion('1.2.3+45');
 
     final entry = ErrorLogFile.formatEntry(
@@ -53,7 +54,8 @@ void main() {
   });
 
   test('ensureExists creates the log file in the writable fallback path', () {
-    final tempDir = Directory.systemTemp.createTempSync('otzaria_error_log_test_');
+    final tempDir =
+        Directory.systemTemp.createTempSync('otzaria_error_log_test_');
 
     try {
       final logPath = ErrorLogFile.resolvePath(
