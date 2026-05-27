@@ -89,6 +89,10 @@ class SettingsRepository {
   // Calendar per-time (zman) alerts
   static const String keyCalendarZmanAlerts = 'key-calendar-zman-alerts';
 
+  // רשימת מזהי הזמנים המוצגים בלוח (JSON array). חסר = ברירת המחדל
+  // מתוך רישום הזמנים (kDefaultEnabledZmanim).
+  static const String keyCalendarEnabledZmanim = 'key-calendar-enabled-zmanim';
+
   // Internal tracking of scheduled calendar event notification IDs
   static const String keyCalendarEventNotificationIds =
       'key-calendar-event-notification-ids';
@@ -297,6 +301,12 @@ class SettingsRepository {
       'calendarZmanAlerts': _settings.getValue<String>(
         keyCalendarZmanAlerts,
         defaultValue: '{}',
+      ),
+
+      // Enabled zmanim ids (JSON array). '' = use registry defaults.
+      'calendarEnabledZmanim': _settings.getValue<String>(
+        keyCalendarEnabledZmanim,
+        defaultValue: '',
       ),
 
       // Google Calendar integration
@@ -579,6 +589,10 @@ class SettingsRepository {
 
   Future<void> updateCalendarZmanAlertsJson(String json) async {
     await _settings.setValue(keyCalendarZmanAlerts, json);
+  }
+
+  Future<void> updateCalendarEnabledZmanim(String json) async {
+    await _settings.setValue(keyCalendarEnabledZmanim, json);
   }
 
   String getCalendarEventNotificationIdsJson() {
