@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/services/book_details_service.dart';
@@ -55,6 +56,20 @@ const _sourceMappings = {
   return _sourceMappings[key] ?? (text: source, url: '');
 }
 
+/// קישור הבית של "תא שמע"
+const _tashmaUrl = 'https://tashma.co.il/';
+
+/// בודק האם מקור הספר הוא "תא שמע".
+/// הזיהוי מבוסס על תיקיית המקור, בדומה ל-error_report_dialog.dart, אך משתמש
+/// באותו נרמול כמו getSourceDisplayInfo (הסרת רווחים/מקפים/קווים תחתונים) כדי
+/// שכל הווריאנטים שמזוהים כ"תא שמע" בתצוגה יקבלו גם את נוסח הזכויות.
+bool isTashmaSource(String? sourceFolder) {
+  final normalized = (sourceFolder ?? '')
+      .toLowerCase()
+      .replaceAll(_sourceNormalizationRegex, '');
+  return normalized.contains('tashma');
+}
+
 /// הצגת דיאלוג אודות הספר
 Future<void> showBookSourceDialog(
   BuildContext context,
@@ -70,6 +85,7 @@ Future<void> showBookSourceDialog(
     final sourceInfo = getSourceDisplayInfo(bookSource);
     final displayText = sourceInfo.text;
     final url = sourceInfo.url;
+    final isTashma = isTashmaSource(bookSource);
 
     debugPrint('Book details received: $bookDetails');
     debugPrint('Book source: $bookSource');
@@ -106,28 +122,32 @@ Future<void> showBookSourceDialog(
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                // אם יש URL, הצג כקישור, אחרת הצג כטקסט רגיל
-                url.isNotEmpty
-                    ? InkWell(
-                        onTap: () async {
-                          final uri = Uri.parse(url);
-                          if (await canLaunchUrl(uri)) {
-                            await launchUrl(uri);
-                          }
-                        },
-                        child: Text(
-                          displayText,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Theme.of(context).colorScheme.primary,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      )
-                    : SelectableText(
-                        displayText,
-                        style: const TextStyle(fontSize: 14),
+                // ספרי "תא שמע" מציגים נוסח זכויות יוצרים עם קישור.
+                // שאר המקורות מציגים קישור/טקסט רגיל.
+                if (isTashma)
+                  const _TashmaCopyrightNotice()
+                else if (url.isNotEmpty)
+                  InkWell(
+                    onTap: () async {
+                      final uri = Uri.parse(url);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri);
+                      }
+                    },
+                    child: Text(
+                      displayText,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.primary,
+                        decoration: TextDecoration.underline,
                       ),
+                    ),
+                  )
+                else
+                  SelectableText(
+                    displayText,
+                    style: const TextStyle(fontSize: 14),
+                  ),
               ],
             ),
           ),
@@ -145,5 +165,61 @@ Future<void> showBookSourceDialog(
     if (context.mounted) {
       UiSnack.showError('שגיאה בטעינת מידע הספר: ${e.toString()}');
     }
+  }
+}
+
+/// נוסח זכויות היוצרים עבור ספרי "תא שמע".
+/// המילים "תא שמע" מוצגות כקישור לאתר תא שמע.
+class _TashmaCopyrightNotice extends StatefulWidget {
+  const _TashmaCopyrightNotice();
+
+  @override
+  State<_TashmaCopyrightNotice> createState() => _TashmaCopyrightNoticeState();
+}
+
+class _TashmaCopyrightNoticeState extends State<_TashmaCopyrightNotice> {
+  late final TapGestureRecognizer _recognizer;
+
+  @override
+  void initState() {
+    super.initState();
+    _recognizer = TapGestureRecognizer()
+      ..onTap = () async {
+        final uri = Uri.parse(_tashmaUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri);
+        }
+      };
+  }
+
+  @override
+  void dispose() {
+    _recognizer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Text.rich(
+      TextSpan(
+        style: const TextStyle(fontSize: 14),
+        children: [
+          const TextSpan(text: 'כל הזכויות שמורות ל'),
+          TextSpan(
+            text: 'תא שמע',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              decoration: TextDecoration.underline,
+            ),
+            recognizer: _recognizer,
+          ),
+          const TextSpan(
+            text: '. השימוש מותר במסגרת תוכנת אוצריא בלבד. '
+                'אין לבצע שימוש אחר ללא אישור.',
+          ),
+        ],
+      ),
+      textDirection: TextDirection.rtl,
+    );
   }
 }
