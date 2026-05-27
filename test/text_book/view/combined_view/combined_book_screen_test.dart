@@ -14,6 +14,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/selection/enhanced_gesture_detector.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
@@ -465,6 +466,86 @@ void main() {
         showTeamim: true,
       );
       expect(result, text);
+    });
+  });
+
+  group('hasCommentariesForLine', () {
+    const noteLine =
+        'שורה<sup class="footnote-marker">א</sup><i class="footnote">גוף ההערה</i>';
+    const plainLine = 'שורה רגילה ללא הערות';
+
+    test(
+        'מחזירה true כש"הערות" פעיל ויש הערת inline בשורה — גם בלי קישורי מפרשים',
+        () {
+      // באג: בספרים שבהם ההערות הן המפרש היחיד, "מפרשים מתחת" לא הציג כלום.
+      final result = hasCommentariesForLine(
+        activeCommentators: const [kNotesCommentatorTitle],
+        content: const [noteLine],
+        linksByLine: const {},
+        index: 0,
+      );
+      expect(result, isTrue);
+    });
+
+    test('מחזירה false כש"הערות" פעיל אך אין הערת inline בשורה ואין קישורים',
+        () {
+      final result = hasCommentariesForLine(
+        activeCommentators: const [kNotesCommentatorTitle],
+        content: const [plainLine],
+        linksByLine: const {},
+        index: 0,
+      );
+      expect(result, isFalse);
+    });
+
+    test('מחזירה false כשאין מפרשים פעילים ואין קישורים', () {
+      final result = hasCommentariesForLine(
+        activeCommentators: const [],
+        content: const [noteLine],
+        linksByLine: const {},
+        index: 0,
+      );
+      expect(result, isFalse);
+    });
+
+    test('מחזירה true כשיש קישור COMMENTARY למפרש פעיל', () {
+      final result = hasCommentariesForLine(
+        activeCommentators: const ['רש"י'],
+        content: const [plainLine],
+        linksByLine: {
+          1: [
+            Link(
+              heRef: 'רש"י על בראשית א',
+              index1: 1,
+              path2: 'commentary/רש"י.txt',
+              index2: 7,
+              connectionType: 'COMMENTARY',
+            ),
+          ],
+        },
+        index: 0,
+      );
+      expect(result, isTrue);
+    });
+
+    test('מחזירה false כשהקישור הוא למפרש שאינו פעיל', () {
+      final result = hasCommentariesForLine(
+        activeCommentators: const ['רמב"ן'],
+        content: const [plainLine],
+        linksByLine: {
+          1: [
+            Link(
+              heRef: 'רש"י על בראשית א',
+              index1: 1,
+              path2: 'commentary/רש"י.txt',
+              index2: 7,
+              connectionType: 'COMMENTARY',
+            ),
+          ],
+        },
+        index: 0,
+      );
+      expect(result, isFalse);
     });
   });
 }

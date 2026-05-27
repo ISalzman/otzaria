@@ -1349,7 +1349,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                 child: customSelection != null
                     ? CommentatorsSelectionPanel(
                         groups: groups,
-                        selectedCommentators: selectedCommentators,
+                        // מעבירים את הבחירה המלאה (כולל 'הערות') ולא את
+                        // selectedCommentators המסונן — אחרת תיבת הסימון של
+                        // 'הערות' לעולם לא תוצג כמסומנת, ובחירת מפרש אחר תמחק
+                        // אותו מהבחירה הפעילה.
+                        selectedCommentators: _allSelectedCommentators(state),
                         onSelectionChanged: (list) {
                           _userInteractedWithFilter = true;
                           customSelection(list);

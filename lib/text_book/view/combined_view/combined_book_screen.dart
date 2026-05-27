@@ -45,6 +45,8 @@ import 'package:otzaria/utils/text/word_at_position.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
+import 'package:otzaria/text_book/utils/inline_notes_utils.dart'
+    as inline_notes;
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
@@ -132,6 +134,41 @@ bool shouldShowOpenLinksPaneEntry({
   required bool isLinksTabActive,
 }) {
   return hasLinks && !isLinksTabActive;
+}
+
+/// מחזירה האם לשורה [index] יש מפרשים להצגה במצב "מפרשים מתחת".
+///
+/// מתחשבת גם במפרש ההערות הוירטואלי ([kNotesCommentatorTitle]): אם הוא
+/// פעיל ויש הערות inline בשורה, יש מה להציג — גם כשאין קישורי מפרשים
+/// אמיתיים. אחרת בודקת קישורי COMMENTARY/TARGUM למפרשים הפעילים.
+@visibleForTesting
+bool hasCommentariesForLine({
+  required List<String> activeCommentators,
+  required List<String> content,
+  required Map<int, List<Link>> linksByLine,
+  required int index,
+}) {
+  if (activeCommentators.contains(kNotesCommentatorTitle) &&
+      inline_notes.notesForLines(content, [index]).isNotEmpty) {
+    return true;
+  }
+
+  final lineLinks = linksByLine[index + 1];
+  if (lineLinks == null || lineLinks.isEmpty) return false;
+
+  final activeCommentatorsSet = activeCommentators.toSet();
+  String? lastPath;
+  String? lastTitle;
+
+  return lineLinks.any((link) {
+    final type = link.connectionType.toUpperCase();
+    if (type != "COMMENTARY" && type != "TARGUM") return false;
+    if (link.path2 != lastPath) {
+      lastPath = link.path2;
+      lastTitle = utils.getTitleFromPath(link.path2);
+    }
+    return lastTitle != null && activeCommentatorsSet.contains(lastTitle!);
+  });
 }
 
 /// פריט "בחר מפרשים מרובים" יוצג כשיש callback `onOpenCommentatorsPaneWithFilter`
@@ -1864,23 +1901,12 @@ class _CombinedViewState extends State<CombinedView> {
 
   /// בדיקה אם יש מפרשים לאינדקס מסוים
   bool _hasCommentaries(TextBookLoaded state, int index) {
-    // בדיקה אם יש קישורים רלוונטיים לאינדקס הזה
-    final lineLinks = state.linksByLine[index + 1];
-    if (lineLinks == null || lineLinks.isEmpty) return false;
-
-    final activeCommentatorsSet = state.activeCommentators.toSet();
-    String? lastPath;
-    String? lastTitle;
-
-    return lineLinks.any((link) {
-      final type = link.connectionType.toUpperCase();
-      if (type != "COMMENTARY" && type != "TARGUM") return false;
-      if (link.path2 != lastPath) {
-        lastPath = link.path2;
-        lastTitle = utils.getTitleFromPath(link.path2);
-      }
-      return lastTitle != null && activeCommentatorsSet.contains(lastTitle!);
-    });
+    return hasCommentariesForLine(
+      activeCommentators: state.activeCommentators,
+      content: state.content,
+      linksByLine: state.linksByLine,
+      index: index,
+    );
   }
 
   @override
