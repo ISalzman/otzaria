@@ -9,12 +9,18 @@ import 'package:otzaria/tools/calendar/widgets/calendar_times_panel.dart';
 
 DateTime? _noCompute(ZmanComputeContext _) => null;
 
-ZmanDefinition _def(String id, {String subtitle = ''}) => ZmanDefinition(
+ZmanDefinition _def(
+  String id, {
+  String subtitle = '',
+  bool showHebrewDate = false,
+}) =>
+    ZmanDefinition(
       id: id,
       title: 'זמן $id',
       subtitle: subtitle,
       category: 'בדיקה',
       explanation: 'הסבר',
+      showHebrewDate: showHebrewDate,
       compute: _noCompute,
     );
 
@@ -35,8 +41,21 @@ void main() {
       expect(entry.subtitle, 'מישורית');
       expect(entry.time, '19:50');
       expect(entry.isComposite, isFalse);
+      expect(entry.canAlert, isTrue);
       expect(entry.alertOptions, hasLength(1));
       expect(entry.alertOptions.single.id, 'sunset');
+    });
+
+    test('זמן תאריך עברי (קידוש לבנה) — לא ניתן להתראה ובלי alertOptions', () {
+      // הזמן מעוצב כתאריך ("ליל שבת ט״ז לחודש 02:37") ולא ניתן לתזמון
+      // נקודתי, ולכן אסור לבנות עבורו אפשרות התראה.
+      final entry = entryFromZmanDefinition(
+        _def('tchilasKidushLevana3', showHebrewDate: true),
+        const {'tchilasKidushLevana3': 'ליל שבת ט״ז לחודש 02:37'},
+      )!;
+
+      expect(entry.canAlert, isFalse);
+      expect(entry.alertOptions, isEmpty);
     });
   });
 

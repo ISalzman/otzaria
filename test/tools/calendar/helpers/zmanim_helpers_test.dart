@@ -142,6 +142,74 @@ void main() {
       expect(value, startsWith('ליל '));
       expect(value, matches(RegExp(r'לחודש \d{2}:\d{2}$')));
     });
+
+    int hourOf(String label) =>
+        int.parse(RegExp(r'(\d{2}):\d{2}$').firstMatch(label)!.group(1)!);
+
+    test('השעה מותאמת לאזור הזמן של העיר — לא זהה בין ערים', () {
+      // לפני התיקון כל הערים קיבלו את אותה שעה (זמן ירושלים), כי הרגע
+      // (מולד+ימים) הוצג בלי המרת timezone.
+      final jerusalem =
+          calculateDailyTimes(summerDate, 'ירושלים')['tchilasKidushLevana3']!;
+      final newYork =
+          calculateDailyTimes(summerDate, 'ניו יורק')['tchilasKidushLevana3']!;
+      expect(jerusalem, isNot(equals(newYork)),
+          reason: 'ירושלים=$jerusalem ניו יורק=$newYork');
+    });
+
+    test('זמן שנופל ביום נדחה לשעת לילה (לא בין 07:00 ל-17:00)', () {
+      // קידוש לבנה אינו נאמר ביום; רגע שנופל בשעות היום נדחה לצאת הכוכבים
+      // (תחילה) או לעלות השחר (סוף). הדוגמה מהדיווח: 2026-06-15 הציג קודם
+      // "ליל שני ט"ז לחודש 12:24" — שעת יום.
+      final times = calculateDailyTimes(summerDate, city);
+      for (final key in const [
+        'tchilasKidushLevana3',
+        'tchilasKidushLevana7',
+        'sofKidushLevanaMoldos',
+        'sofKidushLevana15',
+      ]) {
+        final value = times[key];
+        if (value == null) continue;
+        final hour = hourOf(value);
+        expect(hour < 7 || hour >= 17, isTrue,
+            reason: '$key = "$value" — שעת יום, היה צריך להידחות ללילה');
+      }
+    });
+  });
+
+  group('isClockTime — אבחנת מפתח מיון', () {
+    test('שעת-שעון HH:MM מזוהה כברת-מיון כרונולוגי', () {
+      expect(isClockTime('02:37'), isTrue);
+      expect(isClockTime('20:00'), isTrue);
+      expect(isClockTime('9:05'), isTrue);
+    });
+
+    test('מחרוזת תאריך עברי (קידוש לבנה) אינה שעת-שעון', () {
+      expect(isClockTime('ליל שבת ט״ז לחודש 02:37'), isFalse);
+      expect(isClockTime('ליל שני ד׳ לחודש 20:00'), isFalse);
+      expect(isClockTime('—'), isFalse);
+      expect(isClockTime(''), isFalse);
+    });
+
+    test('מיון מעורב: שעות-שעון לפי שעה, ואחריהן זמני תאריך עברי', () {
+      // מדמה את ה-comparator של הלוח/הטבלה: שעות-שעון תחילה (כרונולוגית),
+      // וזמני קידוש לבנה אחריהן בסדר יציב — לא לפי המחרוזת הלקסיקוגרפית.
+      final order = {'a': 0, 'kl1': 1, 'b': 2, 'kl2': 3};
+      final items = [
+        ('kl2', 'ליל שבת ט״ז לחודש 02:37'),
+        ('b', '20:00'),
+        ('kl1', 'ליל שני ד׳ לחודש 21:00'),
+        ('a', '06:30'),
+      ];
+      items.sort((x, y) {
+        final xc = isClockTime(x.$2);
+        final yc = isClockTime(y.$2);
+        if (xc && yc) return x.$2.compareTo(y.$2);
+        if (xc != yc) return xc ? -1 : 1;
+        return order[x.$1]!.compareTo(order[y.$1]!);
+      });
+      expect(items.map((e) => e.$1).toList(), ['a', 'b', 'kl1', 'kl2']);
+    });
   });
 
   group('calculateDailyTimes — חצות לילה אסטרונומי', () {
