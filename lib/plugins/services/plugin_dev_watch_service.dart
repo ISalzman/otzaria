@@ -35,7 +35,8 @@ class PluginDevWatchService {
     }
 
     for (final plugin in devPlugins) {
-      if (!_watchers.containsKey(plugin.pluginId) || _watchedPaths[plugin.pluginId] != plugin.devRootPath) {
+      if (!_watchers.containsKey(plugin.pluginId) ||
+          _watchedPaths[plugin.pluginId] != plugin.devRootPath) {
         if (_watchers.containsKey(plugin.pluginId)) {
           stopWatcher(plugin.pluginId);
         }
@@ -56,7 +57,7 @@ class PluginDevWatchService {
     _watchers[plugin.pluginId] = dir.watch(recursive: true).listen((event) {
       final changedPath = event.path;
       final basename = p.basename(changedPath);
-      
+
       if (basename == '.DS_Store' ||
           basename == 'Thumbs.db' ||
           basename.endsWith('.swp') ||
@@ -73,7 +74,8 @@ class PluginDevWatchService {
       _pendingChanges[plugin.pluginId]!.add(changedPath);
 
       _debounceTimers[plugin.pluginId]?.cancel();
-      _debounceTimers[plugin.pluginId] = Timer(const Duration(milliseconds: 300), () {
+      _debounceTimers[plugin.pluginId] =
+          Timer(const Duration(milliseconds: 300), () {
         _emitChange(plugin.pluginId, devRootPath);
       });
     });
@@ -84,8 +86,8 @@ class PluginDevWatchService {
     if (changes.isEmpty) return;
 
     final manifestPath = p.join(devRootPath, 'manifest.json');
-    final manifestChanged = changes.contains(manifestPath) || 
-                            changes.any((path) => p.normalize(path) == p.normalize(manifestPath));
+    final manifestChanged = changes.contains(manifestPath) ||
+        changes.any((path) => p.normalize(path) == p.normalize(manifestPath));
 
     final changeEvent = PluginDevFsChange(
       pluginId: pluginId,

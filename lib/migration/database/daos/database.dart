@@ -151,7 +151,6 @@ class MyDatabase {
       db.execute('PRAGMA journal_mode=WAL');
     } catch (_) {}
 
-
     // Ensure schema exists (all scripts use CREATE TABLE/INDEX IF NOT EXISTS).
     for (final script in _getCreateScripts()) {
       db.execute(script);

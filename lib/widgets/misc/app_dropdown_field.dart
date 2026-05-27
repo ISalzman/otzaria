@@ -351,7 +351,6 @@ class _AppDropdownFieldState<T> extends State<AppDropdownField<T>> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final metrics = Theme.of(context).extension<AppMenuMetrics>() ??

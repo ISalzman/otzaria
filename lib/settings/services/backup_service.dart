@@ -283,7 +283,8 @@ class BackupService {
   /// Backup Shamor Zachor data - backs up all sz: keys found in Hive
   static Future<Map<String, dynamic>> _backupShamorZachor() async {
     if (!Hive.isBoxOpen(HiveCache.keyName)) {
-      _logger.warning('_backupShamorZachor: Hive box not open — skipping (partial backup)');
+      _logger.warning(
+          '_backupShamorZachor: Hive box not open — skipping (partial backup)');
       return {};
     }
     final box = Hive.box<dynamic>(HiveCache.keyName);
@@ -316,11 +317,11 @@ class BackupService {
       throw Exception('גרסת גיבוי לא נתמכת');
     }
 
-    final partialSections = (backupData['partial_sections'] as List?)
-            ?.cast<String>() ??
-        [];
+    final partialSections =
+        (backupData['partial_sections'] as List?)?.cast<String>() ?? [];
     if (partialSections.isNotEmpty) {
-      _logger.warning('Restoring a partial backup — sections missing: ${partialSections.join(", ")}');
+      _logger.warning(
+          'Restoring a partial backup — sections missing: ${partialSections.join(", ")}');
     }
 
     final includes = backupData['includes'] as Map<String, dynamic>;
@@ -540,7 +541,8 @@ class BackupService {
     Map<String, dynamic> shamorZachorData,
   ) async {
     if (!Hive.isBoxOpen(HiveCache.keyName)) {
-      _logger.warning('_restoreShamorZachor: Hive box not open — skipping (partial restore)');
+      _logger.warning(
+          '_restoreShamorZachor: Hive box not open — skipping (partial restore)');
       return true;
     }
     final box = Hive.box<dynamic>(HiveCache.keyName);
@@ -618,7 +620,8 @@ class BackupService {
     );
 
     if (result.skippedSections.isNotEmpty) {
-      _logger.warning('Auto-backup partial — skipped: ${result.skippedSections.join(", ")} — will retry after ${_kPartialRetryMinutes}min cooldown');
+      _logger.warning(
+          'Auto-backup partial — skipped: ${result.skippedSections.join(", ")} — will retry after ${_kPartialRetryMinutes}min cooldown');
       await Settings.setValue(
           _kLastPartialAutoBackupKey, DateTime.now().toIso8601String());
       return;

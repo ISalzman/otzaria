@@ -40,7 +40,8 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
     on<SwitchToWorkspace>(_onSwitchToWorkspace, transformer: sequential());
     on<RenameWorkspace>(_onRenameWorkspace, transformer: sequential());
     on<ClearWorkspaces>(_onClearWorkspaces, transformer: sequential());
-    on<UpdateCurrentWorkspaceTabs>(_onUpdateCurrentWorkspaceTabs, transformer: sequential());
+    on<UpdateCurrentWorkspaceTabs>(_onUpdateCurrentWorkspaceTabs,
+        transformer: sequential());
     on<MoveTabToWorkspace>(_onMoveTabToWorkspace, transformer: sequential());
   }
 

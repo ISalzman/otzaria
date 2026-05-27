@@ -36,8 +36,7 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
     // האזנה לשינויים בקיצורים — מבטיחה שה-dropdown יציג את הערך החדש
     // מיד לאחר עדכון, ולא רק לאחר מעבר למסך אחר וחזרה.
     return BlocBuilder<SettingsBloc, SettingsState>(
-      buildWhen: (previous, current) =>
-          previous.shortcuts != current.shortcuts,
+      buildWhen: (previous, current) => previous.shortcuts != current.shortcuts,
       builder: (context, _) => _buildContent(context),
     );
   }
@@ -45,7 +44,8 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
   Widget _buildContent(BuildContext context) {
     // Get current value for this setting
     final currentValue =
-        ShortcutValidator.getShortcutValue(widget.settingKey) ?? widget.selected;
+        ShortcutValidator.getShortcutValue(widget.settingKey) ??
+            widget.selected;
 
     // Get all shortcuts that are in use by OTHER settings
     final usedShortcuts = <String>{};
@@ -168,7 +168,8 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
     if (newValue == null || !mounted) return;
 
     final currentValue =
-        ShortcutValidator.getShortcutValue(widget.settingKey) ?? widget.selected;
+        ShortcutValidator.getShortcutValue(widget.settingKey) ??
+            widget.selected;
     final settingsBloc = context.read<SettingsBloc>();
     String? finalValue = newValue;
 
@@ -196,8 +197,7 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
           !ShortcutValidator.canShareShortcut(widget.settingKey, key)) {
         final usedValue = ShortcutValidator.getShortcutValue(key);
         if (usedValue == finalValue) {
-          final conflictingName =
-              ShortcutValidator.shortcutNames[key] ?? key;
+          final conflictingName = ShortcutValidator.shortcutNames[key] ?? key;
           UiSnack.showError('קיצור זה כבר בשימוש עבור: $conflictingName');
           return;
         }

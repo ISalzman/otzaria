@@ -231,8 +231,7 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
           message: 'מחיל עדכון על מסד הנתונים',
           detail: 'פקודה ${u.appliedStatements} מתוך ${u.totalStatements}'
               '${u.totalAssets > 1 ? ' • קובץ ${u.assetIndex + 1}/${u.totalAssets}' : ''}',
-          progress:
-              (u.appliedStatements / u.totalStatements).clamp(0.0, 1.0),
+          progress: (u.appliedStatements / u.totalStatements).clamp(0.0, 1.0),
         ),
       _ => null,
     };

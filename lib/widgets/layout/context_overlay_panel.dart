@@ -213,7 +213,7 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
           Positioned.fill(
             child: GestureDetector(
               onTap: widget.onClose,
-                child: AnimatedOpacity(
+              child: AnimatedOpacity(
                 duration: AppTokens.animPanelOpacity,
                 opacity: widget.isOpen ? 1.0 : 0.0,
                 child: ColoredBox(

@@ -123,17 +123,14 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
           duration: _isDragging ? Duration.zero : AppTokens.animFast,
           curve: Curves.easeOut,
           builder: (context, blend, _) {
-            final highlightColor =
-                cs.primary.withValues(alpha: 0.22 * blend);
+            final highlightColor = cs.primary.withValues(alpha: 0.22 * blend);
             final thickness = lerpDouble(3.0, 5.0, blend) ?? 3.0;
             final gripLength = lerpDouble(24.0, 32.0, blend) ?? 24.0;
             final showGrip = widget.showDivider || blend > 0;
             final idleOpacity = lerpDouble(0.35, 1.0, blend) ?? 0.35;
             final lineColor = showGrip
-                ? (Color.lerp(
-                        dividerColor.withValues(alpha: idleOpacity),
-                        activeColor,
-                        blend) ??
+                ? (Color.lerp(dividerColor.withValues(alpha: idleOpacity),
+                        activeColor, blend) ??
                     dividerColor)
                 : Colors.transparent;
             final dividerThickness = lerpDouble(1.0, 2.0, blend) ?? 1.0;

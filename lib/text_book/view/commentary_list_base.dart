@@ -335,8 +335,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   Widget _buildClosePaneButton() {
     return Container(
       decoration: BoxDecoration(
-        color:
-            Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -384,9 +383,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                   ? FluentIcons.arrow_collapse_all_24_regular
                   : FluentIcons.arrow_expand_all_24_regular,
             ),
-            tooltip: _allExpanded
-                ? 'כווץ את כל המפרשים'
-                : 'הרחב את כל המפרשים',
+            tooltip: _allExpanded ? 'כווץ את כל המפרשים' : 'הרחב את כל המפרשים',
             onPressed: () {
               setState(() {
                 _allExpanded = !_allExpanded;
@@ -440,17 +437,14 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                         controller: _searchController,
                         decoration: InputDecoration(
                           hintText: 'חפש בתוך המפרשים המוצגים...',
-                          prefixIcon:
-                              const Icon(FluentIcons.search_24_regular),
+                          prefixIcon: const Icon(FluentIcons.search_24_regular),
                           suffixIcon: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (query.isNotEmpty && total > 1) ...[
                                 Text(
                                   '${currentIndex + 1}/$total',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall,
+                                  style: Theme.of(context).textTheme.bodySmall,
                                 ),
                                 const SizedBox(width: 4),
                                 IconButton(
@@ -471,8 +465,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                       : null,
                                 ),
                                 IconButton(
-                                  icon: const Icon(FluentIcons
-                                      .chevron_down_24_regular),
+                                  icon: const Icon(
+                                      FluentIcons.chevron_down_24_regular),
                                   iconSize: 20,
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(
@@ -489,8 +483,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                 ),
                               ],
                               IconButton(
-                                icon: const Icon(
-                                    FluentIcons.dismiss_24_regular),
+                                icon:
+                                    const Icon(FluentIcons.dismiss_24_regular),
                                 tooltip: 'סגור חיפוש',
                                 onPressed: _clearSearchAndCloseField,
                               ),

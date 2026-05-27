@@ -7,7 +7,8 @@ import 'package:path/path.dart' as p;
 class PluginDownloadService {
   final http.Client _client;
 
-  PluginDownloadService({http.Client? client}) : _client = client ?? http.Client() {
+  PluginDownloadService({http.Client? client})
+      : _client = client ?? http.Client() {
     HttpClientRegistry.register(_client.close);
   }
 

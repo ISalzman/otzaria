@@ -85,8 +85,8 @@ class CalendarMainPanel extends StatelessWidget {
 
   Key _buildGridKey(CalendarState state) {
     if (state.calendarView == CalendarView.week) {
-      final weekStart = state.selectedGregorianDate.subtract(
-          Duration(days: state.selectedGregorianDate.weekday % 7));
+      final weekStart = state.selectedGregorianDate
+          .subtract(Duration(days: state.selectedGregorianDate.weekday % 7));
       return ValueKey(
           'week-${weekStart.year}-${weekStart.month}-${weekStart.day}');
     }
@@ -170,10 +170,8 @@ class CalendarMainPanel extends StatelessWidget {
               cell.gregorian,
             );
         final additionalInfoLines = <String>[
-          if (shortTimes['sunrise'] case final sunrise?)
-            'זריחה $sunrise',
-          if (shortTimes['sunset'] case final sunset?)
-            'שקיעה $sunset',
+          if (shortTimes['sunrise'] case final sunrise?) 'זריחה $sunrise',
+          if (shortTimes['sunset'] case final sunset?) 'שקיעה $sunset',
         ];
         return Expanded(
           child: buildDayCell(

@@ -277,8 +277,9 @@ class ReferenceBooksCache {
     }
 
     try {
-      final categories =
-          override != null ? await override() : await repository!.getAllCategories();
+      final categories = override != null
+          ? await override()
+          : await repository!.getAllCategories();
       if (myGen != _generation) return true; // ביטול, לא כשל.
 
       final byId = <int, ({int? parentId, String title})>{
@@ -345,8 +346,7 @@ class ReferenceBooksCache {
     // ולידציה רצה גם ב-release: ערך לא חיובי יוצר לולאה אינסופית
     // (i += 0), עדיף להיכשל בקול מאשר להקפיא את ה-isolate.
     if (maxConcurrent <= 0) {
-      throw ArgumentError.value(
-          maxConcurrent, 'maxConcurrent', 'must be > 0');
+      throw ArgumentError.value(maxConcurrent, 'maxConcurrent', 'must be > 0');
     }
     final gen = _generation;
     final paths = _fsPdfBooks

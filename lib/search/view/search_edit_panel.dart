@@ -250,87 +250,87 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
             return KeyEventResult.ignored;
           },
           child: Container(
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            border: Border(
-              bottom: BorderSide(
-                color: colorScheme.outlineVariant,
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              border: Border(
+                bottom: BorderSide(
+                  color: colorScheme.outlineVariant,
+                ),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.shadow.withValues(alpha: 0.08),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: colorScheme.shadow.withValues(alpha: 0.08),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Wrap(
-                spacing: 16,
-                runSpacing: 12,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    'מצב חיפוש:',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface,
-                    ),
-                    textDirection: TextDirection.rtl,
-                  ),
-                  _buildSearchModeToggle(state),
-                  if (widget.tab.spacingValues.isEmpty && !state.fuzzy)
-                    _buildDistanceField(context, state),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: RtlTextField(
-                      controller: widget.tab.queryController,
-                      focusNode: widget.tab.searchFieldFocusNode,
-                      decoration: InputDecoration(
-                        hintText: 'הזן טקסט לחיפוש...',
-                        border: const OutlineInputBorder(),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        suffixIcon: IconButton(
-                          icon: const Icon(FluentIcons.dismiss_24_regular),
-                          onPressed: widget.tab.queryController.clear,
-                        ),
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      'מצב חיפוש:',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface,
                       ),
-                      textAlign: TextAlign.right,
-                      onSubmitted: (_) => _performSearch(context),
+                      textDirection: TextDirection.rtl,
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  RecommendedActionButton(
-                    text: 'חפש',
-                    icon: FluentIcons.search_24_regular,
-                    onPressed: () => _performSearch(context),
-                  ),
-                  const SizedBox(width: 8),
-                  NeutralActionButton(
-                    text: 'סגור',
-                    icon: FluentIcons.dismiss_24_regular,
-                    onPressed: widget.onClose,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Divider(color: colorScheme.outlineVariant),
-              const SizedBox(height: 16),
-              _buildCategoryAndOptions(context, state),
-            ],
-          ),
+                    _buildSearchModeToggle(state),
+                    if (widget.tab.spacingValues.isEmpty && !state.fuzzy)
+                      _buildDistanceField(context, state),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: RtlTextField(
+                        controller: widget.tab.queryController,
+                        focusNode: widget.tab.searchFieldFocusNode,
+                        decoration: InputDecoration(
+                          hintText: 'הזן טקסט לחיפוש...',
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          suffixIcon: IconButton(
+                            icon: const Icon(FluentIcons.dismiss_24_regular),
+                            onPressed: widget.tab.queryController.clear,
+                          ),
+                        ),
+                        textAlign: TextAlign.right,
+                        onSubmitted: (_) => _performSearch(context),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    RecommendedActionButton(
+                      text: 'חפש',
+                      icon: FluentIcons.search_24_regular,
+                      onPressed: () => _performSearch(context),
+                    ),
+                    const SizedBox(width: 8),
+                    NeutralActionButton(
+                      text: 'סגור',
+                      icon: FluentIcons.dismiss_24_regular,
+                      onPressed: widget.onClose,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Divider(color: colorScheme.outlineVariant),
+                const SizedBox(height: 16),
+                _buildCategoryAndOptions(context, state),
+              ],
+            ),
           ),
         );
       },

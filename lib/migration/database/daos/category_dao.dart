@@ -35,8 +35,7 @@ class CategoryDao {
   /// Gets all category rows, optionally within an ongoing transaction.
   /// Used by [DatabaseLibraryProvider] to load books and categories atomically.
   /// Must be called synchronously inside a [withTransaction] block.
-  List<Map<String, dynamic>> getAllCategoryRows(
-      sqlite3.Database db) {
+  List<Map<String, dynamic>> getAllCategoryRows(sqlite3.Database db) {
     return db
         .select('SELECT * FROM category ORDER BY orderIndex, title')
         .toMapList();
@@ -125,4 +124,3 @@ class CategoryDao {
     return Category.fromJson(result.first);
   }
 }
-

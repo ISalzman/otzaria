@@ -244,12 +244,11 @@ class AppPaths {
       if (currentPath != bundled) {
         await Settings.setValue(SettingsRepository.keyLibraryPath, bundled);
       }
-      final currentFolderName = Settings.getValue<String>(
-              SettingsRepository.keyLibraryFolderName) ??
-          '';
+      final currentFolderName =
+          Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
+              '';
       if (currentFolderName.isNotEmpty) {
-        await Settings.setValue(
-            SettingsRepository.keyLibraryFolderName, '');
+        await Settings.setValue(SettingsRepository.keyLibraryFolderName, '');
       }
       return bundled;
     }
@@ -276,9 +275,8 @@ class AppPaths {
     final folderName =
         Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
             '';
-    final dbDir = folderName.isEmpty
-        ? libraryPath
-        : p.join(libraryPath, folderName);
+    final dbDir =
+        folderName.isEmpty ? libraryPath : p.join(libraryPath, folderName);
 
     final db = File(p.join(dbDir, 'seforim.db'));
     if (!await db.exists()) {

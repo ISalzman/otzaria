@@ -188,7 +188,8 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
   }
 
   Future<void> _openContextMenu(Offset globalPosition) async {
-    final entries = _normalizeEntries(widget.menuBuilder(context, globalPosition));
+    final entries =
+        _normalizeEntries(widget.menuBuilder(context, globalPosition));
     if (entries.isEmpty) return;
 
     final overlay = Overlay.of(context, rootOverlay: true);

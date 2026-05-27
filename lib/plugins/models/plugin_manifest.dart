@@ -92,11 +92,10 @@ class PluginManifest {
               ?.map((e) => e as String)
               .toList() ??
           [],
-      databaseSources:
-          (contributes['databaseSources'] as List<dynamic>?)
-                  ?.map((e) => Map<String, dynamic>.from(e as Map))
-                  .toList() ??
-              [],
+      databaseSources: (contributes['databaseSources'] as List<dynamic>?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          [],
     );
   }
 

@@ -136,86 +136,87 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
         SettingsAnchor(
           cardId: 'tools.gematria',
           child: SettingsCard(
-          title: 'חיפוש גימטריה',
-          children: [
-            ListTile(
-              leading: const Icon(FluentIcons.number_row_24_regular),
-              title:
-                  const Text('מספר תוצאות מקסימלי', style: kSettingsTitleStyle),
-              subtitle: const Text('כמות התוצאות המקסימלית להצגה',
-                  style: kSettingsSubtitleStyle),
-              trailing: SizedBox(
-                width: 120,
-                child: AppDropdownField<int>(
-                  value: maxResults,
-                  entries: [50, 100, 200, 500, 1000]
-                      .map(
-                        (value) =>
-                            AppMenuEntry(value: value, label: '$value'),
-                      )
-                      .toList(),
-                  onSelected: (value) {
-                    if (value != null) {
-                      setState(() => maxResults = value);
-                      Settings.setValue<int>(
-                          'key-gematria-max-results', value);
-                    }
-                  },
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
+            title: 'חיפוש גימטריה',
+            children: [
+              ListTile(
+                leading: const Icon(FluentIcons.number_row_24_regular),
+                title: const Text('מספר תוצאות מקסימלי',
+                    style: kSettingsTitleStyle),
+                subtitle: const Text('כמות התוצאות המקסימלית להצגה',
+                    style: kSettingsSubtitleStyle),
+                trailing: SizedBox(
+                  width: 120,
+                  child: AppDropdownField<int>(
+                    value: maxResults,
+                    entries: [50, 100, 200, 500, 1000]
+                        .map(
+                          (value) =>
+                              AppMenuEntry(value: value, label: '$value'),
+                        )
+                        .toList(),
+                    onSelected: (value) {
+                      if (value != null) {
+                        setState(() => maxResults = value);
+                        Settings.setValue<int>(
+                            'key-gematria-max-results', value);
+                      }
+                    },
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
                   ),
                 ),
               ),
-            ),
-            SwitchSettingsTile(
-              leading: const Icon(FluentIcons.filter_24_regular),
-              title:
-                  const Text('סינון תוצאות כפולות', style: kSettingsTitleStyle),
-              subtitle: Text(
-                filterDuplicates
-                    ? 'תוצאות זהות יוצגו פעם אחת בלבד'
-                    : 'כל התוצאות יוצגו',
-                style: kSettingsSubtitleStyle,
+              SwitchSettingsTile(
+                leading: const Icon(FluentIcons.filter_24_regular),
+                title: const Text('סינון תוצאות כפולות',
+                    style: kSettingsTitleStyle),
+                subtitle: Text(
+                  filterDuplicates
+                      ? 'תוצאות זהות יוצגו פעם אחת בלבד'
+                      : 'כל התוצאות יוצגו',
+                  style: kSettingsSubtitleStyle,
+                ),
+                value: filterDuplicates,
+                onChanged: (value) {
+                  setState(() => filterDuplicates = value);
+                  Settings.setValue<bool>(
+                      'key-gematria-filter-duplicates', filterDuplicates);
+                },
               ),
-              value: filterDuplicates,
-              onChanged: (value) {
-                setState(() => filterDuplicates = value);
-                Settings.setValue<bool>(
-                    'key-gematria-filter-duplicates', filterDuplicates);
-              },
-            ),
-            SwitchSettingsTile(
-              leading: const Icon(FluentIcons.text_word_count_24_regular),
-              title:
-                  const Text('חיפוש פסוק שלם בלבד', style: kSettingsTitleStyle),
-              subtitle: Text(
-                wholeVerseOnly
-                    ? 'חיפוש רק בפסוקים שלמים'
-                    : 'חיפוש גם בחלקי פסוקים',
-                style: kSettingsSubtitleStyle,
+              SwitchSettingsTile(
+                leading: const Icon(FluentIcons.text_word_count_24_regular),
+                title: const Text('חיפוש פסוק שלם בלבד',
+                    style: kSettingsTitleStyle),
+                subtitle: Text(
+                  wholeVerseOnly
+                      ? 'חיפוש רק בפסוקים שלמים'
+                      : 'חיפוש גם בחלקי פסוקים',
+                  style: kSettingsSubtitleStyle,
+                ),
+                value: wholeVerseOnly,
+                onChanged: (value) {
+                  setState(() => wholeVerseOnly = value);
+                  Settings.setValue<bool>(
+                      'key-gematria-whole-verse-only', wholeVerseOnly);
+                },
               ),
-              value: wholeVerseOnly,
-              onChanged: (value) {
-                setState(() => wholeVerseOnly = value);
-                Settings.setValue<bool>(
-                    'key-gematria-whole-verse-only', wholeVerseOnly);
-              },
-            ),
-            SwitchSettingsTile(
-              leading: const Icon(FluentIcons.book_24_regular),
-              title: const Text('חיפוש בתורה בלבד', style: kSettingsTitleStyle),
-              subtitle: Text(
-                torahOnly ? 'חיפוש רק בחמישה חומשי תורה' : 'חיפוש בכל הספרים',
-                style: kSettingsSubtitleStyle,
+              SwitchSettingsTile(
+                leading: const Icon(FluentIcons.book_24_regular),
+                title:
+                    const Text('חיפוש בתורה בלבד', style: kSettingsTitleStyle),
+                subtitle: Text(
+                  torahOnly ? 'חיפוש רק בחמישה חומשי תורה' : 'חיפוש בכל הספרים',
+                  style: kSettingsSubtitleStyle,
+                ),
+                value: torahOnly,
+                onChanged: (value) {
+                  setState(() => torahOnly = value);
+                  Settings.setValue<bool>('key-gematria-torah-only', torahOnly);
+                },
               ),
-              value: torahOnly,
-              onChanged: (value) {
-                setState(() => torahOnly = value);
-                Settings.setValue<bool>('key-gematria-torah-only', torahOnly);
-              },
-            ),
-          ],
+            ],
           ),
         ),
         kSettingsCardSpacing,

@@ -365,8 +365,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
           // ה-registration הלא שלם וגם את ה-canary של ה-crash guard.
           PluginRuntimeDispatcher.instance
               .unregisterController(widget.plugin.pluginId);
-          unawaited(
-              PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
+          unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
           debugPrint(
               'Plugin [${widget.plugin.pluginId}] WebView init error: $e');
           if (mounted) setState(() => _hasError = true);
@@ -540,13 +539,11 @@ class _PluginTabPageState extends State<PluginTabPage> {
 ''');
           // הטעינה הצליחה עד הסוף (גם ה-stub וגם ה-boot payload הוזרקו).
           // מסירים את התוסף מ-quarantine כדי שהפעלה הבאה תאפשר טעינה רגילה.
-          unawaited(
-              PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
+          unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
         } catch (e, st) {
           // Boot ב-Dart נכשל — התהליך חי, לא קריסה native. מנקים את ה-canary
           // כדי שלא נחסום בהפעלה הבאה תוסף שפשוט החזיר שגיאת אתחול רגילה.
-          unawaited(
-              PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
+          unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
           debugPrint('Plugin [${widget.plugin.pluginId}] boot error: $e\n$st');
           PluginSystemDatabase.instance
               .writeLog(widget.plugin.pluginId, 'ERROR', 'Boot failed: $e');
@@ -563,8 +560,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
         if (request.url.scheme == 'file') {
           // שגיאת רשת/קובץ נתפסה ב-Dart — התהליך חי, לא קריסה native.
           // מנקים את ה-canary כדי שלא נחסום שגיאה רגילה כ"קריסה".
-          unawaited(
-              PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
+          unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
           if (mounted) setState(() => _hasError = true);
         }
       },

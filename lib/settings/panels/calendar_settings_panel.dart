@@ -149,78 +149,80 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
             SettingsAnchor(
               cardId: 'tools.calendar',
               child: SettingsCard(
-              title: 'לוח שנה',
-              children: [
-                // סוג לוח
-                SegmentedSettingsTile<CalendarType>(
-                  icon: FluentIcons.calendar_24_regular,
-                  title: 'סוג לוח שנה',
-                  subtitle: state.calendarType == CalendarType.hebrew
-                      ? 'יוצג לוח השנה היהודי בלבד'
-                      : state.calendarType == CalendarType.gregorian
-                          ? 'יוצג לוח השנה הלועזי בלבד'
-                          : 'יוצגו תאריכים מהלוח העברי והלועזי יחד',
-                  options: const [
-                    SegmentOption(value: CalendarType.hebrew, label: 'עברי'),
-                    SegmentOption(value: CalendarType.combined, label: 'משולב'),
-                    SegmentOption(
-                        value: CalendarType.gregorian, label: 'לועזי'),
-                  ],
-                  currentValue: state.calendarType,
-                  onChanged: (value) {
-                    context.read<CalendarCubit>().changeCalendarType(value);
-                  },
-                ),
-                SegmentedSettingsTile<CalendarDayTransition>(
-                  icon: FluentIcons.weather_sunny_low_24_regular,
-                  title: 'מעבר יום',
-                  subtitle: _calendarDayTransitionSubtitle(state.dayTransition),
-                  options: const [
-                    SegmentOption(
-                      value: CalendarDayTransition.sunset,
-                      label: 'שקיעה',
-                    ),
-                    SegmentOption(
-                      value: CalendarDayTransition.tzais,
-                      label: 'צאה"כ',
-                    ),
-                    SegmentOption(
-                      value: CalendarDayTransition.rabbeinuTam,
-                      label: 'רבינו תם',
-                    ),
-                    SegmentOption(
-                      value: CalendarDayTransition.midnight,
-                      label: '12 בלילה',
-                    ),
-                  ],
-                  currentValue: state.dayTransition,
-                  onChanged: (value) {
-                    context
-                        .read<CalendarCubit>()
-                        .changeCalendarDayTransition(value);
-                  },
-                ),
-                // עיר
-                _buildResponsiveDropdownTile<String>(
-                  icon: FluentIcons.location_24_regular,
-                  title: 'עיר נבחרת',
-                  subtitle: 'בחירת עיר לחישובי זמני היום והלוח',
-                  value: state.selectedCity,
-                  minFieldWidth: 220,
-                  maxFieldWidth: 320,
-                  enableSearch: true,
-                  entries: _cityNames
-                      .map(
-                        (city) =>
-                            AppMenuEntry<String>(value: city, label: city),
-                      )
-                      .toList(),
-                  onSelected: (city) {
-                    if (city == null || city == state.selectedCity) return;
-                    context.read<CalendarCubit>().changeCity(city);
-                  },
-                ),
-              ],
+                title: 'לוח שנה',
+                children: [
+                  // סוג לוח
+                  SegmentedSettingsTile<CalendarType>(
+                    icon: FluentIcons.calendar_24_regular,
+                    title: 'סוג לוח שנה',
+                    subtitle: state.calendarType == CalendarType.hebrew
+                        ? 'יוצג לוח השנה היהודי בלבד'
+                        : state.calendarType == CalendarType.gregorian
+                            ? 'יוצג לוח השנה הלועזי בלבד'
+                            : 'יוצגו תאריכים מהלוח העברי והלועזי יחד',
+                    options: const [
+                      SegmentOption(value: CalendarType.hebrew, label: 'עברי'),
+                      SegmentOption(
+                          value: CalendarType.combined, label: 'משולב'),
+                      SegmentOption(
+                          value: CalendarType.gregorian, label: 'לועזי'),
+                    ],
+                    currentValue: state.calendarType,
+                    onChanged: (value) {
+                      context.read<CalendarCubit>().changeCalendarType(value);
+                    },
+                  ),
+                  SegmentedSettingsTile<CalendarDayTransition>(
+                    icon: FluentIcons.weather_sunny_low_24_regular,
+                    title: 'מעבר יום',
+                    subtitle:
+                        _calendarDayTransitionSubtitle(state.dayTransition),
+                    options: const [
+                      SegmentOption(
+                        value: CalendarDayTransition.sunset,
+                        label: 'שקיעה',
+                      ),
+                      SegmentOption(
+                        value: CalendarDayTransition.tzais,
+                        label: 'צאה"כ',
+                      ),
+                      SegmentOption(
+                        value: CalendarDayTransition.rabbeinuTam,
+                        label: 'רבינו תם',
+                      ),
+                      SegmentOption(
+                        value: CalendarDayTransition.midnight,
+                        label: '12 בלילה',
+                      ),
+                    ],
+                    currentValue: state.dayTransition,
+                    onChanged: (value) {
+                      context
+                          .read<CalendarCubit>()
+                          .changeCalendarDayTransition(value);
+                    },
+                  ),
+                  // עיר
+                  _buildResponsiveDropdownTile<String>(
+                    icon: FluentIcons.location_24_regular,
+                    title: 'עיר נבחרת',
+                    subtitle: 'בחירת עיר לחישובי זמני היום והלוח',
+                    value: state.selectedCity,
+                    minFieldWidth: 220,
+                    maxFieldWidth: 320,
+                    enableSearch: true,
+                    entries: _cityNames
+                        .map(
+                          (city) =>
+                              AppMenuEntry<String>(value: city, label: city),
+                        )
+                        .toList(),
+                    onSelected: (city) {
+                      if (city == null || city == state.selectedCity) return;
+                      context.read<CalendarCubit>().changeCity(city);
+                    },
+                  ),
+                ],
               ),
             ),
 

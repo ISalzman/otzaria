@@ -151,8 +151,7 @@ class PluginProtocolRegistrationService {
     }
 
     final iconsRoot = p.join(home, '.local', 'share', 'icons', 'hicolor');
-    final mimetypesDir =
-        Directory(p.join(iconsRoot, '256x256', 'mimetypes'));
+    final mimetypesDir = Directory(p.join(iconsRoot, '256x256', 'mimetypes'));
     await mimetypesDir.create(recursive: true);
 
     final destination = File(p.join(mimetypesDir.path, '$mimeIconName.png'));

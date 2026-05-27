@@ -222,8 +222,7 @@ class PluginSystemDatabase {
   /// בתוך טרנזקציה חיצונית פתוחה (SQLite לא תומך בטרנזקציות מקוננות
   /// אבל כן ב-savepoints מקוננים).
   @visibleForTesting
-  static void applyUserOrderUpdates(
-      Database db, Map<String, int> ordering) {
+  static void applyUserOrderUpdates(Database db, Map<String, int> ordering) {
     if (ordering.isEmpty) return;
     const savepoint = 'sp_plugin_user_order';
     db.execute('SAVEPOINT $savepoint');

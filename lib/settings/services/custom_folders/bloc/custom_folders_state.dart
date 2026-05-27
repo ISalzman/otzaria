@@ -22,7 +22,8 @@ class CustomFoldersState extends Equatable {
     return CustomFoldersState(
       folders: folders ?? this.folders,
       isSyncing: isSyncing ?? this.isSyncing,
-      message: identical(message, _sentinel) ? this.message : message as String?,
+      message:
+          identical(message, _sentinel) ? this.message : message as String?,
       error: identical(error, _sentinel) ? this.error : error as String?,
     );
   }

@@ -67,8 +67,7 @@ class WorkStatusCubit extends Cubit<WorkStatusState> {
   }
 
   void remove(String id) {
-    final newItems = Map<String, WorkStatusItem>.from(state.items)
-      ..remove(id);
+    final newItems = Map<String, WorkStatusItem>.from(state.items)..remove(id);
     emit(state.copyWith(
       items: newItems,
       isDismissed: newItems.isEmpty ? false : state.isDismissed,

@@ -568,8 +568,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
   List<Widget> _onlyConfigured(List<Widget> tiles) {
     return tiles.where((tile) {
       if (tile is _ShortcutTile) {
-        final value =
-            ShortcutValidator.getShortcutValue(tile.settingKey) ?? '';
+        final value = ShortcutValidator.getShortcutValue(tile.settingKey) ?? '';
         return value.isNotEmpty;
       }
       return true;

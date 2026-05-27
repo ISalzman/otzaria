@@ -75,4 +75,3 @@ class PubPlaceDao {
     return firstIntValue(db.select(_queries['countAll']!)) ?? 0;
   }
 }
-

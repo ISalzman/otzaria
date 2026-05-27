@@ -92,7 +92,8 @@ class LibraryDiffSyncWorkerService {
   LibraryDiffSyncWorkerService({
     @visibleForTesting http.Client? httpClient,
     @visibleForTesting Future<Uint8List?> Function(Uint8List)? decompressDiff,
-    @visibleForTesting Future<void> Function(Map<String, dynamic>)? isolateEntryPoint,
+    @visibleForTesting
+    Future<void> Function(Map<String, dynamic>)? isolateEntryPoint,
   })  : _testHttpClient = httpClient,
         _testDecompress = decompressDiff,
         _testIsolateEntryPoint = isolateEntryPoint;
@@ -236,7 +237,8 @@ class LibraryDiffSyncWorkerService {
         ctrl.close();
 
       case 'failed':
-        ctrl.add(LibraryDiffSyncFailed(message['message'] as String? ?? 'שגיאה לא ידועה'));
+        ctrl.add(LibraryDiffSyncFailed(
+            message['message'] as String? ?? 'שגיאה לא ידועה'));
         ctrl.close();
     }
   }

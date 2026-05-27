@@ -125,16 +125,16 @@ class PluginDatabaseService {
     final fetchLimit = effectiveLimit + 1;
     final compiledWithProbe = _compileSpec(spec, fetchLimit, offset);
     final sw = Stopwatch()..start();
-    final resultSet = db.select(compiledWithProbe.sql, compiledWithProbe.params);
+    final resultSet =
+        db.select(compiledWithProbe.sql, compiledWithProbe.params);
     sw.stop();
 
     // Format
     final rowFormat = spec['rowFormat'] as String? ?? 'array';
     final columns = resultSet.columnNames;
     final hasMore = resultSet.length > effectiveLimit;
-    final rawRows = hasMore
-        ? resultSet.take(effectiveLimit).toList()
-        : resultSet.toList();
+    final rawRows =
+        hasMore ? resultSet.take(effectiveLimit).toList() : resultSet.toList();
 
     final List<dynamic> rows;
     if (rowFormat == 'object') {

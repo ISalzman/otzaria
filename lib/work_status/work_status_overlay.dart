@@ -20,8 +20,7 @@ class WorkStatusOverlay extends StatelessWidget {
         final items = state.orderedItems;
         final colorScheme = Theme.of(context).colorScheme;
         final isRtl = Directionality.of(context) == TextDirection.rtl;
-        final isWindows =
-            Theme.of(context).platform == TargetPlatform.windows;
+        final isWindows = Theme.of(context).platform == TargetPlatform.windows;
         final alignment = isWindows
             ? Alignment.bottomLeft
             : (isRtl ? Alignment.bottomRight : Alignment.bottomLeft);

@@ -56,9 +56,8 @@ class _BooksListDialogState extends State<_BooksListDialog> {
   void _onSearchChanged() {
     final query = _searchController.text.trim();
     setState(() {
-      _visibleRows = query.isEmpty
-          ? _rows
-          : _rows.where((r) => r.matches(query)).toList();
+      _visibleRows =
+          query.isEmpty ? _rows : _rows.where((r) => r.matches(query)).toList();
     });
   }
 

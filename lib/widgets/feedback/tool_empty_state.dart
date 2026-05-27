@@ -24,33 +24,33 @@ class ToolEmptyState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-          Icon(
-            icon,
-            size: 64,
-            color: cs.onSurface.withValues(alpha: 0.3),
-          ),
-          const SizedBox(height: AppTokens.spaceMD),
-          Text(
-            message,
-            style: TextStyle(
-              fontSize: AppTokens.fontXL,
-              color: cs.onSurface.withValues(alpha: 0.6),
+            Icon(
+              icon,
+              size: 64,
+              color: cs.onSurface.withValues(alpha: 0.3),
             ),
-            textDirection: TextDirection.rtl,
-            textAlign: TextAlign.center,
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: AppTokens.spaceMD),
             Text(
-              subtitle!,
+              message,
+              style: TextStyle(
+                fontSize: AppTokens.fontXL,
+                color: cs.onSurface.withValues(alpha: 0.6),
+              ),
               textDirection: TextDirection.rtl,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.7),
-                  ),
             ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                subtitle!,
+                textDirection: TextDirection.rtl,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                    ),
+              ),
+            ],
           ],
-        ],
         ),
       ),
     );

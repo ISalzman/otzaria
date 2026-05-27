@@ -73,8 +73,8 @@ class _CommentaryListForCombinedViewState
                         child: ListTile(
                           focusNode: FocusNode(),
                           title: FutureBuilder<String>(
-                            future:
-                                thisLinksSnapshot.data![index1].displayReference,
+                            future: thisLinksSnapshot
+                                .data![index1].displayReference,
                             builder: (context, snapshot) {
                               return Text(
                                 snapshot.data ??
@@ -90,7 +90,9 @@ class _CommentaryListForCombinedViewState
                             link: thisLinksSnapshot.data![index1],
                             fontSize: widget.fontSize,
                             openBookCallback: widget.openBookCallback,
-                            removeNikud: state.removeNikud,                            removePunctuation: state.removePunctuation,                          ),
+                            removeNikud: state.removeNikud,
+                            removePunctuation: state.removePunctuation,
+                          ),
                         ),
                       ),
                     ),

@@ -259,8 +259,8 @@ class PluginExtendedValidator {
     for (final entry in eventUsage.entries) {
       final ev = entry.key;
       if (_knownEvents.contains(ev)) continue;
-      warnings.add(
-          'רישום ל-event לא מוכר: $ev (קבצים: ${entry.value.join(', ')})');
+      warnings
+          .add('רישום ל-event לא מוכר: $ev (קבצים: ${entry.value.join(', ')})');
     }
 
     // Cross-check: method משומש אך ההרשאה לא הוכרזה.
@@ -561,8 +561,8 @@ class PluginExtendedValidator {
       // `--font-size-base: 18px;`, וכד') מותרות במפורש לפי DESIGN_GUIDE —
       // הן ברירות מחדל לפני applyTheme. מוציאים אותן מהמחרוזת לפני סריקה
       // כדי שלא יזוהו כהפרה.
-      stripped = stripped.replaceAll(
-          RegExp(r'--[a-zA-Z_][\w-]*\s*:\s*[^;}]+;?'), '');
+      stripped =
+          stripped.replaceAll(RegExp(r'--[a-zA-Z_][\w-]*\s*:\s*[^;}]+;?'), '');
       final seen = <String>{};
       void addOnce(String type, String message) {
         if (!seen.add(type)) return;
@@ -592,8 +592,7 @@ class PluginExtendedValidator {
         if (_allowedColorKeywords.contains(firstToken)) continue;
         if (RegExp(r'^[\d.]+(px|em|rem|%)?$').hasMatch(firstToken)) continue;
         if (_namedColorRe.hasMatch(value)) {
-          final preview =
-              value.length > 40 ? value.substring(0, 40) : value;
+          final preview = value.length > 40 ? value.substring(0, 40) : value;
           addOnce('named',
               '${chunk.name}: שם צבע באנגלית בערך CSS ("$preview"). חובה var(--color-*)');
           break;
@@ -607,8 +606,7 @@ class PluginExtendedValidator {
         final value = (m.group(1) ?? '').trim();
         if (!RegExp(r'var\s*\(\s*--font', caseSensitive: false)
             .hasMatch(value)) {
-          final preview =
-              value.length > 50 ? value.substring(0, 50) : value;
+          final preview = value.length > 50 ? value.substring(0, 50) : value;
           addOnce('font-family',
               '${chunk.name}: font-family מקודד ("$preview"). חובה var(--font-main)');
           break;
@@ -616,9 +614,8 @@ class PluginExtendedValidator {
       }
 
       // 5. font-size ב-px קבוע
-      for (final m
-          in RegExp(r'font-size\s*:\s*([^;}]+)', caseSensitive: false)
-              .allMatches(stripped)) {
+      for (final m in RegExp(r'font-size\s*:\s*([^;}]+)', caseSensitive: false)
+          .allMatches(stripped)) {
         final value = (m.group(1) ?? '').trim();
         if (RegExp(r'var\s*\(').hasMatch(value)) continue;
         if (RegExp(r'^\d+(?:\.\d+)?\s*(?:em|rem|%)$', caseSensitive: false)
@@ -627,8 +624,7 @@ class PluginExtendedValidator {
         }
         if (RegExp(r'^0(?:px)?$').hasMatch(value)) continue;
         if (RegExp(r'\d+\s*px', caseSensitive: false).hasMatch(value)) {
-          final preview =
-              value.length > 30 ? value.substring(0, 30) : value;
+          final preview = value.length > 30 ? value.substring(0, 30) : value;
           addOnce('font-size-px',
               '${chunk.name}: font-size ב-px קבוע ("$preview"). חובה em/rem או var(--font-size-base)');
           break;
@@ -644,8 +640,7 @@ class PluginExtendedValidator {
         if (RegExp(r'^0(?:px)?(?:\s+0(?:px)?)*$').hasMatch(value)) continue;
         if (RegExp(r'^\d+(?:\.\d+)?\s*%$').hasMatch(value)) continue;
         if (RegExp(r'\d+\s*px', caseSensitive: false).hasMatch(value)) {
-          final preview =
-              value.length > 30 ? value.substring(0, 30) : value;
+          final preview = value.length > 30 ? value.substring(0, 30) : value;
           addOnce('radius-px',
               '${chunk.name}: border-radius ב-px קבוע ("$preview"). חובה var(--radius-sm/md/lg/pill)');
           break;

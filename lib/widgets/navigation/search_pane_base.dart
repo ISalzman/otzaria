@@ -110,14 +110,16 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
             leading: const Icon(FluentIcons.search_24_regular),
             trailingActions: [
               if (widget.onAdvancedSearch != null)
-                OtzariaSearchAction.settings(onPressed: widget.onAdvancedSearch!),
+                OtzariaSearchAction.settings(
+                    onPressed: widget.onAdvancedSearch!),
             ],
           ),
           if (!_isCompact &&
               widget.additionalActions != null &&
               widget.additionalActions!.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(right: 8.0, left: 8.0, bottom: 4.0),
+              padding:
+                  const EdgeInsets.only(right: 8.0, left: 8.0, bottom: 4.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: widget.additionalActions!,

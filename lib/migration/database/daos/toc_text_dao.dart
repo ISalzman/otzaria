@@ -72,4 +72,3 @@ class TocTextDao {
     return db.lastInsertRowId;
   }
 }
-

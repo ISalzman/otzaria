@@ -34,6 +34,7 @@ class PreparedInstall {
   final PluginManifest manifest;
   final String tempDirPath;
   final bool isOverwrite;
+
   /// גרסה מותקנת קודמת — null אם זו התקנה ראשונה.
   final String? previousVersion;
 

@@ -295,8 +295,7 @@ class PdfHorizontalScrollbar extends StatefulWidget {
   });
 
   @override
-  State<PdfHorizontalScrollbar> createState() =>
-      _PdfHorizontalScrollbarState();
+  State<PdfHorizontalScrollbar> createState() => _PdfHorizontalScrollbarState();
 }
 
 class _PdfHorizontalScrollbarState extends State<PdfHorizontalScrollbar> {
@@ -332,17 +331,16 @@ class _PdfHorizontalScrollbarState extends State<PdfHorizontalScrollbar> {
             if (trackWidth <= 0) return const SizedBox.shrink();
 
             final visibleWidth = visibleRect.width.clamp(0.0, totalWidth);
-            final scrollableExtent =
-                math.max(totalWidth - visibleWidth, 0.0);
+            final scrollableExtent = math.max(totalWidth - visibleWidth, 0.0);
             if (scrollableExtent == 0) return const SizedBox.shrink();
 
-            final thumbWidthRaw =
-                totalWidth <= 0 ? trackWidth : trackWidth * (visibleWidth / totalWidth);
+            final thumbWidthRaw = totalWidth <= 0
+                ? trackWidth
+                : trackWidth * (visibleWidth / totalWidth);
             final thumbWidth = thumbWidthRaw.clamp(
                 PdfHorizontalScrollbar._minThumbWidth, trackWidth);
             final maxThumbLeft = math.max(trackWidth - thumbWidth, 0.0);
-            final currentLeft =
-                (visibleRect.left).clamp(0.0, scrollableExtent);
+            final currentLeft = (visibleRect.left).clamp(0.0, scrollableExtent);
             final thumbLeft = maxThumbLeft * (currentLeft / scrollableExtent);
 
             void jumpToThumbLeft(double desiredThumbLeft) {
@@ -372,13 +370,11 @@ class _PdfHorizontalScrollbarState extends State<PdfHorizontalScrollbar> {
             void updateDrag(DragUpdateDetails details) {
               final trackCtx = _trackKey.currentContext;
               if (trackCtx == null) return;
-              final trackBox =
-                  trackCtx.findRenderObject() as RenderBox?;
+              final trackBox = trackCtx.findRenderObject() as RenderBox?;
               if (trackBox == null) return;
               final local = trackBox.globalToLocal(details.globalPosition);
               jumpToThumbLeft(
-                local.dx -
-                    (_dragPointerOffsetWithinThumb ?? thumbWidth / 2),
+                local.dx - (_dragPointerOffsetWithinThumb ?? thumbWidth / 2),
               );
             }
 

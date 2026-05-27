@@ -218,9 +218,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen> {
               _showNavPanel = false;
               _showSearchPanel = false;
             }),
-            paneContent: _showSearchPanel
-                ? _buildSearchPanel()
-                : _buildNavPanel(),
+            paneContent:
+                _showSearchPanel ? _buildSearchPanel() : _buildNavPanel(),
             mainContent: ValueListenableBuilder<bool>(
               valueListenable: widget.tab.sourceTab.linksLoadingNotifier,
               builder: (context, linksLoading, _) => PdfCommentaryPanel(
@@ -628,9 +627,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen> {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppSurfaces.selectedItem(colorScheme)
-              : null,
+          color: isSelected ? AppSurfaces.selectedItem(colorScheme) : null,
           border: Border(
             bottom: BorderSide(
               color: Theme.of(context).dividerColor,
@@ -690,9 +687,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen> {
         padding: const EdgeInsets.only(
             right: 16.0 + 24.0, left: 16, top: 10, bottom: 10),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppSurfaces.selectedItem(colorScheme)
-              : null,
+          color: isSelected ? AppSurfaces.selectedItem(colorScheme) : null,
           border: Border(
             bottom: BorderSide(
               color: Theme.of(context).dividerColor,

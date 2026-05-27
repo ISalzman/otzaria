@@ -25,8 +25,7 @@ IndexingWarningMode? resolveIndexingWarningMode({
   required bool providerInitialized,
   required bool inProgressDismissed,
 }) {
-  if (providerInitialized &&
-      TantivyDataProvider.instance.booksDone.isEmpty) {
+  if (providerInitialized && TantivyDataProvider.instance.booksDone.isEmpty) {
     return IndexingWarningMode.missing;
   }
   if (state is IndexingInProgress && !inProgressDismissed) {
@@ -38,8 +37,7 @@ IndexingWarningMode? resolveIndexingWarningMode({
 /// האם יש לחסום חיפוש שמשתמש באינדקס. מתאים בדיוק ל-mode == missing.
 /// אם ה-provider עוד לא הסתיים לטעון, לא חוסמים — לא ידוע אם יש אינדקס.
 bool isSearchBlockedByMissingIndex({required bool providerInitialized}) {
-  return providerInitialized &&
-      TantivyDataProvider.instance.booksDone.isEmpty;
+  return providerInitialized && TantivyDataProvider.instance.booksDone.isEmpty;
 }
 
 /// וידג'ט באנר אזהרה (ללא state חיצוני). השתמש ב-[IndexingWarningContainer]

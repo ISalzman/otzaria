@@ -13,6 +13,7 @@ import 'package:otzaria/settings/settings_card.dart';
 class PluginInstallScreen extends StatefulWidget {
   final PluginManifest manifest;
   final String tempDirPath;
+
   /// גרסה מותקנת קודמת — null אם זו התקנה ראשונה.
   final String? previousVersion;
 
@@ -116,7 +117,8 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                     ),
                   if (isUpdate)
                     ListTile(
-                      leading: const Icon(FluentIcons.arrow_circle_up_24_regular),
+                      leading:
+                          const Icon(FluentIcons.arrow_circle_up_24_regular),
                       title: const Text(
                         'עדכון גרסה',
                         textDirection: TextDirection.rtl,
@@ -192,9 +194,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                             : FluentIcons.shield_error_24_regular);
                     final iconColor = isSensitive
                         ? colorScheme.tertiary
-                        : (isGranted
-                            ? colorScheme.primary
-                            : colorScheme.error);
+                        : (isGranted ? colorScheme.primary : colorScheme.error);
                     return SwitchListTile(
                       secondary: Icon(iconData, color: iconColor),
                       title: Text(

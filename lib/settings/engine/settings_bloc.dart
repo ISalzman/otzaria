@@ -57,8 +57,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateProtectedModeEnabled>(_onUpdateProtectedModeEnabled);
     on<UpdateProtectedModePassword>(_onUpdateProtectedModePassword);
     on<UpdateHiddenBuiltInToolIds>(_onUpdateHiddenBuiltInToolIds);
-    on<UpdateBuiltInToolsPinnedToNavRail>(
-        _onUpdateBuiltInToolsPinnedToNavRail);
+    on<UpdateBuiltInToolsPinnedToNavRail>(_onUpdateBuiltInToolsPinnedToNavRail);
   }
 
   Future<void> _onLoadSettings(

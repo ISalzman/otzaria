@@ -638,8 +638,8 @@ void scheduleAfterTwoFrames(
   WidgetsBinding? binding,
   void Function(FrameCallback callback)? scheduleFrameCallback,
 }) {
-  final schedule =
-      scheduleFrameCallback ?? (binding ?? WidgetsBinding.instance).addPostFrameCallback;
+  final schedule = scheduleFrameCallback ??
+      (binding ?? WidgetsBinding.instance).addPostFrameCallback;
   schedule((_) {
     schedule((_) {
       action();

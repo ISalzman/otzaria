@@ -16,8 +16,11 @@ class AuthorDao {
 
   Future<List<Author>> getAllAuthors() async {
     final db = await database;
-    return db.select(_queries['selectAll']!).toMapList()
-        .map((row) => Author.fromMap(row)).toList();
+    return db
+        .select(_queries['selectAll']!)
+        .toMapList()
+        .map((row) => Author.fromMap(row))
+        .toList();
   }
 
   Future<Author?> getAuthorById(int id) async {
@@ -36,8 +39,11 @@ class AuthorDao {
 
   Future<List<Author>> getAuthorsByBookId(int bookId) async {
     final db = await database;
-    return db.select(_queries['selectByBookId']!, [bookId]).toMapList()
-        .map((row) => Author.fromMap(row)).toList();
+    return db
+        .select(_queries['selectByBookId']!, [bookId])
+        .toMapList()
+        .map((row) => Author.fromMap(row))
+        .toList();
   }
 
   Future<int> insertAuthor(String name) async {
@@ -91,7 +97,8 @@ class AuthorDao {
 
   Future<int> countBookAuthors(int bookId) async {
     final db = await database;
-    return firstIntValue(db.select(_queries['countBookAuthors']!, [bookId])) ?? 0;
+    return firstIntValue(db.select(_queries['countBookAuthors']!, [bookId])) ??
+        0;
   }
 
   /// מחזירה מיפוי title ← שם תקופה לכל הספרים שיש להם מחבר עם תקופה ידועה

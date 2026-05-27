@@ -21,8 +21,7 @@ class PluginRegistryRepository {
   /// אותו `toolTabOrder` (ברירת מחדל 900 ב-manifest), הסדר ביניהם משתנה
   /// בין הרצות.
   static int _compareForDisplay(InstalledPlugin a, InstalledPlugin b) {
-    final orderCmp =
-        a.effectiveToolTabOrder.compareTo(b.effectiveToolTabOrder);
+    final orderCmp = a.effectiveToolTabOrder.compareTo(b.effectiveToolTabOrder);
     if (orderCmp != 0) return orderCmp;
     final timeCmp = a.installedAt.compareTo(b.installedAt);
     if (timeCmp != 0) return timeCmp;
@@ -59,7 +58,8 @@ class PluginRegistryRepository {
   Future<void> deletePlugin(String pluginId) async {
     final plugin = await getPlugin(pluginId);
     if (plugin != null && plugin.isDevelopment) {
-      throw ArgumentError('Cannot delete a development plugin. Use detachDevelopmentPlugin instead.');
+      throw ArgumentError(
+          'Cannot delete a development plugin. Use detachDevelopmentPlugin instead.');
     }
     await _db.deletePlugin(pluginId);
   }
@@ -82,7 +82,8 @@ class PluginRegistryRepository {
   Future<void> detachDevelopmentPlugin(String pluginId) async {
     final plugin = await getPlugin(pluginId);
     if (plugin != null && !plugin.isDevelopment) {
-      throw ArgumentError('Cannot detach a packaged plugin. Use deletePlugin instead.');
+      throw ArgumentError(
+          'Cannot detach a packaged plugin. Use deletePlugin instead.');
     }
     await _db.deletePlugin(pluginId);
   }
@@ -96,8 +97,7 @@ class PluginRegistryRepository {
     await _db.updatePluginNavRailPinState(pluginId, pinnedToNavRail);
   }
 
-  Future<void> updateHiddenState(
-      String pluginId, bool hiddenFromTools) async {
+  Future<void> updateHiddenState(String pluginId, bool hiddenFromTools) async {
     await _db.updatePluginHiddenState(pluginId, hiddenFromTools);
   }
 
@@ -107,8 +107,7 @@ class PluginRegistryRepository {
   /// יתעלמו בשקט (UPDATE ללא שורות תואמות).
   Future<void> reorderPlugins(List<String> orderedPluginIds) async {
     final ordering = <String, int>{
-      for (var i = 0; i < orderedPluginIds.length; i++)
-        orderedPluginIds[i]: i,
+      for (var i = 0; i < orderedPluginIds.length; i++) orderedPluginIds[i]: i,
     };
     await _db.updatePluginsUserOrder(ordering);
   }

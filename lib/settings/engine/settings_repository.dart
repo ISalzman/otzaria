@@ -123,8 +123,10 @@ class SettingsRepository {
       'isDarkMode': _settings.getValue<bool>(keyDarkMode, defaultValue: false),
       'followSystemTheme':
           _settings.getValue<bool>(keyFollowSystemTheme, defaultValue: false),
-      'seedColor': Color(_settings.getValue<int>(keySwatchColor, defaultValue: AppSeedColors.defaultLight.toARGB32())),
-      'darkSeedColor': Color(_settings.getValue<int>(keyDarkSwatchColor, defaultValue: AppSeedColors.defaultDark.toARGB32())),
+      'seedColor': Color(_settings.getValue<int>(keySwatchColor,
+          defaultValue: AppSeedColors.defaultLight.toARGB32())),
+      'darkSeedColor': Color(_settings.getValue<int>(keyDarkSwatchColor,
+          defaultValue: AppSeedColors.defaultDark.toARGB32())),
       'textMaxWidth':
           _settings.getValue<double>(keyTextMaxWidth, defaultValue: -1),
       'fontSize': _settings.getValue<double>(keyFontSize, defaultValue: 25),
@@ -266,8 +268,7 @@ class SettingsRepository {
         keyHiddenBuiltInToolIds,
         defaultValue: '',
       )),
-      'builtInToolsPinnedToNavRail':
-          _parseToolIdSet(_settings.getValue<String>(
+      'builtInToolsPinnedToNavRail': _parseToolIdSet(_settings.getValue<String>(
         keyBuiltInToolsPinnedToNavRail,
         defaultValue: '',
       )),
@@ -495,7 +496,8 @@ class SettingsRepository {
   }
 
   Future<void> updateHiddenBuiltInToolIds(Set<String> value) async {
-    await _settings.setValue(keyHiddenBuiltInToolIds, _serializeToolIdSet(value));
+    await _settings.setValue(
+        keyHiddenBuiltInToolIds, _serializeToolIdSet(value));
   }
 
   Future<void> updateBuiltInToolsPinnedToNavRail(Set<String> value) async {
@@ -718,7 +720,8 @@ class SettingsRepository {
 
   /// Initialize default settings to disk if this is the first app launch
   Future<void> _initializeDefaultsIfNeeded() async {
-    if (!_settings.getValue<bool>('settings_initialized', defaultValue: false)) {
+    if (!_settings.getValue<bool>('settings_initialized',
+        defaultValue: false)) {
       await _writeDefaultsToStorage();
     }
   }
@@ -726,8 +729,10 @@ class SettingsRepository {
   /// Write all default settings to persistent storage
   Future<void> _writeDefaultsToStorage() async {
     await _settings.setValue(keyDarkMode, false);
-    await _settings.setValue(keySwatchColor, AppSeedColors.defaultLight.toARGB32());
-    await _settings.setValue(keyDarkSwatchColor, AppSeedColors.defaultDark.toARGB32());
+    await _settings.setValue(
+        keySwatchColor, AppSeedColors.defaultLight.toARGB32());
+    await _settings.setValue(
+        keyDarkSwatchColor, AppSeedColors.defaultDark.toARGB32());
     await _settings.setValue(keyTextMaxWidth, -1.0);
     await _settings.setValue(keyFontSize, 25.0);
     await _settings.setValue(keyFontFamily, AppFonts.defaultFont);

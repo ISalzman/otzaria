@@ -97,9 +97,9 @@ class _CalendarPrintDialogState extends State<CalendarPrintDialog>
     Widget result = dialog;
     if (widget.closeShortcut != null) {
       result = CallbackShortcuts(
-      bindings: {
-        widget.closeShortcut!: () => Navigator.of(context).pop(),
-      },
+        bindings: {
+          widget.closeShortcut!: () => Navigator.of(context).pop(),
+        },
         child: result,
       );
     }
