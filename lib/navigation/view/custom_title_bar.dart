@@ -320,8 +320,15 @@ class _CustomTitleBarState extends State<CustomTitleBar>
           previous.currentCategory != current.currentCategory,
       builder: (context, libraryState) {
         final category = libraryState.currentCategory;
-        final subtitle = category?.title ?? '';
-        return _buildPanelTitle(context, 'ספריה', subtitle: subtitle);
+        // בתקייה הראשית (הספרייה עצמה) מוצג רק "ספריה" ללא שם קטגוריה;
+        // בתקיות פנימיות מתווסף שם הקטגוריה ככותרת משנה.
+        final isRoot =
+            category == null || identical(category, libraryState.library);
+        return _buildPanelTitle(
+          context,
+          'ספריה',
+          subtitle: isRoot ? null : category.title,
+        );
       },
     );
   }
