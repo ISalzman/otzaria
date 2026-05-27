@@ -13,6 +13,8 @@ import 'package:otzaria/workspaces/workspace_repository.dart';
 import 'package:otzaria/workspaces/workspace.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/plugins/storage/plugin_system_database.dart';
+import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/core/app_paths.dart';
 
 /// Service for backing up and restoring app data
@@ -52,6 +54,7 @@ class BackupService {
     required bool includeWorkspaces,
     required bool includeShamorZachor,
     required bool includeUserOverrides,
+    required bool includePlugins,
   }) async {
     final skippedSections = <String>[];
     try {
@@ -74,6 +77,7 @@ class BackupService {
           'workspaces': includeWorkspaces,
           'shamorZachor': includeShamorZachor,
           'userOverrides': includeUserOverrides,
+          'plugins': includePlugins,
         },
       };
 
@@ -100,6 +104,11 @@ class BackupService {
       // Backup user overrides
       if (includeUserOverrides) {
         backupData['user_overrides'] = await _backupUserOverrides();
+      }
+
+      // Backup plugins
+      if (includePlugins) {
+        backupData['plugins'] = await _backupPlugins(skippedSections);
       }
 
       // Backup workspaces
@@ -270,6 +279,68 @@ class BackupService {
     return overridesData;
   }
 
+  /// מגבה תוספים מותקנים: קבצי התוסף, רשומות ה-DB (הרשאות, KV, published)
+  /// ותיקיית הנתונים של כל תוסף.
+  ///
+  /// תוספי פיתוח (`development`) מדולגים — הם מצביעים על תיקיית קוד חיצונית
+  /// במחשב המקור (`devRootPath`) שאינה קיימת במחשב היעד.
+  ///
+  /// אם גיבוי קבצי תוסף נכשל (למשל קובץ לא קריא), התוסף **כולו** מדולג
+  /// והסעיף `plugins` מסומן ב-[skippedSections] (גיבוי חלקי) — כדי שלא ייווצר
+  /// גיבוי עם קבצים חסרים שיגרום בשחזור למחיקת התקנה תקינה.
+  static Future<List<Map<String, dynamic>>> _backupPlugins(
+      List<String> skippedSections) async {
+    final db = PluginSystemDatabase.instance;
+    final plugins = await db.getAllInstalledPlugins();
+    final result = <Map<String, dynamic>>[];
+
+    for (final plugin in plugins) {
+      if (plugin.isDevelopment) continue;
+      try {
+        final aux = await db.exportPluginAuxData(plugin.pluginId);
+        final files = await _readDirAsBase64(plugin.installPath);
+        final dataPath = await AppPaths.getPluginDataPath(plugin.pluginId);
+        final data = await _readDirAsBase64(dataPath);
+        result.add({
+          'installation': plugin.toDbMap(),
+          'permissions': aux['permissions'],
+          'kvStore': aux['kvStore'],
+          'publishedRecords': aux['publishedRecords'],
+          'files': files,
+          'data': data,
+        });
+      } catch (e) {
+        _logger.warning(
+            'Skipping plugin ${plugin.pluginId} backup due to error: $e');
+        if (!skippedSections.contains('plugins')) {
+          skippedSections.add('plugins');
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /// קורא את כל הקבצים בתיקייה (רקורסיבית) וממפה נתיב-יחסי → תוכן ב-base64.
+  /// הנתיבים מנורמלים למפריד `/` כדי לאפשר שחזור חוצה-פלטפורמות.
+  ///
+  /// כשל בקריאת קובץ אינו נבלע אלא מתפשט לקורא — כך גיבוי תוסף נכשל במלואו
+  /// ומסומן כחלקי, במקום ליצור גיבוי עם קבצים חסרים בשתיקה.
+  static Future<Map<String, String>> _readDirAsBase64(String dirPath) async {
+    final dir = Directory(dirPath);
+    if (!await dir.exists()) return {};
+
+    final map = <String, String>{};
+    await for (final entity in dir.list(recursive: true)) {
+      if (entity is File) {
+        final relativePath = p.relative(entity.path, from: dir.path);
+        final bytes = await entity.readAsBytes();
+        map[p.split(relativePath).join('/')] = base64Encode(bytes);
+      }
+    }
+    return map;
+  }
+
   /// Backup workspaces
   static Future<Map<String, dynamic>> _backupWorkspaces() async {
     final repo = WorkspaceRepository();
@@ -371,6 +442,13 @@ class BackupService {
       await _restoreWorkspaces(
         (backupData['workspaces'] as List).cast<Map<String, dynamic>>(),
         backupData['currentWorkspace'],
+      );
+    }
+
+    // Restore plugins
+    if (includes['plugins'] == true && backupData.containsKey('plugins')) {
+      await _restorePlugins(
+        (backupData['plugins'] as List).cast<Map<String, dynamic>>(),
       );
     }
 
@@ -502,6 +580,87 @@ class BackupService {
     }
   }
 
+  /// משחזר תוספים מגיבוי: כותב מחדש את קבצי התוסף ונתוניו לדיסק, ומשחזר
+  /// את רשומות ה-DB (התקנה, הרשאות, KV, published records).
+  ///
+  /// נתיב ההתקנה מחושב מחדש למחשב היעד — שם המשתמש או הפלטפורמה עשויים
+  /// להשתנות. הנתיבים `entrypoint_path` ו-`icon_path` יחסיים (מתוך ה-manifest)
+  /// ולכן נשארים תקפים ללא שינוי.
+  static Future<void> _restorePlugins(
+    List<Map<String, dynamic>> pluginsData,
+  ) async {
+    final db = PluginSystemDatabase.instance;
+
+    for (final entry in pluginsData) {
+      try {
+        final installation =
+            (entry['installation'] as Map).cast<String, dynamic>();
+        final pluginId = installation['plugin_id'] as String;
+
+        final installPath = await AppPaths.getPluginInstallPath(pluginId);
+        installation['install_path'] = installPath;
+
+        // כתיבת קבצי התוסף (דריסת התקנה קיימת אם יש).
+        await _restoreDirFromBase64(
+          installPath,
+          (entry['files'] as Map?)?.cast<String, dynamic>() ?? const {},
+        );
+
+        // כתיבת נתוני התוסף.
+        final dataPath = await AppPaths.getPluginDataPath(pluginId);
+        await _restoreDirFromBase64(
+          dataPath,
+          (entry['data'] as Map?)?.cast<String, dynamic>() ?? const {},
+        );
+
+        // רשומת ההתקנה.
+        await db.insertOrUpdatePlugin(InstalledPlugin.fromDbMap(installation));
+
+        // רשומות נלוות.
+        await db.importPluginAuxData(pluginId, {
+          'permissions': entry['permissions'],
+          'kvStore': entry['kvStore'],
+          'publishedRecords': entry['publishedRecords'],
+        });
+      } catch (e) {
+        _logger.warning('Failed to restore plugin entry: $e');
+      }
+    }
+  }
+
+  /// כותב קבצים מגיבוי (מפת נתיב-יחסי → base64) לתיקייה, אחרי ניקוי תוכן
+  /// קודם. נתיבים שמורים עם מפריד `/` ומומרים למפריד המקומי בשחזור.
+  static Future<void> _restoreDirFromBase64(
+    String dirPath,
+    Map<String, dynamic> files,
+  ) async {
+    final dir = Directory(dirPath);
+    if (await dir.exists()) {
+      await dir.delete(recursive: true);
+    }
+    if (files.isEmpty) return;
+    await dir.create(recursive: true);
+
+    final normalizedRoot = p.normalize(dirPath);
+    for (final fileEntry in files.entries) {
+      try {
+        final segments = fileEntry.key.split('/');
+        final targetPath = p.normalize(p.joinAll([dirPath, ...segments]));
+        // הגנה מ-path traversal: דילוג על נתיבים שחורגים מתיקיית היעד
+        // (גיבוי פגום/זדוני עם רכיבי `..` עלול לכתוב מחוץ לתיקיית התוסף).
+        if (!p.isWithin(normalizedRoot, targetPath)) {
+          _logger.warning('Skipping unsafe plugin file path: ${fileEntry.key}');
+          continue;
+        }
+        final file = File(targetPath);
+        await file.parent.create(recursive: true);
+        await file.writeAsBytes(base64Decode(fileEntry.value as String));
+      } catch (e) {
+        _logger.warning('Failed to restore plugin file ${fileEntry.key}: $e');
+      }
+    }
+  }
+
   /// Restore workspaces
   static Future<void> _restoreWorkspaces(
     List<Map<String, dynamic>> workspacesData,
@@ -608,6 +767,8 @@ class BackupService {
         Settings.getValue<bool>('key-backup-shamor-zachor') ?? true;
     final includeUserOverrides =
         Settings.getValue<bool>('key-backup-user-overrides') ?? true;
+    final includePlugins =
+        Settings.getValue<bool>('key-backup-plugins') ?? true;
 
     final result = await createBackup(
       includeSettings: includeSettings,
@@ -617,6 +778,7 @@ class BackupService {
       includeWorkspaces: includeWorkspaces,
       includeShamorZachor: includeShamorZachor,
       includeUserOverrides: includeUserOverrides,
+      includePlugins: includePlugins,
     );
 
     if (result.skippedSections.isNotEmpty) {

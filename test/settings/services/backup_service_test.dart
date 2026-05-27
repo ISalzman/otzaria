@@ -4,7 +4,11 @@ import 'dart:io';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
+import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
 import 'package:otzaria/workspaces/workspace_repository.dart';
@@ -30,6 +34,10 @@ void main() {
 
   tearDown(() async {
     await Hive.close();
+    // סוגר את חיבור ה-DB של התוספים כדי שמחיקת התיקייה תצליח (Windows נועל
+    // קבצים פתוחים), ומאפס את ה-override של נתיב הנתונים.
+    PluginSystemDatabase.instance.resetForTests();
+    AppPaths.debugOverrideDataRootPath(null);
     await tempDir.delete(recursive: true);
   });
 
@@ -46,6 +54,7 @@ void main() {
       includeWorkspaces: false,
       includeShamorZachor: true,
       includeUserOverrides: false,
+      includePlugins: false,
     );
 
     expect(result.skippedSections, isEmpty);
@@ -254,6 +263,193 @@ void main() {
         DateTime.now().subtract(const Duration(minutes: 90)).toIso8601String(),
       );
       expect(await BackupService.shouldPerformAutoBackup(), isTrue);
+    });
+  });
+
+  // ─── גיבוי ושחזור תוספים ───────────────────────────────────────────────────
+  group('גיבוי ושחזור תוספים', () {
+    setUp(() {
+      AppPaths.debugOverrideDataRootPath(tempDir.path);
+      PluginSystemDatabase.instance.resetForTests();
+    });
+
+    InstalledPlugin buildPlugin({
+      required String id,
+      required String installPath,
+      String sourceType = 'packaged',
+      String? devRootPath,
+    }) {
+      final manifest = PluginManifest.fromJson({
+        'id': id,
+        'name': 'תוסף בדיקה',
+        'version': '1.0.0',
+        'entrypoint': 'index.html',
+        'icon': 'assets/logo.png',
+        'permissions': ['clipboard.read'],
+      });
+      return InstalledPlugin(
+        pluginId: id,
+        name: 'תוסף בדיקה',
+        version: '1.0.0',
+        installPath: installPath,
+        entrypointPath: 'index.html',
+        iconPath: 'assets/logo.png',
+        enabled: true,
+        pinned: true,
+        manifest: manifest,
+        installedAt: DateTime.parse('2026-01-01T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-01-02T00:00:00.000Z'),
+        sourceType: sourceType,
+        devRootPath: devRootPath,
+      );
+    }
+
+    Future<({String path, List<String> skipped})> createPluginsBackup() async {
+      final result = await BackupService.createBackup(
+        includeSettings: false,
+        includeBookmarks: false,
+        includeHistory: false,
+        includeNotes: false,
+        includeWorkspaces: false,
+        includeShamorZachor: false,
+        includeUserOverrides: false,
+        includePlugins: true,
+      );
+      return (path: result.path, skipped: result.skippedSections);
+    }
+
+    test('משחזר תוסף packaged עם קבצים, נתונים, הרשאות ו-KV', () async {
+      final db = PluginSystemDatabase.instance;
+      const pluginId = 'test.plugin';
+
+      final installPath = await AppPaths.getPluginInstallPath(pluginId);
+      await File(p.join(installPath, 'index.html')).create(recursive: true);
+      await File(p.join(installPath, 'index.html'))
+          .writeAsString('<html>hi</html>');
+      await File(p.join(installPath, 'assets', 'logo.png'))
+          .create(recursive: true);
+      await File(p.join(installPath, 'assets', 'logo.png'))
+          .writeAsBytes([1, 2, 3, 4]);
+
+      final dataPath = await AppPaths.getPluginDataPath(pluginId);
+      await File(p.join(dataPath, 'state.bin')).create(recursive: true);
+      await File(p.join(dataPath, 'state.bin')).writeAsBytes([9, 9, 9]);
+
+      await db.insertOrUpdatePlugin(
+          buildPlugin(id: pluginId, installPath: installPath));
+      await db.setPermission(pluginId, 'clipboard.read', true);
+      await db.setPluginKV(pluginId, 'settings', 'theme', '"dark"');
+
+      final backup = await createPluginsBackup();
+      expect(backup.skipped, isEmpty);
+
+      // מחיקה מלאה — קבצים, נתונים ורשומות DB.
+      await db.deletePlugin(pluginId);
+      await Directory(installPath).delete(recursive: true);
+      await Directory(dataPath).delete(recursive: true);
+
+      await BackupService.restoreFromBackup(backup.path);
+
+      // רשומת ההתקנה שוחזרה, עם install_path מחושב מחדש.
+      final restored = await db.getInstalledPlugin(pluginId);
+      expect(restored, isNotNull);
+      expect(restored!.name, 'תוסף בדיקה');
+      expect(restored.installPath, installPath);
+      expect(restored.entrypointPath, 'index.html');
+
+      // הקבצים והנתונים שוחזרו (כולל תת-תיקיות וקבצים בינאריים).
+      expect(await File(p.join(installPath, 'index.html')).readAsString(),
+          '<html>hi</html>');
+      expect(
+          await File(p.join(installPath, 'assets', 'logo.png')).readAsBytes(),
+          [1, 2, 3, 4]);
+      expect(
+          await File(p.join(dataPath, 'state.bin')).readAsBytes(), [9, 9, 9]);
+
+      // הרשאות ו-KV שוחזרו.
+      expect(await db.getPermission(pluginId, 'clipboard.read'), isTrue);
+      expect(await db.getPluginKV(pluginId, 'settings', 'theme'), '"dark"');
+    });
+
+    test('מדלג על תוספי development בגיבוי', () async {
+      final db = PluginSystemDatabase.instance;
+      final devPath = p.join(tempDir.path, 'dev_src');
+      await Directory(devPath).create(recursive: true);
+
+      await db.insertOrUpdatePlugin(buildPlugin(
+        id: 'dev.plugin',
+        installPath: devPath,
+        sourceType: 'development',
+        devRootPath: devPath,
+      ));
+
+      final backup = await createPluginsBackup();
+      final backupJson = jsonDecode(await File(backup.path).readAsString())
+          as Map<String, dynamic>;
+
+      expect(backupJson['plugins'], isEmpty);
+    });
+
+    test('שחזור מוחק הרשאות ו-KV שאינם בגיבוי (restore נאמן, לא merge)',
+        () async {
+      final db = PluginSystemDatabase.instance;
+      const pluginId = 'merge.plugin';
+
+      final installPath = await AppPaths.getPluginInstallPath(pluginId);
+      await File(p.join(installPath, 'index.html')).create(recursive: true);
+      await File(p.join(installPath, 'index.html')).writeAsString('x');
+
+      await db.insertOrUpdatePlugin(
+          buildPlugin(id: pluginId, installPath: installPath));
+      await db.setPermission(pluginId, 'clipboard.read', true);
+      await db.setPluginKV(pluginId, 'settings', 'theme', '"dark"');
+
+      final backup = await createPluginsBackup();
+
+      // אחרי הגיבוי — מוסיפים הרשאה ו-KV שאינם קיימים בגיבוי.
+      await db.setPermission(pluginId, 'network.fetch', true);
+      await db.setPluginKV(pluginId, 'settings', 'lang', '"he"');
+
+      await BackupService.restoreFromBackup(backup.path);
+
+      // מה שהיה בגיבוי שוחזר.
+      expect(await db.getPermission(pluginId, 'clipboard.read'), isTrue);
+      expect(await db.getPluginKV(pluginId, 'settings', 'theme'), '"dark"');
+      // מה שלא היה בגיבוי נמחק.
+      expect(await db.getPermission(pluginId, 'network.fetch'), isNull);
+      expect(await db.getPluginKV(pluginId, 'settings', 'lang'), isNull);
+    });
+
+    test('שחזור מתעלם מנתיבי קבצים החורגים מתיקיית התוסף (path traversal)',
+        () async {
+      final db = PluginSystemDatabase.instance;
+      const pluginId = 'evil.plugin';
+
+      final installPath = await AppPaths.getPluginInstallPath(pluginId);
+      await File(p.join(installPath, 'index.html')).create(recursive: true);
+      await File(p.join(installPath, 'index.html')).writeAsString('safe');
+
+      await db.insertOrUpdatePlugin(
+          buildPlugin(id: pluginId, installPath: installPath));
+
+      final backup = await createPluginsBackup();
+
+      // מזריקים נתיב traversal לתוך קטע התוספים של הגיבוי.
+      final backupFile = File(backup.path);
+      final backupJson =
+          jsonDecode(await backupFile.readAsString()) as Map<String, dynamic>;
+      final pluginEntry =
+          (backupJson['plugins'] as List).first as Map<String, dynamic>;
+      (pluginEntry['files'] as Map)['../evil.txt'] = base64Encode([6, 6, 6]);
+      await backupFile.writeAsString(jsonEncode(backupJson));
+
+      await BackupService.restoreFromBackup(backup.path);
+
+      // הקובץ התקין שוחזר, אך הקובץ החורג לא נכתב מחוץ לתיקיית ההתקנה.
+      expect(
+          await File(p.join(installPath, 'index.html')).readAsString(), 'safe');
+      final escaped = File(p.normalize(p.join(installPath, '..', 'evil.txt')));
+      expect(await escaped.exists(), isFalse);
     });
   });
 }
