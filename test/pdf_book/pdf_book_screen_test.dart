@@ -313,4 +313,42 @@ void main() {
       );
     });
   });
+
+  group('resolveReadyPdfPageNumber', () {
+    test('מחזירה את מספר העמוד כש-ה-controller מוכן', () {
+      expect(
+        resolveReadyPdfPageNumber(
+          isReady: true,
+          readPageNumber: () => 7,
+        ),
+        7,
+      );
+    });
+
+    test('מחזירה null כשהעמוד הנוכחי עדיין לא ידוע למרות שמוכן', () {
+      expect(
+        resolveReadyPdfPageNumber(
+          isReady: true,
+          readPageNumber: () => null,
+        ),
+        isNull,
+      );
+    });
+
+    test('לא ניגשת ל-pageNumber ומחזירה null כש-ה-controller אינו מוכן', () {
+      // רגרסיה: הגישה ל-controller.pageNumber משתמשת ב-null check operator
+      // פנימי של pdfrx (_state!), שקורס אם ה-PdfViewer התנתק במהלך await
+      // ב-onViewerReady. ההגנה חייבת למנוע את הקריאה כשאינו מוכן.
+      var pageNumberAccessed = false;
+      final result = resolveReadyPdfPageNumber(
+        isReady: false,
+        readPageNumber: () {
+          pageNumberAccessed = true;
+          throw StateError('Null check operator used on a null value');
+        },
+      );
+      expect(result, isNull);
+      expect(pageNumberAccessed, isFalse);
+    });
+  });
 }

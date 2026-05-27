@@ -124,6 +124,23 @@ bool shouldShowOpenPdfLinksPaneEntry({
   return hasRelevantLinks && !isLinksTabActive;
 }
 
+/// מחזירה את מספר העמוד הנוכחי של ה-controller רק אם הוא מחובר ומוכן.
+///
+/// [isReady] - האם ה-controller מחובר ל-PdfViewer (`controller.isReady`).
+/// [readPageNumber] - קריאה ל-`controller.pageNumber`.
+///
+/// הגישה ל-`controller.pageNumber` משתמשת ב-null check operator פנימי
+/// (`_state!`), ולכן זורקת אם ה-PdfViewer התנתק במהלך `await` ב-`onViewerReady`.
+/// העטיפה הזו מוודאת שלא ניגשים ל-`pageNumber` כש-ה-controller אינו מוכן,
+/// ומחזירה `null` במקום לקרוס.
+@visibleForTesting
+int? resolveReadyPdfPageNumber({
+  required bool isReady,
+  required int? Function() readPageNumber,
+}) {
+  return isReady ? readPageNumber() : null;
+}
+
 /// בונה את פריט תפריט ההקשר "קישורים" עבור PDF.
 /// משתמש ב-`childrenBuilder` (טעינה עצלה) כדי שהתפריט הראשי ייפתח מיד,
 /// בלי להמתין ל-FutureBuilders של `link.displayReference` של כל קישור.
@@ -1168,7 +1185,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           }
         }
 
-        final currentReadyPage = controller.pageNumber;
+        final currentReadyPage = resolveReadyPdfPageNumber(
+          isReady: controller.isReady,
+          readPageNumber: () => controller.pageNumber,
+        );
         final needsInitialPageNavigation =
             currentReadyPage == null || currentReadyPage != initialTargetPage;
         if (needsInitialPageNavigation) {
