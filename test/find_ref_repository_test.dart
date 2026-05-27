@@ -257,6 +257,61 @@ void main() {
   });
 
   test(
+      'FindRef: acronym *prefix* ("טור חושן" ⊂ acronym "טור חושן משפט") must not '
+      'swallow the section token – TOC is searched for "חושן"', () async {
+    // רגרסיה: "טור חושן" הוא תחילית של ראש-התיבות "טור חושן משפט" של הספר "טור",
+    // ולכן הותאם ב-matchRank=4. בעבר הוא התקבל כ"שם הספר המלא" (rank>=3), בלע את
+    // שתי המילים, והשאיר remaining ריק → חיפוש ה-TOC על "חושן" לא רץ כלל
+    // ("טור חושן" החזיר את הספר ללא הסעיף, בעוד "טור משפט" עבד). כעת rank 4 נדחה,
+    // נופלים ל-n=1 ("טור" rank 0), ו-remaining=["חושן"].
+    final tocQueryTokensSeen = <List<String>?>[];
+
+    final repository = FindRefRepository(
+      dataRepository: MockDataRepository(),
+      isReferenceBooksCacheLoaded: () => true,
+      warmUpReferenceBooksCache: () async {},
+      searchReferenceBooks: (query, {int limit = 50}) {
+        if (query == 'טור חושן') {
+          // התאמת ראש-תיבות *תחילית* בלבד (a.startsWith(q)) — לא ראש-תיבות שלם.
+          return [
+            _hit(
+              bookId: 380,
+              title: 'טור',
+              normalizedTitle: 'טור',
+              matchRank: 4,
+              matchedTerm: 'טור חושן משפט',
+            ),
+          ];
+        }
+        if (query == 'טור') {
+          return [_hit(bookId: 380, title: 'טור', matchRank: 0)];
+        }
+        // "חושן" — מופיע רק כ-contains בכותרות ארוכות, אף פעם לא rank 0,
+        // כך ש-hasExactNextTokenMatch נשאר false.
+        return const <ReferenceBookHit>[];
+      },
+      getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async {
+        tocQueryTokensSeen.add(queryTokens);
+        if (bookId == 380 && listEquals(queryTokens, const ['חושן'])) {
+          return [
+            {'reference': 'טור חושן משפט', 'segment': 5, 'level': 1},
+          ];
+        }
+        return const <Map<String, dynamic>>[];
+      },
+    );
+
+    final results = await repository.findRefs('טור חושן');
+
+    expect(
+      tocQueryTokensSeen.any((t) => listEquals(t, const ['חושן'])),
+      isTrue,
+      reason: 'TOC must be searched for the section token "חושן"',
+    );
+    expect(results.map((r) => r.reference), contains('טור חושן משפט'));
+  });
+
+  test(
       'FindRef: "בראשית א" finds Genesis – not commentary books that contain "בראשית א" mid-title',
       () async {
     // Regression: "זוהר חי - בראשית א" contains "בראשית א" but the second
