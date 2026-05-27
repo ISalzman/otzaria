@@ -245,20 +245,24 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   /// מחזיר מידע df עבור נתיב נתון: filesystem ומקום פנוי בבייטים.
   /// מחזיר freeBytes = -1 אם לא ניתן לקבוע.
   static Future<_DfInfo> _getDfInfo(String dirPath) async {
-    if (!Platform.isAndroid)
+    if (!Platform.isAndroid) {
       return const _DfInfo(filesystem: null, freeBytes: -1);
+    }
     try {
       final result =
           await Process.run('df', ['-B1', dirPath], runInShell: false);
-      if (result.exitCode != 0)
+      if (result.exitCode != 0) {
         return const _DfInfo(filesystem: null, freeBytes: -1);
+      }
       final lines = result.stdout.toString().trim().split('\n');
-      if (lines.length < 2)
+      if (lines.length < 2) {
         return const _DfInfo(filesystem: null, freeBytes: -1);
+      }
       // שורת הנתונים של df: Filesystem 1B-blocks Used Available Use% Mount
       final parts = lines.last.trim().split(RegExp(r'\s+'));
-      if (parts.length < 4)
+      if (parts.length < 4) {
         return const _DfInfo(filesystem: null, freeBytes: -1);
+      }
       return _DfInfo(
         filesystem: parts[0],
         freeBytes: int.tryParse(parts[3]) ?? -1,
