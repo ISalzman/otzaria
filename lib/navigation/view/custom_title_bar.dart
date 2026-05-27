@@ -933,7 +933,11 @@ class _CustomTitleBarState extends State<CustomTitleBar>
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
         label: 'כרטיסיות פתוחות',
-        children: _getOpenTabsMenuEntries(state.tabs),
+        // childrenBuilder + stream: הרשימה נבנית מחדש בכל שינוי במצב הכרטיסיות,
+        // כך שסגירת כרטיסייה דרך ה-X מסירה את שורתה והתפריט נשאר פתוח.
+        childrenBuilder: () =>
+            _getOpenTabsMenuEntries(context.read<TabsBloc>().state.tabs),
+        childrenRefreshStream: context.read<TabsBloc>().stream,
       ),
       _buildMoveToWorkspaceMenuEntry(context, tab),
     ]);
@@ -942,9 +946,8 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   }
 
   List<AppContextMenuEntry> _getOpenTabsMenuEntries(List<OpenedTab> tabs) {
-    final sortedTabs = [...tabs]..sort((a, b) => a.title.compareTo(b.title));
-
-    return sortedTabs.map((tab) {
+    // ללא מיון — הרשימה משקפת את סדר הכרטיסיות בשורת הכרטיסיות.
+    return tabs.map((tab) {
       return AppContextMenuEntry(
         label: tab.title,
         onTap: () {
@@ -959,10 +962,9 @@ class _CustomTitleBarState extends State<CustomTitleBar>
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             icon: const Icon(FluentIcons.dismiss_24_regular, size: 14),
-            onPressed: () {
-              Navigator.of(context).maybePop();
-              closeTab(tab, context);
-            },
+            // סגירת הכרטיסייה מעדכנת את ה-TabsBloc; ה-childrenRefreshStream
+            // יבנה מחדש את הרשימה ושורת הכרטיסייה תיעלם.
+            onPressed: () => closeTab(tab, context),
             splashRadius: 16,
           ),
         ),
