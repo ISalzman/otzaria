@@ -373,6 +373,100 @@ void main() {
     expect(textBookBloc.addWasCalled, isFalse);
     expect(tester.takeException(), isNull);
   });
+
+  group('applyDisplayTextPreferences', () {
+    // קמץ (ניקוד) — נמצא ב-vowelsAndCantillation אך לא ב-cantillationOnly
+    const niqqud = 'ָ';
+    // אתנחתא (טעם) — נמצא בשתי הקבוצות
+    const taam = '֑';
+
+    test('מסיר פיסוק כש-removePunctuation פעיל (באג "העתק את כל הפסקה")', () {
+      final result = applyDisplayTextPreferences(
+        text: 'שלום, עולם!',
+        removeNikud: false,
+        removePunctuation: true,
+        showTeamim: true,
+      );
+      expect(result.contains(','), isFalse);
+      expect(result.contains('!'), isFalse);
+      expect(result.contains('שלום'), isTrue);
+      expect(result.contains('עולם'), isTrue);
+    });
+
+    test('שומר פיסוק כש-removePunctuation כבוי', () {
+      final result = applyDisplayTextPreferences(
+        text: 'שלום, עולם!',
+        removeNikud: false,
+        removePunctuation: false,
+        showTeamim: true,
+      );
+      expect(result, 'שלום, עולם!');
+    });
+
+    test('מסיר ניקוד כש-removeNikud פעיל', () {
+      final result = applyDisplayTextPreferences(
+        text: 'א$niqqudבג',
+        removeNikud: true,
+        removePunctuation: false,
+        showTeamim: true,
+      );
+      expect(result, 'אבג');
+    });
+
+    test('שומר ניקוד כש-removeNikud כבוי', () {
+      final result = applyDisplayTextPreferences(
+        text: 'א$niqqudבג',
+        removeNikud: false,
+        removePunctuation: false,
+        showTeamim: true,
+      );
+      expect(result, 'א$niqqudבג');
+    });
+
+    test('מסיר טעמים בלבד כש-showTeamim כבוי (הניקוד נשמר)', () {
+      final result = applyDisplayTextPreferences(
+        text: 'א$niqqud$taamבג',
+        removeNikud: false,
+        removePunctuation: false,
+        showTeamim: false,
+      );
+      expect(result.contains(taam), isFalse);
+      expect(result.contains(niqqud), isTrue);
+    });
+
+    test('שומר טעמים כש-showTeamim פעיל', () {
+      final result = applyDisplayTextPreferences(
+        text: 'א$taamבג',
+        removeNikud: false,
+        removePunctuation: false,
+        showTeamim: true,
+      );
+      expect(result.contains(taam), isTrue);
+    });
+
+    test('מסיר גם ניקוד וגם פיסוק יחד (באג "העתק טקסט מוצג")', () {
+      final result = applyDisplayTextPreferences(
+        text: 'א$niqqudבג, דה!',
+        removeNikud: true,
+        removePunctuation: true,
+        showTeamim: true,
+      );
+      expect(result.contains(niqqud), isFalse);
+      expect(result.contains(','), isFalse);
+      expect(result.contains('!'), isFalse);
+    });
+
+    test('לא משנה טקסט כשכל ההעדפות מאפשרות הצגה מלאה', () {
+      const text = 'א$niqqudבג';
+      final result = applyDisplayTextPreferences(
+        text: text,
+        removeNikud: false,
+        removePunctuation: false,
+        showTeamim: true,
+      );
+      expect(result, text);
+    });
+  });
 }
 
 TextBookLoaded _loadedState() {

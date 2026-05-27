@@ -148,6 +148,32 @@ bool shouldShowSelectCommentatorsEntry({
   return hasOpenCommentatorsPaneWithFilterCallback && !isCommentatorsTabActive;
 }
 
+/// מעבד טקסט גולמי לפי הגדרות התצוגה (טעמים/ניקוד/פיסוק), כך שפעולות
+/// "העתק את כל הפסקה" ו"העתק טקסט מוצג" ישקפו את מה שמוצג בפועל על המסך —
+/// באותו סדר עיבוד של [TextRendererService] (טעמים → ניקוד → פיסוק).
+///
+/// הערה: [utils.removeVolwels] מסיר גם ניקוד וגם טעמים, ולכן כש-[removeNikud]
+/// פעיל הטעמים מוסרים ממילא ללא תלות ב-[showTeamim].
+@visibleForTesting
+String applyDisplayTextPreferences({
+  required String text,
+  required bool removeNikud,
+  required bool removePunctuation,
+  required bool showTeamim,
+}) {
+  var processed = text;
+  if (!showTeamim) {
+    processed = utils.removeTeamim(processed);
+  }
+  if (removeNikud) {
+    processed = utils.removeVolwels(processed);
+  }
+  if (removePunctuation) {
+    processed = utils.removePunctuation(processed);
+  }
+  return processed;
+}
+
 class _CombinedViewState extends State<CombinedView> {
   // שמירת הטקסט הנבחר האחרון
   final ValueNotifier<String?> _savedSelectedText =
@@ -791,6 +817,26 @@ class _CombinedViewState extends State<CombinedView> {
     );
   }
 
+  /// מחלץ את העדפות התצוגה מה-state ומעבד את הטקסט בהתאם, כך שההעתקה
+  /// תשקף את מה שמוצג בפועל על המסך — בדיוק כמו [TextRendererService].
+  String _applyDisplayTextPreferences(
+    String text,
+    TextBookState textBookState,
+    SettingsState settingsState,
+  ) {
+    final removeNikud =
+        textBookState is TextBookLoaded && textBookState.removeNikud;
+    final removePunctuation =
+        textBookState is TextBookLoaded && textBookState.removePunctuation;
+
+    return applyDisplayTextPreferences(
+      text: text,
+      removeNikud: removeNikud,
+      removePunctuation: removePunctuation,
+      showTeamim: settingsState.showTeamim,
+    );
+  }
+
   /// העתקת פסקה לפי אינדקס (משתמש ב־widget.data[index] ומייצר גם HTML)
   Future<void> _copyParagraphByIndex(int index) async {
     if (index < 0 || index >= widget.data.length) return;
@@ -802,9 +848,8 @@ class _CombinedViewState extends State<CombinedView> {
     final settingsState = context.read<SettingsBloc>().state;
     final textBookState = context.read<TextBookBloc>().state;
 
-    final removeNikud =
-        textBookState is TextBookLoaded && textBookState.removeNikud;
-    final processedText = removeNikud ? utils.removeVolwels(text) : text;
+    final processedText =
+        _applyDisplayTextPreferences(text, textBookState, settingsState);
 
     final plainText = utils.stripHtmlIfNeeded(processedText);
 
@@ -856,22 +901,28 @@ class _CombinedViewState extends State<CombinedView> {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded || state.visibleIndices.isEmpty) return;
 
-    // איסוף כל הטקסט הנראה במסך
+    // קבלת ההגדרות הנוכחיות
+    final settingsState = context.read<SettingsBloc>().state;
+
+    // איסוף כל הטקסט הנראה במסך — עם אותן העדפות תצוגה (טעמים/ניקוד/פיסוק)
+    // שמיושמות בפועל על המסך, כדי שההעתקה תשקף את מה שמוצג.
     final visibleTexts = <String>[];
     for (final index in state.visibleIndices) {
       if (index >= 0 && index < widget.data.length) {
-        visibleTexts.add(widget.data[index]);
+        visibleTexts.add(
+          _applyDisplayTextPreferences(
+              widget.data[index], state, settingsState),
+        );
       }
     }
 
     if (visibleTexts.isEmpty) return;
 
     final combinedText = visibleTexts.join('\n\n');
+    final plainText = utils.stripHtmlIfNeeded(combinedText);
 
-    // קבלת ההגדרות הנוכחיות
-    final settingsState = context.read<SettingsBloc>().state;
-
-    String finalText = combinedText;
+    String finalText = plainText;
+    String finalHtmlText = combinedText;
 
     // אם צריך להוסיף כותרות
     if (settingsState.copyWithHeaders != 'none') {
@@ -884,6 +935,14 @@ class _CombinedViewState extends State<CombinedView> {
       );
 
       finalText = CopyUtils.formatTextWithHeaders(
+        originalText: plainText,
+        copyWithHeaders: settingsState.copyWithHeaders,
+        copyHeaderFormat: settingsState.copyHeaderFormat,
+        bookName: bookName,
+        currentPath: currentPath,
+      );
+
+      finalHtmlText = CopyUtils.formatTextWithHeaders(
         originalText: combinedText,
         copyWithHeaders: settingsState.copyWithHeaders,
         copyHeaderFormat: settingsState.copyHeaderFormat,
@@ -892,16 +951,15 @@ class _CombinedViewState extends State<CombinedView> {
       );
     }
 
-    finalText = CopyUtils.applyCopyPreferences(
-      text: finalText,
+    final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
+      plainText: finalText,
+      htmlText: finalHtmlText,
       replaceHolyNames: settingsState.replaceHolyNames,
     );
 
-    final combinedHtml = _formatTextAsHtml(finalText);
-
     final item = DataWriterItem();
-    item.add(Formats.plainText(finalText.trimRight()));
-    item.add(Formats.htmlText(combinedHtml));
+    item.add(Formats.plainText(copyContent.plainText.trimRight()));
+    item.add(Formats.htmlText(_formatTextAsHtml(copyContent.htmlText)));
 
     await SystemClipboard.instance?.write([item]);
   }
