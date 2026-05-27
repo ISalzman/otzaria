@@ -2508,13 +2508,42 @@ extension BookAcronymRepository on SeforimRepository {
     final cache = await _buildAltTocCacheForBook(bookId, bookTitle);
     if (cache.all.isEmpty) return const [];
 
-    final matches = _searchTocHierarchically(cache, queryTokens);
+    final matches = _searchAltTocFlat(cache, queryTokens);
     return matches.map((e) => e.toMap()).toList();
   }
 
+  /// חיפוש **שטוח** בכותרות-המשנה: מחזיר כל ערך שכל טוקני השאילתה מופיעים
+  /// בנתיב המלא שלו, **והטוקן האחרון** מופיע בטקסט של הערך עצמו (העלה).
+  ///
+  /// בניגוד לחיפוש ההיררכי (שדורש שהטוקן הראשון יתאים לשורש), כאן המשתמש יכול
+  /// לדלג על שמות-ביניים: ב"טור" כותרות-המשנה ("הלכות הלואה") יושבות תחת שם
+  /// החלק ("חושן משפט"), שלרוב נבלע בזיהוי שם הספר — כך שחיפוש היררכי משורש
+  /// החלק לא היה מגיע אליהן. תנאי "הטוקן האחרון בעלה" מונע הצפה: שאילתה כמו
+  /// "חושן" מחזירה רק את החלק "חושן משפט", לא את כל 133 ההלכות שתחתיו.
+  ///
+  /// תומך בטרנספוזיציית אותיות עבריות ("טל" ↔ "לט") כמו החיפוש ההיררכי.
+  List<_CachedTocEntry> _searchAltTocFlat(
+      _TocBookCache cache, List<String> tokens) {
+    if (tokens.isEmpty) return const [];
+
+    final lastAlts = _hebrewTokenAlternatives(tokens.last);
+
+    return cache.all.where((e) {
+      // אנטי-הצפה: הטוקן האחרון חייב להתאים לטקסט של הערך עצמו (העלה).
+      if (!lastAlts.any((a) => e.ownTokens.contains(a))) return false;
+      // כל טוקני השאילתה חייבים להופיע בנתיב המלא (בכל סדר).
+      for (final token in tokens) {
+        final alts = _hebrewTokenAlternatives(token);
+        if (!alts.any((a) => e.pathTokens.contains(a))) return false;
+      }
+      return true;
+    }).toList();
+  }
+
   /// בונה (פעם אחת לכל [bookId]) את קאש ה-AltToc.
-  /// מאחד את כל המבנים החלופיים (structureId) של הספר לתוך קאש יחיד,
-  /// ומבנה עליהם חיפוש היררכי זהה לזה של ה-TOC הרגיל.
+  /// מאחד את כל המבנים החלופיים (structureId) של הספר לתוך קאש יחיד.
+  /// כל ערך כולל את `pathTokens` (טוקני הנתיב המלא) עבור החיפוש השטוח
+  /// ב-[_searchAltTocFlat].
   Future<_TocBookCache> _buildAltTocCacheForBook(
       int bookId, String bookTitle) async {
     final cached = _altTocCache[bookId];
@@ -2543,10 +2572,15 @@ extension BookAcronymRepository on SeforimRepository {
 
     final entryTexts = <int, String>{};
     final entryParentIds = <int, int?>{};
+    final entryOwnTokens = <int, List<String>>{};
     for (final e in entries) {
       final id = e['id'] as int;
       entryTexts[id] = e['text'] as String;
       entryParentIds[id] = e['parentId'] as int?;
+      entryOwnTokens[id] = normalizeForFindRefMatch(e['text'] as String)
+          .split(' ')
+          .where((t) => t.isNotEmpty)
+          .toList(growable: false);
     }
 
     // בונה נתיב reference **ללא** שם הספר — AltToc references הם יחסיים לספר.
@@ -2557,6 +2591,12 @@ extension BookAcronymRepository on SeforimRepository {
       final parentId = entryParentIds[id];
       final parent = buildPath(parentId);
       return parent.isEmpty ? entryTexts[id]! : '$parent ${entryTexts[id]!}';
+    }
+
+    // טוקני הנתיב המלא (שורש→ערך) — לחיפוש השטוח של AltToc.
+    List<String> buildPathTokens(int? id) {
+      if (id == null) return const [];
+      return [...buildPathTokens(entryParentIds[id]), ...?entryOwnTokens[id]];
     }
 
     final built = <_CachedTocEntry>[];
@@ -2576,18 +2616,14 @@ extension BookAcronymRepository on SeforimRepository {
           ? (ancestorPath.isEmpty ? text : '$ancestorPath $text')
           : ancestorPath;
 
-      final ownTokens = normalizeForFindRefMatch(text)
-          .split(' ')
-          .where((t) => t.isNotEmpty)
-          .toList(growable: false);
-
       final entry = _CachedTocEntry(
         id: id,
         reference: fullRef,
         segment: lineIndex,
         level: level,
         dbLineId: dbLineId,
-        ownTokens: ownTokens,
+        ownTokens: entryOwnTokens[id] ?? const [],
+        pathTokens: buildPathTokens(id),
       );
 
       built.add(entry);
@@ -2736,6 +2772,10 @@ class _CachedTocEntry {
   /// טוקנים של הטקסט של ערך זה בלבד (ללא אבות) — לשימוש בחיפוש היררכי.
   final List<String> ownTokens;
 
+  /// טוקנים של הנתיב המלא משורש העץ עד הערך הזה (כולל) — לשימוש בחיפוש
+  /// השטוח של AltToc. ריק כברירת מחדל (TOC רגיל משתמש בחיפוש היררכי בלבד).
+  final List<String> pathTokens;
+
   const _CachedTocEntry({
     required this.id,
     required this.reference,
@@ -2743,6 +2783,7 @@ class _CachedTocEntry {
     required this.level,
     required this.dbLineId,
     required this.ownTokens,
+    this.pathTokens = const [],
   });
 
   Map<String, dynamic> toMap() => {
