@@ -506,24 +506,26 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       },
       child: SelectionArea(
         contextMenuBuilder: (context, _) => const SizedBox.shrink(),
-        child: CommentaryListBase(
-          key: _commentaryKey,
-          openBookCallback: widget.openBookCallback,
-          fontSize: state.fontSize,
-          indexes: effectiveIndexes,
-          showSearch: true,
-          useAvailableCommentators: _selectedCommentatorsOverride == null,
-          selectedCommentatorsOverride: _selectedCommentatorsOverride,
-          onSelectedCommentatorsOverrideChanged: (list) {
-            setState(() => _selectedCommentatorsOverride = list);
-          },
-          onFilterOpenRequested: _openCommentatorsSelectionPane,
-          externalSearchController: _commentarySearchController,
-          externalCurrentIndexNotifier: _externalCurrentIndex,
-          externalTotalResultsNotifier: _externalTotalResults,
-          externalSearchResultsByPathNotifier: _externalSearchResultsByPath,
-          externalSearchSnippetsNotifier: _externalSearchSnippets,
-          externalAllExpandedNotifier: _allExpandedInChild,
+        child: BlocBuilder<SettingsBloc, SettingsState>(
+          builder: (context, settingsState) => CommentaryListBase(
+            key: _commentaryKey,
+            openBookCallback: widget.openBookCallback,
+            fontSize: settingsState.commentatorsFontSize,
+            indexes: effectiveIndexes,
+            showSearch: true,
+            useAvailableCommentators: _selectedCommentatorsOverride == null,
+            selectedCommentatorsOverride: _selectedCommentatorsOverride,
+            onSelectedCommentatorsOverrideChanged: (list) {
+              setState(() => _selectedCommentatorsOverride = list);
+            },
+            onFilterOpenRequested: _openCommentatorsSelectionPane,
+            externalSearchController: _commentarySearchController,
+            externalCurrentIndexNotifier: _externalCurrentIndex,
+            externalTotalResultsNotifier: _externalTotalResults,
+            externalSearchResultsByPathNotifier: _externalSearchResultsByPath,
+            externalSearchSnippetsNotifier: _externalSearchSnippets,
+            externalAllExpandedNotifier: _allExpandedInChild,
+          ),
         ),
       ),
     );

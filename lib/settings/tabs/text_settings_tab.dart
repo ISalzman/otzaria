@@ -18,7 +18,15 @@ class TextSettingsTab extends StatelessWidget {
   /// האם להציג כדיאלוג (עם כפתור סגירה) או כטאב (ללא)
   final bool isDialog;
 
-  const TextSettingsTab({super.key, this.isDialog = false});
+  /// כאשר true, מוסתר סליידר "גודל גופן מפרשים". משמש במצב צורת הדף, שבו
+  /// גודל גופן המפרשים נשלט על-ידי הגדרה ייעודית נפרדת בדיאלוג צורת הדף.
+  final bool hideCommentaryFontSize;
+
+  const TextSettingsTab({
+    super.key,
+    this.isDialog = false,
+    this.hideCommentaryFontSize = false,
+  });
 
   /// פריטי חיפוש בהגדרות. נסרק על-ידי tool/generate_search_index.dart.
   static const List<SettingsSearchEntry> searchEntries = [
@@ -299,22 +307,24 @@ class TextSettingsTab extends StatelessWidget {
 
                 // שורה 2: גודל גופן מפרשים + גופן מפרשים
                 if (isNarrow) ...[
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: _FontSizeSlider(
-                      icon: FluentIcons.text_font_size_24_regular,
-                      label: 'גודל גופן מפרשים',
-                      value: state.commentatorsFontSize.clamp(10, 40),
-                      min: 10,
-                      max: 40,
-                      onChanged: (value) {
-                        context
-                            .read<SettingsBloc>()
-                            .add(UpdateCommentatorsFontSize(value));
-                      },
+                  if (!hideCommentaryFontSize) ...[
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: _FontSizeSlider(
+                        icon: FluentIcons.text_font_size_24_regular,
+                        label: 'גודל גופן מפרשים',
+                        value: state.commentatorsFontSize.clamp(10, 40),
+                        min: 10,
+                        max: 40,
+                        onChanged: (value) {
+                          context
+                              .read<SettingsBloc>()
+                              .add(UpdateCommentatorsFontSize(value));
+                        },
+                      ),
                     ),
-                  ),
-                  divider,
+                    divider,
+                  ],
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: _FontDropdown(
@@ -337,21 +347,23 @@ class TextSettingsTab extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: _FontSizeSlider(
-                            icon: FluentIcons.text_font_size_24_regular,
-                            label: 'גודל גופן מפרשים',
-                            value: state.commentatorsFontSize.clamp(10, 40),
-                            min: 10,
-                            max: 40,
-                            onChanged: (value) {
-                              context
-                                  .read<SettingsBloc>()
-                                  .add(UpdateCommentatorsFontSize(value));
-                            },
+                        if (!hideCommentaryFontSize) ...[
+                          Expanded(
+                            child: _FontSizeSlider(
+                              icon: FluentIcons.text_font_size_24_regular,
+                              label: 'גודל גופן מפרשים',
+                              value: state.commentatorsFontSize.clamp(10, 40),
+                              min: 10,
+                              max: 40,
+                              onChanged: (value) {
+                                context
+                                    .read<SettingsBloc>()
+                                    .add(UpdateCommentatorsFontSize(value));
+                              },
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
+                          const SizedBox(width: 16),
+                        ],
                         Expanded(
                           child: _FontDropdown(
                             icon: FluentIcons.book_24_regular,
