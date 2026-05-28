@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:html/parser.dart' as html_parser;
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
 
@@ -20,6 +21,13 @@ class _ApproximateSnippetMatchCandidate {
     required this.range,
     required this.distance,
   });
+}
+
+class _WordTokenMatch {
+  final int wordIdx;
+  final _SnippetMatchRange range;
+
+  const _WordTokenMatch({required this.wordIdx, required this.range});
 }
 
 class _PreparedHighlightData {
@@ -55,6 +63,10 @@ class SnippetBuilder {
   }
 
   /// פונקציה חכמה ליצירת קטע טקסט עם הדגשות - מבטיחה שכל ההתאמות יופיעו!
+  ///
+  /// [searchMode] מאפשר ל-snippet builder לדעת אם המנוע יצר וריאציות מסוג
+  /// fuzzy (`generateFuzzyLiteralVariations`) או typo tolerance רחב, כך
+  /// שההדגשה תהיה תואמת בדיוק לוריאציות שהשאילתה השתמשה בהן.
   static List<InlineSpan> createSnippetSpans({
     required String fullHtml,
     required String query,
@@ -65,6 +77,7 @@ class SnippetBuilder {
     required Map<int, List<String>> alternativeWords,
     Map<String, String> customSpacing = const {},
     int searchDistance = 0,
+    SearchMode? searchMode,
   }) {
     final plainText =
         html_parser.parse(fullHtml).documentElement?.text.trim() ?? '';
@@ -76,6 +89,7 @@ class SnippetBuilder {
       spacingValues: customSpacing,
       searchDistance: searchDistance,
       fallbackToIndividualWords: false,
+      searchMode: searchMode,
     );
 
     if (prepared.plainText.isEmpty || prepared.allMatches.isEmpty) {
@@ -201,6 +215,7 @@ class SnippetBuilder {
     Map<String, String> spacingValues = const {},
     int searchDistance = 0,
     bool fallbackToIndividualWords = true,
+    SearchMode? searchMode,
   }) {
     final prepared = _prepareHighlightData(
       plainText: plainText,
@@ -210,6 +225,7 @@ class SnippetBuilder {
       spacingValues: spacingValues,
       searchDistance: searchDistance,
       fallbackToIndividualWords: fallbackToIndividualWords,
+      searchMode: searchMode,
     );
 
     final matches = prepared.exactMatches.isNotEmpty
@@ -243,6 +259,7 @@ class SnippetBuilder {
     Map<String, String> spacingValues = const {},
     int searchDistance = 0,
     bool fallbackToIndividualWords = true,
+    SearchMode? searchMode,
   }) {
     final text = fullText.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (text.length <= maxChars) return text;
@@ -273,6 +290,7 @@ class SnippetBuilder {
       spacingValues: spacingValues,
       searchDistance: searchDistance,
       fallbackToIndividualWords: fallbackToIndividualWords,
+      searchMode: searchMode,
     );
 
     final anchorRange = prepared.exactMatches.isNotEmpty
@@ -308,7 +326,9 @@ class SnippetBuilder {
   /// מציאת התאמות ביטוי (phrase matching) בשיטת token-based:
   /// מוצאים רק הופעות שבהן כל המילים מופיעות ברצף כשמספר הטוקנים
   /// ביניהם <= customSpacing. תואם את סמנטיקת slop מנוע החיפוש.
-  /// אם לא נמצא ביטוי - מחזיר רשימה ריקה (אין הדגשה), לא מחזיר בodim בודדות.
+  /// אם לא נמצא ביטוי בסדר השאילתה — נופלים ל-window unordered כדי
+  /// לתפוס תוצאות שמנוע ה-tantivy מחזיר עם slop > 0 (שמאפשר transpositions).
+  /// אם גם זה לא נמצא — מחזיר רשימה ריקה (אין הדגשה).
   static List<_SnippetMatchRange> _collectPhraseWordMatches(
     String plainText,
     List<List<_TokenPattern>> patternsByWord, {
@@ -330,7 +350,7 @@ class SnippetBuilder {
 
     // 3. Phrase matching: עבור כל הופעה של המילה הראשונה, בודק אם שאר המילים מופיעות ברצף.
     // משתמשים ב-backtracking כדי לא לפספס התאמה חוקית בגלל בחירה גרידית מוקדמת.
-    final result = <_SnippetMatchRange>[];
+    final orderedResult = <_SnippetMatchRange>[];
     final continuationCache = <String, int?>{};
 
     for (final firstMatch in matchesByWord[0]) {
@@ -344,14 +364,111 @@ class SnippetBuilder {
         phraseMatches: phraseMatches,
         continuationCache: continuationCache,
       )) {
-        result.addAll(phraseMatches);
+        orderedResult.addAll(phraseMatches);
       }
     }
 
-    // אם לא נמצא ביטוי - מחזירים רשימה ריקה. דע caller יבחר להציג קטע ללא הדגשה.
-    // זה הוגן מהדגשת הופעות בודדות לא-קשורות.
-    final merged = _mergeOverlappingRanges(result);
+    if (orderedResult.isNotEmpty) {
+      final merged = _mergeOverlappingRanges(orderedResult);
+      return _mergeAdjacentQuoteGaps(plainText, merged);
+    }
+
+    // 4. Fallback: window לא-מסודר. תואם את סמנטיקת tantivy שבה slop > 0
+    // מאפשר transpositions ולכן המילים יכולות להופיע בכל סדר בתוך חלון.
+    final unorderedResult = _collectUnorderedWindowMatches(
+      matchesByWord: matchesByWord,
+      tokens: tokens,
+      customSpacing: customSpacing,
+    );
+
+    final merged = _mergeOverlappingRanges(unorderedResult);
     return _mergeAdjacentQuoteGaps(plainText, merged);
+  }
+
+  /// מוצאת window של טוקנים שבו לפחות הופעה אחת מכל מילה בשאילתה, כאשר רוחב
+  /// ה-window (במספר טוקנים) חסום ע"י ה-slop האפקטיבי + מספר המילים.
+  /// ההגבלה תואמת את הסמנטיקה של [tantivy::query::PhraseQuery::set_slop]
+  /// שבה slop=N מאפשר עד N transpositions בין מיקומי המילים.
+  static List<_SnippetMatchRange> _collectUnorderedWindowMatches({
+    required List<List<_SnippetMatchRange>> matchesByWord,
+    required List<_SearchToken> tokens,
+    required Map<String, String> customSpacing,
+  }) {
+    final numWords = matchesByWord.length;
+    if (numWords < 2 || tokens.isEmpty) return const [];
+
+    // אם למילה כלשהי אין אף הופעה — אין סיכוי לחלון משותף.
+    for (final perWordMatches in matchesByWord) {
+      if (perWordMatches.isEmpty) return const [];
+    }
+
+    // חישוב slop אפקטיבי תואם ל-prepareQueryParams ב-SearchQueryBuilder:
+    // tantivy מקבל max מבין ערכי ה-spacing (לא sum).
+    int maxSlop = 0;
+    for (final value in customSpacing.values) {
+      final parsed = int.tryParse(value);
+      if (parsed != null && parsed > maxSlop) maxSlop = parsed;
+    }
+    if (maxSlop <= 0) return const [];
+
+    // לכל token, רשימת ה-matches שמתאימות לו ולאיזה word index.
+    // התאמת המילה (match) יכולה להיות חלק קטן מתוך טוקן (למשל "צדיק" בתוך
+    // "הצדיקים" כשהאופציה 'חלק ממילה' פעילה), או לחלופין לכסות כמה טוקנים.
+    // אנחנו שומרים את ה-match range עצמו (לא את הטוקן השלם) כדי שההדגשה
+    // תכסה רק את החלק התואם בפועל — בדיוק כמו ב-ordered phrase matching.
+    final matchesPerToken = <int, List<_WordTokenMatch>>{};
+    for (var wordIdx = 0; wordIdx < numWords; wordIdx++) {
+      for (final match in matchesByWord[wordIdx]) {
+        for (var t = 0; t < tokens.length; t++) {
+          final token = tokens[t];
+          if (match.start < token.end && match.end > token.start) {
+            (matchesPerToken[t] ??= <_WordTokenMatch>[])
+                .add(_WordTokenMatch(wordIdx: wordIdx, range: match));
+          }
+        }
+      }
+    }
+
+    if (matchesPerToken.isEmpty) return const [];
+
+    final hitIndices = matchesPerToken.keys.toList()..sort();
+    final maxWindowTokens = maxSlop + numWords;
+    final result = <_SnippetMatchRange>[];
+    final wordCoverage = List<int>.filled(numWords, 0);
+    var distinctWordsInWindow = 0;
+    var left = 0;
+
+    for (var right = 0; right < hitIndices.length; right++) {
+      final rightTokenIdx = hitIndices[right];
+      for (final hit in matchesPerToken[rightTokenIdx]!) {
+        if (wordCoverage[hit.wordIdx] == 0) distinctWordsInWindow++;
+        wordCoverage[hit.wordIdx]++;
+      }
+
+      while (distinctWordsInWindow == numWords) {
+        final leftTokenIdx = hitIndices[left];
+        final windowWidth = leftTokenIdx == rightTokenIdx
+            ? 1
+            : (rightTokenIdx - leftTokenIdx + 1);
+
+        if (windowWidth <= maxWindowTokens) {
+          for (var t = left; t <= right; t++) {
+            final tokenIdx = hitIndices[t];
+            for (final hit in matchesPerToken[tokenIdx]!) {
+              result.add(hit.range);
+            }
+          }
+        }
+
+        for (final hit in matchesPerToken[leftTokenIdx]!) {
+          wordCoverage[hit.wordIdx]--;
+          if (wordCoverage[hit.wordIdx] == 0) distinctWordsInWindow--;
+        }
+        left++;
+      }
+    }
+
+    return result;
   }
 
   static bool _tryMatchPhraseContinuation({
@@ -754,6 +871,7 @@ class SnippetBuilder {
     required Map<String, String> spacingValues,
     required int searchDistance,
     required bool fallbackToIndividualWords,
+    SearchMode? searchMode,
   }) {
     final searchTerms = SearchQueryBuilder.splitQueryWords(query);
     if (plainText.isEmpty || searchTerms.isEmpty) {
@@ -785,6 +903,7 @@ class SnippetBuilder {
           word,
           wordOptions,
           alternatives: alternatives,
+          searchMode: searchMode,
         ),
       );
       patternsByWord.add(
@@ -792,6 +911,7 @@ class SnippetBuilder {
           word,
           wordOptions,
           alternatives: alternatives,
+          searchMode: searchMode,
         ),
       );
     }
@@ -811,15 +931,19 @@ class SnippetBuilder {
           )
         : const <_SnippetMatchRange>[];
 
-    final approximateMatches =
-        SearchQueryBuilder.hasTypoToleranceEnabled(searchOptions)
-            ? _selectApproximateMatches(
-                plainText: plainText,
-                searchTerms: approximateTerms,
-                exactMatches: exactMatches,
-                fallbackMatches: individualWordMatches,
-              )
-            : const <_SnippetMatchRange>[];
+    // מצב fuzzy מפעיל typo tolerance גם אם ה-flag לא מסומן פר-מילה
+    // (זהה ללוגיקה ב-SearchQueryBuilder.buildAdvancedQuery).
+    final shouldRunApproximate = searchMode == SearchMode.fuzzy ||
+        SearchQueryBuilder.hasTypoToleranceEnabled(searchOptions);
+
+    final approximateMatches = shouldRunApproximate
+        ? _selectApproximateMatches(
+            plainText: plainText,
+            searchTerms: approximateTerms,
+            exactMatches: exactMatches,
+            fallbackMatches: individualWordMatches,
+          )
+        : const <_SnippetMatchRange>[];
 
     final allMatches = _mergeOverlappingRanges(
       exactMatches.isNotEmpty
@@ -925,11 +1049,13 @@ class SnippetBuilder {
     String word,
     Map<String, bool> wordOptions, {
     required List<String> alternatives,
+    SearchMode? searchMode,
   }) {
     final terms = _buildExpandedTermsForWord(
       word,
       wordOptions,
       alternatives: alternatives,
+      searchMode: searchMode,
     );
 
     final patterns = <_TokenPattern>[];
@@ -939,11 +1065,24 @@ class SnippetBuilder {
     return patterns;
   }
 
+  /// בונה את רשימת הוריאציות שמשמשות להדגשה, בהתאמה מלאה ללוגיקת בניית
+  /// השאילתה ב-[SearchQueryBuilder.buildAdvancedQuery]:
+  /// - מצב fuzzy → [SearchRegexPatterns.generateFuzzyLiteralVariations]
+  ///   (כולל כתיב מלא/חסר + שגיאת כתיב אחת)
+  /// - אחרת, אם הופעל 'שגיאות כתיב' →
+  ///   [SearchRegexPatterns.generateTypoToleranceVariations]
+  /// - אחרת, אם הופעל 'כתיב מלא/חסר' →
+  ///   [SearchRegexPatterns.generateFullPartialSpellingVariations]
+  /// - אחרת → המילה כפי שהיא בלבד.
   static List<String> _buildExpandedTermsForWord(
     String word,
     Map<String, bool> wordOptions, {
     required List<String> alternatives,
+    SearchMode? searchMode,
   }) {
+    final isFuzzyMode = searchMode == SearchMode.fuzzy;
+    final hasTypoTolerance =
+        wordOptions[SearchQueryBuilder.typoToleranceOptionKey] == true;
     final hasFullPartialSpelling = wordOptions['כתיב מלא/חסר'] == true;
     final baseTerms = <String>[word, ...alternatives]
         .map((term) => term.trim())
@@ -951,7 +1090,15 @@ class SnippetBuilder {
 
     final expandedTerms = <String>{};
     for (final term in baseTerms) {
-      if (hasFullPartialSpelling) {
+      if (isFuzzyMode) {
+        expandedTerms.addAll(
+          SearchRegexPatterns.generateFuzzyLiteralVariations(term),
+        );
+      } else if (hasTypoTolerance) {
+        expandedTerms.addAll(
+          SearchRegexPatterns.generateTypoToleranceVariations(term),
+        );
+      } else if (hasFullPartialSpelling) {
         expandedTerms.addAll(
           SearchRegexPatterns.generateFullPartialSpellingVariations(term),
         );

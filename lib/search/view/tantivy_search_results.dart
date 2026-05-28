@@ -267,6 +267,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
               result.segment,
               rawHtml.hashCode,
               state.searchQuery.hashCode,
+              state.configuration.searchMode.index,
+              state.configuration.distance,
               SearchQueryBuilder.hasTypoToleranceEnabled(effectiveOptions),
               widget.tab.searchOptionsChanged.value,
               widget.tab.alternativeWordsChanged.value,
@@ -306,6 +308,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                   alternativeWords: widget.tab.alternativeWords,
                   customSpacing: widget.tab.spacingValues,
                   searchDistance: state.configuration.distance,
+                  searchMode: state.configuration.searchMode,
                 );
               },
             );

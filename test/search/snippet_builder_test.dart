@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 
@@ -403,5 +404,188 @@ void main() {
 
     expect(highlighted, contains('רמב"ם'));
     expect(highlighted, contains('משה'));
+  });
+
+  test(
+      'createSnippetSpans במצב fuzzy מדגיש וריאציית typo גם בלי דגל פר-מילה',
+      () {
+    final spans = SnippetBuilder.createSnippetSpans(
+      fullHtml: '<p>חכמה לכל העולם</p>',
+      query: 'חמכה',
+      defaultStyle: const TextStyle(),
+      highlightStyle: const TextStyle(fontWeight: FontWeight.bold),
+      availableWidth: 400,
+      searchOptions: const {},
+      alternativeWords: const {},
+      searchMode: SearchMode.fuzzy,
+    );
+
+    final highlighted = spans
+        .whereType<TextSpan>()
+        .where((span) => span.style?.fontWeight == FontWeight.bold)
+        .map((span) => span.text ?? '')
+        .join();
+
+    expect(highlighted, contains('חכמה'));
+  });
+
+  test(
+      'createSnippetSpans במצב fuzzy מדגיש וריאציית כתיב מלא/חסר',
+      () {
+    final spans = SnippetBuilder.createSnippetSpans(
+      fullHtml: '<p>שלום לכל אדם</p>',
+      query: 'שלם',
+      defaultStyle: const TextStyle(),
+      highlightStyle: const TextStyle(fontWeight: FontWeight.bold),
+      availableWidth: 400,
+      searchOptions: const {},
+      alternativeWords: const {},
+      searchMode: SearchMode.fuzzy,
+    );
+
+    final highlighted = spans
+        .whereType<TextSpan>()
+        .where((span) => span.style?.fontWeight == FontWeight.bold)
+        .map((span) => span.text ?? '')
+        .join();
+
+    expect(highlighted, contains('שלום'));
+  });
+
+  test(
+      'createSnippetSpans במצב exact לא מדגיש וריאציות fuzzy',
+      () {
+    final spans = SnippetBuilder.createSnippetSpans(
+      fullHtml: '<p>חכמה לכל העולם</p>',
+      query: 'חמכה',
+      defaultStyle: const TextStyle(),
+      highlightStyle: const TextStyle(fontWeight: FontWeight.bold),
+      availableWidth: 400,
+      searchOptions: const {},
+      alternativeWords: const {},
+      searchMode: SearchMode.exact,
+    );
+
+    final highlighted = spans
+        .whereType<TextSpan>()
+        .where((span) => span.style?.fontWeight == FontWeight.bold)
+        .map((span) => span.text ?? '')
+        .join();
+
+    expect(highlighted, isEmpty);
+  });
+
+  test(
+      'buildHighlightSpans מדגיש מילים בסדר הפוך כאשר ה-slop מספיק',
+      () {
+    final spans = SnippetBuilder.buildHighlightSpans(
+      plainText: 'תפילה גאולה ביניהם צדיק עומד',
+      query: 'צדיק גאולה תפילה',
+      defaultStyle: const TextStyle(),
+      highlightStyle: const TextStyle(fontWeight: FontWeight.bold),
+      searchOptions: const {},
+      alternativeWords: const {},
+      searchDistance: 10,
+      fallbackToIndividualWords: false,
+    );
+
+    final highlighted = spans
+        .whereType<TextSpan>()
+        .where((span) => span.style?.fontWeight == FontWeight.bold)
+        .map((span) => span.text ?? '')
+        .join('|');
+
+    expect(highlighted, contains('צדיק'));
+    expect(highlighted, contains('גאולה'));
+    expect(highlighted, contains('תפילה'));
+  });
+
+  test(
+      'buildHighlightSpans לא מדגיש מילים בסדר הפוך כאשר ה-slop קטן מדי',
+      () {
+    final spans = SnippetBuilder.buildHighlightSpans(
+      plainText:
+          'תפילה ${'אבגדה ' * 30} גאולה ${'אבגדה ' * 30} צדיק עומד',
+      query: 'צדיק גאולה תפילה',
+      defaultStyle: const TextStyle(),
+      highlightStyle: const TextStyle(fontWeight: FontWeight.bold),
+      searchOptions: const {},
+      alternativeWords: const {},
+      searchDistance: 2,
+      fallbackToIndividualWords: false,
+    );
+
+    final highlighted = spans
+        .whereType<TextSpan>()
+        .where((span) => span.style?.fontWeight == FontWeight.bold)
+        .map((span) => span.text ?? '')
+        .join();
+
+    expect(highlighted, isEmpty);
+  });
+
+  test(
+      "buildHighlightSpans מדגיש כש'חלק ממילה' פעיל וסדר הפוך תוך slop",
+      () {
+    const plainText =
+        'כל הסומך גאולה לתפילה הרי זה בן עוה"ב כי עבדות הצדיקים לחבר';
+    final spans = SnippetBuilder.buildHighlightSpans(
+      plainText: plainText,
+      query: 'צדיק גאולה תפילה',
+      defaultStyle: const TextStyle(),
+      highlightStyle: const TextStyle(fontWeight: FontWeight.bold),
+      searchOptions: {
+        SearchQueryBuilder.buildWordKey('צדיק', 0): const {
+          'חלק ממילה': true,
+        },
+        SearchQueryBuilder.buildWordKey('גאולה', 1): const {
+          'חלק ממילה': true,
+        },
+        SearchQueryBuilder.buildWordKey('תפילה', 2): const {
+          'חלק ממילה': true,
+        },
+      },
+      alternativeWords: const {},
+      searchDistance: 10,
+      fallbackToIndividualWords: false,
+    );
+
+    final highlighted = spans
+        .whereType<TextSpan>()
+        .where((span) => span.style?.fontWeight == FontWeight.bold)
+        .map((span) => span.text ?? '')
+        .join('|');
+
+    // ההדגשה תופסת רק את החלק התואם בתוך הטוקן — "צדיק" ולא
+    // "הצדיקים" השלם — בדיוק כמו ב-ordered phrase matching.
+    expect(highlighted, contains('גאולה'));
+    expect(highlighted, contains('תפילה'));
+    expect(highlighted, contains('צדיק'));
+    expect(highlighted, isNot(contains('הצדיקים')));
+  });
+
+  test(
+      'buildHighlightSpans מעדיף סדר רגיל כשקיים גם רצף סדור',
+      () {
+    final spans = SnippetBuilder.buildHighlightSpans(
+      plainText: 'הנה צדיק גאולה תפילה ביחד',
+      query: 'צדיק גאולה תפילה',
+      defaultStyle: const TextStyle(),
+      highlightStyle: const TextStyle(fontWeight: FontWeight.bold),
+      searchOptions: const {},
+      alternativeWords: const {},
+      searchDistance: 5,
+      fallbackToIndividualWords: false,
+    );
+
+    final highlighted = spans
+        .whereType<TextSpan>()
+        .where((span) => span.style?.fontWeight == FontWeight.bold)
+        .map((span) => span.text ?? '')
+        .join('|');
+
+    expect(highlighted, contains('צדיק'));
+    expect(highlighted, contains('גאולה'));
+    expect(highlighted, contains('תפילה'));
   });
 }
