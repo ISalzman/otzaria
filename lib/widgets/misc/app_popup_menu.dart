@@ -52,6 +52,13 @@ class AppContextMenuEntry {
   /// בנייה עצלה של תת-פריטים לתפריט משנה.
   final List<AppContextMenuEntry> Function()? childrenBuilder;
 
+  /// סטרים שכאשר הוא פולט, תת-התפריט נבנה מחדש מ-[childrenBuilder].
+  ///
+  /// מאפשר תת-תפריט תגובתי שמתעדכן בזמן אמת (למשל רשימת "כרטיסיות פתוחות"
+  /// שמסירה שורה כשכרטיסייה נסגרת). דורש [childrenBuilder] שקורא מקור נתונים
+  /// טרי בכל קריאה.
+  final Stream<Object?>? childrenRefreshStream;
+
   const AppContextMenuEntry({
     required this.label,
     this.key,
@@ -65,6 +72,7 @@ class AppContextMenuEntry {
     this.trailing,
     this.children,
     this.childrenBuilder,
+    this.childrenRefreshStream,
   }) : isDivider = false;
 
   const AppContextMenuEntry.divider()
@@ -80,7 +88,8 @@ class AppContextMenuEntry {
         onTap = null,
         trailing = null,
         children = null,
-        childrenBuilder = null;
+        childrenBuilder = null,
+        childrenRefreshStream = null;
 }
 
 bool hasEnabledAppContextMenuEntries(List<AppContextMenuEntry> entries) {

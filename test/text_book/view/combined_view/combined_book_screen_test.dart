@@ -14,6 +14,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/selection/enhanced_gesture_detector.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
@@ -372,6 +373,180 @@ void main() {
 
     expect(textBookBloc.addWasCalled, isFalse);
     expect(tester.takeException(), isNull);
+  });
+
+  group('applyDisplayTextPreferences', () {
+    // קמץ (ניקוד) — נמצא ב-vowelsAndCantillation אך לא ב-cantillationOnly
+    const niqqud = 'ָ';
+    // אתנחתא (טעם) — נמצא בשתי הקבוצות
+    const taam = '֑';
+
+    test('מסיר פיסוק כש-removePunctuation פעיל (באג "העתק את כל הפסקה")', () {
+      final result = applyDisplayTextPreferences(
+        text: 'שלום, עולם!',
+        removeNikud: false,
+        removePunctuation: true,
+        showTeamim: true,
+      );
+      expect(result.contains(','), isFalse);
+      expect(result.contains('!'), isFalse);
+      expect(result.contains('שלום'), isTrue);
+      expect(result.contains('עולם'), isTrue);
+    });
+
+    test('שומר פיסוק כש-removePunctuation כבוי', () {
+      final result = applyDisplayTextPreferences(
+        text: 'שלום, עולם!',
+        removeNikud: false,
+        removePunctuation: false,
+        showTeamim: true,
+      );
+      expect(result, 'שלום, עולם!');
+    });
+
+    test('מסיר ניקוד כש-removeNikud פעיל', () {
+      final result = applyDisplayTextPreferences(
+        text: 'א$niqqudבג',
+        removeNikud: true,
+        removePunctuation: false,
+        showTeamim: true,
+      );
+      expect(result, 'אבג');
+    });
+
+    test('שומר ניקוד כש-removeNikud כבוי', () {
+      final result = applyDisplayTextPreferences(
+        text: 'א$niqqudבג',
+        removeNikud: false,
+        removePunctuation: false,
+        showTeamim: true,
+      );
+      expect(result, 'א$niqqudבג');
+    });
+
+    test('מסיר טעמים בלבד כש-showTeamim כבוי (הניקוד נשמר)', () {
+      final result = applyDisplayTextPreferences(
+        text: 'א$niqqud$taamבג',
+        removeNikud: false,
+        removePunctuation: false,
+        showTeamim: false,
+      );
+      expect(result.contains(taam), isFalse);
+      expect(result.contains(niqqud), isTrue);
+    });
+
+    test('שומר טעמים כש-showTeamim פעיל', () {
+      final result = applyDisplayTextPreferences(
+        text: 'א$taamבג',
+        removeNikud: false,
+        removePunctuation: false,
+        showTeamim: true,
+      );
+      expect(result.contains(taam), isTrue);
+    });
+
+    test('מסיר גם ניקוד וגם פיסוק יחד (באג "העתק טקסט מוצג")', () {
+      final result = applyDisplayTextPreferences(
+        text: 'א$niqqudבג, דה!',
+        removeNikud: true,
+        removePunctuation: true,
+        showTeamim: true,
+      );
+      expect(result.contains(niqqud), isFalse);
+      expect(result.contains(','), isFalse);
+      expect(result.contains('!'), isFalse);
+    });
+
+    test('לא משנה טקסט כשכל ההעדפות מאפשרות הצגה מלאה', () {
+      const text = 'א$niqqudבג';
+      final result = applyDisplayTextPreferences(
+        text: text,
+        removeNikud: false,
+        removePunctuation: false,
+        showTeamim: true,
+      );
+      expect(result, text);
+    });
+  });
+
+  group('hasCommentariesForLine', () {
+    const noteLine =
+        'שורה<sup class="footnote-marker">א</sup><i class="footnote">גוף ההערה</i>';
+    const plainLine = 'שורה רגילה ללא הערות';
+
+    test(
+        'מחזירה true כש"הערות" פעיל ויש הערת inline בשורה — גם בלי קישורי מפרשים',
+        () {
+      // באג: בספרים שבהם ההערות הן המפרש היחיד, "מפרשים מתחת" לא הציג כלום.
+      final result = hasCommentariesForLine(
+        activeCommentators: const [kNotesCommentatorTitle],
+        content: const [noteLine],
+        linksByLine: const {},
+        index: 0,
+      );
+      expect(result, isTrue);
+    });
+
+    test('מחזירה false כש"הערות" פעיל אך אין הערת inline בשורה ואין קישורים',
+        () {
+      final result = hasCommentariesForLine(
+        activeCommentators: const [kNotesCommentatorTitle],
+        content: const [plainLine],
+        linksByLine: const {},
+        index: 0,
+      );
+      expect(result, isFalse);
+    });
+
+    test('מחזירה false כשאין מפרשים פעילים ואין קישורים', () {
+      final result = hasCommentariesForLine(
+        activeCommentators: const [],
+        content: const [noteLine],
+        linksByLine: const {},
+        index: 0,
+      );
+      expect(result, isFalse);
+    });
+
+    test('מחזירה true כשיש קישור COMMENTARY למפרש פעיל', () {
+      final result = hasCommentariesForLine(
+        activeCommentators: const ['רש"י'],
+        content: const [plainLine],
+        linksByLine: {
+          1: [
+            Link(
+              heRef: 'רש"י על בראשית א',
+              index1: 1,
+              path2: 'commentary/רש"י.txt',
+              index2: 7,
+              connectionType: 'COMMENTARY',
+            ),
+          ],
+        },
+        index: 0,
+      );
+      expect(result, isTrue);
+    });
+
+    test('מחזירה false כשהקישור הוא למפרש שאינו פעיל', () {
+      final result = hasCommentariesForLine(
+        activeCommentators: const ['רמב"ן'],
+        content: const [plainLine],
+        linksByLine: {
+          1: [
+            Link(
+              heRef: 'רש"י על בראשית א',
+              index1: 1,
+              path2: 'commentary/רש"י.txt',
+              index2: 7,
+              connectionType: 'COMMENTARY',
+            ),
+          ],
+        },
+        index: 0,
+      );
+      expect(result, isFalse);
+    });
   });
 }
 

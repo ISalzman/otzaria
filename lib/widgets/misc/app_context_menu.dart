@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -658,6 +660,14 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton>
     canRequestFocus: false,
   );
 
+  // השבתת הפוקוס לעיל מבטלת גם את הפתיחה-בריחוף המובנית של SubmenuButton
+  // (שמסתמכת על requestFocus). לכן פותחים את התת-תפריט בריחוף ידנית דרך
+  // ה-controller — open() אינו מבקש פוקוס, כך שהבחירה ב-SelectableRegion נשמרת.
+  Timer? _hoverOpenTimer;
+
+  // מנוי לרענון תגובתי של הילדים (למשל רשימת "כרטיסיות פתוחות").
+  StreamSubscription<Object?>? _refreshSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -667,12 +677,46 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton>
         _ensureMenuChildrenLoaded();
       }
     });
+    // רענון הילדים בכל פעימה של הסטרים — בונה מחדש מ-entriesBuilder עם נתונים
+    // טריים. הסטרים פולט אחרי עדכון מקור הנתונים, כך שהרשימה מעודכנת.
+    _refreshSubscription =
+        widget.entry.childrenRefreshStream?.listen((_) => _refreshChildren());
   }
 
   @override
   void dispose() {
+    _refreshSubscription?.cancel();
+    _hoverOpenTimer?.cancel();
     _submenuButtonFocusNode.dispose();
     super.dispose();
+  }
+
+  void _refreshChildren() {
+    if (!mounted) return;
+    _entries = null;
+    _menuChildren = null;
+    _hasEnabledChildren = null;
+    _ensureMenuChildrenLoaded();
+  }
+
+  // פתיחה-בריחוף: השהיה קצרה כדי שמעבר עכבר חולף לא יפתח תת-תפריט.
+  // הערך תואם את מנגנון התת-תפריט השני בפרויקט (_SubmenuItemWidget).
+  void _scheduleHoverOpen() {
+    _ensureMenuChildrenLoaded();
+    _hoverOpenTimer?.cancel();
+    _hoverOpenTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      final controller = widget.controller;
+      if (controller != null && !controller.isOpen) {
+        // open() מפעיל את SubmenuButton.onOpen → סוגר תתי-תפריט אחאים פתוחים.
+        openSubmenu();
+      }
+    });
+  }
+
+  void _cancelHoverOpen() {
+    _hoverOpenTimer?.cancel();
+    _hoverOpenTimer = null;
   }
 
   @override
@@ -776,7 +820,8 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton>
     }
 
     final submenuButton = MouseRegion(
-      onEnter: (_) => _ensureMenuChildrenLoaded(),
+      onEnter: (_) => _scheduleHoverOpen(),
+      onExit: (_) => _cancelHoverOpen(),
       child: Listener(
         behavior: HitTestBehavior.deferToChild,
         onPointerDown: (_) => _ensureMenuChildrenLoaded(),

@@ -2,12 +2,17 @@ import 'package:otzaria/widgets/smart_text/render_settings.dart';
 import 'package:otzaria/widgets/smart_text/text_renderer_service.dart';
 
 /// מעבד שורת מקור לאותו טקסט פשוט שהמשתמש רואה בפועל במסך.
+///
+/// תצוגת ה-HTML מכווצת רצפי רווחים לרווח אחד ומקצצת רווחים בקצוות,
+/// ולכן יש לכווץ גם כאן — אחרת רווחים כפולים שמותיר `removePunctuation`
+/// (כשהוא מסיר פיסוק שהיה מוקף ברווחים) ימנעו את התאמת הבחירה בשחזור.
 String renderSelectionLine({
   required String rawText,
   required RenderSettings settings,
 }) {
   final processed = TextRendererService.processText(rawText, settings);
-  return TextRendererService.stripHtml(processed);
+  final stripped = TextRendererService.stripHtml(processed);
+  return stripped.replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
 /// משחזר מעברי שורה בטקסט שנבחר מ-SelectionArea כאשר Flutter מחזיר טקסט שטוח.

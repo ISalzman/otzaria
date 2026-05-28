@@ -8,6 +8,8 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/view/selected_line_links_view.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/view/commentators_list_screen.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
@@ -179,32 +181,35 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                 children: [
                   // כרטיסייה ראשונה: מפרשים (מצב מפוצל) או הגדרות מפרשים (מצב למטה)
                   if (widget.showSplitView)
-                    CommentaryListBase(
-                      key: const ValueKey('commentary_list_tabbed'),
-                      openBookCallback: widget.openBookCallback,
-                      fontSize: widget.fontSize,
-                      showSearch: widget.showSearch,
-                      selectionSyncController: widget.selectionSyncController,
-                      openFilterRequest: widget.openFilterRequest,
-                      selectedCommentatorsOverride: state.activeCommentators,
-                      openFilterNotifier: widget.openCommentatorsFilterNotifier,
-                      closeFilterNotifier:
-                          widget.closeCommentatorsFilterNotifier,
-                      onSelectedCommentatorsOverrideChanged: (commentators) {
-                        context
-                            .read<TextBookBloc>()
-                            .add(UpdateCommentators(commentators));
-                      },
-                      onOpenInNewTab: widget.tab == null
-                          ? null
-                          : () => context.read<TabsBloc>().add(
-                                AddTab(
-                                  CommentatorsTab(
-                                    sourceTab: widget.tab!,
+                    BlocBuilder<SettingsBloc, SettingsState>(
+                      builder: (context, settingsState) => CommentaryListBase(
+                        key: const ValueKey('commentary_list_tabbed'),
+                        openBookCallback: widget.openBookCallback,
+                        fontSize: settingsState.commentatorsFontSize,
+                        showSearch: widget.showSearch,
+                        selectionSyncController: widget.selectionSyncController,
+                        openFilterRequest: widget.openFilterRequest,
+                        selectedCommentatorsOverride: state.activeCommentators,
+                        openFilterNotifier:
+                            widget.openCommentatorsFilterNotifier,
+                        closeFilterNotifier:
+                            widget.closeCommentatorsFilterNotifier,
+                        onSelectedCommentatorsOverrideChanged: (commentators) {
+                          context
+                              .read<TextBookBloc>()
+                              .add(UpdateCommentators(commentators));
+                        },
+                        onOpenInNewTab: widget.tab == null
+                            ? null
+                            : () => context.read<TabsBloc>().add(
+                                  AddTab(
+                                    CommentatorsTab(
+                                      sourceTab: widget.tab!,
+                                    ),
+                                    insertAdjacent: true,
                                   ),
-                                  insertAdjacent: true,
                                 ),
-                              ),
+                      ),
                     )
                   else
                     const CommentatorsListView(

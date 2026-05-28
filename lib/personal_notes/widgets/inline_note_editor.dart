@@ -43,10 +43,11 @@ class InlineNoteEditor extends StatefulWidget {
 class _InlineNoteEditorState extends State<InlineNoteEditor> {
   late final PersonalNoteEditorController _controller;
   late final PersonalNoteEditorResult _initialResult;
-  final FocusNode _focusNode = FocusNode();
+  final FocusNode _focusNode = FocusNode(debugLabel: 'InlineNoteEditor');
   final ScrollController _scrollController = ScrollController();
   final PersonalNoteDraftService _draftService = PersonalNoteDraftService();
   Timer? _draftSaveTimer;
+  Timer? _focusRetryTimer;
   bool _isDone = false; // מונע שמירת טיוטה אחרי שמירה/ביטול
 
   @override
@@ -70,11 +71,23 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
     _initialResult = originalController.buildResult();
     originalController.quillController.dispose();
     _controller.quillController.addListener(_scheduleDraftSave);
+    // QuillEditor.autoFocus לא תמיד תופס פוקוס כשהעורך נפתח בתוך פאנל
+    // שנפתח דינמית. ה-post-frame הראשון יורה לפני שאנימציית פתיחת הפאנל
+    // הסתיימה, ולפעמים ה-FocusNode עוד לא מחובר. ה-Timer מנסה שוב
+    // אחרי אורך אנימציה טיפוסי של Material (300ms).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+    _focusRetryTimer = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      if (!_focusNode.hasFocus) _focusNode.requestFocus();
+    });
   }
 
   @override
   void dispose() {
     _draftSaveTimer?.cancel();
+    _focusRetryTimer?.cancel();
     _controller.quillController.removeListener(_scheduleDraftSave);
     unawaited(_persistDraft());
     _focusNode.dispose();

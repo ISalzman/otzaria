@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -236,6 +238,119 @@ void main() {
     );
   });
 
+  testWidgets(
+      'ריחוף מעל SubmenuButton פותח את התת-תפריט אחרי השהיה (בלי לחיצה)',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: AppContextMenuRegion(
+              menuBuilder: (_, __) => [
+                AppContextMenuEntry(
+                  label: 'תת-תפריט',
+                  children: [
+                    AppContextMenuEntry(label: 'פנימי', onTap: () {}),
+                  ],
+                ),
+              ],
+              child: const SizedBox(
+                width: 100,
+                height: 100,
+                child: ColoredBox(color: Colors.amber),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // פתיחת תפריט ההקשר עם לחיצה ימנית
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryButton,
+    );
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
+    await gesture.moveTo(regionCenter);
+    await gesture.down(regionCenter);
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('פנימי'), findsNothing,
+        reason: 'התת-תפריט אמור להיות סגור לפני הריחוף');
+
+    // ריחוף מעל פריט התת-תפריט — אמור לפתוח אותו אחרי השהיית 300ms, בלי לחיצה.
+    // (לפני התיקון: השבתת הפוקוס ביטלה את הפתיחה-בריחוף המובנית של SubmenuButton.)
+    await gesture.moveTo(tester.getCenter(find.text('תת-תפריט')));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('פנימי'),
+      findsOneWidget,
+      reason: 'ריחוף מעל פריט התת-תפריט חייב לפתוח אותו בלי צורך בלחיצה',
+    );
+  });
+
+  testWidgets('מעבר עכבר חולף (פחות מההשהיה) אינו פותח את התת-תפריט',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: AppContextMenuRegion(
+              menuBuilder: (_, __) => [
+                AppContextMenuEntry(
+                  label: 'תת-תפריט',
+                  children: [
+                    AppContextMenuEntry(label: 'פנימי', onTap: () {}),
+                  ],
+                ),
+                AppContextMenuEntry(label: 'פריט רגיל', onTap: () {}),
+              ],
+              child: const SizedBox(
+                width: 100,
+                height: 100,
+                child: ColoredBox(color: Colors.amber),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryButton,
+    );
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
+    await gesture.moveTo(regionCenter);
+    await gesture.down(regionCenter);
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    // ריחוף קצר מעל התת-תפריט ויציאה ממנו לפני שההשהיה הסתיימה
+    await gesture.moveTo(tester.getCenter(find.text('תת-תפריט')));
+    await tester.pump(const Duration(milliseconds: 100));
+    await gesture.moveTo(tester.getCenter(find.text('פריט רגיל')));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('פנימי'),
+      findsNothing,
+      reason: 'יציאה מהפריט לפני תום ההשהיה חייבת לבטל את הפתיחה-בריחוף',
+    );
+  });
+
   testWidgets('גרירה לבחירת טקסט מחוץ לתפריט סוגרת את התפריט', (tester) async {
     // בדיקה עצמאית — מנהלת את כל ה-gestures ידנית כדי לשלוט בסדר down/up
     await tester.pumpWidget(
@@ -455,6 +570,70 @@ void main() {
         reason: 'לחיצה על פריט אחרי openMenuAt חייבת להפעיל את ה-onTap שלו');
     expect(find.text('פעולה א'), findsNothing,
         reason: 'התפריט חייב להיסגר לאחר בחירת פריט');
+  });
+
+  testWidgets(
+      'childrenRefreshStream: פעימה מסירה שורה מתת-התפריט בלי לסגור אותו',
+      (tester) async {
+    // משחזר את רשימת "כרטיסיות פתוחות": לחיצה על X מסירה כרטיסייה ממקור
+    // הנתונים, פעימת הסטרים בונה מחדש את תת-התפריט והשורה נעלמת — התפריט נשאר.
+    final controller = StreamController<Object?>.broadcast();
+    addTearDown(controller.close);
+    final tabs = ['ראב"ד', 'עירובין'];
+    final key = GlobalKey<AppContextMenuRegionState>();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppContextMenuRegion(
+            key: key,
+            menuBuilder: (_, __) => [
+              AppContextMenuEntry(
+                label: 'כרטיסיות פתוחות',
+                childrenRefreshStream: controller.stream,
+                childrenBuilder: () => tabs
+                    .map((t) => AppContextMenuEntry(
+                          label: t,
+                          onTap: () {},
+                          trailing: IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              tabs.remove(t);
+                              controller.add(null);
+                            },
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ],
+            child: const SizedBox(
+              width: 200,
+              height: 200,
+              child: ColoredBox(color: Colors.amber),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await key.currentState!.openMenuAt(const Offset(100, 100));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('כרטיסיות פתוחות'));
+    await tester.pumpAndSettle();
+    expect(find.text('ראב"ד'), findsOneWidget);
+    expect(find.text('עירובין'), findsOneWidget);
+
+    // לחיצה על ה-X של "ראב"ד" — מסירה אותו ופולטת בסטרים
+    await tester.tap(find.byIcon(Icons.close).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('ראב"ד'), findsNothing,
+        reason: 'שורת הכרטיסייה שנסגרה חייבת להיעלם מתת-התפריט');
+    expect(find.text('עירובין'), findsOneWidget,
+        reason: 'שאר הכרטיסיות נשארות');
+    expect(find.text('כרטיסיות פתוחות'), findsOneWidget,
+        reason: 'התפריט נשאר פתוח — רק השורה הוסרה');
   });
 
   testWidgets('openMenuAt: קריאה כפולה אינה פותחת שני תפריטים', (tester) async {

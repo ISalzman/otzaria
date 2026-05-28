@@ -198,6 +198,56 @@ void main() {
       // selectedCommentators=['מפרש בדיקה'] (לא ריק) → אין פתיחה אוטומטית
       expect(find.text('בחירת מפרשים'), findsNothing);
     });
+
+    testWidgets(
+        'activeCommentators=[הערות] + onFilterOpenRequested: נקרא פעם אחת בלבד גם תחת rebuilds',
+        (tester) async {
+      // כרטיסיית המפרשים פותחת את הבחירה בלשונית צד נפרדת (onFilterOpenRequested)
+      // שאינה מסתירה את ההערות. לכן גם כש'הערות' פעיל ואין מפרשים נבחרים,
+      // יש להעביר את המשתמש לבחירת מפרשים ולא להשאירו תקוע על "אין הערות".
+      // הקולבק כאן עושה setState (כמו _openCommentatorsSelectionPane שמעדכן
+      // _navPaneOpen), מה שמפעיל rebuild — ה-latch חייב למנוע קריאה חוזרת,
+      // אחרת תיווצר לולאת rebuild + side-effect (pumpAndSettle יזרוק timeout).
+      final notesOnlyBloc = _TestTextBookBloc(
+          _loadedStateWithCommentators([kNotesCommentatorTitle]));
+      addTearDown(() async => notesOnlyBloc.close());
+
+      var filterOpenCount = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MultiBlocProvider(
+            providers: [
+              BlocProvider<TextBookBloc>.value(value: notesOnlyBloc),
+              BlocProvider<SettingsBloc>.value(value: settingsBloc),
+            ],
+            child: Scaffold(
+              body: StatefulBuilder(
+                builder: (context, setState) {
+                  return CommentaryListBase(
+                    openBookCallback: (_) {},
+                    fontSize: 18,
+                    showSearch: true,
+                    shrinkWrap: false,
+                    onSelectedCommentatorsOverrideChanged: (_) {},
+                    onFilterOpenRequested: () {
+                      filterOpenCount++;
+                      setState(() {}); // מדמה את ה-setState של ההורה
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+      // pump-ים נוספים — אילו ה-latch לא היה קיים, כל אחד היה מוסיף קריאה.
+      await tester.pump();
+      await tester.pump();
+
+      expect(filterOpenCount, 1);
+    });
   });
 }
 

@@ -397,16 +397,23 @@ class FindRefRepository {
       // position i (0-indexed) starts a word at position i in the book title.
       // This prevents "בראשית א" from matching "גור אריה על בראשית פסוק א"
       // (matchRank=2, "א" appears in the 5th word, not the 2nd).
-      // Acronym hits (matchRank >= 3) are accepted without this restriction
-      // because the phrase matched as a whole acronym.
+      // Exact-acronym hits (matchRank == 3) are accepted without this restriction
+      // because the phrase matched a complete acronym (a == q).
+      // Acronym *prefix* (matchRank 4) and *contains* (5) hits are NOT a complete
+      // acronym — accepting them swallowed the section name into the book key:
+      // "טור חושן" is a prefix of the acronym "טור חושן משפט", so it matched the
+      // book "טור" at rank 4, consumed both tokens, and skipped the TOC search for
+      // "חושן" entirely (→ "טור חושן" returned no real result, while "טור משפט"
+      // did). They now fall through to the positional title check below, which
+      // rejects them because the title itself didn't match.
       // Contains-only hits (matchRank == 2) are always excluded for multi-token
       // phrases: "גור אריה על בראשית" should never be selected when the user
       // types "בראשית א".
       final phraseTokens = queryTokens.take(n).toList();
       final qualifiedHits = hits.where((hit) {
-        if (hit.matchRank >= 3) return true; // acronym match – always accept
-        if (hit.matchRank == 2) {
-          return false; // contains-only – never accept for n>1
+        if (hit.matchRank == 3) return true; // complete acronym – always accept
+        if (hit.matchRank >= 2) {
+          return false; // contains / acronym-prefix / acronym-contains – never accept for n>1
         }
         // הכותרת המנורמלת כבר מחושבת מראש בתוך הקאש.
         final titleTokens = _tokenize(hit.normalizedTitle);

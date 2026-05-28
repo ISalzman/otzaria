@@ -298,6 +298,30 @@ void main() {
       );
     });
 
+    group('UpdateMergeUserBooksIntoLibrary', () {
+      blocTest<SettingsBloc, SettingsState>(
+        'emits state עם mergeUserBooksIntoLibrary=true ושומר ב-repository',
+        build: () {
+          when(mockRepository.updateMergeUserBooksIntoLibrary(true))
+              .thenAnswer((_) async {});
+          return settingsBloc;
+        },
+        act: (bloc) =>
+            bloc.add(const UpdateMergeUserBooksIntoLibrary(true)),
+        expect: () => [
+          settingsBloc.state.copyWith(mergeUserBooksIntoLibrary: true),
+        ],
+        verify: (_) {
+          verify(mockRepository.updateMergeUserBooksIntoLibrary(true))
+              .called(1);
+        },
+      );
+
+      test('initial state defaults to false', () {
+        expect(settingsBloc.state.mergeUserBooksIntoLibrary, isFalse);
+      });
+    });
+
     group('UpdateSoftwareAndBookUpdatesEnabled', () {
       blocTest<SettingsBloc, SettingsState>(
         'emits updated state when UpdateSoftwareAndBookUpdatesEnabled is added',

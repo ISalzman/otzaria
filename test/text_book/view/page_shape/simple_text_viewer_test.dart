@@ -11,6 +11,9 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
+import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
+import 'package:otzaria/personal_notes/widgets/personal_note_editor_dialog.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
@@ -74,6 +77,193 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(openedTab, 1);
+  });
+
+  testWidgets(
+      'הוספת הערה ממפרש פותחת דיאלוג עצמאי ולא עוברת דרך הסיידבר של הספר הראשי',
+      (tester) async {
+    // רגרסיה: בצורת הדף המפרש חולק את ה-TextBookBloc של הספר הראשי. הוספת הערה
+    // ממפרש חייבת להישמר תחת ספר המפרש (דרך דיאלוג עצמאי), ולא לשלוח
+    // StartCreatingPersonalNote — שהיה שומר תחת הספר הראשי במספר שורה שגוי.
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      PersonalNotesState(
+        isLoading: false,
+        bookId: 'ספר בדיקה',
+        locatedNotes: const [],
+        missingNotes: const [],
+        errorMessage: null,
+        filteredLocatedNotes: const [],
+        filteredMissingNotes: const [],
+      ),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: SimpleTextViewer(
+              content: const ['שורת מפרש'],
+              fontSize: 18,
+              openBookCallback: (_) {},
+              isMainText: false, // מפרש — לא הטקסט הראשי
+              bookTitle: 'רש"י',
+              reportBook: TextBook(title: 'רש"י'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // פתיחת תפריט ההקשר בלחיצה ימנית על שורת המפרש
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryButton,
+    );
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final regionCenter =
+        tester.getCenter(find.byType(AppContextMenuRegion).first);
+    await gesture.moveTo(regionCenter);
+    await gesture.down(regionCenter);
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    final addNoteFinder = find.textContaining('הוסף הערה אישית');
+    expect(addNoteFinder, findsOneWidget,
+        reason: 'תפריט ההקשר במפרש חייב לכלול "הוסף הערה אישית"');
+
+    await tester.tap(addNoteFinder);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // נפתח דיאלוג עורך עצמאי לשמירה תחת ספר המפרש
+    expect(find.byType(PersonalNoteEditorDialog), findsOneWidget,
+        reason: 'הוספת הערה ממפרש צריכה לפתוח דיאלוג עצמאי');
+
+    // ה-bloc של הספר הראשי לא קיבל StartCreatingPersonalNote
+    expect(
+      personalNotesBloc.receivedEvents.whereType<StartCreatingPersonalNote>(),
+      isEmpty,
+      reason: 'הערה על מפרש לא צריכה לעבור דרך הסיידבר של הספר הראשי',
+    );
+
+    // ניקוי: סגירת הדיאלוג כדי לא להשאיר טיימרים של העורך פתוחים
+    await tester.tap(find.text('ביטול'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+      'דיאלוג ההערה ממפרש מכוון לספר המפרש ולשורה הנכונה (bookId + draftLineNumber)',
+      (tester) async {
+    // מאמת את היעד של השמירה: הדיאלוג חייב לקבל את ה-bookId של המפרש ואת מספר
+    // השורה המקומי בתוך תוכן המפרש — אותם ערכים שמועברים גם ל-addNote.
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      PersonalNotesState(
+        isLoading: false,
+        bookId: 'ספר בדיקה',
+        locatedNotes: const [],
+        missingNotes: const [],
+        errorMessage: null,
+        filteredLocatedNotes: const [],
+        filteredMissingNotes: const [],
+      ),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: SimpleTextViewer(
+              // שלוש שורות — נבחר את השנייה כדי לוודא lineNumber=2 ולא 1
+              content: const ['שורה ראשונה', 'שורה שנייה', 'שורה שלישית'],
+              fontSize: 18,
+              openBookCallback: (_) {},
+              isMainText: false,
+              bookTitle: 'רש"י',
+              reportBook: TextBook(title: 'רש"י'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryButton,
+    );
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    // ה-regions מסודרים לפי סדר השורות; השני (index 1) = שורה שנייה = lineNumber 2
+    final regions = find.byType(AppContextMenuRegion);
+    expect(regions, findsNWidgets(3));
+    final secondLineCenter = tester.getCenter(regions.at(1));
+    await gesture.moveTo(secondLineCenter);
+    await gesture.down(secondLineCenter);
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('הוסף הערה אישית'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final dialog = tester.widget<PersonalNoteEditorDialog>(
+      find.byType(PersonalNoteEditorDialog),
+    );
+    expect(dialog.bookId, 'רש"י',
+        reason: 'הדיאלוג חייב לכוון לספר המפרש, לא לספר הראשי');
+    expect(dialog.draftLineNumber, 2,
+        reason: 'מספר השורה חייב להתאים לשורה שנבחרה בתוך תוכן המפרש');
+
+    // ניקוי: סגירת הדיאלוג כדי לא להשאיר טיימרים של העורך פתוחים
+    await tester.tap(find.text('ביטול'));
+    await tester.pumpAndSettle();
+  });
+
+  test('saveCommentaryNoteToRepository ממפה את תוצאת העורך לקריאת addNote',
+      () async {
+    final repo = _RecordingNotesRepository();
+
+    await saveCommentaryNoteToRepository(
+      repository: repo,
+      bookId: 'רש"י',
+      lineNumber: 2,
+      result: const PersonalNoteEditorResult(
+        content: 'דלתא',
+        contentPlain: 'תוכן ההערה',
+        contentFormat: PersonalNoteContentFormat.quillDelta,
+      ),
+      selectedText: 'טקסט נבחר',
+      categoryId: 7,
+    );
+
+    expect(repo.addNoteCallCount, 1,
+        reason: 'חייבת להתבצע קריאה אחת בדיוק ל-addNote');
+    expect(repo.capturedBookId, 'רש"י', reason: 'ההערה נשמרת תחת ספר המפרש');
+    expect(repo.capturedLineNumber, 2);
+    expect(repo.capturedContentPlain, 'תוכן ההערה');
+    expect(repo.capturedCategoryId, 7);
   });
 
   test('שומר בחירה אחרונה רק כאשר הטקסט הנבחר אינו ריק', () {
@@ -790,6 +980,33 @@ Element? _findSelectableRegionElement(WidgetTester tester) {
   return null;
 }
 
+/// repository מדומה שמתעד את הקריאה ל-addNote בלי לגעת במערכת הקבצים.
+class _RecordingNotesRepository extends PersonalNotesRepository {
+  String? capturedBookId;
+  int? capturedLineNumber;
+  String? capturedContentPlain;
+  int? capturedCategoryId;
+  int addNoteCallCount = 0;
+
+  @override
+  Future<List<PersonalNote>> addNote({
+    required String bookId,
+    required int lineNumber,
+    required String content,
+    required String contentPlain,
+    required PersonalNoteContentFormat contentFormat,
+    String? selectedText,
+    int? categoryId,
+  }) async {
+    addNoteCallCount++;
+    capturedBookId = bookId;
+    capturedLineNumber = lineNumber;
+    capturedContentPlain = contentPlain;
+    capturedCategoryId = categoryId;
+    return const [];
+  }
+}
+
 PersonalNote _note() {
   final now = DateTime(2026, 3, 15);
   return PersonalNote(
@@ -845,8 +1062,12 @@ class _TestTextBookBloc extends Bloc<TextBookEvent, TextBookState>
 class _TestPersonalNotesBloc
     extends Bloc<PersonalNotesEvent, PersonalNotesState>
     implements PersonalNotesBloc {
+  final List<PersonalNotesEvent> receivedEvents = [];
+
   _TestPersonalNotesBloc(super.initialState) {
-    on<PersonalNotesEvent>((event, emit) {});
+    on<PersonalNotesEvent>((event, emit) {
+      receivedEvents.add(event);
+    });
   }
 
   @override

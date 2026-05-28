@@ -45,6 +45,8 @@ import 'package:otzaria/utils/text/word_at_position.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
+import 'package:otzaria/text_book/utils/inline_notes_utils.dart'
+    as inline_notes;
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
@@ -134,6 +136,41 @@ bool shouldShowOpenLinksPaneEntry({
   return hasLinks && !isLinksTabActive;
 }
 
+/// מחזירה האם לשורה [index] יש מפרשים להצגה במצב "מפרשים מתחת".
+///
+/// מתחשבת גם במפרש ההערות הוירטואלי ([kNotesCommentatorTitle]): אם הוא
+/// פעיל ויש הערות inline בשורה, יש מה להציג — גם כשאין קישורי מפרשים
+/// אמיתיים. אחרת בודקת קישורי COMMENTARY/TARGUM למפרשים הפעילים.
+@visibleForTesting
+bool hasCommentariesForLine({
+  required List<String> activeCommentators,
+  required List<String> content,
+  required Map<int, List<Link>> linksByLine,
+  required int index,
+}) {
+  if (activeCommentators.contains(kNotesCommentatorTitle) &&
+      inline_notes.notesForLines(content, [index]).isNotEmpty) {
+    return true;
+  }
+
+  final lineLinks = linksByLine[index + 1];
+  if (lineLinks == null || lineLinks.isEmpty) return false;
+
+  final activeCommentatorsSet = activeCommentators.toSet();
+  String? lastPath;
+  String? lastTitle;
+
+  return lineLinks.any((link) {
+    final type = link.connectionType.toUpperCase();
+    if (type != "COMMENTARY" && type != "TARGUM") return false;
+    if (link.path2 != lastPath) {
+      lastPath = link.path2;
+      lastTitle = utils.getTitleFromPath(link.path2);
+    }
+    return lastTitle != null && activeCommentatorsSet.contains(lastTitle!);
+  });
+}
+
 /// פריט "בחר מפרשים מרובים" יוצג כשיש callback `onOpenCommentatorsPaneWithFilter`
 /// וטאב המפרשים אינו פעיל בחלונית הצד. הכלל זהה גם במצב "מפרשים מתחת":
 /// אם המשתמש כבר פתח את חלונית הצד על המפרשים, אין צורך בפריט.
@@ -146,6 +183,32 @@ bool shouldShowSelectCommentatorsEntry({
   required bool isCommentatorsTabActive,
 }) {
   return hasOpenCommentatorsPaneWithFilterCallback && !isCommentatorsTabActive;
+}
+
+/// מעבד טקסט גולמי לפי הגדרות התצוגה (טעמים/ניקוד/פיסוק), כך שפעולות
+/// "העתק את כל הפסקה" ו"העתק טקסט מוצג" ישקפו את מה שמוצג בפועל על המסך —
+/// באותו סדר עיבוד של [TextRendererService] (טעמים → ניקוד → פיסוק).
+///
+/// הערה: [utils.removeVolwels] מסיר גם ניקוד וגם טעמים, ולכן כש-[removeNikud]
+/// פעיל הטעמים מוסרים ממילא ללא תלות ב-[showTeamim].
+@visibleForTesting
+String applyDisplayTextPreferences({
+  required String text,
+  required bool removeNikud,
+  required bool removePunctuation,
+  required bool showTeamim,
+}) {
+  var processed = text;
+  if (!showTeamim) {
+    processed = utils.removeTeamim(processed);
+  }
+  if (removeNikud) {
+    processed = utils.removeVolwels(processed);
+  }
+  if (removePunctuation) {
+    processed = utils.removePunctuation(processed);
+  }
+  return processed;
 }
 
 class _CombinedViewState extends State<CombinedView> {
@@ -791,6 +854,26 @@ class _CombinedViewState extends State<CombinedView> {
     );
   }
 
+  /// מחלץ את העדפות התצוגה מה-state ומעבד את הטקסט בהתאם, כך שההעתקה
+  /// תשקף את מה שמוצג בפועל על המסך — בדיוק כמו [TextRendererService].
+  String _applyDisplayTextPreferences(
+    String text,
+    TextBookState textBookState,
+    SettingsState settingsState,
+  ) {
+    final removeNikud =
+        textBookState is TextBookLoaded && textBookState.removeNikud;
+    final removePunctuation =
+        textBookState is TextBookLoaded && textBookState.removePunctuation;
+
+    return applyDisplayTextPreferences(
+      text: text,
+      removeNikud: removeNikud,
+      removePunctuation: removePunctuation,
+      showTeamim: settingsState.showTeamim,
+    );
+  }
+
   /// העתקת פסקה לפי אינדקס (משתמש ב־widget.data[index] ומייצר גם HTML)
   Future<void> _copyParagraphByIndex(int index) async {
     if (index < 0 || index >= widget.data.length) return;
@@ -802,9 +885,8 @@ class _CombinedViewState extends State<CombinedView> {
     final settingsState = context.read<SettingsBloc>().state;
     final textBookState = context.read<TextBookBloc>().state;
 
-    final removeNikud =
-        textBookState is TextBookLoaded && textBookState.removeNikud;
-    final processedText = removeNikud ? utils.removeVolwels(text) : text;
+    final processedText =
+        _applyDisplayTextPreferences(text, textBookState, settingsState);
 
     final plainText = utils.stripHtmlIfNeeded(processedText);
 
@@ -856,22 +938,28 @@ class _CombinedViewState extends State<CombinedView> {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded || state.visibleIndices.isEmpty) return;
 
-    // איסוף כל הטקסט הנראה במסך
+    // קבלת ההגדרות הנוכחיות
+    final settingsState = context.read<SettingsBloc>().state;
+
+    // איסוף כל הטקסט הנראה במסך — עם אותן העדפות תצוגה (טעמים/ניקוד/פיסוק)
+    // שמיושמות בפועל על המסך, כדי שההעתקה תשקף את מה שמוצג.
     final visibleTexts = <String>[];
     for (final index in state.visibleIndices) {
       if (index >= 0 && index < widget.data.length) {
-        visibleTexts.add(widget.data[index]);
+        visibleTexts.add(
+          _applyDisplayTextPreferences(
+              widget.data[index], state, settingsState),
+        );
       }
     }
 
     if (visibleTexts.isEmpty) return;
 
     final combinedText = visibleTexts.join('\n\n');
+    final plainText = utils.stripHtmlIfNeeded(combinedText);
 
-    // קבלת ההגדרות הנוכחיות
-    final settingsState = context.read<SettingsBloc>().state;
-
-    String finalText = combinedText;
+    String finalText = plainText;
+    String finalHtmlText = combinedText;
 
     // אם צריך להוסיף כותרות
     if (settingsState.copyWithHeaders != 'none') {
@@ -884,6 +972,14 @@ class _CombinedViewState extends State<CombinedView> {
       );
 
       finalText = CopyUtils.formatTextWithHeaders(
+        originalText: plainText,
+        copyWithHeaders: settingsState.copyWithHeaders,
+        copyHeaderFormat: settingsState.copyHeaderFormat,
+        bookName: bookName,
+        currentPath: currentPath,
+      );
+
+      finalHtmlText = CopyUtils.formatTextWithHeaders(
         originalText: combinedText,
         copyWithHeaders: settingsState.copyWithHeaders,
         copyHeaderFormat: settingsState.copyHeaderFormat,
@@ -892,16 +988,15 @@ class _CombinedViewState extends State<CombinedView> {
       );
     }
 
-    finalText = CopyUtils.applyCopyPreferences(
-      text: finalText,
+    final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
+      plainText: finalText,
+      htmlText: finalHtmlText,
       replaceHolyNames: settingsState.replaceHolyNames,
     );
 
-    final combinedHtml = _formatTextAsHtml(finalText);
-
     final item = DataWriterItem();
-    item.add(Formats.plainText(finalText.trimRight()));
-    item.add(Formats.htmlText(combinedHtml));
+    item.add(Formats.plainText(copyContent.plainText.trimRight()));
+    item.add(Formats.htmlText(_formatTextAsHtml(copyContent.htmlText)));
 
     await SystemClipboard.instance?.write([item]);
   }
@@ -1806,23 +1901,12 @@ class _CombinedViewState extends State<CombinedView> {
 
   /// בדיקה אם יש מפרשים לאינדקס מסוים
   bool _hasCommentaries(TextBookLoaded state, int index) {
-    // בדיקה אם יש קישורים רלוונטיים לאינדקס הזה
-    final lineLinks = state.linksByLine[index + 1];
-    if (lineLinks == null || lineLinks.isEmpty) return false;
-
-    final activeCommentatorsSet = state.activeCommentators.toSet();
-    String? lastPath;
-    String? lastTitle;
-
-    return lineLinks.any((link) {
-      final type = link.connectionType.toUpperCase();
-      if (type != "COMMENTARY" && type != "TARGUM") return false;
-      if (link.path2 != lastPath) {
-        lastPath = link.path2;
-        lastTitle = utils.getTitleFromPath(link.path2);
-      }
-      return lastTitle != null && activeCommentatorsSet.contains(lastTitle!);
-    });
+    return hasCommentariesForLine(
+      activeCommentators: state.activeCommentators,
+      content: state.content,
+      linksByLine: state.linksByLine,
+      index: index,
+    );
   }
 
   @override
@@ -1916,7 +2000,7 @@ class _CommentaryCardState extends State<_CommentaryCard> {
                   child: CommentaryListBase(
                     key: _commentaryKey,
                     indexes: [widget.index],
-                    fontSize: widget.textSize,
+                    fontSize: settingsState.commentatorsFontSize,
                     openBookCallback: widget.openBookCallback,
                     showSearch: false,
                     selectionSyncController: widget.selectionSyncController,

@@ -110,6 +110,56 @@ void main() {
       expect(find.text('אודות הספר'), findsOneWidget);
     });
 
+    testWidgets('תפריט תצוגת המפרשים כולל "פתח כרטיסיית מפרשים"',
+        (tester) async {
+      final book = TextBook(title: 'ספר בדיקה');
+      final bloc = _TestTextBookBloc(_loadedState(book));
+      final tab = TextBookTab(
+        book: book,
+        index: 0,
+        blocOverride: bloc,
+      );
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bloc.close();
+        await tabsBloc.close();
+        await settingsBloc.close();
+        tab.dispose();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 900));
+      await _pumpTextBookScreen(
+        tester,
+        tab: tab,
+        textBookBloc: bloc,
+        tabsBloc: tabsBloc,
+        settingsBloc: settingsBloc,
+        focusRepository: focusRepository,
+        shamorZachorDataProvider: shamorZachorDataProvider,
+        shamorZachorProgressProvider: shamorZachorProgressProvider,
+        bookmarkBloc: bookmarkBloc,
+        personalNotesBloc: personalNotesBloc,
+        tourCubit: tourCubit,
+        isInCombinedView: false,
+      );
+
+      final viewModeButton = find.byTooltip('בחר סוג תצוגת מפרשים');
+      expect(viewModeButton, findsOneWidget);
+      await tester.tap(viewModeButton);
+      await tester.pumpAndSettle();
+
+      // ודא שזה התפריט הנכון (מצבי התצוגה) ושנוסף פריט הפעולה החדש
+      expect(find.text('מפרשים בצד'), findsOneWidget);
+      expect(find.text('צורת הדף'), findsOneWidget);
+      expect(find.text('פתח כרטיסיית מפרשים'), findsOneWidget);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
     testWidgets(
         'openNotesTabNotifier פותח פאנל כשסיפליט ויו כבר פעיל והפאנל סגור',
         (tester) async {

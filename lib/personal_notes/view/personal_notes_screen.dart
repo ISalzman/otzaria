@@ -69,6 +69,8 @@ class _PersonalNotesManagerScreenState
   final ScrollController _contentScrollController = ScrollController();
   String _searchQuery = '';
   double _navigationWidth = 250.0;
+  // טווח תאריכים לסינון לפי תאריך עדכון ההערה. null = ללא סינון תאריכים.
+  DateTimeRange? _dateRange;
 
   @override
   void initState() {
@@ -132,6 +134,55 @@ class _PersonalNotesManagerScreenState
       _selectedFilter = filter;
     });
   }
+
+  /// פתיחת בורר טווח תאריכים לסינון ההערות לפי תאריך עדכון.
+  ///
+  /// משתמש בשני דיאלוגי [showDatePicker] קומפקטיים ברצף (תחילה תאריך התחלה ואז
+  /// תאריך סיום) במקום [showDateRangePicker] מסך-מלא — כך מקבלים דיאלוג קטן רגיל
+  /// עם ניווט נוח בין חודשים ושנים.
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final firstDate = DateTime(2000);
+
+    final start = await showDatePicker(
+      context: context,
+      firstDate: firstDate,
+      lastDate: today,
+      initialDate: _dateRange?.start ?? today,
+      helpText: 'בחר תאריך התחלה',
+      cancelText: 'ביטול',
+      confirmText: 'הבא',
+    );
+    if (!mounted || start == null) return;
+
+    final previousEnd = _dateRange?.end;
+    final end = await showDatePicker(
+      context: context,
+      firstDate: start,
+      lastDate: today,
+      initialDate: (previousEnd != null && !previousEnd.isBefore(start))
+          ? previousEnd
+          : today,
+      helpText: 'בחר תאריך סיום',
+      cancelText: 'ביטול',
+      confirmText: 'סנן',
+    );
+    if (!mounted || end == null) return;
+
+    setState(() {
+      _dateRange = DateTimeRange(start: start, end: end);
+    });
+  }
+
+  void _clearDateRange() {
+    setState(() {
+      _dateRange = null;
+    });
+  }
+
+  /// פורמט תאריך לועזי קצר להצגה בבאנר הסינון.
+  String _formatDate(DateTime date) => '${date.day}/${date.month}/${date.year}';
 
   void requestKeyboardFocus() {
     if (!mounted || !_windowFocusNode.canRequestFocus) return;
@@ -256,7 +307,12 @@ class _PersonalNotesManagerScreenState
                     isOpen: _isNavigationVisible,
                     alignment: AlignmentDirectional
                         .centerEnd, // ימין בעברית (RTL) - סרגל ניווט
-                    mainContent: _buildAllNotesList(),
+                    mainContent: Column(
+                      children: [
+                        if (_dateRange != null) _buildDateFilterBanner(),
+                        Expanded(child: _buildAllNotesList()),
+                      ],
+                    ),
                     paneWidth: _navigationWidth,
                     minMainContentWidth: 320,
                     onClose: () => setState(() => _isNavigationVisible = false),
@@ -331,6 +387,18 @@ class _PersonalNotesManagerScreenState
             },
           ),
           trailingItems: [
+            AppTopBarItem(
+              widget: ToolbarActionButton(
+                compact: isCompact,
+                tooltip: _dateRange != null
+                    ? 'סינון תאריך פעיל - לחץ לשינוי'
+                    : 'סנן לפי תאריך',
+                icon: _dateRange != null
+                    ? FluentIcons.calendar_checkmark_24_filled
+                    : FluentIcons.calendar_24_regular,
+                onPressed: _pickDateRange,
+              ),
+            ),
             AppTopBarItem(
               widget: ToolbarActionButton(
                 compact: isCompact,
@@ -729,6 +797,13 @@ class _PersonalNotesManagerScreenState
       });
     }
 
+    // סינון לפי טווח תאריכים (לפי תאריך עדכון ההערה, ברמת היום)
+    if (_dateRange != null) {
+      allNotes.removeWhere(
+        (noteWithBook) => !noteWithinDateRange(noteWithBook.note, _dateRange),
+      );
+    }
+
     // Filter by selected filter
     List<_NoteWithBook> filteredNotes;
 
@@ -871,6 +946,46 @@ class _PersonalNotesManagerScreenState
           ],
         );
       },
+    );
+  }
+
+  /// באנר המציג את טווח התאריכים הפעיל לסינון, עם אפשרות ניקוי.
+  Widget _buildDateFilterBanner() {
+    final cs = Theme.of(context).colorScheme;
+    final range = _dateRange!;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.secondaryContainer,
+        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            FluentIcons.calendar_24_regular,
+            size: 18,
+            color: cs.onSecondaryContainer,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'מציג הערות מ-${_formatDate(range.start)} עד ${_formatDate(range.end)}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: cs.onSecondaryContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+              textDirection: TextDirection.rtl,
+            ),
+          ),
+          IconButton(
+            tooltip: 'נקה סינון תאריך',
+            icon: const Icon(FluentIcons.dismiss_24_regular, size: 18),
+            color: cs.onSecondaryContainer,
+            onPressed: _clearDateRange,
+          ),
+        ],
+      ),
     );
   }
 
@@ -1167,6 +1282,17 @@ class _InfoChip extends StatelessWidget {
       ),
     );
   }
+}
+
+/// בודקת אם הערה נכללת בטווח התאריכים שנבחר לסינון.
+///
+/// הסינון מתבצע לפי תאריך העדכון [PersonalNote.updatedAt] ברמת היום בלבד
+/// (מתעלם משעה). [range] של null פירושו שאין סינון פעיל — כל ההערות נכללות.
+@visibleForTesting
+bool noteWithinDateRange(PersonalNote note, DateTimeRange? range) {
+  if (range == null) return true;
+  final noteDay = DateUtils.dateOnly(note.updatedAt);
+  return !noteDay.isBefore(range.start) && !noteDay.isAfter(range.end);
 }
 
 class _NoteWithBook {

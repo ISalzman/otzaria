@@ -84,6 +84,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   /// על סריקות עתידיות גם אם 'הערות' לא נוסף ל-availableCommentators.
   bool _inlineNotesFullScanDone = false;
 
+  /// true אחרי שהוזנקה טעינת התוכן המלא (_loadFullBookInBackground). במצב כזה
+  /// ApplyFullBookContent ממילא יסרוק את כל התוכן, ולכן הזיהוי החד-פעמי ברקע
+  /// (_detectInlineNotesInBackground) מיותר — מונע קריאת full-content כפולה.
+  bool _fullContentLoadInitiated = false;
+
   /// מאפס את הדגלים הספציפיים-לספר. נקרא מ-_onLoadContent כשבלוק עובר
   /// לטעון ספר חדש (כיום בייצור bloc נוצר חדש לכל תא, אבל הקריאה כאן
   /// מגינה מפני דליפת state בין ספרים אם זה ישתנה בעתיד).
@@ -91,6 +96,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   void resetInlineNotesStateForNewBook() {
     _userTouchedCommentators = false;
     _inlineNotesFullScanDone = false;
+    _fullContentLoadInitiated = false;
   }
 
   @visibleForTesting
@@ -98,6 +104,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   @visibleForTesting
   bool get inlineNotesFullScanDoneForTesting => _inlineNotesFullScanDone;
+
+  @visibleForTesting
+  bool get fullContentLoadInitiatedForTesting => _fullContentLoadInitiated;
 
   // pinpoint highlight ממתין להחלה כשה-bloc יגיע ל-Loaded
   ({String text, int? sectionIndex})? _pendingPinpoint;
@@ -136,6 +145,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<UpdateSearchText>(_onUpdateSearchText);
     on<ApplyFullBookContent>(_onApplyFullBookContent);
     on<ApplyBookContentRange>(_onApplyBookContentRange);
+    on<InlineNotesDetected>(_onInlineNotesDetected);
     on<CreateNoteFromToolbar>(_onCreateNoteFromToolbar);
     on<UpdateSelectedTextForNote>(_onUpdateSelectedTextForNote);
     on<UpdateLinks>(_onUpdateLinks);
@@ -585,6 +595,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       _loadContentRangeInBackground(book, visibleIndices);
       _warmContentCacheInBackground(book);
+      _detectInlineNotesInBackground(book);
 
       _loadLinksInBackground(book, visibleIndices);
 
@@ -1403,6 +1414,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (!notes.hasInlineNotes(linesToScan)) {
       return state;
     }
+    return _attachInlineNotesCommentator(state);
+  }
+
+  /// מצרף את מפרש ההערות הוירטואלי ל-availableCommentators ולקבוצת "שאר
+  /// מפרשים", ובוחר אותו אוטומטית אם המשתמש עוד לא נגע ידנית בבחירה.
+  /// משותף למסלול הסריקה לפי-תוכן ולמסלול הזיהוי החד-פעמי ברקע.
+  TextBookLoaded _attachInlineNotesCommentator(TextBookLoaded state) {
+    if (state.availableCommentators.contains(kNotesCommentatorTitle)) {
+      return state;
+    }
     final updatedAvailable = [
       ...state.availableCommentators,
       kNotesCommentatorTitle,
@@ -1419,6 +1440,26 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           ? const [kNotesCommentatorTitle]
           : state.activeCommentators,
     );
+  }
+
+  /// מטפל בתוצאת הזיהוי החד-פעמי של הערות inline (סריקת substring על הטקסט
+  /// הגולמי המלא, ברקע). מכיוון שנסרק כל הספר, אין יותר טעם בסריקות
+  /// per-chunk עתידיות — לכן מסמנים [_inlineNotesFullScanDone].
+  void _onInlineNotesDetected(
+    InlineNotesDetected event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is! TextBookLoaded) {
+      return;
+    }
+    final currentState = state as TextBookLoaded;
+    if (currentState.book.title != event.bookTitle) {
+      return;
+    }
+    _inlineNotesFullScanDone = true;
+    if (event.hasNotes) {
+      emit(_attachInlineNotesCommentator(currentState));
+    }
   }
 
   List<CommentatorGroup> _addNotesToOtherCommentatorsGroup(
@@ -1644,6 +1685,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   void _loadFullBookInBackground(TextBook book) async {
+    // מסמן סינכרונית (לפני ה-await) כדי ש-_detectInlineNotesInBackground,
+    // שרץ מיד אחרי, ידלג ולא יבצע קריאת full-content כפולה.
+    _fullContentLoadInitiated = true;
     try {
       final fullContent = await repository.getBookContent(book);
 
@@ -1668,6 +1712,45 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (kDebugMode) {
         debugPrint(
             '⚠️ TextBookBloc::loadFullBook failed for ${book.title}: $e');
+      }
+    }
+  }
+
+  /// זיהוי חד-פעמי ברקע של הערות inline בכל הספר, בקריאה מלאה אחת ובדיקת
+  /// substring זולה — במקום להמתין שהחימום ההדרגתי יסרוק נתח-אחר-נתח עד
+  /// שיגיע לשורה עם הערה. כך מפרש "הערות" מופיע מיד גם בספרים שבהם ההערות
+  /// מופיעות רק בהמשך. הטקסט הגולמי משמש לבדיקה בלבד ואינו נשמר.
+  void _detectInlineNotesInBackground(TextBook book) async {
+    // אם כבר סרקנו את כל התוכן (ApplyFullBookContent), או שכבר הוזנקה טעינת
+    // תוכן מלא שתסרוק ממילא — אין צורך בקריאת full-content נוספת. הדילוג כאן
+    // מונע קריאה כפולה במסלול ה-preview (ראה _loadFullBookInBackground).
+    if (_inlineNotesFullScanDone || _fullContentLoadInitiated) {
+      return;
+    }
+    final currentState = state;
+    if (currentState is! TextBookLoaded ||
+        currentState.book.title != book.title ||
+        currentState.availableCommentators.contains(kNotesCommentatorTitle)) {
+      return;
+    }
+
+    try {
+      final rawContent = await repository.getBookContent(book);
+      if (isClosed || rawContent.isEmpty) {
+        return;
+      }
+      final latest = state;
+      if (latest is! TextBookLoaded || latest.book.title != book.title) {
+        return;
+      }
+      add(InlineNotesDetected(
+        bookTitle: book.title,
+        hasNotes: notes.rawTextHasInlineNotes(rawContent),
+      ));
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+            '⚠️ TextBookBloc::detectInlineNotes failed for ${book.title}: $e');
       }
     }
   }

@@ -54,6 +54,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdatePersonalNotesCollapsedByDefault>(
         _onUpdatePersonalNotesCollapsedByDefault);
     on<UpdateCompactMenuMode>(_onUpdateCompactMenuMode);
+    on<UpdateMergeUserBooksIntoLibrary>(_onUpdateMergeUserBooksIntoLibrary);
     on<UpdateProtectedModeEnabled>(_onUpdateProtectedModeEnabled);
     on<UpdateProtectedModePassword>(_onUpdateProtectedModePassword);
     on<UpdateHiddenBuiltInToolIds>(_onUpdateHiddenBuiltInToolIds);
@@ -113,6 +114,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       personalNotesCollapsedByDefault:
           settings['personalNotesCollapsedByDefault'] ?? true,
       compactMenuMode: settings['compactMenuMode'] ?? false,
+      mergeUserBooksIntoLibrary:
+          settings['mergeUserBooksIntoLibrary'] ?? false,
       protectedModeEnabled: settings['protectedModeEnabled'] ?? false,
       hiddenBuiltInToolIds:
           (settings['hiddenBuiltInToolIds'] as Set<String>?) ?? <String>{},
@@ -186,6 +189,16 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateCompactMenuMode(event.compactMenuMode);
     emit(state.copyWith(compactMenuMode: event.compactMenuMode));
+  }
+
+  Future<void> _onUpdateMergeUserBooksIntoLibrary(
+    UpdateMergeUserBooksIntoLibrary event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository
+        .updateMergeUserBooksIntoLibrary(event.mergeUserBooksIntoLibrary);
+    emit(state.copyWith(
+        mergeUserBooksIntoLibrary: event.mergeUserBooksIntoLibrary));
   }
 
   Future<void> _onUpdateProtectedModeEnabled(

@@ -17,7 +17,9 @@ import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart' hide UpdateFontSize;
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/utils/visible_index.dart';
@@ -68,6 +70,8 @@ import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 const String _viewModeSplit = 'split';
 const String _viewModeBelow = 'below';
 const String _viewModePage = 'page';
+// פעולה (לא מצב תצוגה): פתיחת כרטיסיית מפרשים נפרדת
+const String _actionOpenCommentatorsTab = 'open_commentators_tab';
 
 final GlobalKey textBookNavigationTourTargetKey = GlobalKey(
   debugLabel: 'text_book_navigation_tour_target',
@@ -1745,6 +1749,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ? _viewModePage
           : (state.showSplitView ? _viewModeSplit : _viewModeBelow),
       onSelected: (value) async {
+        // פתיחת כרטיסיית מפרשים נפרדת — פעולה, לא מצב תצוגה
+        if (value == _actionOpenCommentatorsTab) {
+          context.read<TabsBloc>().add(
+                AddTab(
+                  CommentatorsTab(sourceTab: widget.tab),
+                  insertAdjacent: true,
+                ),
+              );
+          return;
+        }
+
         final bloc = context.read<TextBookBloc>();
         final tourCubit = context.read<TourCubit>();
 
@@ -1794,6 +1809,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           icon: isPage
               ? FluentIcons.book_open_24_filled
               : FluentIcons.book_open_24_regular,
+        ),
+        const AppMenuEntry(
+          value: _actionOpenCommentatorsTab,
+          label: 'פתח כרטיסיית מפרשים',
+          icon: FluentIcons.open_24_regular,
         ),
       ],
     );

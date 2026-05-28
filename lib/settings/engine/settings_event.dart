@@ -353,6 +353,15 @@ class UpdateCompactMenuMode extends SettingsEvent {
   List<Object?> get props => [compactMenuMode];
 }
 
+class UpdateMergeUserBooksIntoLibrary extends SettingsEvent {
+  final bool mergeUserBooksIntoLibrary;
+
+  const UpdateMergeUserBooksIntoLibrary(this.mergeUserBooksIntoLibrary);
+
+  @override
+  List<Object?> get props => [mergeUserBooksIntoLibrary];
+}
+
 class UpdateProtectedModeEnabled extends SettingsEvent {
   final bool enabled;
 

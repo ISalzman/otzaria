@@ -2,6 +2,11 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:search_engine/search_engine.dart';
 
+/// סנטינל לזיהוי "פרמטר לא הועבר" ב-copyWith כשהשדה nullable וצריך לאפשר
+/// גם איפוס מפורש ל-null. בלי זה, `null` במשמעות "לא הועבר" ו"אפס אותי
+/// במפורש" לא ניתנים להבחנה בחתימת copyWith רגילה.
+const Object _unset = Object();
+
 class SearchState {
   final String? filterQuery;
   final List<Book>? filteredBooks;
@@ -17,6 +22,12 @@ class SearchState {
   // הגדרות החיפוש מרוכזות במחלקה נפרדת
   final SearchConfiguration configuration;
 
+  /// הודעת שגיאה אחרונה בחיפוש (קומפילציית רגקס, FFI וכד׳). null אם החיפוש
+  /// האחרון הצליח או לא בוצע. ה-UI מציג את ההודעה במקום "אין תוצאות" כאשר
+  /// `results` ריק ו-errorMessage לא null, כדי שתקלה לא תיראה כמו חיפוש ריק
+  /// לגיטימי. השדה מתאפס בתחילת חיפוש חדש (clear-then-set), ונשמר אחרת.
+  final String? errorMessage;
+
   const SearchState({
     this.results = const [],
     this.booksToSearch = const {},
@@ -27,6 +38,7 @@ class SearchState {
     this.filteredBooks,
     this.facetCounts = const {},
     this.configuration = const SearchConfiguration(),
+    this.errorMessage,
   });
 
   SearchState copyWith({
@@ -39,6 +51,7 @@ class SearchState {
     List<Book>? filteredBooks,
     Map<String, int>? facetCounts,
     SearchConfiguration? configuration,
+    Object? errorMessage = _unset,
   }) {
     return SearchState(
       results: results ?? this.results,
@@ -50,6 +63,9 @@ class SearchState {
       filteredBooks: filteredBooks,
       facetCounts: facetCounts ?? this.facetCounts,
       configuration: configuration ?? this.configuration,
+      errorMessage: identical(errorMessage, _unset)
+          ? this.errorMessage
+          : errorMessage as String?,
     );
   }
 

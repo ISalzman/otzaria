@@ -293,6 +293,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   static const _keyBackupWorkspaces = 'key-backup-workspaces';
   static const _keyBackupShamorZachor = 'key-backup-shamor-zachor';
   static const _keyBackupUserOverrides = 'key-backup-user-overrides';
+  static const _keyBackupPlugins = 'key-backup-plugins';
   static const _keyAutoBackupFrequency = 'key-auto-backup-frequency';
 
   _BackupMode _selectedBackupMode = _BackupMode.all;
@@ -1334,6 +1335,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         includeWorkspaces: _shouldInclude(_keyBackupWorkspaces),
         includeShamorZachor: _shouldInclude(_keyBackupShamorZachor),
         includeUserOverrides: _shouldInclude(_keyBackupUserOverrides),
+        includePlugins: _shouldInclude(_keyBackupPlugins),
       );
       if (!mounted) return;
       final backupPath = result.path;
@@ -1614,6 +1616,13 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                         title: 'הגדרות מתקדמות',
                         subtitle: 'הגדרות נוספות שדרסת',
                         settingKey: _keyBackupUserOverrides,
+                        onChanged: () => setState(() {}),
+                      ),
+                      _BackupOptionTile(
+                        icon: FluentIcons.puzzle_piece_24_regular,
+                        title: 'תוספים',
+                        subtitle: 'התוספים שהותקנו, הגדרותיהם ונתוניהם',
+                        settingKey: _keyBackupPlugins,
                         onChanged: () => setState(() {}),
                       ),
                     ],
