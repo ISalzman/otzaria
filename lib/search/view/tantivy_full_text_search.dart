@@ -287,12 +287,26 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                     else if (state.hasNoSelectedFacets)
                       _buildNoCategoriesSelectedMessage(context)
                     else if (state.results.isEmpty)
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text('אין תוצאות'),
-                        ),
-                      )
+                      // הבחנה בין חיפוש ריק לכשל מנוע — ראה state.errorMessage.
+                      state.errorMessage != null
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Text(
+                                  state.errorMessage!,
+                                  textDirection: TextDirection.rtl,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Text('אין תוצאות'),
+                              ),
+                            )
                     else
                       Container(
                         clipBehavior: Clip.hardEdge,
@@ -578,6 +592,26 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                               );
                                             }
                                             if (state.results.isEmpty) {
+                                              // ראה הסבר על errorMessage למעלה.
+                                              if (state.errorMessage != null) {
+                                                return Center(
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                            8.0),
+                                                    child: Text(
+                                                      state.errorMessage!,
+                                                      textDirection:
+                                                          TextDirection.rtl,
+                                                      style: TextStyle(
+                                                        color: Theme.of(context)
+                                                            .colorScheme
+                                                            .error,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              }
                                               return const Center(
                                                 child: Padding(
                                                   padding: EdgeInsets.all(8.0),

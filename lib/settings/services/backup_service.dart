@@ -445,15 +445,17 @@ class BackupService {
       );
     }
 
+    final runtimeSkipped = <String>[];
+
     // Restore plugins
     if (includes['plugins'] == true && backupData.containsKey('plugins')) {
-      await _restorePlugins(
+      final pluginsHadFailures = await _restorePlugins(
         (backupData['plugins'] as List).cast<Map<String, dynamic>>(),
       );
+      if (pluginsHadFailures) runtimeSkipped.add('plugins');
     }
 
     // Restore Shamor Zachor
-    final runtimeSkipped = <String>[];
     if (includes['shamorZachor'] == true &&
         backupData.containsKey('shamorZachor')) {
       final skipped = await _restoreShamorZachor(
@@ -586,10 +588,16 @@ class BackupService {
   /// נתיב ההתקנה מחושב מחדש למחשב היעד — שם המשתמש או הפלטפורמה עשויים
   /// להשתנות. הנתיבים `entrypoint_path` ו-`icon_path` יחסיים (מתוך ה-manifest)
   /// ולכן נשארים תקפים ללא שינוי.
-  static Future<void> _restorePlugins(
+  ///
+  /// מחזיר `true` אם לפחות תוסף אחד נכשל בשחזור — הקורא משתמש בזה כדי
+  /// לסמן את הסעיף `plugins` כדילוג ולהציג למשתמש שחזור חלקי. זה קריטי
+  /// כי [_restoreDirFromBase64] מוחק את תיקיית ההתקנה הקיימת *לפני* הכתיבה,
+  /// כך שכשל באמצע עלול להשאיר תוסף חצי-משוחזר.
+  static Future<bool> _restorePlugins(
     List<Map<String, dynamic>> pluginsData,
   ) async {
     final db = PluginSystemDatabase.instance;
+    var hadFailures = false;
 
     for (final entry in pluginsData) {
       try {
@@ -624,8 +632,11 @@ class BackupService {
         });
       } catch (e) {
         _logger.warning('Failed to restore plugin entry: $e');
+        hadFailures = true;
       }
     }
+
+    return hadFailures;
   }
 
   /// כותב קבצים מגיבוי (מפת נתיב-יחסי → base64) לתיקייה, אחרי ניקוי תוכן

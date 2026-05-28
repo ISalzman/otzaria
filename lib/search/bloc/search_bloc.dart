@@ -105,6 +105,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       searchQuery: query,
       isLoading: true,
       facetCounts: shouldPreserveFacetCounts ? state.facetCounts : const {},
+      // איפוס שגיאה קודמת בתחילת חיפוש חדש, אחרת הודעת שגיאה ישנה הייתה
+      // נשארת ב-state ומבלבלת את המשתמש במהלך החיפוש החדש.
+      errorMessage: null,
     ));
 
     final booksToSearch = state.booksToSearch.map((e) => e.title).toList();
@@ -205,15 +208,17 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         totalResults: totalResults,
       ));
     } catch (e, stackTrace) {
-      // זיהוי שגיאה: לפני התיקון, שגיאת מנוע (למשל כשל קומפילציית רגקס) נבלעה
-      // כאן בשקט והוצגה כ"0 תוצאות" — מצב שלא נבדל מחיפוש ריק לגיטימי. כעת
-      // השגיאה מתועדת ומוצגת למשתמש, כדי שתקלות לא ייעלמו בשקט.
+      // זיהוי שגיאה: שגיאת מנוע (למשל כשל קומפילציית רגקס) פעם נבלעה כאן
+      // בשקט והוצגה כ"0 תוצאות" — מצב שלא נבדל מחיפוש ריק לגיטימי. כעת:
+      // (1) toast מיידי דרך UiSnack, וגם (2) שדה errorMessage ב-state כדי
+      // שה-UI יציג שגיאה במקום "אין תוצאות" באופן מתמשך עד החיפוש הבא.
       debugPrint('❌ Search failed: $e\n$stackTrace');
       UiSnack.showError('אירעה שגיאה בעת החיפוש');
       emit(state.copyWith(
         results: [],
         totalResults: 0,
         isLoading: false,
+        errorMessage: 'אירעה שגיאה בעת החיפוש',
       ));
     }
   }

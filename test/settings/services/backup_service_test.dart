@@ -420,6 +420,35 @@ void main() {
       expect(await db.getPluginKV(pluginId, 'settings', 'lang'), isNull);
     });
 
+    test('שחזור מסמן "plugins" כדילוג כשתוסף נכשל בשחזור', () async {
+      final db = PluginSystemDatabase.instance;
+      const pluginId = 'broken.plugin';
+
+      final installPath = await AppPaths.getPluginInstallPath(pluginId);
+      await File(p.join(installPath, 'index.html')).create(recursive: true);
+      await File(p.join(installPath, 'index.html')).writeAsString('x');
+
+      await db.insertOrUpdatePlugin(
+          buildPlugin(id: pluginId, installPath: installPath));
+
+      final backup = await createPluginsBackup();
+
+      // משבשים את ה-manifest_json כך ש-InstalledPlugin.fromDbMap יזרוק
+      // בעת השחזור (אחרי שתיקיית ההתקנה כבר נמחקה).
+      final backupFile = File(backup.path);
+      final backupJson =
+          jsonDecode(await backupFile.readAsString()) as Map<String, dynamic>;
+      final pluginEntry =
+          (backupJson['plugins'] as List).first as Map<String, dynamic>;
+      (pluginEntry['installation'] as Map)['manifest_json'] = 'not-json{';
+      await backupFile.writeAsString(jsonEncode(backupJson));
+
+      final skipped = await BackupService.restoreFromBackup(backup.path);
+
+      expect(skipped, contains('plugins'),
+          reason: 'כשל בשחזור חייב להציג שחזור חלקי במקום דיווח-שווא');
+    });
+
     test('שחזור מתעלם מנתיבי קבצים החורגים מתיקיית התוסף (path traversal)',
         () async {
       final db = PluginSystemDatabase.instance;
