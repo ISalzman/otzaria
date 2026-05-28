@@ -286,7 +286,7 @@ void main() {
     // ריחוף מעל פריט התת-תפריט — אמור לפתוח אותו אחרי השהיית 300ms, בלי לחיצה.
     // (לפני התיקון: השבתת הפוקוס ביטלה את הפתיחה-בריחוף המובנית של SubmenuButton.)
     await gesture.moveTo(tester.getCenter(find.text('תת-תפריט')));
-    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump(const Duration(milliseconds: 550));
     await tester.pumpAndSettle();
 
     expect(
