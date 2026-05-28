@@ -65,32 +65,45 @@ class TextRendererService {
     return processed;
   }
 
+  // RegExps מקומפלים פעם אחת ברמת הקלאס — הקריאות הקודמות יצרו אותם מחדש
+  // בכל קריאת processText (ולכל תג <sup> בנפרד), מה שהוסיף עומס CPU משמעותי
+  // ברנדור שורות עם הרבה סימוני הערות.
+  static final RegExp _supRegex = RegExp(
+    r'<sup(\s[^>]*)?>(.*?)</sup>',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  static final RegExp _htmlTagRegex = RegExp(r'<[^>]+>');
+  static final RegExp _footnoteMarkerClassRegex = RegExp(
+    r'\bclass\s*=\s*"[^"]*\bfootnote-marker\b[^"]*"',
+    caseSensitive: false,
+  );
+  static final RegExp _simpleInnerRegex = RegExp(r'^[0-9\u0590-\u05FF]+$');
+  static final RegExp _isolateStartRegex = RegExp(r'[\u2066\u2067\u2068]');
+  static final RegExp _rtlCharRegex = RegExp(r'[\u0590-\u08FF]');
+
   /// מתקן תגי <sup> כדי למנוע היפוך סדר ב-RTL
   ///
   /// כאשר יש מספר תגי <sup> ברצף, האלגוריתם של bidi עלול להציג אותם בסדר הפוך.
   /// הפתרון: בידוד כל <sup> באמצעות סימני בידוד דו־כיווניות (LRI/RLI + PDI)
   /// בהתאם לתוכן (מספרים/לטינית -> LTR, עברית/ערבית -> RTL).
   static String _fixFootnoteMarkers(String text) {
-    final supRegex = RegExp(
-      r'<sup(\s[^>]*)?>(.*?)</sup>',
-      caseSensitive: false,
-      dotAll: true,
-    );
+    // Early-exit מהיר: אם אין בכלל תג <sup> בשורה, מחזירים את הטקסט כפי שהוא
+    // בלי לבצע replaceAllMapped (שמקצה StringBuffer גם כשאין התאמות).
+    // משתמשים ב-_supRegex.hasMatch כדי לכבד case-insensitivity של ה-regex
+    // עצמו (text.contains('<sup') היה מפספס <SUP>/<Sup>).
+    if (!_supRegex.hasMatch(text)) return text;
 
-    return text.replaceAllMapped(supRegex, (match) {
+    return text.replaceAllMapped(_supRegex, (match) {
       final attrs = match[1] ?? '';
       final innerHtml = match[2] ?? '';
-      final innerText = innerHtml.replaceAll(RegExp(r'<[^>]+>'), '');
+      final innerText = innerHtml.replaceAll(_htmlTagRegex, '');
       if (innerText.trim().isEmpty) {
         return '';
       }
 
-      final isFootnoteMarker = RegExp(
-        r'\bclass\s*=\s*"[^"]*\bfootnote-marker\b[^"]*"',
-        caseSensitive: false,
-      ).hasMatch(attrs);
-
-      final isSimple = RegExp(r'^[0-9\u0590-\u05FF]+$').hasMatch(innerText);
+      final isFootnoteMarker = _footnoteMarkerClassRegex.hasMatch(attrs);
+      final isSimple = _simpleInnerRegex.hasMatch(innerText);
 
       final wrappedInner = _wrapWithBidiIsolate(innerHtml);
       if (!isFootnoteMarker && !isSimple) {
@@ -108,15 +121,15 @@ class TextRendererService {
     if (innerHtml.isEmpty) return innerHtml;
 
     // Skip if already wrapped with isolate marks.
-    if (RegExp(r'[\u2066\u2067\u2068]').hasMatch(innerHtml) ||
+    if (_isolateStartRegex.hasMatch(innerHtml) ||
         innerHtml.contains('\u2069')) {
       return innerHtml;
     }
 
-    final stripped = innerHtml.replaceAll(RegExp(r'<[^>]+>'), '');
+    final stripped = innerHtml.replaceAll(_htmlTagRegex, '');
     if (stripped.isEmpty) return innerHtml;
 
-    final hasRtl = RegExp(r'[\u0590-\u08FF]').hasMatch(stripped);
+    final hasRtl = _rtlCharRegex.hasMatch(stripped);
     final isolateStart = hasRtl ? '\u2067' /* RLI */ : '\u2066' /* LRI */;
     const isolateEnd = '\u2069'; // PDI
 

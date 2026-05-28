@@ -254,22 +254,6 @@ class ApplyBookContentRange extends TextBookEvent {
   List<Object?> get props => [bookTitle, startLine, totalLines, lines];
 }
 
-/// תוצאת זיהוי חד-פעמי ברקע של הערות inline בכל הספר (סריקת substring על
-/// הטקסט הגולמי). מאפשר להציג את מפרש "הערות" מיד, בלי להמתין לחימום
-/// ההדרגתי של התוכן. [hasNotes] מציין אם נמצאו הערות בספר.
-class InlineNotesDetected extends TextBookEvent {
-  final String bookTitle;
-  final bool hasNotes;
-
-  const InlineNotesDetected({
-    required this.bookTitle,
-    required this.hasNotes,
-  });
-
-  @override
-  List<Object?> get props => [bookTitle, hasNotes];
-}
-
 class CreateNoteFromToolbar extends TextBookEvent {
   const CreateNoteFromToolbar();
 
