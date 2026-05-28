@@ -7,6 +7,7 @@ import '../../models/book.dart';
 import '../../models/category.dart';
 import '../../models/line.dart';
 import '../../models/link.dart';
+import '../../models/pdf_outline_cache_entry.dart';
 import '../../models/pub_date.dart';
 import '../../models/pub_place.dart';
 import '../../models/search_result.dart';
@@ -1033,6 +1034,34 @@ class SeforimRepository {
 
   Future<List<TocEntry>> getTocChildren(int parentId) async {
     return await _database.tocDao.selectChildren(parentId);
+  }
+
+  // --- Persistent external PDF outline cache ---
+
+  Future<PdfOutlineCacheEntry?> getPdfOutlineCacheEntry(String filePath) async {
+    return _database.pdfOutlineCacheDao.selectByFilePath(filePath);
+  }
+
+  Future<void> upsertPdfOutlineCacheEntry(PdfOutlineCacheEntry entry) async {
+    await _database.pdfOutlineCacheDao.upsert(entry);
+  }
+
+  Future<void> touchPdfOutlineCacheEntry(
+      String filePath, int accessedAt) async {
+    await _database.pdfOutlineCacheDao.updateAccessedAt(filePath, accessedAt);
+  }
+
+  Future<void> deletePdfOutlineCacheEntry(String filePath) async {
+    await _database.pdfOutlineCacheDao.deleteByFilePath(filePath);
+  }
+
+  Future<void> prunePdfOutlineCacheAccessedBefore(int cutoffMillis) async {
+    await _database.pdfOutlineCacheDao.deleteAccessedBefore(cutoffMillis);
+  }
+
+  Future<void> prunePdfOutlineCacheExceptFilePaths(
+      Set<String> keepFilePaths) async {
+    await _database.pdfOutlineCacheDao.deleteAllExceptFilePaths(keepFilePaths);
   }
 
   // --- TocText methods ---
