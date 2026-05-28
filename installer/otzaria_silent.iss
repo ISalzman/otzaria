@@ -2,7 +2,7 @@
 ; המשתמש רק מפעיל את ה-EXE — הוא משגר את עצמו מחדש ב-/VERYSILENT ויוצא בשקט.
 ; אם התהליך רץ עם הרשאות מנהל (Run as administrator) — התקנה לכל המשתמשים;
 ; אחרת — התקנה למשתמש הנוכחי בלבד (ללא UAC, כי PrivilegesRequired=lowest).
-; ההתקנה תמיד מאפסת את ההגדרות הקודמות, וסיומה משיק את אוצריא אוטומטית.
+; ההתקנה משמרת את ההגדרות הקודמות, וסיומה משיק את אוצריא אוטומטית.
 
 #define MyAppName "אוצריא"
 #define MyAppVersion "0.9.93"
@@ -228,42 +228,6 @@ begin
     Result := ExpandConstant('{userappdata}\otzaria');
 end;
 
-procedure DelTreeExceptBooks(Path: String);
-var
-  FindRec: TFindRec;
-  ChildPath: String;
-begin
-  if not DirExists(Path) then
-    exit;
-
-  if FindFirst(Path + '\*', FindRec) then
-  begin
-    try
-      repeat
-        if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
-        begin
-          ChildPath := Path + '\' + FindRec.Name;
-
-          if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
-          begin
-            if Lowercase(FindRec.Name) <> 'books' then
-            begin
-              DelTreeExceptBooks(ChildPath);
-              RemoveDir(ChildPath);
-            end;
-          end
-          else
-            DeleteFile(ChildPath);
-        end;
-      until not FindNext(FindRec);
-    finally
-      FindClose(FindRec);
-    end;
-  end;
-
-  RemoveDir(Path);
-end;
-
 procedure OnSlideshowTimer(H: LongWord; Msg: LongWord; IdEvent: LongWord; Time: LongWord);
 var
   NextFile: String;
@@ -485,48 +449,18 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  AppDataPath: string;
   ErrorLogPath: string;
 begin
   if CurStep = ssInstall then
   begin
-    // מחק את לוג השגיאות הישן בכל התקנה/עדכון
+    // מחק את לוג השגיאות הישן בכל התקנה/עדכון.
+    // הערה: זו אינה הגדרת משתמש — זה לוג מצטבר שמתנקה בכל עדכון.
+    // המתקין השקט אינו מאפס הגדרות אחרות (הערות, בוקמרקים, היסטוריה וכו').
     ErrorLogPath := ExpandConstant('{userappdata}\otzaria\logs\errors.txt');
     if FileExists(ErrorLogPath) then
       DeleteFile(ErrorLogPath);
     ErrorLogPath := ExpandConstant('{commonappdata}\otzaria\logs\errors.txt');
     if FileExists(ErrorLogPath) then
       DeleteFile(ErrorLogPath);
-
-    // המתקין השקט תמיד מאפס את כל ההגדרות הקודמות — בלי משימה אופציונלית.
-    AppDataPath := GetDataDir('');
-    if DirExists(AppDataPath) then
-      DelTreeExceptBooks(AppDataPath);
-
-    AppDataPath := ExpandConstant('{userappdata}\otzaria');
-    if DirExists(AppDataPath) then
-      DelTreeExceptBooks(AppDataPath);
-
-    AppDataPath := ExpandConstant('{commonappdata}\otzaria');
-    if DirExists(AppDataPath) then
-      DelTreeExceptBooks(AppDataPath);
-
-    AppDataPath := ExpandConstant('{localappdata}\otzaria');
-    if DirExists(AppDataPath) then
-      DelTreeExceptBooks(AppDataPath);
-
-    // הגדרות ישנות בשם com.example (לפני שינוי מזהה החבילה)
-    AppDataPath := ExpandConstant('{userappdata}\com.example');
-    if DirExists(AppDataPath) then
-      DelTreeExceptBooks(AppDataPath);
-
-    // נתיבים ישנים מאוד: LocalAppData בעברית (לפני גרסה 0.9.x)
-    AppDataPath := ExpandConstant('{localappdata}\אוצריא');
-    if DirExists(AppDataPath) then
-      DelTree(AppDataPath, True, True, True);
-
-    AppDataPath := ExpandConstant('{localappdata}\אוצריא\Data');
-    if DirExists(AppDataPath) then
-      DelTree(AppDataPath, True, True, True);
   end;
 end;
