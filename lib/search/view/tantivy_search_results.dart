@@ -160,6 +160,21 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
       return const Center(child: Text("לא בוצע חיפוש"));
     }
     if (state.results.isEmpty && !state.isLoading) {
+      // הבחנה בין חיפוש ריק לגיטימי לבין כשל בחיפוש: אם errorMessage קיים,
+      // תקלת מנוע (או FFI) הסתיימה בלי תוצאות — מציגים את ההודעה בצבע שגיאה
+      // במקום "אין תוצאות" המטעה.
+      if (state.errorMessage != null) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Text(
+              state.errorMessage!,
+              textDirection: TextDirection.rtl,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        );
+      }
       return const Center(
           child: Padding(
         padding: EdgeInsets.all(8.0),
