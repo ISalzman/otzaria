@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_bloc.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_event.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_state.dart';
@@ -17,6 +18,10 @@ import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 class FindRefDialog extends StatefulWidget {
   const FindRefDialog({super.key});
+
+  /// מפתח הגדרה לשמירת מצב הטוגל "כלול ספרים אישיים" בין פתיחות הדיאלוג.
+  static const String _keyIncludePersonalBooks =
+      'key-find-ref-include-personal-books';
 
   @override
   State<FindRefDialog> createState() => _FindRefDialogState();
@@ -97,7 +102,11 @@ Book? _findBookInLibraryByTitlePass(Category category, String title,
 
 class _FindRefDialogState extends State<FindRefDialog> {
   int _selectedIndex = 0;
-  bool _includePersonalBooks = false;
+  bool _includePersonalBooks = Settings.getValue<bool>(
+        FindRefDialog._keyIncludePersonalBooks,
+        defaultValue: false,
+      ) ??
+      false;
   final Map<int, GlobalKey> _itemKeys = {};
   final Map<int, GlobalKey> _commentatorsButtonKeys = {};
   // המפתח כולל את כל הפרמטרים המבדילים בין refs (bookId/sourceLineId/isAltToc/
@@ -534,6 +543,10 @@ class _FindRefDialogState extends State<FindRefDialog> {
                     value: _includePersonalBooks,
                     onChanged: (v) {
                       setState(() => _includePersonalBooks = v);
+                      Settings.setValue<bool>(
+                        FindRefDialog._keyIncludePersonalBooks,
+                        v,
+                      );
                       final text = focusRepository.findRefSearchController.text;
                       if (text.length >= 2) {
                         context.read<FindRefBloc>().add(
