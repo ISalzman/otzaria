@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
-import 'package:otzaria/settings/tabs/text_settings_tab.dart';
+import 'package:otzaria/settings/panels/reading_settings_panel.dart';
 
 /// פונקציה גלובלית להצגת דיאלוג הגדרות תצוגת הספרים
 /// ניתן לקרוא לה מכל מקום באפליקציה (למשל ממסך העיון)
@@ -26,7 +26,7 @@ void showReadingSettingsDialog(BuildContext context) {
           content: SizedBox(
             width: 650,
             height: MediaQuery.of(context).size.height * 0.7,
-            child: const TextSettingsTab(isDialog: true),
+            child: const ReadingSettingsBody(),
           ),
           actions: [
             FilledButton(

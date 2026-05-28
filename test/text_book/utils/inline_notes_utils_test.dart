@@ -58,6 +58,29 @@ void main() {
     });
   });
 
+  group('rawTextHasInlineNotes', () {
+    test('מחזיר true כשהטקסט הגולמי מכיל <i class="footnote">', () {
+      const raw = 'שורה רגילה\n'
+          'שורה<sup>1</sup><i class="footnote">הערה</i>\n'
+          'שורה אחרונה';
+      expect(rawTextHasInlineNotes(raw), isTrue);
+    });
+
+    test('מחזיר false כשאין הערות בכלל בטקסט הגולמי', () {
+      expect(rawTextHasInlineNotes('שורה א\nשורה ב\nשורה ג'), isFalse);
+    });
+
+    test('מחזיר false למחרוזת ריקה', () {
+      expect(rawTextHasInlineNotes(''), isFalse);
+    });
+
+    test('לא מזהה false-positive כשיש footnote-marker בלבד ללא גוף הערה', () {
+      // ה-guard על 'footnote' עובר, אבל ה-regex דורש <i class="footnote">.
+      const raw = 'גוף<sup class="footnote-marker">א</sup> בלי גוף הערה';
+      expect(rawTextHasInlineNotes(raw), isFalse);
+    });
+  });
+
   group('notesForLines', () {
     test('מחזיר את ה-marker והגוף עבור הערה צמודה ל-<sup>', () {
       final content = [

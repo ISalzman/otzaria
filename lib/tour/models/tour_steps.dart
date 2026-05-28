@@ -13,6 +13,7 @@ class TourSteps {
   static List<TourStep> build(
       {required bool libraryLoaded, bool isRestart = false}) {
     final shortcuts = _ShortcutText();
+    final hiddenTools = _readHiddenBuiltInToolIds();
     final steps = <TourStep>[
       if (isRestart)
         TourStep(
@@ -176,29 +177,32 @@ class TourSteps {
         area: TourSpotlightArea.tools,
         action: TourStepAction.openTools,
       ),
-      const TourStep(
-        id: 'calendar',
-        title: 'לוח שנה יהודי',
-        body:
-            'לוח עברי-לועזי עם זמני תפילה לפי מיקום, וגם דף יומי לתלמוד בבלי ועוד.',
-        area: TourSpotlightArea.toolsTabs,
-        action: TourStepAction.openTools,
-      ),
-      const TourStep(
-        id: 'gematria',
-        title: 'חיפוש גימטריות',
-        body: 'הזן מילה וקבל את הגימטריה שלה, או חפש מילים לפי ערך גימטרי.',
-        area: TourSpotlightArea.toolsTabs,
-        action: TourStepAction.openTools,
-      ),
-      const TourStep(
-        id: 'notes',
-        title: 'הערות אישיות',
-        body:
-            'הוסף הערות אישיות לכל מקום בכל ספר. ההערות שמורות במכשיר וניתנות לייצוא.',
-        area: TourSpotlightArea.toolsTabs,
-        action: TourStepAction.openTools,
-      ),
+      if (!hiddenTools.contains('builtin.calendar'))
+        const TourStep(
+          id: 'calendar',
+          title: 'לוח שנה יהודי',
+          body:
+              'לוח עברי-לועזי עם זמני תפילה לפי מיקום, וגם דף יומי לתלמוד בבלי ועוד.',
+          area: TourSpotlightArea.toolsTabs,
+          action: TourStepAction.openTools,
+        ),
+      if (!hiddenTools.contains('builtin.gematria'))
+        const TourStep(
+          id: 'gematria',
+          title: 'חיפוש גימטריות',
+          body: 'הזן מילה וקבל את הגימטריה שלה, או חפש מילים לפי ערך גימטרי.',
+          area: TourSpotlightArea.toolsTabs,
+          action: TourStepAction.openTools,
+        ),
+      if (!hiddenTools.contains('builtin.notes'))
+        const TourStep(
+          id: 'notes',
+          title: 'הערות אישיות',
+          body:
+              'הוסף הערות אישיות לכל מקום בכל ספר. ההערות שמורות במכשיר וניתנות לייצוא.',
+          area: TourSpotlightArea.toolsTabs,
+          action: TourStepAction.openTools,
+        ),
       TourStep(
         id: 'settings',
         title: 'הגדרות',
@@ -258,6 +262,16 @@ class TourSteps {
     }
 
     return steps;
+  }
+
+  static Set<String> _readHiddenBuiltInToolIds() {
+    final raw = Settings.getValue<String>('key-hidden-builtin-tool-ids') ?? '';
+    if (raw.isEmpty) return const <String>{};
+    return raw
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
   }
 }
 

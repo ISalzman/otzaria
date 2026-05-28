@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
@@ -184,30 +185,60 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
               children: [
                 _PersonalNoteToolbar(
                   controller: widget.controller.quillController,
+                  editorFocusNode: widget.focusNode,
                   onInsertLink: _insertLink,
                 ),
                 const Divider(height: 1),
                 SizedBox(
                   height: 220,
-                  child: CallbackShortcuts(
-                    bindings: {
-                      if (widget.onSaveShortcut != null)
-                        const SingleActivator(
-                          LogicalKeyboardKey.enter,
-                          alt: true,
-                        ): widget.onSaveShortcut!,
+                  // RawGestureDetector תופס מחוות גרירה אנכית באזור העורך
+                  // לפני שה-ListView ההורה (פאנל ההערות) רואה אותן.
+                  // אחרת כשהמשתמש גורר אלכסונית כדי לסמן יותר ממילה,
+                  // ה-VerticalDragGestureRecognizer של ה-ListView מנצח
+                  // את ה-HorizontalDragGestureRecognizer של Quill,
+                  // והסימון בעורך כלל לא נוצר.
+                  // ה-recognizer כאן לא עושה כלום — רק "תופס" את המחווה
+                  // כדי לא לתת לאב לגלול. גלילה בגלגלת תמשיך לעבוד
+                  // (היא PointerSignal, לא GestureRecognizer).
+                  child: RawGestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    gestures: <Type, GestureRecognizerFactory>{
+                      VerticalDragGestureRecognizer:
+                          GestureRecognizerFactoryWithHandlers<
+                              VerticalDragGestureRecognizer>(
+                        () => VerticalDragGestureRecognizer(
+                          supportedDevices: const <PointerDeviceKind>{
+                            PointerDeviceKind.mouse,
+                          },
+                        ),
+                        (instance) {},
+                      ),
                     },
-                    child: quill.QuillEditor(
-                      controller: widget.controller.quillController,
-                      focusNode: widget.focusNode,
-                      scrollController: widget.scrollController,
-                      config: quill.QuillEditorConfig(
-                        autoFocus: widget.autofocus,
-                        expands: false,
-                        padding: const EdgeInsets.all(12),
-                        placeholder:
-                            widget.hintText ?? 'כתוב כאן... (Alt+Enter לשמירה)',
-                        customShortcuts: _rtlArrowShortcuts,
+                    child: CallbackShortcuts(
+                      bindings: {
+                        if (widget.onSaveShortcut != null)
+                          const SingleActivator(
+                            LogicalKeyboardKey.enter,
+                            alt: true,
+                          ): widget.onSaveShortcut!,
+                      },
+                      child: quill.QuillEditor(
+                        controller: widget.controller.quillController,
+                        focusNode: widget.focusNode,
+                        scrollController: widget.scrollController,
+                        config: quill.QuillEditorConfig(
+                          autoFocus: widget.autofocus,
+                          expands: false,
+                          padding: const EdgeInsets.all(12),
+                          placeholder: widget.hintText ??
+                              'כתוב כאן... (Alt+Enter לשמירה)',
+                          customShortcuts: _rtlArrowShortcuts,
+                          // Quill מציגה אוטומטית תפריט סלקציה ב-desktop
+                          // בסיום גרירה — בהערות אישיות זה מטריד.
+                          // יש לנו טולבר משלנו וניתן להשתמש בקיצורי מקלדת
+                          // וב-right-click הסטנדרטי של המערכת.
+                          enableSelectionToolbar: false,
+                        ),
                       ),
                     ),
                   ),
@@ -220,6 +251,19 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
     );
   }
 }
+
+// מכבה הדבקת Rich-Text מהלוח החיצוני. בלי זה Quill מזהה HTML שמערכת
+// ההעתקה של אוצריא מזריקה ללוח (super_native_extensions) וגוררת את
+// העיצוב של הספר לתוך ההערה — וגם משפיע על טקסט עתידי שיוקלד באותו מקום.
+// ignore: experimental_member_use
+const _noteClipboardConfig = quill.QuillClipboardConfig(
+  // ignore: experimental_member_use
+  enableExternalRichPaste: false,
+);
+const _noteControllerConfig = quill.QuillControllerConfig(
+  // ignore: experimental_member_use
+  clipboardConfig: _noteClipboardConfig,
+);
 
 PersonalNoteEditorController buildPersonalNoteEditorController({
   required String initialContent,
@@ -234,6 +278,7 @@ PersonalNoteEditorController buildPersonalNoteEditorController({
         quillController: quill.QuillController(
           document: document,
           selection: const TextSelection.collapsed(offset: 0),
+          config: _noteControllerConfig,
         ),
       );
     } catch (_) {}
@@ -245,16 +290,19 @@ PersonalNoteEditorController buildPersonalNoteEditorController({
     quillController: quill.QuillController(
       document: document,
       selection: const TextSelection.collapsed(offset: 0),
+      config: _noteControllerConfig,
     ),
   );
 }
 
 class _PersonalNoteToolbar extends StatelessWidget {
   final quill.QuillController controller;
+  final FocusNode editorFocusNode;
   final VoidCallback onInsertLink;
 
   const _PersonalNoteToolbar({
     required this.controller,
+    required this.editorFocusNode,
     required this.onInsertLink,
   });
 
@@ -266,6 +314,10 @@ class _PersonalNoteToolbar extends StatelessWidget {
       ..formatSelection(
         isActive ? quill.Attribute.clone(attribute, null) : attribute,
       );
+    // לחיצה על IconButton גוזלת פוקוס מ-QuillEditor, ובדסקטופ Quill לא
+    // מחזיר אותו אוטומטית (_keyboardVisible תמיד true). מחזירים פוקוס
+    // ידנית כדי שהסמן יישאר נראה ושטקסט שיוקלד יקבל את ה-toggledStyle.
+    editorFocusNode.requestFocus();
   }
 
   bool _isAttributeActive(

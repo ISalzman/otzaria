@@ -397,4 +397,101 @@ class PluginSystemDatabase {
         'INSERT INTO plugin_runtime_log (plugin_id, level, message, created_at) VALUES (?, ?, ?, ?)',
         [pluginId, level, message, DateTime.now().toIso8601String()]);
   }
+
+  // --- Backup / Restore ---
+
+  /// מייצא את הרשומות הנלוות של תוסף (הרשאות, KV, published records) לגיבוי.
+  ///
+  /// [pluginId] - מזהה התוסף.
+  /// מחזיר מפה עם המפתחות `permissions`, `kvStore`, `publishedRecords`,
+  /// שכל אחד הוא רשימת שורות גולמיות מוכנות לסריאליזציה ל-JSON.
+  Future<Map<String, List<Map<String, dynamic>>>> exportPluginAuxData(
+      String pluginId) async {
+    final db = await database;
+    final permissions = db.select(
+      'SELECT permission, granted, granted_at FROM plugin_permission_grant WHERE plugin_id = ?',
+      [pluginId],
+    ).toMapList();
+    final kvStore = db.select(
+      'SELECT namespace, key, value_json, updated_at FROM plugin_kv_store WHERE plugin_id = ?',
+      [pluginId],
+    ).toMapList();
+    final publishedRecords = db.select(
+      'SELECT type, scope, record_key, payload_json, version, created_at, updated_at, expires_at FROM plugin_published_record WHERE plugin_id = ?',
+      [pluginId],
+    ).toMapList();
+    return {
+      'permissions': permissions,
+      'kvStore': kvStore,
+      'publishedRecords': publishedRecords,
+    };
+  }
+
+  /// מייבא רשומות נלוות של תוסף משחזור גיבוי.
+  ///
+  /// [pluginId] - מזהה התוסף.
+  /// [aux] - מפה במבנה שמחזירה [exportPluginAuxData].
+  /// שחזור נאמן לגיבוי: כל הרשומות הנלוות הקיימות של התוסף נמחקות תחילה,
+  /// כדי שלא יישארו הרשאות/KV/published records שאינם בגיבוי (merge שקט).
+  Future<void> importPluginAuxData(
+      String pluginId, Map<String, dynamic> aux) async {
+    final db = await database;
+    db.execute('BEGIN TRANSACTION');
+    try {
+      db.execute('DELETE FROM plugin_permission_grant WHERE plugin_id = ?',
+          [pluginId]);
+      db.execute('DELETE FROM plugin_kv_store WHERE plugin_id = ?', [pluginId]);
+      db.execute('DELETE FROM plugin_published_record WHERE plugin_id = ?',
+          [pluginId]);
+      for (final row in (aux['permissions'] as List? ?? const [])) {
+        final m = (row as Map).cast<String, dynamic>();
+        db.execute(
+          'INSERT OR REPLACE INTO plugin_permission_grant (plugin_id, permission, granted, granted_at) VALUES (?, ?, ?, ?)',
+          [pluginId, m['permission'], m['granted'], m['granted_at']],
+        );
+      }
+      for (final row in (aux['kvStore'] as List? ?? const [])) {
+        final m = (row as Map).cast<String, dynamic>();
+        db.execute(
+          'INSERT OR REPLACE INTO plugin_kv_store (plugin_id, namespace, key, value_json, updated_at) VALUES (?, ?, ?, ?, ?)',
+          [
+            pluginId,
+            m['namespace'],
+            m['key'],
+            m['value_json'],
+            m['updated_at']
+          ],
+        );
+      }
+      for (final row in (aux['publishedRecords'] as List? ?? const [])) {
+        final m = (row as Map).cast<String, dynamic>();
+        db.execute(
+          'INSERT OR REPLACE INTO plugin_published_record (plugin_id, type, scope, record_key, payload_json, version, created_at, updated_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            pluginId,
+            m['type'],
+            m['scope'],
+            m['record_key'],
+            m['payload_json'],
+            m['version'] ?? 1,
+            m['created_at'],
+            m['updated_at'],
+            m['expires_at'],
+          ],
+        );
+      }
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  /// סוגר ומאפס את חיבור ה-DB. חשוף לבדיקות בלבד כדי לאפשר אתחול מחדש
+  /// של ה-singleton מול תיקיית נתונים זמנית.
+  @visibleForTesting
+  void resetForTests() {
+    _database?.close();
+    _database = null;
+  }
 }
