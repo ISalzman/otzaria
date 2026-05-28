@@ -207,8 +207,7 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: 320,
+              Expanded(
                 child: SingleChildScrollView(child: advancedControls),
               ),
               const SizedBox(width: 16),
