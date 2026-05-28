@@ -21,10 +21,16 @@ void main() {
     BooksCache.instance.clear();
     AcronymsCache.instance.clear();
     ReferenceBooksCache.instance.categoriesProviderOverride = null;
+    ReferenceBooksCache.instance.pdfOutlineCacheRepositoryOverride = null;
+    ReferenceBooksCache.instance.pdfFileMetadataProviderOverride = null;
+    ReferenceBooksCache.instance.nowProviderOverride = null;
   });
 
   tearDown(() {
     ReferenceBooksCache.instance.categoriesProviderOverride = null;
+    ReferenceBooksCache.instance.pdfOutlineCacheRepositoryOverride = null;
+    ReferenceBooksCache.instance.pdfFileMetadataProviderOverride = null;
+    ReferenceBooksCache.instance.nowProviderOverride = null;
   });
 
   group('ReferenceBooksCache — race condition מול clear()', () {

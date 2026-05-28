@@ -230,6 +230,17 @@ CREATE TABLE IF NOT EXISTS db_meta (
 CREATE INDEX IF NOT EXISTS idx_connection_type_name ON connection_type(name);
 CREATE INDEX IF NOT EXISTS idx_db_meta_key ON db_meta(key);
 
+CREATE TABLE IF NOT EXISTS pdf_outline_cache (
+    filePath TEXT PRIMARY KEY,
+    fileSize INTEGER NOT NULL,
+    lastModified INTEGER NOT NULL,
+    outlineJson TEXT NOT NULL,
+    createdAt INTEGER NOT NULL,
+    accessedAt INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pdf_outline_cache_accessed_at ON pdf_outline_cache(accessedAt);
+
 -- Links table
 CREATE TABLE IF NOT EXISTS link (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
