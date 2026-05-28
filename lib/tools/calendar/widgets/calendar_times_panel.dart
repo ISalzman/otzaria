@@ -9,11 +9,13 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart'
     hide cityCoordinates;
 import 'package:otzaria/tools/calendar/models/calendar_location.dart';
+import 'package:otzaria/tools/calendar/models/zman_definition.dart';
 import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart';
 import 'package:otzaria/tools/calendar/helpers/molad_helpers.dart';
 import 'package:otzaria/tools/calendar/helpers/zmanim_helpers.dart'
     as zmanim_helpers;
 import 'package:otzaria/tools/calendar/dialogs/calendar_zman_alert_dialog.dart';
+import 'package:otzaria/tools/calendar/dialogs/zmanim_settings_dialog.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -21,6 +23,9 @@ import 'package:timezone/timezone.dart' as tz;
 class CalendarTimeEntry {
   final String id;
   final String name;
+
+  /// תת-כותרת (פירוט השיטה) — מוצגת בשורה שנייה קטנה בכרטיס בודד.
+  final String subtitle;
   final String time;
   final bool isHolidaySpecial;
   final bool isComposite;
@@ -28,15 +33,22 @@ class CalendarTimeEntry {
   final String? leadingLabel;
   final List<CalendarTimeAlertOption> alertOptions;
 
+  /// האם ניתן להפעיל התראה לזמן זה. זמנים המוצגים כתאריך עברי (קידוש
+  /// לבנה) אינם זמני שעון נקודתיים ולכן לא ניתנים לתזמון — עבורם כפתור
+  /// ההתראה אינו מוצג כלל.
+  final bool canAlert;
+
   const CalendarTimeEntry({
     required this.id,
     required this.name,
     required this.time,
     required this.isHolidaySpecial,
+    this.subtitle = '',
     this.isComposite = false,
     this.trailingLabel,
     this.leadingLabel,
     this.alertOptions = const [],
+    this.canAlert = true,
   });
 }
 
@@ -52,87 +64,65 @@ class CalendarTimeAlertOption {
   });
 }
 
-class _CalendarTimeDefinition {
-  final String id;
-  final String name;
-
-  const _CalendarTimeDefinition({
-    required this.id,
-    required this.name,
-  });
+/// בונה כרטיס בודד מתוך הגדרת זמן, על בסיס הזמן שחושב ל-dailyTimes.
+/// מחזיר null אם הזמן אינו זמין.
+CalendarTimeEntry? entryFromZmanDefinition(
+  ZmanDefinition def,
+  Map<String, String> dailyTimes,
+) {
+  final time = dailyTimes[def.id];
+  if (time == null || time.isEmpty) return null;
+  // זמני תאריך עברי (קידוש לבנה) אינם ניתנים לתזמון התראה.
+  final canAlert = !def.showHebrewDate;
+  return CalendarTimeEntry(
+    id: def.id,
+    name: def.title,
+    subtitle: def.subtitle,
+    time: time,
+    isHolidaySpecial: def.isHolidaySpecial,
+    canAlert: canAlert,
+    alertOptions: canAlert
+        ? [CalendarTimeAlertOption(id: def.id, name: def.fullName, time: time)]
+        : const [],
+  );
 }
 
-const List<_CalendarTimeDefinition> _kBaseTimeDefinitions = [
-  _CalendarTimeDefinition(id: 'alos', name: 'עלות השחר'),
-  _CalendarTimeDefinition(
-    id: 'alos16point1Degrees',
-    name: 'עלוה"ש (72 דק\') במע\'',
-  ),
-  _CalendarTimeDefinition(
-    id: 'alos19point8Degrees',
-    name: 'עלוה"ש (90 דק\') במע\'',
-  ),
-  _CalendarTimeDefinition(id: 'sunrise', name: 'זריחה'),
-  _CalendarTimeDefinition(id: 'sofZmanShmaMGA', name: 'סוף זמן ק"ש - מג"א'),
-  _CalendarTimeDefinition(id: 'sofZmanShmaGRA', name: 'סוף זמן ק"ש - גר"א'),
-  _CalendarTimeDefinition(
-    id: 'sofZmanTfilaMGA',
-    name: 'סוף זמן תפילה - מג"א',
-  ),
-  _CalendarTimeDefinition(
-    id: 'sofZmanTfilaGRA',
-    name: 'סוף זמן תפילה - גר"א',
-  ),
-  _CalendarTimeDefinition(id: 'chatzos', name: 'חצות היום'),
-  _CalendarTimeDefinition(id: 'chatzosLayla', name: 'חצות לילה'),
-  _CalendarTimeDefinition(id: 'minchaGedola', name: 'מנחה גדולה'),
-  _CalendarTimeDefinition(id: 'minchaKetana', name: 'מנחה קטנה'),
-  _CalendarTimeDefinition(id: 'plagHamincha', name: 'פלג המנחה'),
-  _CalendarTimeDefinition(id: 'sunset', name: 'שקיעה'),
-  _CalendarTimeDefinition(id: 'sunsetRT', name: 'צאת הכוכבים לרבנו תם'),
-  _CalendarTimeDefinition(id: 'tzais', name: 'צאת הכוכבים'),
-];
+/// בונה כרטיס composite מזיווג שתי הגדרות — תצוגת הלוח הראשי בלבד.
+/// בטבלת "זמנים נוספים" כל הגדרה מופיעה בנפרד.
+CalendarTimeEntry? _pairedEntry(
+  ZmanDefinition a,
+  ZmanDefinition b,
+  Map<String, String> dailyTimes,
+) {
+  final rawA = dailyTimes[a.id];
+  final rawB = dailyTimes[b.id];
+  final ta = (rawA != null && rawA.isNotEmpty) ? rawA : null;
+  final tb = (rawB != null && rawB.isNotEmpty) ? rawB : null;
+  if (ta == null && tb == null) return null;
 
-const List<_CalendarTimeDefinition> _kConditionalTimeDefinitions = [
-  _CalendarTimeDefinition(id: 'candleLighting', name: 'הדלקת נרות'),
-  _CalendarTimeDefinition(id: 'shabbosExit1', name: 'מוצאי שבת/חג'),
-  _CalendarTimeDefinition(id: 'shabbosExit2', name: 'מוצאי שבת/חג לחזו"א'),
-  _CalendarTimeDefinition(id: 'omerCounting', name: 'ספירת העומר'),
-  _CalendarTimeDefinition(
-    id: 'sofZmanAchilasChametzMGA',
-    name: 'סוף זמן אכילת חמץ - מג"א',
-  ),
-  _CalendarTimeDefinition(
-    id: 'sofZmanAchilasChametzGRA',
-    name: 'סוף זמן אכילת חמץ - גר"א',
-  ),
-  _CalendarTimeDefinition(
-    id: 'sofZmanBiurChametzMGA',
-    name: 'סוף זמן ביעור חמץ - מג"א',
-  ),
-  _CalendarTimeDefinition(
-    id: 'sofZmanBiurChametzGRA',
-    name: 'סוף זמן ביעור חמץ - גר"א',
-  ),
-  _CalendarTimeDefinition(id: 'fastStart', name: 'תחילת התענית'),
-  _CalendarTimeDefinition(id: 'fastEnd', name: 'סיום התענית'),
-  _CalendarTimeDefinition(
-    id: 'kidushLevanaEarliest',
-    name: 'קידוש לבנה מוקדם',
-  ),
-  _CalendarTimeDefinition(
-    id: 'kidushLevanaLatest',
-    name: 'קידוש לבנה מאוחר',
-  ),
-  _CalendarTimeDefinition(
-    id: 'tchilasKidushLevana',
-    name: 'תחילת זמן קידוש לבנה',
-  ),
-  _CalendarTimeDefinition(
-    id: 'sofZmanKidushLevana',
-    name: 'סוף זמן קידוש לבנה',
-  ),
-];
+  final String sortTime;
+  if (ta != null && tb != null) {
+    sortTime = ta.compareTo(tb) < 0 ? ta : tb;
+  } else {
+    sortTime = ta ?? tb ?? '';
+  }
+
+  return CalendarTimeEntry(
+    id: a.pairId ?? a.id,
+    name: a.title,
+    time: sortTime,
+    isHolidaySpecial: a.isHolidaySpecial,
+    isComposite: true,
+    trailingLabel: ta != null ? '${a.pairLabel} $ta' : null,
+    leadingLabel: tb != null ? '${b.pairLabel} $tb' : null,
+    alertOptions: [
+      if (ta != null)
+        CalendarTimeAlertOption(id: a.id, name: a.fullName, time: ta),
+      if (tb != null)
+        CalendarTimeAlertOption(id: b.id, name: b.fullName, time: tb),
+    ],
+  );
+}
 
 /// פאנל זמני היום.
 class CalendarTimesPanel extends StatefulWidget {
@@ -154,140 +144,56 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
   late final List<String> _cityNames;
   static const double _infoButtonWidth = 40;
 
-  static const Set<String> _holidaySpecialIds = {
-    'candleLighting',
-    'shabbosExitComposite',
-  };
-
+  /// בונה את רשימת כרטיסי הזמנים להצגה — לפי רישום הזמנים המרכזי,
+  /// מסונן לזמנים שהמשתמש הפעיל ושרלוונטיים ליום הנבחר.
   List<CalendarTimeEntry> _buildCalendarTimeEntries(CalendarState state) {
     final dailyTimes = state.dailyTimes;
+    final jewishCalendar =
+        JewishCalendar.fromDateTime(state.selectedGregorianDate);
+    jewishCalendar.inIsrael = state.inIsrael;
+
+    // אוספים את ההגדרות המופעלות והרלוונטיות, בסדר הרישום.
+    final visible = <ZmanDefinition>[];
+    for (final def in zmanim_helpers.kZmanimRegistry) {
+      if (!state.enabledZmanim.contains(def.id)) continue;
+      if (def.isRelevant != null && !def.isRelevant!(jewishCalendar)) continue;
+      visible.add(def);
+    }
+
+    // מזווגים בלוח שתי הגדרות מופעלות עם אותו pairId לכרטיס composite אחד.
     final entries = <CalendarTimeEntry>[];
-    final alosCard = _buildCompositeAlosEntry(dailyTimes);
-    if (alosCard != null) {
-      entries.add(alosCard);
+    final consumed = <int>{};
+    for (var i = 0; i < visible.length; i++) {
+      if (consumed.contains(i)) continue;
+      final def = visible[i];
+      if (def.pairId != null) {
+        final j = visible.indexWhere((d) => d.pairId == def.pairId, i + 1);
+        if (j != -1) {
+          consumed.add(j);
+          final paired = _pairedEntry(def, visible[j], dailyTimes);
+          if (paired != null) entries.add(paired);
+          continue;
+        }
+      }
+      final entry = entryFromZmanDefinition(def, dailyTimes);
+      if (entry != null) entries.add(entry);
     }
-    final shabbosExitCard = _buildCompositeShabbosExitEntry(dailyTimes);
-    if (shabbosExitCard != null) {
-      entries.add(shabbosExitCard);
-    }
 
-    final definitions = <_CalendarTimeDefinition>[
-      ..._kBaseTimeDefinitions,
-      ..._kConditionalTimeDefinitions,
-    ].where((definition) =>
-        definition.id != 'alos' &&
-        definition.id != 'alos16point1Degrees' &&
-        definition.id != 'alos19point8Degrees' &&
-        definition.id != 'omerCounting' &&
-        definition.id != 'shabbosExit1' &&
-        definition.id != 'shabbosExit2');
-
-    entries.addAll(
-      definitions
-          .map(
-            (definition) => CalendarTimeEntry(
-              id: definition.id,
-              name: definition.name,
-              time: dailyTimes[definition.id] ?? '',
-              isHolidaySpecial: _isHolidaySpecialTimeId(definition.id),
-            ),
-          )
-          .where((entry) => entry.time.isNotEmpty),
-    );
-
+    // סדר ההופעה הנוכחי (סדר הרישום) — שובר-שוויון יציב לזמנים שאינם
+    // שעת-שעון (קידוש לבנה), שמחרוזת התצוגה שלהם אינה ברת-מיון כרונולוגי.
+    final order = {for (final (i, e) in entries.indexed) e.id: i};
     entries.sort((a, b) {
       // חצות לילה תמיד בסוף
       if (a.id == 'chatzosLayla') return 1;
       if (b.id == 'chatzosLayla') return -1;
-      return a.time.compareTo(b.time);
+      final aClock = zmanim_helpers.isClockTime(a.time);
+      final bClock = zmanim_helpers.isClockTime(b.time);
+      if (aClock && bClock) return a.time.compareTo(b.time);
+      // שעות-שעון ממוינות כרונולוגית ומופיעות לפני זמני תאריך עברי.
+      if (aClock != bClock) return aClock ? -1 : 1;
+      return (order[a.id] ?? 0).compareTo(order[b.id] ?? 0);
     });
     return entries;
-  }
-
-  bool _isHolidaySpecialTimeId(String timeId) {
-    return _holidaySpecialIds.contains(timeId);
-  }
-
-  CalendarTimeEntry? _buildCompositeAlosEntry(Map<String, String> dailyTimes) {
-    final alos90 = dailyTimes['alos19point8Degrees'];
-    final alos72 = dailyTimes['alos16point1Degrees'];
-    final regularAlos = dailyTimes['alos'];
-
-    if ((alos90 == null || alos90.isEmpty) &&
-        (alos72 == null || alos72.isEmpty) &&
-        (regularAlos == null || regularAlos.isEmpty)) {
-      return null;
-    }
-
-    final sortTime = alos72?.isNotEmpty == true
-        ? alos72!
-        : (alos90?.isNotEmpty == true ? alos90! : regularAlos ?? '');
-
-    return CalendarTimeEntry(
-      id: 'alosComposite',
-      name: 'עלות השחר (מעלות)',
-      time: sortTime,
-      isHolidaySpecial: false,
-      isComposite: true,
-      trailingLabel: alos90?.isNotEmpty == true
-          ? '90 דק׳ $alos90'
-          : (regularAlos?.isNotEmpty == true ? 'רגיל $regularAlos' : null),
-      leadingLabel: alos72?.isNotEmpty == true ? '72 דק׳ $alos72' : null,
-      alertOptions: [
-        if (alos72?.isNotEmpty == true)
-          CalendarTimeAlertOption(
-            id: 'alos16point1Degrees',
-            name: 'עלות השחר 72 דק׳',
-            time: alos72!,
-          ),
-        if (alos90?.isNotEmpty == true)
-          CalendarTimeAlertOption(
-            id: 'alos19point8Degrees',
-            name: 'עלות השחר 90 דק׳',
-            time: alos90!,
-          ),
-      ],
-    );
-  }
-
-  CalendarTimeEntry? _buildCompositeShabbosExitEntry(
-    Map<String, String> dailyTimes,
-  ) {
-    final regularExit = dailyTimes['shabbosExit1'];
-    final chazonIshExit = dailyTimes['shabbosExit2'];
-    if ((regularExit == null || regularExit.isEmpty) &&
-        (chazonIshExit == null || chazonIshExit.isEmpty)) {
-      return null;
-    }
-
-    final sortTime =
-        regularExit?.isNotEmpty == true ? regularExit! : chazonIshExit ?? '';
-
-    return CalendarTimeEntry(
-      id: 'shabbosExitComposite',
-      name: 'מוצאי שבת/חג',
-      time: sortTime,
-      isHolidaySpecial: true,
-      isComposite: true,
-      trailingLabel:
-          regularExit?.isNotEmpty == true ? 'רגיל $regularExit' : null,
-      leadingLabel:
-          chazonIshExit?.isNotEmpty == true ? 'חזו"א $chazonIshExit' : null,
-      alertOptions: [
-        if (regularExit?.isNotEmpty == true)
-          CalendarTimeAlertOption(
-            id: 'shabbosExit1',
-            name: 'מוצאי שבת/חג',
-            time: regularExit!,
-          ),
-        if (chazonIshExit?.isNotEmpty == true)
-          CalendarTimeAlertOption(
-            id: 'shabbosExit2',
-            name: 'מוצאי שבת/חג חזו"א',
-            time: chazonIshExit!,
-          ),
-      ],
-    );
   }
 
   String? _buildOmerInfo(DateTime date) {
@@ -482,9 +388,19 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                const Spacer(),
+                ToolbarActionButton(
+                  tooltip: 'זמנים נוספים',
+                  icon: FluentIcons.list_24_regular,
+                  compact: true,
+                  emphasis: ToolbarActionButtonEmphasis.subtle,
+                  onPressed: () => showZmanimSettingsDialog(context),
+                ),
                 _CityDropdown(
                   cityName: widget.state.selectedCity,
                   cityNames: _cityNames,
@@ -553,13 +469,6 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "שים לב! הזמנים שונים מהותית מהלוח 'עיתים לבינה'!",
-                  textAlign: TextAlign.center,
-                  textDirection: TextDirection.rtl,
-                  style: theme.textTheme.bodySmall,
                 ),
               ],
             ),
@@ -816,46 +725,85 @@ class _ZmanCard extends StatelessWidget {
     required BuildContext context,
     required String text,
     required Color textColor,
-    required CrossAxisAlignment textAlignment,
-    required bool alignToStart,
+    required bool titleAtStart,
     required ZmanAlertPreference? existingAlert,
     required VoidCallback onPressed,
   }) {
     final hasAlert = existingAlert != null;
-    final segmentAlignment = alignToStart
-        ? AlignmentDirectional.centerStart
-        : AlignmentDirectional.centerEnd;
-    final control = Align(
-      alignment: segmentAlignment,
-      child: _AlertControl(
-        hasAlert: hasAlert,
-        existingAlert: existingAlert,
-        tooltip: _tooltipForAlert(existingAlert, 'הפעל התראה'),
-        foregroundColor: textColor,
-        onPressed: onPressed,
-        menuEntries: const [],
-        onOptionSelected: (_) {},
-      ),
+    final control = _AlertControl(
+      hasAlert: hasAlert,
+      existingAlert: existingAlert,
+      tooltip: _tooltipForAlert(existingAlert, 'הפעל התראה'),
+      foregroundColor: textColor,
+      onPressed: onPressed,
+      menuEntries: const [],
+      onOptionSelected: (_) {},
     );
 
-    final labelValue = _CompositeLabelValue(
-      text: text,
-      textColor: textColor,
-      crossAxisAlignment: textAlignment,
+    // הזמן עצמו ממורכז בחצי הכרטיס; שם הזמן (הכותרת) נשאר בקצה החיצוני
+    // של הקטע. כל קטע תופס את כל רוחב חצי הכרטיס, ובו הכותרת/הזמן ומקש
+    // ההתראה מוצבים זה לצד זה.
+    return Row(
+      textDirection: TextDirection.rtl,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: _CompositeLabelValue(
+            text: text,
+            textColor: textColor,
+            titleAtStart: titleAtStart,
+          ),
+        ),
+        const SizedBox(width: 6),
+        control,
+      ],
     );
+  }
 
-    return Align(
-      alignment: segmentAlignment,
-      child: Row(
-        textDirection: TextDirection.rtl,
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        // alignToStart=true (90 דק') → אייקון ימין, טקסט שמאל
-        // alignToStart=false (72 דק') → טקסט ימין, אייקון שמאל
-        children: alignToStart
-            ? [control, const SizedBox(width: 6), labelValue]
-            : [labelValue, const SizedBox(width: 6), control],
-      ),
+  /// בונה שורת composite עם 2 ערכים והתראה צמודה לכל ערך.
+  Widget _buildAlertedCompositeRow({
+    required BuildContext context,
+    required String? trailingLabel,
+    required String? leadingLabel,
+    required List<CalendarTimeAlertOption> alertOptions,
+    required Color textColor,
+  }) {
+    // כשרק אחד מבני-הזוג זמין (השני לא רלוונטי היום), alertOptions מכיל
+    // אפשרות אחת בלבד — ואז גם הצד הקיים (trailing או leading) חייב
+    // להשתמש ב-alertOptions[0]. רק כששניהם קיימים leading משתמש ב-[1].
+    final hasTrailing = trailingLabel != null && alertOptions.isNotEmpty;
+    final hasLeading = leadingLabel != null &&
+        (hasTrailing ? alertOptions.length >= 2 : alertOptions.isNotEmpty);
+    final leadingIndex = hasTrailing ? 1 : 0;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (hasTrailing)
+          Expanded(
+            child: _buildCompositeSegment(
+              context: context,
+              text: trailingLabel,
+              textColor: textColor,
+              titleAtStart: true,
+              existingAlert: zmanAlerts[alertOptions[0].id],
+              onPressed: () =>
+                  _openAlertDialogForOption(context, alertOptions[0]),
+            ),
+          ),
+        if (hasTrailing && hasLeading) const SizedBox(width: 8),
+        if (hasLeading)
+          Expanded(
+            child: _buildCompositeSegment(
+              context: context,
+              text: leadingLabel,
+              textColor: textColor,
+              titleAtStart: false,
+              existingAlert: zmanAlerts[alertOptions[leadingIndex].id],
+              onPressed: () => _openAlertDialogForOption(
+                  context, alertOptions[leadingIndex]),
+            ),
+          ),
+      ],
     );
   }
 
@@ -906,74 +854,58 @@ class _ZmanCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              LayoutBuilder(
-                builder: (context, constraints) {
+              Builder(
+                builder: (context) {
                   final nameStyle =
                       Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                             fontSize: _titleFontSizeFor(timeData),
                             color: primaryTextColor,
                           );
-                  return FittedBox(
-                    alignment: Alignment.center,
-                    fit: BoxFit.scaleDown,
-                    child: SizedBox(
-                      width: constraints.maxWidth,
-                      child: Align(
-                        alignment: Alignment.center,
-                        child: _OverflowAwareTooltipText(
-                          text: timeData.name,
-                          style: nameStyle,
-                          maxLines: 2,
+                  // כרטיס בודד עם תת-כותרת: שורת כותרת + שורת פירוט קטנה.
+                  final showSubtitle =
+                      !timeData.isComposite && timeData.subtitle.isNotEmpty;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: FittedBox(
+                          alignment: Alignment.center,
+                          fit: BoxFit.scaleDown,
+                          child: _OverflowAwareTooltipText(
+                            text: timeData.name,
+                            style: nameStyle,
+                            maxLines: 2,
+                          ),
                         ),
                       ),
-                    ),
+                      if (showSubtitle)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            timeData.subtitle,
+                            textAlign: TextAlign.center,
+                            textDirection: TextDirection.rtl,
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      fontSize: 11,
+                                      color: secondaryTextColor,
+                                    ),
+                          ),
+                        ),
+                    ],
                   );
                 },
               ),
               // כרטיס composite עם 2 אפשרויות התראה — אייקון ליד כל שעה
               if (timeData.isComposite && timeData.alertOptions.length >= 2)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    if (timeData.trailingLabel != null) ...[
-                      Expanded(
-                        child: _buildCompositeSegment(
-                          context: context,
-                          text: timeData.trailingLabel!,
-                          textColor: secondaryTextColor,
-                          textAlignment: CrossAxisAlignment.end,
-                          alignToStart: true,
-                          existingAlert:
-                              zmanAlerts[timeData.alertOptions[0].id],
-                          onPressed: () => _openAlertDialogForOption(
-                            context,
-                            timeData.alertOptions[0],
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (timeData.trailingLabel != null &&
-                        timeData.leadingLabel != null)
-                      const SizedBox(width: 8),
-                    if (timeData.leadingLabel != null) ...[
-                      Expanded(
-                        child: _buildCompositeSegment(
-                          context: context,
-                          text: timeData.leadingLabel!,
-                          textColor: secondaryTextColor,
-                          textAlignment: CrossAxisAlignment.start,
-                          alignToStart: false,
-                          existingAlert:
-                              zmanAlerts[timeData.alertOptions[1].id],
-                          onPressed: () => _openAlertDialogForOption(
-                            context,
-                            timeData.alertOptions[1],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                _buildAlertedCompositeRow(
+                  context: context,
+                  trailingLabel: timeData.trailingLabel,
+                  leadingLabel: timeData.leadingLabel,
+                  alertOptions: timeData.alertOptions,
+                  textColor: secondaryTextColor,
                 )
               else
                 // כרטיס רגיל או composite ללא 2 אפשרויות — אייקון אחד בסוף
@@ -990,8 +922,7 @@ class _ZmanCard extends StatelessWidget {
                                     child: _CompositeLabelValue(
                                       text: timeData.trailingLabel!,
                                       textColor: secondaryTextColor,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
+                                      titleAtStart: true,
                                     ),
                                   ),
                                 if (timeData.trailingLabel != null &&
@@ -1002,14 +933,14 @@ class _ZmanCard extends StatelessWidget {
                                     child: _CompositeLabelValue(
                                       text: timeData.leadingLabel!,
                                       textColor: secondaryTextColor,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      titleAtStart: false,
                                     ),
                                   ),
                               ],
                             )
                           : Text(
                               timeData.time,
+                              textAlign: TextAlign.center,
                               style: Theme.of(context)
                                   .textTheme
                                   .bodySmall
@@ -1019,22 +950,24 @@ class _ZmanCard extends StatelessWidget {
                                   ),
                             ),
                     ),
-                    const SizedBox(width: 8),
-                    _AlertControl(
-                      hasAlert: hasAlert,
-                      existingAlert: existingAlert,
-                      tooltip: hasAlert
-                          ? _tooltipForAlert(
-                              existingAlert, 'הפעל התראה לזמן זה')
-                          : timeData.alertOptions.isEmpty
-                              ? 'הפעל התראה לזמן זה'
-                              : 'בחר זמן להתראה',
-                      foregroundColor: primaryTextColor,
-                      onPressed: onAlertPressed,
-                      menuEntries: timeData.alertOptions,
-                      onOptionSelected: (option) =>
-                          _openAlertDialogForOption(context, option),
-                    ),
+                    if (timeData.canAlert) ...[
+                      const SizedBox(width: 8),
+                      _AlertControl(
+                        hasAlert: hasAlert,
+                        existingAlert: existingAlert,
+                        tooltip: hasAlert
+                            ? _tooltipForAlert(
+                                existingAlert, 'הפעל התראה לזמן זה')
+                            : timeData.alertOptions.isEmpty
+                                ? 'הפעל התראה לזמן זה'
+                                : 'בחר זמן להתראה',
+                        foregroundColor: primaryTextColor,
+                        onPressed: onAlertPressed,
+                        menuEntries: timeData.alertOptions,
+                        onOptionSelected: (option) =>
+                            _openAlertDialogForOption(context, option),
+                      ),
+                    ],
                   ],
                 ),
             ],
@@ -1240,12 +1173,15 @@ class _OverflowAwareTooltipText extends StatelessWidget {
 class _CompositeLabelValue extends StatelessWidget {
   final String text;
   final Color textColor;
-  final CrossAxisAlignment crossAxisAlignment;
+
+  /// כשערכו true (קטע ימני ב-RTL) הכותרת מיושרת לקצה ההתחלה (ימין);
+  /// כשערכו false (קטע שמאלי) — לקצה הסוף (שמאל). הזמן עצמו תמיד ממורכז.
+  final bool titleAtStart;
 
   const _CompositeLabelValue({
     required this.text,
     required this.textColor,
-    required this.crossAxisAlignment,
+    this.titleAtStart = true,
   });
 
   @override
@@ -1253,17 +1189,16 @@ class _CompositeLabelValue extends StatelessWidget {
     final lastSpace = text.lastIndexOf(' ');
     final title = lastSpace == -1 ? text : text.substring(0, lastSpace);
     final value = lastSpace == -1 ? '' : text.substring(lastSpace + 1);
-    final alignment = crossAxisAlignment == CrossAxisAlignment.end
-        ? AlignmentDirectional.centerEnd
-        : AlignmentDirectional.centerStart;
 
-    return Align(
-      alignment: alignment,
-      child: Column(
-        crossAxisAlignment: crossAxisAlignment,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FittedBox(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Align(
+          alignment: titleAtStart
+              ? AlignmentDirectional.centerStart
+              : AlignmentDirectional.centerEnd,
+          child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               title,
@@ -1275,8 +1210,10 @@ class _CompositeLabelValue extends StatelessWidget {
                   ),
             ),
           ),
-          const SizedBox(height: 2),
-          FittedBox(
+        ),
+        const SizedBox(height: 2),
+        Center(
+          child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               value,
@@ -1288,8 +1225,8 @@ class _CompositeLabelValue extends StatelessWidget {
                   ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
