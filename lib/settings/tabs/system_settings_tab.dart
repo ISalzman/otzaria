@@ -1482,7 +1482,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   Expanded(
                     child: Text(
                       'גיבוי אוטומטי',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: kSettingsTitleStyle,
                     ),
                   ),
                   // AppSegmentedControl לבחירת תדירות
@@ -1596,29 +1596,24 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                     ],
 
                     // כפתורי צור/שחזר
+                    AppCard.sectionDivider(context),
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Row(
                         children: [
                           Expanded(
                             child: RecommendedActionButton(
-                              onPressed: _createBackup,
-                              iconWidget: const RtlIcon(
-                                FluentIcons.arrow_upload_24_regular,
-                              ),
+                              icon: FluentIcons.arrow_upload_24_regular,
                               text: 'צור גיבוי עכשיו',
-                              textAlign: TextAlign.center,
+                              onPressed: _createBackup,
                             ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: NeutralActionButton(
-                              onPressed: _restoreBackup,
-                              iconWidget: const RtlIcon(
-                                FluentIcons.arrow_download_24_regular,
-                              ),
+                              icon: FluentIcons.arrow_download_24_regular,
                               text: 'שחזר מגיבוי',
-                              textAlign: TextAlign.center,
+                              onPressed: _restoreBackup,
                             ),
                           ),
                         ],
@@ -1689,6 +1684,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                               context, repository, value)
                           : null,
                     ),
+
+                    AppCard.sectionDivider(context),
 
                     // הגדרת/שינוי סיסמה
                     ListTile(
