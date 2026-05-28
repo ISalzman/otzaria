@@ -1453,30 +1453,16 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
-                  // SegmentedButton לבחירת תדירות
-                  SegmentedButton<String>(
-                    showSelectedIcon: false,
-                    style: ButtonStyle(
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    segments: const [
-                      ButtonSegment<String>(
-                        value: 'none',
-                        label: Text('ללא'),
-                      ),
-                      ButtonSegment<String>(
-                        value: 'weekly',
-                        label: Text('שבועי'),
-                      ),
-                      ButtonSegment<String>(
-                        value: 'monthly',
-                        label: Text('חודשי'),
-                      ),
+                  // AppSegmentedControl לבחירת תדירות
+                  AppSegmentedControl<String>(
+                    options: const [
+                      SegmentOption<String>(value: 'none', label: 'ללא'),
+                      SegmentOption<String>(value: 'weekly', label: 'שבועי'),
+                      SegmentOption<String>(value: 'monthly', label: 'חודשי'),
                     ],
-                    selected: {autoFrequency},
-                    onSelectionChanged: (Set<String> newSelection) {
-                      Settings.setValue<String>(
-                          _keyAutoBackupFrequency, newSelection.first);
+                    currentValue: autoFrequency,
+                    onChanged: (value) {
+                      Settings.setValue<String>(_keyAutoBackupFrequency, value);
                       setState(() {});
                     },
                   ),
