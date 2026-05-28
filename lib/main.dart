@@ -445,6 +445,10 @@ Future<void> _runAppBootstrap() async {
         await _windowReadyCompleter.future;
         await windowManager.show();
         await windowManager.focus();
+        // Maximize must happen AFTER show() — calling it before show is
+        // unreliable on Windows because `show()` triggers SW_SHOWNORMAL which
+        // unmaximizes the window. See window_persistence.dart.
+        await WindowPersistence.applyPendingMaximize();
       },
     );
   }
