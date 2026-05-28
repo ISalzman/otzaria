@@ -37,6 +37,58 @@ class _FakeNotificationService implements NotificationService {
   bool get isInitialized => true;
 
   @override
+  Future<void> cancelNotification(int id) async {}
+
+  @override
+  Future<bool> checkPermissions() async => false;
+
+  @override
+  noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+/// SettingsRepository מינימלי בזיכרון — שומר ערכים שכתבנו וחושף אותם
+/// דרך getters לאסרציות בטסטים.
+class _InMemorySettingsRepository implements SettingsRepository {
+  String calendarZmanAlertsJson = '{}';
+  String calendarEnabledZmanim = '';
+
+  @override
+  Future<Map<String, dynamic>> loadSettings() async {
+    return {
+      'calendarType': 'combined',
+      'selectedCity': 'ירושלים',
+      'calendarEvents': '[]',
+      'calendarNotificationsEnabled': false,
+      'calendarNotificationTime': 60,
+      'calendarNotificationSound': false,
+      'calendarZmanAlerts': calendarZmanAlertsJson,
+      'calendarEnabledZmanim': calendarEnabledZmanim,
+      'calendarDayTransition': 'sunset',
+      'googleCalendarEnabled': false,
+      'googleCalendarSelectedIds': 'primary',
+      'googleCalendarSyncPastDays': 60,
+      'googleCalendarSyncFutureDays': 365,
+      'googleCalendarLastSync': 0,
+    };
+  }
+
+  @override
+  Future<void> updateCalendarZmanAlertsJson(String json) async {
+    calendarZmanAlertsJson = json;
+  }
+
+  @override
+  Future<void> updateCalendarEnabledZmanim(String json) async {
+    calendarEnabledZmanim = json;
+  }
+
+  @override
+  String getCalendarEventNotificationIdsJson() => '[]';
+
+  @override
+  Future<void> updateCalendarEventNotificationIdsJson(String json) async {}
+
+  @override
   noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
@@ -61,6 +113,7 @@ class _SlowSettingsWithStoredEvents implements SettingsRepository {
       'calendarNotificationTime': 60,
       'calendarNotificationSound': false,
       'calendarZmanAlerts': '{}',
+      'calendarEnabledZmanim': '',
       'calendarDayTransition': 'sunset',
       'googleCalendarEnabled': false,
       'googleCalendarSelectedIds': 'primary',
@@ -343,6 +396,27 @@ void main() {
           reason: 'תוצאת הקריאה החדשה חייבת להופיע ב-state הסופי');
 
       cubit.close();
+    });
+  });
+
+  group('setZmanEnabled — הפעלה/כיבוי זמנים', () {
+    test('הפעלה וכיבוי מעדכנים את ה-state ושומרים ל-prefs', () async {
+      final settings = _InMemorySettingsRepository();
+      final cubit = CalendarCubit(
+        settingsRepository: settings,
+        notificationService: _FakeNotificationService(),
+      );
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      await cubit.setZmanEnabled('tzais', false);
+      expect(cubit.state.enabledZmanim.contains('tzais'), isFalse);
+      expect(settings.calendarEnabledZmanim, isNot(contains('tzais')));
+
+      await cubit.setZmanEnabled('tzais', true);
+      expect(cubit.state.enabledZmanim.contains('tzais'), isTrue);
+      expect(settings.calendarEnabledZmanim, contains('tzais'));
+
+      await cubit.close();
     });
   });
 }
