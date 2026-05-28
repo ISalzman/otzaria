@@ -1,3 +1,4 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -23,7 +24,10 @@ class SegmentOption<T> {
   });
 }
 
-/// פקד סגמנטד גנרי לשימוש בסרגלי כלים
+/// פקד סגמנטד גנרי לשימוש בסרגלי כלים ובהגדרות.
+///
+/// [height] — גובה קבוע בפיקסלים (ברירת מחדל: null = compact density לסרגלי כלים).
+/// [expandToFillWidth] — מלא את כל הרוחב הזמין.
 ///
 /// דוגמה:
 /// ```dart
@@ -41,6 +45,7 @@ class AppSegmentedControl<T> extends StatelessWidget {
   final T currentValue;
   final ValueChanged<T> onChanged;
   final bool expandToFillWidth;
+  final double? height;
 
   const AppSegmentedControl({
     super.key,
@@ -48,56 +53,70 @@ class AppSegmentedControl<T> extends StatelessWidget {
     required this.currentValue,
     required this.onChanged,
     this.expandToFillWidth = false,
+    this.height,
   });
+
+  List<ButtonSegment<T>> _segments() {
+    final hasIcons = options.any((o) => o.icon != null);
+    return options
+        .map(
+          (o) => ButtonSegment<T>(
+            value: o.value,
+            label: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(o.label, style: AppTextStyles.settingTitle),
+            ),
+            icon: hasIcons
+                ? (o.icon != null
+                    ? Icon(o.icon, size: 18)
+                    : const SizedBox(width: 18))
+                : null,
+          ),
+        )
+        .toList();
+  }
+
+  static ButtonStyle _buttonStyle(ColorScheme cs) => ButtonStyle(
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return cs.onSecondaryContainer;
+          }
+          return cs.onSurfaceVariant;
+        }),
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return cs.secondaryContainer;
+          return cs.surface;
+        }),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTokens.radiusSM),
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isFixed = height != null;
 
     return SegmentedButton<T>(
-      segments: options
-          .map(
-            (opt) => ButtonSegment<T>(
-              value: opt.value,
-              label: Text(opt.label),
-              icon: opt.icon != null ? Icon(opt.icon) : null,
-            ),
-          )
-          .toList(),
+      segments: _segments(),
       selected: {currentValue},
       expandedInsets: expandToFillWidth ? EdgeInsets.zero : null,
       onSelectionChanged: (Set<T> selection) {
         if (selection.isNotEmpty) onChanged(selection.first);
       },
-      showSelectedIcon: false,
-      style: ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        textStyle: WidgetStatePropertyAll(
-          Theme.of(context).textTheme.bodySmall,
-        ),
-        foregroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return cs.onPrimaryContainer;
-          }
-          return cs.onSurface;
-        }),
-        backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return cs.primaryContainer;
-          }
-          return cs.surface;
-        }),
-        side: WidgetStatePropertyAll(
-          BorderSide(
-            color: cs.outline.withValues(alpha: 0.4),
-          ),
-        ),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-          ),
-        ),
-      ),
+      showSelectedIcon: true,
+      selectedIcon: const Icon(FluentIcons.checkmark_24_regular, size: 16),
+      style: isFixed
+          ? _buttonStyle(cs).copyWith(
+              minimumSize: WidgetStateProperty.all(Size(0, height!)),
+              maximumSize:
+                  WidgetStateProperty.all(Size(double.infinity, height!)),
+            )
+          : _buttonStyle(cs).copyWith(
+              visualDensity: VisualDensity.compact,
+            ),
     );
   }
 }
@@ -135,9 +154,7 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
     super.initState();
     _focusedIndex =
         widget.options.indexWhere((o) => o.value == widget.currentValue);
-    if (_focusedIndex < 0) {
-      _focusedIndex = 0;
-    }
+    if (_focusedIndex < 0) _focusedIndex = 0;
   }
 
   @override
@@ -145,9 +162,9 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentValue != widget.currentValue ||
         oldWidget.options != widget.options) {
-      final selectedIndex =
+      final idx =
           widget.options.indexWhere((o) => o.value == widget.currentValue);
-      _focusedIndex = selectedIndex < 0 ? 0 : selectedIndex;
+      _focusedIndex = idx < 0 ? 0 : idx;
     }
   }
 
@@ -159,7 +176,6 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final hasIcons = widget.options.any((o) => o.icon != null);
     final maxLen = widget.options
         .map((o) => o.label.length)
@@ -174,7 +190,7 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
       builder: (ctx, constraints) {
         final isNarrow =
             constraints.maxWidth < totalW + _kSegmentNarrowLayoutThreshold;
-        final button = _buildButton(cs, hasIcons, totalW);
+        final button = _buildButton(totalW);
 
         if (isNarrow) {
           return Padding(
@@ -197,14 +213,13 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _titleOnlyWidget(),
+                          _titleWidget(),
                           if (widget.subtitle != null) ...[
                             const SizedBox(height: 4),
                             Text(
                               widget.subtitle!,
                               style: AppTextStyles.settingSubtitle.copyWith(
-                                color:
-                                    Theme.of(ctx).colorScheme.onSurfaceVariant,
+                                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -222,12 +237,9 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
 
         return ListTile(
           leading: widget.icon != null ? Icon(widget.icon) : null,
-          title: _titleOnlyWidget(),
+          title: _titleWidget(),
           subtitle: widget.subtitle != null
-              ? Text(
-                  widget.subtitle!,
-                  style: AppTextStyles.settingSubtitle,
-                )
+              ? Text(widget.subtitle!, style: AppTextStyles.settingSubtitle)
               : null,
           trailing: button,
         );
@@ -235,34 +247,25 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
     );
   }
 
-  Widget _titleOnlyWidget() {
-    if (widget.title is! String) {
-      return widget.title as Widget;
-    }
-    return Text(
-      widget.title as String,
-      style: AppTextStyles.settingTitle,
-    );
+  Widget _titleWidget() {
+    if (widget.title is! String) return widget.title as Widget;
+    return Text(widget.title as String, style: AppTextStyles.settingTitle);
   }
 
-  Widget _buildButton(ColorScheme cs, bool hasIcons, double totalW) {
+  Widget _buildButton(double totalW) {
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: (_, ev) {
-        if (ev is! KeyDownEvent) {
-          return KeyEventResult.ignored;
-        }
+        if (ev is! KeyDownEvent) return KeyEventResult.ignored;
         if (ev.logicalKey == LogicalKeyboardKey.arrowRight) {
-          setState(() {
-            _focusedIndex = (_focusedIndex + 1) % widget.options.length;
-          });
+          setState(
+              () => _focusedIndex = (_focusedIndex + 1) % widget.options.length);
           return KeyEventResult.handled;
         }
         if (ev.logicalKey == LogicalKeyboardKey.arrowLeft) {
-          setState(() {
-            _focusedIndex = (_focusedIndex - 1 + widget.options.length) %
-                widget.options.length;
-          });
+          setState(() => _focusedIndex =
+              (_focusedIndex - 1 + widget.options.length) %
+                  widget.options.length);
           return KeyEventResult.handled;
         }
         if (ev.logicalKey == LogicalKeyboardKey.enter ||
@@ -274,50 +277,11 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
       },
       child: SizedBox(
         width: totalW,
-        child: SegmentedButton<T>(
-          showSelectedIcon: false,
-          style: ButtonStyle(
-            minimumSize: WidgetStateProperty.all(const Size(0, 40)),
-            maximumSize:
-                WidgetStateProperty.all(const Size(double.infinity, 40)),
-            shape: WidgetStateProperty.all(
-              RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppTokens.radiusSM),
-              ),
-            ),
-            backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
-              if (states.contains(WidgetState.selected)) {
-                return cs.secondaryContainer;
-              }
-              return cs.surface;
-            }),
-            foregroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
-              if (states.contains(WidgetState.selected)) {
-                return cs.onSecondaryContainer;
-              }
-              return cs.onSurfaceVariant;
-            }),
-          ),
-          segments: widget.options
-              .map(
-                (o) => ButtonSegment<T>(
-                  value: o.value,
-                  label: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(o.label, style: AppTextStyles.settingTitle),
-                  ),
-                  icon: hasIcons
-                      ? (o.icon != null
-                          ? Icon(o.icon, size: 18)
-                          : const SizedBox(width: 18))
-                      : null,
-                ),
-              )
-              .toList(),
-          selected: {widget.currentValue},
-          onSelectionChanged: (selection) {
-            widget.onChanged(selection.first);
-          },
+        child: AppSegmentedControl<T>(
+          options: widget.options,
+          currentValue: widget.currentValue,
+          onChanged: widget.onChanged,
+          height: 40,
         ),
       ),
     );
