@@ -2000,7 +2000,7 @@ class _CommentaryCardState extends State<_CommentaryCard> {
                   child: CommentaryListBase(
                     key: _commentaryKey,
                     indexes: [widget.index],
-                    fontSize: widget.textSize,
+                    fontSize: settingsState.commentatorsFontSize,
                     openBookCallback: widget.openBookCallback,
                     showSearch: false,
                     selectionSyncController: widget.selectionSyncController,
