@@ -61,6 +61,27 @@ Map<String, dynamic> pickLatestDevRelease(List<dynamic> releases) {
   return (releases.first as Map).cast<String, dynamic>();
 }
 
+/// כאשר ערוץ המפתחים פעיל, עדיין צריך לבחור release יציב אם הוא חדש יותר
+/// מה-pre-release האחרון. במקרה של שוויון בגרסת הליבה מחזירים את ה-stable,
+/// כדי לעגן את ה-changelog והנכסים ל-release היציב; עצם ההקפצה למשתמש עדיין
+/// תלויה בהשוואת semver המלאה של `updat`, ולכן שינוי רק ב-`+build` לא ייחשב
+/// לעדכון חדש.
+@visibleForTesting
+Map<String, dynamic> pickPreferredReleaseForDevChannel({
+  required Map<String, dynamic> stableRelease,
+  required Map<String, dynamic> devRelease,
+}) {
+  final stableTag = stableRelease['tag_name']?.toString() ?? '';
+  final devTag = devRelease['tag_name']?.toString() ?? '';
+  final stableVersion = _tryParseVersion(stableTag);
+  final devVersion = _tryParseVersion(devTag);
+
+  if (stableVersion == null) return devRelease;
+  if (devVersion == null) return stableRelease;
+
+  return devVersion > stableVersion ? devRelease : stableRelease;
+}
+
 /// שולפת את מידע ה-release מ-GitHub עבור גרסה נתונה ושומרת אותו במטמון.
 /// אם `getLatestVersion` כבר הקדים לאחסן את ה-release המדויק שזוהה, נחזיר
 /// אותו ישירות — כך מובטח עקביות בין ה-release שזוהה כ"חדש" לבין
@@ -306,7 +327,6 @@ class MyUpdatWidget extends StatelessWidget {
   final Widget child;
   @override
   Widget build(BuildContext context) {
-    // Don't show update widget in debug mode or offline mode
     final isOfflineMode =
         Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ?? false;
     final softwareAndBookUpdatesEnabled = Settings.getValue<bool>(
@@ -324,7 +344,9 @@ class MyUpdatWidget extends StatelessWidget {
           if (!snapshot.hasData) {
             return child;
           }
+          final currentVersion = snapshot.data!.version;
           return UpdatWindowManager(
+            key: ValueKey('updat-$currentVersion-${_isDevChannelEnabled()}'),
             getLatestVersion: () async {
               // ניקוי המטמון מבדיקת עדכון קודמת — אנו רוצים נתונים טריים
               // עבור ה-flow הנוכחי (ובכך גם להבטיח שלא יוחזר release מיושן
@@ -334,17 +356,26 @@ class MyUpdatWidget extends StatelessWidget {
               final isDevChannel = _isDevChannelEnabled();
 
               if (isDevChannel) {
-                // For dev channel, get the latest pre-release from the main repo
-                final data = await http.get(Uri.parse(
+                // בערוץ dev עדיין רוצים לראות גם stable חדש יותר אם פורסם.
+                final devData = await http.get(Uri.parse(
                   "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases",
                 ));
-                final releases = jsonDecode(data.body) as List;
+                final stableData = await http.get(Uri.parse(
+                  "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/latest",
+                ));
+                final releases = jsonDecode(devData.body) as List;
                 final preRelease = pickLatestDevRelease(releases);
+                final stableRelease = (jsonDecode(stableData.body) as Map)
+                    .cast<String, dynamic>();
+                final selectedRelease = pickPreferredReleaseForDevChannel(
+                  stableRelease: stableRelease,
+                  devRelease: preRelease,
+                );
                 final normalized =
-                    _normalizeVersion(preRelease["tag_name"] as String);
+                    _normalizeVersion(selectedRelease["tag_name"] as String);
                 // אחסון ה-release המדויק שזוהה — כדי ש-getChangelog ו-
                 // getBinaryUrl לא יבחרו מחדש לפי prefix ויתפסו release אחר.
-                _cacheRelease(normalized, preRelease, isDev: true);
+                _cacheRelease(normalized, selectedRelease, isDev: true);
                 return normalized;
               } else {
                 // For stable channel, get the latest stable release
@@ -486,10 +517,9 @@ class MyUpdatWidget extends StatelessWidget {
                 return 'שגיאה בטעינת יומן השינויים: $e';
               }
             },
-            currentVersion: snapshot.data!.version,
+            currentVersion: currentVersion,
             updateChipBuilder: _hebrewFlatChipAutoHideError,
             updateDialogBuilder: hebrewDefaultDialog,
-
             callback: (status) {},
             child: child,
           );
