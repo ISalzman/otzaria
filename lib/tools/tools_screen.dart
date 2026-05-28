@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -60,6 +61,17 @@ void setActiveToolIdSafely(String? id, {bool Function()? isMounted}) {
   } else {
     activeToolIdNotifier.value = id;
   }
+}
+
+/// ממיין רשימת [ToolDescriptor] לפי [ToolDescriptor.order] במיון *יציב*.
+///
+/// כש-N כלים חולקים את אותו `order` (למשל כמה תוספים בברירת המחדל 900
+/// מהמניפסט), הסדר היחסי ביניהם נשמר כפי שהגיע ברשימת הקלט — סדר שכבר נקבע
+/// דטרמיניסטית ב-repository (order → installedAt → pluginId). `List.sort`
+/// הרגיל אינו יציב והיה משבש את הסדר הזה בין הרצות.
+@visibleForTesting
+void sortToolDescriptorsStably(List<ToolDescriptor> descriptors) {
+  insertionSort(descriptors, compare: (a, b) => a.order.compareTo(b.order));
 }
 
 abstract class ToolDescriptor {
@@ -489,7 +501,7 @@ class ToolsScreenState extends State<ToolsScreen>
       }
     }
 
-    newDescriptors.sort((a, b) => a.order.compareTo(b.order));
+    sortToolDescriptorsStably(newDescriptors);
     final newSignature = _descriptorSignature(newDescriptors);
     if (newSignature == _lastDescriptorsSignature && _pages.isNotEmpty) {
       return;
