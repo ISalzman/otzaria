@@ -898,7 +898,7 @@ class _SubmenuItemWidgetState<T> extends State<_SubmenuItemWidget<T>> {
     _closeTimer?.cancel();
     _closeTimer = null;
     _hoverTimer?.cancel();
-    _hoverTimer = Timer(const Duration(milliseconds: 300), () {
+    _hoverTimer = Timer(const Duration(milliseconds: 500), () {
       if (mounted) {
         _openSubmenuFromData(renderBox, overlay);
       }
