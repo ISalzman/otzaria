@@ -74,21 +74,14 @@ class FindRefRepository {
     List<String>? queryTokens,
   })? getUserBookTocEntries;
 
-  /// Injection for testing: returns commentator rows for a specific source line.
-  /// In production calls [LinkDao.selectCommentatorsBySourceLine].
+  /// Injection for testing: מחזיר את שורות המפרשים הגולמיות עבור תוצאה.
+  /// In production calls [SeforimRepository.getCommentatorsForReference].
   ///
   /// כל row צפוי לכלול לפחות `targetBookTitle` ו-`targetLineIndex` (השורה
-  /// הראשונה בספר המפרש שמקושרת לשורת המקור).
-  final Future<List<Map<String, dynamic>>> Function(int sourceLineId)?
-      selectCommentatorsBySourceLine;
-
-  /// Injection for testing: returns commentator rows for a whole book.
-  /// In production calls [LinkDao.selectCommentatorsByBook].
-  ///
-  /// אין כאן `targetLineIndex` משמעותי לכל מפרש; הקוד נופל ל-best-effort
-  /// (`ref.segment.toInt()`) בהנחת alignment שורה-שורה.
-  final Future<List<Map<String, dynamic>>> Function(int bookId)?
-      selectCommentatorsByBook;
+  /// הראשונה בספר המפרש על פני טווח הקטע). חישוב הטווח (כותרת עד הכותרת
+  /// הבאה / כל הספר כשאין כותרות פנימיות) מתבצע ב-repository ה-DB.
+  final Future<List<Map<String, dynamic>>> Function(DbReferenceResult ref)?
+      fetchCommentatorRows;
 
   /// Injection for testing: מחזירה את הדור של מפרש לפי שם.
   /// In production calls [CommentaryService.getBookEra].
@@ -99,10 +92,17 @@ class FindRefRepository {
   /// קטגוריית הספר. In production: [ReferenceBooksCache.instance.getCategoryPathForBookSync].
   final String? Function(int bookId)? getCategoryPathSync;
 
-  /// קאש בזיכרון: מפתח = "bookId:sourceLineId" (sourceLineId=0 כשנופלים ל-book-level).
-  /// חי כל זמן שה-repository חי. אינו מתנקה אוטומטית — קטן יחסית
-  /// (לכל היותר ~15 מפתחות פר session, רוב המשתמשים פחות).
+  /// קאש בזיכרון. המפתח כולל את כל הפרמטרים שמשפיעים על תוצאת ה-loader
+  /// (`bookId`, `sourceLineId`, `isAltToc`, `tocLevel`, `segment`) — לא מספיק
+  /// `bookId:sourceLineId` בלבד: TOC רגיל ו-AltToc יכולים לחלוק את אותה שורת
+  /// התחלה (למשל "בראשית פרק א" ו"פרשת בראשית" — שניהם בשורה הראשונה), אך
+  /// הטווח המחושב להם שונה. חי כל זמן שה-repository חי; קטן יחסית בפועל.
   final Map<String, List<DbCommentatorEntry>> _commentatorsCache = {};
+
+  /// מפתח קאש לרשומות מפרשים — ראה [_commentatorsCache].
+  static String _cacheKeyFor(DbReferenceResult ref) =>
+      '${ref.bookId}:${ref.sourceLineId}:${ref.isAltToc ? 1 : 0}'
+      ':${ref.tocLevel}:${ref.segment.toInt()}';
 
   /// קאש שטוח של כל ערכי ה-AltToc על פני כל הספרים. נבנה lazy בקריאה
   /// הראשונה ל-fallback הגלובלי, ומשרת את כל ה-sessions שלאחר מכן.
@@ -121,8 +121,7 @@ class FindRefRepository {
     this.getPdfOutlineEntries,
     this.getAllUserBooks,
     this.getUserBookTocEntries,
-    this.selectCommentatorsBySourceLine,
-    this.selectCommentatorsByBook,
+    this.fetchCommentatorRows,
     this.getBookEra,
     this.getCategoryPathSync,
   }) {
@@ -208,58 +207,43 @@ class FindRefRepository {
 
   /// מחזיר רשימת רשומות מפרשים זמינים עבור תוצאה, מוכנות לפתיחה ישירה.
   ///
-  /// כל [DbCommentatorEntry.targetSegment] הוא:
-  ///   - `int` במסלול segment-level — `MIN(targetLineIndex)` של הקישורים
-  ///     היוצאים מהשורה למפרש (=הקטע הראשון של המפרש על אותה שורה).
-  ///   - `null` במסלול book-level — על הצרכן ליפול ל-best-effort
-  ///     (`ref.segment.toInt()`) בהנחת alignment שורה-שורה.
+  /// כל [DbCommentatorEntry.targetSegment] הוא `MIN(targetLineIndex)` על פני
+  /// טווח הקטע — המיקום הראשון בספר המפרש על אותו קטע — או `null` אם ה-row
+  /// אינו כולל `targetLineIndex`.
   ///
-  /// חשוב: `targetSegment` אינו תלוי ב-`ref.segment`. הקאש ממופתח לפי
-  /// `bookId:sourceLineId` בלבד, ולכן שני refs עם אותו `bookId` ו-`sourceLineId == 0`
-  /// אך `segment` שונה חולקים את אותה רשומה — והפתרון של ה-fallback חייב
-  /// להישאר באחריות הצרכן.
+  /// המתודה רק מנקה כפילויות וממיינת לפי דורות; **חישוב טווח הקטע** (כותרת עד
+  /// הכותרת הבאה, או כל הספר כשאין כותרות פנימיות) מתבצע ב-[fetchCommentatorRows]
+  /// (בייצור: [SeforimRepository.getCommentatorsForReference]).
   ///
-  /// אסטרטגיה:
-  /// 1. אם [DbReferenceResult.sourceLineId] > 0 — שאילתה segment-level
-  ///    (`selectCommentatorsBySourceLine`). מחזירה גם `targetLineIndex`.
-  /// 2. אחרת (או אם segment-level חזר ריק) — שאילתה book-level לכל הספר;
-  ///    `targetSegment` יישאר `null`.
-  /// 3. PDFs / ספרים מחוץ ל-DB (bookId <= 0) / ספרים אישיים — מחזיר ריק.
-  ///    ספרים אישיים: ה-bookId/sourceLineId שלהם שייכים ל-user_books.db ולא
-  ///    מתאימים ל-link table של ה-DB הראשי — שאילתה תחזיר מפרשים שגויים.
+  /// PDFs / ספרים מחוץ ל-DB (bookId <= 0) / ספרים אישיים — מחזיר ריק מיידית.
+  /// ספרים אישיים: ה-bookId/sourceLineId שלהם שייכים ל-user_books.db ולא
+  /// מתאימים ל-link table של ה-DB הראשי — שאילתה תחזיר מפרשים שגויים.
   ///
   /// תוצאות נשמרות בקאש בזיכרון לאורך חיי ה-repository.
   Future<List<DbCommentatorEntry>> getCommentatorsForResult(
       DbReferenceResult ref) async {
     if (ref.isPdf || ref.bookId <= 0 || ref.isUserBook) return const [];
 
-    final cacheKey = '${ref.bookId}:${ref.sourceLineId}';
+    final cacheKey = _cacheKeyFor(ref);
     final cached = _commentatorsCache[cacheKey];
     if (cached != null) return cached;
 
     final repository = SqliteDataProvider.instance.repository;
-    final lineFn = selectCommentatorsBySourceLine ??
+    final fetchFn = fetchCommentatorRows ??
         (repository == null
             ? null
-            : (int lineId) => repository.database.linkDao
-                .selectCommentatorsBySourceLine(lineId));
-    final bookFn = selectCommentatorsByBook ??
-        (repository == null
-            ? null
-            : (int bookId) =>
-                repository.database.linkDao.selectCommentatorsByBook(bookId));
+            : (DbReferenceResult r) => repository.getCommentatorsForReference(
+                  bookId: r.bookId,
+                  bookTitle: r.title,
+                  sourceLineId: r.sourceLineId,
+                  startLineIndex: r.segment.toInt(),
+                  level: r.tocLevel,
+                  isAltToc: r.isAltToc,
+                ));
 
-    if (lineFn == null && bookFn == null) return const [];
+    if (fetchFn == null) return const [];
 
-    List<Map<String, dynamic>> rows = const [];
-    var usedSegmentLevel = false;
-    if (ref.sourceLineId > 0 && lineFn != null) {
-      rows = await lineFn(ref.sourceLineId);
-      usedSegmentLevel = rows.isNotEmpty;
-    }
-    if (rows.isEmpty && bookFn != null) {
-      rows = await bookFn(ref.bookId);
-    }
+    final rows = await fetchFn(ref);
 
     // dedupe על `(title, bookId)` ולא רק `title`: שני מפרשים שונים יכולים
     // לחלוק אותה כותרת ולהיבדל ב-`targetBookId` (למשל "רש"י" שיש לו
@@ -276,10 +260,8 @@ class FindRefRepository {
       final int? bookId = row['targetBookId'] as int?;
       if (!seen.add((title, bookId))) continue;
 
-      // segment-level → `targetLineIndex` אם ה-row כולל אותו, אחרת null;
-      // book-level → null (הצרכן יפתור לפי ref.segment).
-      final int? segment =
-          usedSegmentLevel ? row['targetLineIndex'] as int? : null;
+      // `targetLineIndex` — המיקום המקביל הראשון בספר המפרש על פני הקטע.
+      final int? segment = row['targetLineIndex'] as int?;
       entries.add((title: title, bookId: bookId, segment: segment));
     }
 

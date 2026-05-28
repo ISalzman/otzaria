@@ -2320,6 +2320,71 @@ extension BookAcronymRepository on SeforimRepository {
     return matches.map((e) => e.toMap()).toList();
   }
 
+  /// מחזיר את שורות המפרשים הגולמיות עבור תוצאת איתור מקורות, מוכנות לעיבוד
+  /// ב-`FindRefRepository` (dedupe, מיון דורות). כל row כולל `targetBookTitle`,
+  /// `targetBookId` ו-`targetLineIndex` (המיקום המקביל הראשון בספר המפרש).
+  ///
+  /// אסטרטגיית הטווח:
+  ///   - תוצאת כותרת/דף ([sourceLineId] > 0): כל המפרשים מ-[startLineIndex]
+  ///     ועד הכותרת הבאה ברמה <= [level] (לא כולל) — כלומר כל תוכן הקטע,
+  ///     כולל תת-כותרות (רמה עמוקה יותר), ללא קישורי הקטע הבא.
+  ///   - תוצאת ספר ([sourceLineId] == 0): אם לספר יש כותרות פנימיות (level >= 2)
+  ///     מוחזר ריק — על המשתמש לבחור כותרת ספציפית. אם אין כותרות פנימיות
+  ///     מוחזרים כל מפרשי הספר (טווח מלא), כל אחד במיקומו הראשון.
+  ///
+  /// [isAltToc] בוחר את מבנה הכותרות שלפיו נחשב הגבול (TOC רגיל מול AltToc).
+  Future<List<Map<String, dynamic>>> getCommentatorsForReference({
+    required int bookId,
+    required String bookTitle,
+    required int sourceLineId,
+    required int startLineIndex,
+    required int level,
+    bool isAltToc = false,
+  }) async {
+    // גבול עליון "אינסופי" לטווח — אף ספר לא מתקרב ל-2 מיליון שורות.
+    const maxLineIndex = 0x7fffffff;
+    final int startIdx;
+    final int endIdx;
+
+    if (sourceLineId > 0) {
+      // קטע ספציפי: מהכותרת ועד הכותרת הבאה ברמה <= level.
+      final cache = isAltToc
+          ? await _buildAltTocCacheForBook(bookId, bookTitle)
+          : await _buildTocCacheForBook(bookId, bookTitle);
+      startIdx = startLineIndex;
+      endIdx = _nextHeadingLineIndex(cache, startLineIndex, level);
+    } else {
+      // תוצאת ספר: אם יש כותרות פנימיות — אין קטע נבחר, מחזירים ריק.
+      // אחרת — כל הספר (ספר ללא TOC פנימי, כל מפרשיו רלוונטיים).
+      final cache = await _buildTocCacheForBook(bookId, bookTitle);
+      final hasInnerToc = cache.all.any((e) => e.level >= 2);
+      if (hasInnerToc) return const [];
+      startIdx = 0;
+      endIdx = maxLineIndex;
+    }
+
+    return _database.linkDao
+        .selectCommentatorsByLineRange(bookId, startIdx, endIdx);
+  }
+
+  /// מחזיר את ה-`segment` (=lineIndex) של ערך ה-TOC הבא **ברמה <= [level]**
+  /// אחרי [afterLineIndex], או 0x7fffffff אם אין כזה (=עד סוף הספר).
+  /// הכותרת הבאה באותה רמה או רדודה יותר חוסמת את הקטע, בעוד תת-כותרות
+  /// (רמה עמוקה יותר) נכללות בו.
+  int _nextHeadingLineIndex(
+      _TocBookCache cache, int afterLineIndex, int level) {
+    var end = 0x7fffffff;
+    for (final e in cache.all) {
+      if (e.level >= 1 &&
+          e.level <= level &&
+          e.segment > afterLineIndex &&
+          e.segment < end) {
+        end = e.segment;
+      }
+    }
+    return end;
+  }
+
   /// בונה (פעם אחת לכל [bookId]) את רשימת ערכי ה-TOC המעובדים.
   /// כל ערך כולל את ה-reference המלא (כולל נתיב אבות שלם) ואת הטוקנים המנורמלים
   /// שלו מראש. מבנה היררכי (childrenByParentId) מאפשר חיפוש רמה-אחר-רמה.

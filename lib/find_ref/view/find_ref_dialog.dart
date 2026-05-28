@@ -26,10 +26,9 @@ class FindRefDialog extends StatefulWidget {
 /// נוצרת בעת טעינת רשימת המפרשים — מאחדת את ה-`title` ו-`targetSegment`
 /// מה-DB עם ה-[Book] המתאים מתוך הספרייה.
 ///
-/// `targetSegment` הוא nullable: `non-null` רק כש-DB החזיר `targetLineIndex`
-/// מדויק (מסלול segment-level). ב-book-level הוא `null`, והקליק נופל ל-
-/// `ref.segment.toInt()`. חשוב: הרשומה הזו משותפת בין refs עם אותו
-/// `bookId+sourceLineId` אך `segment` שונה, ולכן אסור לקבע את ה-segment כאן.
+/// `targetSegment` הוא ה-`targetLineIndex` שהחזיר ה-DB — המיקום המקביל הראשון
+/// בספר המפרש על פני הקטע. הוא nullable רק כאמצעי הגנה (row חריג בלי
+/// `targetLineIndex`); במקרה כזה הקליק נופל לתחילת ספר המפרש (segment 0).
 class _CommentatorEntry {
   final String title;
   final int? targetSegment;
@@ -101,7 +100,9 @@ class _FindRefDialogState extends State<FindRefDialog> {
   bool _includePersonalBooks = false;
   final Map<int, GlobalKey> _itemKeys = {};
   final Map<int, GlobalKey> _commentatorsButtonKeys = {};
-  // מפתח = "bookId:sourceLineId". value=null → טעינה בתהליך.
+  // המפתח כולל את כל הפרמטרים המבדילים בין refs (bookId/sourceLineId/isAltToc/
+  // level/segment) — TOC רגיל ו-AltToc יכולים לחלוק שורת התחלה ולחשב טווח שונה.
+  // value=null → טעינה בתהליך.
   // value=[] → אין מפרשים זמינים (לא יוצג כפתור).
   // value=[...] → רשומות מוכנות לפתיחה ישירה (כולל targetSegment ו-Book).
   final Map<String, List<_CommentatorEntry>?> _commentatorsByRef = {};
@@ -187,7 +188,8 @@ class _FindRefDialogState extends State<FindRefDialog> {
   }
 
   String _commentatorsKey(DbReferenceResult ref) =>
-      '${ref.bookId}:${ref.sourceLineId}';
+      '${ref.bookId}:${ref.sourceLineId}:${ref.isAltToc ? 1 : 0}'
+      ':${ref.tocLevel}:${ref.segment.toInt()}';
 
   /// טוען את רשימת המפרשים ל-[ref] ברקע אם עוד לא נטענה, יחד עם ה-[Book]
   /// המתאים לכל מפרש. רשומות מלאות נשמרות ב-[_commentatorsByRef] כך שהקליק
@@ -328,11 +330,9 @@ class _FindRefDialogState extends State<FindRefDialog> {
         initialCommentators: initialCommentators);
   }
 
-  /// פותח תפריט עם רשימת המפרשים הזמינים ל-[ref] (כבר preloaded — כולל
-  /// `Book` לכל רשומה). בחירה פותחת את הספר ישירות. ה-[ref] נחוץ עבור
-  /// fallback של `targetSegment` במסלול book-level (ראה [_openCommentator]).
+  /// פותח תפריט עם רשימת המפרשים הזמינים (כבר preloaded — כולל `Book` לכל
+  /// רשומה). בחירה פותחת את ספר המפרש ישירות במיקומו (ראה [_openCommentator]).
   Future<void> _showCommentatorsMenu(
-    DbReferenceResult ref,
     GlobalKey buttonKey,
     List<_CommentatorEntry> commentators,
   ) async {
@@ -379,15 +379,16 @@ class _FindRefDialogState extends State<FindRefDialog> {
     );
 
     if (selected == null || !mounted) return;
-    _openCommentator(ref, selected);
+    _openCommentator(selected);
   }
 
   /// פותח את ספר המפרש מתוך רשומה שהוכנה מראש: ה-`book` כבר ידוע, וה-
-  /// `targetSegment` נלקח מה-[entry] או נופל ל-`ref.segment` כש-DB לא ידע
-  /// לפתור (מסלול book-level). הקליק סינכרוני לחלוטין — אין `await`, אין
+  /// `targetSegment` נלקח מה-[entry] (ה-`targetLineIndex` של ה-DB). אם חסר
+  /// (row חריג) נפתח בתחילת ספר המפרש — לא ב-`ref.segment`, שהוא אינדקס בספר
+  /// המקור וחסר משמעות בספר המפרש. הקליק סינכרוני לחלוטין — אין `await`, אין
   /// שאילתות DB ואין מעבר על עץ הספרייה בזמן הקליק.
-  void _openCommentator(DbReferenceResult ref, _CommentatorEntry entry) {
-    final segment = entry.targetSegment ?? ref.segment.toInt();
+  void _openCommentator(_CommentatorEntry entry) {
+    final segment = entry.targetSegment ?? 0;
     Navigator.of(context).pop();
     openBook(context, entry.book, segment, '');
   }
@@ -656,7 +657,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
                                             FluentIcons.library_24_regular),
                                         tooltip: 'הצג מפרשים זמינים',
                                         onPressed: () => _showCommentatorsMenu(
-                                            ref, menuButtonKey, cached),
+                                            menuButtonKey, cached),
                                       )
                                     : null,
                                 onTap: () {
