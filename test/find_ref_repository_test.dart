@@ -312,12 +312,12 @@ void main() {
   });
 
   test(
-      'FindRef: "בראשית א" finds Genesis – not commentary books that contain "בראשית א" mid-title',
+      'FindRef: "בראשית א" finds Genesis first; mid-title commentary appears lower',
       () async {
-    // Regression: "זוהר חי - בראשית א" contains "בראשית א" but the second
-    // token of its *title* is not "א" – it should be ignored for phrase=2.
-    // The single-token fallback should then find "בראשית" (Genesis) instead.
-
+    // matchRank=2 hits ("contains") הם "secondary" — מתקבלים אבל לא דוחקים
+    // את ה-primary hits. ב-phrase n=2 רק "זוהר חי בראשית א" נמצא (matchRank=2)
+    // → ה-loop ממשיך ל-n=1 ומוצא את "בראשית" כ-primary. שניהם נכללים בתוצאות
+    // כאשר "בראשית" מקודם בדירוג.
     final repository = FindRefRepository(
       dataRepository: MockDataRepository(),
       isReferenceBooksCacheLoaded: () => true,
@@ -363,11 +363,17 @@ void main() {
     );
 
     final results = await repository.findRefs('בראשית א');
+    final titles = results.map((r) => r.title).toList();
 
-    expect(results.map((r) => r.title), contains('בראשית'),
-        reason: 'Genesis must appear');
-    expect(results.map((r) => r.title), isNot(contains('זוהר חי בראשית א')),
-        reason: 'Commentary with mid-title match must not appear');
+    expect(titles, contains('בראשית'), reason: 'Genesis must appear');
+    expect(titles, contains('זוהר חי בראשית א'),
+        reason:
+            'mid-title contains hit חייב להופיע (secondary), כי המשתמש ביקש '
+            'שיכלל בתוצאות גם אם בדירוג נמוך');
+    final genesisIdx = titles.indexOf('בראשית');
+    final commentaryIdx = titles.indexOf('זוהר חי בראשית א');
+    expect(genesisIdx, lessThan(commentaryIdx),
+        reason: 'Genesis (primary) חייב להקדים את ה-mid-title (secondary)');
   });
 
   test(
@@ -793,12 +799,15 @@ void main() {
     });
   });
 
-  // ─── שאריות-ריקות → ספר + רמה 2 ─────────────────────────────────────────────
+  // ─── שאריות-ריקות → רק הספר עצמו ────────────────────────────────────────────
 
-  group('FindRef — remainingTokens ריק מחזיר ספר + רמה 2', () {
+  group('FindRef — remainingTokens ריק מחזיר רק את הספר', () {
     test(
-        'שאילתה רב-מילים שתואמת לכותרת לחלוטין מחזירה את הספר ואת כל ערכי רמה 2',
+        'שאילתה רב-מילים שתואמת לכותרת לחלוטין מחזירה רק את הספר (ללא TOC)',
         () async {
+      // התנהגות סימטרית למסלול של מילה אחת: כשהמשתמש הקליד רק את כותרת
+      // הספר ושום דבר נוסף — לא נשלפים ערכי TOC, רק הספר עצמו.
+      var fetchTocCalled = false;
       final repo = FindRefRepository(
         dataRepository: MockDataRepository(),
         isReferenceBooksCacheLoaded: () => true,
@@ -818,26 +827,19 @@ void main() {
           return const <ReferenceBookHit>[];
         },
         getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async {
-          // כשאין queryTokens — מחזירים TOC מלא ובוחרים רמה 2 בלבד.
-          expect(queryTokens, isNull,
-              reason: 'remainingTokens ריק → אסור להעביר queryTokens');
-          return [
-            {'reference': 'תורה אור', 'segment': 0, 'level': 0},
-            {'reference': 'תורה אור פתיחה', 'segment': 1, 'level': 1},
-            {'reference': 'תורה אור פרשת בראשית', 'segment': 10, 'level': 2},
-            {'reference': 'תורה אור פרשת נח', 'segment': 50, 'level': 2},
-          ];
+          fetchTocCalled = true;
+          return const [];
         },
       );
 
       final results = await repo.findRefs('תורה אור');
       final refs = results.map((r) => r.reference).toList();
 
-      expect(refs, contains('תורה אור'), reason: 'הספר עצמו תמיד מופיע ראשון');
-      expect(refs, contains('תורה אור פרשת בראשית'));
-      expect(refs, contains('תורה אור פרשת נח'));
-      expect(refs.contains('תורה אור פתיחה'), isFalse,
-          reason: 'רמה 1 לא מוחזרת כשאין שאריות לסנן');
+      expect(refs, equals(['תורה אור']),
+          reason: 'רק כותרת הספר מוחזרת, ללא ערכי TOC');
+      expect(fetchTocCalled, isFalse,
+          reason: 'אין צורך לקרוא ל-fetchTocEntries כשהשאילתה כיסתה את כל '
+              'כותרת הספר — מקביל למסלול של מילה אחת');
     });
   });
 
@@ -878,35 +880,10 @@ void main() {
     });
 
     test('reference קצר יותר מועדף בשובר-תיקו', () async {
+      // שאילתה עם remainingTokens שאינם ריקים ("פרקי אבות פרק") — כדי לוודא
+      // שהמיון על-פני אורך ה-reference פועל. (כאשר remainingTokens ריק
+      // מחזירים רק את הספר עצמו, ראה הטסט של "תורה אור" לעיל.)
       final repo = FindRefRepository(
-        dataRepository: MockDataRepository(),
-        isReferenceBooksCacheLoaded: () => true,
-        warmUpReferenceBooksCache: () async {},
-        searchReferenceBooks: (query, {int limit = 50}) {
-          if (query == 'אבות') {
-            return [_hit(bookId: 1, title: 'אבות', orderIndex: 1.0)];
-          }
-          return const <ReferenceBookHit>[];
-        },
-        getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async {
-          if (queryTokens == null) {
-            return [
-              {
-                'reference': 'אבות פרק חמישי בעניין דברים',
-                'segment': 5,
-                'level': 2
-              },
-              {'reference': 'אבות פרק א', 'segment': 1, 'level': 2},
-            ];
-          }
-          return const <Map<String, dynamic>>[];
-        },
-      );
-
-      // קלט מילה-אחת לא חודר ל-TOC — אז זה לא מצב טוב. נחליף את הזרימה:
-      // נשתמש בשאילתה רב-מילים שתואמת בדיוק לספר → remainingTokens=[] → TOC רמה 2.
-      // נריץ אבחנה נפרדת:
-      final repo2 = FindRefRepository(
         dataRepository: MockDataRepository(),
         isReferenceBooksCacheLoaded: () => true,
         warmUpReferenceBooksCache: () async {},
@@ -936,20 +913,15 @@ void main() {
         },
       );
 
-      // עוטף את ה-results כדי לאמת שהקצר קודם.
-      final results = await repo2.findRefs('פרקי אבות');
+      final results = await repo.findRefs('פרקי אבות פרק');
       final byRef = results.map((r) => r.reference).toList();
 
-      // הספר עצמו ראשון; אחר כך פרקים — הקצר לפני הארוך.
       final idxShort = byRef.indexOf('פרקי אבות פרק א');
       final idxLong = byRef.indexOf('פרקי אבות פרק חמישי בעניין דברים');
       expect(idxShort, isNonNegative);
       expect(idxLong, isNonNegative);
       expect(idxShort, lessThan(idxLong),
           reason: 'reference קצר יותר מופיע לפני ארוך');
-
-      // נשתמש ב-repo כדי לא להשאיר משתנה לא בשימוש.
-      expect(repo, isNotNull);
     });
   });
 
@@ -1310,7 +1282,9 @@ void main() {
     // ── AltToc (כותרות-משנה) ──────────────────────────────────────────────────
 
     group('FindRef — חיפוש בכותרות-משנה (AltToc)', () {
-      // AltToc references אינם כוללים שם הספר (הם יחסיים לספר).
+      // AltToc references נשמרים ב-DB יחסיים לספר (ללא שם הספר).
+      // ה-repository מצרף את שם הספר ב-prefix כך שהתוצאה הסופית כוללת אותו —
+      // ראה _qualifyAltTocReference.
       //   רמה 1: "פרשת לך לך"           (segment=100)
       //   רמה 2: "פרשת לך לך עליה א"   (segment=110)
       //          "פרשת לך לך עליה ו"   (segment=160)
@@ -1343,9 +1317,11 @@ void main() {
         final altResult = results.where((r) => r.isAltToc).toList();
         expect(altResult.any((r) => r.reference.contains('עליה ו')), isTrue,
             reason: '"בראשית לך ו" חייב למצוא "עליה ו" דרך AltToc');
-        // reference ללא שם הספר
-        expect(altResult.any((r) => r.reference.startsWith('בראשית')), isFalse,
-            reason: 'AltToc reference לא אמור לכלול שם הספר');
+        // ה-repository מצרף את שם הספר ב-prefix לתוצאות AltToc, כדי שהתצוגה
+        // תזהה לאיזה ספר התוצאה שייכת.
+        expect(altResult.any((r) => r.reference.startsWith('בראשית ')), isTrue,
+            reason:
+                'AltToc reference חייב להתחיל בשם הספר כדי שלא יוצג ללא הקשר');
       });
 
       test('חיפוש "לך א" מוצא "עליה א" דרך AltToc', () async {
@@ -1495,6 +1471,185 @@ void main() {
         isTrue,
         reason: 'global fallback חייב לרוץ ולמצוא AltToc של בראשית',
       );
+    });
+
+    test(
+        'L3 entries מודחקים כש-L2 parent matches (סינון "אם לא צריך לרדת לרמה 3")',
+        () async {
+      // התרחיש: שאילתה "בבא קמא" מתאימה גם ל-L2 "פסקי בבא קמא" וגם
+      // ל-L3 שתחתיה ("סימן א", "סימן ב", ...). ה-L3 רק מרחיבים את ה-L2
+      // ולכן מציפים את 15 התוצאות בפירוט שאותו המשתמש לא ביקש.
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'בבא') {
+            return [
+              _hit(
+                bookId: 1,
+                title: 'אור זרוע',
+                normalizedTitle: 'אור זרוע',
+                matchRank: 1,
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (id, title, {queryTokens}) async => [
+          {'reference': 'אור זרוע פסקי בבא קמא', 'segment': 100, 'level': 2},
+          {
+            'reference': 'אור זרוע פסקי בבא קמא סימן א',
+            'segment': 101,
+            'level': 3
+          },
+          {
+            'reference': 'אור זרוע פסקי בבא קמא סימן ב',
+            'segment': 102,
+            'level': 3
+          },
+          {
+            'reference': 'אור זרוע פסקי בבא קמא סימן ג',
+            'segment': 103,
+            'level': 3
+          },
+        ],
+      );
+
+      final results = await repo.findRefs('בבא קמא');
+      final refs = results.map((r) => r.reference).toList();
+
+      expect(refs, contains('אור זרוע פסקי בבא קמא'),
+          reason: 'ערך L2 ה-parent חייב להישאר');
+      expect(
+        refs.any((r) => r.contains('סימן')),
+        isFalse,
+        reason:
+            'ערכי L3 שמרחיבים את ה-parent (סימן א/ב/ג) מודחקים — ה-L2 כבר '
+            'עונה על השאילתה',
+      );
+    });
+
+    test(
+        'global AltToc fallback: ילדי L1 של entry L0 ש-matches — מודחקים',
+        () async {
+      // התרחיש המדויק מהמשתמש: שאילתה "בבא קמא" → bookHits מחזיר רק את
+      // התלמוד "בבא קמא" (שכל הטוקנים נצרכים בכותרת → ערך הספר בלבד, ללא
+      // TOC). perBookHasSpecificMatch=false → ה-fallback הגלובלי רץ.
+      // ב-DB, "אור זרוע" מכיל AltToc:
+      //   level 0: "פסקי בבא קמא"
+      //   level 1: "סימן א", "סימן ב", ... (parents=L0)
+      // ה-flat cache הגלובלי בודק רק אם כל הטוקנים בנתיב המלא, ולכן L1
+      // (refTokens=["פסקי","בבא","קמא","סימן","ב"]) עוברים — וצריך להדחיק.
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'בבא קמא') {
+            return [
+              _hit(
+                bookId: 1,
+                title: 'בבא קמא',
+                normalizedTitle: 'בבא קמא',
+                matchRank: 0,
+                orderIndex: 100.0,
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getAllAltTocFlatEntries: () async => const [
+          {
+            'bookId': 3720,
+            'bookTitle': 'אור זרוע',
+            'bookOrderIndex': 5000.0,
+            'reference': 'פסקי בבא קמא',
+            'segment': 100,
+            'level': 0,
+            'dbLineId': 1,
+          },
+          {
+            'bookId': 3720,
+            'bookTitle': 'אור זרוע',
+            'bookOrderIndex': 5000.0,
+            'reference': 'פסקי בבא קמא סימן א',
+            'segment': 101,
+            'level': 1,
+            'dbLineId': 2,
+          },
+          {
+            'bookId': 3720,
+            'bookTitle': 'אור זרוע',
+            'bookOrderIndex': 5000.0,
+            'reference': 'פסקי בבא קמא סימן ב',
+            'segment': 102,
+            'level': 1,
+            'dbLineId': 3,
+          },
+          {
+            'bookId': 3720,
+            'bookTitle': 'אור זרוע',
+            'bookOrderIndex': 5000.0,
+            'reference': 'פסקי בבא קמא סימן ג',
+            'segment': 103,
+            'level': 1,
+            'dbLineId': 4,
+          },
+        ],
+      );
+
+      final results = await repo.findRefs('בבא קמא');
+      final refs = results.map((r) => r.reference).toList();
+
+      expect(refs, contains('אור זרוע פסקי בבא קמא'),
+          reason: 'ערך L0 ה-parent חייב להישאר (עם prefix של שם הספר)');
+      expect(
+        refs.where((r) => r.contains('סימן')).toList(),
+        isEmpty,
+        reason: 'ערכי L1 של "סימן X" שמרחיבים את ה-parent מודחקים — אסור '
+            'שיוצפו 15 התוצאות בפירוט פנימי שלא נדרש',
+      );
+    });
+
+    test(
+        'L3 entries לא מודחקים כשהשאילתה דורשת אותם (L2 parent לא matches)',
+        () async {
+      // אם המשתמש כתב "בבא קמא סימן ב", רק L3 הספציפי מתאים — אסור להדחיק
+      // אותו (אין L2 parent שתואם את כל הטוקנים).
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'בבא') {
+            return [
+              _hit(
+                bookId: 1,
+                title: 'אור זרוע',
+                normalizedTitle: 'אור זרוע',
+                matchRank: 1,
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        // ב-production ה-DB מסנן לפי queryTokens ומחזיר רק L3 התואם.
+        getTocEntriesForReference: (id, title, {queryTokens}) async => [
+          {
+            'reference': 'אור זרוע פסקי בבא קמא סימן ב',
+            'segment': 102,
+            'level': 3
+          },
+        ],
+      );
+
+      final results = await repo.findRefs('בבא קמא סימן ב');
+      final refs = results.map((r) => r.reference).toList();
+
+      expect(refs, contains('אור זרוע פסקי בבא קמא סימן ב'),
+          reason: 'L3 חייב להישאר כשאין parent matching');
     });
 
     test('dedup: TOC ו-AltToc לאותו segment מחזירים תוצאה אחת', () async {
@@ -2185,12 +2340,14 @@ void main() {
     });
   });
 
-  // ─── דחיית contains-only לרב-מילים ─────────────────────────────────────────
+  // ─── contains-only לרב-מילים — מקובל כ-secondary ─────────────────────────────
 
-  group('FindRef — contains-only נדחה לרב-מילים', () {
-    test('hit עם matchRank=2 נדחה כאשר השאילתה רב-מילים', () async {
-      // וריאציה: שאילתה רב-מילים שמחזירה רק contains-only → התוצאה ריקה
-      // ובסולם הביטויים יורדים למילה אחת.
+  group('FindRef — contains-only לרב-מילים מתקבל כ-secondary', () {
+    test('hit עם matchRank=2 שטוקני השאילתה רצופים בכותרת — מתקבל ומופיע',
+        () async {
+      // התרחיש המקורי שהבעיה תוקנה אליו: "פני יהושע על בבא קמא" כשמחפשים
+      // "בבא קמא". טוקני "בבא קמא" מופיעים רצופים בכותרת (במיקום פנימי) →
+      // צריך להופיע בתוצאות גם אם הוא היחיד הזמין.
       final repo = FindRefRepository(
         dataRepository: MockDataRepository(),
         isReferenceBooksCacheLoaded: () => true,
@@ -2202,7 +2359,7 @@ void main() {
                 bookId: 1,
                 title: 'ספר אור החיים על התורה',
                 normalizedTitle: 'ספר אור החיים על התורה',
-                matchRank: 2, // contains-only — חייב להידחות
+                matchRank: 2,
                 orderIndex: 5.0,
               ),
             ];
@@ -2217,10 +2374,46 @@ void main() {
 
       final results = await repo.findRefs('אור החיים');
 
+      // הטוקנים "אור" ו"החיים" רצופים בכותרת "ספר אור החיים על התורה" (במיקום 1-2)
+      // → ה-hit מתקבל כ-secondary. המשתמש ביקש שלפחות יופיע, גם אם לא ראשון.
       expect(
         results.any((r) => r.title == 'ספר אור החיים על התורה'),
+        isTrue,
+        reason: 'matchRank=2 עם טוקנים רצופים בכותרת חייב להופיע',
+      );
+    });
+
+    test('hit עם matchRank=2 שטוקני השאילתה לא רצופים — נדחה', () async {
+      // הגנה: "בראשית פסוק א" שמחפשים "בראשית א" — אם הטוקנים לא רצופים
+      // בכותרת המנורמלת, נדחה גם אם t.contains(q) ב-DB (לדוגמה אם בעתיד
+      // נורמליזציה תוסיף רווחים שונים).
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'בראשית א') {
+            return [
+              _hit(
+                bookId: 1,
+                title: 'בראשית פסוק א',
+                normalizedTitle: 'בראשית פסוק א',
+                matchRank: 2,
+                orderIndex: 5.0,
+              ),
+            ];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+      );
+
+      final results = await repo.findRefs('בראשית א');
+
+      expect(
+        results.any((r) => r.title == 'בראשית פסוק א'),
         isFalse,
-        reason: 'matchRank=2 לרב-מילים חייב להידחות גם אם זה היחיד הזמין',
+        reason: '"בראשית" ו"א" לא רצופים בכותרת ("פסוק" באמצע) → נדחה',
       );
     });
   });
@@ -2267,18 +2460,26 @@ void main() {
           getCategoryPath: (_) async => '',
         );
 
-    test('remainingTokens ריק — מחזיר כותרת הספר + כל פרקי ה-outline',
+    test('remainingTokens ריק — מחזיר רק כותרת הספר (ללא ערכי outline)',
         () async {
-      final repo = buildPdfRepo(outlineBuilder: (_) => outline);
+      // כשהמשתמש הקליד רק את שם הספר אנו לא רוצים להציף את התוצאות בערכי
+      // outline (בעיקר ב-PDFs של גמרא ששומרים entry לכל דף). סימטרי למסלול
+      // של מילה אחת.
+      var outlineBuilderCalled = false;
+      final repo = buildPdfRepo(outlineBuilder: (_) {
+        outlineBuilderCalled = true;
+        return outline;
+      });
 
       // "ספר אטלס" → שתי המילים ב-title → remainingTokens=[]
       final results = await repo.findRefs('ספר אטלס');
       final refs = results.map((r) => r.reference).toList();
 
-      expect(refs, contains('ספר אטלס'), reason: 'כותרת הספר חייבת להיכלל');
-      expect(refs, contains('ספר אטלס פרק א'));
-      expect(refs, contains('ספר אטלס פרק ב'));
-      expect(refs, contains('ספר אטלס פרק ג'));
+      expect(refs, equals(['ספר אטלס']),
+          reason: 'רק כותרת ה-PDF, ללא דפים/פרקים מה-outline');
+      expect(outlineBuilderCalled, isFalse,
+          reason: 'אין צורך לטעון את ה-outline כשהשאילתה כיסתה את כל '
+              'כותרת הספר');
     });
 
     test('remainingTokens לא ריק — מחזיר כל הפרקים התואמים (לא רק ראשון)',
@@ -2601,8 +2802,10 @@ void main() {
       expect(personal.first.segment, equals(0));
     });
 
-    test('שאילתת שתי מילים ו-remainingTokens ריק — כותרת + TOC רמה 2',
+    test('שאילתת שתי מילים ו-remainingTokens ריק — רק כותרת הספר',
         () async {
+      // סימטרי למסלול הראשי ולמסלול של מילה אחת: שאילתה שכל הטוקנים בה
+      // נצרכים ע"י כותרת הספר מחזירה רק את הספר עצמו.
       final repo = buildPersonalRepo(userToc: [
         {'reference': 'ספר פרטי פרק א', 'segment': 10, 'level': 2},
         {'reference': 'ספר פרטי פרק ב', 'segment': 20, 'level': 2},
@@ -2613,9 +2816,8 @@ void main() {
           .where((r) => r.bookPath == 'ספרים אישיים')
           .map((r) => r.reference)
           .toList();
-      expect(refs, contains('ספר פרטי'));
-      expect(refs, contains('ספר פרטי פרק א'));
-      expect(refs, contains('ספר פרטי פרק ב'));
+      expect(refs, equals(['ספר פרטי']),
+          reason: 'רק כותרת הספר האישי, ללא ערכי TOC');
     });
 
     test('שאילתה עם remainingTokens — מחזיר רק TOC תואם', () async {
