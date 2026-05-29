@@ -100,6 +100,22 @@ void main() {
       expect(segments.first.sourceLineIndices, [0, 1, 2]);
     });
 
+    test('שורות לא-טעונות שוברת פסקה ואינן מתמזגות עם תוכן טעון', () {
+      final lines = ['', '', 'א', 'ב'];
+      final segments = buildReadingSegments(
+        lines,
+        continuous: true,
+        loadedLineFlags: const [false, false, true, true],
+      );
+
+      expect(segments, hasLength(2));
+      expect(segments[0].isLoaded, isFalse);
+      expect(segments[0].sourceLineIndices, [0, 1]);
+      expect(segments[1].isLoaded, isTrue);
+      expect(segments[1].sourceLineIndices, [2, 3]);
+      expect(segments[1].text, 'א ב');
+    });
+
     test('רשימה ריקה לא נופלת', () {
       expect(buildReadingSegments(const [], continuous: true), isEmpty);
       expect(buildReadingSegments(const [], continuous: false), isEmpty);
@@ -129,6 +145,118 @@ void main() {
       final fromA = buildReadingSegments(a, continuous: false);
       final fromB = buildReadingSegments(b, continuous: false);
       expect(identical(fromA, fromB), isFalse);
+    });
+
+    test('loadedLineFlags שונים לא מחזירים cache ישן עבור אותה רשימה', () {
+      final lines = ['', 'טעון'];
+      final unloaded = buildReadingSegments(
+        lines,
+        continuous: true,
+        loadedLineFlags: const [false, true],
+      );
+      final loaded = buildReadingSegments(
+        lines,
+        continuous: true,
+        loadedLineFlags: const [true, true],
+      );
+
+      expect(unloaded, isNot(same(loaded)));
+      expect(unloaded.first.isLoaded, isFalse);
+      expect(loaded.first.isLoaded, isTrue);
+    });
+  });
+
+  group('updateReadingSegmentsForRange', () {
+    test('במצב רגיל מעדכן רק את הטווח שנוסף', () {
+      final initialLines = ['א', '', ''];
+      final initialSegments = buildReadingSegments(
+        initialLines,
+        continuous: false,
+        loadedLineFlags: const [true, false, false],
+      );
+
+      final updated = updateReadingSegmentsForRange(
+        initialSegments,
+        ['א', 'ב', ''],
+        loadedLineFlags: const [true, true, false],
+        continuous: false,
+        startLine: 1,
+        endLine: 1,
+      );
+
+      expect(updated, hasLength(3));
+      expect(updated[0].text, 'א');
+      expect(updated[1].text, 'ב');
+      expect(updated[2].isLoaded, isFalse);
+    });
+
+    test('במצב רציף ממזג מחדש רק את הגבול המקומי סביב הטווח החדש', () {
+      final initialSegments = buildReadingSegments(
+        ['', '', 'א', 'ב'],
+        continuous: true,
+        loadedLineFlags: const [false, false, true, true],
+      );
+
+      final updated = updateReadingSegmentsForRange(
+        initialSegments,
+        ['', 'קודם', 'א', 'ב'],
+        loadedLineFlags: const [false, true, true, true],
+        continuous: true,
+        startLine: 1,
+        endLine: 1,
+      );
+
+      expect(updated, hasLength(2));
+      expect(updated[0].isLoaded, isFalse);
+      expect(updated[0].sourceLineIndices, [0]);
+      expect(updated[1].sourceLineIndices, [1, 2, 3]);
+      expect(updated[1].text, 'קודם א ב');
+    });
+
+    test('append קדימה במצב רציף שומר סגמנטים קיימים במסלול ללא חפיפה', () {
+      final initialSegments = buildReadingSegments(
+        ['<h1>כותרת</h1>'],
+        continuous: true,
+        loadedLineFlags: const [true],
+      );
+
+      final updated = updateReadingSegmentsForRange(
+        initialSegments,
+        ['<h1>כותרת</h1>', 'ג', 'ד'],
+        loadedLineFlags: const [true, true, true],
+        continuous: true,
+        startLine: 1,
+        endLine: 2,
+      );
+
+      expect(updated, hasLength(2));
+      expect(identical(updated.first, initialSegments.first), isTrue);
+      expect(updated.last.sourceLineIndices, [1, 2]);
+      expect(updated.last.text, 'ג ד');
+    });
+
+    test('backfill אחורה במצב רציף שומר prefix unloaded מקומי בלבד', () {
+      final initialSegments = buildReadingSegments(
+        ['', '', '', '', '', 'א', 'ב'],
+        continuous: true,
+        loadedLineFlags: const [false, false, false, false, false, true, true],
+      );
+
+      final updated = updateReadingSegmentsForRange(
+        initialSegments,
+        ['', '', '', 'קודם', 'אמצע', 'א', 'ב'],
+        loadedLineFlags: const [false, false, false, true, true, true, true],
+        continuous: true,
+        startLine: 3,
+        endLine: 4,
+      );
+
+      expect(updated, hasLength(2));
+      expect(updated.first.isLoaded, isFalse);
+      expect(updated.first.sourceLineIndices, [0, 1, 2]);
+      expect(updated.last.isLoaded, isTrue);
+      expect(updated.last.sourceLineIndices, [3, 4, 5, 6]);
+      expect(updated.last.text, 'קודם אמצע א ב');
     });
   });
 
@@ -219,6 +347,29 @@ void main() {
         ],
       );
       expect(result, [0]);
+    });
+
+    test('סגמנט unloaded גדול מחזיר רק פרוסה מייצגת קטנה', () {
+      final segments = buildReadingSegments(
+        List<String>.filled(1000, ''),
+        continuous: true,
+        loadedLineFlags: List<bool>.filled(1000, false),
+      );
+
+      final result = sourceLineIndicesForSegmentViewports(
+        segments,
+        const [
+          ReadingSegmentViewport(
+            segmentIndex: 0,
+            leadingEdge: -10,
+            trailingEdge: 10,
+          ),
+        ],
+      );
+
+      expect(result.length, lessThanOrEqualTo(3));
+      expect(result.first, greaterThan(0));
+      expect(result.last, lessThan(999));
     });
 
     test('סגמנט רב-שורתי — חישוב fraction מחזיר תת-קבוצה של שורות', () {
