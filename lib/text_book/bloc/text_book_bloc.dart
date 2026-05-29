@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/animation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
@@ -34,7 +35,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   static const int _initialContentLookAheadLines = 180;
   static const int _contentLookBehindLines = 120;
   static const int _contentLookAheadLines = 260;
-  static const int _contentWarmChunkLines = 220;
+  static const int _contentWarmChunkLines = 640;
   static const int _contentReloadThresholdLines = 60;
   static const Duration _visibleIndicesDebounceDuration =
       Duration(milliseconds: 160);
@@ -62,6 +63,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   String? _activeLinksTargetBookTitlesSignature;
   String? _loadedContentBookTitle;
   List<({int startLine, int endLine})> _loadedContentRanges = const [];
+  List<bool> _loadedContentFlags = const [];
   int? _loadedContentTotalLines;
   bool _isLoadingContentRange = false;
   bool _pendingContentRangeReload = false;
@@ -297,6 +299,57 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return nextStart < totalLines ? nextStart : null;
   }
 
+  @visibleForTesting
+  static int? nextWarmContentStartNearViewportForTesting({
+    required List<({int startLine, int endLine})> loadedRanges,
+    required int totalLines,
+    required List<int> visibleIndices,
+    required int chunkLines,
+  }) {
+    if (totalLines <= 0) {
+      return null;
+    }
+
+    if (loadedRanges.isEmpty) {
+      return 0;
+    }
+
+    final firstVisible = visibleIndices.isEmpty ? 0 : visibleIndices.first;
+    final lastVisible = visibleIndices.isEmpty ? firstVisible : visibleIndices.last;
+
+    ({int startLine, int endLine})? anchorRange;
+    for (final range in loadedRanges) {
+      final overlapsViewport =
+          range.startLine <= lastVisible && range.endLine >= firstVisible;
+      if (overlapsViewport) {
+        anchorRange = range;
+        break;
+      }
+    }
+
+    if (anchorRange == null) {
+      return nextWarmContentStartForTesting(
+        loadedRanges: loadedRanges,
+        totalLines: totalLines,
+      );
+    }
+
+    final forwardStart = anchorRange.endLine + 1;
+    if (forwardStart < totalLines) {
+      return forwardStart;
+    }
+
+    if (anchorRange.startLine > 0) {
+      final backwardStart = anchorRange.startLine - chunkLines;
+      return backwardStart < 0 ? 0 : backwardStart;
+    }
+
+    return nextWarmContentStartForTesting(
+      loadedRanges: loadedRanges,
+      totalLines: totalLines,
+    );
+  }
+
   bool _isInitialPageShapeVisibleSyncAligned(
     TextBookLoaded state,
     List<int> nextVisibleIndices,
@@ -436,8 +489,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final tocFuture = repository.getTableOfContents(book);
 
       List<String>? contentLines;
+      List<bool>? loadedLineFlags;
       if (state is TextBookLoaded && event.preserveState) {
         contentLines = (state as TextBookLoaded).content;
+        loadedLineFlags = _loadedContentFlags;
       } else {
         final initialRange = await repository.getBookContentRange(
           book,
@@ -447,6 +502,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
         if (initialRange != null) {
           contentLines = _contentWithAppliedRange(initialRange);
+          loadedLineFlags = _loadedContentFlagsWithAppliedRange(initialRange);
+          _setLoadedContentFlags(book, loadedLineFlags);
           _markLoadedContentRange(
             book,
             initialRange.startLine,
@@ -465,6 +522,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             final previewStartLine =
                 (visibleIndices.first - 10).clamp(0, visibleIndices.first);
             contentLines = buildPreviewLines(preview, previewStartLine);
+            loadedLineFlags = _buildPreviewLoadedLineFlags(
+              preview,
+              previewStartLine,
+            );
+            _setLoadedContentFlags(book, loadedLineFlags);
+            _markLoadedContentRange(
+              book,
+              previewStartLine,
+              contentLines.isEmpty ? previewStartLine : contentLines.length - 1,
+            );
             _loadFullBookInBackground(book);
           }
         }
@@ -473,6 +540,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (contentLines == null) {
         final content = await repository.getBookContent(book);
         contentLines = await splitContentLines(content);
+        loadedLineFlags = List<bool>.filled(contentLines.length, true);
+        _setLoadedContentFlags(book, loadedLineFlags);
         _markLoadedContentRange(
           book,
           0,
@@ -480,6 +549,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           totalLines: contentLines.length,
         );
       }
+
+      loadedLineFlags ??= _loadedContentFlags;
 
       final tableOfContents = await tocFuture;
 
@@ -527,6 +598,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final readingSegments = buildReadingSegments(
         contentLines,
         continuous: effectiveContinuousReading,
+        loadedLineFlags: loadedLineFlags,
       );
 
       const List<Link> emptyLinks = [];
@@ -912,6 +984,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       readingSegments: buildReadingSegments(
         currentState.content,
         continuous: effectiveEnabled,
+        loadedLineFlags: _loadedContentFlags,
       ),
     ));
   }
@@ -1406,9 +1479,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       return;
     }
 
-    if (listEquals(currentState.content, event.content)) {
+    final nextLoadedFlags = List<bool>.filled(event.content.length, true);
+    final hasLoadedFlagsChanged =
+        _loadedContentFlags.length != event.content.length ||
+            _loadedContentFlags.any((loaded) => !loaded);
+    if (listEquals(currentState.content, event.content) &&
+        !hasLoadedFlagsChanged) {
       return;
     }
+
+    _setLoadedContentFlags(currentState.book, nextLoadedFlags);
 
     final updatedState = _withInlineNotesCommentator(currentState.copyWith(
       content: event.content,
@@ -1416,6 +1496,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       readingSegments: buildReadingSegments(
         event.content,
         continuous: currentState.continuousReadingMode,
+        loadedLineFlags: nextLoadedFlags,
       ),
     ));
     // אחרי שסרקנו את התוכן המלא, אין יותר טעם בסריקה נוספת על הרחבות
@@ -1445,11 +1526,18 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     final nextContent = List<String>.of(currentState.content);
+    final nextLoadedFlags = List<bool>.of(_loadedContentFlags);
     final targetLength = event.startLine + event.lines.length;
     var hasContentChanged = targetLength > nextContent.length;
+    var hasLoadedFlagsChanged = targetLength > nextLoadedFlags.length;
     if (nextContent.length < targetLength) {
       nextContent.addAll(
         List<String>.filled(targetLength - nextContent.length, ''),
+      );
+    }
+    if (nextLoadedFlags.length < targetLength) {
+      nextLoadedFlags.addAll(
+        List<bool>.filled(targetLength - nextLoadedFlags.length, false),
       );
     }
 
@@ -1459,11 +1547,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         if (nextContent[targetIndex] != event.lines[offset]) {
           hasContentChanged = true;
         }
+        if (!nextLoadedFlags[targetIndex]) {
+          hasLoadedFlagsChanged = true;
+        }
         nextContent[targetIndex] = event.lines[offset];
+        nextLoadedFlags[targetIndex] = true;
       }
     }
 
-    if (!hasContentChanged) {
+    if (!hasContentChanged && !hasLoadedFlagsChanged) {
       _markLoadedContentRange(
         currentState.book,
         event.startLine,
@@ -1473,6 +1565,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       return;
     }
 
+    _setLoadedContentFlags(currentState.book, nextLoadedFlags);
     _markLoadedContentRange(
       currentState.book,
       event.startLine,
@@ -1483,9 +1576,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       currentState.copyWith(
         content: nextContent,
         contentVersion: currentState.contentVersion + 1,
-        readingSegments: buildReadingSegments(
+        readingSegments: updateReadingSegmentsForRange(
+          currentState.readingSegments,
           nextContent,
+          loadedLineFlags: nextLoadedFlags,
           continuous: currentState.continuousReadingMode,
+          startLine: event.startLine,
+          endLine: event.startLine + event.lines.length - 1,
         ),
       ),
       // אופטימיזציה: לסרוק רק את השורות החדשות במקום את כל ה-content
@@ -1617,17 +1714,54 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return content;
   }
 
+  List<bool> _loadedContentFlagsWithAppliedRange(BookContentRange range) {
+    final loadedFlags = List<bool>.filled(range.endLine + 1, false);
+    for (var offset = 0; offset < range.lines.length; offset++) {
+      final targetIndex = range.startLine + offset;
+      if (targetIndex >= 0 && targetIndex < loadedFlags.length) {
+        loadedFlags[targetIndex] = true;
+      }
+    }
+    return loadedFlags;
+  }
+
+  List<bool> _buildPreviewLoadedLineFlags(
+    String previewContent,
+    int previewStartLine,
+  ) {
+    final previewLineCount =
+        previewContent.isEmpty ? 0 : previewContent.split('\n').length;
+    final loadedFlags =
+        List<bool>.filled(previewStartLine + previewLineCount, false);
+    for (var index = previewStartLine; index < loadedFlags.length; index++) {
+      loadedFlags[index] = true;
+    }
+    return loadedFlags;
+  }
+
+  void _ensureLoadedContentTrackingBook(TextBook book) {
+    if (_loadedContentBookTitle == book.title) {
+      return;
+    }
+
+    _loadedContentBookTitle = book.title;
+    _loadedContentRanges = const [];
+    _loadedContentFlags = const [];
+    _loadedContentTotalLines = null;
+  }
+
+  void _setLoadedContentFlags(TextBook book, List<bool> loadedFlags) {
+    _ensureLoadedContentTrackingBook(book);
+    _loadedContentFlags = List<bool>.unmodifiable(loadedFlags);
+  }
+
   void _markLoadedContentRange(
     TextBook book,
     int startLine,
     int endLine, {
     int? totalLines,
   }) {
-    if (_loadedContentBookTitle != book.title) {
-      _loadedContentBookTitle = book.title;
-      _loadedContentRanges = const [];
-      _loadedContentTotalLines = null;
-    }
+    _ensureLoadedContentTrackingBook(book);
 
     _loadedContentTotalLines = totalLines ?? _loadedContentTotalLines;
     _loadedContentRanges = mergeLoadedContentRangesForTesting(
@@ -1650,15 +1784,17 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     );
   }
 
-  int? _nextWarmContentStart() {
+  int? _nextWarmContentStart(List<int> visibleIndices) {
     final totalLines = _loadedContentTotalLines;
     if (totalLines == null) {
       return null;
     }
 
-    return nextWarmContentStartForTesting(
+    return nextWarmContentStartNearViewportForTesting(
       loadedRanges: _loadedContentRanges,
       totalLines: totalLines,
+      visibleIndices: visibleIndices,
+      chunkLines: _contentWarmChunkLines,
     );
   }
 
@@ -1747,7 +1883,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           return;
         }
 
-        final nextStart = _nextWarmContentStart();
+        final nextStart = _nextWarmContentStart(currentState.visibleIndices);
         if (nextStart == null || nextStart >= totalLines) {
           return;
         }
@@ -1772,7 +1908,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           lines: range.lines,
         ));
 
-        await Future<void>.delayed(Duration.zero);
+        await SchedulerBinding.instance.endOfFrame;
       }
     } finally {
       _isWarmingContentCache = false;

@@ -157,16 +157,46 @@ void main() {
       );
     });
 
-    test('warming בוחר את החור הראשון שטרם נטען ולא מניח טווח רציף', () {
+    test('warming בוחר קודם הרחבה קדימה סביב ה-viewport', () {
       expect(
-        TextBookBloc.nextWarmContentStartForTesting(
+        TextBookBloc.nextWarmContentStartNearViewportForTesting(
           loadedRanges: const [
-            (startLine: 0, endLine: 180),
-            (startLine: 500, endLine: 700),
+            (startLine: 4920, endLine: 5180),
           ],
-          totalLines: 1000,
+          totalLines: 12000,
+          visibleIndices: const [5000, 5001, 5002],
+          chunkLines: 640,
         ),
-        181,
+        5181,
+      );
+    });
+
+    test('warming חוזר אחורה רק אחרי שההמשך קדימה כבר כוסה', () {
+      expect(
+        TextBookBloc.nextWarmContentStartNearViewportForTesting(
+          loadedRanges: const [
+            (startLine: 4920, endLine: 11999),
+          ],
+          totalLines: 12000,
+          visibleIndices: const [5000, 5001, 5002],
+          chunkLines: 640,
+        ),
+        4280,
+      );
+    });
+
+    test('warming נופל חזרה לחור הראשון אם ה-viewport לא חופף לטווח טעון', () {
+      expect(
+        TextBookBloc.nextWarmContentStartNearViewportForTesting(
+          loadedRanges: const [
+            (startLine: 1000, endLine: 1200),
+            (startLine: 5000, endLine: 5200),
+          ],
+          totalLines: 8000,
+          visibleIndices: const [3000, 3001],
+          chunkLines: 640,
+        ),
+        0,
       );
     });
 
