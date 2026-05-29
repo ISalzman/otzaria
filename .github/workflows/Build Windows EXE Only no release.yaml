@@ -368,6 +368,12 @@ jobs:
             throw "FULL installer build failed"
           }
 
+          Write-Host "Building FULL SILENT installer (auto-runs /VERYSILENT, includes library + WebView2)..."
+          & "$env:ISCC" installer\otzaria_full_silent.iss
+          if ($LASTEXITCODE -ne 0) {
+            throw "FULL silent installer build failed"
+          }
+
           # ניקוי קבצי הספרייה והחולץ לאחר בניית ה-FULL installer
           Write-Host "Cleaning up bundled DB assets to free disk space..."
           if (Test-Path "installer\library_db") {
@@ -425,6 +431,12 @@ jobs:
         with:
           name: otzaria-windows-installer-silent
           path: installer/otzaria-*-windows-silent.exe
+
+      - name: Upload Windows installer (full silent)
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: otzaria-windows-installer-full-silent
+          path: installer/otzaria-*-windows-full-silent.exe
 
       - name: Upload Windows ZIP
         uses: actions/upload-artifact@v4.6.2

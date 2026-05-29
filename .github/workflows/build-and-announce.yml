@@ -414,7 +414,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "FULL installer build failed"
           }
-          
+
+          Write-Host "Building FULL SILENT installer (auto-runs /VERYSILENT, includes library + WebView2)..."
+          & "$env:ISCC" installer\otzaria_full_silent.iss
+          if ($LASTEXITCODE -ne 0) {
+            throw "FULL silent installer build failed"
+          }
+
           # ניקוי קבצי הספרייה והחולץ לאחר בניית ה-FULL installer
           Write-Host "Cleaning up bundled DB assets to free disk space..."
           if (Test-Path "installer\library_db") {
@@ -472,6 +478,12 @@ jobs:
         with:
           name: otzaria-windows-installer-silent
           path: installer/otzaria-*-windows-silent.exe
+
+      - name: Upload Windows installer (full silent)
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: otzaria-windows-installer-full-silent
+          path: installer/otzaria-*-windows-full-silent.exe
 
       - name: Upload Windows ZIP
         uses: actions/upload-artifact@v4.6.2
@@ -1314,6 +1326,11 @@ jobs:
             cp artifacts/otzaria-windows-installer-silent/*.exe release-files/ || true
           fi
 
+          # Windows installer (full silent)
+          if [ -d "artifacts/otzaria-windows-installer-full-silent" ]; then
+            cp artifacts/otzaria-windows-installer-full-silent/*.exe release-files/ || true
+          fi
+
           # Windows ZIP
           if [ -d "artifacts/otzaria-windows-zip" ]; then
             cp artifacts/otzaria-windows-zip/*.zip release-files/ || true
@@ -1380,6 +1397,7 @@ jobs:
           windows_silent=()
           windows_portable=()
           windows_full=()
+          windows_full_silent=()
           android_apk=()
           android_full=()
           linux_deb=()
@@ -1404,6 +1422,9 @@ jobs:
             lower=$(printf '%s' "$file" | tr '[:upper:]' '[:lower:]')
 
             case "$lower" in
+              *windows-full-silent*.exe)
+                windows_full_silent+=("$file")
+                ;;
               *windows-full*.exe)
                 windows_full+=("$file")
                 ;;
@@ -1475,20 +1496,21 @@ jobs:
 
           EOF
 
-          if [ ${#windows_installers[@]} -gt 0 ] || [ ${#windows_portable[@]} -gt 0 ] || [ ${#windows_full[@]} -gt 0 ] || [ ${#windows_silent[@]} -gt 0 ]; then
+          if [ ${#windows_installers[@]} -gt 0 ] || [ ${#windows_portable[@]} -gt 0 ] || [ ${#windows_full[@]} -gt 0 ] || [ ${#windows_silent[@]} -gt 0 ] || [ ${#windows_full_silent[@]} -gt 0 ]; then
             printf "## ווינדוס\n\n" >> release-body.md
 
             if [ ${#windows_installers[@]} -gt 0 ] || [ ${#windows_portable[@]} -gt 0 ] || [ ${#windows_silent[@]} -gt 0 ]; then
               printf "### גרסת תוכנה בלבד\n\n" >> release-body.md
               emit_link_group "מתקין לווינדוס" "${windows_installers[@]}"
-              emit_link_group "מתקין שקט לווינדוס (מתקין ברקע ומאפס הגדרות)" "${windows_silent[@]}"
+              emit_link_group "מתקין שקט לווינדוס (מתקין ברקע, משמר הגדרות קיימות)" "${windows_silent[@]}"
               emit_link_group "גרסה ניידת לווינדוס" "${windows_portable[@]}"
               printf "\n" >> release-body.md
             fi
 
-            if [ ${#windows_full[@]} -gt 0 ]; then
+            if [ ${#windows_full[@]} -gt 0 ] || [ ${#windows_full_silent[@]} -gt 0 ]; then
               printf "### גרסת ספרייה מלאה\n\n" >> release-body.md
               emit_link_group "חבילה מלאה לווינדוס" "${windows_full[@]}"
+              emit_link_group "חבילה מלאה שקטה לווינדוס (מתקין ברקע, משמר הגדרות קיימות)" "${windows_full_silent[@]}"
               printf "\n" >> release-body.md
             fi
           fi

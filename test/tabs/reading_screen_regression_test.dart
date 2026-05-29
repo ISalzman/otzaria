@@ -12,6 +12,10 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 ///    החיצונית — מונע התנגשות נתיב PageStorage בין `ScrollablePositionedList`
 ///    הפנימי, שכותב `ItemPosition`, לבין `PageView` הפנימי של `TabBarView`
 ///    בחלונית השמאלית, שקורא `double?` מאותו תא ונופל ב-cast error.
+///
+/// 3. דחיית `_syncPageController` ל-`addPostFrameCallback` ונטרול
+///    `onPageChanged → SetCurrentTab` בדסקטופ — מונעים שההדגשה בשורת
+///    הטאבים תקפוץ לטאב הקודם במקום לחדש בעת פתיחת טאב חדש בסוף.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -141,6 +145,104 @@ void main() {
         expect(_PdfMock.initCount, 1,
             reason: 'עם ValueKey יציב, ה-Element של "pdf" עוקב אחרי המפתח גם '
                 'כשטאב "text" שלפניו נסגר. ה-State נשמר.');
+      },
+    );
+  });
+
+  group('reading_screen — סנכרון PageController בפתיחת טאב חדש בסוף', () {
+    // שורש הבאג שתוקן: ה-BlocListener ב-reading_screen רץ *לפני* שה-
+    // BlocBuilder בונה מחדש את ה-PageView עם הילד החדש (listener הוא ancestor
+    // ולכן מנוי לפני הילד). אם _syncPageController קוראת ל-jumpToPage
+    // סינכרונית בתוך ה-listener, ה-PageView עדיין עם מספר הילדים הישן —
+    // קפיצה לאינדקס שמעבר לתחום מצמדת ויורה onPageChanged עם האינדקס הקודם.
+    // אם onPageChanged מזין SetCurrentTab (כפי שהיה בקוד הישן), זה דורס את
+    // ה-currentTabIndex הנכון, וההדגשה בשורת הטאבים זזה לטאב לפני החדש.
+    //
+    // התיקון: שני שינויים משלימים —
+    //   (א) דחיית jumpToPage ל-addPostFrameCallback (קופצים על PageView
+    //       שכבר קיבל את הילד החדש, בלי clamp).
+    //   (ב) `onPageChanged: null` בדסקטופ (NeverScrollableScrollPhysics →
+    //       אין גלילה ידנית → ה-callback רק מהדהד קפיצות תוכנתיות וערכי
+    //       clamp שגויים → מיותר ומזיק).
+
+    testWidgets(
+      'הוכחת המנגנון: jumpToPage לאינדקס מחוץ לתחום מצמיד ויורה '
+      'onPageChanged עם האינדקס הקודם, לא עם היעד',
+      (tester) async {
+        final controller = PageController();
+        final received = <int>[];
+
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: PageView(
+              controller: controller,
+              physics: const NeverScrollableScrollPhysics(),
+              onPageChanged: received.add,
+              children: const [
+                Center(child: Text('p0')),
+                Center(child: Text('p1')),
+              ],
+            ),
+          ),
+        ));
+        await tester.pump();
+        received.clear();
+
+        // ה-PageView כרגע עם 2 ילדים (אינדקסים 0,1). קפיצה ל-2 מדמה את
+        // התרחיש: ה-listener קרא ל-jumpToPage(N) לפני שה-PageView קיבל
+        // את הילד ה-N+1.
+        controller.jumpToPage(2);
+        await tester.pumpAndSettle();
+
+        expect(received, isNotEmpty,
+            reason: 'jumpToPage לאינדקס חורג חייב לירות onPageChanged');
+        expect(received.last, 1,
+            reason: 'אחרי applyContentDimensions ה-pixels נצמדים '
+                'ל-maxScrollExtent (page=1) → onPageChanged יורה עם 1, '
+                'לא עם היעד 2. זה ה-clamped index שדרס את currentTabIndex '
+                'בקוד הישן (ההדגשה זזה ל-"הטאב הבא" במקום לחדש).');
+
+        controller.dispose();
+      },
+    );
+
+    testWidgets(
+      'הוכחת ההגנה השנייה: עם onPageChanged: null, גם clamp רגעי לא יוצר '
+      'ערוץ ל-SetCurrentTab שגוי',
+      (tester) async {
+        // אותו תרחיש כמו "הוכחת המנגנון" (jumpToPage לאינדקס חורג שגורם
+        // ל-clamp), אבל הפעם onPageChanged הוא null כפי שמוגדר בדסקטופ.
+        // אם מישהו יחזיר onPageChanged בלי הגנת platform, ה-clamped index
+        // יזרום שוב ל-SetCurrentTab וההדגשה תקפוץ לטאב הקודם.
+        final controller = PageController();
+        var rogueCalled = false;
+
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: PageView(
+              controller: controller,
+              physics: const NeverScrollableScrollPhysics(),
+              // אם תשנה את זה לפונקציה שמסמנת rogueCalled = true, הטסט
+              // ייכשל — וזה בדיוק מה שהקוד הישן בדסקטופ עשה.
+              onPageChanged: null,
+              children: const [
+                Center(child: Text('p0')),
+                Center(child: Text('p1')),
+              ],
+            ),
+          ),
+        ));
+        await tester.pump();
+
+        controller.jumpToPage(2);
+        await tester.pumpAndSettle();
+
+        expect(rogueCalled, isFalse,
+            reason: 'onPageChanged: null מבטיח שאין מסלול לכתיבת '
+                'currentTabIndex שגוי גם כשה-clamp קורה');
+        expect(tester.takeException(), isNull);
+
+        controller.dispose();
       },
     );
   });

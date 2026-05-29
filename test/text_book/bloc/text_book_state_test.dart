@@ -47,10 +47,25 @@ void main() {
 
       expect(withTypoTolerance, isNot(equals(withoutTypoTolerance)));
     });
+
+    test('changes when content version changes even if content length stays same', () {
+      final older = _loadedState(
+        content: const ['שורה א'],
+        contentVersion: 1,
+      );
+      final newer = _loadedState(
+        content: const ['שורה ב'],
+        contentVersion: 2,
+      );
+
+      expect(older, isNot(equals(newer)));
+    });
   });
 }
 
 TextBookLoaded _loadedState({
+  List<String> content = const ['שורה א'],
+  int contentVersion = 0,
   Map<String, Map<String, bool>> searchOptions = const {},
   Map<int, List<String>> alternativeWords = const {},
   Map<String, String> spacingValues = const {},
@@ -59,7 +74,8 @@ TextBookLoaded _loadedState({
   return TextBookLoaded(
     book: TextBook(title: 'ספר בדיקה'),
     showLeftPane: false,
-    content: const ['שורה א'],
+    content: content,
+    contentVersion: contentVersion,
     fontSize: 18,
     showSplitView: false,
     activeCommentators: const [],

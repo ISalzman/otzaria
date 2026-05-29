@@ -280,14 +280,14 @@ class _ShortcutText {
         'ספרייה ${_read('key-shortcut-open-library-browser', 'ctrl+l')}',
         'איתור ${_read('key-shortcut-open-find-ref', 'ctrl+o')}',
         'עיון ${_read('key-shortcut-open-reading-screen', 'ctrl+r')}',
-        'חיפוש ${_read('key-shortcut-open-new-search', 'ctrl+q')}',
+        'חיפוש ${_read('key-shortcut-open-new-search', 'ctrl+shift+f')}',
         'כלים ${_read('key-shortcut-open-more', 'ctrl+m')}',
         'הגדרות ${_read('key-shortcut-open-settings', 'ctrl+comma')}',
       ].join(' · ');
 
   String get findRef => _read('key-shortcut-open-find-ref', 'ctrl+o');
   String get reading => _read('key-shortcut-open-reading-screen', 'ctrl+r');
-  String get search => _read('key-shortcut-open-new-search', 'ctrl+q');
+  String get search => _read('key-shortcut-open-new-search', 'ctrl+shift+f');
   String get tools => _read('key-shortcut-open-more', 'ctrl+m');
   String get settings => _read('key-shortcut-open-settings', 'ctrl+comma');
 
@@ -295,7 +295,7 @@ class _ShortcutText {
         'ספרייה: ${_read('key-shortcut-open-library-browser', 'ctrl+l')}',
         'איתור: ${_read('key-shortcut-open-find-ref', 'ctrl+o')}',
         'עיון: ${_read('key-shortcut-open-reading-screen', 'ctrl+r')}',
-        'חיפוש מתקדם: ${_read('key-shortcut-open-new-search', 'ctrl+q')}',
+        'חיפוש מתקדם: ${_read('key-shortcut-open-new-search', 'ctrl+shift+f')}',
         'טאב הבא: ${_read('key-shortcut-next-tab', 'ctrl+tab')}',
         'סגור טאב: ${_read('key-shortcut-close-tab', 'ctrl+w')}',
       ].join('\n');

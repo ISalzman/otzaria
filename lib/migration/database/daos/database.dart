@@ -9,6 +9,7 @@ import 'connection_type_dao.dart';
 import 'generation_dao.dart';
 import 'line_dao.dart';
 import 'link_dao.dart';
+import 'pdf_outline_cache_dao.dart';
 import 'pub_date_dao.dart';
 import 'pub_place_dao.dart';
 import 'search_dao.dart';
@@ -35,6 +36,7 @@ class MyDatabase {
   GenerationDao? _generationDao;
   LineDao? _lineDao;
   LinkDao? _linkDao;
+  PdfOutlineCacheDao? _pdfOutlineCacheDao;
   PubDateDao? _pubDateDao;
   PubPlaceDao? _pubPlaceDao;
   SearchDao? _searchDao;
@@ -85,6 +87,11 @@ class MyDatabase {
   LinkDao get linkDao {
     _ensureDaosInitialized();
     return _linkDao!;
+  }
+
+  PdfOutlineCacheDao get pdfOutlineCacheDao {
+    _ensureDaosInitialized();
+    return _pdfOutlineCacheDao!;
   }
 
   PubDateDao get pubDateDao {
@@ -176,6 +183,7 @@ class MyDatabase {
     _generationDao = GenerationDao(this);
     _lineDao = LineDao(this);
     _linkDao = LinkDao(this);
+    _pdfOutlineCacheDao = PdfOutlineCacheDao(this);
     _pubDateDao = PubDateDao(this);
     _pubPlaceDao = PubPlaceDao(this);
     _searchDao = SearchDao(this);
@@ -436,6 +444,19 @@ class MyDatabase {
         );
         ''',
       'CREATE INDEX IF NOT EXISTS idx_db_meta_key ON db_meta(key);',
+
+      // Persistent cache for outlines of external PDF files
+      '''
+        CREATE TABLE IF NOT EXISTS pdf_outline_cache (
+          filePath TEXT PRIMARY KEY,
+          fileSize INTEGER NOT NULL,
+          lastModified INTEGER NOT NULL,
+          outlineJson TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          accessedAt INTEGER NOT NULL
+        );
+        ''',
+      'CREATE INDEX IF NOT EXISTS idx_pdf_outline_cache_accessed_at ON pdf_outline_cache(accessedAt);',
 
       // Links table
       '''

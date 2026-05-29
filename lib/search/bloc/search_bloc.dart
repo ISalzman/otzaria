@@ -38,7 +38,10 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     return _defaultDistanceForMode(newMode);
   }
 
-  SearchBloc() : super(const SearchState()) {
+  SearchBloc({SearchConfiguration? initialConfiguration})
+      : super(SearchState(
+          configuration: initialConfiguration ?? const SearchConfiguration(),
+        )) {
     on<UpdateSearchQuery>(_onUpdateSearchQuery);
     on<UpdateDistance>(_onUpdateDistance);
     on<UpdateDistanceWithoutSearch>(_onUpdateDistanceWithoutSearch);

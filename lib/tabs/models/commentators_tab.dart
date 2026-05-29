@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/models/books.dart';
@@ -30,6 +31,7 @@ class CommentatorsTab extends OpenedTab {
   CommentatorsTab({
     required this.sourceTab,
     bool disposeSourceTabOnDispose = false,
+    @visibleForTesting TextBookBloc? blocOverride,
   })  : _disposeSourceTabOnDispose = disposeSourceTabOnDispose,
         initialSelectedLine = _resolveSelectedLine(sourceTab),
         super('מפרשים | ${sourceTab.title}') {
@@ -42,19 +44,22 @@ class CommentatorsTab extends OpenedTab {
                 : sourceTab.index))
         : sourceTab.index;
 
-    bloc = TextBookBloc(
-      repository: TextBookRepository(
-        fileSystem: FileSystemData.instance,
-      ),
-      initialState: TextBookInitial.named(
-        sourceTab.book,
-        startIndex,
-        false, // openLeftPane
-        const [], // commentators — ייטען אחרי availableCommentators
-      ),
-      scrollController: scrollController,
-      positionsListener: positionsListener,
-    );
+    // ב-production תמיד נבנה bloc חדש; blocOverride קיים רק לטסטים שצריכים
+    // להזריק bloc עם repository מזויף ולהביאו ל-Loaded ללא תשתית קבצים אמיתית.
+    bloc = blocOverride ??
+        TextBookBloc(
+          repository: TextBookRepository(
+            fileSystem: FileSystemData.instance,
+          ),
+          initialState: TextBookInitial.named(
+            sourceTab.book,
+            startIndex,
+            false, // openLeftPane
+            const [], // commentators — ייטען אחרי availableCommentators
+          ),
+          scrollController: scrollController,
+          positionsListener: positionsListener,
+        );
   }
 
   /// שחזור מ-JSON — יוצר sourceTab מדומה על בסיס הנתונים השמורים

@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:otzaria/shortcuts/key_map.dart';
@@ -6,11 +9,31 @@ import 'package:otzaria/shortcuts/key_map.dart';
 ///
 /// מסתמך על [KeyMap] כמקור-האמת היחיד למיפוי שמות מקשים ← [LogicalKeyboardKey].
 /// לכל הוספה/שינוי של מקש יש לעדכן רק את [KeyMap].
+///
+/// **התאמה ל-macOS:** הקיצורים נשמרים בפורמט קנוני (`ctrl+X`) על כל
+/// הפלטפורמות, אבל ב-Mac ה-token `ctrl` מתורגם ל-Command (Meta) הן בבדיקה
+/// (`matchesShortcut`) והן בתצוגה (`formatShortcutForDisplay`), בהתאם
+/// למוסכמת מקלדת Mac. כך ההגדרות נשארות עקביות בין מערכות הפעלה.
 class ShortcutHelper {
   ShortcutHelper._();
 
   // ─── modifiers ────────────────────────────────────────────────────────────────
   static const _modifiers = {'ctrl', 'control', 'shift', 'alt', 'meta'};
+
+  /// האם הפלטפורמה הנוכחית היא macOS — מחושב פעם אחת לבדיקות מהירות.
+  /// ב-Web מחזיר false (אין `Platform.isMacOS`).
+  static bool get _isMac => !kIsWeb && Platform.isMacOS;
+
+  /// במקלדת Mac המוסכמה היא Command, לכן ה-token הקנוני `ctrl` בקיצור
+  /// נבדק/מוצג כ-Meta. שאר הפלטפורמות משתמשות ב-Control כרגיל.
+  ///
+  /// `null` = השתמש בערך המחושב מ-[Platform.isMacOS] (ברירת המחדל בייצור).
+  /// `true` / `false` = override בבדיקות יחידה כדי לבדוק שני המסלולים בלי
+  /// תלות בפלטפורמת הריצה.
+  @visibleForTesting
+  static bool? isMacForTesting;
+
+  static bool get _treatCtrlAsMeta => isMacForTesting ?? _isMac;
 
   /// בודק אם האירוע [event] תואם להגדרת הקיצור [shortcutSetting].
   ///
@@ -27,10 +50,18 @@ class ShortcutHelper {
     if (event is! KeyDownEvent) return false;
 
     final parts = shortcutSetting.toLowerCase().split('+');
-    final requiresCtrl = parts.contains('ctrl') || parts.contains('control');
+    final hasCtrlToken = parts.contains('ctrl') || parts.contains('control');
+    final hasMetaToken = parts.contains('meta');
     final requiresShift = parts.contains('shift');
     final requiresAlt = parts.contains('alt');
-    final requiresMeta = parts.contains('meta');
+
+    // ב-Mac גם `ctrl` וגם `meta` בקיצור שמור משויכים לפעולת Command. מצב
+    // מקש Control הפיזי לא נבדק כלל — מאחד את הסמנטיקה ומונע אי-עקביות
+    // בקיצור `ctrl+meta+X` (שאם נבדק כפשוטו היה נשבר).
+    final requiresCtrl = _treatCtrlAsMeta ? null : hasCtrlToken;
+    final requiresMeta = _treatCtrlAsMeta
+        ? (hasMetaToken || hasCtrlToken)
+        : hasMetaToken;
 
     // בדיקת modifiers
     final controlPressed =
@@ -41,7 +72,7 @@ class ShortcutHelper {
     final metaPressed =
         isMetaPressed ?? HardwareKeyboard.instance.isMetaPressed;
 
-    if (requiresCtrl != controlPressed) {
+    if (requiresCtrl != null && requiresCtrl != controlPressed) {
       return false;
     }
     if (requiresShift != shiftPressed) {
@@ -71,6 +102,10 @@ class ShortcutHelper {
   }
 
   /// ממיר קבוצה של [LogicalKeyboardKey] למחרוזת קיצור (כגון `'ctrl+shift+f'`).
+  ///
+  /// ב-Mac, לחיצה על מקש Command נשמרת כ-`ctrl` בפורמט הקנוני, כך שאותו
+  /// קיצור עובד בכל הפלטפורמות. אם המשתמש לוחץ במפורש גם על Control וגם
+  /// על Command (תרחיש נדיר), שני ה-tokens נשמרים בנפרד (`ctrl+meta+X`).
   static String formatKeysToShortcut(Set<LogicalKeyboardKey> keys) {
     if (keys.isEmpty) return '';
 
@@ -103,6 +138,14 @@ class ShortcutHelper {
       }
     }
 
+    // ב-Mac גם Cmd וגם Control מתורגמים לאותו token קנוני `ctrl`. זה שומר
+    // על תאימות בין-פלטפורמות (אותו `ctrl+f` עובד בכל מערכת) ומונע יצירת
+    // `ctrl+meta+X` משעמם — שתי הצורות נחשבות שוות-ערך ב-Mac.
+    if (_treatCtrlAsMeta && (hasMeta || hasCtrl)) {
+      hasCtrl = true;
+      hasMeta = false;
+    }
+
     if (hasCtrl) parts.add('ctrl');
     if (hasShift) parts.add('shift');
     if (hasAlt) parts.add('alt');
@@ -128,7 +171,21 @@ class ShortcutHelper {
   }
 
   /// מעצב את [shortcut] לתצוגה ידידותית (`'ctrl+f'` → `'CTRL + F'`).
+  ///
+  /// ב-macOS גם `ctrl` וגם `meta` מוצגים כ-`⌘` — שניהם משויכים לפעולת
+  /// Command בפועל (ראה [matchesShortcut] ו-[activatorFromShortcut]), ולכן
+  /// המוצג חייב להיות עקבי עם ההתנהגות. `alt` מוצג כ-`⌥`, `shift` כ-`⇧`.
+  /// בשאר הפלטפורמות נשמרת התצוגה הקלאסית `CTRL + X`.
   static String formatShortcutForDisplay(String shortcut) {
+    if (_treatCtrlAsMeta) {
+      return shortcut
+          .replaceAll('ctrl+', '⌘ + ')
+          .replaceAll('control+', '⌘ + ')
+          .replaceAll('meta+', '⌘ + ')
+          .replaceAll('shift+', '⇧ + ')
+          .replaceAll('alt+', '⌥ + ')
+          .toUpperCase();
+    }
     return shortcut
         .replaceAll('ctrl+', 'CTRL + ')
         .replaceAll('shift+', 'SHIFT + ')
@@ -141,12 +198,25 @@ class ShortcutHelper {
   ///
   /// מחזיר [SingleActivator] עם modifiers מתאימים.
   /// אם המחרוזת אינה ניתנת לניתוח, מחזיר `null`.
+  ///
+  /// ב-Mac ה-token `ctrl` ממופה ל-`meta: true` כדי שמתפעלי קיצור (Flutter
+  /// `Shortcuts` widget) יזהו לחיצת Command.
   static ShortcutActivator? activatorFromShortcut(String shortcut) {
     final parts = shortcut.toLowerCase().split('+');
-    final hasCtrl = parts.contains('ctrl') || parts.contains('control');
+    final hasCtrlToken = parts.contains('ctrl') || parts.contains('control');
+    final hasMetaToken = parts.contains('meta');
     final hasShift = parts.contains('shift');
     final hasAlt = parts.contains('alt');
-    final hasMeta = parts.contains('meta');
+
+    final bool useControl;
+    final bool useMeta;
+    if (_treatCtrlAsMeta) {
+      useControl = false;
+      useMeta = hasCtrlToken || hasMetaToken;
+    } else {
+      useControl = hasCtrlToken;
+      useMeta = hasMetaToken;
+    }
 
     final mainKeyName = parts.where((p) => !_modifiers.contains(p)).firstOrNull;
     if (mainKeyName == null) return null;
@@ -163,10 +233,10 @@ class ShortcutHelper {
 
     return SingleActivator(
       logicalKey,
-      control: hasCtrl,
+      control: useControl,
       shift: hasShift,
       alt: hasAlt,
-      meta: hasMeta,
+      meta: useMeta,
     );
   }
 }

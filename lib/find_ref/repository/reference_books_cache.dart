@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
@@ -7,7 +8,9 @@ import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/models/category.dart' as db_models;
+import 'package:otzaria/migration/models/pdf_outline_cache_entry.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -23,6 +26,7 @@ class ReferenceBooksCache {
   ReferenceBooksCache._();
 
   static final ReferenceBooksCache instance = ReferenceBooksCache._();
+  static const Duration _persistentPdfOutlineCacheTtl = Duration(days: 90);
 
   bool _isLoaded = false;
   Future<void>? _loadingFuture;
@@ -47,6 +51,21 @@ class ReferenceBooksCache {
   @visibleForTesting
   Future<List<(String, String, int)>> Function(String filePath)
       pdfOutlineParser = _parsePdfOutlineEntries;
+
+  /// Injection לבדיקות בלבד: repository ייעודי ל-persistent cache של
+  /// outlines. אם לא סופק — נשתמש ב-[SqliteDataProvider.instance.repository].
+  @visibleForTesting
+  SeforimRepository? pdfOutlineCacheRepositoryOverride;
+
+  /// Injection לבדיקות בלבד: קריאת metadata של הקובץ (size + mtime).
+  /// מחזיר `null` אם הקובץ לא זמין ולכן אין טעם לגשת ל-persistent cache.
+  @visibleForTesting
+  Future<({int fileSize, int lastModified})?> Function(String filePath)?
+      pdfFileMetadataProviderOverride;
+
+  /// Injection לבדיקות בלבד: שעון מילישניות.
+  @visibleForTesting
+  int Function()? nowProviderOverride;
 
   /// Injection לבדיקות בלבד: ספק הקטגוריות עבור [_prewarmCategoryPaths]. אם
   /// `null` (ברירת מחדל) — `_prewarmCategoryPaths` ניגש ל-[SqliteDataProvider].
@@ -182,6 +201,22 @@ class ReferenceBooksCache {
       debugPrint(
         '[ReferenceBooksCache] Ready with ${BooksCache.instance.books.length} DB books'
         ' + ${_fsPdfBooks.length} FS PDF books',
+      );
+
+      final knownFsPdfPaths = FileSystemLibraryProvider.instance.isInitialized
+          ? localFsPdfBooks
+              .map((entry) => entry.$2.filePath)
+              .where((path) => path.isNotEmpty)
+              .toSet()
+          : null;
+
+      unawaited(
+        _prunePersistentPdfOutlineCache(
+          generation: myGen,
+          knownFilePaths: knownFsPdfPaths,
+        ).catchError((Object e) {
+          debugPrint('[ReferenceBooksCache] PDF outline prune failed: $e');
+        }),
       );
 
       // Pre-warm PDF outlines in the background — typically 20-40 FS PDFs,
@@ -327,8 +362,80 @@ class ReferenceBooksCache {
   /// Each entry is (normalizedTitle, originalTitle, pageNumber).
   Future<List<(String, String, int)>> getPdfOutlineEntries(
       String filePath) async {
-    return _pdfOutlineCache.putIfAbsent(
-        filePath, () => pdfOutlineParser(filePath));
+    return _pdfOutlineCache.putIfAbsent(filePath, () async {
+      if (filePath.isEmpty) return const [];
+
+      final fileMetadata = await _readPdfFileMetadata(filePath);
+      if (fileMetadata.isMissing) {
+        await _deletePersistentPdfOutline(filePath);
+        return const [];
+      }
+
+      final persistentEntry = await _loadPersistentPdfOutline(filePath);
+      if (fileMetadata.metadata == null) {
+        if (persistentEntry != null) {
+          try {
+            final entries = persistentEntry.decodeEntries();
+            unawaited(_touchPersistentPdfOutline(filePath).catchError((e) {
+              debugPrint(
+                '[ReferenceBooksCache] Failed to touch PDF outline cache '
+                'for $filePath: $e',
+              );
+            }));
+            return entries;
+          } catch (e) {
+            debugPrint(
+              '[ReferenceBooksCache] Failed to decode cached outline for '
+              '$filePath after metadata read failure: $e',
+            );
+          }
+        }
+
+        return pdfOutlineParser(filePath);
+      }
+
+      final metadata = fileMetadata.metadata!;
+      if (persistentEntry != null) {
+        final matchesCurrentFile =
+            persistentEntry.fileSize == metadata.fileSize &&
+                persistentEntry.lastModified == metadata.lastModified;
+        if (matchesCurrentFile) {
+          try {
+            final entries = persistentEntry.decodeEntries();
+            unawaited(_touchPersistentPdfOutline(filePath).catchError((e) {
+              debugPrint(
+                '[ReferenceBooksCache] Failed to touch PDF outline cache '
+                'for $filePath: $e',
+              );
+            }));
+            return entries;
+          } catch (e) {
+            debugPrint(
+              '[ReferenceBooksCache] Failed to decode cached outline for '
+              '$filePath: $e',
+            );
+            await _deletePersistentPdfOutline(filePath);
+          }
+        } else {
+          await _deletePersistentPdfOutline(filePath);
+        }
+      }
+
+      final entries = await pdfOutlineParser(filePath);
+      if (entries.isNotEmpty) {
+        await _savePersistentPdfOutline(
+          PdfOutlineCacheEntry(
+            filePath: filePath,
+            fileSize: metadata.fileSize,
+            lastModified: metadata.lastModified,
+            outlineJson: PdfOutlineCacheEntry.encodeOutlineEntries(entries),
+            createdAt: _nowMillis(),
+            accessedAt: _nowMillis(),
+          ),
+        );
+      }
+      return entries;
+    });
   }
 
   /// Pre-warms the PDF outline cache for all currently-known FS PDF books.
@@ -498,6 +605,137 @@ class ReferenceBooksCache {
   static String _normalizeForMatch(String input) =>
       normalizeForFindRefMatch(input);
 
+  Future<_PdfFileMetadataReadResult> _readPdfFileMetadata(
+      String filePath) async {
+    final override = pdfFileMetadataProviderOverride;
+    if (override != null) {
+      try {
+        final metadata = await override(filePath);
+        return metadata == null
+            ? const _PdfFileMetadataReadResult.missing()
+            : _PdfFileMetadataReadResult.available(metadata);
+      } catch (e) {
+        debugPrint(
+          '[ReferenceBooksCache] Failed to read PDF file metadata for '
+          '$filePath via override: $e',
+        );
+        return const _PdfFileMetadataReadResult.unavailable();
+      }
+    }
+
+    try {
+      final stat = await File(filePath).stat();
+      if (stat.type == FileSystemEntityType.notFound) {
+        return const _PdfFileMetadataReadResult.missing();
+      }
+      return _PdfFileMetadataReadResult.available((
+        fileSize: stat.size,
+        lastModified: stat.modified.millisecondsSinceEpoch,
+      ));
+    } catch (e) {
+      debugPrint(
+        '[ReferenceBooksCache] Failed to read PDF file metadata for '
+        '$filePath: $e',
+      );
+      return const _PdfFileMetadataReadResult.unavailable();
+    }
+  }
+
+  SeforimRepository? get _persistentPdfOutlineRepository =>
+      pdfOutlineCacheRepositoryOverride ??
+      SqliteDataProvider.instance.repository;
+
+  int _nowMillis() => (nowProviderOverride ?? _defaultNowMillis).call();
+
+  static int _defaultNowMillis() => DateTime.now().millisecondsSinceEpoch;
+
+  Future<PdfOutlineCacheEntry?> _loadPersistentPdfOutline(
+      String filePath) async {
+    final repository = _persistentPdfOutlineRepository;
+    if (repository == null) return null;
+
+    try {
+      return await repository.getPdfOutlineCacheEntry(filePath);
+    } catch (e) {
+      debugPrint(
+        '[ReferenceBooksCache] Failed to load PDF outline cache for '
+        '$filePath: $e',
+      );
+      return null;
+    }
+  }
+
+  Future<void> _savePersistentPdfOutline(PdfOutlineCacheEntry entry) async {
+    final repository = _persistentPdfOutlineRepository;
+    if (repository == null) return;
+
+    try {
+      await repository.upsertPdfOutlineCacheEntry(entry);
+    } catch (e) {
+      debugPrint(
+        '[ReferenceBooksCache] Failed to persist PDF outline cache for '
+        '${entry.filePath}: $e',
+      );
+    }
+  }
+
+  Future<void> _touchPersistentPdfOutline(String filePath) async {
+    final repository = _persistentPdfOutlineRepository;
+    if (repository == null) return;
+
+    try {
+      await repository.touchPdfOutlineCacheEntry(filePath, _nowMillis());
+    } catch (e) {
+      debugPrint(
+        '[ReferenceBooksCache] Failed to touch persisted PDF outline cache '
+        'for $filePath: $e',
+      );
+    }
+  }
+
+  Future<void> _deletePersistentPdfOutline(String filePath) async {
+    final repository = _persistentPdfOutlineRepository;
+    if (repository == null) return;
+
+    try {
+      await repository.deletePdfOutlineCacheEntry(filePath);
+    } catch (e) {
+      debugPrint(
+        '[ReferenceBooksCache] Failed to delete persisted PDF outline cache '
+        'for $filePath: $e',
+      );
+    }
+  }
+
+  Future<void> _prunePersistentPdfOutlineCache({
+    required int generation,
+    Set<String>? knownFilePaths,
+    Duration ttl = _persistentPdfOutlineCacheTtl,
+  }) async {
+    final repository = _persistentPdfOutlineRepository;
+    if (repository == null) return;
+
+    final cutoffMillis = _nowMillis() - ttl.inMilliseconds;
+    await repository.prunePdfOutlineCacheAccessedBefore(cutoffMillis);
+    if (generation != _generation) return;
+
+    if (knownFilePaths != null) {
+      await repository.prunePdfOutlineCacheExceptFilePaths(knownFilePaths);
+    }
+  }
+
+  @visibleForTesting
+  Future<void> prunePersistentPdfOutlineCacheForTesting({
+    required Set<String>? knownFilePaths,
+    Duration ttl = _persistentPdfOutlineCacheTtl,
+  }) {
+    return _prunePersistentPdfOutlineCache(
+      generation: _generation,
+      knownFilePaths: knownFilePaths,
+      ttl: ttl,
+    );
+  }
+
   static Future<List<(String, String, int)>> _parsePdfOutlineEntries(
       String filePath) async {
     try {
@@ -531,6 +769,23 @@ class ReferenceBooksCache {
           maxDepth: maxDepth, currentDepth: currentDepth + 1);
     }
   }
+}
+
+class _PdfFileMetadataReadResult {
+  final ({int fileSize, int lastModified})? metadata;
+  final bool isMissing;
+
+  const _PdfFileMetadataReadResult.available(
+      ({int fileSize, int lastModified}) this.metadata)
+      : isMissing = false;
+
+  const _PdfFileMetadataReadResult.missing()
+      : metadata = null,
+        isMissing = true;
+
+  const _PdfFileMetadataReadResult.unavailable()
+      : metadata = null,
+        isMissing = false;
 }
 
 class ReferenceBookHit {

@@ -135,11 +135,27 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     // Request focus on search field when the widget is first created
     _requestSearchFieldFocus();
 
-    // הפעל חיפוש ממתין - רק כשהטאב מוצג לראשונה (לא בפתיחת האפליקציה)
+    // הפעל חיפוש ממתין - רק כשהטאב מוצג לראשונה (לא בפתיחת האפליקציה).
+    // חשוב להעביר גם את ה-customSpacing/alternativeWords/searchOptions
+    // שנשמרו ב-tab, אחרת חיפוש משוחזר (מ-fromJson) ירוץ ללא 'חלק ממילה'
+    // ושאר אפשרויות פר-מילה, ויחזיר 0 תוצאות גם כשהשאילתה תקפה.
     final pendingQuery = widget.tab.queryController.text.trim();
     if (pendingQuery.isNotEmpty &&
         widget.tab.searchBloc.state.searchQuery.isEmpty) {
-      widget.tab.searchBloc.add(UpdateSearchQuery(pendingQuery));
+      final searchMode = widget.tab.searchBloc.state.configuration.searchMode;
+      final normalizedParameters =
+          SearchQueryBuilder.normalizeParametersForMode(
+        searchMode,
+        customSpacing: widget.tab.spacingValues,
+        alternativeWords: widget.tab.alternativeWords,
+        searchOptions: widget.tab.effectiveSearchOptions(query: pendingQuery),
+      );
+      widget.tab.searchBloc.add(UpdateSearchQuery(
+        pendingQuery,
+        customSpacing: normalizedParameters.customSpacing,
+        alternativeWords: normalizedParameters.alternativeWords,
+        searchOptions: normalizedParameters.searchOptions,
+      ));
     }
   }
 

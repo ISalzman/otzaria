@@ -704,7 +704,7 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton>
   void _scheduleHoverOpen() {
     _ensureMenuChildrenLoaded();
     _hoverOpenTimer?.cancel();
-    _hoverOpenTimer = Timer(const Duration(milliseconds: 300), () {
+    _hoverOpenTimer = Timer(const Duration(milliseconds: 500), () {
       if (!mounted) return;
       final controller = widget.controller;
       if (controller != null && !controller.isOpen) {

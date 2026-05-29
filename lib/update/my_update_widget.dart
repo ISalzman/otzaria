@@ -1,12 +1,15 @@
 import 'dart:io';
+import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:updat/updat.dart';
-import 'package:updat/updat_window_manager.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path/path.dart' as p;
+import 'package:updat/utils/file_handler.dart' show getDownloadFileLocation, openInstaller;
+import 'package:window_manager/window_manager.dart';
 import 'hebrew_update_widgets.dart';
 import 'linux_installer.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -19,6 +22,29 @@ const _kInstallKind =
 const _githubOwner = 'Otzaria';
 const _githubRepository = 'otzaria';
 const _changelogAssetPath = 'assets/יומן שינויים.md';
+const _kGithubTimeout = Duration(seconds: 15);
+const _kDownloadTimeout = Duration(minutes: 3);
+
+@visibleForTesting
+bool supportsManagedUpdatePlatform({
+  required bool isWeb,
+  required String operatingSystem,
+}) {
+  if (isWeb) return false;
+  return operatingSystem == 'windows' ||
+      operatingSystem == 'macos' ||
+      operatingSystem == 'linux';
+}
+
+@visibleForTesting
+bool shouldLaunchInstallerOnExit({
+  required UpdatStatus status,
+  required bool hasInstallerFile,
+}) {
+  if (!hasInstallerFile) return false;
+  return status == UpdatStatus.readyToInstall ||
+      status == UpdatStatus.dismissed;
+}
 
 /// מטמון של תוצאות GitHub API. המפתח כולל גם את הערוץ (stable/dev) כדי למנוע
 /// דליפה בין ערוצים אם המשתמש מחליף הגדרה באותו סשן, וגם כדי שלא יחזרו
@@ -61,6 +87,27 @@ Map<String, dynamic> pickLatestDevRelease(List<dynamic> releases) {
   return (releases.first as Map).cast<String, dynamic>();
 }
 
+/// כאשר ערוץ המפתחים פעיל, עדיין צריך לבחור release יציב אם הוא חדש יותר
+/// מה-pre-release האחרון. במקרה של שוויון בגרסת הליבה מחזירים את ה-stable,
+/// כדי לעגן את ה-changelog והנכסים ל-release היציב; עצם ההקפצה למשתמש עדיין
+/// תלויה בהשוואת semver המלאה של `updat`, ולכן שינוי רק ב-`+build` לא ייחשב
+/// לעדכון חדש.
+@visibleForTesting
+Map<String, dynamic> pickPreferredReleaseForDevChannel({
+  required Map<String, dynamic> stableRelease,
+  required Map<String, dynamic> devRelease,
+}) {
+  final stableTag = stableRelease['tag_name']?.toString() ?? '';
+  final devTag = devRelease['tag_name']?.toString() ?? '';
+  final stableVersion = _tryParseVersion(stableTag);
+  final devVersion = _tryParseVersion(devTag);
+
+  if (stableVersion == null) return devRelease;
+  if (devVersion == null) return stableRelease;
+
+  return devVersion > stableVersion ? devRelease : stableRelease;
+}
+
 /// שולפת את מידע ה-release מ-GitHub עבור גרסה נתונה ושומרת אותו במטמון.
 /// אם `getLatestVersion` כבר הקדים לאחסן את ה-release המדויק שזוהה, נחזיר
 /// אותו ישירות — כך מובטח עקביות בין ה-release שזוהה כ"חדש" לבין
@@ -75,7 +122,7 @@ Future<Map<String, dynamic>> _fetchRelease(String version) async {
   if (isDev) {
     final data = await http.get(Uri.parse(
       "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases",
-    ));
+    )).timeout(_kGithubTimeout);
     final releases = jsonDecode(data.body) as List;
     final byPrefix = releases
         .where((r) => r["tag_name"].toString().startsWith(version))
@@ -85,11 +132,11 @@ Future<Map<String, dynamic>> _fetchRelease(String version) async {
   } else {
     var resp = await http.get(Uri.parse(
       "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/tags/$version",
-    ));
+    )).timeout(_kGithubTimeout);
     if (resp.statusCode == 404) {
       resp = await http.get(Uri.parse(
         "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/tags/v$version",
-      ));
+      )).timeout(_kGithubTimeout);
     }
     if (resp.statusCode >= 400) {
       throw Exception(
@@ -268,8 +315,8 @@ String changelogBetweenVersionsForUpdateDialog({
   return result;
 }
 
-/// עוטף את [hebrewFlatChip] ומבטל אוטומטית שגיאות עדכון לאחר השהיה קצרה.
-Widget _hebrewFlatChipAutoHideError({
+/// עוטף את [hebrewFlatChip] ומחיל launchInstaller מותאם ללינוקס.
+Widget _hebrewFlatChipWithLinuxInstaller({
   required BuildContext context,
   required String? latestVersion,
   required String appVersion,
@@ -280,10 +327,6 @@ Widget _hebrewFlatChipAutoHideError({
   required Future<void> Function() launchInstaller,
   required void Function() dismissUpdate,
 }) {
-  if (status == UpdatStatus.error) {
-    Future.delayed(const Duration(seconds: 3), dismissUpdate);
-  }
-
   // Wrap launchInstaller for Linux
   final wrappedLaunchInstaller = wrapLinuxInstaller(launchInstaller, 'otzaria');
 
@@ -306,7 +349,12 @@ class MyUpdatWidget extends StatelessWidget {
   final Widget child;
   @override
   Widget build(BuildContext context) {
-    // Don't show update widget in debug mode or offline mode
+    if (!supportsManagedUpdatePlatform(
+      isWeb: kIsWeb,
+      operatingSystem: Platform.operatingSystem,
+    )) {
+      return child;
+    }
     final isOfflineMode =
         Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ?? false;
     final softwareAndBookUpdatesEnabled = Settings.getValue<bool>(
@@ -318,181 +366,413 @@ class MyUpdatWidget extends StatelessWidget {
       return child;
     }
 
-    return FutureBuilder(
-        future: PackageInfo.fromPlatform(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return child;
-          }
-          return UpdatWindowManager(
-            getLatestVersion: () async {
-              // ניקוי המטמון מבדיקת עדכון קודמת — אנו רוצים נתונים טריים
-              // עבור ה-flow הנוכחי (ובכך גם להבטיח שלא יוחזר release מיושן
-              // אם פורסם release חדש מאז הבדיקה הקודמת).
-              releaseCacheForTesting.clear();
+    return _ManagedUpdatWidget(child: child);
+  }
+}
 
-              final isDevChannel = _isDevChannelEnabled();
+class _ManagedUpdatWidget extends StatefulWidget {
+  const _ManagedUpdatWidget({required this.child});
 
-              if (isDevChannel) {
-                // For dev channel, get the latest pre-release from the main repo
-                final data = await http.get(Uri.parse(
-                  "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases",
-                ));
-                final releases = jsonDecode(data.body) as List;
-                final preRelease = pickLatestDevRelease(releases);
-                final normalized =
-                    _normalizeVersion(preRelease["tag_name"] as String);
-                // אחסון ה-release המדויק שזוהה — כדי ש-getChangelog ו-
-                // getBinaryUrl לא יבחרו מחדש לפי prefix ויתפסו release אחר.
-                _cacheRelease(normalized, preRelease, isDev: true);
-                return normalized;
-              } else {
-                // For stable channel, get the latest stable release
-                final data = await http.get(Uri.parse(
-                  "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/latest",
-                ));
-                final release =
-                    (jsonDecode(data.body) as Map).cast<String, dynamic>();
-                final normalized =
-                    _normalizeVersion(release["tag_name"] as String);
-                _cacheRelease(normalized, release, isDev: false);
-                return normalized;
-              }
-            },
-            getBinaryUrl: (version) async {
-              final release = await _fetchRelease(version ?? '');
-              final assets =
-                  (release["assets"] as List).cast<Map<String, dynamic>>();
-              final platform = Platform.operatingSystem.toLowerCase();
+  final Widget child;
 
-              String? assetUrl;
+  @override
+  State<_ManagedUpdatWidget> createState() => _ManagedUpdatWidgetState();
+}
 
-              // פונקציה לבחירת קובץ Windows לפי סדר עדיפות
-              // חשוב: לא לבחור קובץ -full.exe כי הוא מכיל את הספרייה המלאה
-              // ומיועד רק למשתמשים חדשים, לא לעדכונים
-              // allowZipFallback: האם לאפשר נפילה ל-ZIP אם לא נמצא התאמה
-              String? pickWindows(List<String> extsInOrder,
-                  {bool allowZipFallback = true}) {
-                String? foundZip;
-                for (final a in assets) {
-                  final name = (a["name"] as String).toLowerCase();
-                  final url = a["browser_download_url"] as String;
-                  final isWin = name.contains('win') ||
-                      name.contains('windows') ||
-                      name.endsWith('.exe');
-                  if (!isWin) continue;
+class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
+  UpdatStatus _status = UpdatStatus.checking;
+  String? _currentVersion;
+  String? _latestVersion;
+  String? _changelog;
+  File? _installerFile;
+  bool _windowCloseHookInstalled = false;
 
-                  // דלג על קובץ full - מיועד להתקנה ראשונית בלבד
-                  if (name.contains('-full.exe') ||
-                      name.contains('_full.exe')) {
-                    continue;
-                  }
+  @override
+  void initState() {
+    super.initState();
+    _installWindowCloseHook();
+    _checkForUpdate();
+  }
 
-                  // דלג על קובץ silent - המשתמש רוצה את מתקין ה-GUI הרגיל
-                  if (name.contains('silent')) continue;
+  @override
+  void dispose() {
+    if (_windowCloseHookInstalled) {
+      windowManager.removeListener(_windowListener);
+      _windowCloseHookInstalled = false;
+    }
+    super.dispose();
+  }
 
-                  for (final ext in extsInOrder) {
-                    if (name.endsWith(ext)) return url;
-                  }
-                  // רק אם מותר fallback ל-ZIP
-                  if (allowZipFallback &&
-                      name.endsWith('.zip') &&
-                      foundZip == null) {
-                    foundZip = url;
-                  }
-                }
-                return foundZip;
-              }
+  Future<void> _installWindowCloseHook() async {
+    try {
+      await windowManager.setPreventClose(true);
+      if (!mounted) {
+        return;
+      }
+      windowManager.addListener(_windowListener);
+      _windowCloseHookInstalled = true;
+    } catch (_) {
+      _windowCloseHookInstalled = false;
+    }
+  }
 
-              if (platform == 'windows') {
-                // בחירת סדר עדיפות לפי סוג ההתקנה
-                final pref = _preferredWindowsFormat();
-                final order = switch (pref) {
-                  'zip' => ['.zip', '.exe'],
-                  _ => ['.exe', '.zip'],
-                };
-                assetUrl = pickWindows(order, allowZipFallback: true);
-              } else if (platform == 'macos') {
-                // macOS - חיפוש קובץ zip
-                for (final a in assets) {
-                  final n = (a["name"] as String).toLowerCase();
-                  if ((n.contains('macos') ||
-                          n.contains('darwin') ||
-                          n.contains('mac')) &&
-                      n.endsWith('.zip')) {
-                    assetUrl = a["browser_download_url"] as String;
-                    break;
-                  }
-                }
-              } else if (platform == 'linux') {
-                // Linux - עדיפות: DEB -> RPM -> ZIP
-                for (final a in assets) {
-                  final n = (a["name"] as String).toLowerCase();
-                  final u = a["browser_download_url"] as String;
-                  if (n.endsWith('.deb')) {
-                    assetUrl = u;
-                    break;
-                  }
-                }
-                if (assetUrl == null) {
-                  for (final a in assets) {
-                    final n = (a["name"] as String).toLowerCase();
-                    final u = a["browser_download_url"] as String;
-                    if (n.endsWith('.rpm')) {
-                      assetUrl = u;
-                      break;
-                    }
-                  }
-                }
-                if (assetUrl == null) {
-                  for (final a in assets) {
-                    final n = (a["name"] as String).toLowerCase();
-                    final u = a["browser_download_url"] as String;
-                    if ((n.contains('linux') || n.contains('gnu')) &&
-                        n.endsWith('.zip')) {
-                      assetUrl = u;
-                      break;
-                    }
-                  }
-                }
-              }
+  late final WindowListener _windowListener = _ManagedUpdateWindowListener(
+    handleWindowClose: _handleWindowClose,
+  );
 
-              if (assetUrl == null) {
-                throw Exception('No suitable binary found for $platform');
-              }
-              return assetUrl;
-            },
-            appName: "otzaria", // This is used to name the downloaded files.
-            getChangelog: (latestVersion, appVersion) async {
-              // טעינת יומן השינויים מהתג של ה-release עצמו, כך שהיומן יוצמד
-              // לקומיט שמכיל את כותרת הגרסה החדשה — ללא תלות בענף שממנו נבנתה.
-              try {
-                final release = await _fetchRelease(latestVersion);
-                final tagName = release['tag_name'] as String;
-                final url = rawAssetUrlForTag(tagName, _changelogAssetPath);
-                final response =
-                    await http.get(url).timeout(const Duration(seconds: 10));
+  Future<void> _handleWindowClose() async {
+    try {
+      if (shouldLaunchInstallerOnExit(
+        status: _status,
+        hasInstallerFile: _installerFile != null,
+      )) {
+        await _launchInstaller();
+      }
+    } finally {
+      await windowManager.destroy();
+    }
+  }
 
-                if (response.statusCode == 200) {
-                  return changelogBetweenVersionsForUpdateDialog(
-                    changelog: response.body,
-                    currentVersion: appVersion,
-                    latestVersion: latestVersion,
-                  );
-                } else {
-                  return 'שגיאה בטעינת יומן השינויים.\nקוד שגיאה: ${response.statusCode}';
-                }
-              } catch (e) {
-                return 'שגיאה בטעינת יומן השינויים: $e';
-              }
-            },
-            currentVersion: snapshot.data!.version,
-            updateChipBuilder: _hebrewFlatChipAutoHideError,
-            updateDialogBuilder: hebrewDefaultDialog,
+  Future<void> _checkForUpdate() async {
+    setState(() {
+      _status = UpdatStatus.checking;
+    });
 
-            callback: (status) {},
-            child: child,
-          );
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = packageInfo.version;
+      final latestVersion = await _getLatestVersion();
+
+      if (!mounted) return;
+
+      if (latestVersion == null) {
+        setState(() {
+          _currentVersion = currentVersion;
+          _status = UpdatStatus.upToDate;
         });
+        return;
+      }
+
+      final parsedCurrent = _tryParseVersion(currentVersion);
+      final parsedLatest = _tryParseVersion(latestVersion);
+
+      if (parsedCurrent != null &&
+          parsedLatest != null &&
+          parsedLatest > parsedCurrent) {
+        final changelog = await _getChangelog(latestVersion, currentVersion);
+        if (!mounted) return;
+        setState(() {
+          _currentVersion = currentVersion;
+          _latestVersion = latestVersion;
+          _changelog = changelog;
+          _status = UpdatStatus.availableWithChangelog;
+        });
+        return;
+      }
+
+      setState(() {
+        _currentVersion = currentVersion;
+        _latestVersion = latestVersion;
+        _status = UpdatStatus.upToDate;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _status = UpdatStatus.error;
+      });
+    }
+  }
+
+  Future<String?> _getLatestVersion() async {
+    releaseCacheForTesting.clear();
+
+    final isDevChannel = _isDevChannelEnabled();
+
+    if (isDevChannel) {
+      final devData = await http.get(Uri.parse(
+        "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases",
+      )).timeout(_kGithubTimeout);
+      final stableData = await http.get(Uri.parse(
+        "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/latest",
+      )).timeout(_kGithubTimeout);
+      final releases = jsonDecode(devData.body) as List;
+      final preRelease = pickLatestDevRelease(releases);
+      final stableRelease =
+          (jsonDecode(stableData.body) as Map).cast<String, dynamic>();
+      final selectedRelease = pickPreferredReleaseForDevChannel(
+        stableRelease: stableRelease,
+        devRelease: preRelease,
+      );
+      final normalized = _normalizeVersion(selectedRelease["tag_name"] as String);
+      _cacheRelease(normalized, selectedRelease, isDev: true);
+      return normalized;
+    }
+
+    final data = await http.get(Uri.parse(
+      "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/latest",
+    )).timeout(_kGithubTimeout);
+    final release = (jsonDecode(data.body) as Map).cast<String, dynamic>();
+    final normalized = _normalizeVersion(release["tag_name"] as String);
+    _cacheRelease(normalized, release, isDev: false);
+    return normalized;
+  }
+
+  Future<String> _getBinaryUrl(String version) async {
+    final release = await _fetchRelease(version).timeout(_kGithubTimeout);
+    final assets = (release["assets"] as List).cast<Map<String, dynamic>>();
+    final platform = Platform.operatingSystem.toLowerCase();
+
+    String? assetUrl;
+
+    String? pickWindows(List<String> extsInOrder,
+        {bool allowZipFallback = true}) {
+      String? foundZip;
+      for (final a in assets) {
+        final name = (a["name"] as String).toLowerCase();
+        final url = a["browser_download_url"] as String;
+        final isWin = name.contains('win') ||
+            name.contains('windows') ||
+            name.endsWith('.exe');
+        if (!isWin) continue;
+
+        if (name.contains('-full.exe') || name.contains('_full.exe')) {
+          continue;
+        }
+
+        if (name.contains('silent')) continue;
+
+        for (final ext in extsInOrder) {
+          if (name.endsWith(ext)) return url;
+        }
+        if (allowZipFallback && name.endsWith('.zip') && foundZip == null) {
+          foundZip = url;
+        }
+      }
+      return foundZip;
+    }
+
+    if (platform == 'windows') {
+      final pref = _preferredWindowsFormat();
+      final order = switch (pref) {
+        'zip' => ['.zip', '.exe'],
+        _ => ['.exe', '.zip'],
+      };
+      assetUrl = pickWindows(order, allowZipFallback: true);
+    } else if (platform == 'macos') {
+      for (final a in assets) {
+        final n = (a["name"] as String).toLowerCase();
+        if ((n.contains('macos') || n.contains('darwin') || n.contains('mac')) &&
+            n.endsWith('.zip')) {
+          assetUrl = a["browser_download_url"] as String;
+          break;
+        }
+      }
+    } else if (platform == 'linux') {
+      for (final a in assets) {
+        final n = (a["name"] as String).toLowerCase();
+        final u = a["browser_download_url"] as String;
+        if (n.endsWith('.deb')) {
+          assetUrl = u;
+          break;
+        }
+      }
+      if (assetUrl == null) {
+        for (final a in assets) {
+          final n = (a["name"] as String).toLowerCase();
+          final u = a["browser_download_url"] as String;
+          if (n.endsWith('.rpm')) {
+            assetUrl = u;
+            break;
+          }
+        }
+      }
+      if (assetUrl == null) {
+        for (final a in assets) {
+          final n = (a["name"] as String).toLowerCase();
+          final u = a["browser_download_url"] as String;
+          if ((n.contains('linux') || n.contains('gnu')) && n.endsWith('.zip')) {
+            assetUrl = u;
+            break;
+          }
+        }
+      }
+    }
+
+    if (assetUrl == null) {
+      throw Exception('No suitable binary found for $platform');
+    }
+    return assetUrl;
+  }
+
+  Future<String> _getChangelog(String latestVersion, String appVersion) async {
+    try {
+      final release = await _fetchRelease(latestVersion);
+      final tagName = release['tag_name'] as String;
+      final url = rawAssetUrlForTag(tagName, _changelogAssetPath);
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        return changelogBetweenVersionsForUpdateDialog(
+          changelog: response.body,
+          currentVersion: appVersion,
+          latestVersion: latestVersion,
+        );
+      }
+      return 'שגיאה בטעינת יומן השינויים.\nקוד שגיאה: ${response.statusCode}';
+    } catch (e) {
+      return 'שגיאה בטעינת יומן השינויים: $e';
+    }
+  }
+
+  Future<void> _startUpdate() async {
+    if (_latestVersion == null) {
+      return;
+    }
+
+    if (_status == UpdatStatus.readyToInstall) {
+      return _launchInstaller();
+    }
+
+    if (_status != UpdatStatus.available &&
+        _status != UpdatStatus.availableWithChangelog) {
+      return;
+    }
+
+    setState(() {
+      _status = UpdatStatus.downloading;
+    });
+
+    try {
+      final url = await _getBinaryUrl(_latestVersion!).timeout(_kGithubTimeout);
+      final installerFile = await getDownloadFileLocation(
+        _latestVersion!,
+        'otzaria',
+        url.split('.').last,
+      ).timeout(_kGithubTimeout);
+      await _downloadRelease(installerFile, url, 'otzaria')
+          .timeout(_kDownloadTimeout);
+
+      if (!mounted) return;
+      setState(() {
+        _installerFile = installerFile;
+        _status = UpdatStatus.readyToInstall;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _status = UpdatStatus.error;
+      });
+    }
+  }
+
+  Future<void> _launchInstaller() async {
+    if (_installerFile == null) return;
+
+    final wrappedLaunchInstaller =
+        wrapLinuxInstaller(_launchInstallerDirect, 'otzaria');
+    try {
+      await wrappedLaunchInstaller();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _status = UpdatStatus.error;
+      });
+    }
+  }
+
+  Future<void> _launchInstallerDirect() async {
+    if (_installerFile == null) return;
+    await openInstaller(_installerFile!, 'otzaria');
+  }
+
+  void _dismissUpdate() {
+    if (!mounted) return;
+    setState(() {
+      _status = UpdatStatus.dismissed;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(child: widget.child),
+        Positioned(
+          right: 10,
+          bottom: 10,
+          child: _hebrewFlatChipWithLinuxInstaller(
+            context: context,
+            latestVersion: _latestVersion,
+            appVersion: _currentVersion ?? 'unknown',
+            status: _status,
+            checkForUpdate: _checkForUpdate,
+            openDialog: () {
+              hebrewDefaultDialog(
+                context: context,
+                latestVersion: _latestVersion,
+                appVersion: _currentVersion ?? 'unknown',
+                status: _status,
+                changelog: _changelog,
+                checkForUpdate: _checkForUpdate,
+                openDialog: () {},
+                startUpdate: _startUpdate,
+                launchInstaller: _launchInstaller,
+                dismissUpdate: _dismissUpdate,
+              );
+            },
+            startUpdate: _startUpdate,
+            launchInstaller: _launchInstaller,
+            dismissUpdate: _dismissUpdate,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ManagedUpdateWindowListener extends WindowListener {
+  _ManagedUpdateWindowListener({required this.handleWindowClose});
+
+  final Future<void> Function() handleWindowClose;
+
+  @override
+  void onWindowClose() async {
+    await handleWindowClose();
+  }
+}
+
+Future<File> _downloadRelease(File file, String url, String appName) async {
+  final client = http.Client();
+  IOSink? sink;
+  try {
+    final request = http.Request('GET', Uri.parse(url));
+    final response = await client.send(request).timeout(_kGithubTimeout);
+    if (response.statusCode != 200) {
+      throw Exception('Download failed with status ${response.statusCode}');
+    }
+
+    await file.parent.create(recursive: true);
+    sink = file.openWrite();
+
+    await response.stream
+        .timeout(const Duration(seconds: 30))
+        .forEach(sink.add);
+    await sink.flush();
+    await sink.close();
+    sink = null;
+
+    if (file.path.toLowerCase().endsWith('.zip')) {
+      final outDir = Directory(p.join(p.dirname(file.path), appName));
+      if (outDir.existsSync()) {
+        outDir.deleteSync(recursive: true);
+      }
+      outDir.createSync(recursive: true);
+      extractFileToDisk(file.absolute.path, outDir.absolute.path);
+    }
+
+    return file;
+  } finally {
+    await sink?.close();
+    client.close();
   }
 }

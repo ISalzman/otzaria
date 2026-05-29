@@ -74,21 +74,14 @@ class FindRefRepository {
     List<String>? queryTokens,
   })? getUserBookTocEntries;
 
-  /// Injection for testing: returns commentator rows for a specific source line.
-  /// In production calls [LinkDao.selectCommentatorsBySourceLine].
+  /// Injection for testing: מחזיר את שורות המפרשים הגולמיות עבור תוצאה.
+  /// In production calls [SeforimRepository.getCommentatorsForReference].
   ///
   /// כל row צפוי לכלול לפחות `targetBookTitle` ו-`targetLineIndex` (השורה
-  /// הראשונה בספר המפרש שמקושרת לשורת המקור).
-  final Future<List<Map<String, dynamic>>> Function(int sourceLineId)?
-      selectCommentatorsBySourceLine;
-
-  /// Injection for testing: returns commentator rows for a whole book.
-  /// In production calls [LinkDao.selectCommentatorsByBook].
-  ///
-  /// אין כאן `targetLineIndex` משמעותי לכל מפרש; הקוד נופל ל-best-effort
-  /// (`ref.segment.toInt()`) בהנחת alignment שורה-שורה.
-  final Future<List<Map<String, dynamic>>> Function(int bookId)?
-      selectCommentatorsByBook;
+  /// הראשונה בספר המפרש על פני טווח הקטע). חישוב הטווח (כותרת עד הכותרת
+  /// הבאה / כל הספר כשאין כותרות פנימיות) מתבצע ב-repository ה-DB.
+  final Future<List<Map<String, dynamic>>> Function(DbReferenceResult ref)?
+      fetchCommentatorRows;
 
   /// Injection for testing: מחזירה את הדור של מפרש לפי שם.
   /// In production calls [CommentaryService.getBookEra].
@@ -99,10 +92,17 @@ class FindRefRepository {
   /// קטגוריית הספר. In production: [ReferenceBooksCache.instance.getCategoryPathForBookSync].
   final String? Function(int bookId)? getCategoryPathSync;
 
-  /// קאש בזיכרון: מפתח = "bookId:sourceLineId" (sourceLineId=0 כשנופלים ל-book-level).
-  /// חי כל זמן שה-repository חי. אינו מתנקה אוטומטית — קטן יחסית
-  /// (לכל היותר ~15 מפתחות פר session, רוב המשתמשים פחות).
+  /// קאש בזיכרון. המפתח כולל את כל הפרמטרים שמשפיעים על תוצאת ה-loader
+  /// (`bookId`, `sourceLineId`, `isAltToc`, `tocLevel`, `segment`) — לא מספיק
+  /// `bookId:sourceLineId` בלבד: TOC רגיל ו-AltToc יכולים לחלוק את אותה שורת
+  /// התחלה (למשל "בראשית פרק א" ו"פרשת בראשית" — שניהם בשורה הראשונה), אך
+  /// הטווח המחושב להם שונה. חי כל זמן שה-repository חי; קטן יחסית בפועל.
   final Map<String, List<DbCommentatorEntry>> _commentatorsCache = {};
+
+  /// מפתח קאש לרשומות מפרשים — ראה [_commentatorsCache].
+  static String _cacheKeyFor(DbReferenceResult ref) =>
+      '${ref.bookId}:${ref.sourceLineId}:${ref.isAltToc ? 1 : 0}'
+      ':${ref.tocLevel}:${ref.segment.toInt()}';
 
   /// קאש שטוח של כל ערכי ה-AltToc על פני כל הספרים. נבנה lazy בקריאה
   /// הראשונה ל-fallback הגלובלי, ומשרת את כל ה-sessions שלאחר מכן.
@@ -121,8 +121,7 @@ class FindRefRepository {
     this.getPdfOutlineEntries,
     this.getAllUserBooks,
     this.getUserBookTocEntries,
-    this.selectCommentatorsBySourceLine,
-    this.selectCommentatorsByBook,
+    this.fetchCommentatorRows,
     this.getBookEra,
     this.getCategoryPathSync,
   }) {
@@ -208,58 +207,43 @@ class FindRefRepository {
 
   /// מחזיר רשימת רשומות מפרשים זמינים עבור תוצאה, מוכנות לפתיחה ישירה.
   ///
-  /// כל [DbCommentatorEntry.targetSegment] הוא:
-  ///   - `int` במסלול segment-level — `MIN(targetLineIndex)` של הקישורים
-  ///     היוצאים מהשורה למפרש (=הקטע הראשון של המפרש על אותה שורה).
-  ///   - `null` במסלול book-level — על הצרכן ליפול ל-best-effort
-  ///     (`ref.segment.toInt()`) בהנחת alignment שורה-שורה.
+  /// כל [DbCommentatorEntry.targetSegment] הוא `MIN(targetLineIndex)` על פני
+  /// טווח הקטע — המיקום הראשון בספר המפרש על אותו קטע — או `null` אם ה-row
+  /// אינו כולל `targetLineIndex`.
   ///
-  /// חשוב: `targetSegment` אינו תלוי ב-`ref.segment`. הקאש ממופתח לפי
-  /// `bookId:sourceLineId` בלבד, ולכן שני refs עם אותו `bookId` ו-`sourceLineId == 0`
-  /// אך `segment` שונה חולקים את אותה רשומה — והפתרון של ה-fallback חייב
-  /// להישאר באחריות הצרכן.
+  /// המתודה רק מנקה כפילויות וממיינת לפי דורות; **חישוב טווח הקטע** (כותרת עד
+  /// הכותרת הבאה, או כל הספר כשאין כותרות פנימיות) מתבצע ב-[fetchCommentatorRows]
+  /// (בייצור: [SeforimRepository.getCommentatorsForReference]).
   ///
-  /// אסטרטגיה:
-  /// 1. אם [DbReferenceResult.sourceLineId] > 0 — שאילתה segment-level
-  ///    (`selectCommentatorsBySourceLine`). מחזירה גם `targetLineIndex`.
-  /// 2. אחרת (או אם segment-level חזר ריק) — שאילתה book-level לכל הספר;
-  ///    `targetSegment` יישאר `null`.
-  /// 3. PDFs / ספרים מחוץ ל-DB (bookId <= 0) / ספרים אישיים — מחזיר ריק.
-  ///    ספרים אישיים: ה-bookId/sourceLineId שלהם שייכים ל-user_books.db ולא
-  ///    מתאימים ל-link table של ה-DB הראשי — שאילתה תחזיר מפרשים שגויים.
+  /// PDFs / ספרים מחוץ ל-DB (bookId <= 0) / ספרים אישיים — מחזיר ריק מיידית.
+  /// ספרים אישיים: ה-bookId/sourceLineId שלהם שייכים ל-user_books.db ולא
+  /// מתאימים ל-link table של ה-DB הראשי — שאילתה תחזיר מפרשים שגויים.
   ///
   /// תוצאות נשמרות בקאש בזיכרון לאורך חיי ה-repository.
   Future<List<DbCommentatorEntry>> getCommentatorsForResult(
       DbReferenceResult ref) async {
     if (ref.isPdf || ref.bookId <= 0 || ref.isUserBook) return const [];
 
-    final cacheKey = '${ref.bookId}:${ref.sourceLineId}';
+    final cacheKey = _cacheKeyFor(ref);
     final cached = _commentatorsCache[cacheKey];
     if (cached != null) return cached;
 
     final repository = SqliteDataProvider.instance.repository;
-    final lineFn = selectCommentatorsBySourceLine ??
+    final fetchFn = fetchCommentatorRows ??
         (repository == null
             ? null
-            : (int lineId) => repository.database.linkDao
-                .selectCommentatorsBySourceLine(lineId));
-    final bookFn = selectCommentatorsByBook ??
-        (repository == null
-            ? null
-            : (int bookId) =>
-                repository.database.linkDao.selectCommentatorsByBook(bookId));
+            : (DbReferenceResult r) => repository.getCommentatorsForReference(
+                  bookId: r.bookId,
+                  bookTitle: r.title,
+                  sourceLineId: r.sourceLineId,
+                  startLineIndex: r.segment.toInt(),
+                  level: r.tocLevel,
+                  isAltToc: r.isAltToc,
+                ));
 
-    if (lineFn == null && bookFn == null) return const [];
+    if (fetchFn == null) return const [];
 
-    List<Map<String, dynamic>> rows = const [];
-    var usedSegmentLevel = false;
-    if (ref.sourceLineId > 0 && lineFn != null) {
-      rows = await lineFn(ref.sourceLineId);
-      usedSegmentLevel = rows.isNotEmpty;
-    }
-    if (rows.isEmpty && bookFn != null) {
-      rows = await bookFn(ref.bookId);
-    }
+    final rows = await fetchFn(ref);
 
     // dedupe על `(title, bookId)` ולא רק `title`: שני מפרשים שונים יכולים
     // לחלוק אותה כותרת ולהיבדל ב-`targetBookId` (למשל "רש"י" שיש לו
@@ -276,10 +260,8 @@ class FindRefRepository {
       final int? bookId = row['targetBookId'] as int?;
       if (!seen.add((title, bookId))) continue;
 
-      // segment-level → `targetLineIndex` אם ה-row כולל אותו, אחרת null;
-      // book-level → null (הצרכן יפתור לפי ref.segment).
-      final int? segment =
-          usedSegmentLevel ? row['targetLineIndex'] as int? : null;
+      // `targetLineIndex` — המיקום המקביל הראשון בספר המפרש על פני הקטע.
+      final int? segment = row['targetLineIndex'] as int?;
       entries.add((title: title, bookId: bookId, segment: segment));
     }
 
@@ -381,6 +363,15 @@ class FindRefRepository {
     final maxPhraseTokens = queryTokens.length >= 3 ? 3 : queryTokens.length;
     var bookQueryTokenCount = 1;
     List<ReferenceBookHit> bookHits = const <ReferenceBookHit>[];
+
+    // hits ב-matchRank=2 ("contains") נשמרים כצובר לכל אורך הלולאה: הם
+    // לגיטימיים — פרשנויות כמו "פני יהושע על בבא קמא" כשמחפשים "בבא קמא" —
+    // אבל לא ראויים "לתפוס" את ה-bookQueryTokenCount, כי הם לא התאמה ישירה
+    // של תחילת הכותרת. אם אין hits ראשיים (matchRank<=1 או ==3) באף n, הם
+    // עדיין יוצרפו לתוצאות אבל ה-loop ימשיך לנסות n קטן יותר כדי למצוא
+    // התאמה ישירה לספר עצמו (למשל "בראשית" עבור "בראשית א").
+    final secondaryHits = <ReferenceBookHit>[];
+
     for (var n = maxPhraseTokens; n >= 1; n--) {
       final phrase = queryTokens.take(n).join(' ');
       final hits = searchBooks(phrase, limit: 50);
@@ -393,43 +384,44 @@ class FindRefRepository {
         break;
       }
 
-      // For multi-token phrases: only accept a hit if every query token at
-      // position i (0-indexed) starts a word at position i in the book title.
-      // This prevents "בראשית א" from matching "גור אריה על בראשית פסוק א"
-      // (matchRank=2, "א" appears in the 5th word, not the 2nd).
-      // Exact-acronym hits (matchRank == 3) are accepted without this restriction
-      // because the phrase matched a complete acronym (a == q).
-      // Acronym *prefix* (matchRank 4) and *contains* (5) hits are NOT a complete
-      // acronym — accepting them swallowed the section name into the book key:
-      // "טור חושן" is a prefix of the acronym "טור חושן משפט", so it matched the
-      // book "טור" at rank 4, consumed both tokens, and skipped the TOC search for
-      // "חושן" entirely (→ "טור חושן" returned no real result, while "טור משפט"
-      // did). They now fall through to the positional title check below, which
-      // rejects them because the title itself didn't match.
-      // Contains-only hits (matchRank == 2) are always excluded for multi-token
-      // phrases: "גור אריה על בראשית" should never be selected when the user
-      // types "בראשית א".
+      // For multi-token phrases:
+      //   matchRank=3 (complete acronym) — תמיד מקובל.
+      //   matchRank=4,5 (acronym prefix/contains) — נדחים. הסיבה: "טור חושן"
+      //     הוא prefix של ה-acronym "טור חושן משפט", ולכן יבלע את "חושן" לתוך
+      //     ה-book key ולא ישאיר remainingTokens לחיפוש TOC.
+      //   matchRank=0,1,2 — מקובלים אם טוקני ה-phrase מופיעים כסיקוונס רציף
+      //     ב-titleTokens (לאו דווקא בתחילת הכותרת). matchRank=2 נחשב
+      //     "secondary" — מציפן בנפרד וממשיכים לחפש n קטן יותר; matchRank=0,1
+      //     הם "primary" וגורמים ל-break.
       final phraseTokens = queryTokens.take(n).toList();
-      final qualifiedHits = hits.where((hit) {
-        if (hit.matchRank == 3) return true; // complete acronym – always accept
-        if (hit.matchRank >= 2) {
-          return false; // contains / acronym-prefix / acronym-contains – never accept for n>1
+      final primaryHits = <ReferenceBookHit>[];
+      for (final hit in hits) {
+        if (hit.matchRank == 3) {
+          primaryHits.add(hit);
+          continue;
         }
+        if (hit.matchRank >= 4) continue; // acronym prefix/contains — נדחים
         // הכותרת המנורמלת כבר מחושבת מראש בתוך הקאש.
         final titleTokens = _tokenize(hit.normalizedTitle);
-        // Every phrase token at index i must match the start of title token i.
-        for (var i = 0; i < phraseTokens.length; i++) {
-          if (i >= titleTokens.length) return false;
-          if (!titleTokens[i].startsWith(phraseTokens[i])) return false;
+        if (!_phraseAppearsAsTokens(titleTokens, phraseTokens)) continue;
+        if (hit.matchRank == 2) {
+          secondaryHits.add(hit);
+        } else {
+          primaryHits.add(hit);
         }
-        return true;
-      }).toList();
+      }
 
-      if (qualifiedHits.isNotEmpty) {
-        bookHits = qualifiedHits;
+      if (primaryHits.isNotEmpty) {
+        bookHits = primaryHits;
         bookQueryTokenCount = n;
         break;
       }
+    }
+
+    // צרף את ה-secondary hits בסוף, כך שיופיעו אחרי ה-primary בדירוג.
+    // ההצמדה היא בכל מקרה — בין אם נמצאו hits ראשיים ובין אם לא.
+    if (secondaryHits.isNotEmpty) {
+      bookHits = [...bookHits, ...secondaryHits];
     }
 
     debugPrint(
@@ -491,13 +483,12 @@ class FindRefRepository {
       // bookId == -1: file-system PDF not in DB — use PDF outline as TOC,
       // mirroring the regular book flow as closely as possible.
       if (bookId == -1) {
-        final outlineFn = getPdfOutlineEntries ??
-            ReferenceBooksCache.instance.getPdfOutlineEntries;
-        final outlineEntries = await outlineFn(hit.filePath);
-        final normalizedBookTitle = _normalizeForMatch(title);
-
         if (remainingTokens.isEmpty) {
-          // Mirror regular book: add the book title + all top-level outline entries.
+          // המשתמש הקליד רק את כותרת הספר — מחזירים את הספר בלבד, בלי לסקור
+          // את כל ערכי ה-outline. PDFs רבים שומרים את ה-outline בגרנולריות
+          // של דף-לדף (50+ ערכים למסכת), וטעינה אוטומטית הציפה את רשימת
+          // התוצאות בדפים בודדים שדחקו החוצה ספרי DB תואמים. סימטרי למסלול
+          // של מילה אחת — שם גם לא נסקרים ערכי TOC.
           results.add(DbReferenceResult(
             title: title,
             reference: title,
@@ -506,19 +497,15 @@ class FindRefRepository {
             filePath: hit.filePath,
             orderIndex: hit.orderIndex,
           ));
-          for (final (normChapter, origChapter, pageNumber) in outlineEntries) {
-            if (normChapter == normalizedBookTitle) continue;
-            results.add(DbReferenceResult(
-              title: title,
-              reference: '$title $origChapter',
-              segment: pageNumber,
-              isPdf: true,
-              filePath: hit.filePath,
-              orderIndex: hit.orderIndex,
-              tocLevel: 2,
-            ));
-          }
-        } else if (!hasExactNextTokenMatch) {
+          continue;
+        }
+
+        final outlineFn = getPdfOutlineEntries ??
+            ReferenceBooksCache.instance.getPdfOutlineEntries;
+        final outlineEntries = await outlineFn(hit.filePath);
+        final normalizedBookTitle = _normalizeForMatch(title);
+
+        if (!hasExactNextTokenMatch) {
           // Mirror regular book: add ALL matching outline entries (not just first).
           for (final (normChapter, origChapter, pageNumber) in outlineEntries) {
             if (normChapter == normalizedBookTitle) continue;
@@ -543,8 +530,8 @@ class FindRefRepository {
       }
 
       if (remainingTokens.isEmpty) {
-        final tocEntries = await fetchTocEntries(bookId, title);
-
+        // המשתמש הקליד רק את כותרת הספר — מחזירים את הספר בלבד, ללא ערכי
+        // TOC. סימטרי למסלול של מילה אחת ולמסלול ה-PDF למעלה.
         results.add(DbReferenceResult(
           title: title,
           reference: title,
@@ -554,23 +541,6 @@ class FindRefRepository {
           orderIndex: hit.orderIndex,
           bookId: bookId,
         ));
-
-        for (final entry in tocEntries) {
-          final level = entry['level'] as int;
-          if (level == 2 && entry['reference'] != title) {
-            results.add(DbReferenceResult(
-              title: title,
-              reference: entry['reference'] as String,
-              segment: entry['segment'] as int,
-              isPdf: isPdf,
-              filePath: hit.filePath,
-              orderIndex: hit.orderIndex,
-              tocLevel: level,
-              bookId: bookId,
-              sourceLineId: entry['dbLineId'] as int? ?? 0,
-            ));
-          }
-        }
       } else if (!hasExactNextTokenMatch) {
         final tocEntries = await fetchTocEntries(
           bookId,
@@ -593,7 +563,11 @@ class FindRefRepository {
         }
 
         // חיפוש בכותרות-משנה (AltToc): עליות, פרשות ומבנים חלופיים נוספים.
-        // ה-reference של AltToc אינו כולל שם הספר (הוא יחסי — "פרשת לך לך עליה ו").
+        // ה-reference שמחזיר ה-DB עבור AltToc הוא יחסי — אינו כולל את שם
+        // הספר (למשל "פרשת לך לך עליה ו" בתוך "בראשית"). אנו מצרפים את שם
+        // הספר ב-prefix כדי שהתצוגה תזהה לאיזה ספר התוצאה שייכת — תוצאת
+        // AltToc "הלכות בבא קמא" בתוך "הלכות גדולות" הוצגה לבדה ללא רמז
+        // לזהות הספר. ה-prefix מתבצע רק אם אין כפילות — defensive guard.
         final altTocEntries = await fetchAltTocEntries(
           bookId,
           title,
@@ -609,7 +583,7 @@ class FindRefRepository {
 
           results.add(DbReferenceResult(
             title: title,
-            reference: ref,
+            reference: _qualifyAltTocReference(title, ref),
             segment: entry['segment'] as int,
             isPdf: isPdf,
             filePath: hit.filePath,
@@ -658,7 +632,7 @@ class FindRefRepository {
 
           results.add(DbReferenceResult(
             title: entry.bookTitle,
-            reference: entry.reference,
+            reference: _qualifyAltTocReference(entry.bookTitle, entry.reference),
             segment: entry.segment,
             orderIndex: entry.bookOrderIndex,
             tocLevel: entry.level,
@@ -677,12 +651,51 @@ class FindRefRepository {
     }
 
     final unique = _dedupeRefs(results);
-    final ranked = _rankResults(unique, queryTokens);
+    final pruned = _suppressDeeperVariants(unique);
+    final ranked = _rankResults(pruned, queryTokens);
     final limited = ranked.length > 15 ? ranked.take(15).toList() : ranked;
 
     debugPrint('[FindRef] Final results: ${limited.length}');
 
     return await _enrichWithPaths(limited);
+  }
+
+  /// מסיר ערכי TOC/AltToc כאשר קיים ערך-אב באותו ספר שה-reference שלו הוא
+  /// prefix של הערך הנוכחי. הרציונל: השאילתה כבר תאמה ערך רחב (כמו
+  /// "אור זרוע פסקי בבא קמא"), ולכן ערכי-ילדים שמרחיבים אותו
+  /// ("... סימן ת", "... סימן ב", ...) אינם מוסיפים מידע לחיפוש — הם רק
+  /// ממלאים את 15 התוצאות הזמינות בפירוט פנימי שאותו המשתמש לא ביקש.
+  ///
+  /// הסינון הזה הכרחי במיוחד עבור ה-fallback הגלובלי של AltToc: בניגוד לחיפוש
+  /// הפר-ספר ([_searchAltTocFlat] ב-seforim_repository) שמחיל "anti-flood"
+  /// (הטוקן האחרון חייב להופיע ב-ownTokens), ה-flat cache הגלובלי בודק רק
+  /// אם כל הטוקנים מופיעים בנתיב המלא — וכך צאצאי entry שתואם משתחלים גם הם.
+  ///
+  /// ההשוואה היא לפי `(bookId, isUserBook, isAltToc, isPdf)`: TOC ו-AltToc
+  /// הם מבנים חלופיים — אחד לא מסתיר את השני. ספרים שונים בכלל אינם
+  /// משפיעים אחד על השני. רמת ה-TOC המוחלטת לא רלוונטית כי מבני AltToc
+  /// מתחילים ב-DB מ-level 0 בעוד TOC רגיל מ-1 — מה שחשוב הוא היחס prefix
+  /// בלבד (כולל רווח בסוף, להבטיח גבול מילה שלמה).
+  List<DbReferenceResult> _suppressDeeperVariants(
+      List<DbReferenceResult> entries) {
+    if (entries.length < 2) return entries;
+
+    return entries.where((entry) {
+      for (final other in entries) {
+        if (identical(other, entry)) continue;
+        if (other.bookId != entry.bookId) continue;
+        if (other.isUserBook != entry.isUserBook) continue;
+        if (other.isAltToc != entry.isAltToc) continue;
+        if (other.isPdf != entry.isPdf) continue;
+        // משווים אורך reference ולא tocLevel — TOC ו-AltToc מתחילים ברמות
+        // שונות, וגם אם הרמות זהות, ה-prefix הקצר יותר הוא ה"אב" הלוגי.
+        if (other.reference.length >= entry.reference.length) continue;
+        // ה-prefix המלא — כולל רווח בסוף — מבטיח התאמת "מילה שלמה" ולא
+        // התאמה חלקית של מחרוזת ("פרק א" לא חוסם "פרק אבות").
+        if (entry.reference.startsWith('${other.reference} ')) return false;
+      }
+      return true;
+    }).toList();
   }
 
   Future<List<DbReferenceResult>> _searchPersonalBooks(
@@ -783,7 +796,8 @@ class FindRefRepository {
             isUserBook: true,
           ));
         } else if (remainingTokens.isEmpty) {
-          // Book title + all level-2 TOC entries
+          // המשתמש הקליד רק את כותרת הספר — מחזירים את הספר בלבד, סימטרי
+          // למסלול הראשי ולמסלול מילה-אחת לעיל.
           out.add(DbReferenceResult(
             title: book.title,
             reference: book.title,
@@ -795,25 +809,6 @@ class FindRefRepository {
             bookPath: personalBookPath,
             isUserBook: true,
           ));
-          final toc = await fetchUserToc(book.id, book.title);
-          for (final entry in toc) {
-            final level = entry['level'] as int;
-            if (level == 2 && entry['reference'] != book.title) {
-              out.add(DbReferenceResult(
-                title: book.title,
-                reference: entry['reference'] as String,
-                segment: entry['segment'] as int,
-                isPdf: isPdf,
-                filePath: book.filePath ?? '',
-                orderIndex: book.orderIndex,
-                tocLevel: level,
-                bookId: book.id,
-                bookPath: personalBookPath,
-                sourceLineId: entry['dbLineId'] as int? ?? 0,
-                isUserBook: true,
-              ));
-            }
-          }
         } else {
           // Only TOC entries matching remainingTokens
           final toc = await fetchUserToc(
@@ -1089,6 +1084,41 @@ class FindRefRepository {
       .split(' ')
       .where((token) => token.isNotEmpty)
       .toList(growable: false);
+
+  /// בודק אם [phraseTokens] מופיעים כסיקוונס רציף ב-[titleTokens], כאשר
+  /// כל title-token במיקום שלו מתחיל ב-phrase-token המקביל (startsWith).
+  ///
+  /// מקבל מיקום התחלה כלשהו, לא רק 0 — כדי שכותרת כמו "פני יהושע על בבא קמא"
+  /// תתפוס שאילתה "בבא קמא" (start=3). שמירה על רציפות מונעת התאמות חוצות-
+  /// ענפים: שאילתה "בבא קמא" לא תתפוס "פסקי בבא בתרא סימן קמא" כי "בבא"
+  /// ו"קמא" אינם רצופים שם.
+  static bool _phraseAppearsAsTokens(
+      List<String> titleTokens, List<String> phraseTokens) {
+    if (phraseTokens.isEmpty) return true;
+    if (phraseTokens.length > titleTokens.length) return false;
+    final maxStart = titleTokens.length - phraseTokens.length;
+    for (var start = 0; start <= maxStart; start++) {
+      var ok = true;
+      for (var i = 0; i < phraseTokens.length; i++) {
+        if (!titleTokens[start + i].startsWith(phraseTokens[i])) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) return true;
+    }
+    return false;
+  }
+
+  /// מצרף את שם הספר ל-prefix של reference יחסי מ-AltToc. אם ה-reference
+  /// כבר מתחיל בשם הספר (אם פעם תתווסף שכבת ספרים שבה ה-DB מחזיר ערכים
+  /// כוללים) — אין הכפלה.
+  static String _qualifyAltTocReference(String bookTitle, String reference) {
+    if (bookTitle.isEmpty) return reference;
+    if (reference == bookTitle) return reference;
+    if (reference.startsWith('$bookTitle ')) return reference;
+    return '$bookTitle $reference';
+  }
 
   /// מסווג ספר ל-tier של "ספר יסוד" לפי [categoryPath] ו-[title].
   /// מחזיר tier בטווח 1-10 (קטן יותר → ראשון בדירוג) או `null` עבור ספרים

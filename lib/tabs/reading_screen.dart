@@ -73,13 +73,26 @@ class _ReadingScreenState extends State<ReadingScreen>
     _pageController ??= PageController(initialPage: initialIndex);
   }
 
-  void _syncPageController(int targetIndex) {
-    final controller = _pageController;
-    if (controller == null || !controller.hasClients) return;
-    final currentPage = controller.page?.round();
-    if (currentPage != null && currentPage != targetIndex) {
-      controller.jumpToPage(targetIndex);
-    }
+  void _syncPageController() {
+    // הקפיצה נדחית לפוסט-פריים בכוונה: ה-BlocListener שמפעיל את הסנכרון רץ
+    // *לפני* שה-BlocBuilder בונה מחדש את ה-PageView, כך שברגע הקריאה ל-PageView
+    // עדיין יש את מספר הילדים הישן. כשנפתח טאב חדש בסוף, jumpToPage לאינדקס
+    // החדש על תצוגה ישנה חורג מהתחום ונצמד (clamp) רגעית לאינדקס הקודם, מה
+    // שיורה onPageChanged עם אינדקס שגוי → SetCurrentTab שגוי → ההדגשה בשורת
+    // הטאבים קופצת לטאב הקודם במקום לחדש. דחייה לפוסט-פריים מבטיחה שהקפיצה
+    // תתבצע אחרי שהילד החדש כבר בעץ, על תצוגה תקינה.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final controller = _pageController;
+      if (controller == null || !controller.hasClients) return;
+      final state = context.read<TabsBloc>().state;
+      if (!state.hasOpenTabs) return;
+      final targetIndex = state.currentTabIndex.clamp(0, state.tabs.length - 1);
+      final currentPage = controller.page?.round();
+      if (currentPage != null && currentPage != targetIndex) {
+        controller.jumpToPage(targetIndex);
+      }
+    });
   }
 
   @override
@@ -103,8 +116,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                   .read<HistoryBloc>()
                   .add(CaptureStateForHistory(state.currentTab!));
               context.read<TabsBloc>().add(const SaveTabs());
-              _syncPageController(
-                  state.currentTabIndex.clamp(0, state.tabs.length - 1));
+              _syncPageController();
             }
           },
           listenWhen: (previous, current) =>
@@ -182,11 +194,20 @@ class _ReadingScreenState extends State<ReadingScreen>
                       physics: Platform.isAndroid || Platform.isIOS
                           ? const PageScrollPhysics()
                           : const NeverScrollableScrollPhysics(),
-                      onPageChanged: (index) {
-                        if (index < state.tabs.length) {
-                          context.read<TabsBloc>().add(SetCurrentTab(index));
-                        }
-                      },
+                      // רק במובייל הגלילה ידנית ולכן onPageChanged משקף בחירת
+                      // משתמש שצריך להזין חזרה ל-currentTabIndex. בדסקטופ
+                      // (NeverScrollable) אי-אפשר לגלול ידנית, וה-callback היה
+                      // יורה רק על קפיצות תוכנתיות — כולל ערך clamp שגוי רגעי
+                      // בעת פתיחת טאב חדש — ודורס את האינדקס הנכון. לכן מנוטרל.
+                      onPageChanged: Platform.isAndroid || Platform.isIOS
+                          ? (index) {
+                              if (index < state.tabs.length) {
+                                context
+                                    .read<TabsBloc>()
+                                    .add(SetCurrentTab(index));
+                              }
+                            }
+                          : null,
                       children: [
                         for (var i = 0; i < state.tabs.length; i++)
                           _buildTabView(

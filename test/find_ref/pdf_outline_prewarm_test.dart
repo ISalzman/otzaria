@@ -27,6 +27,16 @@ void main() {
   setUp(() {
     // singleton — מבטיח מצב נקי בין טסטים.
     ReferenceBooksCache.instance.clear();
+    ReferenceBooksCache.instance.pdfOutlineCacheRepositoryOverride = null;
+    ReferenceBooksCache.instance.pdfFileMetadataProviderOverride =
+        (filePath) async {
+      if (filePath.isEmpty) return null;
+      return (
+        fileSize: filePath.length,
+        lastModified: filePath.hashCode,
+      );
+    };
+    ReferenceBooksCache.instance.nowProviderOverride = null;
   });
 
   group('prewarmAllPdfOutlines', () {
@@ -128,8 +138,9 @@ void main() {
       // batches של 2 — סך הכל 5 batches.
       final prewarm = cache.prewarmAllPdfOutlines(maxConcurrent: 2);
 
-      // הגוף עד הלולאה הראשונה רץ סינכרונית — בגלל ש-`getPdfOutlineEntries`
-      // מטמיע sync את הפרסר. batch ראשון נשלח (2 קריאות).
+      // `getPdfOutlineEntries` ניגש קודם ל-metadata, לכן הקריאות לפרסר
+      // מתחילות רק אחרי סבב microtask ראשון.
+      await Future<void>.delayed(Duration.zero);
       expect(callCount, equals(2), reason: 'batch ראשון התחיל סינכרונית');
 
       // משלימים batch 1.

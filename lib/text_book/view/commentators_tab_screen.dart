@@ -44,6 +44,86 @@ bool shouldNotifyCommentatorsTabListener(
   return prev.selectedIndex != curr.selectedIndex;
 }
 
+/// מצב הניווט של [CommentatorsTabScreen] — חשוף ל-testing כיחידה טהורה
+/// כדי שניתן יהיה לוודא שהטרנספורמציות שמופעלות מ-onTap callbacks ב-UI
+/// אינן משנות שדות שלא היו אמורות לשנות.
+@immutable
+@visibleForTesting
+class CommentatorsNavSelection {
+  final TocEntry? selectedChapter;
+  final int selectedVerseIdx;
+  final TocEntry? navExpandedChapter;
+
+  const CommentatorsNavSelection({
+    this.selectedChapter,
+    this.selectedVerseIdx = _kAllChapter,
+    this.navExpandedChapter,
+  });
+
+  CommentatorsNavSelection copyWith({
+    Object? selectedChapter = _sentinel,
+    int? selectedVerseIdx,
+    Object? navExpandedChapter = _sentinel,
+  }) {
+    return CommentatorsNavSelection(
+      selectedChapter: identical(selectedChapter, _sentinel)
+          ? this.selectedChapter
+          : selectedChapter as TocEntry?,
+      selectedVerseIdx: selectedVerseIdx ?? this.selectedVerseIdx,
+      navExpandedChapter: identical(navExpandedChapter, _sentinel)
+          ? this.navExpandedChapter
+          : navExpandedChapter as TocEntry?,
+    );
+  }
+
+  static const Object _sentinel = Object();
+}
+
+/// טרנספורמציה ללחיצה על גוף שורת פרק (האזור הראשי, לא חץ הכיווץ).
+/// אם הפרק כבר נבחר — no-op (מונע אובדן בחירה ע"י לחיצה כפולה).
+/// אחרת בוחר את הפרק, מאפס את האינדקס לפרק שלם ומרחיב בניווט.
+@visibleForTesting
+CommentatorsNavSelection reduceChapterBodyTap(
+  CommentatorsNavSelection state,
+  TocEntry chapter,
+) {
+  if (state.selectedChapter == chapter) return state;
+  return CommentatorsNavSelection(
+    selectedChapter: chapter,
+    selectedVerseIdx: _kAllChapter,
+    navExpandedChapter: chapter,
+  );
+}
+
+/// טרנספורמציה ללחיצה על חץ הכיווץ/פתיחה של פרק.
+/// אסור לה לגעת ב-[CommentatorsNavSelection.selectedChapter] או
+/// ב-[CommentatorsNavSelection.selectedVerseIdx] — אחרת חוזרת הרגרסיה
+/// שבה כיווץ הניווט גרם לאיבוד בחירת המפרשים ולהודעת 'לא נמצאו מפרשים'.
+@visibleForTesting
+CommentatorsNavSelection reduceChevronTap(
+  CommentatorsNavSelection state,
+  TocEntry chapter,
+) {
+  return state.copyWith(
+    navExpandedChapter: state.navExpandedChapter == chapter ? null : chapter,
+  );
+}
+
+/// טרנספורמציה ללחיצה על תת-פריט בפרק כלשהו (יכול להיות שונה מהפרק הנבחר
+/// אם המשתמש פתח פרק אחר בניווט). הפרק והאינדקס הנבחרים מתעדכנים לפי הקלט.
+@visibleForTesting
+CommentatorsNavSelection reduceSubItemTap(
+  CommentatorsNavSelection state,
+  TocEntry chapter,
+  int verseIdx,
+) {
+  return CommentatorsNavSelection(
+    selectedChapter: chapter,
+    selectedVerseIdx: verseIdx,
+    navExpandedChapter: chapter,
+  );
+}
+
 class CommentatorsTabScreen extends StatefulWidget {
   final CommentatorsTab tab;
   final Function(OpenedTab) openBookCallback;
@@ -62,6 +142,26 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     with TickerProviderStateMixin {
   TocEntry? _selectedChapter;
   int _selectedVerseIdx = _kAllChapter;
+  // הפרק שתתי-הפריטים שלו פרושים בניווט. עצמאי מ-_selectedChapter כדי
+  // שניתן יהיה לעיין בניווט בפרק אחר מבלי לבטל את בחירת המפרשים הנוכחית.
+  TocEntry? _navExpandedChapter;
+
+  @visibleForTesting
+  CommentatorsNavSelection get debugNavSelection => CommentatorsNavSelection(
+        selectedChapter: _selectedChapter,
+        selectedVerseIdx: _selectedVerseIdx,
+        navExpandedChapter: _navExpandedChapter,
+      );
+
+  /// מחיל מצב חדש שחושב ע"י אחד הרדוסרים הטהורים (ראה [reduceChevronTap]
+  /// וחבריו). מבטיח שכל הנתיבים שמשנים את מצב הניווט עוברים דרך אותו צינור.
+  void _applyNavSelection(CommentatorsNavSelection next) {
+    setState(() {
+      _selectedChapter = next.selectedChapter;
+      _selectedVerseIdx = next.selectedVerseIdx;
+      _navExpandedChapter = next.navExpandedChapter;
+    });
+  }
 
   final _commentaryKey = GlobalKey<CommentaryListBaseState>();
   // מצב פתיחה/כיווץ של כל המפרשים, מסונכרן עם CommentaryListBase
@@ -283,11 +383,14 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   }
 
   void _onChapterSelected(TocEntry ch, List<TocEntry> chapters) {
-    setState(() {
-      _selectedChapter = ch;
-      _selectedVerseIdx = _kAllChapter;
-    });
-    // טוען links לכל הפרק
+    _applyNavSelection(reduceSubItemTap(debugNavSelection, ch, _kAllChapter));
+    _loadLinksForChapter(ch, chapters);
+  }
+
+  /// טעינת כל ה-links של הפרק (ללא שינוי state). מופרד מ-[_onChapterSelected]
+  /// כדי שתת-פריט "כל הפרק" יוכל להפעיל את עדכון ה-state ע"י [reduceSubItemTap]
+  /// ואז לטעון את ה-links בלי setState כפול.
+  void _loadLinksForChapter(TocEntry ch, List<TocEntry> chapters) {
     final ci = chapters.indexOf(ch);
     final int endIdx;
     if (ci + 1 < chapters.length) {
@@ -559,27 +662,15 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   }
 
   void _selectVerseAndLoad(int verseIdx, List<TocEntry> chapters) {
-    setState(() => _selectedVerseIdx = verseIdx);
-    if (verseIdx == _kAllChapter) {
-      _onChapterSelected(_selectedChapter!, chapters);
-    } else if (_selectedChapter != null &&
-        verseIdx < _selectedChapter!.children.length) {
-      final verse = _selectedChapter!.children[verseIdx];
-      final int endIdx = (verseIdx + 1 < _selectedChapter!.children.length)
-          ? _selectedChapter!.children[verseIdx + 1].index - 1
-          : verse.index + 50;
-      final count = (endIdx - verse.index + 1).clamp(1, 200);
-      _triggerLinkLoad(List.generate(count, (j) => verse.index + j));
-    }
+    final chapter = _selectedChapter;
+    if (chapter == null) return;
+    _selectVerseInChapter(verseIdx, chapter, chapters);
   }
 
   void _selectParaAndLoad(int paraIdx, List<TocEntry> chapters) {
-    setState(() => _selectedVerseIdx = paraIdx);
-    if (paraIdx == _kAllChapter) {
-      _onChapterSelected(_selectedChapter!, chapters);
-    } else if (_selectedChapter != null) {
-      _triggerLinkLoad([_selectedChapter!.index + paraIdx]);
-    }
+    final chapter = _selectedChapter;
+    if (chapter == null) return;
+    _selectParaInChapter(paraIdx, chapter, chapters);
   }
 
   // ── ניווט בין פרקים ────────────────────────────────────────────────────────
@@ -1272,68 +1363,87 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                   if (item.isChapter) {
                     final ch = item.chapter!;
                     final isSelected = ch == _selectedChapter;
+                    final isExpandedInNav = ch == _navExpandedChapter;
 
-                    return InkWell(
-                      onTap: () {
-                        if (isSelected) {
-                          setState(() => _selectedChapter = null);
-                        } else {
-                          setState(() {
-                            _selectedChapter = ch;
-                            _selectedVerseIdx = _kAllChapter;
-                          });
-                          _onChapterSelected(ch, chapters);
-                        }
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppSurfaces.selectedItem(colorScheme)
-                              : null,
-                          border: Border(
-                            bottom: BorderSide(
-                              color: Theme.of(context).dividerColor,
-                              width: 0.5,
-                            ),
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppSurfaces.selectedItem(colorScheme)
+                            : null,
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Theme.of(context).dividerColor,
+                            width: 0.5,
                           ),
                         ),
-                        padding: const EdgeInsets.only(
-                            right: 16, left: 8, top: 12, bottom: 12),
-                        child: Row(
-                          children: [
-                            Icon(
-                              FluentIcons.book_24_regular,
-                              color: colorScheme.primary,
+                      ),
+                      child: Row(
+                        children: [
+                          // אזור לחיצה ראשי — בחירת הפרק לטעינת מפרשים.
+                          Expanded(
+                            child: InkWell(
+                              onTap: () {
+                                // no-op כשהפרק כבר נבחר — מונע טעינה כפולה
+                                // של links. _onChapterSelected יחיל את ה-state
+                                // הסופי דרך הרדוסר reduceSubItemTap.
+                                final current = debugNavSelection;
+                                if (identical(
+                                  reduceChapterBodyTap(current, ch),
+                                  current,
+                                )) {
+                                  return;
+                                }
+                                _onChapterSelected(ch, chapters);
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                    right: 16, top: 12, bottom: 12),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      FluentIcons.book_24_regular,
+                                      color: colorScheme.primary,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        ch.text,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w600
+                                              : FontWeight.normal,
+                                          color: colorScheme.primary,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 2,
+                                        textDirection: TextDirection.rtl,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          // חץ הכיווץ/פתיחה — אזור לחיצה נפרד שמשנה רק את
+                          // תצוגת תתי-הפריטים בניווט, ללא ביטול בחירת הפרק.
+                          IconButton(
+                            onPressed: () => _applyNavSelection(
+                              reduceChevronTap(debugNavSelection, ch),
+                            ),
+                            icon: Icon(
+                              isExpandedInNav
+                                  ? FluentIcons.chevron_up_24_regular
+                                  : FluentIcons.chevron_down_24_regular,
+                              color: colorScheme.onSurfaceVariant,
                               size: 20,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                ch.text,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
-                                  color: colorScheme.primary,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 2,
-                                textDirection: TextDirection.rtl,
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(left: 8),
-                              child: Icon(
-                                isSelected
-                                    ? FluentIcons.chevron_up_24_regular
-                                    : FluentIcons.chevron_down_24_regular,
-                                color: colorScheme.onSurfaceVariant,
-                                size: 20,
-                              ),
-                            ),
-                          ],
-                        ),
+                            tooltip: isExpandedInNav
+                                ? 'כווץ תתי-פריטים'
+                                : 'הצג תתי-פריטים',
+                          ),
+                        ],
                       ),
                     );
                   }
@@ -1449,19 +1559,22 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     final items = <_TocListItem>[];
     for (final chapter in visibleChapters) {
       items.add(_TocListItem.chapter(chapter));
-      if (chapter != _selectedChapter) {
+      if (chapter != _navExpandedChapter) {
         continue;
       }
+      // הדגשת תת-פריט תופיע רק כאשר הפרק המורחב הוא גם הפרק הנבחר —
+      // אחרת אנו רק מעיינים בניווט ואין כאן בחירה אקטיבית.
+      final isSelectionContext = chapter == _selectedChapter;
 
       items.add(
         _TocListItem.subItem(
           text: allUnitLabel(chapter.text),
-          isSelected: _selectedVerseIdx == _kAllChapter,
+          isSelected:
+              isSelectionContext && _selectedVerseIdx == _kAllChapter,
           isAllChapter: true,
-          onTap: () {
-            setState(() => _selectedVerseIdx = _kAllChapter);
-            _onChapterSelected(chapter, allChapters);
-          },
+          // _onChapterSelected מעדכן את ה-state במלואו דרך reduceSubItemTap
+          // עם verseIdx=_kAllChapter — אין צורך ב-setState נוסף כאן.
+          onTap: () => _onChapterSelected(chapter, allChapters),
         ),
       );
 
@@ -1473,8 +1586,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           items.add(
             _TocListItem.subItem(
               text: preview,
-              isSelected: _selectedVerseIdx == i,
-              onTap: () => _selectVerseAndLoad(i, allChapters),
+              isSelected: isSelectionContext && _selectedVerseIdx == i,
+              onTap: () => _selectVerseInChapter(i, chapter, allChapters),
             ),
           );
         }
@@ -1496,13 +1609,48 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         items.add(
           _TocListItem.subItem(
             text: preview,
-            isSelected: _selectedVerseIdx == i,
-            onTap: () => _selectParaAndLoad(i, allChapters),
+            isSelected: isSelectionContext && _selectedVerseIdx == i,
+            onTap: () => _selectParaInChapter(i, chapter, allChapters),
           ),
         );
       }
     }
     return items;
+  }
+
+  // הטיפול בלחיצה על תת-פריט (פסוק/פסקה) של פרק כלשהו. מעדכן את כל מצב
+  // הניווט באטומיות ע"י [reduceSubItemTap] (setState בודד), ואז טוען את ה-links
+  // לטווח הספציפי של הפסוק/פסקה הנלחץ. הפרק יכול להיות שונה מהפרק הנבחר כרגע
+  // (תרחיש: המשתמש פתח פרק אחר בניווט ולחץ על פסוק בו).
+  void _selectVerseInChapter(
+    int verseIdx,
+    TocEntry chapter,
+    List<TocEntry> chapters,
+  ) {
+    _applyNavSelection(reduceSubItemTap(debugNavSelection, chapter, verseIdx));
+    if (verseIdx == _kAllChapter) {
+      _loadLinksForChapter(chapter, chapters);
+    } else if (verseIdx < chapter.children.length) {
+      final verse = chapter.children[verseIdx];
+      final int endIdx = (verseIdx + 1 < chapter.children.length)
+          ? chapter.children[verseIdx + 1].index - 1
+          : verse.index + 50;
+      final count = (endIdx - verse.index + 1).clamp(1, 200);
+      _triggerLinkLoad(List.generate(count, (j) => verse.index + j));
+    }
+  }
+
+  void _selectParaInChapter(
+    int paraIdx,
+    TocEntry chapter,
+    List<TocEntry> chapters,
+  ) {
+    _applyNavSelection(reduceSubItemTap(debugNavSelection, chapter, paraIdx));
+    if (paraIdx == _kAllChapter) {
+      _loadLinksForChapter(chapter, chapters);
+    } else {
+      _triggerLinkLoad([chapter.index + paraIdx]);
+    }
   }
 
   Widget _buildSubItem(

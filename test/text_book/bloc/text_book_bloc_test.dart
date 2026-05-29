@@ -114,6 +114,92 @@ void main() {
       expect(lines[13], 'שורה 13');
     });
 
+    test('טווחי תוכן טעונים נשמרים כרשימת טווחים ממוזגת ללא הנחת רציפות', () {
+      final merged = TextBookBloc.mergeLoadedContentRangesForTesting(
+        const [
+          (startLine: 0, endLine: 100),
+          (startLine: 500, endLine: 700),
+        ],
+        startLine: 101,
+        endLine: 180,
+      );
+
+      expect(merged, const [
+        (startLine: 0, endLine: 180),
+        (startLine: 500, endLine: 700),
+      ]);
+    });
+
+    test('בדיקת sufficiency לא מחליקה על חור באמצע הטווח', () {
+      const loadedRanges = [
+        (startLine: 0, endLine: 180),
+        (startLine: 500, endLine: 700),
+      ];
+
+      expect(
+        TextBookBloc.isContentWindowSufficientForTesting(
+          loadedRanges: loadedRanges,
+          startLine: 300,
+          endLine: 340,
+          reloadThresholdLines: 60,
+        ),
+        isFalse,
+      );
+
+      expect(
+        TextBookBloc.isContentWindowSufficientForTesting(
+          loadedRanges: loadedRanges,
+          startLine: 560,
+          endLine: 600,
+          reloadThresholdLines: 40,
+        ),
+        isTrue,
+      );
+    });
+
+    test('warming בוחר קודם הרחבה קדימה סביב ה-viewport', () {
+      expect(
+        TextBookBloc.nextWarmContentStartNearViewportForTesting(
+          loadedRanges: const [
+            (startLine: 4920, endLine: 5180),
+          ],
+          totalLines: 12000,
+          visibleIndices: const [5000, 5001, 5002],
+          chunkLines: 640,
+        ),
+        5181,
+      );
+    });
+
+    test('warming חוזר אחורה רק אחרי שההמשך קדימה כבר כוסה', () {
+      expect(
+        TextBookBloc.nextWarmContentStartNearViewportForTesting(
+          loadedRanges: const [
+            (startLine: 4920, endLine: 11999),
+          ],
+          totalLines: 12000,
+          visibleIndices: const [5000, 5001, 5002],
+          chunkLines: 640,
+        ),
+        4280,
+      );
+    });
+
+    test('warming נופל חזרה לחור הראשון אם ה-viewport לא חופף לטווח טעון', () {
+      expect(
+        TextBookBloc.nextWarmContentStartNearViewportForTesting(
+          loadedRanges: const [
+            (startLine: 1000, endLine: 1200),
+            (startLine: 5000, endLine: 5200),
+          ],
+          totalLines: 8000,
+          visibleIndices: const [3000, 3001],
+          chunkLines: 640,
+        ),
+        0,
+      );
+    });
+
     test('LoadContent משתמש ב-categoryId וב-fileType במסלול quick preview',
         () async {
       final repository = _EmptyContentTextBookRepository();
