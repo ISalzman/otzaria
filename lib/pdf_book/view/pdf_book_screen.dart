@@ -18,6 +18,7 @@ import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart' as pdf_events;
 import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
 import 'package:otzaria/pdf_book/utils/pdf_spread_layout.dart';
+import 'package:otzaria/pdf_book/utils/trackpad_axis_lock.dart';
 import 'package:otzaria/pdf_book/view/pdf_page_number_display.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentary_panel.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
@@ -242,6 +243,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   // distinguish a held key (drain queue on release) from a short tap (let
   // its queued turn play out).
   final Set<LogicalKeyboardKey> _heldArrowKeys = {};
+
+  // נעילת ציר לגלילת לוח מגע: כשמתחילים גלילה אנכית עם שתי אצבעות,
+  // הציר נשאר אנכי עד שמרימים את האצבעות (מזוהה לפי הפסקה בזרם
+  // האירועים). זה מונע "סחיפה" אופקית של הצופה תוך כדי גלילה רגילה -
+  // אותה התנהגות שיש בכל קורא PDF.
+  final TrackpadAxisLock _trackpadAxisLock = TrackpadAxisLock();
 
   // Pre-rendered spread cache: lets the page-turn animation start instantly
   // because the target spread snapshot is already in memory at click time.
@@ -1086,7 +1093,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             child: Listener(
               behavior: HitTestBehavior.translucent,
               onPointerSignal: (event) {
-                widget.tab.pdfViewerController.handlePointerSignalEvent(event);
+                final adjusted = _trackpadAxisLock.apply(
+                  event,
+                  isControlPressed: HardwareKeyboard.instance.isControlPressed,
+                );
+                widget.tab.pdfViewerController
+                    .handlePointerSignalEvent(adjusted);
                 _scheduleReaderFocusAndHidePaneIfNeeded();
               },
               child: const SizedBox.expand(),
@@ -2645,18 +2657,33 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final wideScreen = MediaQuery.of(context).size.width >= 600;
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
+        // ב-Mac המוסכמה היא Cmd (Meta); בשאר הפלטפורמות Ctrl. שתי הגרסאות
+        // רשומות יחד כדי שאותו handler יופעל ללא בדיקה דינמית של פלטפורמה.
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyF):
+            _ensureSearchTabIsActive,
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyF):
             _ensureSearchTabIsActive,
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.equal):
             _zoomIn,
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.equal):
+            _zoomIn,
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.add):
+            _zoomIn,
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.add):
             _zoomIn,
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.numpadAdd):
             _zoomIn,
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.numpadAdd):
+            _zoomIn,
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.minus):
+            _zoomOut,
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.minus):
             _zoomOut,
         LogicalKeySet(
                 LogicalKeyboardKey.control, LogicalKeyboardKey.numpadSubtract):
+            _zoomOut,
+        LogicalKeySet(
+                LogicalKeyboardKey.meta, LogicalKeyboardKey.numpadSubtract):
             _zoomOut,
       },
       child: Scaffold(

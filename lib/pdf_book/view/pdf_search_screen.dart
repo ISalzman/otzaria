@@ -6,7 +6,6 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
-import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/book_facet.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
@@ -496,12 +495,20 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
       hintText: 'חפש כאן..',
       onAdvancedSearch: () async {
         final pdfBookBloc = context.read<PdfBookBloc>();
-        final tempTab = SearchingTab('חיפוש', widget.searchController.text);
+        // ראה הערה מקבילה ב-text_book_search_screen.dart: initialConfiguration
+        // נמנעת מ-race condition של events ו-dispose נדחה ל-frame הבא כדי
+        // למנוע FocusNode disposed בזמן rebuild של ה-dialog.
+        final tempTab = SearchingTab(
+          'חיפוש',
+          widget.searchController.text,
+          initialConfiguration: SearchConfiguration(
+            searchMode: _searchMode,
+            distance: _searchDistance,
+          ),
+        );
         tempTab.searchOptions.addAll(_searchOptions);
         tempTab.alternativeWords.addAll(_alternativeWords);
         tempTab.spacingValues.addAll(_spacingValues);
-        tempTab.searchBloc.add(SetSearchMode(_searchMode));
-        tempTab.searchBloc.add(UpdateDistance(_searchDistance));
 
         final result = await showDialog<SearchDialogResult>(
           context: context,
@@ -512,7 +519,11 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
           ),
         );
 
-        tempTab.dispose();
+        // ראה הערה ב-text_book_search_screen: דחיה של 500ms מאפשרת ל-dialog
+        // fade-out animation להסתיים לפני שחרור ה-FocusNode.
+        Future.delayed(const Duration(milliseconds: 500), () {
+          tempTab.dispose();
+        });
 
         if (!mounted || result == null) {
           return;

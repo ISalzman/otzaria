@@ -48,14 +48,15 @@ class LinkDao {
         .select(_queries['selectCommentatorsByBook']!, [bookId]).toMapList();
   }
 
-  /// מחזיר רשימת מפרשים זמינים עבור שורת מקור, כולל `targetLineIndex` —
-  /// ה-`lineIndex` הראשון בספר המפרש שמקושר לאותה שורה. זה מאפשר ל-FindRef
-  /// לפתוח את ספר המפרש ישירות במיקום המקביל, ללא שאילתה נפרדת בעת הקליק.
-  Future<List<Map<String, dynamic>>> selectCommentatorsBySourceLine(
-      int sourceLineId) async {
+  /// מחזיר את כל המפרשים על טווח שורות המקור [`startLineIndex`, `endLineIndex`)
+  /// בספר [bookId], כולל `targetLineIndex` — ה-`lineIndex` הראשון בספר המפרש
+  /// על פני הטווח. מאפשר ל-FindRef לאסוף את כל מפרשי הקטע (כותרת עד הכותרת
+  /// הבאה) ולפתוח כל מפרש במיקום המקביל, ללא שאילתה נפרדת בעת הקליק.
+  Future<List<Map<String, dynamic>>> selectCommentatorsByLineRange(
+      int bookId, int startLineIndex, int endLineIndex) async {
     final db = await database;
-    return db.select(_queries['selectCommentatorsBySourceLine']!,
-        [sourceLineId]).toMapList();
+    return db.select(_queries['selectCommentatorsByLineRange']!,
+        [bookId, startLineIndex, endLineIndex]).toMapList();
   }
 
   Future<int> insertLink(Link link, int connectionTypeId) async {

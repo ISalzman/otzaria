@@ -1,8 +1,10 @@
-﻿; מתקין שקט עבור אוצריא.
-; המשתמש רק מפעיל את ה-EXE — הוא משגר את עצמו מחדש ב-/VERYSILENT ויוצא בשקט.
-; אם התהליך רץ עם הרשאות מנהל (Run as administrator) — התקנה לכל המשתמשים;
-; אחרת — התקנה למשתמש הנוכחי בלבד (ללא UAC, כי PrivilegesRequired=lowest).
-; ההתקנה משמרת את ההגדרות הקודמות, וסיומה משיק את אוצריא אוטומטית.
+; מתקין FULL שקט עבור אוצריא.
+; משלב את הגרסה השקטה (שיגור-מחדש ב-/VERYSILENT, שימור הגדרות) עם
+; תכולת ה-FULL — חילוץ ספריית seforim.db + קטלוג + תלמוד בבלי, והתקנה
+; שקטה של WebView2 Runtime אם הוא חסר. אין דפי אשף, אין דיאלוגים.
+; אם רץ עם הרשאות מנהל — התקנה לכל המשתמשים; אחרת — למשתמש הנוכחי בלבד.
+; הגדרות המשתמש נשמרות (הערות, בוקמרקים, היסטוריה). תיקיית הספרים
+; מוחלפת בחבילה החדשה — זהה ל-FULL הרגיל. סיום ההתקנה משיק את אוצריא.
 
 #define MyAppName "אוצריא"
 #define MyAppVersion "0.9.93"
@@ -28,7 +30,7 @@ DefaultDirName={code:GetDefaultInstallDir}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=.\
-OutputBaseFilename=otzaria-{#MyAppVersion}-windows-silent
+OutputBaseFilename=otzaria-{#MyAppVersion}-windows-full-silent
 SetupIconFile=white_sketch128x128.ico
 Compression=lzma
 SolidCompression=yes
@@ -46,6 +48,8 @@ ChangesEnvironment=yes
 [InstallDelete]
 ; ניקוי מסד הנתונים הישן של Isar שהוחלף על ידי hive_ce — מחיקה מכוונת בעת שדרוג.
 Type: filesandordirs; Name: "{app}\default.isar";
+; ניקוי תיקיית הספרים הישנה לפני פריסת מסד הנתונים החדש (זהה ל-FULL הרגיל)
+Type: filesandordirs; Name: "{code:GetSelectedBooksPath}"
 
 [Dirs]
 Name: "{code:GetDataDir}"; Permissions: users-modify
@@ -61,10 +65,12 @@ Root: HKA; Subkey: "Software\Classes\otzaria"; ValueType: string; ValueName: "UR
 Root: HKA; Subkey: "Software\Classes\otzaria\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName}"; Flags: uninsdeletekeyifempty
 Root: HKA; Subkey: "Software\Classes\otzaria\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekeyifempty
 ; הוספת {app} ל-PATH של המשתמש — אוטומטית במתקין השקט (אין tasks אופציונליים).
-; ה-Check מונע כפילויות בהתקנה חוזרת; ההסרה מהPATH ב-CurUninstallStepChanged.
 Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Flags: preservestringtype; Check: NeedsAddPath(ExpandConstant('{app}'))
 
 [Run]
+; התקנה שקטה של WebView2 Runtime אם הוא חסר. waituntilterminated כדי
+; לוודא שאוצריא לא מופעלת לפני שה-runtime מוכן.
+Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "מתקין Microsoft WebView2 Runtime..."; Flags: waituntilterminated; Check: ShouldInstallWV2
 ; הפעלת התוכנה בסוף ההתקנה — גם במצב שקט (אין skipifsilent).
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait postinstall
 
@@ -72,8 +78,24 @@ Filename: "{app}\{#MyAppExeName}"; Flags: nowait postinstall
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Files]
-Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; צילומי מסך להצגה בדף ההתקנה (במקרה שהמתקין מציג ממשק — ראה InitializeSlideshow)
+; Copy DLL files without compression to prevent corruption
+Source: "..\build\windows\x64\runner\Release\*.dll"; DestDir: "{app}"; Flags: ignoreversion nocompression
+; Copy all other app files
+Source: "..\build\windows\x64\runner\Release\*"; \
+  Excludes: "*.dll"; \
+    DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Compressed library assets + extraction tools for post-install extraction
+Source: "library_db\seforim.db.zst"; DestDir: "{app}\_staging"; Flags: ignoreversion nocompression
+Source: "library_db\otzar-HB_catalog.db.zst"; DestDir: "{app}\_staging"; Flags: ignoreversion nocompression
+Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{app}\_staging"; Flags: ignoreversion nocompression
+Source: "zstd.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "7za.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+; MicrosoftEdgeWebview2Setup.exe — bootstrapper קטן (~2MB) שמוריד ומתקין WebView2
+Source: "MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallWV2
+
+; צילומי מסך להצגה בדף ההתקנה (כאשר השיגור מחדש נכשל — fallback בלבד)
 Source: "feature1.bmp"; Flags: dontcopy
 Source: "feature2.bmp"; Flags: dontcopy
 Source: "feature3.bmp"; Flags: dontcopy
@@ -88,6 +110,10 @@ var
   SlideshowTimerId: LongWord;
   SlideshowTimerCallback: LongWord;
   SlideshowIndex: Integer;
+
+  InstallWV2: Boolean;
+  SelectedBooksPath: String;
+
   // אם המשתמש בחר במהלך ההסרה למחוק גם את כל הנתונים והספרים, לא רק את
   // קבצי האפליקציה. ברירת המחדל False — נשמר כדי לא לאבד נתונים בעדכון
   // שקט (Inno Setup מריץ את ה-uninstaller הישן עם /SILENT).
@@ -130,8 +156,6 @@ end;
 
 // מזהה נתיבים מערכתיים שמחייבים UAC לשדרוג. זה נותן לנו לבקש הרשאות
 // מראש עבור התקנות ישנות שנרשמו ב-HKCU אבל הותקנו בפועל תחת Program Files.
-// הסיווג הוא לפי מיקום ידוע, לא לפי ניסיון כתיבה, כדי להימנע מ-false-positive
-// בגלל AV / מנעולי קבצים / דיסק מלא.
 function PathLikelyRequiresAdmin(PathDir: String): Boolean;
 begin
   Result :=
@@ -195,9 +219,6 @@ begin
     exit;
   end;
 
-  // {autopf} בריצת non-admin מתפענח ל-%LocalAppData%\Programs (נתיב משתמש).
-  // בריצת admin זה Program Files, אבל אז IsAdmin=True ב-InitializeSetup
-  // ולא נכנסים לענף ההסלמה ממילא — כך ש-RequiresAdmin נשאר False בבטחה.
   LegacyDir := ExpandConstant('{autopf}\אוצריא');
   if DirExists(LegacyDir) then
   begin
@@ -231,6 +252,254 @@ begin
   else
     Result := ExpandConstant('{userappdata}\otzaria');
 end;
+
+function GetSelectedBooksPath(Param: String): String;
+begin
+  if SelectedBooksPath <> '' then
+    Result := SelectedBooksPath
+  else
+    Result := GetDataDir('') + '\books';
+end;
+
+// ─── בדיקת WebView2 ────────────────────────────────────────────────────────
+
+function GetWebView2Version: String;
+var
+  Version: String;
+begin
+  if RegQueryStringValue(HKLM64,
+      'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      'pv', Version) then
+  begin
+    Result := Version;
+    exit;
+  end;
+  if RegQueryStringValue(HKCU,
+      'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      'pv', Version) then
+    Result := Version
+  else
+    Result := '';
+end;
+
+function WebView2NeedsInstall: Boolean;
+begin
+  Result := GetWebView2Version = '';
+end;
+
+function ShouldInstallWV2: Boolean;
+begin
+  Result := InstallWV2;
+end;
+
+// ─── כתיבת נתיב הספרים ל-shared_preferences.json ───────────────────────────
+
+function EscapeJsonString(const Value: String): String;
+var
+  i: Integer;
+begin
+  Result := '';
+  for i := 1 to Length(Value) do
+  begin
+    if Value[i] = '\' then
+      Result := Result + '\\'
+    else if Value[i] = '"' then
+      Result := Result + '\"'
+    else
+      Result := Result + Value[i];
+  end;
+end;
+
+function LoadTextFile(const FileName: String): String;
+var
+  Lines: TArrayOfString;
+  i: Integer;
+begin
+  Result := '';
+  if not LoadStringsFromFile(FileName, Lines) then
+    exit;
+
+  for i := 0 to GetArrayLength(Lines) - 1 do
+  begin
+    if i > 0 then
+      Result := Result + #13#10;
+    Result := Result + Lines[i];
+  end;
+end;
+
+function FindJsonStringEnd(const Text: String; StartPos: Integer): Integer;
+begin
+  Result := StartPos;
+  while Result <= Length(Text) do
+  begin
+    if (Text[Result] = '"') and ((Result = StartPos) or (Text[Result - 1] <> '\')) then
+      exit;
+    Result := Result + 1;
+  end;
+
+  Result := 0;
+end;
+
+procedure WriteLibraryPathToPrefs(const LibraryPath: String);
+var
+  PrefsDir, PrefsFile, JsonContent, NewEntry: String;
+  SharedPrefsKey, LegacyPrefsKey: String;
+  KeyPos, ValueStart, ValueEnd, PairEnd, LastBrace, ExistingLength: Integer;
+begin
+  SharedPrefsKey := '"flutter.key-library-path":';
+  LegacyPrefsKey := '"key-library-path":';
+  PrefsDir := ExpandConstant('{userappdata}\otzaria');
+  PrefsFile := PrefsDir + '\shared_preferences.json';
+
+  ForceDirectories(PrefsDir);
+
+  NewEntry := SharedPrefsKey + '"' + EscapeJsonString(LibraryPath) + '"';
+
+  if FileExists(PrefsFile) then
+    JsonContent := Trim(LoadTextFile(PrefsFile))
+  else
+    JsonContent := '';
+
+  if JsonContent = '' then
+  begin
+    SaveStringToFile(PrefsFile, '{' + NewEntry + '}', False);
+    exit;
+  end;
+
+  KeyPos := Pos(SharedPrefsKey, JsonContent);
+  ExistingLength := Length(SharedPrefsKey);
+  if KeyPos = 0 then
+  begin
+    KeyPos := Pos(LegacyPrefsKey, JsonContent);
+    ExistingLength := Length(LegacyPrefsKey);
+  end;
+
+  if KeyPos > 0 then
+  begin
+    ValueStart := KeyPos + ExistingLength;
+    while (ValueStart <= Length(JsonContent)) and (JsonContent[ValueStart] = ' ') do
+      ValueStart := ValueStart + 1;
+
+    if (ValueStart <= Length(JsonContent)) and (JsonContent[ValueStart] = '"') then
+    begin
+      ValueEnd := FindJsonStringEnd(JsonContent, ValueStart + 1);
+      if ValueEnd > 0 then
+      begin
+        PairEnd := ValueEnd + 1;
+        while (PairEnd <= Length(JsonContent)) and (JsonContent[PairEnd] = ' ') do
+          PairEnd := PairEnd + 1;
+        JsonContent :=
+          Copy(JsonContent, 1, KeyPos - 1) +
+          NewEntry +
+          Copy(JsonContent, PairEnd, Length(JsonContent) - PairEnd + 1);
+        SaveStringToFile(PrefsFile, JsonContent, False);
+        exit;
+      end;
+    end;
+  end;
+
+  LastBrace := Length(JsonContent);
+  while (LastBrace > 0) and (JsonContent[LastBrace] <> '}') do
+    LastBrace := LastBrace - 1;
+
+  if (LastBrace = 0) or (Trim(JsonContent) = '{}') then
+    JsonContent := '{' + NewEntry + '}'
+  else
+  begin
+    PairEnd := LastBrace - 1;
+    while (PairEnd > 0) and (JsonContent[PairEnd] <= ' ') do
+      PairEnd := PairEnd - 1;
+
+    if (PairEnd > 0) and (JsonContent[PairEnd] <> '{') and (JsonContent[PairEnd] <> ',') then
+      JsonContent :=
+        Copy(JsonContent, 1, LastBrace - 1) + ',' + NewEntry +
+        Copy(JsonContent, LastBrace, Length(JsonContent) - LastBrace + 1)
+    else
+      JsonContent :=
+        Copy(JsonContent, 1, LastBrace - 1) + NewEntry +
+        Copy(JsonContent, LastBrace, Length(JsonContent) - LastBrace + 1);
+  end;
+
+  SaveStringToFile(PrefsFile, JsonContent, False);
+end;
+
+// ─── חילוץ הספריה המצורפת ──────────────────────────────────────────────────
+
+procedure ExtractBundledDatabase(const ArchiveName, DatabaseName: String);
+var
+  ArchivePath, DatabasePath, ZstdPath, Params: String;
+  ResultCode: Integer;
+begin
+  ArchivePath := ExpandConstant('{app}\_staging\' + ArchiveName);
+  if not FileExists(ArchivePath) then
+  begin
+    Log('Bundled database archive not found, skipping: ' + ArchivePath);
+    exit;
+  end;
+
+  DatabasePath := SelectedBooksPath + '\' + DatabaseName;
+  ZstdPath := ExpandConstant('{app}\zstd.exe');
+
+  ForceDirectories(ExtractFileDir(DatabasePath));
+
+  Log('Extracting bundled database from ' + ArchivePath);
+  Params := '-d -f -T0 --long=31 "' + ArchivePath + '" -o "' + DatabasePath + '"';
+
+  if (not Exec(ZstdPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  begin
+    // במצב שקט אין מי שיראה את MsgBox — מתעדים ב-Log ויוצאים בכשל.
+    Log('Database extraction failed with code ' + IntToStr(ResultCode) + ': ' + ArchivePath);
+    Abort;
+  end;
+
+  DeleteFile(ArchivePath);
+end;
+
+procedure ExtractBundledTarArchive(const ArchiveName, TargetDirName: String);
+var
+  ArchivePath, TarPath, ParentDir, TargetDir, ZstdPath, SevenZipPath, Params: String;
+  ResultCode: Integer;
+begin
+  ArchivePath := ExpandConstant('{app}\_staging\' + ArchiveName);
+  if not FileExists(ArchivePath) then
+  begin
+    Log('Bundled archive not found, skipping: ' + ArchivePath);
+    exit;
+  end;
+
+  ParentDir := SelectedBooksPath;
+  TarPath := ParentDir + '\' + ChangeFileExt(ArchiveName, '');
+  TargetDir := SelectedBooksPath + '\' + TargetDirName;
+  ZstdPath := ExpandConstant('{app}\zstd.exe');
+  SevenZipPath := ExpandConstant('{app}\7za.exe');
+
+  if DirExists(TargetDir) then
+  begin
+    DelTree(TargetDir, True, True, True);
+  end;
+
+  Log('Extracting bundled tar archive from ' + ArchivePath);
+  Params := '-d -f -T0 --long=31 "' + ArchivePath + '" -o "' + TarPath + '"';
+
+  if (not Exec(ZstdPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  begin
+    Log('Tar zstd extraction failed with code ' + IntToStr(ResultCode) + ': ' + ArchivePath);
+    Abort;
+  end;
+
+  Params := 'x -y "' + TarPath + '" "-o' + ParentDir + '"';
+  if (not Exec(SevenZipPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
+     (ResultCode <> 0) then
+  begin
+    Log('7za extraction failed with code ' + IntToStr(ResultCode) + ': ' + TarPath);
+    Abort;
+  end;
+
+  DeleteFile(TarPath);
+  DeleteFile(ArchivePath);
+end;
+
+// ─── slideshow (גלוי רק אם השיגור-מחדש נכשל) ───────────────────────────────
 
 procedure OnSlideshowTimer(H: LongWord; Msg: LongWord; IdEvent: LongWord; Time: LongWord);
 var
@@ -277,6 +546,9 @@ end;
 
 procedure InitializeWizard;
 begin
+  // ערכי ברירת מחדל עבור הריצה השקטה (אין דפי אשף לקבוע אותם).
+  InstallWV2 := WebView2NeedsInstall;
+  SelectedBooksPath := GetDataDir('') + '\books';
   InitializeSlideshow;
 end;
 
@@ -306,6 +578,11 @@ var
 begin
   Result := True;
 
+  // הגדרת SelectedBooksPath כברירת מחדל כבר עכשיו, כדי ש-GetSelectedBooksPath
+  // (שמשמש ב-[InstallDelete]) יחזיר ערך תקין גם בריצה הקצרה (קוד שיגור-מחדש).
+  SelectedBooksPath := GetDataDir('') + '\books';
+  InstallWV2 := WebView2NeedsInstall;
+
   // אם המשתמש פתח את ה-EXE רגיל (לא דרך command-line שקט), משגרים את
   // עצמנו מחדש ב-/VERYSILENT. בריצה השנייה WizardSilent יהיה True
   // והקוד הזה לא ירוץ שוב.
@@ -319,8 +596,6 @@ begin
     end
     else if RequiresAdmin then
     begin
-      // ההתקנה הקודמת בנתיב הדורש הרשאות מנהל. משגרים מחדש עם 'runas'
-      // כדי לקבל UAC; cmd.exe המורם יפעיל את המתקין עם /ALLUSERS.
       PrivilegeFlag := '/ALLUSERS';
       Launched := RelaunchSetupElevated(
         '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART ' + PrivilegeFlag,
@@ -332,9 +607,6 @@ begin
         exit;
       end;
 
-      // אם גם השיגור המורם נכשל, המשתמש דחה את ה-UAC (ERROR_CANCELLED)
-      // או שהייתה שגיאת מערכת. לא נופלים ל-/CURRENTUSER, כי ההתקנה
-      // הייתה נכשלת בכתיבה לנתיב המוגן.
       MsgBox(
         'אוצריא הותקנה בעבר בנתיב הדורש הרשאות מנהל:' + #13#10 +
         PreviousDir + #13#10 + #13#10 +
@@ -355,14 +627,10 @@ begin
 
     if Launched then
     begin
-      // השיגור הצליח — יוצאים מהריצה הנוכחית בשקט (Result := False
-      // יוצא ללא הודעת ביטול), והעותק השקט ימשיך מכאן.
       Result := False;
       exit;
     end;
 
-    // ניסיון fallback ב-ShellExec — לפעמים CreateProcess נכשל בגלל
-    // אנטי-וירוס/מנעולי קובץ אבל ShellExecute (דרך ה-shell) עובר.
     Launched := ShellExec('open', ExpandConstant('{srcexe}'),
          '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART ' + PrivilegeFlag,
          '', SW_HIDE, ewNoWait, ResultCode);
@@ -373,16 +641,13 @@ begin
       exit;
     end;
 
-    // השיגור מחדש נכשל לחלוטין — אל תיצא בשקט (אחרת המשתמש מקבל
-    // no-op בלי שום פידבק). ממשיכים את ההתקנה בתהליך הנוכחי
-    // (Result נשאר True). כל עמודי האשף מנוטרלים, אז המשתמש יראה
-    // רק את חלון ההתקדמות עד לסיום — לא אידיאלי, אבל לא כשל שקט.
+    // השיגור מחדש נכשל לחלוטין — ממשיכים בתהליך הנוכחי (Result נשאר True).
+    // כל עמודי האשף מנוטרלים, אז המשתמש יראה רק את חלון ההתקדמות עד לסיום.
   end;
 end;
 
-// בודק האם הנתיב NewPath כבר נמצא ב-PATH של המשתמש. מחזיר True אם
-// יש להוסיף (לא קיים). מטפל גם בגרסה עם backslash סופי. case-insensitive
-// כי Windows מתייחס ל-PATH ככזה.
+// ─── ניהול PATH ─────────────────────────────────────────────────────────────
+
 function NeedsAddPath(NewPath: String): Boolean;
 var
   CurrentPath: String;
@@ -399,10 +664,6 @@ begin
     Result := False;
 end;
 
-// מסיר את PathToRemove מ-PATH של המשתמש (ב-uninstall). מטפל בשני
-// הוריאנטים — עם וללא backslash סופי — **בנפרד**, כדי שכפילות
-// היסטורית (גם 'C:\app' וגם 'C:\app\') תוסר במלואה. גם מסיר כל
-// מופע חוזר.
 procedure RemoveAppFromUserPath(PathToRemove: String);
 var
   CurrentPath, LowerCurrent: String;
@@ -445,26 +706,10 @@ begin
   RegWriteExpandStringValue(HKCU, 'Environment', 'Path', CurrentPath);
 end;
 
-// קריאת shared_preferences.json לקובץ טקסט אחד; משמש לחילוץ נתיב הספרים
-// המותאם אישית של המשתמש לפני שמוחקים את ספריית הנתונים.
-function UninstallReadTextFile(const FileName: String): String;
-var
-  Lines: TArrayOfString;
-  i: Integer;
-begin
-  Result := '';
-  if not LoadStringsFromFile(FileName, Lines) then
-    exit;
-  for i := 0 to GetArrayLength(Lines) - 1 do
-  begin
-    if i > 0 then
-      Result := Result + #13#10;
-    Result := Result + Lines[i];
-  end;
-end;
-
 // מחזיר את נתיב תיקיית הספרים שהמשתמש בחר (אם שונה מברירת המחדל),
 // כפי שנשמר ב-shared_preferences.json תחת המפתח flutter.key-library-path.
+// משתמש בעוזרי ה-JSON הקיימים (LoadTextFile, FindJsonStringEnd) ובפענוח
+// escapes ה-JSON בסיסי שתואם ל-EscapeJsonString.
 function GetCustomLibraryPath(): String;
 var
   PrefsFile, JsonContent, KeyStr, Value: String;
@@ -475,7 +720,7 @@ begin
   if not FileExists(PrefsFile) then
     exit;
 
-  JsonContent := UninstallReadTextFile(PrefsFile);
+  JsonContent := LoadTextFile(PrefsFile);
   if JsonContent = '' then
     exit;
 
@@ -497,14 +742,8 @@ begin
     exit;
   ValueStart := ValueStart + 1;
 
-  ValueEnd := ValueStart;
-  while ValueEnd <= Length(JsonContent) do
-  begin
-    if (JsonContent[ValueEnd] = '"') and (JsonContent[ValueEnd - 1] <> '\') then
-      Break;
-    ValueEnd := ValueEnd + 1;
-  end;
-  if ValueEnd > Length(JsonContent) then
+  ValueEnd := FindJsonStringEnd(JsonContent, ValueStart);
+  if ValueEnd <= 0 then
     exit;
 
   Value := Copy(JsonContent, ValueStart, ValueEnd - ValueStart);
@@ -621,6 +860,7 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ErrorLogPath: string;
+  ZstdPath, SevenZipPath: String;
 begin
   if CurStep = ssInstall then
   begin
@@ -633,5 +873,51 @@ begin
     ErrorLogPath := ExpandConstant('{commonappdata}\otzaria\logs\errors.txt');
     if FileExists(ErrorLogPath) then
       DeleteFile(ErrorLogPath);
+  end;
+
+  if CurStep <> ssPostInstall then
+    exit;
+
+  // ─── חילוץ הספריה המצורפת ─────────────────────────────────────────────
+  ZstdPath := ExpandConstant('{app}\zstd.exe');
+  SevenZipPath := ExpandConstant('{app}\7za.exe');
+
+  if not FileExists(ZstdPath) then
+  begin
+    Log('zstd.exe not found - cannot extract bundled library');
+    Abort;
+  end;
+
+  if not FileExists(SevenZipPath) then
+  begin
+    Log('7za.exe not found - cannot extract bundled PDF archive');
+    Abort;
+  end;
+
+  WizardForm.ProgressGauge.Style := npbstMarquee;
+
+  WizardForm.StatusLabel.Caption := 'מחלץ מסד הנתונים seforim.db...';
+  WizardForm.StatusLabel.Update;
+  ExtractBundledDatabase('seforim.db.zst', 'seforim.db');
+
+  WizardForm.StatusLabel.Caption := 'מחלץ קטלוג אוצר החכמה...';
+  WizardForm.StatusLabel.Update;
+  ExtractBundledDatabase('otzar-HB_catalog.db.zst', 'otzar-HB_catalog.db');
+
+  WizardForm.StatusLabel.Caption := 'מחלץ ספרי תלמוד בבלי...';
+  WizardForm.StatusLabel.Update;
+  ExtractBundledTarArchive('talmud_bavli_latest.tar.zst', 'תלמוד בבלי');
+
+  WizardForm.ProgressGauge.Style := npbstNormal;
+  WizardForm.ProgressGauge.Position := WizardForm.ProgressGauge.Max;
+  DeleteFile(ZstdPath);
+  DeleteFile(SevenZipPath);
+
+  DelTree(ExpandConstant('{app}\_staging'), True, True, True);
+
+  if SelectedBooksPath <> '' then
+  begin
+    ForceDirectories(SelectedBooksPath);
+    WriteLibraryPathToPrefs(SelectedBooksPath);
   end;
 end;

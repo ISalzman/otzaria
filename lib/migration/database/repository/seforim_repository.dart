@@ -7,6 +7,7 @@ import '../../models/book.dart';
 import '../../models/category.dart';
 import '../../models/line.dart';
 import '../../models/link.dart';
+import '../../models/pdf_outline_cache_entry.dart';
 import '../../models/pub_date.dart';
 import '../../models/pub_place.dart';
 import '../../models/search_result.dart';
@@ -1033,6 +1034,34 @@ class SeforimRepository {
 
   Future<List<TocEntry>> getTocChildren(int parentId) async {
     return await _database.tocDao.selectChildren(parentId);
+  }
+
+  // --- Persistent external PDF outline cache ---
+
+  Future<PdfOutlineCacheEntry?> getPdfOutlineCacheEntry(String filePath) async {
+    return _database.pdfOutlineCacheDao.selectByFilePath(filePath);
+  }
+
+  Future<void> upsertPdfOutlineCacheEntry(PdfOutlineCacheEntry entry) async {
+    await _database.pdfOutlineCacheDao.upsert(entry);
+  }
+
+  Future<void> touchPdfOutlineCacheEntry(
+      String filePath, int accessedAt) async {
+    await _database.pdfOutlineCacheDao.updateAccessedAt(filePath, accessedAt);
+  }
+
+  Future<void> deletePdfOutlineCacheEntry(String filePath) async {
+    await _database.pdfOutlineCacheDao.deleteByFilePath(filePath);
+  }
+
+  Future<void> prunePdfOutlineCacheAccessedBefore(int cutoffMillis) async {
+    await _database.pdfOutlineCacheDao.deleteAccessedBefore(cutoffMillis);
+  }
+
+  Future<void> prunePdfOutlineCacheExceptFilePaths(
+      Set<String> keepFilePaths) async {
+    await _database.pdfOutlineCacheDao.deleteAllExceptFilePaths(keepFilePaths);
   }
 
   // --- TocText methods ---
@@ -2318,6 +2347,71 @@ extension BookAcronymRepository on SeforimRepository {
     // חיפוש היררכי: יורד רמה-אחר-רמה עם תמיכה בטרנספוזיציית אותיות.
     final matches = _searchTocHierarchically(cache, queryTokens);
     return matches.map((e) => e.toMap()).toList();
+  }
+
+  /// מחזיר את שורות המפרשים הגולמיות עבור תוצאת איתור מקורות, מוכנות לעיבוד
+  /// ב-`FindRefRepository` (dedupe, מיון דורות). כל row כולל `targetBookTitle`,
+  /// `targetBookId` ו-`targetLineIndex` (המיקום המקביל הראשון בספר המפרש).
+  ///
+  /// אסטרטגיית הטווח:
+  ///   - תוצאת כותרת/דף ([sourceLineId] > 0): כל המפרשים מ-[startLineIndex]
+  ///     ועד הכותרת הבאה ברמה <= [level] (לא כולל) — כלומר כל תוכן הקטע,
+  ///     כולל תת-כותרות (רמה עמוקה יותר), ללא קישורי הקטע הבא.
+  ///   - תוצאת ספר ([sourceLineId] == 0): אם לספר יש כותרות פנימיות (level >= 2)
+  ///     מוחזר ריק — על המשתמש לבחור כותרת ספציפית. אם אין כותרות פנימיות
+  ///     מוחזרים כל מפרשי הספר (טווח מלא), כל אחד במיקומו הראשון.
+  ///
+  /// [isAltToc] בוחר את מבנה הכותרות שלפיו נחשב הגבול (TOC רגיל מול AltToc).
+  Future<List<Map<String, dynamic>>> getCommentatorsForReference({
+    required int bookId,
+    required String bookTitle,
+    required int sourceLineId,
+    required int startLineIndex,
+    required int level,
+    bool isAltToc = false,
+  }) async {
+    // גבול עליון "אינסופי" לטווח — אף ספר לא מתקרב ל-2 מיליון שורות.
+    const maxLineIndex = 0x7fffffff;
+    final int startIdx;
+    final int endIdx;
+
+    if (sourceLineId > 0) {
+      // קטע ספציפי: מהכותרת ועד הכותרת הבאה ברמה <= level.
+      final cache = isAltToc
+          ? await _buildAltTocCacheForBook(bookId, bookTitle)
+          : await _buildTocCacheForBook(bookId, bookTitle);
+      startIdx = startLineIndex;
+      endIdx = _nextHeadingLineIndex(cache, startLineIndex, level);
+    } else {
+      // תוצאת ספר: אם יש כותרות פנימיות — אין קטע נבחר, מחזירים ריק.
+      // אחרת — כל הספר (ספר ללא TOC פנימי, כל מפרשיו רלוונטיים).
+      final cache = await _buildTocCacheForBook(bookId, bookTitle);
+      final hasInnerToc = cache.all.any((e) => e.level >= 2);
+      if (hasInnerToc) return const [];
+      startIdx = 0;
+      endIdx = maxLineIndex;
+    }
+
+    return _database.linkDao
+        .selectCommentatorsByLineRange(bookId, startIdx, endIdx);
+  }
+
+  /// מחזיר את ה-`segment` (=lineIndex) של ערך ה-TOC הבא **ברמה <= [level]**
+  /// אחרי [afterLineIndex], או 0x7fffffff אם אין כזה (=עד סוף הספר).
+  /// הכותרת הבאה באותה רמה או רדודה יותר חוסמת את הקטע, בעוד תת-כותרות
+  /// (רמה עמוקה יותר) נכללות בו.
+  int _nextHeadingLineIndex(
+      _TocBookCache cache, int afterLineIndex, int level) {
+    var end = 0x7fffffff;
+    for (final e in cache.all) {
+      if (e.level >= 1 &&
+          e.level <= level &&
+          e.segment > afterLineIndex &&
+          e.segment < end) {
+        end = e.segment;
+      }
+    }
+    return end;
   }
 
   /// בונה (פעם אחת לכל [bookId]) את רשימת ערכי ה-TOC המעובדים.

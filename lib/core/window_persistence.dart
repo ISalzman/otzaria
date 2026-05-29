@@ -19,6 +19,7 @@ class WindowPersistence {
   static Timer? _debounce;
   static bool _restored = false;
   static bool _isRestoring = false;
+  static bool _pendingMaximize = false;
 
   static bool get isRestoring => _isRestoring;
 
@@ -34,30 +35,45 @@ class WindowPersistence {
       final width = Settings.getValue<double>(_kWidth);
       final height = Settings.getValue<double>(_kHeight);
 
+      _pendingMaximize = isMaximized;
+
       // If we don't have a complete set of bounds, do nothing.
+      // Maximize (if needed) will be applied after `show()` via
+      // `applyPendingMaximize` — calling it before show is unreliable on
+      // Windows because `show()` issues SW_SHOWNORMAL which restores
+      // maximized state to the previous windowed size.
       if (left == null || top == null || width == null || height == null) {
-        if (isMaximized) {
-          await windowManager.maximize();
-        }
         return;
       }
 
       final clampedWidth = width < minSize.width ? minSize.width : width;
       final clampedHeight = height < minSize.height ? minSize.height : height;
 
-      // Set bounds before maximizing so Windows records this as the "restore size".
+      // Set bounds before show so Windows records this as the "restore size".
       // Without this, unmaximize would revert to the runner's default dimensions
       // instead of the user's last chosen windowed size.
       await windowManager.setBounds(
         Rect.fromLTWH(left, top, clampedWidth, clampedHeight),
       );
-
-      if (isMaximized) {
-        await windowManager.maximize();
-      }
     } catch (_) {
       // window manager may fail on first launch;
       // silently continue with default window dimensions.
+    } finally {
+      _isRestoring = false;
+    }
+  }
+
+  /// Applies a maximize that was deferred from `restoreIfAny` until after
+  /// `windowManager.show()` was called. Must be invoked after show() —
+  /// otherwise the maximize is undone by Windows' SW_SHOWNORMAL semantics.
+  static Future<void> applyPendingMaximize() async {
+    if (!_pendingMaximize) return;
+    _pendingMaximize = false;
+    _isRestoring = true;
+    try {
+      await windowManager.maximize();
+    } catch (_) {
+      // Ignore; window stays at the restored bounds.
     } finally {
       _isRestoring = false;
     }

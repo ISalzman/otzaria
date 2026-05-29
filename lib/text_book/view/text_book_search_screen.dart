@@ -19,7 +19,6 @@ import 'package:otzaria/search/book_facet.dart';
 import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
@@ -796,12 +795,19 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       additionalActions: const [],
       hintText: 'חפש כאן...',
       onAdvancedSearch: () async {
-        final tempTab = SearchingTab('חיפוש', searchTextController.text);
+        // מטמיעים את ה-configuration ישירות ב-Bloc במקום events, כי events
+        // אסינכרוניים עלולים לרוץ אחרי שה-dialog פותח חיפוש ראשון.
+        final tempTab = SearchingTab(
+          'חיפוש',
+          searchTextController.text,
+          initialConfiguration: SearchConfiguration(
+            searchMode: _searchMode,
+            distance: _searchDistance,
+          ),
+        );
         tempTab.searchOptions.addAll(_searchOptions);
         tempTab.alternativeWords.addAll(_alternativeWords);
         tempTab.spacingValues.addAll(_spacingValues);
-        tempTab.searchBloc.add(SetSearchMode(_searchMode));
-        tempTab.searchBloc.add(UpdateDistance(_searchDistance));
 
         final bookTitle =
             (context.read<TextBookBloc>().state as TextBookLoaded).book.title;
@@ -815,7 +821,13 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           ),
         );
 
-        tempTab.dispose();
+        // dispose נדחה כדי לחכות ל-fade-out animation של ה-dialog (~200ms)
+        // ולכל ה-animations הפנימיים של ה-TextField (cursor blink וכו') —
+        // אחרת ה-FocusNode של ה-tempTab משוחרר בזמן ש-Widget tree של ה-dialog
+        // עדיין rebuilds, וגורם ל-"FocusNode used after being disposed" crash.
+        Future.delayed(const Duration(milliseconds: 500), () {
+          tempTab.dispose();
+        });
 
         if (!mounted || result == null) {
           return;

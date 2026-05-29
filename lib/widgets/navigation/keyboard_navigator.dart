@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -50,18 +52,21 @@ class KeyboardNavigator extends StatelessWidget {
           }
         }
 
-        // Ctrl + Tab - טאב הבא
+        // Ctrl + Tab / Cmd + Tab (Mac) - טאב הבא
+        final isCtrlOrCmd = HardwareKeyboard.instance.isControlPressed ||
+            (Platform.isMacOS && HardwareKeyboard.instance.isMetaPressed);
+
         if (event.logicalKey == LogicalKeyboardKey.tab &&
-            HardwareKeyboard.instance.isControlPressed &&
+            isCtrlOrCmd &&
             !HardwareKeyboard.instance.isShiftPressed) {
           final nextIndex = (currentTabIndex + 1) % totalTabs;
           onTabChange(nextIndex);
           return KeyEventResult.handled;
         }
 
-        // Ctrl + Shift + Tab - טאב קודם
+        // Ctrl + Shift + Tab / Cmd + Shift + Tab (Mac) - טאב קודם
         if (event.logicalKey == LogicalKeyboardKey.tab &&
-            HardwareKeyboard.instance.isControlPressed &&
+            isCtrlOrCmd &&
             HardwareKeyboard.instance.isShiftPressed) {
           final prevIndex = (currentTabIndex - 1 + totalTabs) % totalTabs;
           onTabChange(prevIndex);

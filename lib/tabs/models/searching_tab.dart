@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:search_engine/search_engine.dart';
 
 class SearchingTab extends OpenedTab {
-  final searchBloc = SearchBloc();
+  late final SearchBloc searchBloc;
   final queryController = TextEditingController();
   final searchFieldFocusNode = FocusNode();
   late final ValueNotifier<String> titleNotifier;
@@ -56,7 +58,9 @@ class SearchingTab extends OpenedTab {
     String? searchText, {
     super.isPinned = false,
     super.dedupeKey,
+    SearchConfiguration? initialConfiguration,
   }) {
+    searchBloc = SearchBloc(initialConfiguration: initialConfiguration);
     titleNotifier = ValueNotifier(title);
     if (searchText != null) {
       queryController.text = searchText;
@@ -65,11 +69,15 @@ class SearchingTab extends OpenedTab {
   }
 
   factory SearchingTab.clone(SearchingTab other) {
+    // ה-configuration מועברת ל-Bloc בעת בנייתו, ולא דרך events אחר-כך,
+    // כדי למנוע race condition עם UpdateSearchQuery ש-UI שולח ב-initState
+    // (ראה הערה מקבילה ב-[SearchingTab.fromJson]).
     final cloned = SearchingTab(
       other.title,
       other.queryController.text,
       isPinned: other.isPinned,
       dedupeKey: other.dedupeKey,
+      initialConfiguration: other.searchBloc.state.configuration,
     );
 
     cloned.searchOptions.addAll(
@@ -87,27 +95,8 @@ class SearchingTab extends OpenedTab {
     cloned.spacingValues.addAll(other.spacingValues);
     cloned.isLeftPaneOpen.value = other.isLeftPaneOpen.value;
 
-    final state = other.searchBloc.state;
-    cloned.searchBloc.add(SetSearchMode(state.configuration.searchMode));
-    cloned.searchBloc.add(SetFacetsWithoutSearch(state.searchScopeFacets));
-
-    if (state.configuration.numResults !=
-        cloned.searchBloc.state.configuration.numResults) {
-      cloned.searchBloc.add(UpdateNumResults(state.configuration.numResults));
-    }
-
-    if (state.configuration.sortBy !=
-        cloned.searchBloc.state.configuration.sortBy) {
-      cloned.searchBloc.add(UpdateSortOrder(state.configuration.sortBy));
-    }
-
-    if (state.configuration.distance !=
-        cloned.searchBloc.state.configuration.distance) {
-      cloned.searchBloc.add(UpdateDistance(state.configuration.distance));
-    }
-
-    if (state.searchQuery.trim().isNotEmpty) {
-      cloned.updateTitleFromAppliedQuery(state.searchQuery);
+    if (other.searchBloc.state.searchQuery.trim().isNotEmpty) {
+      cloned.updateTitleFromAppliedQuery(other.searchBloc.state.searchQuery);
     }
 
     return cloned;
@@ -253,18 +242,136 @@ class SearchingTab extends OpenedTab {
   }
 
   factory SearchingTab.fromJson(Map<String, dynamic> json) {
-    final tab = SearchingTab(json['title'], json['searchText'],
-        isPinned: json['isPinned'] ?? false);
+    // אנו מטמיעים את ה-configuration ישירות ב-SearchBloc בעת בנייתו,
+    // ולא דרך events אחרי הבנייה. שליחת events היא async ועלולה
+    // להתעבד אחרי שה-UI כבר הפעיל את החיפוש הראשון - וכך החיפוש היה
+    // רץ עם distance=0 גם כשנשמר ערך אחר.
+    const defaultConfig = SearchConfiguration();
+    final distanceJson = json['distance'];
+    final searchModeIndex = json['searchMode'];
+    final numResultsJson = json['numResults'];
+    final sortByIndex = json['sortBy'];
+    final rawCurrentFacets = json['currentFacets'];
+    final rawScopeFacets = json['searchScopeFacets'];
+
+    final initialDistance =
+        distanceJson is int ? distanceJson : defaultConfig.distance;
+    final initialMode = (searchModeIndex is int &&
+            searchModeIndex >= 0 &&
+            searchModeIndex < SearchMode.values.length)
+        ? SearchMode.values[searchModeIndex]
+        : defaultConfig.searchMode;
+    final initialNumResults =
+        numResultsJson is int ? numResultsJson : defaultConfig.numResults;
+    final initialSortBy = (sortByIndex is int &&
+            sortByIndex >= 0 &&
+            sortByIndex < ResultsOrder.values.length)
+        ? ResultsOrder.values[sortByIndex]
+        : defaultConfig.sortBy;
+    final initialCurrentFacets = rawCurrentFacets is List
+        ? rawCurrentFacets.map((e) => e.toString()).toList(growable: false)
+        : defaultConfig.currentFacets;
+    final initialScopeFacets = rawScopeFacets is List
+        ? rawScopeFacets.map((e) => e.toString()).toList(growable: false)
+        : defaultConfig.searchScopeFacets;
+
+    final initialConfig = SearchConfiguration(
+      distance: initialDistance,
+      searchMode: initialMode,
+      numResults: initialNumResults,
+      sortBy: initialSortBy,
+      currentFacets: initialCurrentFacets,
+      searchScopeFacets: initialScopeFacets,
+      regexEnabled: json['regexEnabled'] == true,
+      caseSensitive: json['caseSensitive'] == true,
+      multiline: json['multiline'] == true,
+      dotAll: json['dotAll'] == true,
+      unicode: json['unicode'] is bool
+          ? json['unicode'] as bool
+          : defaultConfig.unicode,
+    );
+
+    final tab = SearchingTab(
+      json['title'],
+      json['searchText'],
+      isPinned: json['isPinned'] ?? false,
+      initialConfiguration: initialConfig,
+    );
+
+    final rawSearchOptions = json['searchOptions'];
+    if (rawSearchOptions is Map) {
+      for (final entry in rawSearchOptions.entries) {
+        final value = entry.value;
+        if (value is Map) {
+          tab.searchOptions[entry.key.toString()] = {
+            for (final inner in value.entries)
+              inner.key.toString(): inner.value == true,
+          };
+        }
+      }
+    }
+
+    final rawGlobalOptions = json['globalSearchOptions'];
+    if (rawGlobalOptions is Map) {
+      for (final entry in rawGlobalOptions.entries) {
+        tab.globalSearchOptions[entry.key.toString()] = entry.value == true;
+      }
+    }
+
+    final useGlobal = json['useGlobalSearchOptions'];
+    if (useGlobal is bool) {
+      tab.useGlobalSearchOptions.value = useGlobal;
+    }
+
+    final rawAlternatives = json['alternativeWords'];
+    if (rawAlternatives is Map) {
+      for (final entry in rawAlternatives.entries) {
+        final key = int.tryParse(entry.key.toString());
+        final value = entry.value;
+        if (key != null && value is List) {
+          tab.alternativeWords[key] =
+              value.map((e) => e.toString()).toList(growable: true);
+        }
+      }
+    }
+
+    final rawSpacing = json['spacingValues'];
+    if (rawSpacing is Map) {
+      for (final entry in rawSpacing.entries) {
+        tab.spacingValues[entry.key.toString()] = entry.value.toString();
+      }
+    }
+
     return tab;
   }
 
   @override
   Map<String, dynamic> toJson() {
+    final config = searchBloc.state.configuration;
     return {
       'title': title,
       'searchText': queryController.text,
       'isPinned': isPinned,
-      'type': 'SearchingTabWindow'
+      'type': 'SearchingTabWindow',
+      'distance': config.distance,
+      'searchMode': config.searchMode.index,
+      'numResults': config.numResults,
+      'sortBy': config.sortBy.index,
+      'currentFacets': config.currentFacets,
+      'searchScopeFacets': config.searchScopeFacets,
+      'regexEnabled': config.regexEnabled,
+      'caseSensitive': config.caseSensitive,
+      'multiline': config.multiline,
+      'dotAll': config.dotAll,
+      'unicode': config.unicode,
+      'searchOptions': searchOptions,
+      'globalSearchOptions': globalSearchOptions,
+      'useGlobalSearchOptions': useGlobalSearchOptions.value,
+      'alternativeWords': {
+        for (final entry in alternativeWords.entries)
+          entry.key.toString(): entry.value,
+      },
+      'spacingValues': spacingValues,
     };
   }
 }

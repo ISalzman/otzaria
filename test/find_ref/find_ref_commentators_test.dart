@@ -6,10 +6,14 @@ import 'package:otzaria/services/commentary_service.dart';
 
 // המבחנים בודקים את ההתנהגות האמיתית של
 // [FindRefRepository.getCommentatorsForResult] — לא שכפול מקומי.
-// אנחנו מזרקים את ה-DB callbacks דרך ה-constructor (selectCommentatorsBySourceLine /
-// selectCommentatorsByBook / getBookEra) ובודקים שהקוד האמיתי בוחר את ה-callback
-// הנכון, ממיין לפי דורות, מוסיף ל-cache, מכבד את התנאים של PDF / bookId<=0 /
-// isUserBook, ובונה את ה-`targetSegment` מ-`targetLineIndex` או ב-fallback.
+// אנחנו מזריקים את שורות המפרשים הגולמיות דרך ה-constructor
+// (`fetchCommentatorRows` / `getBookEra`) ובודקים שהקוד האמיתי מנקה כפילויות,
+// ממיין לפי דורות, מוסיף ל-cache, ומכבד את התנאים של PDF / bookId<=0 /
+// isUserBook, ובונה את ה-`targetSegment` מ-`targetLineIndex`.
+//
+// חישוב **טווח** הקטע (כותרת עד הכותרת הבאה / כל הספר כשאין כותרות פנימיות)
+// אינו באחריות ה-repository הזה אלא של [SeforimRepository.getCommentatorsForReference]
+// — ולכן הוא נבדק בנפרד מול DB אמיתי, לא כאן.
 //
 // במבחנים ללא [getBookEra] אנו מסתמכים על fallback ל-CommentaryService.getBookEra:
 // בסביבת טסט SqliteDataProvider אינו מאותחל ולכן הוא מחזיר CommentaryEra.other
@@ -17,8 +21,10 @@ import 'package:otzaria/services/commentary_service.dart';
 
 DbReferenceResult _ref({
   int bookId = 10,
-  int sourceLineId = 0,
+  int sourceLineId = 1,
   int segment = 1,
+  int tocLevel = 1,
+  bool isAltToc = false,
   bool isPdf = false,
   bool isUserBook = false,
 }) =>
@@ -28,18 +34,18 @@ DbReferenceResult _ref({
       segment: segment,
       bookId: bookId,
       sourceLineId: sourceLineId,
+      tocLevel: tocLevel,
+      isAltToc: isAltToc,
       isPdf: isPdf,
       isUserBook: isUserBook,
     );
 
 FindRefRepository _repoWith({
-  Future<List<Map<String, dynamic>>> Function(int)? bySourceLine,
-  Future<List<Map<String, dynamic>>> Function(int)? byBook,
+  Future<List<Map<String, dynamic>>> Function(DbReferenceResult)? fetch,
   Future<CommentaryEra> Function(String)? era,
 }) =>
     FindRefRepository(
-      selectCommentatorsBySourceLine: bySourceLine,
-      selectCommentatorsByBook: byBook,
+      fetchCommentatorRows: fetch,
       getBookEra: era,
     );
 
@@ -48,9 +54,9 @@ List<String> _titles(List<DbCommentatorEntry> entries) =>
 
 void main() {
   group('FindRefRepository.getCommentatorsForResult — קוד היצור', () {
-    test('PDF — מחזיר רשימה ריקה בלי שאילתה', () async {
+    test('PDF — מחזיר רשימה ריקה בלי קריאה ל-loader', () async {
       var calls = 0;
-      final repo = _repoWith(byBook: (id) async {
+      final repo = _repoWith(fetch: (ref) async {
         calls++;
         return const [];
       });
@@ -63,9 +69,9 @@ void main() {
       expect(calls, 0);
     });
 
-    test('bookId ≤ 0 — מחזיר רשימה ריקה בלי שאילתה', () async {
+    test('bookId ≤ 0 — מחזיר רשימה ריקה בלי קריאה ל-loader', () async {
       var calls = 0;
-      final repo = _repoWith(byBook: (id) async {
+      final repo = _repoWith(fetch: (ref) async {
         calls++;
         return const [];
       });
@@ -76,9 +82,9 @@ void main() {
       expect(calls, 0);
     });
 
-    test('isUserBook — לא מבצע שאילתה (namespace collision)', () async {
+    test('isUserBook — לא קורא ל-loader (namespace collision)', () async {
       var calls = 0;
-      final repo = _repoWith(byBook: (id) async {
+      final repo = _repoWith(fetch: (ref) async {
         calls++;
         return [
           {'targetBookTitle': 'מפרש מספר אחר'},
@@ -93,37 +99,9 @@ void main() {
       expect(calls, 0);
     });
 
-    test('sourceLineId > 0 — מעדיף שאילתת segment ולא נופל ל-book', () async {
-      var lineCalls = 0;
-      var bookCalls = 0;
+    test('`targetSegment` נלקח מ-`targetLineIndex`', () async {
       final repo = _repoWith(
-        bySourceLine: (lineId) async {
-          lineCalls++;
-          return [
-            {'targetBookTitle': 'רש"י', 'targetLineIndex': 100},
-            {'targetBookTitle': 'אבן עזרא', 'targetLineIndex': 200},
-          ];
-        },
-        byBook: (bookId) async {
-          bookCalls++;
-          return const [];
-        },
-      );
-
-      final result = await repo.getCommentatorsForResult(
-        _ref(sourceLineId: 42),
-      );
-
-      // ללא injection של era — fallback מחזיר 'other' לשניהם → מיון אלפביתי.
-      // 'אבן עזרא' (א) < 'רש"י' (ר).
-      expect(_titles(result), ['אבן עזרא', 'רש"י']);
-      expect(lineCalls, 1);
-      expect(bookCalls, 0);
-    });
-
-    test('segment-level — `targetSegment` נלקח מ-`targetLineIndex`', () async {
-      final repo = _repoWith(
-        bySourceLine: (lineId) async => [
+        fetch: (ref) async => [
           {'targetBookTitle': 'רש"י', 'targetLineIndex': 100},
           {'targetBookTitle': 'אבן עזרא', 'targetLineIndex': 250},
         ],
@@ -138,12 +116,11 @@ void main() {
       expect(segmentByTitle['אבן עזרא'], 250);
     });
 
-    test('segment-level בלי `targetLineIndex` — targetSegment=null', () async {
-      // אם השאילתה אינה מחזירה targetLineIndex (למשל בעקבות שדרוג נתונים
-      // ישנים), `targetSegment` יישאר null. על הצרכן ליפול ל-ref.segment
-      // בזמן הקליק; ה-repository לא נוגע ב-ref.segment כדי לא להזליג ל-cache.
+    test('row בלי `targetLineIndex` — targetSegment=null', () async {
+      // הגנה: אם ה-row אינו מכיל targetLineIndex (row חריג), `targetSegment`
+      // יישאר null. הצרכן (הדיאלוג) יפתח את ספר המפרש בתחילתו.
       final repo = _repoWith(
-        bySourceLine: (lineId) async => [
+        fetch: (ref) async => [
           {'targetBookTitle': 'רש"י'}, // אין targetLineIndex
         ],
       );
@@ -156,94 +133,12 @@ void main() {
       expect(result.single.targetSegment, isNull);
     });
 
-    test('segment חוזר ריק → fallback ל-book-level, targetSegment=null',
-        () async {
-      var lineCalls = 0;
-      var bookCalls = 0;
-      final repo = _repoWith(
-        bySourceLine: (lineId) async {
-          lineCalls++;
-          return const [];
-        },
-        byBook: (bookId) async {
-          bookCalls++;
-          return [
-            {'targetBookTitle': 'רש"י'},
-            {'targetBookTitle': 'רמב"ן'},
-          ];
-        },
-      );
-
-      final result = await repo.getCommentatorsForResult(
-        _ref(sourceLineId: 42, segment: 7),
-      );
-
-      // fallback אלפביתי: 'רמב"ן' (מ U+05DE) < 'רש"י' (ש U+05E9).
-      expect(_titles(result), ['רמב"ן', 'רש"י']);
-      // ב-book-level אין `targetLineIndex` משמעותי → ה-repository אינו
-      // מקבע segment. הצרכן יפתור ל-ref.segment בזמן הקליק.
-      expect(result.every((e) => e.targetSegment == null), isTrue);
-      expect(lineCalls, 1);
-      expect(bookCalls, 1);
-    });
-
-    test('sourceLineId = 0 — book-level מיידי, targetSegment=null', () async {
-      var lineCalls = 0;
-      var bookCalls = 0;
-      final repo = _repoWith(
-        bySourceLine: (lineId) async {
-          lineCalls++;
-          return const [];
-        },
-        byBook: (bookId) async {
-          bookCalls++;
-          return [
-            {'targetBookTitle': 'רש"י'},
-          ];
-        },
-      );
-
-      final result = await repo.getCommentatorsForResult(_ref(segment: 5));
-
-      expect(result.single.title, 'רש"י');
-      expect(result.single.targetSegment, isNull);
-      expect(lineCalls, 0);
-      expect(bookCalls, 1);
-    });
-
-    test(
-        'book-level — refs עם אותו bookId אך segment שונה משתפים cache בלי '
-        'הזלגת segment', () async {
-      // רגרסיה: לפני התיקון, ה-repository קיבע `targetSegment = ref.segment`
-      // לרשומות book-level. הקאש (מפתח=`bookId:sourceLineId`) היה משותף בין
-      // שני refs כאלה — וכך הקליק על תוצאה שנייה היה פותח את ה-segment
-      // של התוצאה הראשונה. עכשיו ה-repository מחזיר `null` למסלול book-level
-      // והצרכן (הדיאלוג) פותר את ה-fallback מקומית.
-      var bookCalls = 0;
-      final repo = _repoWith(byBook: (bookId) async {
-        bookCalls++;
-        return [
-          {'targetBookTitle': 'רש"י'},
-        ];
-      });
-
-      final first = await repo.getCommentatorsForResult(_ref(segment: 5));
-      final second = await repo.getCommentatorsForResult(_ref(segment: 17));
-
-      // הקאש משותף — שאילתה אחת בלבד, אבל ה-segment נשאר null לשניהם.
-      expect(bookCalls, 1);
-      expect(first.single.targetSegment, isNull);
-      expect(second.single.targetSegment, isNull);
-      // וודאי זהות אובייקטים: אותה רשימה מהקאש.
-      expect(identical(first, second), isTrue);
-    });
-
     test('מיון לפי דורות: עם injection של [getBookEra]', () async {
-      // ה-DB מחזיר 4 מפרשים בסדר שרירותי. ה-eraResolver ממפה כל אחד לדור
+      // ה-loader מחזיר 4 מפרשים בסדר שרירותי. ה-eraResolver ממפה כל אחד לדור
       // אחר. אנו מאמתים שהמיון הוא: chazal → rishonim → acharonim → modern.
       // השמות לא ממוינים אלפביתית — לכן אם המיון נשבר, הסדר ישתנה.
       final repo = _repoWith(
-        byBook: (id) async => [
+        fetch: (ref) async => [
           {'targetBookTitle': 'מחבר מודרני'},
           {'targetBookTitle': 'משנה'},
           {'targetBookTitle': 'רמב"ם'},
@@ -273,7 +168,7 @@ void main() {
     test('מיון אלפביתי בתוך אותו דור', () async {
       // כל המפרשים באותו דור (rishonim) → סדר אלפביתי גובר.
       final repo = _repoWith(
-        byBook: (id) async => [
+        fetch: (ref) async => [
           {'targetBookTitle': 'רש"י'},
           {'targetBookTitle': 'אבן עזרא'},
           {'targetBookTitle': 'רמב"ן'},
@@ -290,10 +185,10 @@ void main() {
     test('מסיר כפילויות לפי (targetBookTitle, targetBookId) — שומר על הראשון',
         () async {
       // אם אותו (title, bookId) מופיע פעמיים, אנחנו שומרים על ה-row הראשון
-      // (כולל ה-targetLineIndex שלו). זה חשוב לסגמנט-level: שני קישורים שונים
-      // לאותו מפרש שונים זה מזה רק ב-targetLineIndex, אנחנו רוצים את הראשון.
+      // (כולל ה-targetLineIndex שלו). שני קישורים שונים לאותו מפרש שונים זה
+      // מזה רק ב-targetLineIndex, אנחנו רוצים את הראשון (המוקדם בקטע).
       final repo = _repoWith(
-        bySourceLine: (id) async => [
+        fetch: (ref) async => [
           {
             'targetBookTitle': 'רש"י',
             'targetBookId': 50,
@@ -325,10 +220,9 @@ void main() {
         '(P1 רגרסיה)', () async {
       // המקרה שהדיפף נועד לתקן: book table יכול להכיל שני book records נפרדים
       // עם אותה כותרת (למשל "רש"י" על תורה ועל בבלי). dedupe לפי title בלבד
-      // היה זורק אחד, וגם resolve לפי id בדיאלוג לא היה משנה — כי הרשומה
-      // נעלמת לפני שה-UI רואה אותה. כעת dedupe לפי (title, bookId) שומר את שניהם.
+      // היה זורק אחד. כעת dedupe לפי (title, bookId) שומר את שניהם.
       final repo = _repoWith(
-        bySourceLine: (id) async => [
+        fetch: (ref) async => [
           {
             'targetBookTitle': 'רש"י',
             'targetBookId': 100,
@@ -346,13 +240,11 @@ void main() {
 
       expect(result, hasLength(2),
           reason: 'שני מפרשים בעלי targetBookId שונה לא יכולים להתאחד');
-      // כל אחד שומר את ה-bookId וה-targetSegment שלו (אסור שהם יתערבבו).
       final byBookId = {for (final e in result) e.bookId: e};
       expect(byBookId[100], isNotNull);
       expect(byBookId[100]!.targetSegment, 10);
       expect(byBookId[200], isNotNull);
       expect(byBookId[200]!.targetSegment, 20);
-      // שני המופעים נושאים את אותה כותרת — אסור שהדיפף ישנה את התווית.
       expect(result.every((e) => e.title == 'רש"י'), isTrue);
     });
 
@@ -360,10 +252,9 @@ void main() {
         'rows ללא targetBookId — נחשבים אותו "ספר" ומתאחדים '
         '(תאימות לאחור)', () async {
       // אם DB ישן לא מחזיר targetBookId, כל ה-rows באותו title חולקים מפתח
-      // dedupe (title, null) — והשני מסונן. זה משחזר את ההתנהגות הקודמת ולא
-      // יוצר רעש בתפריט כשאין מידע מבדל.
+      // dedupe (title, null) — והשני מסונן.
       final repo = _repoWith(
-        bySourceLine: (id) async => [
+        fetch: (ref) async => [
           {'targetBookTitle': 'רש"י', 'targetLineIndex': 11},
           {'targetBookTitle': 'רש"י', 'targetLineIndex': 22},
         ],
@@ -378,7 +269,7 @@ void main() {
 
     test('targetBookTitle ריק/null — מדלג', () async {
       final repo = _repoWith(
-          byBook: (id) async => [
+          fetch: (ref) async => [
                 {'targetBookTitle': null},
                 {'targetBookTitle': ''},
                 {'targetBookTitle': 'רש"י'},
@@ -389,10 +280,10 @@ void main() {
       expect(_titles(result), ['רש"י']);
     });
 
-    test('cache — קריאה שנייה לא מבצעת שאילתה נוספת', () async {
-      var bookCalls = 0;
-      final repo = _repoWith(byBook: (id) async {
-        bookCalls++;
+    test('cache — קריאה שנייה לא קוראת ל-loader שוב', () async {
+      var calls = 0;
+      final repo = _repoWith(fetch: (ref) async {
+        calls++;
         return [
           {'targetBookTitle': 'רש"י'},
         ];
@@ -403,44 +294,64 @@ void main() {
 
       expect(_titles(first), ['רש"י']);
       expect(_titles(second), ['רש"י']);
-      expect(bookCalls, 1);
+      expect(calls, 1);
+      // אותה רשימה מהקאש (זהות אובייקטים).
+      expect(identical(first, second), isTrue);
     });
 
     test('cache — מפרידים לפי (bookId, sourceLineId)', () async {
-      var lineCalls = 0;
-      var bookCalls = 0;
+      var calls = 0;
       final repo = _repoWith(
-        bySourceLine: (lineId) async {
-          lineCalls++;
+        fetch: (ref) async {
+          calls++;
           return [
-            {'targetBookTitle': 'רש"י על פסוק', 'targetLineIndex': 7},
-          ];
-        },
-        byBook: (bookId) async {
-          bookCalls++;
-          return [
-            {'targetBookTitle': 'רש"י על הספר'},
+            {'targetBookTitle': 'מפרש ל-${ref.sourceLineId}'},
           ];
         },
       );
 
-      final withLine =
-          await repo.getCommentatorsForResult(_ref(sourceLineId: 42));
-      final withoutLine = await repo.getCommentatorsForResult(_ref());
+      final r1 = await repo.getCommentatorsForResult(_ref(sourceLineId: 42));
+      final r2 = await repo.getCommentatorsForResult(_ref(sourceLineId: 7));
 
-      expect(_titles(withLine), ['רש"י על פסוק']);
-      expect(withLine.single.targetSegment, 7);
-      expect(_titles(withoutLine), ['רש"י על הספר']);
-      expect(lineCalls, 1);
-      expect(bookCalls, 1);
+      expect(_titles(r1), ['מפרש ל-42']);
+      expect(_titles(r2), ['מפרש ל-7']);
+      expect(calls, 2);
+    });
+
+    test('cache — TOC רגיל ו-AltToc על אותה שורה לא מתערבבים (P1 רגרסיה)',
+        () async {
+      // שני refs יכולים לחלוק את אותו (bookId, sourceLineId) — לדוגמה
+      // "בראשית פרק א" (TOC) ו"פרשת בראשית" (AltToc), שתחילתם באותה line.id —
+      // אבל הטווח המחושב להם שונה (boundary מ-TOC vs alt_toc_entry). אם המפתח
+      // לא כולל את isAltToc/level/segment, ה-loader נקרא פעם אחת והרשומה
+      // השנייה תקבל מפרשים שגויים מהקאש של הראשונה.
+      var calls = 0;
+      final repo = _repoWith(fetch: (ref) async {
+        calls++;
+        return [
+          {'targetBookTitle': ref.isAltToc ? 'מפרש-AltToc' : 'מפרש-TOC'},
+        ];
+      });
+
+      final tocRef = _ref(sourceLineId: 100, tocLevel: 2, isAltToc: false);
+      final altRef = _ref(sourceLineId: 100, tocLevel: 1, isAltToc: true);
+
+      final tocResult = await repo.getCommentatorsForResult(tocRef);
+      final altResult = await repo.getCommentatorsForResult(altRef);
+
+      expect(_titles(tocResult), ['מפרש-TOC']);
+      expect(_titles(altResult), ['מפרש-AltToc']);
+      expect(calls, 2,
+          reason: 'שני refs עם אותו sourceLineId אך isAltToc שונה דורשים '
+              'fetch נפרד — אסור להם לחלוק cache');
     });
 
     test('ספרים שונים — לא מערבבים cache', () async {
-      var bookCalls = 0;
-      final repo = _repoWith(byBook: (bookId) async {
-        bookCalls++;
+      var calls = 0;
+      final repo = _repoWith(fetch: (ref) async {
+        calls++;
         return [
-          {'targetBookTitle': 'מפרש לספר $bookId'},
+          {'targetBookTitle': 'מפרש לספר ${ref.bookId}'},
         ];
       });
 
@@ -449,7 +360,7 @@ void main() {
 
       expect(_titles(r1), ['מפרש לספר 10']);
       expect(_titles(r2), ['מפרש לספר 20']);
-      expect(bookCalls, 2);
+      expect(calls, 2);
     });
 
     test('בלי injection ובלי DB — מחזיר ריק בלי לזרוק', () async {

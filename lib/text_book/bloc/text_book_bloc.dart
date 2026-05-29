@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/animation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
@@ -34,7 +35,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   static const int _initialContentLookAheadLines = 180;
   static const int _contentLookBehindLines = 120;
   static const int _contentLookAheadLines = 260;
-  static const int _contentWarmChunkLines = 220;
+  static const int _contentWarmChunkLines = 640;
   static const int _contentReloadThresholdLines = 60;
   static const Duration _visibleIndicesDebounceDuration =
       Duration(milliseconds: 160);
@@ -61,8 +62,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   String? _loadedLinksTargetBookTitlesSignature;
   String? _activeLinksTargetBookTitlesSignature;
   String? _loadedContentBookTitle;
-  int? _loadedContentStart;
-  int? _loadedContentEnd;
+  List<({int startLine, int endLine})> _loadedContentRanges = const [];
+  List<bool> _loadedContentFlags = const [];
   int? _loadedContentTotalLines;
   bool _isLoadingContentRange = false;
   bool _pendingContentRangeReload = false;
@@ -84,11 +85,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   /// על סריקות עתידיות גם אם 'הערות' לא נוסף ל-availableCommentators.
   bool _inlineNotesFullScanDone = false;
 
-  /// true אחרי שהוזנקה טעינת התוכן המלא (_loadFullBookInBackground). במצב כזה
-  /// ApplyFullBookContent ממילא יסרוק את כל התוכן, ולכן הזיהוי החד-פעמי ברקע
-  /// (_detectInlineNotesInBackground) מיותר — מונע קריאת full-content כפולה.
-  bool _fullContentLoadInitiated = false;
-
   /// מאפס את הדגלים הספציפיים-לספר. נקרא מ-_onLoadContent כשבלוק עובר
   /// לטעון ספר חדש (כיום בייצור bloc נוצר חדש לכל תא, אבל הקריאה כאן
   /// מגינה מפני דליפת state בין ספרים אם זה ישתנה בעתיד).
@@ -96,7 +92,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   void resetInlineNotesStateForNewBook() {
     _userTouchedCommentators = false;
     _inlineNotesFullScanDone = false;
-    _fullContentLoadInitiated = false;
   }
 
   @visibleForTesting
@@ -104,9 +99,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   @visibleForTesting
   bool get inlineNotesFullScanDoneForTesting => _inlineNotesFullScanDone;
-
-  @visibleForTesting
-  bool get fullContentLoadInitiatedForTesting => _fullContentLoadInitiated;
 
   // pinpoint highlight ממתין להחלה כשה-bloc יגיע ל-Loaded
   ({String text, int? sectionIndex})? _pendingPinpoint;
@@ -145,7 +137,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<UpdateSearchText>(_onUpdateSearchText);
     on<ApplyFullBookContent>(_onApplyFullBookContent);
     on<ApplyBookContentRange>(_onApplyBookContentRange);
-    on<InlineNotesDetected>(_onInlineNotesDetected);
     on<CreateNoteFromToolbar>(_onCreateNoteFromToolbar);
     on<UpdateSelectedTextForNote>(_onUpdateSelectedTextForNote);
     on<UpdateLinks>(_onUpdateLinks);
@@ -216,6 +207,147 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     return expectedIndex >= (minVisible - tolerance) &&
         expectedIndex <= (maxVisible + tolerance);
+  }
+
+  @visibleForTesting
+  static List<({int startLine, int endLine})> mergeLoadedContentRangesForTesting(
+    List<({int startLine, int endLine})> ranges, {
+    required int startLine,
+    required int endLine,
+  }) {
+    final normalizedStart = startLine < 0 ? 0 : startLine;
+    if (endLine < normalizedStart) {
+      return List<({int startLine, int endLine})>.unmodifiable(ranges);
+    }
+
+    final sorted = [
+      ...ranges,
+      (startLine: normalizedStart, endLine: endLine),
+    ]..sort((a, b) => a.startLine.compareTo(b.startLine));
+
+    final merged = <({int startLine, int endLine})>[];
+    for (final range in sorted) {
+      if (merged.isEmpty) {
+        merged.add(range);
+        continue;
+      }
+
+      final last = merged.last;
+      if (range.startLine <= last.endLine + 1) {
+        merged[merged.length - 1] = (
+          startLine: last.startLine,
+          endLine: range.endLine > last.endLine ? range.endLine : last.endLine,
+        );
+        continue;
+      }
+
+      merged.add(range);
+    }
+
+    return List<({int startLine, int endLine})>.unmodifiable(merged);
+  }
+
+  @visibleForTesting
+  static bool isContentWindowSufficientForTesting({
+    required List<({int startLine, int endLine})> loadedRanges,
+    required int startLine,
+    required int endLine,
+    required int reloadThresholdLines,
+  }) {
+    if (loadedRanges.isEmpty) {
+      return false;
+    }
+
+    final normalizedStart = startLine < 0 ? 0 : startLine;
+    for (final range in loadedRanges) {
+      final hasStartMargin =
+          (normalizedStart == 0 && range.startLine == 0) ||
+              normalizedStart >= range.startLine + reloadThresholdLines;
+      if (hasStartMargin && endLine <= range.endLine - reloadThresholdLines) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  @visibleForTesting
+  static int? nextWarmContentStartForTesting({
+    required List<({int startLine, int endLine})> loadedRanges,
+    required int totalLines,
+  }) {
+    if (totalLines <= 0) {
+      return null;
+    }
+    if (loadedRanges.isEmpty) {
+      return 0;
+    }
+
+    var nextStart = 0;
+    for (final range in loadedRanges) {
+      if (nextStart < range.startLine) {
+        return nextStart;
+      }
+      if (nextStart <= range.endLine) {
+        nextStart = range.endLine + 1;
+        if (nextStart >= totalLines) {
+          return null;
+        }
+      }
+    }
+
+    return nextStart < totalLines ? nextStart : null;
+  }
+
+  @visibleForTesting
+  static int? nextWarmContentStartNearViewportForTesting({
+    required List<({int startLine, int endLine})> loadedRanges,
+    required int totalLines,
+    required List<int> visibleIndices,
+    required int chunkLines,
+  }) {
+    if (totalLines <= 0) {
+      return null;
+    }
+
+    if (loadedRanges.isEmpty) {
+      return 0;
+    }
+
+    final firstVisible = visibleIndices.isEmpty ? 0 : visibleIndices.first;
+    final lastVisible = visibleIndices.isEmpty ? firstVisible : visibleIndices.last;
+
+    ({int startLine, int endLine})? anchorRange;
+    for (final range in loadedRanges) {
+      final overlapsViewport =
+          range.startLine <= lastVisible && range.endLine >= firstVisible;
+      if (overlapsViewport) {
+        anchorRange = range;
+        break;
+      }
+    }
+
+    if (anchorRange == null) {
+      return nextWarmContentStartForTesting(
+        loadedRanges: loadedRanges,
+        totalLines: totalLines,
+      );
+    }
+
+    final forwardStart = anchorRange.endLine + 1;
+    if (forwardStart < totalLines) {
+      return forwardStart;
+    }
+
+    if (anchorRange.startLine > 0) {
+      final backwardStart = anchorRange.startLine - chunkLines;
+      return backwardStart < 0 ? 0 : backwardStart;
+    }
+
+    return nextWarmContentStartForTesting(
+      loadedRanges: loadedRanges,
+      totalLines: totalLines,
+    );
   }
 
   bool _isInitialPageShapeVisibleSyncAligned(
@@ -357,8 +489,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final tocFuture = repository.getTableOfContents(book);
 
       List<String>? contentLines;
+      List<bool>? loadedLineFlags;
       if (state is TextBookLoaded && event.preserveState) {
         contentLines = (state as TextBookLoaded).content;
+        loadedLineFlags = _loadedContentFlags;
       } else {
         final initialRange = await repository.getBookContentRange(
           book,
@@ -368,6 +502,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
         if (initialRange != null) {
           contentLines = _contentWithAppliedRange(initialRange);
+          loadedLineFlags = _loadedContentFlagsWithAppliedRange(initialRange);
+          _setLoadedContentFlags(book, loadedLineFlags);
           _markLoadedContentRange(
             book,
             initialRange.startLine,
@@ -386,6 +522,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             final previewStartLine =
                 (visibleIndices.first - 10).clamp(0, visibleIndices.first);
             contentLines = buildPreviewLines(preview, previewStartLine);
+            loadedLineFlags = _buildPreviewLoadedLineFlags(
+              preview,
+              previewStartLine,
+            );
+            _setLoadedContentFlags(book, loadedLineFlags);
+            _markLoadedContentRange(
+              book,
+              previewStartLine,
+              contentLines.isEmpty ? previewStartLine : contentLines.length - 1,
+            );
             _loadFullBookInBackground(book);
           }
         }
@@ -394,6 +540,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (contentLines == null) {
         final content = await repository.getBookContent(book);
         contentLines = await splitContentLines(content);
+        loadedLineFlags = List<bool>.filled(contentLines.length, true);
+        _setLoadedContentFlags(book, loadedLineFlags);
         _markLoadedContentRange(
           book,
           0,
@@ -401,6 +549,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           totalLines: contentLines.length,
         );
       }
+
+      loadedLineFlags ??= _loadedContentFlags;
 
       final tableOfContents = await tocFuture;
 
@@ -448,6 +598,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final readingSegments = buildReadingSegments(
         contentLines,
         continuous: effectiveContinuousReading,
+        loadedLineFlags: loadedLineFlags,
       );
 
       const List<Link> emptyLinks = [];
@@ -532,9 +683,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       _setAwaitingInitialPageShapeVisibleSync(initialShowPageShapeView);
 
-      emit(TextBookLoaded(
+      TextBookLoaded loadedState = TextBookLoaded(
         book: book,
         content: contentLines,
+        contentVersion: contentLines.isEmpty ? 0 : 1,
         links: emptyLinks,
         linksByLine: const {},
         availableCommentators: existingAvailableCommentators,
@@ -587,7 +739,17 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             : permanentHighlightLine,
         pinpointHighlightIndex: pinpointHighlightIndex,
         pinpointHighlightText: pinpointHighlightText,
-      ));
+      );
+
+      // סריקה סינכרונית של ה-content שכבר בזיכרון לזיהוי הערות inline
+      // לפני ה-emit הראשון. מסלולי preview/range מקבלים הרחבה הדרגתית
+      // דרך ApplyBookContentRange / ApplyFullBookContent (ראה
+      // _withInlineNotesCommentator).
+      if (notes.hasInlineNotes(contentLines)) {
+        loadedState = _attachInlineNotesCommentator(loadedState);
+      }
+
+      emit(loadedState);
 
       _pendingPinpoint = null;
 
@@ -595,7 +757,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       _loadContentRangeInBackground(book, visibleIndices);
       _warmContentCacheInBackground(book);
-      _detectInlineNotesInBackground(book);
 
       _loadLinksInBackground(book, visibleIndices);
 
@@ -823,6 +984,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       readingSegments: buildReadingSegments(
         currentState.content,
         continuous: effectiveEnabled,
+        loadedLineFlags: _loadedContentFlags,
       ),
     ));
   }
@@ -1317,15 +1479,24 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       return;
     }
 
-    if (listEquals(currentState.content, event.content)) {
+    final nextLoadedFlags = List<bool>.filled(event.content.length, true);
+    final hasLoadedFlagsChanged =
+        _loadedContentFlags.length != event.content.length ||
+            _loadedContentFlags.any((loaded) => !loaded);
+    if (listEquals(currentState.content, event.content) &&
+        !hasLoadedFlagsChanged) {
       return;
     }
 
+    _setLoadedContentFlags(currentState.book, nextLoadedFlags);
+
     final updatedState = _withInlineNotesCommentator(currentState.copyWith(
       content: event.content,
+      contentVersion: currentState.contentVersion + 1,
       readingSegments: buildReadingSegments(
         event.content,
         continuous: currentState.continuousReadingMode,
+        loadedLineFlags: nextLoadedFlags,
       ),
     ));
     // אחרי שסרקנו את התוכן המלא, אין יותר טעם בסריקה נוספת על הרחבות
@@ -1355,20 +1526,46 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     final nextContent = List<String>.of(currentState.content);
+    final nextLoadedFlags = List<bool>.of(_loadedContentFlags);
     final targetLength = event.startLine + event.lines.length;
+    var hasContentChanged = targetLength > nextContent.length;
+    var hasLoadedFlagsChanged = targetLength > nextLoadedFlags.length;
     if (nextContent.length < targetLength) {
       nextContent.addAll(
         List<String>.filled(targetLength - nextContent.length, ''),
+      );
+    }
+    if (nextLoadedFlags.length < targetLength) {
+      nextLoadedFlags.addAll(
+        List<bool>.filled(targetLength - nextLoadedFlags.length, false),
       );
     }
 
     for (var offset = 0; offset < event.lines.length; offset++) {
       final targetIndex = event.startLine + offset;
       if (targetIndex >= 0 && targetIndex < nextContent.length) {
+        if (nextContent[targetIndex] != event.lines[offset]) {
+          hasContentChanged = true;
+        }
+        if (!nextLoadedFlags[targetIndex]) {
+          hasLoadedFlagsChanged = true;
+        }
         nextContent[targetIndex] = event.lines[offset];
+        nextLoadedFlags[targetIndex] = true;
       }
     }
 
+    if (!hasContentChanged && !hasLoadedFlagsChanged) {
+      _markLoadedContentRange(
+        currentState.book,
+        event.startLine,
+        event.startLine + event.lines.length - 1,
+        totalLines: event.totalLines,
+      );
+      return;
+    }
+
+    _setLoadedContentFlags(currentState.book, nextLoadedFlags);
     _markLoadedContentRange(
       currentState.book,
       event.startLine,
@@ -1378,9 +1575,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     emit(_withInlineNotesCommentator(
       currentState.copyWith(
         content: nextContent,
-        readingSegments: buildReadingSegments(
+        contentVersion: currentState.contentVersion + 1,
+        readingSegments: updateReadingSegmentsForRange(
+          currentState.readingSegments,
           nextContent,
+          loadedLineFlags: nextLoadedFlags,
           continuous: currentState.continuousReadingMode,
+          startLine: event.startLine,
+          endLine: event.startLine + event.lines.length - 1,
         ),
       ),
       // אופטימיזציה: לסרוק רק את השורות החדשות במקום את כל ה-content
@@ -1419,7 +1621,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   /// מצרף את מפרש ההערות הוירטואלי ל-availableCommentators ולקבוצת "שאר
   /// מפרשים", ובוחר אותו אוטומטית אם המשתמש עוד לא נגע ידנית בבחירה.
-  /// משותף למסלול הסריקה לפי-תוכן ולמסלול הזיהוי החד-פעמי ברקע.
+  /// משותף לסריקה הסינכרונית ב-_onLoadContent ולסריקות ההדרגתיות
+  /// ב-_withInlineNotesCommentator (מסלולי preview/range).
   TextBookLoaded _attachInlineNotesCommentator(TextBookLoaded state) {
     if (state.availableCommentators.contains(kNotesCommentatorTitle)) {
       return state;
@@ -1440,26 +1643,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           ? const [kNotesCommentatorTitle]
           : state.activeCommentators,
     );
-  }
-
-  /// מטפל בתוצאת הזיהוי החד-פעמי של הערות inline (סריקת substring על הטקסט
-  /// הגולמי המלא, ברקע). מכיוון שנסרק כל הספר, אין יותר טעם בסריקות
-  /// per-chunk עתידיות — לכן מסמנים [_inlineNotesFullScanDone].
-  void _onInlineNotesDetected(
-    InlineNotesDetected event,
-    Emitter<TextBookState> emit,
-  ) {
-    if (state is! TextBookLoaded) {
-      return;
-    }
-    final currentState = state as TextBookLoaded;
-    if (currentState.book.title != event.bookTitle) {
-      return;
-    }
-    _inlineNotesFullScanDone = true;
-    if (event.hasNotes) {
-      emit(_attachInlineNotesCommentator(currentState));
-    }
   }
 
   List<CommentatorGroup> _addNotesToOtherCommentatorsGroup(
@@ -1531,40 +1714,88 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return content;
   }
 
+  List<bool> _loadedContentFlagsWithAppliedRange(BookContentRange range) {
+    final loadedFlags = List<bool>.filled(range.endLine + 1, false);
+    for (var offset = 0; offset < range.lines.length; offset++) {
+      final targetIndex = range.startLine + offset;
+      if (targetIndex >= 0 && targetIndex < loadedFlags.length) {
+        loadedFlags[targetIndex] = true;
+      }
+    }
+    return loadedFlags;
+  }
+
+  List<bool> _buildPreviewLoadedLineFlags(
+    String previewContent,
+    int previewStartLine,
+  ) {
+    final previewLineCount =
+        previewContent.isEmpty ? 0 : previewContent.split('\n').length;
+    final loadedFlags =
+        List<bool>.filled(previewStartLine + previewLineCount, false);
+    for (var index = previewStartLine; index < loadedFlags.length; index++) {
+      loadedFlags[index] = true;
+    }
+    return loadedFlags;
+  }
+
+  void _ensureLoadedContentTrackingBook(TextBook book) {
+    if (_loadedContentBookTitle == book.title) {
+      return;
+    }
+
+    _loadedContentBookTitle = book.title;
+    _loadedContentRanges = const [];
+    _loadedContentFlags = const [];
+    _loadedContentTotalLines = null;
+  }
+
+  void _setLoadedContentFlags(TextBook book, List<bool> loadedFlags) {
+    _ensureLoadedContentTrackingBook(book);
+    _loadedContentFlags = List<bool>.unmodifiable(loadedFlags);
+  }
+
   void _markLoadedContentRange(
     TextBook book,
     int startLine,
     int endLine, {
     int? totalLines,
   }) {
-    if (_loadedContentBookTitle != book.title) {
-      _loadedContentBookTitle = book.title;
-      _loadedContentStart = null;
-      _loadedContentEnd = null;
-      _loadedContentTotalLines = null;
-    }
+    _ensureLoadedContentTrackingBook(book);
 
     _loadedContentTotalLines = totalLines ?? _loadedContentTotalLines;
-    _loadedContentStart = _loadedContentStart == null
-        ? startLine
-        : (_loadedContentStart! < startLine ? _loadedContentStart : startLine);
-    _loadedContentEnd = _loadedContentEnd == null
-        ? endLine
-        : (_loadedContentEnd! > endLine ? _loadedContentEnd : endLine);
+    _loadedContentRanges = mergeLoadedContentRangesForTesting(
+      _loadedContentRanges,
+      startLine: startLine,
+      endLine: endLine,
+    );
   }
 
   bool _isContentWindowSufficient(TextBook book, int startLine, int endLine) {
-    if (_loadedContentBookTitle != book.title ||
-        _loadedContentStart == null ||
-        _loadedContentEnd == null) {
+    if (_loadedContentBookTitle != book.title || _loadedContentRanges.isEmpty) {
       return false;
     }
 
-    final normalizedStart = startLine < 0 ? 0 : startLine;
-    final hasStartMargin = normalizedStart == 0 && _loadedContentStart == 0 ||
-        normalizedStart >= _loadedContentStart! + _contentReloadThresholdLines;
-    return hasStartMargin &&
-        endLine <= _loadedContentEnd! - _contentReloadThresholdLines;
+    return isContentWindowSufficientForTesting(
+      loadedRanges: _loadedContentRanges,
+      startLine: startLine,
+      endLine: endLine,
+      reloadThresholdLines: _contentReloadThresholdLines,
+    );
+  }
+
+  int? _nextWarmContentStart(List<int> visibleIndices) {
+    final totalLines = _loadedContentTotalLines;
+    if (totalLines == null) {
+      return null;
+    }
+
+    return nextWarmContentStartNearViewportForTesting(
+      loadedRanges: _loadedContentRanges,
+      totalLines: totalLines,
+      visibleIndices: visibleIndices,
+      chunkLines: _contentWarmChunkLines,
+    );
   }
 
   ({int startLine, int endLine}) _calculateContentWindow(
@@ -1652,8 +1883,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           return;
         }
 
-        final nextStart = (_loadedContentEnd ?? -1) + 1;
-        if (nextStart >= totalLines) {
+        final nextStart = _nextWarmContentStart(currentState.visibleIndices);
+        if (nextStart == null || nextStart >= totalLines) {
           return;
         }
 
@@ -1677,7 +1908,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           lines: range.lines,
         ));
 
-        await Future<void>.delayed(Duration.zero);
+        await SchedulerBinding.instance.endOfFrame;
       }
     } finally {
       _isWarmingContentCache = false;
@@ -1685,9 +1916,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   void _loadFullBookInBackground(TextBook book) async {
-    // מסמן סינכרונית (לפני ה-await) כדי ש-_detectInlineNotesInBackground,
-    // שרץ מיד אחרי, ידלג ולא יבצע קריאת full-content כפולה.
-    _fullContentLoadInitiated = true;
     try {
       final fullContent = await repository.getBookContent(book);
 
@@ -1712,45 +1940,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (kDebugMode) {
         debugPrint(
             '⚠️ TextBookBloc::loadFullBook failed for ${book.title}: $e');
-      }
-    }
-  }
-
-  /// זיהוי חד-פעמי ברקע של הערות inline בכל הספר, בקריאה מלאה אחת ובדיקת
-  /// substring זולה — במקום להמתין שהחימום ההדרגתי יסרוק נתח-אחר-נתח עד
-  /// שיגיע לשורה עם הערה. כך מפרש "הערות" מופיע מיד גם בספרים שבהם ההערות
-  /// מופיעות רק בהמשך. הטקסט הגולמי משמש לבדיקה בלבד ואינו נשמר.
-  void _detectInlineNotesInBackground(TextBook book) async {
-    // אם כבר סרקנו את כל התוכן (ApplyFullBookContent), או שכבר הוזנקה טעינת
-    // תוכן מלא שתסרוק ממילא — אין צורך בקריאת full-content נוספת. הדילוג כאן
-    // מונע קריאה כפולה במסלול ה-preview (ראה _loadFullBookInBackground).
-    if (_inlineNotesFullScanDone || _fullContentLoadInitiated) {
-      return;
-    }
-    final currentState = state;
-    if (currentState is! TextBookLoaded ||
-        currentState.book.title != book.title ||
-        currentState.availableCommentators.contains(kNotesCommentatorTitle)) {
-      return;
-    }
-
-    try {
-      final rawContent = await repository.getBookContent(book);
-      if (isClosed || rawContent.isEmpty) {
-        return;
-      }
-      final latest = state;
-      if (latest is! TextBookLoaded || latest.book.title != book.title) {
-        return;
-      }
-      add(InlineNotesDetected(
-        bookTitle: book.title,
-        hasNotes: notes.rawTextHasInlineNotes(rawContent),
-      ));
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint(
-            '⚠️ TextBookBloc::detectInlineNotes failed for ${book.title}: $e');
       }
     }
   }
