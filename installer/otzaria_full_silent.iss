@@ -114,6 +114,11 @@ var
   InstallWV2: Boolean;
   SelectedBooksPath: String;
 
+  // אם המשתמש בחר במהלך ההסרה למחוק גם את כל הנתונים והספרים, לא רק את
+  // קבצי האפליקציה. ברירת המחדל False — נשמר כדי לא לאבד נתונים בעדכון
+  // שקט (Inno Setup מריץ את ה-uninstaller הישן עם /SILENT).
+  DeleteUserDataOnUninstall: Boolean;
+
 // TTimer לא זמין ב-Pascal Script של Inno Setup; נשתמש ב-Windows API.
 function SetTimer(hWnd, nIDEvent, uElapse, lpTimerFunc: LongWord): LongWord;
   external 'SetTimer@user32.dll stdcall';
@@ -701,10 +706,155 @@ begin
   RegWriteExpandStringValue(HKCU, 'Environment', 'Path', CurrentPath);
 end;
 
+// מחזיר את נתיב תיקיית הספרים שהמשתמש בחר (אם שונה מברירת המחדל),
+// כפי שנשמר ב-shared_preferences.json תחת המפתח flutter.key-library-path.
+// משתמש בעוזרי ה-JSON הקיימים (LoadTextFile, FindJsonStringEnd) ובפענוח
+// escapes ה-JSON בסיסי שתואם ל-EscapeJsonString.
+function GetCustomLibraryPath(): String;
+var
+  PrefsFile, JsonContent, KeyStr, Value: String;
+  KeyPos, ValueStart, ValueEnd: Integer;
+begin
+  Result := '';
+  PrefsFile := ExpandConstant('{userappdata}\otzaria\shared_preferences.json');
+  if not FileExists(PrefsFile) then
+    exit;
+
+  JsonContent := LoadTextFile(PrefsFile);
+  if JsonContent = '' then
+    exit;
+
+  KeyStr := '"flutter.key-library-path":';
+  KeyPos := Pos(KeyStr, JsonContent);
+  if KeyPos = 0 then
+  begin
+    KeyStr := '"key-library-path":';
+    KeyPos := Pos(KeyStr, JsonContent);
+  end;
+  if KeyPos = 0 then
+    exit;
+
+  ValueStart := KeyPos + Length(KeyStr);
+  while (ValueStart <= Length(JsonContent)) and
+        (JsonContent[ValueStart] <> '"') do
+    ValueStart := ValueStart + 1;
+  if ValueStart > Length(JsonContent) then
+    exit;
+  ValueStart := ValueStart + 1;
+
+  ValueEnd := FindJsonStringEnd(JsonContent, ValueStart);
+  if ValueEnd <= 0 then
+    exit;
+
+  Value := Copy(JsonContent, ValueStart, ValueEnd - ValueStart);
+  StringChangeEx(Value, '\\', '\', True);
+  StringChangeEx(Value, '\"', '"', True);
+  Result := Value;
+end;
+
+// בודק שהתיקייה נראית כמו תיקיית ספרים של אוצריא — כלומר מכילה לפחות
+// אחד מהסימנים הייחודיים שמותקנים ע"י המתקין FULL. נחוץ לפני DelTree על
+// נתיב שמגיע מהמשתמש (prefs), כדי שלא נמחק תיקייה אישית רחבה שהמשתמש
+// בחר בטעות כנתיב ספרים (למשל D:\, Downloads, Documents).
+function IsOtzariaBooksFolder(const Path: String): Boolean;
+begin
+  Result := False;
+  // אורך מינימלי 6 פוסל גם 'C:\' וגם 'C:\X'; מונע מחיקה בקרבת שורש כונן.
+  if (Path = '') or (Length(Path) < 6) then
+    exit;
+  if not DirExists(Path) then
+    exit;
+  if FileExists(Path + '\seforim.db') or
+     FileExists(Path + '\otzar-HB_catalog.db') or
+     DirExists(Path + '\תלמוד בבלי') then
+    Result := True;
+end;
+
+// מוחק את כל הנתונים והספרים של אוצריא: ספריית הספרים המותאמת אישית
+// (רק אם היא מזוהה כתיקיית אוצריא — ראה IsOtzariaBooksFolder), כל תיקיות
+// הנתונים הסטנדרטיות וגם נתיבי legacy. קוראים את הנתיב המותאם מה-prefs
+// לפני שמוחקים את ה-prefs עצמו.
+procedure DeleteAllUserData();
+var
+  Path: String;
+begin
+  Path := GetCustomLibraryPath();
+  if IsOtzariaBooksFolder(Path) then
+    DelTree(Path, True, True, True);
+
+  Path := ExpandConstant('{commonappdata}\otzaria');
+  if DirExists(Path) then
+    DelTree(Path, True, True, True);
+
+  Path := ExpandConstant('{userappdata}\otzaria');
+  if DirExists(Path) then
+    DelTree(Path, True, True, True);
+
+  Path := ExpandConstant('{localappdata}\otzaria');
+  if DirExists(Path) then
+    DelTree(Path, True, True, True);
+
+  // נתיבים ישנים: מזהה חבילה לפני שינוי (com.example) ושמות עבריים.
+  Path := ExpandConstant('{userappdata}\com.example');
+  if DirExists(Path) then
+    DelTree(Path, True, True, True);
+
+  Path := ExpandConstant('{localappdata}\אוצריא');
+  if DirExists(Path) then
+    DelTree(Path, True, True, True);
+
+  // הערה: C:\אוצריא לא נמחק כאן כי זה היה נתיב התקנה legacy (לא נתונים).
+  // אם נשארה שם התקנה ישנה — היא תוסר על ידי ה-uninstaller שלה.
+end;
+
+// שאלה בתחילת ההסרה: האם למחוק גם את הנתונים והספרים?
+// בהסרה שקטה (כולל עדכון שמריץ unins000.exe /SILENT) MsgBox מחזיר אוטומטית
+// את ברירת המחדל; MB_DEFBUTTON2 דואג שברירת המחדל היא "לא" כך שנתוני
+// המשתמש נשמרים אם הוא לא בחר במפורש למחוק.
+function InitializeUninstall(): Boolean;
+var
+  CustomPath, Msg: String;
+begin
+  Result := True;
+  DeleteUserDataOnUninstall := False;
+
+  CustomPath := GetCustomLibraryPath();
+
+  Msg := 'האם למחוק גם את הספרים וכל הנתונים של אוצריא?' + #13#10 + #13#10 +
+         'בכל מקרה תוסר התוכנה. בחירה ב"כן" תמחק בנוסף:' + #13#10;
+
+  // אם יש נתיב ספרים מותאם והוא מזוהה כתיקיית אוצריא — נציג אותו במפורש.
+  // אחרת לא מציינים נתיב חיצוני; תיקיית הספרים שתחת AppData ממילא נמחקת
+  // כחלק מ-{userappdata}\otzaria / {commonappdata}\otzaria.
+  if IsOtzariaBooksFolder(CustomPath) then
+    Msg := Msg + '• תיקיית הספרים:' + #13#10 +
+                 '   ' + CustomPath + #13#10
+  else
+    Msg := Msg + '• תיקיית הספרים שתחת תיקיית הנתונים' + #13#10;
+
+  Msg := Msg +
+         '• מסדי הנתונים, אינדקס החיפוש, הגדרות,' + #13#10 +
+         '   סימניות, היסטוריה והערות אישיות' + #13#10 + #13#10 +
+         'בחר "לא" כדי לשמור את הנתונים לקראת התקנה עתידית.';
+
+  if MsgBox(Msg, mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+  begin
+    if MsgBox(
+         'שים לב: לא ניתן יהיה לשחזר את הנתונים לאחר המחיקה.' + #13#10 + #13#10 +
+         'האם אתה בטוח שברצונך למחוק את כל הספרים והנתונים?',
+         mbCriticalError, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      DeleteUserDataOnUninstall := True;
+  end;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then
+  begin
     RemoveAppFromUserPath(ExpandConstant('{app}'));
+    if DeleteUserDataOnUninstall then
+      DeleteAllUserData();
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
