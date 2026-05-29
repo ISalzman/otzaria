@@ -6,6 +6,7 @@ import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/view/custom_shortcut_dialog.dart';
 import 'package:otzaria/shortcuts/view/shortcut_dropdown_tile.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
@@ -59,7 +60,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
       subtitle: 'פתיחת חלון חיפוש',
       tab: SettingsTab.shortcuts,
       cardId: 'shortcuts.main',
-      keywords: ['חיפוש', 'ctrl+q', 'מקלדת'],
+      keywords: ['חיפוש', 'ctrl+shift+f', 'מקלדת'],
     ),
     SettingsSearchEntry(
       id: 'shortcuts.nav.settings',
@@ -232,52 +233,24 @@ class ShortcutsSettingsTab extends StatelessWidget {
     ),
   ];
 
-  static const Map<String, String> _shortcutsList = {
-    'ctrl+a': 'CTRL + A',
-    'ctrl+b': 'CTRL + B',
-    'ctrl+c': 'CTRL + C',
-    'ctrl+d': 'CTRL + D',
-    'ctrl+e': 'CTRL + E',
-    'ctrl+f': 'CTRL + F',
-    'ctrl+g': 'CTRL + G',
-    'ctrl+h': 'CTRL + H',
-    'ctrl+i': 'CTRL + I',
-    'ctrl+j': 'CTRL + J',
-    'ctrl+k': 'CTRL + K',
-    'ctrl+l': 'CTRL + L',
-    'ctrl+m': 'CTRL + M',
-    'ctrl+n': 'CTRL + N',
-    'ctrl+o': 'CTRL + O',
-    'ctrl+p': 'CTRL + P',
-    'ctrl+q': 'CTRL + Q',
-    'ctrl+r': 'CTRL + R',
-    'ctrl+s': 'CTRL + S',
-    'ctrl+t': 'CTRL + T',
-    'ctrl+u': 'CTRL + U',
-    'ctrl+v': 'CTRL + V',
-    'ctrl+w': 'CTRL + W',
-    'ctrl+x': 'CTRL + X',
-    'ctrl+y': 'CTRL + Y',
-    'ctrl+z': 'CTRL + Z',
-    'ctrl+0': 'CTRL + 0',
-    'ctrl+1': 'CTRL + 1',
-    'ctrl+2': 'CTRL + 2',
-    'ctrl+3': 'CTRL + 3',
-    'ctrl+4': 'CTRL + 4',
-    'ctrl+5': 'CTRL + 5',
-    'ctrl+6': 'CTRL + 6',
-    'ctrl+7': 'CTRL + 7',
-    'ctrl+8': 'CTRL + 8',
-    'ctrl+9': 'CTRL + 9',
-    'ctrl+comma': 'CTRL + ,',
-    'ctrl+shift+b': 'CTRL + SHIFT + B',
-    'ctrl+shift+c': 'CTRL + SHIFT + C',
-    'ctrl+shift+e': 'CTRL + SHIFT + E',
-    'ctrl+shift+l': 'CTRL + SHIFT + L',
-    'ctrl+shift+n': 'CTRL + SHIFT + N',
-    'ctrl+shift+p': 'CTRL + SHIFT + P',
-    'ctrl+shift+w': 'CTRL + SHIFT + W',
-  };
+  /// אוסף הקיצורים הזמינים לבחירה ב-dropdown. התווית נגזרת דינמית כדי
+  /// ש-Mac יציג `⌘` במקום `CTRL`. הערך (המפתח) נשאר קנוני (`ctrl+X`).
+  static final Map<String, String> _shortcutsList = _buildShortcutsList();
+
+  static Map<String, String> _buildShortcutsList() {
+    const List<String> keys = [
+      'ctrl+a', 'ctrl+b', 'ctrl+c', 'ctrl+d', 'ctrl+e', 'ctrl+f', 'ctrl+g',
+      'ctrl+h', 'ctrl+i', 'ctrl+j', 'ctrl+k', 'ctrl+l', 'ctrl+m', 'ctrl+n',
+      'ctrl+o', 'ctrl+p', 'ctrl+q', 'ctrl+r', 'ctrl+s', 'ctrl+t', 'ctrl+u',
+      'ctrl+v', 'ctrl+w', 'ctrl+x', 'ctrl+y', 'ctrl+z',
+      'ctrl+0', 'ctrl+1', 'ctrl+2', 'ctrl+3', 'ctrl+4',
+      'ctrl+5', 'ctrl+6', 'ctrl+7', 'ctrl+8', 'ctrl+9',
+      'ctrl+comma',
+      'ctrl+shift+b', 'ctrl+shift+c', 'ctrl+shift+e', 'ctrl+shift+f',
+      'ctrl+shift+l', 'ctrl+shift+n', 'ctrl+shift+p', 'ctrl+shift+w',
+    ];
+    return {for (final k in keys) k: ShortcutHelper.formatShortcutForDisplay(k)};
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -362,7 +335,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
             _ShortcutTile(
               settingKey: 'key-shortcut-open-new-search',
               label: 'חלון חיפוש חדש',
-              defaultShortcut: 'ctrl+q',
+              defaultShortcut: 'ctrl+shift+f',
               icon: FluentIcons.search_24_regular,
               allShortcuts: _shortcutsList,
             ),

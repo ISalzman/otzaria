@@ -2657,18 +2657,33 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final wideScreen = MediaQuery.of(context).size.width >= 600;
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
+        // ב-Mac המוסכמה היא Cmd (Meta); בשאר הפלטפורמות Ctrl. שתי הגרסאות
+        // רשומות יחד כדי שאותו handler יופעל ללא בדיקה דינמית של פלטפורמה.
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyF):
+            _ensureSearchTabIsActive,
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyF):
             _ensureSearchTabIsActive,
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.equal):
             _zoomIn,
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.equal):
+            _zoomIn,
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.add):
+            _zoomIn,
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.add):
             _zoomIn,
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.numpadAdd):
             _zoomIn,
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.numpadAdd):
+            _zoomIn,
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.minus):
+            _zoomOut,
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.minus):
             _zoomOut,
         LogicalKeySet(
                 LogicalKeyboardKey.control, LogicalKeyboardKey.numpadSubtract):
+            _zoomOut,
+        LogicalKeySet(
+                LogicalKeyboardKey.meta, LogicalKeyboardKey.numpadSubtract):
             _zoomOut,
       },
       child: Scaffold(
