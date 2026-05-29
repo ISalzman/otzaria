@@ -141,6 +141,7 @@ class TextBookError extends TextBookState {
 
 class TextBookLoaded extends TextBookState {
   final List<String> content;
+  final int contentVersion;
   final double fontSize;
   final bool showSplitView;
   final bool showTzuratHadafView;
@@ -211,6 +212,7 @@ class TextBookLoaded extends TextBookState {
     required TextBook book,
     required bool showLeftPane,
     required this.content,
+    this.contentVersion = 0,
     required this.fontSize,
     required this.showSplitView,
     this.showTzuratHadafView = false,
@@ -268,6 +270,7 @@ class TextBookLoaded extends TextBookState {
     return TextBookLoaded(
       book: book,
       content: const [],
+      contentVersion: 0,
       fontSize: 25.0, // Default font size
       showLeftPane: showLeftPane,
       showSplitView: splitView,
@@ -307,6 +310,7 @@ class TextBookLoaded extends TextBookState {
   TextBookLoaded copyWith({
     TextBook? book,
     List<String>? content,
+    int? contentVersion,
     double? fontSize,
     bool? showLeftPane,
     bool? showSplitView,
@@ -362,6 +366,7 @@ class TextBookLoaded extends TextBookState {
     return TextBookLoaded(
       book: book ?? this.book,
       content: content ?? this.content,
+      contentVersion: contentVersion ?? this.contentVersion,
       fontSize: fontSize ?? this.fontSize,
       showLeftPane: showLeftPane ?? this.showLeftPane,
       showSplitView: showSplitView ?? this.showSplitView,
@@ -441,6 +446,7 @@ class TextBookLoaded extends TextBookState {
   @override
   List<Object?> get props => [
         book.title,
+      contentVersion,
         content.length,
         fontSize,
         showLeftPane,

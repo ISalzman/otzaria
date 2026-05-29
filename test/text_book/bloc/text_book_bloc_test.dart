@@ -114,6 +114,62 @@ void main() {
       expect(lines[13], 'שורה 13');
     });
 
+    test('טווחי תוכן טעונים נשמרים כרשימת טווחים ממוזגת ללא הנחת רציפות', () {
+      final merged = TextBookBloc.mergeLoadedContentRangesForTesting(
+        const [
+          (startLine: 0, endLine: 100),
+          (startLine: 500, endLine: 700),
+        ],
+        startLine: 101,
+        endLine: 180,
+      );
+
+      expect(merged, const [
+        (startLine: 0, endLine: 180),
+        (startLine: 500, endLine: 700),
+      ]);
+    });
+
+    test('בדיקת sufficiency לא מחליקה על חור באמצע הטווח', () {
+      const loadedRanges = [
+        (startLine: 0, endLine: 180),
+        (startLine: 500, endLine: 700),
+      ];
+
+      expect(
+        TextBookBloc.isContentWindowSufficientForTesting(
+          loadedRanges: loadedRanges,
+          startLine: 300,
+          endLine: 340,
+          reloadThresholdLines: 60,
+        ),
+        isFalse,
+      );
+
+      expect(
+        TextBookBloc.isContentWindowSufficientForTesting(
+          loadedRanges: loadedRanges,
+          startLine: 560,
+          endLine: 600,
+          reloadThresholdLines: 40,
+        ),
+        isTrue,
+      );
+    });
+
+    test('warming בוחר את החור הראשון שטרם נטען ולא מניח טווח רציף', () {
+      expect(
+        TextBookBloc.nextWarmContentStartForTesting(
+          loadedRanges: const [
+            (startLine: 0, endLine: 180),
+            (startLine: 500, endLine: 700),
+          ],
+          totalLines: 1000,
+        ),
+        181,
+      );
+    });
+
     test('LoadContent משתמש ב-categoryId וב-fileType במסלול quick preview',
         () async {
       final repository = _EmptyContentTextBookRepository();

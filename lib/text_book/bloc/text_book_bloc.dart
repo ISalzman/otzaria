@@ -61,8 +61,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   String? _loadedLinksTargetBookTitlesSignature;
   String? _activeLinksTargetBookTitlesSignature;
   String? _loadedContentBookTitle;
-  int? _loadedContentStart;
-  int? _loadedContentEnd;
+  List<({int startLine, int endLine})> _loadedContentRanges = const [];
   int? _loadedContentTotalLines;
   bool _isLoadingContentRange = false;
   bool _pendingContentRangeReload = false;
@@ -206,6 +205,96 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     return expectedIndex >= (minVisible - tolerance) &&
         expectedIndex <= (maxVisible + tolerance);
+  }
+
+  @visibleForTesting
+  static List<({int startLine, int endLine})> mergeLoadedContentRangesForTesting(
+    List<({int startLine, int endLine})> ranges, {
+    required int startLine,
+    required int endLine,
+  }) {
+    final normalizedStart = startLine < 0 ? 0 : startLine;
+    if (endLine < normalizedStart) {
+      return List<({int startLine, int endLine})>.unmodifiable(ranges);
+    }
+
+    final sorted = [
+      ...ranges,
+      (startLine: normalizedStart, endLine: endLine),
+    ]..sort((a, b) => a.startLine.compareTo(b.startLine));
+
+    final merged = <({int startLine, int endLine})>[];
+    for (final range in sorted) {
+      if (merged.isEmpty) {
+        merged.add(range);
+        continue;
+      }
+
+      final last = merged.last;
+      if (range.startLine <= last.endLine + 1) {
+        merged[merged.length - 1] = (
+          startLine: last.startLine,
+          endLine: range.endLine > last.endLine ? range.endLine : last.endLine,
+        );
+        continue;
+      }
+
+      merged.add(range);
+    }
+
+    return List<({int startLine, int endLine})>.unmodifiable(merged);
+  }
+
+  @visibleForTesting
+  static bool isContentWindowSufficientForTesting({
+    required List<({int startLine, int endLine})> loadedRanges,
+    required int startLine,
+    required int endLine,
+    required int reloadThresholdLines,
+  }) {
+    if (loadedRanges.isEmpty) {
+      return false;
+    }
+
+    final normalizedStart = startLine < 0 ? 0 : startLine;
+    for (final range in loadedRanges) {
+      final hasStartMargin =
+          (normalizedStart == 0 && range.startLine == 0) ||
+              normalizedStart >= range.startLine + reloadThresholdLines;
+      if (hasStartMargin && endLine <= range.endLine - reloadThresholdLines) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  @visibleForTesting
+  static int? nextWarmContentStartForTesting({
+    required List<({int startLine, int endLine})> loadedRanges,
+    required int totalLines,
+  }) {
+    if (totalLines <= 0) {
+      return null;
+    }
+    if (loadedRanges.isEmpty) {
+      return 0;
+    }
+
+    var nextStart = 0;
+    for (final range in loadedRanges) {
+      if (nextStart < range.startLine) {
+        return nextStart;
+      }
+      if (nextStart <= range.endLine) {
+        nextStart = range.endLine + 1;
+        if (nextStart >= totalLines) {
+          return null;
+        }
+      }
+    }
+
+    return nextStart < totalLines ? nextStart : null;
   }
 
   bool _isInitialPageShapeVisibleSyncAligned(
@@ -525,6 +614,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       TextBookLoaded loadedState = TextBookLoaded(
         book: book,
         content: contentLines,
+        contentVersion: contentLines.isEmpty ? 0 : 1,
         links: emptyLinks,
         linksByLine: const {},
         availableCommentators: existingAvailableCommentators,
@@ -1322,6 +1412,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     final updatedState = _withInlineNotesCommentator(currentState.copyWith(
       content: event.content,
+      contentVersion: currentState.contentVersion + 1,
       readingSegments: buildReadingSegments(
         event.content,
         continuous: currentState.continuousReadingMode,
@@ -1355,6 +1446,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     final nextContent = List<String>.of(currentState.content);
     final targetLength = event.startLine + event.lines.length;
+    var hasContentChanged = targetLength > nextContent.length;
     if (nextContent.length < targetLength) {
       nextContent.addAll(
         List<String>.filled(targetLength - nextContent.length, ''),
@@ -1364,8 +1456,21 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     for (var offset = 0; offset < event.lines.length; offset++) {
       final targetIndex = event.startLine + offset;
       if (targetIndex >= 0 && targetIndex < nextContent.length) {
+        if (nextContent[targetIndex] != event.lines[offset]) {
+          hasContentChanged = true;
+        }
         nextContent[targetIndex] = event.lines[offset];
       }
+    }
+
+    if (!hasContentChanged) {
+      _markLoadedContentRange(
+        currentState.book,
+        event.startLine,
+        event.startLine + event.lines.length - 1,
+        totalLines: event.totalLines,
+      );
+      return;
     }
 
     _markLoadedContentRange(
@@ -1377,6 +1482,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     emit(_withInlineNotesCommentator(
       currentState.copyWith(
         content: nextContent,
+        contentVersion: currentState.contentVersion + 1,
         readingSegments: buildReadingSegments(
           nextContent,
           continuous: currentState.continuousReadingMode,
@@ -1519,32 +1625,41 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }) {
     if (_loadedContentBookTitle != book.title) {
       _loadedContentBookTitle = book.title;
-      _loadedContentStart = null;
-      _loadedContentEnd = null;
+      _loadedContentRanges = const [];
       _loadedContentTotalLines = null;
     }
 
     _loadedContentTotalLines = totalLines ?? _loadedContentTotalLines;
-    _loadedContentStart = _loadedContentStart == null
-        ? startLine
-        : (_loadedContentStart! < startLine ? _loadedContentStart : startLine);
-    _loadedContentEnd = _loadedContentEnd == null
-        ? endLine
-        : (_loadedContentEnd! > endLine ? _loadedContentEnd : endLine);
+    _loadedContentRanges = mergeLoadedContentRangesForTesting(
+      _loadedContentRanges,
+      startLine: startLine,
+      endLine: endLine,
+    );
   }
 
   bool _isContentWindowSufficient(TextBook book, int startLine, int endLine) {
-    if (_loadedContentBookTitle != book.title ||
-        _loadedContentStart == null ||
-        _loadedContentEnd == null) {
+    if (_loadedContentBookTitle != book.title || _loadedContentRanges.isEmpty) {
       return false;
     }
 
-    final normalizedStart = startLine < 0 ? 0 : startLine;
-    final hasStartMargin = normalizedStart == 0 && _loadedContentStart == 0 ||
-        normalizedStart >= _loadedContentStart! + _contentReloadThresholdLines;
-    return hasStartMargin &&
-        endLine <= _loadedContentEnd! - _contentReloadThresholdLines;
+    return isContentWindowSufficientForTesting(
+      loadedRanges: _loadedContentRanges,
+      startLine: startLine,
+      endLine: endLine,
+      reloadThresholdLines: _contentReloadThresholdLines,
+    );
+  }
+
+  int? _nextWarmContentStart() {
+    final totalLines = _loadedContentTotalLines;
+    if (totalLines == null) {
+      return null;
+    }
+
+    return nextWarmContentStartForTesting(
+      loadedRanges: _loadedContentRanges,
+      totalLines: totalLines,
+    );
   }
 
   ({int startLine, int endLine}) _calculateContentWindow(
@@ -1632,8 +1747,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           return;
         }
 
-        final nextStart = (_loadedContentEnd ?? -1) + 1;
-        if (nextStart >= totalLines) {
+        final nextStart = _nextWarmContentStart();
+        if (nextStart == null || nextStart >= totalLines) {
           return;
         }
 
