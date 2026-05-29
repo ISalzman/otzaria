@@ -1,7 +1,8 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
@@ -76,6 +77,15 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
     } else if (query.isEmpty) {
       context.read<SearchBloc>().add(ClearFilter());
     }
+  }
+
+  /// ב-Mac המוסכמה לריבוי בחירה היא Cmd+Click, בשאר הפלטפורמות Ctrl+Click.
+  bool _isMultiSelectModifierPressed() {
+    final keyboard = HardwareKeyboard.instance;
+    if (Platform.isMacOS) {
+      return keyboard.isMetaPressed || keyboard.isControlPressed;
+    }
+    return keyboard.isControlPressed;
   }
 
   void _handleFacetToggle(BuildContext context, String facet) {
@@ -158,7 +168,8 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
     final facet = FacetHelper.buildBookFacet(resolvedCategoryPath, book);
     final isSelected = state.currentFacets.contains(facet);
     return InkWell(
-      onTap: () => HardwareKeyboard.instance.isControlPressed
+      // ב-Mac המוסכמה היא Cmd+Click לריבוי בחירה; בשאר הפלטפורמות Ctrl+Click.
+      onTap: () => _isMultiSelectModifierPressed()
           ? _handleFacetToggle(context, facet)
           : _setFacet(context, facet),
       onDoubleTap: () => _handleFacetToggle(context, facet),
@@ -290,8 +301,8 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
         // שורת הקטגוריה - סגנון ספרייה
         InkWell(
           onTap: () {
-            // Ctrl+לחיצה = toggle, לחיצה רגילה = set
-            if (HardwareKeyboard.instance.isControlPressed) {
+            // Ctrl+לחיצה (Cmd ב-Mac) = toggle, לחיצה רגילה = set
+            if (_isMultiSelectModifierPressed()) {
               _handleFacetToggle(context, category.path);
             } else {
               _setFacet(context, category.path);

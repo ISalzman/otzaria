@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/shortcuts/view/custom_shortcut_dialog.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
@@ -77,7 +78,7 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
     if (!availableShortcuts.containsKey(currentValue) &&
         !widget.allShortcuts.containsKey(currentValue)) {
       availableShortcuts[currentValue] =
-          currentValue.toUpperCase().replaceAll('+', ' + ');
+          ShortcutHelper.formatShortcutForDisplay(currentValue);
     }
 
     return Padding(

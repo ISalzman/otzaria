@@ -2377,6 +2377,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 LogicalKeyboardKey.control,
                 LogicalKeyboardKey.keyF,
               ): _openSearchFromToolbar,
+              // Mac: Cmd+F
+              LogicalKeySet(
+                LogicalKeyboardKey.meta,
+                LogicalKeyboardKey.keyF,
+              ): _openSearchFromToolbar,
             },
             child: TextBookScaffold(
               content: state.content,
@@ -2460,21 +2465,30 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                       .add(const ToggleLeftPane(false)),
                   scrollController: state.scrollController,
                 ),
-              CallbackShortcuts(
-                bindings: <ShortcutActivator, VoidCallback>{
-                  LogicalKeySet(
-                    LogicalKeyboardKey.control,
-                    LogicalKeyboardKey.keyF,
-                  ): () {
-                    context.read<TextBookBloc>().add(
-                          const ToggleLeftPane(true),
-                        );
-                    tabController.index = _hasAltTitles ? 2 : 1;
-                    textSearchFocusNode.requestFocus();
+              Builder(builder: (context) {
+                void openSearch() {
+                  context.read<TextBookBloc>().add(
+                        const ToggleLeftPane(true),
+                      );
+                  tabController.index = _hasAltTitles ? 2 : 1;
+                  textSearchFocusNode.requestFocus();
+                }
+
+                return CallbackShortcuts(
+                  bindings: <ShortcutActivator, VoidCallback>{
+                    LogicalKeySet(
+                      LogicalKeyboardKey.control,
+                      LogicalKeyboardKey.keyF,
+                    ): openSearch,
+                    // Mac: Cmd+F
+                    LogicalKeySet(
+                      LogicalKeyboardKey.meta,
+                      LogicalKeyboardKey.keyF,
+                    ): openSearch,
                   },
-                },
-                child: _buildSearchView(context, state),
-              ),
+                  child: _buildSearchView(context, state),
+                );
+              }),
             ],
           ),
         ),
@@ -2652,8 +2666,12 @@ bool _handleGlobalKeyEvent(
     return true;
   }
 
-  // קיצורים קבועים (לא ניתנים להתאמה אישית)
-  if (event is KeyDownEvent && HardwareKeyboard.instance.isControlPressed) {
+  // קיצורים קבועים (לא ניתנים להתאמה אישית).
+  // ב-Mac מקבלים גם את Cmd (Meta) כי זו המוסכמה בפלטפורמה.
+  final isCtrlOrCmd = HardwareKeyboard.instance.isControlPressed ||
+      (Platform.isMacOS && HardwareKeyboard.instance.isMetaPressed);
+
+  if (event is KeyDownEvent && isCtrlOrCmd) {
     switch (event.logicalKey) {
       // הגדל את גודל הטקסט (Ctrl++ או Ctrl+=)
       case LogicalKeyboardKey.equal:
@@ -2679,7 +2697,7 @@ bool _handleGlobalKeyEvent(
   }
 
   // ניווט עם Ctrl+Home ו-Ctrl+End
-  if (event is KeyDownEvent && HardwareKeyboard.instance.isControlPressed) {
+  if (event is KeyDownEvent && isCtrlOrCmd) {
     switch (event.logicalKey) {
       // Ctrl+Home - תחילת הספר
       case LogicalKeyboardKey.home:
@@ -2699,8 +2717,8 @@ bool _handleGlobalKeyEvent(
     }
   }
 
-  // מקשי פונקציה ללא Ctrl
-  if (event is KeyDownEvent && !HardwareKeyboard.instance.isControlPressed) {
+  // מקשי פונקציה ללא Ctrl/Cmd
+  if (event is KeyDownEvent && !isCtrlOrCmd) {
     switch (event.logicalKey) {
       // F11 - מסך מלא
       case LogicalKeyboardKey.f11:

@@ -101,7 +101,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     final readingScreenShortcut =
         shortcutSettings['key-shortcut-open-reading-screen'] ?? 'ctrl+r';
     final newSearchShortcut =
-        shortcutSettings['key-shortcut-open-new-search'] ?? 'ctrl+q';
+        shortcutSettings['key-shortcut-open-new-search'] ?? 'ctrl+shift+f';
     final settingsShortcut =
         shortcutSettings['key-shortcut-open-settings'] ?? 'ctrl+comma';
     final moreShortcut = shortcutSettings['key-shortcut-open-more'] ?? 'ctrl+m';
@@ -272,15 +272,18 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       return KeyEventResult.handled;
     }
 
-    // Ctrl+Tab - טאב הבא
-    if (ShortcutHelper.matchesShortcut(event, 'ctrl+tab')) {
-      context.read<TabsBloc>().add(NavigateToNextTab());
-      return KeyEventResult.handled;
-    }
-
-    // Ctrl+Shift+Tab - טאב קודם
-    if (ShortcutHelper.matchesShortcut(event, 'ctrl+shift+tab')) {
-      context.read<TabsBloc>().add(NavigateToPreviousTab());
+    // Ctrl+Tab / Ctrl+Shift+Tab - מעבר בין טאבים.
+    // לא משתמשים ב-matchesShortcut כדי לא להפוך ל-Cmd ב-Mac: Cmd+Tab
+    // שמור למערכת ההפעלה, ולכן ב-Mac נשארים עם Ctrl פיזי (זמין שם).
+    if (event.logicalKey == LogicalKeyboardKey.tab &&
+        HardwareKeyboard.instance.isControlPressed &&
+        !HardwareKeyboard.instance.isAltPressed &&
+        !HardwareKeyboard.instance.isMetaPressed) {
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        context.read<TabsBloc>().add(NavigateToPreviousTab());
+      } else {
+        context.read<TabsBloc>().add(NavigateToNextTab());
+      }
       return KeyEventResult.handled;
     }
 

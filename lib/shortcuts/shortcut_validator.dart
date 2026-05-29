@@ -58,7 +58,7 @@ class ShortcutValidator {
     'key-shortcut-close-tab': 'ctrl+w',
     'key-shortcut-close-all-tabs': 'ctrl+shift+w',
     'key-shortcut-open-reading-screen': 'ctrl+r',
-    'key-shortcut-open-new-search': 'ctrl+q',
+    'key-shortcut-open-new-search': 'ctrl+shift+f',
     'key-shortcut-open-settings': 'ctrl+comma',
     'key-shortcut-open-more': 'ctrl+m',
     'key-shortcut-open-bookmarks': 'ctrl+shift+b',
