@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -38,6 +39,75 @@ void main() {
     if (await tempDir.exists()) {
       await tempDir.delete(recursive: true);
     }
+  });
+
+  group('PdfOutlineCacheEntry encode/decode', () {
+    test('encode מייצר מעטפה עם שדה הגרסה הנוכחית', () {
+      final json = PdfOutlineCacheEntry.encodeOutlineEntries(
+        const [('ברכות', 'ברכות', 1)],
+      );
+
+      final decoded = jsonDecode(json);
+      expect(decoded, isA<Map>());
+      expect((decoded as Map)['v'],
+          equals(PdfOutlineCacheEntry.currentSchemaVersion));
+      expect(decoded['entries'], isA<List>());
+    });
+
+    test('decode של פורמט legacy (List ישנה ללא v) מחזיר פריטים', () {
+      final legacyJson = jsonEncode([
+        {'n': 'ברכות', 'o': 'ברכות', 'p': 1},
+        {'n': 'פרק א', 'o': 'פרק א', 'p': 3},
+      ]);
+
+      final entries = PdfOutlineCacheEntry.decodeOutlineEntries(legacyJson);
+
+      expect(entries, equals(const [
+        ('ברכות', 'ברכות', 1),
+        ('פרק א', 'פרק א', 3),
+      ]));
+    });
+
+    test('decode של JSON עם גרסה לא תואמת זורק FormatException', () {
+      final futureJson = jsonEncode({
+        'v': PdfOutlineCacheEntry.currentSchemaVersion + 1,
+        'entries': [
+          {'n': 'ברכות', 'o': 'ברכות', 'p': 1}
+        ],
+      });
+
+      expect(
+        () => PdfOutlineCacheEntry.decodeOutlineEntries(futureJson),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('מעטפה תקפה עם entries לא-רשימה נחשבת corruption וזורקת FormatException',
+        () {
+      final malformedJson = jsonEncode({
+        'v': PdfOutlineCacheEntry.currentSchemaVersion,
+        'entries': 'not-a-list',
+      });
+
+      expect(
+        () => PdfOutlineCacheEntry.decodeOutlineEntries(malformedJson),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('payload עם top-level שאינו list או object זורק FormatException', () {
+      expect(
+        () => PdfOutlineCacheEntry.decodeOutlineEntries('"לא תקין"'),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('legacy List נתמך כל עוד currentSchemaVersion == 1', () {
+      // סנטינל: כשמעלים את currentSchemaVersion, ה-fallback הזה הופך
+      // לדחיה אוטומטית של רשומות legacy. אם משנים את הקבוע, יש לוודא
+      // שזו עדיין ההתנהגות הרצויה ולעדכן את הטסט הזה במודע.
+      expect(PdfOutlineCacheEntry.currentSchemaVersion, equals(1));
+    });
   });
 
   group('ReferenceBooksCache persistent PDF outline cache', () {
@@ -238,6 +308,45 @@ void main() {
       expect(await repository.getPdfOutlineCacheEntry('/old.pdf'), isNull);
       expect(
           await repository.getPdfOutlineCacheEntry('/recent.pdf'), isNotNull);
+    });
+
+    test('רשומה עם schemaVersion לא תואם נמחקת ונבנית מחדש דרך parser',
+        () async {
+      final forwardCompatibleJson = jsonEncode({
+        'v': PdfOutlineCacheEntry.currentSchemaVersion + 1,
+        'entries': [
+          {'n': 'ישן', 'o': 'ישן', 'p': 1}
+        ],
+      });
+      await repository.upsertPdfOutlineCacheEntry(
+        PdfOutlineCacheEntry(
+          filePath: '/incompatible.pdf',
+          fileSize: 10,
+          lastModified: 20,
+          outlineJson: forwardCompatibleJson,
+          createdAt: 1,
+          accessedAt: 2,
+        ),
+      );
+
+      cache.pdfFileMetadataProviderOverride = (_) async => (
+            fileSize: 10,
+            lastModified: 20,
+          );
+      const reparsedEntries = [('חדש', 'חדש', 7)];
+      var parserCalls = 0;
+      cache.pdfOutlineParser = (_) async {
+        parserCalls++;
+        return reparsedEntries;
+      };
+
+      final result = await cache.getPdfOutlineEntries('/incompatible.pdf');
+
+      expect(result, equals(reparsedEntries));
+      expect(parserCalls, equals(1));
+      final row = await repository.getPdfOutlineCacheEntry('/incompatible.pdf');
+      expect(row, isNotNull);
+      expect(row!.decodeEntries(), equals(reparsedEntries));
     });
 
     test('pruning לפי known file paths מוחק entries שכבר לא ידועים', () async {

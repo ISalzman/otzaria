@@ -2,6 +2,14 @@ import 'dart:convert';
 
 /// רשומת cache מתמשך ל-outline של קובץ PDF חיצוני.
 class PdfOutlineCacheEntry {
+  /// גרסת הסכמה הנוכחית של מבנה ה-outline המסודר ב-[outlineJson].
+  ///
+  /// העלאת הערך כאן (בעקבות שינוי שדות/מפתחות במבנה של פריט outline)
+  /// גורמת לכך ש-[decodeOutlineEntries] יזרוק `FormatException` על רשומות
+  /// שנשמרו בגרסה ישנה. ה-self-healing ב-ReferenceBooksCache תופס את החריגה,
+  /// מוחק את הרשומה הישנה ובונה אותה מחדש דרך parser של pdfrx.
+  static const int currentSchemaVersion = 1;
+
   final String filePath;
   final int fileSize;
   final int lastModified;
@@ -63,24 +71,69 @@ class PdfOutlineCacheEntry {
       decodeOutlineEntries(outlineJson);
 
   /// ממיר רשימת outline entries ל-JSON יציב לשמירה ב-DB.
+  ///
+  /// פורמט: `{"v": <גרסה>, "entries": [{"n": ..., "o": ..., "p": ...}, ...]}`.
   static String encodeOutlineEntries(List<(String, String, int)> entries) {
-    return jsonEncode([
-      for (final (normalizedTitle, originalTitle, pageNumber) in entries)
-        {
-          'n': normalizedTitle,
-          'o': originalTitle,
-          'p': pageNumber,
-        }
-    ]);
+    return jsonEncode({
+      'v': currentSchemaVersion,
+      'entries': [
+        for (final (normalizedTitle, originalTitle, pageNumber) in entries)
+          {
+            'n': normalizedTitle,
+            'o': originalTitle,
+            'p': pageNumber,
+          }
+      ],
+    });
   }
 
   /// מפענח outline entries מ-JSON שמור.
+  ///
+  /// תומך בשני פורמטים:
+  /// - הפורמט הנוכחי: `{"v": <גרסה>, "entries": [...]}`.
+  /// - פורמט legacy מלפני הוספת שדה הגרסה: רשימה בלבד `[...]` — מטופל
+  ///   כגרסה 1 בלבד. כש-[currentSchemaVersion] גדול מ-1, רשומות בפורמט
+  ///   הזה ייחשבו לא תקפות וייבנו מחדש.
+  ///
+  /// בכל מקרה של אי-התאמת גרסה או corruption (מעטפה תקפה עם `entries`
+  /// שאינו רשימה) נזרק `FormatException`, כך שהקוד הקורא ימחק את הרשומה
+  /// ויבנה מחדש מתוך ה-PDF.
   static List<(String, String, int)> decodeOutlineEntries(String outlineJson) {
     final decoded = jsonDecode(outlineJson);
-    if (decoded is! List) return const [];
+
+    final List<dynamic> rawEntries;
+    if (decoded is List) {
+      if (currentSchemaVersion != 1) {
+        throw FormatException(
+          'Unsupported pdf_outline_cache legacy format (implicit v=1, '
+          'expected $currentSchemaVersion)',
+        );
+      }
+      rawEntries = decoded;
+    } else if (decoded is Map) {
+      final version = decoded['v'];
+      if (version is! int || version != currentSchemaVersion) {
+        throw FormatException(
+          'Unsupported pdf_outline_cache schema version: $version '
+          '(expected $currentSchemaVersion)',
+        );
+      }
+      final entries = decoded['entries'];
+      if (entries is! List) {
+        throw const FormatException(
+          'Malformed pdf_outline_cache payload: "entries" is not a list',
+        );
+      }
+      rawEntries = entries;
+    } else {
+      throw const FormatException(
+        'Malformed pdf_outline_cache payload: top-level value is not '
+        'a list or object',
+      );
+    }
 
     return [
-      for (final item in decoded)
+      for (final item in rawEntries)
         if (item is Map)
           (
             item['n'] as String? ?? '',
