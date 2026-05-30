@@ -12,6 +12,7 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/personal_notes/services/personal_notes_import_export_service.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
+import 'package:otzaria/personal_notes/widgets/personal_note_content_view.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor_dialog.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_export_dialog.dart';
@@ -410,9 +411,17 @@ class _PersonalNotesManagerScreenState
             AppTopBarItem(
               widget: ToolbarActionButton(
                 compact: isCompact,
-                tooltip: 'ייצוא הערות',
+                tooltip: 'גיבוי הערות',
                 icon: FluentIcons.arrow_download_24_regular,
                 onPressed: _exportNotes,
+              ),
+            ),
+            AppTopBarItem(
+              widget: ToolbarActionButton(
+                compact: isCompact,
+                tooltip: 'ייצוא לטקסט',
+                icon: FluentIcons.document_text_24_regular,
+                onPressed: _exportNotesToText,
               ),
             ),
             AppTopBarItem(
@@ -445,14 +454,16 @@ class _PersonalNotesManagerScreenState
       context: context,
       builder: (context) => PersonalNotesExportDialog(
         allNotes: _collectAllNotes(),
+        title: 'גיבוי הערות',
+        confirmText: 'גבה',
       ),
     );
     if (!mounted) return;
     if (selection == null || selection.notes.isEmpty) return;
 
     final path = await FilePicker.saveFile(
-      dialogTitle: 'בחר מיקום לשמירת קובץ הייצוא',
-      fileName: 'otzaria_notes_export.json',
+      dialogTitle: 'בחר מיקום לשמירת קובץ הגיבוי',
+      fileName: 'otzaria_notes_backup.json',
       allowedExtensions: ['json'],
       type: FileType.custom,
       lockParentWindow: true,
@@ -467,7 +478,39 @@ class _PersonalNotesManagerScreenState
     );
 
     if (!mounted) return;
-    UiSnack.show('הייצוא הושלם בהצלחה');
+    UiSnack.show('הגיבוי הושלם בהצלחה');
+  }
+
+  Future<void> _exportNotesToText() async {
+    final selection = await showDialog<NotesExportSelection>(
+      context: context,
+      builder: (context) => PersonalNotesExportDialog(
+        allNotes: _collectAllNotes(),
+        title: 'ייצוא לטקסט',
+        confirmText: 'ייצא',
+      ),
+    );
+    if (!mounted) return;
+    if (selection == null || selection.notes.isEmpty) return;
+
+    final path = await FilePicker.saveFile(
+      dialogTitle: 'בחר מיקום לשמירת קובץ הטקסט',
+      fileName: 'otzaria_notes.txt',
+      allowedExtensions: ['txt'],
+      type: FileType.custom,
+      lockParentWindow: true,
+    );
+    if (!mounted) return;
+    if (path == null) return;
+
+    await _importExportService.exportToTextFile(
+      path: path,
+      notes: selection.notes,
+      description: selection.description,
+    );
+
+    if (!mounted) return;
+    UiSnack.show('הייצוא לטקסט הושלם בהצלחה');
   }
 
   Future<void> _importNotes() async {
@@ -1028,17 +1071,32 @@ class _PersonalNotesManagerScreenState
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
-                note.contentPlain,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                      height: 1.45,
+              // תצוגה מקדימה מעוצבת: מרנדרים את ה-Quill Delta המלא במקום
+              // טקסט פשוט, כך שהעיצוב (מודגש/נטוי/קו תחתי/קו חוצה וכו') יופיע
+              // גם בכרטיס. הכרטיס בגובה קבוע (mainAxisExtent: 170), לכן עוטפים
+              // ב-Expanded + ClipRect + OverflowBox כדי לחתוך עודף תוכן במקום
+              // לגלוש (PersonalNoteContentView לא תומך ב-maxLines).
+              Expanded(
+                child: ClipRect(
+                  child: OverflowBox(
+                    alignment: Alignment.topCenter,
+                    minHeight: 0,
+                    maxHeight: double.infinity,
+                    child: IgnorePointer(
+                      child: PersonalNoteContentView(
+                        note: note,
+                        allowSelection: false,
+                        textStyle:
+                            Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                  height: 1.45,
+                                ),
+                      ),
                     ),
-                textDirection: TextDirection.rtl,
+                  ),
+                ),
               ),
-              const Spacer(),
+              const SizedBox(height: 8),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [

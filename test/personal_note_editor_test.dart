@@ -49,6 +49,54 @@ void main() {
     expect(_deltaHasAttribute(controller, quill.Attribute.bold), isFalse);
   });
 
+  testWidgets('כפתור קו חוצה פועל גם כ-toggle ומסיר עיצוב קיים',
+      (tester) async {
+    final controller = buildPersonalNoteEditorController(
+      initialContent: 'שלום',
+      initialFormat: PersonalNoteContentFormat.plain,
+    );
+
+    controller.quillController.updateSelection(
+      const TextSelection(baseOffset: 0, extentOffset: 4),
+      quill.ChangeSource.local,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PersonalNoteEditorBody(
+            controller: controller,
+            focusNode: FocusNode(),
+            scrollController: ScrollController(),
+            autofocus: false,
+            linkableNotes: const [],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(FluentIcons.text_strikethrough_24_regular));
+    await tester.pump();
+
+    expect(
+      _deltaHasAttribute(controller, quill.Attribute.strikeThrough),
+      isTrue,
+    );
+
+    controller.quillController.updateSelection(
+      const TextSelection(baseOffset: 0, extentOffset: 4),
+      quill.ChangeSource.local,
+    );
+
+    await tester.tap(find.byIcon(FluentIcons.text_strikethrough_24_regular));
+    await tester.pump();
+
+    expect(
+      _deltaHasAttribute(controller, quill.Attribute.strikeThrough),
+      isFalse,
+    );
+  });
+
   testWidgets('לחיצה על כפתור עיצוב מחזירה פוקוס לעורך', (tester) async {
     // רגרסיה: בעבר לחיצה על IconButton בטולבר גזלה פוקוס מ-QuillEditor
     // ובדסקטופ הפוקוס לא חזר אוטומטית, כי skipRequestKeyboard לבדו לא
@@ -99,9 +147,11 @@ void main() {
       initialFormat: PersonalNoteContentFormat.plain,
     );
 
+    // ignore: experimental_member_use
+    final clipboardConfig = controller.quillController.config.clipboardConfig;
     expect(
       // ignore: experimental_member_use
-      controller.quillController.config.clipboardConfig?.enableExternalRichPaste,
+      clipboardConfig?.enableExternalRichPaste,
       isFalse,
     );
 
