@@ -132,5 +132,63 @@ void main() {
       expect(loaded.single, isA<TextBookTab>());
       expect(repository.loadCurrentTabIndex(), 0);
     });
+
+    test('saveCurrentTabIndex מעדכן את האינדקס בלי לדרוס את הטאבים השמורים',
+        () async {
+      final firstTab = TextBookTab(
+        book: TextBook(title: 'ספר בדיקה'),
+        index: 1,
+      );
+      final secondTab = TextBookTab(
+        book: TextBook(title: 'ספר בדיקה 2'),
+        index: 2,
+      );
+      addTearDown(firstTab.dispose);
+      addTearDown(secondTab.dispose);
+
+      await repository.saveTabs([firstTab, secondTab], 0);
+      await repository.saveCurrentTabIndex([firstTab, secondTab], 1);
+
+      // האינדקס התעדכן...
+      expect(repository.loadCurrentTabIndex(), 1);
+
+      // ...והטאבים נשארו כפי שהיו (לא קודדו מחדש/נדרסו)
+      final loaded = repository.loadTabs();
+      addTearDown(() {
+        for (final tab in loaded) {
+          tab.dispose();
+        }
+      });
+      expect(loaded, hasLength(2));
+    });
+
+    test('saveCurrentTabIndex ממפה לאינדקס השחזורי כשיש טאב שאינו נשמר',
+        () async {
+      final firstTab = TextBookTab(
+        book: TextBook(title: 'ספר בדיקה'),
+        index: 1,
+      );
+      final pdfSource = PdfBookTab(
+        book: PdfBook(title: 'PDF בדיקה', path: '/tmp/book.pdf'),
+        pageNumber: 2,
+      );
+      final thirdTab = TextBookTab(
+        book: TextBook(title: 'ספר בדיקה 3'),
+        index: 3,
+      );
+      addTearDown(firstTab.dispose);
+      addTearDown(pdfSource.dispose);
+      addTearDown(thirdTab.dispose);
+
+      final pdfCommentatorsTab = PdfCommentatorsTab(sourceTab: pdfSource);
+      addTearDown(pdfCommentatorsTab.dispose);
+      final tabs = [firstTab, pdfCommentatorsTab, thirdTab];
+
+      // האינדקס הגולמי הוא 2 (thirdTab), אך מבין הטאבים הנשמרים הוא במקום 1
+      // כי pdfCommentatorsTab אינו נשמר.
+      await repository.saveCurrentTabIndex(tabs, 2);
+
+      expect(repository.loadCurrentTabIndex(), 1);
+    });
   });
 }
