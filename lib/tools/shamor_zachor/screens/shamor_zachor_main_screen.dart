@@ -193,10 +193,10 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
   }
 
   bool _isTextFieldFocused() {
-    final w = FocusManager.instance.primaryFocus?.context?.widget;
-    return w is TextField ||
-        w is EditableText ||
-        w.runtimeType.toString().contains('TextField');
+    final context = FocusManager.instance.primaryFocus?.context;
+    if (context == null) return false;
+    return context.widget is EditableText ||
+        context.findAncestorWidgetOfExactType<EditableText>() != null;
   }
 
   KeyEventResult _handleWindowKeyEvent(FocusNode node, KeyEvent event) {
