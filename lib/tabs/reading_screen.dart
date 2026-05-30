@@ -115,7 +115,10 @@ class _ReadingScreenState extends State<ReadingScreen>
               context
                   .read<HistoryBloc>()
                   .add(CaptureStateForHistory(state.currentTab!));
-              context.read<TabsBloc>().add(const SaveTabs());
+              // אין צורך לקרוא כאן ל-SaveTabs: כל פעולה שמשנה את הטאבים או את
+              // הטאב הנוכחי (SetCurrentTab/AddTab/RemoveTab/MoveTab וכו') כבר
+              // שומרת בעצמה ב-TabsBloc. קריאה נוספת כאן גרמה לשמירה כפולה
+              // (encoding של כל הטאבים) בכל מעבר טאב.
               _syncPageController();
             }
           },

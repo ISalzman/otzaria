@@ -141,4 +141,29 @@ class TabsRepository {
       await box.delete(_sideBySideModeKey);
     }
   }
+
+  /// שומר רק את אינדקס הטאב הנוכחי, בלי לקודד מחדש את כל הטאבים.
+  ///
+  /// מיועד למעבר בין טאבים, שבו רשימת הטאבים עצמה לא משתנה — אין טעם
+  /// להריץ `toJson()` על כל הטאבים בכל מעבר. מבצע רק מיפוי אינדקסים קל
+  /// (כדי לדלג על טאבים שאינם נשמרים, כמו PdfCommentatorsTab) ושומר ערך
+  /// בודד. הכתיבה ל-Hive אסינכרונית ואינה חוסמת את ה-UI.
+  Future<void> saveCurrentTabIndex(
+      List<OpenedTab> tabs, int currentTabIndex) async {
+    final persistedIndexByOriginalIndex = <int, int>{};
+    var persistedCount = 0;
+    for (var i = 0; i < tabs.length; i++) {
+      if (!_isPersistableTab(tabs[i])) continue;
+      persistedIndexByOriginalIndex[i] = persistedCount;
+      persistedCount++;
+    }
+
+    final persistedCurrentIndex = _resolvePersistedCurrentTabIndex(
+      persistedIndexByOriginalIndex,
+      currentTabIndex,
+      tabs.length,
+    );
+
+    await Hive.box('tabs').put(_currentTabKey, persistedCurrentIndex);
+  }
 }
