@@ -152,10 +152,12 @@ class PdfBookTab extends OpenedTab {
     }
 
     final tab = PdfBookTab(
-        book: restoredBook,
-        pageNumber: pageNumber,
-        openLeftPane: shouldOpenLeftPane,
-        isPinned: json['isPinned'] ?? false);
+      book: restoredBook,
+      pageNumber: pageNumber,
+      openLeftPane: shouldOpenLeftPane,
+      isPinned: json['isPinned'] ?? false,
+      requiresStableLayout: json['requiresStableLayout'] ?? false,
+    );
 
     tab.savedLayoutMode = savedLayoutMode;
 
@@ -201,6 +203,7 @@ class PdfBookTab extends OpenedTab {
       'showLeftPane': showLeftPane.value,
       'isPinned': isPinned,
       'type': 'PdfBookTab',
+      'requiresStableLayout': requiresStableLayout,
       if (savedLayoutMode != null) 'savedLayoutMode': savedLayoutMode!.name,
     };
   }
