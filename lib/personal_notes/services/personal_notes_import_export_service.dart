@@ -53,6 +53,97 @@ class PersonalNotesImportExportService {
     await file.writeAsString(jsonEncode(payload));
   }
 
+  /// בונה ייצוא טקסט קריא למשתמש (להבדיל מהגיבוי שהוא JSON גולמי).
+  ///
+  /// העיצוב הוויזואלי (מודגש/נטוי/קו חוצה וכו') לא נשמר — זו גרסה לקריאה
+  /// והעתקה. עם זאת יעדי הקישורים *כן* נשמרים: טקסט מקושר מיוצא בתבנית
+  /// `הטקסט (היעד)`, כדי לא לאבד מידע מהותי שאינו עיצוב בלבד.
+  String buildPlainTextExport({
+    required List<PersonalNote> notes,
+    String? description,
+  }) {
+    const separator =
+        '------------------------------------------------------------';
+    final buffer = StringBuffer()
+      ..writeln('הערות אישיות מאוצריא')
+      ..writeln('============================================================');
+    if (description != null && description.trim().isNotEmpty) {
+      buffer.writeln(description.trim());
+    }
+    buffer
+      ..writeln('תאריך ייצוא: ${_formatDate(DateTime.now())}')
+      ..writeln('מספר הערות: ${notes.length}');
+
+    for (var i = 0; i < notes.length; i++) {
+      final note = notes[i];
+      final title = (note.displayTitle?.trim().isNotEmpty ?? false)
+          ? note.displayTitle!.trim()
+          : note.bookId;
+      final meta = <String>['ספר: ${note.bookId}'];
+      if (note.lineNumber != null) meta.add('שורה: ${note.lineNumber}');
+      meta.add('עודכן: ${_formatDate(note.updatedAt)}');
+
+      buffer
+        ..writeln()
+        ..writeln('[${i + 1}] $title')
+        ..writeln(meta.join(' | '))
+        ..writeln(separator)
+        // trimRight בלבד — עקבי עם הנרמול בשמירה, כדי לא למחוק הזחה/שורות
+        // פותחות שהמשתמש שמר בכוונה.
+        ..writeln(_noteBodyText(note).trimRight());
+    }
+
+    return buffer.toString();
+  }
+
+  /// מחזיר את גוף ההערה כטקסט קריא, תוך שימור יעדי הקישורים.
+  ///
+  /// עבור הערות עשירות (Quill Delta) ה-[PersonalNote.contentPlain] שומר רק את
+  /// הטקסט הגלוי ומאבד את ה-link attributes. כאן בונים את הטקסט מתוך ה-Delta
+  /// עצמו ומשרשרים את היעד אחרי טקסט מקושר בתבנית `טקסט (יעד)`. אם התוכן אינו
+  /// Delta תקין — נופלים בחזרה ל-[PersonalNote.contentPlain].
+  String _noteBodyText(PersonalNote note) {
+    if (note.contentFormat != PersonalNoteContentFormat.quillDelta) {
+      return note.contentPlain;
+    }
+    try {
+      final decoded = jsonDecode(note.content) as List<dynamic>;
+      final buffer = StringBuffer();
+      for (final op in decoded) {
+        if (op is! Map<String, dynamic>) continue;
+        final insert = op['insert'];
+        if (insert is! String) continue;
+        final attributes = op['attributes'];
+        final link =
+            attributes is Map<String, dynamic> ? attributes['link'] : null;
+        if (link is String && link.isNotEmpty && insert.trim().isNotEmpty) {
+          buffer.write('$insert ($link)');
+        } else {
+          buffer.write(insert);
+        }
+      }
+      return buffer.toString();
+    } catch (_) {
+      return note.contentPlain;
+    }
+  }
+
+  /// מייצא את ההערות לקובץ טקסט קריא (.txt).
+  Future<void> exportToTextFile({
+    required String path,
+    required List<PersonalNote> notes,
+    String? description,
+  }) async {
+    final text = buildPlainTextExport(notes: notes, description: description);
+    final file = File(path);
+    await file.writeAsString(text);
+  }
+
+  String _formatDate(DateTime date) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(date.day)}/${two(date.month)}/${date.year}';
+  }
+
   Future<NotesImportSummary> importFromFile({
     required String path,
     required NotesImportConflictStrategy strategy,

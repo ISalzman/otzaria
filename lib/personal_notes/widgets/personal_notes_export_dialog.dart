@@ -22,9 +22,17 @@ class NotesExportSelection {
 class PersonalNotesExportDialog extends StatefulWidget {
   final List<PersonalNote> allNotes;
 
+  /// כותרת הדיאלוג — מאפשר להבחין בין מסלול הגיבוי לייצוא הטקסט.
+  final String title;
+
+  /// טקסט כפתור האישור.
+  final String confirmText;
+
   const PersonalNotesExportDialog({
     super.key,
     required this.allNotes,
+    this.title = 'ייצוא הערות',
+    this.confirmText = 'ייצא',
   });
 
   @override
@@ -93,7 +101,7 @@ class _PersonalNotesExportDialogState extends State<PersonalNotesExportDialog> {
     }).toList();
 
     return AlertDialog(
-      title: const Text('ייצוא הערות'),
+      title: Text(widget.title),
       content: SizedBox(
         width: 540,
         child: Column(
@@ -192,7 +200,7 @@ class _PersonalNotesExportDialogState extends State<PersonalNotesExportDialog> {
         ),
         RecommendedActionButton(
           onPressed: _submit,
-          text: 'ייצא',
+          text: widget.confirmText,
         ),
       ],
     );
