@@ -285,7 +285,11 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       searchMode: searchMode,
       searchDistance: searchDistance,
       layoutMode: layoutMode,
-      isLoading: false, // Document is ready, so no longer loading
+      // כל פתיחה לעמוד שאינו הראשון (היסטוריה, סימניות, דף יומי,
+      // חיפוש, קישור→PDF) צריכה overlay עד ש-stability tracking
+      // ב-screen מסיים. בפתיחה לעמוד הראשון אין סיכון לקפיצות —
+      // הספינר נסגר מיד.
+      isLoading: tab.requiresStableLayout || tab.pageNumber > 1,
       loadSucceeded: true,
     ));
 
