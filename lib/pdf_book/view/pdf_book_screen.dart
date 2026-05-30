@@ -234,6 +234,39 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   bool _pdfViewerSuspended = false;
   bool _readerFocusAndHideQueued = false;
   bool _bookHasCommentaryLinks = false;
+
+  /// פעיל רק בפתיחה לעמוד שאינו ראשון (דף יומי, חיפוש, היסטוריה,
+  /// קישור מטקסט). כשהדגל true:
+  ///   1. ה-overlay נשאר על המסך עד שה-layout מתייצב על עמוד היעד.
+  ///   2. `verticalCacheExtent` ירוד ל-0 כדי לחסוך עבודת רינדור בזמן
+  ///      שהמטא-דאטה של עמודי הרקע עוד נטענת.
+  bool _waitingForStableLayout = false;
+
+  /// טיימר debounce - מאופס בכל עדכון controller. כשנפסקים העדכונים
+  /// למשך [_kStableLayoutDebounce], נבדק תנאי היציבות.
+  Timer? _stableLayoutTimer;
+
+  /// העמוד שאליו ביקש המשתמש לפתוח. ה-stability check מוודא שאחרי
+  /// שה-layout התייצב, ה-controller באמת נמצא בעמוד זה (ולא נדחף
+  /// משם בגלל ממדי עמודי רקע שהתעדכנו).
+  int? _stableLayoutTargetPage;
+
+  /// הגנה מפני לולאת תיקון אינסופית: אם אחרי [_kStableLayoutMaxRetries]
+  /// נסיונות עוד לא הגענו לעמוד היעד, מסתפקים במה שיש ומסירים את
+  /// ה-overlay כדי לא לתקוע את המשתמש.
+  int _stableLayoutRetryCount = 0;
+
+  /// אינדיקטור חזק שכל המטא-דאטה של המסמך נטענה. ללא הדגל הזה,
+  /// 800ms של debounce ריק מטעים — עמודי רקע שעדיין נטענים יכולים
+  /// לדחוף את עמוד היעד אחרי שהצהרנו יציבות ולגרום לקפיצה נראית
+  /// (בעיקר ב-bookView).
+  ///
+  /// חשוב: הדגל מתאפס רק ב-[_createDocumentRef] (= מסמך חדש), לא ב-
+  /// [_cancelStableLayoutTracking] / [_beginStableLayoutTracking]. אילו
+  /// היינו מאפסים בהתחלת tracking, race condition שבו
+  /// onDocumentLoadFinished יורה לפני onViewerReady היה מאבד את
+  /// הסימון "המסמך נטען" ויוצר לולאה אינסופית של debounce.
+  bool _documentFullyLoaded = false;
   // FIFO queue of page-turns that came in while another was already running.
   // Each click gets its own animation; rapid clicks accumulate and play in
   // order, instead of being collapsed into a single animation toward the
@@ -1037,18 +1070,36 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           const PdfViewerScrollInteractionDelegateProviderPhysics(),
       onDocumentLoadFinished: (documentRef, succeeded) {
         if (!mounted) return;
-        _bloc.add(pdf_events.SetLoadingState(
-          isLoading: false,
-          succeeded: succeeded,
-        ));
+        if (!succeeded) {
+          _bloc.add(const pdf_events.SetLoadingState(
+            isLoading: false,
+            succeeded: false,
+          ));
+          return;
+        }
+        // המטא-דאטה של כל המסמך נטענה — מסמנים את הדגל ומפעילים את
+        // בדיקת היציבות מיד (במקום להמתין ל-800ms של debounce ריק).
+        _documentFullyLoaded = true;
+        if (_waitingForStableLayout) {
+          _onLayoutMaybeStable();
+        } else {
+          _bloc.add(const pdf_events.SetLoadingState(isLoading: false));
+        }
       },
       backgroundColor:
           Colors.white, // תמיד לבן - ה-ColorFilter יהפוך לשחור במצב כהה
       sizeDelegateProvider: PdfViewerSizeDelegateProviderLegacy(maxScale: 10),
+      // חסימת הזיכרון של ה-renderer: ברירת המחדל של pdfrx 2.4.3 היא
+      // 100MB; מהודק ל-48MB כדי לצמצם לחץ זיכרון במחשבים עם 8GB RAM
+      // (תרחיש ה-OOM ב-Microsoft Store).
+      maxImageBytesCachedOnMemory: 48 * 1024 * 1024,
       horizontalCacheExtent: 0,
-      verticalCacheExtent: layoutMode == PdfLayoutMode.bookView
-          ? 2
-          : 1, // במצב ספר: פריסה אחת קדימה/אחורה נוספת
+      // בזמן stability tracking לא מרנדרים שכנים — חוסך עבודה בזמן
+      // שהמטא-דאטה של עמודי הרקע עוד נטענת. אחרי שמתייצב חוזרים לערך
+      // הרגיל (2 בספר, 1 רגיל).
+      verticalCacheExtent: _waitingForStableLayout
+          ? 0
+          : (layoutMode == PdfLayoutMode.bookView ? 2 : 1),
       pageAnchor: PdfPageAnchor.top, // עיגון לראש הדף
       onInteractionStart: (_) {
         if (!(widget.tab.pinLeftPane.value ||
@@ -1139,6 +1190,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       },
       onViewerReady: (document, controller) async {
         if (!mounted) return;
+        // איפוס stability tracking של פתיחה קודמת (רלוונטי ב-retry).
+        _cancelStableLayoutTracking();
+
         // Only grab focus if neither of the pane text-fields is focused.
         // Unconditional requestFocus() here stole focus from open search/nav fields.
         if (!_searchFieldFocusNode.hasFocus &&
@@ -1150,32 +1204,34 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
         final documentRef = controller.documentRef;
         widget.tab.documentRef.value = documentRef;
-        final outline = await document.loadOutline();
-        if (!mounted) return;
-        widget.tab.outline.value = outline;
         final totalPages = document.pages.length;
         final initialTargetPage = widget.tab.pageNumber.clamp(1, totalPages);
         widget.tab.pageNumber = initialTargetPage;
 
+        // שולחים DocumentReady מיד כדי לשחרר את ה-UI. טעינת ה-outline
+        // ו-resolve של titles/line-numbers הם פעולות כבדות (DB+PDF
+        // bookmarks) ונדחקות לרקע — outline מתעדכן ב-tab.outline
+        // וב-state בעדכון שני, ו-titles מתעדכנים ב-ValueNotifier.
         _bloc.add(pdf_events.DocumentReady(
           documentRef: documentRef,
-          outline: outline,
           totalPages: totalPages,
         ));
 
-        // חישוב currentTextLineNumber אחרי טעינת ה-outline
-        final targetPage = initialTargetPage;
-        final targetTitles = await _resolveTitlesForPage(targetPage);
-        if (!mounted) return;
-        widget.tab.currentTitle.value = targetTitles.display;
-        final initialResolved = await _resolveTextLineNumberForPage(
-          targetPage,
-          resolvedTitle: targetTitles.single,
-        );
-        if (!mounted) return;
-        widget.tab.currentTextLineNumber = initialResolved.start;
-        widget.tab.currentTextLineNumberEnd = initialResolved.end;
-        setState(() {});
+        // פתיחה ל"עמוד יעד" (דף יומי/חיפוש/קישור/היסטוריה/סימניה) —
+        // progressive loading עלול לעדכן ממדי עמודים ברקע ולדחוף את
+        // עמוד היעד מהמסך. כל פתיחה לעמוד שאינו הראשון צריכה overlay
+        // עד שה-layout מתייצב, גם אם הקורא לא הגדיר requiresStableLayout
+        // במפורש (היסטוריה/סימניה לא מסמנים את הדגל הזה).
+        if (widget.tab.requiresStableLayout || initialTargetPage > 1) {
+          _beginStableLayoutTracking(initialTargetPage);
+        }
+
+        unawaited(_loadOutlineAndTitlesInBackground(
+          document: document,
+          documentRef: documentRef,
+          targetPage: initialTargetPage,
+          totalPages: totalPages,
+        ));
 
         if (!mounted) return;
         final enablePerBookSettings =
@@ -1266,11 +1322,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     );
   }
 
-  PdfDocumentRefFile _createDocumentRef() => PdfDocumentRefFile(
-        widget.tab.book.path,
-        useProgressiveLoading: !widget.tab.requiresStableLayout,
-        passwordProvider: () => passwordDialog(context),
-      );
+  PdfDocumentRefFile _createDocumentRef() {
+    // מסמך חדש = מחזור חיים חדש לדגל הטעינה. זה המקום הריכוזי והבטוח
+    // לאיפוס: נקרא בכל יצירת ref (initial load + retry) ולא רגיש
+    // לסדר ההפעלה של onViewerReady / onDocumentLoadFinished.
+    _documentFullyLoaded = false;
+    return PdfDocumentRefFile(
+      widget.tab.book.path,
+      // תמיד progressive: pdfrx מציג את העמוד הראשון מיד במקום
+      // להמתין למטא-דאטה של כל העמודים. המעבר ל"stable" מטופל ב-screen
+      // עם debounce timer, ולכן אין צורך לכבות progressive loading.
+      useProgressiveLoading: true,
+      passwordProvider: () => passwordDialog(context),
+    );
+  }
 
   Widget _buildPdfViewerFromFile(String filePath) {
     return BlocBuilder<PdfBookBloc, PdfBookState>(
@@ -2424,6 +2489,159 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     });
   }
 
+  /// טוען את ה-outline ואת ה-titles ברקע, מבלי לחסום את onViewerReady.
+  /// outline נטען ראשון כי resolve של titles ו-line-numbers נסמך עליו.
+  /// בסוף נשלח DocumentReady שני עם ה-outline כדי לעדכן את ה-state.
+  Future<void> _loadOutlineAndTitlesInBackground({
+    required PdfDocument document,
+    required PdfDocumentRef documentRef,
+    required int targetPage,
+    required int totalPages,
+  }) async {
+    try {
+      final outline = await document.loadOutline();
+      if (!mounted) return;
+      widget.tab.outline.value = outline;
+      _bloc.add(pdf_events.DocumentReady(
+        documentRef: documentRef,
+        outline: outline,
+        totalPages: totalPages,
+      ));
+    } catch (e, stackTrace) {
+      debugPrint('❌ Failed to load PDF outline: $e\n$stackTrace');
+    }
+
+    // אם המשתמש כבר ניווט מ-targetPage לעמוד אחר לפני שטעינת ה-outline
+    // הסתיימה, אין טעם לכתוב metadata של עמוד ישן — `_onPdfViewerControllerUpdate`
+    // כבר טיפל בעמוד החדש, ועדכון נוסף ידרוס אותו.
+    if (!mounted || !_isPageStillCurrent(targetPage)) return;
+    final titles = await _resolveTitlesForPage(targetPage);
+    if (!mounted || !_isPageStillCurrent(targetPage)) return;
+    widget.tab.currentTitle.value = titles.display;
+    final resolved = await _resolveTextLineNumberForPage(
+      targetPage,
+      resolvedTitle: titles.single,
+    );
+    if (!mounted || !_isPageStillCurrent(targetPage)) return;
+    widget.tab.currentTextLineNumber = resolved.start;
+    widget.tab.currentTextLineNumberEnd = resolved.end;
+    if (mounted) setState(() {});
+  }
+
+  /// בודק אם [page] עדיין רלוונטי — האם המשתמש לא ניווט הלאה.
+  /// במצב ספר ההשוואה ברמת ה-spread (עמוד 3 נחשב כ-spread שמתחיל ב-2).
+  bool _isPageStillCurrent(int page) {
+    final controller = widget.tab.pdfViewerController;
+    final viewerPage = controller.isReady
+        ? (controller.pageNumber ?? widget.tab.pageNumber)
+        : widget.tab.pageNumber;
+    if (_isBookViewModeActive()) {
+      return pdfSpreadStartPage(page) == pdfSpreadStartPage(viewerPage);
+    }
+    return page == viewerPage;
+  }
+
+  // ============ Stable-layout tracking ============
+  //
+  // ב-`requiresStableLayout: true` (דף יומי, חיפוש, קישור→PDF) פותחים
+  // PDF עם `useProgressiveLoading: true` כדי שה-PDF יופיע מיד, אבל
+  // משאירים overlay טעינה עד שה-layout מתייצב על עמוד היעד. הזיהוי
+  // מבוצע ב-debounce של [_kStableLayoutDebounce] על עדכוני ה-controller.
+
+  static const Duration _kStableLayoutDebounce = Duration(milliseconds: 800);
+  static const int _kStableLayoutMaxRetries = 3;
+
+  void _beginStableLayoutTracking(int targetPage) {
+    if (!mounted) return;
+    _stableLayoutTargetPage = targetPage;
+    _stableLayoutRetryCount = 0;
+    // לא מאפסים _documentFullyLoaded כאן — race: onDocumentLoadFinished
+    // יכול לירות לפני onViewerReady, ואיפוס היה מאבד את הסימון. הוא
+    // מנוהל ריכוזית ב-_createDocumentRef.
+    if (!_waitingForStableLayout) {
+      setState(() {
+        _waitingForStableLayout = true;
+      });
+    }
+    _restartStableLayoutDebounce();
+  }
+
+  void _restartStableLayoutDebounce() {
+    _stableLayoutTimer?.cancel();
+    _stableLayoutTimer = Timer(_kStableLayoutDebounce, _onLayoutMaybeStable);
+  }
+
+  void _onLayoutMaybeStable() {
+    if (!mounted || !_waitingForStableLayout) return;
+    final controller = widget.tab.pdfViewerController;
+    if (!controller.isReady) {
+      _restartStableLayoutDebounce();
+      return;
+    }
+    // אינדיקטור חזק נדרש: בלי ש-onDocumentLoadFinished ירה (= כל
+    // המטא-דאטה נטענה), 800ms של debounce ריק עדיין משאיר אפשרות
+    // שעמודי רקע ימשיכו להידחק ולדחוף את עמוד היעד. בלי הבדיקה הזו
+    // נראו קפיצות גלויות אחרי שה-overlay הוסר ב-bookView.
+    if (!_documentFullyLoaded) {
+      _restartStableLayoutDebounce();
+      return;
+    }
+    final target = _stableLayoutTargetPage;
+    if (target != null) {
+      // במצב ספר עמודים מצומדים לזוגות (2,3), (4,5) — ה-controller
+      // מחזיר את עמוד התחילה של ה-spread. אילו השווינו ברמת עמוד,
+      // יעד=3 מול ה-controller=2 היה נראה כסטייה והיינו נכנסים
+      // ללולאת ייצוב אינסופית. ההשוואה ברמת ה-spread.
+      final currentPage = controller.pageNumber ?? target;
+      final inBookView = _isBookViewModeActive();
+      final targetKey = inBookView ? pdfSpreadStartPage(target) : target;
+      final currentKey =
+          inBookView ? pdfSpreadStartPage(currentPage) : currentPage;
+      if (currentKey != targetKey) {
+        // הגנה מפני לולאה אינסופית: אם controller.goToPage לא מצליח
+        // לקבע את עמוד היעד אחרי N נסיונות, מוותרים על ניווט נוסף
+        // ומסירים את ה-overlay. עדיף PDF במיקום קצת שגוי על overlay
+        // תקוע.
+        if (_stableLayoutRetryCount >= _kStableLayoutMaxRetries) {
+          debugPrint(
+              '⚠️ stable-layout: ויתור אחרי $_stableLayoutRetryCount נסיונות '
+              '(target=$target, current=$currentPage)');
+          _completeStableLayoutTracking();
+          return;
+        }
+        _stableLayoutRetryCount++;
+        controller.goToPage(pageNumber: target, duration: Duration.zero);
+        _restartStableLayoutDebounce();
+        return;
+      }
+    }
+    _completeStableLayoutTracking();
+  }
+
+  void _completeStableLayoutTracking() {
+    _stableLayoutTimer?.cancel();
+    _stableLayoutTimer = null;
+    _stableLayoutTargetPage = null;
+    if (!_waitingForStableLayout) return;
+    if (mounted) {
+      setState(() {
+        _waitingForStableLayout = false;
+      });
+      _bloc.add(const pdf_events.SetLoadingState(isLoading: false));
+    } else {
+      _waitingForStableLayout = false;
+    }
+  }
+
+  void _cancelStableLayoutTracking() {
+    _stableLayoutTimer?.cancel();
+    _stableLayoutTimer = null;
+    _stableLayoutTargetPage = null;
+    _stableLayoutRetryCount = 0;
+    _waitingForStableLayout = false;
+    // לא מאפסים _documentFullyLoaded כאן — ראה הסבר ב-_beginStableLayoutTracking.
+  }
+
   Future<void> _loadPdfHeadingsAndLinks() async {
     final bookTitle = widget.tab.book.title;
     final categoryId = widget.tab.book.categoryId;
@@ -2534,6 +2752,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _pendingPageTurns.clear();
     _pageTurnController.dispose();
     textSearcher?.removeListener(_onTextSearcherUpdated);
+    textSearcher?.dispose();
+    textSearcher = null;
+    _stableLayoutTimer?.cancel();
+    _stableLayoutTimer = null;
     pdfController.removeListener(_onPdfViewerControllerUpdate);
     _leftPaneTabController?.removeListener(_leftPaneTabControllerListener);
     widget.tab.showLeftPane.removeListener(_showLeftPaneListener);
@@ -2570,6 +2792,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   void _onPdfViewerControllerUpdate() async {
     if (!widget.tab.pdfViewerController.isReady) return;
+
+    // ה-debounce של stability tracking מאופס בכל עדכון. כשהעדכונים
+    // נפסקים למשך _kStableLayoutDebounce, נחשב הציר כיציב.
+    if (_waitingForStableLayout) {
+      _restartStableLayoutDebounce();
+    }
 
     // Keep adjacent-spread pre-renders warm so page-turn animations can
     // open the cached snapshot instantly without waiting on goToPage + tile
@@ -2669,8 +2897,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             _zoomIn,
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.add):
             _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.add):
-            _zoomIn,
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.add): _zoomIn,
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.numpadAdd):
             _zoomIn,
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.numpadAdd):
