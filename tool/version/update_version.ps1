@@ -40,34 +40,58 @@ $versionCode = Get-VersionCode -Version $newVersion
 
 Write-Host "Updating version to: $newVersion"
 
-# Update .gitignore (installer output filenames)
+# Update .gitignore (managed Windows installer outputs)
+$installerStartMarker = "# Generated Windows installers"
+$installerEndMarker = "# End generated Windows installers"
+$managedInstallerLines = @(
+    "installer/otzaria-$newVersion-windows.exe",
+    "installer/otzaria-$newVersion-windows-full.exe",
+    "installer/otzaria-$newVersion-windows-silent.exe",
+    "installer/otzaria-$newVersion-windows-full-silent.exe"
+)
 $gitignoreContent = [System.Collections.Generic.List[string]]::new()
 $gitignoreContent.AddRange([string[]](Get-Content ".gitignore"))
-$silentFound = $false
-$fullIndex = -1
-for ($i = 0; $i -lt $gitignoreContent.Count; $i++) {
-    if ($gitignoreContent[$i] -match "installer/otzaria-.*-windows-full\.exe") {
-        $gitignoreContent[$i] = "installer/otzaria-$newVersion-windows-full.exe"
-        $fullIndex = $i
+$filteredGitignore = [System.Collections.Generic.List[string]]::new()
+$insideManagedInstallerBlock = $false
+$insertedInstallerBlock = $false
+foreach ($line in $gitignoreContent) {
+    if ($line -eq $installerStartMarker) {
+        $insideManagedInstallerBlock = $true
+        continue
     }
-    elseif ($gitignoreContent[$i] -match "installer/otzaria-.*-windows-silent\.exe") {
-        $gitignoreContent[$i] = "installer/otzaria-$newVersion-windows-silent.exe"
-        $silentFound = $true
+    if ($line -eq $installerEndMarker) {
+        $insideManagedInstallerBlock = $false
+        continue
     }
-    elseif ($gitignoreContent[$i] -match "installer/otzaria-.*-windows\.exe") {
-        # Match the plain -windows.exe line last, since the others contain "-windows" too.
-        $gitignoreContent[$i] = "installer/otzaria-$newVersion-windows.exe"
+    if ($insideManagedInstallerBlock) {
+        continue
+    }
+    if ($line -match '^installer/otzaria-[0-9.]+-windows(?:-full)?(?:-silent)?\.exe$') {
+        continue
+    }
+
+    $filteredGitignore.Add($line)
+
+    if (-not $insertedInstallerBlock -and $line -eq "external/") {
+        $filteredGitignore.Add($installerStartMarker)
+        foreach ($installerLine in $managedInstallerLines) {
+            $filteredGitignore.Add($installerLine)
+        }
+        $filteredGitignore.Add($installerEndMarker)
+        $insertedInstallerBlock = $true
     }
 }
-if (-not $silentFound) {
-    $silentLine = "installer/otzaria-$newVersion-windows-silent.exe"
-    if ($fullIndex -ge 0) {
-        $gitignoreContent.Insert($fullIndex + 1, $silentLine)
-    } else {
-        $gitignoreContent.Add($silentLine)
+if (-not $insertedInstallerBlock) {
+    if ($filteredGitignore.Count -gt 0 -and $filteredGitignore[$filteredGitignore.Count - 1] -ne "") {
+        $filteredGitignore.Add("")
     }
+    $filteredGitignore.Add($installerStartMarker)
+    foreach ($installerLine in $managedInstallerLines) {
+        $filteredGitignore.Add($installerLine)
+    }
+    $filteredGitignore.Add($installerEndMarker)
 }
-$gitignoreContent | Set-Content ".gitignore" -Encoding $Utf8NoBom
+$filteredGitignore | Set-Content ".gitignore" -Encoding $Utf8NoBom
 Write-Host "Updated .gitignore"
 
 # Update pubspec.yaml: msix_version (4-part) and version (with build code).
@@ -120,6 +144,21 @@ if (Test-Path $silentIssFile) {
     Write-Host "Updated $silentIssFile"
 } else {
     Write-Warning "File '$silentIssFile' not found! Skipping silent installer update."
+}
+
+# Update installer/otzaria_full_silent.iss (full silent installer)
+$fullSilentIssFile = "installer/otzaria_full_silent.iss"
+if (Test-Path $fullSilentIssFile) {
+    $fullSilentIssContent = Get-Content $fullSilentIssFile
+    for ($i = 0; $i -lt $fullSilentIssContent.Length; $i++) {
+        if ($fullSilentIssContent[$i] -match '^#define MyAppVersion\s+') {
+            $fullSilentIssContent[$i] = "#define MyAppVersion `"$newVersion`""
+        }
+    }
+    $fullSilentIssContent | Set-Content $fullSilentIssFile -Encoding $Utf8Bom
+    Write-Host "Updated $fullSilentIssFile"
+} else {
+    Write-Warning "File '$fullSilentIssFile' not found! Skipping full silent installer update."
 }
 
 # Update android/local.properties (versionName and versionCode)
@@ -194,6 +233,7 @@ Write-Host "All files have been updated to version: $newVersion"
 # Git commit
 $filesToStage = @(".gitignore", "pubspec.yaml", "installer/otzaria_full.iss", "installer/otzaria.iss", $changelogFile, $VersionFile, $mainDartFile)
 if (Test-Path $silentIssFile) { $filesToStage += $silentIssFile }
+if (Test-Path $fullSilentIssFile) { $filesToStage += $fullSilentIssFile }
 git add $filesToStage
 git commit -m "$newVersion"
 Write-Host "Git commit created for version: $newVersion"
