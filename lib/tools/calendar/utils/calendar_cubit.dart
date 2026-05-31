@@ -661,19 +661,17 @@ class CalendarCubit extends Cubit<CalendarState> {
           continue;
         }
 
-        final parts = timeStr.split(':');
-        if (parts.length != 2) {
+        // מחלצים שעה:דקה תוך התעלמות מעטיפת ה-LTR isolate (\u2066) ומסימן
+        // השניות (`.`/`:`) שבסוף.
+        final match =
+            RegExp('^\u2066?' r'(\d{1,2}):(\d{2})').firstMatch(timeStr);
+        if (match == null) {
           await notificationService.cancelNotification(cancellationId);
           continue;
         }
 
-        final h = int.tryParse(parts[0]);
-        final m = int.tryParse(parts[1]);
-
-        if (h == null || m == null) {
-          await notificationService.cancelNotification(cancellationId);
-          continue;
-        }
+        final h = int.parse(match.group(1)!);
+        final m = int.parse(match.group(2)!);
 
         // Construct TZDateTime in the correct timezone
         final eventDt = tz.TZDateTime(location, d.year, d.month, d.day, h, m);
@@ -684,7 +682,7 @@ class CalendarCubit extends Cubit<CalendarState> {
           id: cancellationId,
           title: 'תזכורת: ${pref.displayName}',
           body:
-              'בעוד ${_formatMinutesBefore(pref.minutesBefore)} ${pref.displayName} ($timeStr)',
+              'בעוד ${_formatMinutesBefore(pref.minutesBefore)} ${pref.displayName} (${timeStr.replaceAll(RegExp('[\u2066\u2069]'), '').replaceFirst(RegExp(r'[.:]$'), '')})',
           eventDate: eventDt,
           reminderMinutes: pref.minutesBefore,
           soundEnabled: true,
