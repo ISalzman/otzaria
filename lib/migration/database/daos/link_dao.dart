@@ -59,6 +59,22 @@ class LinkDao {
         [bookId, startLineIndex, endLineIndex]).toMapList();
   }
 
+  /// מחזיר את מפרשי ברירת המחדל של הספר [bookId], ממוינים לפי `position`.
+  /// כל שורה: `targetBookTitle` (שם ספר המפרש) ו-`position`.
+  Future<List<Map<String, dynamic>>> selectDefaultCommentators(
+      int bookId) async {
+    final db = await database;
+    return db
+        .select(_queries['selectDefaultCommentators']!, [bookId]).toMapList();
+  }
+
+  /// מחזיר את תרגומי ברירת המחדל של הספר [bookId], ממוינים לפי `position`.
+  /// כל שורה: `targetBookTitle` (שם ספר התרגום) ו-`position`.
+  Future<List<Map<String, dynamic>>> selectDefaultTargums(int bookId) async {
+    final db = await database;
+    return db.select(_queries['selectDefaultTargums']!, [bookId]).toMapList();
+  }
+
   Future<int> insertLink(Link link, int connectionTypeId) async {
     final db = await database;
     db.execute(_queries['insert']!, [
