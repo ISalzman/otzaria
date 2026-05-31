@@ -39,6 +39,31 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
   int? _lastPageNumber;
   double? _dragPointerOffsetWithinThumb;
 
+  /// מיקום המחוון בזמן גרירה פעילה. כשהוא לא null, המחוון נצמד לאצבע
+  /// במקום להיגזר מ-`controller.visibleRect`, כך שהוא חלק ולא ממתין לרינדור.
+  double? _activeDragThumbTop;
+
+  /// מספר העמוד בתוך המחוון. FittedBox מבטיח שורה אחת תמיד — מספרים
+  /// תלת/ארבע-ספרתיים (100+, ש"ס) מתכווצים במקום להישבר לשתי שורות.
+  Widget _buildPageNumberText(int pageNumber, ColorScheme colorScheme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 1),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          pageNumber.toString(),
+          maxLines: 1,
+          softWrap: false,
+          style: TextStyle(
+            color: colorScheme.onPrimary,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isVertical = widget.orientation == ScrollbarOrientation.right ||
@@ -76,14 +101,8 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                 ),
                 child: isVertical
                     ? Center(
-                        child: Text(
-                          (pageNumber ?? 1).toString(),
-                          style: TextStyle(
-                            color: colorScheme.onPrimary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        child:
+                            _buildPageNumberText(pageNumber ?? 1, colorScheme),
                       )
                     : null,
               );
@@ -158,9 +177,16 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                 final computedThumbTop = scrollableExtent == 0
                     ? 0.0
                     : maxThumbTop * (currentTop / scrollableExtent);
-                final thumbTop = useFrozenThumb
-                    ? _lastThumbTop!.clamp(0.0, maxThumbTop).toDouble()
-                    : computedThumbTop;
+                final bool isDragging = _activeDragThumbTop != null;
+                final double thumbTop;
+                if (isDragging) {
+                  thumbTop =
+                      _activeDragThumbTop!.clamp(0.0, maxThumbTop).toDouble();
+                } else if (useFrozenThumb) {
+                  thumbTop = _lastThumbTop!.clamp(0.0, maxThumbTop).toDouble();
+                } else {
+                  thumbTop = computedThumbTop;
+                }
                 final displayedPageNumber =
                     useFrozenThumb ? _lastPageNumber ?? pageNumber : pageNumber;
 
@@ -170,7 +196,10 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                   _lastPageNumber = pageNumber;
                 }
 
-                void jumpToThumbTop(double desiredThumbTop) {
+                // animate=false בזמן גרירה: מיקום מיידי (Duration.zero) במקום
+                // אנימציית 200ms שמצטברת בכל drag update ויוצרת השהיה.
+                void jumpToThumbTop(double desiredThumbTop,
+                    {bool animate = true}) {
                   if (widget.freezeThumb) return;
                   if (maxThumbTop <= 0) return;
                   final normalizedTop =
@@ -189,11 +218,16 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                       zoom: zoom,
                       viewSize: widget.controller.viewSize,
                     ),
+                    duration: animate
+                        ? const Duration(milliseconds: 200)
+                        : Duration.zero,
                   );
                 }
 
                 void startThumbDrag(DragStartDetails details) {
                   _dragPointerOffsetWithinThumb = details.localPosition.dy;
+                  // נצמד מיד לאצבע מהמיקום הנוכחי של המחוון.
+                  setState(() => _activeDragThumbTop = thumbTop);
                 }
 
                 void updateThumbDrag(DragUpdateDetails details) {
@@ -204,14 +238,19 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                   if (trackBox == null) return;
                   final localPosition =
                       trackBox.globalToLocal(details.globalPosition);
-                  jumpToThumbTop(
-                    localPosition.dy -
-                        (_dragPointerOffsetWithinThumb ?? thumbHeight / 2),
-                  );
+                  final desiredThumbTop = localPosition.dy -
+                      (_dragPointerOffsetWithinThumb ?? thumbHeight / 2);
+                  // המחוון נצמד לאצבע מיד (חלק), והתצוגה מתעדכנת ברקע ללא אנימציה.
+                  setState(() => _activeDragThumbTop =
+                      desiredThumbTop.clamp(0.0, maxThumbTop).toDouble());
+                  jumpToThumbTop(desiredThumbTop, animate: false);
                 }
 
                 void endThumbDrag() {
                   _dragPointerOffsetWithinThumb = null;
+                  if (_activeDragThumbTop != null) {
+                    setState(() => _activeDragThumbTop = null);
+                  }
                 }
 
                 return GestureDetector(
@@ -253,14 +292,8 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                                   widget.trackThickness / 2),
                             ),
                             child: Center(
-                              child: Text(
-                                displayedPageNumber.toString(),
-                                style: TextStyle(
-                                  color: colorScheme.onPrimary,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                              child: _buildPageNumberText(
+                                  displayedPageNumber, colorScheme),
                             ),
                           ),
                         ),
@@ -302,6 +335,9 @@ class _PdfHorizontalScrollbarState extends State<PdfHorizontalScrollbar> {
   double? _dragPointerOffsetWithinThumb;
   final GlobalKey _trackKey = GlobalKey();
 
+  /// מיקום המחוון בזמן גרירה פעילה (ראה הסבר בפס האנכי).
+  double? _activeDragThumbLeft;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -341,9 +377,15 @@ class _PdfHorizontalScrollbarState extends State<PdfHorizontalScrollbar> {
                 PdfHorizontalScrollbar._minThumbWidth, trackWidth);
             final maxThumbLeft = math.max(trackWidth - thumbWidth, 0.0);
             final currentLeft = (visibleRect.left).clamp(0.0, scrollableExtent);
-            final thumbLeft = maxThumbLeft * (currentLeft / scrollableExtent);
+            final computedThumbLeft =
+                maxThumbLeft * (currentLeft / scrollableExtent);
+            final thumbLeft = _activeDragThumbLeft != null
+                ? _activeDragThumbLeft!.clamp(0.0, maxThumbLeft).toDouble()
+                : computedThumbLeft;
 
-            void jumpToThumbLeft(double desiredThumbLeft) {
+            // animate=false בזמן גרירה: מיקום מיידי במקום אנימציית 200ms.
+            void jumpToThumbLeft(double desiredThumbLeft,
+                {bool animate = true}) {
               if (maxThumbLeft <= 0) return;
               final normalized =
                   (desiredThumbLeft.clamp(0.0, maxThumbLeft) / maxThumbLeft)
@@ -360,11 +402,14 @@ class _PdfHorizontalScrollbarState extends State<PdfHorizontalScrollbar> {
                   zoom: zoom,
                   viewSize: widget.controller.viewSize,
                 ),
+                duration:
+                    animate ? const Duration(milliseconds: 200) : Duration.zero,
               );
             }
 
             void startDrag(DragStartDetails details) {
               _dragPointerOffsetWithinThumb = details.localPosition.dx;
+              setState(() => _activeDragThumbLeft = thumbLeft);
             }
 
             void updateDrag(DragUpdateDetails details) {
@@ -373,13 +418,18 @@ class _PdfHorizontalScrollbarState extends State<PdfHorizontalScrollbar> {
               final trackBox = trackCtx.findRenderObject() as RenderBox?;
               if (trackBox == null) return;
               final local = trackBox.globalToLocal(details.globalPosition);
-              jumpToThumbLeft(
-                local.dx - (_dragPointerOffsetWithinThumb ?? thumbWidth / 2),
-              );
+              final desiredThumbLeft =
+                  local.dx - (_dragPointerOffsetWithinThumb ?? thumbWidth / 2);
+              setState(() => _activeDragThumbLeft =
+                  desiredThumbLeft.clamp(0.0, maxThumbLeft).toDouble());
+              jumpToThumbLeft(desiredThumbLeft, animate: false);
             }
 
             void endDrag() {
               _dragPointerOffsetWithinThumb = null;
+              if (_activeDragThumbLeft != null) {
+                setState(() => _activeDragThumbLeft = null);
+              }
             }
 
             return GestureDetector(
