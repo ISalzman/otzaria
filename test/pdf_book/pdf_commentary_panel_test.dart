@@ -251,6 +251,33 @@ void main() {
 
       expect(find.textContaining('לא נמצאו מפרשים'), findsOneWidget);
     });
+
+    testWidgets(
+        'enableInternalFilter=false ובחירה ריקה → מציג את כל המפרשים הזמינים (לא "לא נמצאו")',
+        (tester) async {
+      final tab = _tab(
+        currentLine: 10,
+        currentLineEnd: 15,
+        links: [_commentaryLink(index1: 12)], // מפרש בטווח, ללא בחירה
+      );
+      addTearDown(tab.dispose);
+
+      await tester.pumpWidget(_wrap(PdfCommentaryPanel(
+        tab: tab,
+        linksCount: tab.links.length,
+        linksLoading: false,
+        openBookCallback: (_) {},
+        fontSize: 16.0,
+        initialTabIndex: 0,
+        isFullScreen: true,
+        enableInternalFilter: false,
+      )));
+      await tester.pump();
+
+      // בחירה ריקה אך יש מפרש זמין לקטע → אין הודעת "לא נמצאו"
+      expect(tab.activeCommentators, isEmpty);
+      expect(find.textContaining('לא נמצאו מפרשים'), findsNothing);
+    });
   });
 
   // ── openFilterRequest: התנהגות baseline + counter ─────────────────────────

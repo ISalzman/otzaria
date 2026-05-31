@@ -54,6 +54,14 @@ class PdfCommentaryPanel extends StatefulWidget {
   /// כשאמת — מציג כמסך מלא (כמו CommentatorsTabScreen) ללא כרטיסיות פאנל
   final bool isFullScreen;
 
+  /// כשאמת (ברירת מחדל) — בחירת המפרשים מתבצעת ב-overlay פנימי של הפאנל.
+  /// כשמכובה — הבחירה מנוהלת חיצונית (לשונית "מפרשים" בפאנל הצד של הכרטיסייה),
+  /// וכל בקשה לבחירת מפרשים מנותבת ל-[onSelectCommentatorsRequested].
+  final bool enableInternalFilter;
+
+  /// נקרא כשהמשתמש מבקש לבחור מפרשים ו-[enableInternalFilter] מכובה.
+  final VoidCallback? onSelectCommentatorsRequested;
+
   /// override לטווח השורות בטקסט (לכרטסייה עצמאית)
   final int? lineStartOverride;
   final int? lineEndOverride;
@@ -62,6 +70,13 @@ class PdfCommentaryPanel extends StatefulWidget {
   final TextEditingController? externalSearchController;
   final ValueNotifier<int>? externalTotalResultsNotifier;
   final ValueNotifier<int>? externalCurrentIndexNotifier;
+
+  /// משקף החוצה את מצב "הכל מורחב" (לכפתור הכיווץ/הרחבה בסרגל הכרטיסייה).
+  final ValueNotifier<bool>? externalAllExpandedNotifier;
+
+  /// הסרת ניקוד/פיסוק מתוכן המפרשים (כמו בכרטיסיית הטקסט).
+  final bool removeNikud;
+  final bool removePunctuation;
 
   const PdfCommentaryPanel({
     super.key,
@@ -76,11 +91,16 @@ class PdfCommentaryPanel extends StatefulWidget {
     this.openFilterRequest,
     this.openFilterNotifier,
     this.isFullScreen = false,
+    this.enableInternalFilter = true,
+    this.onSelectCommentatorsRequested,
     this.lineStartOverride,
     this.lineEndOverride,
     this.externalSearchController,
     this.externalTotalResultsNotifier,
     this.externalCurrentIndexNotifier,
+    this.externalAllExpandedNotifier,
+    this.removeNikud = false,
+    this.removePunctuation = false,
   });
 
   @override
@@ -364,6 +384,21 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     }
   }
 
+  /// מרחיב/מכווץ את כל קבוצות המפרשים (להפעלה מסרגל הכלים של הכרטיסייה).
+  void toggleAllExpanded() {
+    setState(() {
+      final nextExpanded = !_allExpanded;
+      _allExpanded = nextExpanded;
+      for (final key in _expansionStates.keys.toList()) {
+        _expansionStates[key] = nextExpanded;
+      }
+      for (final group in _orderedGroups) {
+        _expansionStates[group.bookTitle] = nextExpanded;
+      }
+    });
+    widget.externalAllExpandedNotifier?.value = _allExpanded;
+  }
+
   void _updateSearchResultsCount(Link link, int count) {
     if (!mounted) return;
 
@@ -593,19 +628,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                   : FluentIcons.arrow_expand_all_24_regular,
             ),
             tooltip: _allExpanded ? 'כווץ את כל המפרשים' : 'הרחב את כל המפרשים',
-            onPressed: () {
-              setState(() {
-                final nextExpanded = !_allExpanded;
-                _allExpanded = nextExpanded;
-
-                for (final key in _expansionStates.keys.toList()) {
-                  _expansionStates[key] = nextExpanded;
-                }
-                for (final group in _orderedGroups) {
-                  _expansionStates[group.bookTitle] = nextExpanded;
-                }
-              });
-            },
+            onPressed: toggleAllExpanded,
           ),
         ],
         const SizedBox(width: gap),
@@ -752,7 +775,9 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
 
       final hasCommentaryLinks = visibleContent.hasAnyCommentaryLinks;
 
-      if (hasCommentaryLinks && widget.tab.activeCommentators.isEmpty) {
+      if (hasCommentaryLinks &&
+          widget.tab.activeCommentators.isEmpty &&
+          widget.enableInternalFilter) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && !_showFilterTab) {
             setState(() {
@@ -784,9 +809,13 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
                   onPressed: () {
-                    setState(() {
-                      _showFilterTab = true;
-                    });
+                    if (widget.enableInternalFilter) {
+                      setState(() {
+                        _showFilterTab = true;
+                      });
+                    } else {
+                      widget.onSelectCommentatorsRequested?.call();
+                    }
                   },
                   icon: const Icon(FluentIcons.apps_list_24_regular),
                   label: const Text('בחר מפרשים'),
@@ -1003,6 +1032,8 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           onSearchResultsCountUpdate: _updateSearchResultsCount,
           getKeyForLink: _getLinkKeyObject,
           getItemSearchIndex: _getItemSearchIndex, // Pass the function
+          removeNikud: widget.removeNikud,
+          removePunctuation: widget.removePunctuation,
         );
       },
     );
@@ -1252,6 +1283,12 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     final nonCommentaryLinks = <Link>[];
     var hasAnyCommentaryLinks = false;
 
+    // בכרטסיית המפרשים (ללא הפילטר הפנימי), בחירה ריקה משמעה "הצג את כל
+    // המפרשים הזמינים לקטע" — זהה ל-useAvailableCommentators בכרטסיית הטקסט —
+    // כדי שלא יוצג "לא נמצאו מפרשים" מיד עם הפתיחה לפני בחירה.
+    final showAllWhenEmpty =
+        !widget.enableInternalFilter && widget.tab.activeCommentators.isEmpty;
+
     for (final link in widget.tab.links) {
       if (link.index1 < range.startLine) {
         continue;
@@ -1266,8 +1303,9 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
 
       if (isCommentary) {
         hasAnyCommentaryLinks = true;
-        if (widget.tab.activeCommentators
-            .contains(utils.getTitleFromPath(link.path2))) {
+        if (showAllWhenEmpty ||
+            widget.tab.activeCommentators
+                .contains(utils.getTitleFromPath(link.path2))) {
           commentaryLinks.add(link);
         }
         continue;
@@ -1391,6 +1429,8 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   final Function(Link, int)? onSearchResultsCountUpdate;
   final Key? Function(Link)? getKeyForLink; // Support linking keys
   final int Function(Link)? getItemSearchIndex; // Support highlighting
+  final bool removeNikud;
+  final bool removePunctuation;
 
   const _CollapsibleCommentaryGroup({
     super.key,
@@ -1406,6 +1446,8 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     this.onSearchResultsCountUpdate,
     this.getKeyForLink,
     this.getItemSearchIndex,
+    this.removeNikud = false,
+    this.removePunctuation = false,
   });
 
   @override
@@ -1504,6 +1546,8 @@ class _CollapsibleCommentaryGroupState
                       },
                       currentSearchIndex:
                           widget.getItemSearchIndex?.call(link) ?? -1,
+                      removeNikud: widget.removeNikud,
+                      removePunctuation: widget.removePunctuation,
                     ),
                   ),
                 ],

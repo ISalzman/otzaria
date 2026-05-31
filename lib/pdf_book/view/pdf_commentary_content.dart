@@ -18,6 +18,8 @@ class PdfCommentaryContent extends StatefulWidget {
     this.searchQuery = '',
     this.onSearchResultsCountChanged,
     this.currentSearchIndex = -1,
+    this.removeNikud = false,
+    this.removePunctuation = false,
   });
 
   final Link link;
@@ -26,6 +28,8 @@ class PdfCommentaryContent extends StatefulWidget {
   final String searchQuery;
   final Function(int)? onSearchResultsCountChanged;
   final int currentSearchIndex;
+  final bool removeNikud;
+  final bool removePunctuation;
 
   @override
   State<PdfCommentaryContent> createState() => _PdfCommentaryContentState();
@@ -108,6 +112,8 @@ class _PdfCommentaryContentState extends State<PdfCommentaryContent> {
                     fontSize: settingsState.commentatorsFontSize,
                     fontFamily: settingsState.commentatorsFontFamily,
                     lineHeight: settingsState.lineHeight,
+                    removeNikud: widget.removeNikud,
+                    removePunctuation: widget.removePunctuation,
                   ),
                 );
               },
