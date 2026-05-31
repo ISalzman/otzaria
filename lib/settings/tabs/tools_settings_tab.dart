@@ -19,21 +19,27 @@ class ToolsSettingsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = SingleChildScrollView(
+    // CustomScrollView (ולא SingleChildScrollView) כדי ש-ToolsManagementPanel
+    // יוכל להחזיר sliver עם סרגל פעולות מוצמד (PinnedHeaderSliver) לאזור התוספים.
+    final content = CustomScrollView(
       primary: true,
-      child: ToolPanelWrapper(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: const [
-            ToolsManagementPanel(),
-            SizedBox(height: 16),
-            CalendarSettingsTab(),
-            GematriaSettingsTab(),
-            // [EDITING DISABLED] EditorSettingsTab(),
-            SizedBox(height: 16),
-          ],
+      slivers: [
+        const ToolsManagementPanel(),
+        SliverToBoxAdapter(
+          child: ToolPanelWrapper(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: const [
+                SizedBox(height: 16),
+                CalendarSettingsTab(),
+                GematriaSettingsTab(),
+                // [EDITING DISABLED] EditorSettingsTab(),
+                SizedBox(height: 16),
+              ],
+            ),
+          ),
         ),
-      ),
+      ],
     );
 
     // אם קיבלנו CalendarCubit במפורש — עטוף כדי להבטיח שהשינויים יישמרו
