@@ -790,7 +790,7 @@ class _DraggableSettingsPluginRow extends StatelessWidget {
         return Container(
           decoration: isHovering
               ? BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.08),
+                  color: AppSurfaces.dragTargetHighlight(cs),
                   border: Border(
                     top: BorderSide(color: cs.primary, width: 2),
                   ),

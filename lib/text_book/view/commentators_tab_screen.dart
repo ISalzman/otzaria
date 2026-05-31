@@ -477,6 +477,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     'מפרשים על ${widget.tab.sourceTab.book.title}',
                     style: const TextStyle(fontSize: 16),
                     overflow: TextOverflow.ellipsis,
+                    textDirection: TextDirection.rtl,
                   ),
                   actions: [
                     ResponsiveActionBar(
@@ -830,6 +831,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         'מפרשים על ${state.book.title}',
         style: const TextStyle(fontSize: 16),
         overflow: TextOverflow.ellipsis,
+        textDirection: TextDirection.rtl,
       ),
       actions: [
         ResponsiveActionBar(
@@ -1077,8 +1079,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                       ),
                     ],
                     labelColor: colorScheme.primary,
-                    unselectedLabelColor:
-                        colorScheme.onSurface.withValues(alpha: 0.6),
+                    unselectedLabelColor: colorScheme.onSurfaceVariant,
                     indicatorColor: colorScheme.primary,
                     dividerColor: Colors.transparent,
                     splashBorderRadius: BorderRadius.circular(12),
@@ -1221,6 +1222,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         child: Text(
           'טוען תוצאות...',
           style: Theme.of(context).textTheme.bodySmall,
+          textDirection: TextDirection.rtl,
         ),
       );
     }
@@ -1263,6 +1265,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     textAlign: TextAlign.right,
+                    textDirection: TextDirection.rtl,
                   ),
                 ),
               ],
@@ -1321,7 +1324,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     required List<String> content,
   }) {
     if (chapters.isEmpty) {
-      return const Center(child: Text('אין תוכן עניינים'));
+      return const Center(
+        child: Text('אין תוכן עניינים', textDirection: TextDirection.rtl),
+      );
     }
     final colorScheme = Theme.of(context).colorScheme;
 
