@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -68,10 +69,84 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   // מצויר ידנית (CustomPaint) ולא ע"י ה-indicator של TabBar.
   final ScrollController _tabsScrollController = ScrollController();
 
+  // GlobalKey לטאב הנבחר, לשם גלילה אוטומטית שלו לתצוגה (ראה
+  // _ensureSelectedTabVisible). עובר בין הטאבים כשהבחירה משתנה — בטוח כי רק
+  // טאב אחד נבחר בכל רגע, ורק מבנה אחד (רחב/צר) מרנדר טאבים בו-זמנית.
+  final GlobalKey _selectedTabKey = GlobalKey();
+
+  // חתימת המצב שאליו גללנו לאחרונה. כוללת זהות הטאב הנבחר, אינדקסו, מספר
+  // הטאבים, רוחב המסך והאוריינטציה — כך שגלילה-מחדש מתרחשת לא רק בבחירת טאב
+  // אחר אלא גם בשחזור workspace/ReplaceAllTabs (אותו אינדקס, טאב אחר), resize
+  // ומעבר portrait/landscape — בכולם הטאב הנבחר עלול לצאת מהתצוגה.
+  Object? _lastScrollSignature;
+  // הטאב שאליו גללנו לאחרונה, להבחנה בין שינוי-בחירה (מנפישים) לבין שינוי
+  // גודל/מבנה בלבד (גלילה מיידית, ללא אנימציה מיותרת).
+  OpenedTab? _lastScrolledTab;
+
   @override
   void dispose() {
     _tabsScrollController.dispose();
     super.dispose();
+  }
+
+  /// גולל את שורת הטאבים כך שהטאב הנבחר ייראה במלואו.
+  ///
+  /// נדרש כי שורת הטאבים בנויה על [ReorderableListView] (lazy, עם אינדיקטור
+  /// ידני) וללא [TabController] — ולכן אין גלילה אוטומטית לטאב הנבחר. בלעדי
+  /// פונקציה זו, בטעינה ראשונית עם הרבה טאבים ה-ScrollController נשאר ב-offset 0
+  /// והטאב הפעיל עלול להישאר גלול מחוץ לתצוגה.
+  ///
+  /// [animate] - האם להנפיש את הגלילה (false בטעינה ראשונית כדי למקם מיידית).
+  void _ensureSelectedTabVisible({required bool animate, int attempt = 0}) {
+    if (attempt >= 12) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_tabsScrollController.hasClients) {
+        _ensureSelectedTabVisible(animate: animate, attempt: attempt + 1);
+        return;
+      }
+      final pos = _tabsScrollController.position;
+      if (!pos.hasContentDimensions) {
+        // המידות עדיין לא נמדדו — ננסה שוב בפריים הבא.
+        _ensureSelectedTabVisible(animate: animate, attempt: attempt + 1);
+        return;
+      }
+      final ctx = _selectedTabKey.currentContext;
+      if (ctx == null) {
+        // הטאב הנבחר מחוץ לתחום הרינדור (ReorderableListView הוא lazy). קפיצה
+        // להערכה לינארית לפי האינדקס מכניסה אותו לתחום, ופריים נוסף מדייק.
+        final state = context.read<TabsBloc>().state;
+        if (state.tabs.length <= 1 || pos.maxScrollExtent <= 0) return;
+        final estimate = (pos.maxScrollExtent *
+                state.currentTabIndex /
+                (state.tabs.length - 1))
+            .clamp(pos.minScrollExtent, pos.maxScrollExtent);
+        if ((estimate - pos.pixels).abs() < 1.0) return; // כבר שם — מניעת לולאה
+        _tabsScrollController.jumpTo(estimate);
+        _ensureSelectedTabVisible(animate: animate, attempt: attempt + 1);
+        return;
+      }
+      final renderObject = ctx.findRenderObject();
+      if (renderObject == null) return;
+      final viewport = RenderAbstractViewport.of(renderObject);
+      // ה-offsets שיביאו את הטאב לקצה ההתחלתי/הסופי של ה-viewport.
+      final leadingEdge = viewport.getOffsetToReveal(renderObject, 0.0).offset;
+      final trailingEdge = viewport.getOffsetToReveal(renderObject, 1.0).offset;
+      // גלילה מינימלית: רק אם הטאב חתוך, ולכיוון הקרוב. אם נראה במלואו — כלום.
+      final double? target = pos.pixels > leadingEdge
+          ? leadingEdge
+          : (pos.pixels < trailingEdge ? trailingEdge : null);
+      if (target == null) return;
+      final clamped = target.clamp(pos.minScrollExtent, pos.maxScrollExtent);
+      if (animate) {
+        _tabsScrollController.animateTo(
+          clamped,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+        );
+      } else {
+        _tabsScrollController.jumpTo(clamped);
+      }
+    });
   }
 
   bool _useStackedTabs(BuildContext context, NavigationState navState) {
@@ -362,6 +437,25 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   }
 
   Widget _buildScrollableTabsArea(TabsState state) {
+    // גלילה אוטומטית לטאב הנבחר כשמשהו שעלול להוציאו מהתצוגה משתנה: בחירת טאב,
+    // החלפת רשימת הטאבים (workspace/ReplaceAllTabs), resize או שינוי אוריינטציה.
+    // ה-MediaQuery נקרא רק לשם זיהוי השינוי; ערכו אינו חייב להיות מדויק.
+    final mq = MediaQuery.of(context);
+    final signature = (
+      state.currentTab,
+      state.currentTabIndex,
+      state.tabs.length,
+      mq.size.width.round(),
+      mq.orientation,
+    );
+    if (signature != _lastScrollSignature) {
+      final isFirstScroll = _lastScrollSignature == null;
+      // מנפישים רק כשהבחירה עצמה השתנתה; שינוי גודל/מבנה — גלילה מיידית.
+      final selectionChanged = !identical(state.currentTab, _lastScrolledTab);
+      _lastScrollSignature = signature;
+      _lastScrolledTab = state.currentTab;
+      _ensureSelectedTabVisible(animate: selectionChanged && !isFirstScroll);
+    }
     // ReorderableListView מטפל במלוא הגרירה-לסידור: הרמת הטאב, ה-placeholder
     // היחיד שזז, סידור שאר הטאבים לתצוגת התוצאה, והאנימציה — ללא לולאת ה-shift
     // של hit-test ידני. הבחירה היא ב-onPointerDown (ב-_buildTab), כך שכל
@@ -755,32 +849,38 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       );
     }
 
-    return Listener(
-      // בחירת הטאב על pointer-down: לחצן אמצעי סוגר, וכל לחצן אחר בוחר מיד.
-      // משתמשים ב-Listener פסיבי (ולא ב-onTap) כי הגרירה המיידית
-      // (ReorderableDragStartListener) זוכה ב-gesture arena וחוסמת onTap. כך כל
-      // אינטראקציה — לחיצה רגילה או תחילת גרירה — בוחרת את הטאב מיד.
-      onPointerDown: (PointerDownEvent event) {
-        if (event.buttons == 4) {
-          closeTab(tab, context);
-        } else if (index != state.currentTabIndex) {
-          context.read<TabsBloc>().add(SetCurrentTab(index));
-        }
-      },
-      child: AppContextMenuRegion(
-        key: isSelected ? tourTabContextMenuTargetKey : null,
-        menuBuilder: (menuCtx, _) =>
-            _buildTabContextMenuEntries(menuCtx, tab, state),
-        menuItemKeysByLabel:
-            isSelected ? {'הצג לצד': tourTabSideBySideMenuItemTargetKey} : null,
-        child: StatefulBuilder(
-          builder: (context, setLocalState) {
-            return MouseRegion(
-              onEnter: (_) => setLocalState(() => isTabHovered = true),
-              onExit: (_) => setLocalState(() => isTabHovered = false),
-              child: buildTabAppearance(setLocalState),
-            );
-          },
+    return KeyedSubtree(
+      // ה-key על הטאב הנבחר בלבד, כדי שגלילה אוטומטית תוכל לאתר אותו (ראה
+      // _ensureSelectedTabVisible). הטאבים האחרים ללא key (null).
+      key: isSelected ? _selectedTabKey : null,
+      child: Listener(
+        // בחירת הטאב על pointer-down: לחצן אמצעי סוגר, וכל לחצן אחר בוחר מיד.
+        // משתמשים ב-Listener פסיבי (ולא ב-onTap) כי הגרירה המיידית
+        // (ReorderableDragStartListener) זוכה ב-gesture arena וחוסמת onTap. כך כל
+        // אינטראקציה — לחיצה רגילה או תחילת גרירה — בוחרת את הטאב מיד.
+        onPointerDown: (PointerDownEvent event) {
+          if (event.buttons == 4) {
+            closeTab(tab, context);
+          } else if (index != state.currentTabIndex) {
+            context.read<TabsBloc>().add(SetCurrentTab(index));
+          }
+        },
+        child: AppContextMenuRegion(
+          key: isSelected ? tourTabContextMenuTargetKey : null,
+          menuBuilder: (menuCtx, _) =>
+              _buildTabContextMenuEntries(menuCtx, tab, state),
+          menuItemKeysByLabel: isSelected
+              ? {'הצג לצד': tourTabSideBySideMenuItemTargetKey}
+              : null,
+          child: StatefulBuilder(
+            builder: (context, setLocalState) {
+              return MouseRegion(
+                onEnter: (_) => setLocalState(() => isTabHovered = true),
+                onExit: (_) => setLocalState(() => isTabHovered = false),
+                child: buildTabAppearance(setLocalState),
+              );
+            },
+          ),
         ),
       ),
     );
