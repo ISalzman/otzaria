@@ -918,7 +918,7 @@ class _ClosingQuote extends StatelessWidget {
                     size: 32, color: colorScheme.primary),
                 const SizedBox(height: 12),
                 Text(
-                  '...וְצִדְקָתוֹ עֹמֶדֶת לָעַד',
+                  'וְצִדְקָתוֹ עֹמֶדֶת לָעַד',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 20,
@@ -956,7 +956,7 @@ class _ClosingQuote extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '...זֶה הַכּוֹתֵב סְפָרִים וּמַשְׁאִילָן לַאֲחֵרִים',
+                  'זֶה הַכּוֹתֵב סְפָרִים וּמַשְׁאִילָן לַאֲחֵרִים',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 18,
