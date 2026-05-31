@@ -1071,21 +1071,24 @@ class _PersonalNotesManagerScreenState
                 ],
               ),
               const SizedBox(height: 8),
-              // תצוגה מקדימה מעוצבת: מרנדרים את ה-Quill Delta המלא במקום
-              // טקסט פשוט, כך שהעיצוב (מודגש/נטוי/קו תחתי/קו חוצה וכו') יופיע
-              // גם בכרטיס. הכרטיס בגובה קבוע (mainAxisExtent: 170), לכן עוטפים
-              // ב-Expanded + ClipRect + OverflowBox כדי לחתוך עודף תוכן במקום
-              // לגלוש (PersonalNoteContentView לא תומך ב-maxLines).
+              // תצוגה מקדימה מעוצבת: מרנדרים את ה-Quill Delta במקום טקסט פשוט,
+              // כך שהעיצוב (מודגש/נטוי/קו תחתי/קו חוצה וכו') יופיע גם בכרטיס.
+              // maxPreviewChars מקצר הערות ארוכות כדי שלא נרנדר אלפי מילים
+              // בכל כרטיס (QuillEditor הלא-נגלל מחשב layout לכל הטקסט).
+              // הכרטיס בגובה קבוע (mainAxisExtent: 170), לכן עוטפים ב-Expanded +
+              // ClipRect + OverflowBox כדי לחתוך את העודף הוויזואלי. maxHeight
+              // מוגבל כהגנה כפולה מעל הקיצור התוכני.
               Expanded(
                 child: ClipRect(
                   child: OverflowBox(
                     alignment: Alignment.topCenter,
                     minHeight: 0,
-                    maxHeight: double.infinity,
+                    maxHeight: 200,
                     child: IgnorePointer(
                       child: PersonalNoteContentView(
                         note: note,
                         allowSelection: false,
+                        maxPreviewChars: 280,
                         textStyle:
                             Theme.of(context).textTheme.bodySmall?.copyWith(
                                   color: cs.onSurfaceVariant,
