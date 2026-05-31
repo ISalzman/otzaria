@@ -338,6 +338,210 @@ void main() {
     });
   });
 
+  group('גלילה אוטומטית לטאב הנבחר', () {
+    testWidgets('בטעינה ראשונית עם טאב נבחר מחוץ לתצוגה — נגלל אליו',
+        (tester) async {
+      // הרבה טאבים שגולשים מעבר לרוחב, והטאב הנבחר הוא האחרון (מחוץ לתצוגה
+      // ב-offset 0). ללא גלילה אוטומטית הוא היה נשאר גלול מחוץ לראייה.
+      final tabs = List.generate(20, (i) => _makeTextTab('ספר מספר $i'));
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 19),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final t in tabs) {
+          t.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+
+      // שורת הטאבים נגללה מ-offset 0 כדי להראות את הטאב הנבחר.
+      final scrollableFinder = find.descendant(
+        of: find.byType(ReorderableListView),
+        matching: find.byType(Scrollable),
+      );
+      final position =
+          tester.state<ScrollableState>(scrollableFinder.first).position;
+      expect(position.pixels, greaterThan(0),
+          reason: 'הטאב הנבחר האחרון מחוץ לתצוגה צריך לגרום לגלילה');
+
+      // והטאב הנבחר אכן רונדר (נכנס לתחום אחרי הגלילה).
+      expect(find.text('ספר מספר 19'), findsOneWidget,
+          reason: 'הטאב הנבחר צריך להיות גלוי אחרי הגלילה האוטומטית');
+    });
+
+    testWidgets('שינוי בחירה אחרי הטעינה הראשונית גם גורר גלילה',
+        (tester) async {
+      // מאמת שהמנגנון אינו חד-פעמי: גם rebuild עוקב (כאן — בחירת טאב אחר דרך
+      // עדכון ה-state) מפעיל את הגלילה האוטומטית.
+      final tabs = List.generate(20, (i) => _makeTextTab('ספר מספר $i'));
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final t in tabs) {
+          t.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+
+      final scrollableFinder = find.descendant(
+        of: find.byType(ReorderableListView),
+        matching: find.byType(Scrollable),
+      );
+      // הטאב הראשון נבחר → אין גלילה בטעינה.
+      expect(
+          tester.state<ScrollableState>(scrollableFinder.first).position.pixels,
+          0);
+
+      // בחירת הטאב האחרון אחרי הטעינה.
+      tabsBloc.emitState(TabsState(tabs: tabs, currentTabIndex: 19));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.state<ScrollableState>(scrollableFinder.first).position.pixels,
+        greaterThan(0),
+        reason: 'בחירת טאב נסתר אחרי הטעינה צריכה לגלול אליו',
+      );
+    });
+
+    testWidgets('כיווץ רוחב המסך (resize) שמוציא את הטאב הנבחר — נגלל אליו',
+        (tester) async {
+      // מסך רחב מאוד שבו כל הטאבים נכנסים; הטאב הנבחר האחרון נראה ללא גלילה.
+      // כיווץ הרוחב יוצר overflow ומוציא אותו — ובלי תלות בשינוי אינדקס,
+      // הגלילה האוטומטית צריכה להחזירו לתצוגה.
+      final tabs = List.generate(15, (i) => _makeTextTab('ספר מספר $i'));
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 14),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final t in tabs) {
+          t.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      tester.view.physicalSize = const Size(4000, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // בנייה ברוחב מלא (ללא SizedBox קבוע) כדי ש-resize ישפיע על שורת הטאבים.
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<TabsBloc>.value(value: tabsBloc),
+            BlocProvider<NavigationBloc>.value(value: navigationBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomTitleBar(onReadingSettingsPressed: () {}),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final scrollableFinder = find.descendant(
+        of: find.byType(ReorderableListView),
+        matching: find.byType(Scrollable),
+      );
+      // ברוחב 4000 הכל נכנס — אין גלילה.
+      expect(
+          tester.state<ScrollableState>(scrollableFinder.first).position.pixels,
+          0,
+          reason: 'במסך רחב מאוד אין overflow');
+
+      // כיווץ ל-900px (עדיין landscape) — נוצר overflow והטאב האחרון יוצא.
+      tester.view.physicalSize = const Size(900, 800);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.state<ScrollableState>(scrollableFinder.first).position.pixels,
+        greaterThan(0),
+        reason: 'כיווץ הרוחב מוציא את הטאב הנבחר → גלילה אוטומטית אליו',
+      );
+    });
+
+    testWidgets('טאב נבחר ראשון — אין גלילה מיותרת (נשאר ב-offset 0)',
+        (tester) async {
+      final tabs = List.generate(20, (i) => _makeTextTab('ספר מספר $i'));
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final t in tabs) {
+          t.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+
+      final scrollableFinder = find.descendant(
+        of: find.byType(ReorderableListView),
+        matching: find.byType(Scrollable),
+      );
+      final position =
+          tester.state<ScrollableState>(scrollableFinder.first).position;
+      expect(position.pixels, 0,
+          reason: 'הטאב הראשון כבר נראה — אין צורך לגלול');
+    });
+  });
+
   group('פריסת מסך צר (portrait) — טאבים בשורה תחתונה', () {
     testWidgets('landscape: הטאבים באותה שורה של כפתורי הפעולה',
         (tester) async {
@@ -550,6 +754,9 @@ class _TestTabsBloc extends Cubit<TabsState> implements TabsBloc {
 
   /// מתעד את כל ה-events שנשלחו, לבדיקת בחירה/סידור-מחדש של טאבים.
   final List<TabsEvent> addedEvents = [];
+
+  /// מאפשר לטסט לדמות שינוי מצב (בחירה/החלפת רשימת טאבים) אחרי הטעינה.
+  void emitState(TabsState state) => emit(state);
 
   @override
   void add(TabsEvent event) => addedEvents.add(event);
