@@ -464,6 +464,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                           context: context,
                           title: 'עצירת עדכון',
                           content: 'האם לעצור את תהליך עדכון האינדקס?',
+                          confirmText: 'עצור',
                         );
                         if (!context.mounted) return;
                         if (result == true) {
@@ -511,6 +512,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                                       title: 'איפוס אינדקס',
                                       content:
                                           'האם למחוק את אינדקס החיפוש? תצטרך לבנות אותו מחדש כדי להשתמש בחיפוש.',
+                                      confirmText: 'אפס',
                                     );
                                     if (!context.mounted) return;
                                     if (result == true) {
