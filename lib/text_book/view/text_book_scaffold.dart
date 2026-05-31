@@ -13,7 +13,7 @@ class TextBookScaffold extends StatelessWidget {
   final List<String> content;
   final Function(OpenedTab) openBookCallback;
   final void Function(int, {String? searchText}) openLeftPaneTab;
-  final ValueChanged<String?>? onSelectedTextChanged;
+  final void Function(String? text, int? lineIndex)? onSelectedTextChanged;
   final TextEditingValue searchTextController;
   final TextBookTab tab;
   final int? initialSidebarTabIndex;

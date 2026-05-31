@@ -140,6 +140,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   FocusRepository? _focusRepository; // שמירת הפניה לשימוש ב-dispose
   final GlobalKey _viewModeMenuKey = GlobalKey(); // מפתח לתפריט בחירת התצוגה
   String? _selectedTextForSearch;
+  int?
+      _selectedLineForNote; // שורת המקור של הטקסט המסומן, ליצירת הערה בקיצור מקשים
   Book? _pdfBook; // Companion PDF
   bool _hasPdfBook = false;
   bool _leftPaneAutoCloseQueuedByScroll = false;
@@ -791,8 +793,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
   }
 
-  void _onSelectedTextChanged(String? selectedText) {
+  void _onSelectedTextChanged(String? selectedText, int? lineIndex) {
     _selectedTextForSearch = selectedText;
+    _selectedLineForNote = lineIndex;
     if (selectedText == null || selectedText.trim().isEmpty) {
       return;
     }
@@ -1157,6 +1160,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                       openSearchFromToolbar: _openSearchFromToolbar,
                       openNotesForCurrentView: () =>
                           _openPersonalNotesForCurrentView(state),
+                      selectedTextForNote: _selectedTextForSearch,
+                      selectedLineForNote: _selectedLineForNote,
                     ),
                     child: Scaffold(
                       appBar: _buildAppBar(context, state, wideScreen),
@@ -2584,6 +2589,8 @@ bool _handleGlobalKeyEvent(
   TextBookTab tab, {
   required VoidCallback openSearchFromToolbar,
   required VoidCallback openNotesForCurrentView,
+  String? selectedTextForNote,
+  int? selectedLineForNote,
 }) {
   // קריאת קיצורים מההגדרות
   // [EDITING DISABLED]
@@ -2656,6 +2663,8 @@ bool _handleGlobalKeyEvent(
       context,
       state,
       openNotesForCurrentView: openNotesForCurrentView,
+      selectedText: selectedTextForNote,
+      selectedLineIndex: selectedLineForNote,
     );
     return true;
   }
@@ -2855,18 +2864,27 @@ Future<void> _addNoteFromKeyboard(
   BuildContext context,
   TextBookLoaded state, {
   required VoidCallback openNotesForCurrentView,
+  String? selectedText,
+  int? selectedLineIndex,
 }) async {
-  // משתמש בשורה הנבחרת אם קיימת, אחרת בשורה הראשונה הנראית
-  final currentIndex = state.selectedIndex ??
-      (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
-  // לא צריך טקסט נבחר - ההערה חלה על כל השורה
+  // אם יש טקסט מסומן — מתנהגים בדיוק כמו תפריט הקליק-ימני: ההערה חלה על
+  // השורה שממנה הודגש הטקסט, והטקסט המסומן עצמו משמש ככותרת ההערה.
+  // אחרת — ההערה חלה על השורה הנבחרת/הראשונה הנראית, וכותרתה היא טקסט הזיהוי.
+  final trimmedSelection = selectedText?.trim();
+  final hasSelection = trimmedSelection != null && trimmedSelection.isNotEmpty;
 
-  // קבלת הטקסט המזהה של השורה (כמו שיוצג ככותרת ההערה)
-  final referenceText = extractDisplayTextFromLines(
-    state.content,
-    currentIndex + 1,
-    excludeBookTitle: state.book.title,
-  );
+  final currentIndex = (hasSelection ? selectedLineIndex : null) ??
+      state.selectedIndex ??
+      (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
+
+  // קבלת הטקסט המזהה של השורה (כמו שיוצג ככותרת ההערה), או הטקסט המסומן
+  final referenceText = hasSelection
+      ? removeHebrewDiacritics(trimmedSelection)
+      : extractDisplayTextFromLines(
+          state.content,
+          currentIndex + 1,
+          excludeBookTitle: state.book.title,
+        );
 
   // טען טיוטה אם קיימת
   final draftService = PersonalNoteDraftService();
@@ -2882,6 +2900,7 @@ Future<void> _addNoteFromKeyboard(
         bookId: state.book.title,
         lineNumber: currentIndex + 1,
         referenceText: referenceText,
+        selectedText: hasSelection ? trimmedSelection : null,
         initialContent: draft?.content ?? '',
         initialFormat: draft?.contentFormat ?? PersonalNoteContentFormat.plain,
       ));
