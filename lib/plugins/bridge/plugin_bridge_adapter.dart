@@ -18,6 +18,7 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -404,9 +405,75 @@ class PluginBridgeAdapter {
               .toList();
         }
         return [];
+      case 'getTree':
+        // spec: getTree({ path?, includeBooks? }) -> מבנה עץ הספרייה המלא
+        // path אופציונלי: מצמצם את העץ לתת-קטגוריה לפי הנתיב שלה (כמו '/תנך/ראשונים').
+        //   ברירת מחדל: כל הספרייה.
+        // includeBooks אופציונלי (ברירת מחדל true): האם לכלול את רשימות הספרים.
+        final path = args['path']?.toString();
+        final includeBooks = args['includeBooks'] as bool? ?? true;
+        final root = (path == null || path.isEmpty || path == '/')
+            ? library
+            : _findCategoryByPath(library, path);
+        if (root == null) return null;
+        return _categoryToTree(root, includeBooks: includeBooks);
       default:
         throw Exception('Unknown action in library: $action');
     }
+  }
+
+  /// בונה ייצוג JSON רקורסיבי של קטגוריה כולל תתי-קטגוריות וספרים.
+  ///
+  /// [includeBooks] קובע האם לכלול את רשימת הספרים בכל קטגוריה.
+  Map<String, dynamic> _categoryToTree(
+    Category category, {
+    required bool includeBooks,
+  }) {
+    final node = <String, dynamic>{
+      'title': category.title,
+      'path': category.path,
+      'categories': category.subCategories
+          .map((c) => _categoryToTree(c, includeBooks: includeBooks))
+          .toList(),
+    };
+    if (includeBooks) {
+      node['books'] = category.books.map(_bookToTreeEntry).toList();
+    }
+    return node;
+  }
+
+  /// ממפה ספר לרשומה בעץ: bookId (= title באוצריא), title, type, author?, topics?.
+  Map<String, dynamic> _bookToTreeEntry(Book book) {
+    final entry = <String, dynamic>{
+      'bookId': book.title,
+      'title': book.title,
+      'type': switch (book) {
+        PdfBook() => 'pdf',
+        DocxBook() => 'docx',
+        _ => 'text',
+      },
+    };
+    if (book.author != null && book.author!.isNotEmpty) {
+      entry['author'] = book.author;
+    }
+    if (book.topics.isNotEmpty) {
+      entry['topics'] = book.topics;
+    }
+    return entry;
+  }
+
+  /// מאתר תת-קטגוריה לפי נתיב מלא (למשל '/תנך/ראשונים'), או null אם לא נמצאה.
+  Category? _findCategoryByPath(Library library, String path) {
+    final normalized = path.startsWith('/') ? path.substring(1) : path;
+    final segments = normalized.split('/').where((s) => s.isNotEmpty).toList();
+    Category current = library;
+    for (final segment in segments) {
+      final next =
+          current.subCategories.where((c) => c.title == segment).firstOrNull;
+      if (next == null) return null;
+      current = next;
+    }
+    return current;
   }
 
   // ----------------------------------------------------------------
