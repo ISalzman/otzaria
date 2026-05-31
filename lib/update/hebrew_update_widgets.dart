@@ -6,6 +6,21 @@ import 'package:updat/updat.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// עוטף את צ'יפ העדכון ברקע קל עם גבול עדין, כדי שיהיה ניכר מעל טקסט
+/// התוכן שמאחוריו (הצ'יפ צף מעל מסך התוכן).
+Widget _updateChipSurface(BuildContext context, Widget child) {
+  final colorScheme = Theme.of(context).colorScheme;
+  return Material(
+    color: colorScheme.surfaceContainerHighest,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(color: colorScheme.outlineVariant),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: child,
+  );
+}
+
 /// רכיב לחיצה (chip) בעברית - דומה ל-flatChip המקורי
 Widget hebrewFlatChip({
   required BuildContext context,
@@ -33,10 +48,13 @@ Widget hebrewFlatChip({
     });
     return Tooltip(
       message: 'עדכון לגרסה ${latestVersion!.toString()}',
-      child: TextButton.icon(
-        onPressed: openDialog,
-        icon: const Icon(FluentIcons.arrow_download_24_regular),
-        label: const Text('עדכון זמין'),
+      child: _updateChipSurface(
+        context,
+        TextButton.icon(
+          onPressed: openDialog,
+          icon: const Icon(FluentIcons.arrow_download_24_regular),
+          label: const Text('עדכון זמין'),
+        ),
       ),
     );
   }
@@ -44,16 +62,19 @@ Widget hebrewFlatChip({
   if (UpdatStatus.downloading == status) {
     return Tooltip(
       message: 'אנא המתן...',
-      child: TextButton.icon(
-        onPressed: () {},
-        icon: const SizedBox(
-          width: 15,
-          height: 15,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
+      child: _updateChipSurface(
+        context,
+        TextButton.icon(
+          onPressed: () {},
+          icon: const SizedBox(
+            width: 15,
+            height: 15,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+            ),
           ),
+          label: const Text('מוריד...'),
         ),
-        label: const Text('מוריד...'),
       ),
     );
   }
@@ -61,10 +82,13 @@ Widget hebrewFlatChip({
   if (UpdatStatus.readyToInstall == status) {
     return Tooltip(
       message: 'לחץ להתקנה',
-      child: TextButton.icon(
-        onPressed: launchInstaller,
-        icon: const Icon(FluentIcons.checkmark_circle_24_regular),
-        label: const Text('מוכן להתקנה'),
+      child: _updateChipSurface(
+        context,
+        TextButton.icon(
+          onPressed: launchInstaller,
+          icon: const Icon(FluentIcons.checkmark_circle_24_regular),
+          label: const Text('מוכן להתקנה'),
+        ),
       ),
     );
   }
@@ -77,11 +101,14 @@ Widget hebrewFlatChip({
       return Container();
     }
     return Tooltip(
-      message: 'אירעה שגיאה בעדכון. אנא נסה שוב.',
-      child: TextButton.icon(
-        onPressed: startUpdate,
-        icon: const Icon(FluentIcons.warning_24_regular),
-        label: const Text('שגיאה בחיבור לרשת במהלך בדיקת עדכונים'),
+      message: 'אירעה שגיאה בעדכון. לחץ לבדיקה חוזרת.',
+      child: _updateChipSurface(
+        context,
+        TextButton.icon(
+          onPressed: checkForUpdate,
+          icon: const Icon(FluentIcons.warning_24_regular),
+          label: const Text('שגיאה בחיבור לרשת במהלך בדיקת עדכונים'),
+        ),
       ),
     );
   }
