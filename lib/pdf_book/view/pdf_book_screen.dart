@@ -26,7 +26,10 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
@@ -3650,6 +3653,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         icon: FluentIcons.document_text_24_regular,
         tooltip: 'פתח ספר במהדורת טקסט',
         onPressed: () => _handleTextButtonPress(context),
+      ),
+      ActionButtonData.simple(
+        icon: FluentIcons.open_24_regular,
+        tooltip: 'פתח כרטיסיית מפרשים',
+        onPressed: () => context.read<TabsBloc>().add(
+              AddTab(
+                PdfCommentatorsTab(sourceTab: widget.tab),
+                insertAdjacent: true,
+              ),
+            ),
+        compact: false,
+        visual: ActionButtonVisual.iconButton,
       ),
       ActionButtonData(
         widget: BlocBuilder<PdfBookBloc, PdfBookState>(

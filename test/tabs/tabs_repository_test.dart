@@ -5,6 +5,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
@@ -64,7 +65,7 @@ void main() {
           (loaded.single as CommentatorsTab).sourceTab.book.title, 'ספר בדיקה');
     });
 
-    test('PdfCommentatorsTab לא נשמר לדיסק כלל', () async {
+    test('PdfCommentatorsTab נשמר ומשוחזר', () async {
       final pdfSource = PdfBookTab(
         book: PdfBook(title: 'PDF בדיקה', path: '/tmp/book.pdf'),
         pageNumber: 2,
@@ -75,8 +76,51 @@ void main() {
       await repository.saveTabs([pdfCommentatorsTab], 0);
 
       final loaded = repository.loadTabs();
-      expect(loaded, isEmpty);
+      addTearDown(() {
+        for (final tab in loaded) {
+          tab.dispose();
+        }
+      });
+
+      expect(loaded, hasLength(1));
+      expect(loaded.single, isA<PdfCommentatorsTab>());
+      final restored = loaded.single as PdfCommentatorsTab;
+      expect(restored.sourceTab.book.title, 'PDF בדיקה');
+      expect(restored.sourceTab.pageNumber, 2);
       expect(repository.loadCurrentTabIndex(), 0);
+    });
+
+    test('CombinedTab עם PdfCommentatorsTab נשמר ומשוחזר (side-by-side)',
+        () async {
+      final pdfSource = PdfBookTab(
+        book: PdfBook(title: 'PDF בדיקה', path: '/tmp/book.pdf'),
+        pageNumber: 2,
+      );
+      final textTab = TextBookTab(
+        book: TextBook(title: 'ספר בדיקה'),
+        index: 1,
+      );
+      addTearDown(pdfSource.dispose);
+      addTearDown(textTab.dispose);
+
+      final combined = CombinedTab(
+        rightTab: PdfCommentatorsTab(sourceTab: pdfSource),
+        leftTab: textTab,
+      );
+      await repository.saveTabs([combined], 0);
+
+      final loaded = repository.loadTabs();
+      addTearDown(() {
+        for (final tab in loaded) {
+          tab.dispose();
+        }
+      });
+
+      expect(loaded, hasLength(1));
+      expect(loaded.single, isA<CombinedTab>());
+      final restored = loaded.single as CombinedTab;
+      expect(restored.rightTab, isA<PdfCommentatorsTab>());
+      expect(restored.leftTab, isA<TextBookTab>());
     });
 
     test('loadCurrentTabIndex משחזר את האינדקס שנשמר', () async {
@@ -106,7 +150,8 @@ void main() {
       expect(repository.loadCurrentTabIndex(), 3);
     });
 
-    test('אם הטאב הנוכחי אינו נשמר, האינדקס נשמר לטאב השחזורי הקרוב', () async {
+    test('טאבים מעורבים (טקסט + מפרשי PDF) — כולם נשמרים והאינדקס נשמר',
+        () async {
       final textTab = TextBookTab(
         book: TextBook(title: 'ספר בדיקה'),
         index: 1,
@@ -128,9 +173,10 @@ void main() {
         }
       });
 
-      expect(loaded, hasLength(1));
-      expect(loaded.single, isA<TextBookTab>());
-      expect(repository.loadCurrentTabIndex(), 0);
+      expect(loaded, hasLength(2));
+      expect(loaded[0], isA<TextBookTab>());
+      expect(loaded[1], isA<PdfCommentatorsTab>());
+      expect(repository.loadCurrentTabIndex(), 1);
     });
 
     test('saveCurrentTabIndex מעדכן את האינדקס בלי לדרוס את הטאבים השמורים',
@@ -162,8 +208,7 @@ void main() {
       expect(loaded, hasLength(2));
     });
 
-    test('saveCurrentTabIndex ממפה לאינדקס השחזורי כשיש טאב שאינו נשמר',
-        () async {
+    test('saveCurrentTabIndex שומר את האינדקס כשכל הטאבים נשמרים', () async {
       final firstTab = TextBookTab(
         book: TextBook(title: 'ספר בדיקה'),
         index: 1,
@@ -184,11 +229,10 @@ void main() {
       addTearDown(pdfCommentatorsTab.dispose);
       final tabs = [firstTab, pdfCommentatorsTab, thirdTab];
 
-      // האינדקס הגולמי הוא 2 (thirdTab), אך מבין הטאבים הנשמרים הוא במקום 1
-      // כי pdfCommentatorsTab אינו נשמר.
+      // כל הטאבים נשמרים, כולל PdfCommentatorsTab — לכן האינדקס נשמר כמות שהוא.
       await repository.saveCurrentTabIndex(tabs, 2);
 
-      expect(repository.loadCurrentTabIndex(), 1);
+      expect(repository.loadCurrentTabIndex(), 2);
     });
   });
 }

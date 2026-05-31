@@ -1,5 +1,6 @@
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 
 /// Represents a combined tab that displays two books side-by-side.
@@ -49,8 +50,7 @@ class CombinedTab extends OpenedTab {
   factory CombinedTab.fromJson(Map<String, dynamic> json) {
     OpenedTab decodeTab(Map<String, dynamic> map) {
       if (map['type'] == 'PdfCommentatorsTab') {
-        throw UnsupportedError(
-            'PdfCommentatorsTab cannot be restored inside a CombinedTab');
+        return PdfCommentatorsTab.fromJson(map);
       }
       if (map['type'] == 'CommentatorsTab') {
         return CommentatorsTab.fromJson(map);

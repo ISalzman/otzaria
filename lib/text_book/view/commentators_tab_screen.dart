@@ -690,6 +690,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   }
 
   void _navigateToPrevVerse(List<TocEntry> chapters) {
+    if (_selectedChapter == null) return;
     final currentState = widget.tab.bloc.state;
     final content = currentState is TextBookLoaded
         ? currentState.content
@@ -722,6 +723,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   }
 
   void _navigateToNextVerse(List<TocEntry> chapters) {
+    if (_selectedChapter == null) return;
     final currentState = widget.tab.bloc.state;
     final content = currentState is TextBookLoaded
         ? currentState.content
@@ -1569,8 +1571,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       items.add(
         _TocListItem.subItem(
           text: allUnitLabel(chapter.text),
-          isSelected:
-              isSelectionContext && _selectedVerseIdx == _kAllChapter,
+          isSelected: isSelectionContext && _selectedVerseIdx == _kAllChapter,
           isAllChapter: true,
           // _onChapterSelected מעדכן את ה-state במלואו דרך reduceSubItemTap
           // עם verseIdx=_kAllChapter — אין צורך ב-setState נוסף כאן.
