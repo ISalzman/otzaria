@@ -43,6 +43,27 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
   /// במקום להיגזר מ-`controller.visibleRect`, כך שהוא חלק ולא ממתין לרינדור.
   double? _activeDragThumbTop;
 
+  /// מספר העמוד בתוך המחוון. FittedBox מבטיח שורה אחת תמיד — מספרים
+  /// תלת/ארבע-ספרתיים (100+, ש"ס) מתכווצים במקום להישבר לשתי שורות.
+  Widget _buildPageNumberText(int pageNumber, ColorScheme colorScheme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 1),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          pageNumber.toString(),
+          maxLines: 1,
+          softWrap: false,
+          style: TextStyle(
+            color: colorScheme.onPrimary,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isVertical = widget.orientation == ScrollbarOrientation.right ||
@@ -80,24 +101,8 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                 ),
                 child: isVertical
                     ? Center(
-                        // FittedBox מבטיח שורה אחת תמיד — מספרים תלת/ארבע
-                        // ספרתיים (100+, ש"ס) מתכווצים במקום להישבר לשתי שורות.
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 1),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              (pageNumber ?? 1).toString(),
-                              maxLines: 1,
-                              softWrap: false,
-                              style: TextStyle(
-                                color: colorScheme.onPrimary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
+                        child:
+                            _buildPageNumberText(pageNumber ?? 1, colorScheme),
                       )
                     : null,
               );
@@ -287,25 +292,8 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                                   widget.trackThickness / 2),
                             ),
                             child: Center(
-                              // FittedBox מבטיח שורה אחת תמיד — מספרים תלת/ארבע
-                              // ספרתיים מתכווצים במקום להישבר לשתי שורות.
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 1),
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    displayedPageNumber.toString(),
-                                    maxLines: 1,
-                                    softWrap: false,
-                                    style: TextStyle(
-                                      color: colorScheme.onPrimary,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ),
+                              child: _buildPageNumberText(
+                                  displayedPageNumber, colorScheme),
                             ),
                           ),
                         ),
