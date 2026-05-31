@@ -17,11 +17,16 @@ class PluginInstallScreen extends StatefulWidget {
   /// גרסה מותקנת קודמת — null אם זו התקנה ראשונה.
   final String? previousVersion;
 
+  /// בחירה קודמת של המשתמש לגבי הקדמת התוסף לפני כלים מובנים.
+  /// `null` = אין החלטה קודמת (התקנה ראשונה או תוסף ישן לפני הפיצ'ר).
+  final bool? previousAllowOrderBeforeBuiltInsGranted;
+
   const PluginInstallScreen({
     super.key,
     required this.manifest,
     required this.tempDirPath,
     this.previousVersion,
+    this.previousAllowOrderBeforeBuiltInsGranted,
   });
 
   bool get isUpdate => previousVersion != null;
@@ -34,6 +39,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
   /// מצב toggle לכל הרשאה — ברירת מחדל: הכל מופעל, פרט להרשאות רגישות
   /// (למשל [pluginRunOnStartupPermission]) שמתחילות כבויות.
   late Map<String, bool> _permissionToggles;
+  late bool _allowOrderBeforeBuiltInsGranted;
 
   @override
   void initState() {
@@ -42,10 +48,16 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
       for (final p in widget.manifest.permissions)
         p: p != pluginRunOnStartupPermission,
     };
+    _allowOrderBeforeBuiltInsGranted =
+        widget.previousAllowOrderBeforeBuiltInsGranted ??
+            widget.manifest.allowOrderBeforeBuiltIns;
   }
 
   bool get _requestsRunOnStartup =>
       widget.manifest.permissions.contains(pluginRunOnStartupPermission);
+
+  bool get _requestsOrderBeforeBuiltIns =>
+      widget.manifest.allowOrderBeforeBuiltIns;
 
   void _onInstall() {
     context.read<PluginSystemBloc>().add(
@@ -53,6 +65,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
             widget.tempDirPath,
             widget.manifest,
             Map.unmodifiable(_permissionToggles),
+            _allowOrderBeforeBuiltInsGranted,
           ),
         );
     Navigator.of(context).pop();
@@ -150,6 +163,42 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
               // ===== באנר בולט: בקשת טעינה אוטומטית עם עליית האפליקציה =====
               if (_requestsRunOnStartup) ...[
                 _RunOnStartupBanner(colorScheme: colorScheme),
+                const SizedBox(height: 16),
+              ],
+
+              if (_requestsOrderBeforeBuiltIns) ...[
+                SettingsCard(
+                  title: 'מיקום במסך כלים',
+                  subtitle: 'התוסף מבקש להופיע לפני הכלים המובנים במסך "כלים".',
+                  children: [
+                    SwitchListTile(
+                      secondary: Icon(
+                        _allowOrderBeforeBuiltInsGranted
+                            ? FluentIcons.arrow_sort_up_24_regular
+                            : FluentIcons.arrow_sort_24_regular,
+                        color: _allowOrderBeforeBuiltInsGranted
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
+                      ),
+                      title: const Text(
+                        'אפשר לתוסף להופיע לפני הכלים המובנים',
+                        textDirection: TextDirection.rtl,
+                      ),
+                      subtitle: const Text(
+                        'אם תכבה את האפשרות, התוסף עדיין יותקן כרגיל, אבל '
+                        'יופיע רק אחרי הכלים המובנים גם אם המניפסט שלו ביקש אחרת.',
+                        textDirection: TextDirection.rtl,
+                      ),
+                      value: _allowOrderBeforeBuiltInsGranted,
+                      onChanged: (value) {
+                        setState(() {
+                          _allowOrderBeforeBuiltInsGranted = value;
+                        });
+                      },
+                      hoverColor: Colors.transparent,
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 16),
               ],
 

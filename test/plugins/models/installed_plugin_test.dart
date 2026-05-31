@@ -5,6 +5,7 @@ import 'package:otzaria/plugins/models/plugin_manifest.dart';
 PluginManifest _manifest({
   String id = 'test.plugin',
   int? toolTabOrder,
+  bool allowOrderBeforeBuiltIns = false,
 }) {
   return PluginManifest.fromJson({
     'schemaVersion': 1,
@@ -16,6 +17,7 @@ PluginManifest _manifest({
       'toolTab': {
         'title': 'T',
         if (toolTabOrder != null) 'order': toolTabOrder,
+        if (allowOrderBeforeBuiltIns) 'allowOrderBeforeBuiltIns': true,
       },
     },
   });
@@ -26,8 +28,10 @@ InstalledPlugin _plugin({
   bool pinned = true,
   bool pinnedToNavRail = false,
   bool hiddenFromTools = false,
+  bool? allowOrderBeforeBuiltInsGranted,
   int? userOrder,
   int? manifestToolTabOrder,
+  bool allowOrderBeforeBuiltIns = false,
 }) {
   return InstalledPlugin(
     pluginId: 'test.plugin',
@@ -39,7 +43,11 @@ InstalledPlugin _plugin({
     pinned: pinned,
     pinnedToNavRail: pinnedToNavRail,
     hiddenFromTools: hiddenFromTools,
-    manifest: _manifest(toolTabOrder: manifestToolTabOrder),
+    allowOrderBeforeBuiltInsGranted: allowOrderBeforeBuiltInsGranted,
+    manifest: _manifest(
+      toolTabOrder: manifestToolTabOrder,
+      allowOrderBeforeBuiltIns: allowOrderBeforeBuiltIns,
+    ),
     installedAt: DateTime.utc(2026, 5, 10, 12, 0),
     updatedAt: DateTime.utc(2026, 5, 10, 12, 0),
     userOrder: userOrder,
@@ -130,6 +138,41 @@ void main() {
           reason: 'omitted parameter should keep current value');
       expect(updated.pinned, isFalse);
     });
+
+    test('allowOrderBeforeBuiltInsGranted defaults to manifest request', () {
+      final plugin = _plugin(allowOrderBeforeBuiltIns: true);
+      expect(plugin.allowOrderBeforeBuiltInsGranted, isTrue);
+    });
+
+    test('toDbMap serializes allowOrderBeforeBuiltInsGranted as 0/1', () {
+      expect(
+        _plugin(allowOrderBeforeBuiltInsGranted: false)
+            .toDbMap()['allow_order_before_built_ins_granted'],
+        0,
+      );
+      expect(
+        _plugin(allowOrderBeforeBuiltInsGranted: true)
+            .toDbMap()['allow_order_before_built_ins_granted'],
+        1,
+      );
+    });
+
+    test(
+        'fromDbMap falls back to manifest request when allow_order_before_built_ins_granted is absent',
+        () {
+      final legacyMap = _plugin(allowOrderBeforeBuiltIns: true).toDbMap();
+      legacyMap.remove('allow_order_before_built_ins_granted');
+      final restored = InstalledPlugin.fromDbMap(legacyMap);
+      expect(restored.allowOrderBeforeBuiltInsGranted, isTrue,
+          reason: 'legacy rows should preserve the old behavior instead of '
+              'suddenly disabling the plugin request');
+    });
+
+    test('copyWith updates allowOrderBeforeBuiltInsGranted', () {
+      final original = _plugin(allowOrderBeforeBuiltInsGranted: true);
+      final updated = original.copyWith(allowOrderBeforeBuiltInsGranted: false);
+      expect(updated.allowOrderBeforeBuiltInsGranted, isFalse);
+    });
   });
 
   group('InstalledPlugin.userOrder + effectiveToolTabOrder', () {
@@ -148,13 +191,12 @@ void main() {
 
     test(
         'userOrder=0 maps to userOrderToolTabOffset (1000), not to 0 — '
-        'this keeps reordered plugins after the built-in tools (orders 10-100)',
-        () {
+        'this keeps reordered plugins in a separate numeric range', () {
       final plugin = _plugin(userOrder: 0, manifestToolTabOrder: 50);
       expect(
           plugin.effectiveToolTabOrder, InstalledPlugin.userOrderToolTabOffset);
       expect(plugin.effectiveToolTabOrder, greaterThan(100),
-          reason: 'must stay after built-in tools (10..100)');
+          reason: 'must stay above the built-in numeric range (10..100)');
     });
 
     test('effectiveToolTabOrder = offset + userOrder for positive index', () {
@@ -240,6 +282,35 @@ void main() {
       final updated = original.copyWith(userOrder: 3, clearUserOrder: true);
       expect(updated.userOrder, isNull,
           reason: 'clearUserOrder must take precedence over userOrder');
+    });
+
+    test('allowOrderBeforeBuiltIns is independent from effectiveToolTabOrder',
+        () {
+      final plugin = _plugin(
+        userOrder: 0,
+        manifestToolTabOrder: 5,
+        allowOrderBeforeBuiltIns: true,
+      );
+      expect(plugin.manifest.allowOrderBeforeBuiltIns, isTrue);
+      expect(
+          plugin.effectiveToolTabOrder, InstalledPlugin.userOrderToolTabOffset,
+          reason: 'the manifest flag controls the display group; the numeric '
+              'order stays in the plugin user-order range');
+    });
+
+    test(
+        'allowsOrderBeforeBuiltIns becomes false when the user disables the feature',
+        () {
+      final plugin = _plugin(
+        manifestToolTabOrder: 5,
+        allowOrderBeforeBuiltIns: true,
+        allowOrderBeforeBuiltInsGranted: false,
+      );
+      expect(plugin.manifest.allowOrderBeforeBuiltIns, isTrue);
+      expect(plugin.allowOrderBeforeBuiltInsGranted, isFalse);
+      expect(plugin.allowsOrderBeforeBuiltIns, isFalse,
+          reason: 'the manifest request alone is no longer enough once the '
+              'user explicitly disabled the feature');
     });
   });
 

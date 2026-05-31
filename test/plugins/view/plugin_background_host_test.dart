@@ -34,7 +34,8 @@ class _FakeInstallerService extends PluginInstallerService {
   @override
   Future<void> cancelInstall(String path) async {}
   @override
-  Future<void> finalizeInstall(String path, dynamic manifest) async {}
+  Future<void> finalizeInstall(String path, dynamic manifest,
+      {required bool allowOrderBeforeBuiltInsGranted}) async {}
 }
 
 class _TestableBloc extends PluginSystemBloc {

@@ -121,7 +121,7 @@ void main() {
       expect(result.map((p) => p.pluginId).toList(), ['early', 'mid', 'late']);
     });
 
-    test('userOrder beats manifest order (always pushed after built-ins)',
+    test('userOrder beats manifest order (moves to the user-order range)',
         () async {
       // 'b' has the lowest manifest order (50) but no userOrder.
       // 'a' has high manifest order (9999) but userOrder=0 → ends up
@@ -136,8 +136,8 @@ void main() {
 
       expect(result.map((p) => p.pluginId).toList(), ['b', 'a'],
           reason: 'plugins without userOrder (relying on manifest) sort by '
-              'manifest order; userOrder is offset by 1000 to stay after '
-              'built-in tools');
+              'manifest order; userOrder is offset by 1000 to move them into '
+              'the dedicated manual-order range');
     });
 
     test('between two plugins with userOrder, the lower index comes first',

@@ -42,7 +42,8 @@ class _FakeInstallerService extends PluginInstallerService {
   Future<void> cancelInstall(String tempDirPath) async {}
 
   @override
-  Future<void> finalizeInstall(String tempDirPath, dynamic manifest) async {}
+  Future<void> finalizeInstall(String tempDirPath, dynamic manifest,
+      {required bool allowOrderBeforeBuiltInsGranted}) async {}
 }
 
 /// מאפשר emit ידני מחוץ לבלוק בטסטים בלבד.
@@ -67,6 +68,7 @@ class _TestableBloc extends PluginSystemBloc {
 PluginManifest _manifest({
   List<String> permissions = const [],
   String version = '1.0.0',
+  bool allowOrderBeforeBuiltIns = false,
 }) =>
     PluginManifest(
       schemaVersion: 1,
@@ -84,6 +86,7 @@ PluginManifest _manifest({
       networkAllowlist: [],
       toolTabTitle: 'Tab',
       toolTabOrder: 0,
+      allowOrderBeforeBuiltIns: allowOrderBeforeBuiltIns,
       defaultPinned: true,
       publishedDataTypes: [],
     );
@@ -97,6 +100,7 @@ Future<void> _openDialog(
   _TestableBloc bloc,
   PluginManifest manifest, {
   String? previousVersion,
+  bool? previousAllowOrderBeforeBuiltInsGranted,
   double screenHeight = 900,
 }) async {
   tester.view.physicalSize = Size(800, screenHeight);
@@ -121,6 +125,8 @@ Future<void> _openDialog(
                     manifest: manifest,
                     tempDirPath: '/tmp/t',
                     previousVersion: previousVersion,
+                    previousAllowOrderBeforeBuiltInsGranted:
+                        previousAllowOrderBeforeBuiltInsGranted,
                   ),
                 ),
               ),
@@ -229,6 +235,8 @@ void main() {
                     child: PluginInstallScreen(
                       manifest: state.manifest,
                       tempDirPath: state.tempDirPath,
+                      previousAllowOrderBeforeBuiltInsGranted:
+                          state.previousAllowOrderBeforeBuiltInsGranted,
                     ),
                   ),
                 );
@@ -366,6 +374,69 @@ void main() {
     expect(switchTile.value, isTrue);
   });
 
+  testWidgets(
+      'תוסף שמבקש להופיע לפני כלים מובנים — מוצג switch ייעודי במסך ההתקנה',
+      (tester) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(allowOrderBeforeBuiltIns: true),
+    );
+
+    expect(
+      find.text('אפשר לתוסף להופיע לפני הכלים המובנים'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'תוסף שלא מבקש להופיע לפני כלים מובנים — ה-switch הייעודי לא מוצג',
+      (tester) async {
+    await _openDialog(tester, bloc, _manifest());
+
+    expect(
+      find.text('אפשר לתוסף להופיע לפני הכלים המובנים'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('הקדמה לפני כלים מובנים מתחילה דלוקה כברירת מחדל בהתקנה ראשונה',
+      (tester) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(allowOrderBeforeBuiltIns: true),
+    );
+
+    final switchFinder = find.ancestor(
+      of: find.text('אפשר לתוסף להופיע לפני הכלים המובנים'),
+      matching: find.byType(SwitchListTile),
+    );
+    expect(switchFinder, findsOneWidget);
+    final switchTile = tester.widget<SwitchListTile>(switchFinder);
+    expect(switchTile.value, isTrue);
+  });
+
+  testWidgets(
+      'בעדכון נשמרת הבחירה הקודמת של המשתמש לגבי הקדמת התוסף לפני כלים מובנים',
+      (tester) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(allowOrderBeforeBuiltIns: true),
+      previousVersion: '1.0.0',
+      previousAllowOrderBeforeBuiltInsGranted: false,
+    );
+
+    final switchFinder = find.ancestor(
+      of: find.text('אפשר לתוסף להופיע לפני הכלים המובנים'),
+      matching: find.byType(SwitchListTile),
+    );
+    expect(switchFinder, findsOneWidget);
+    final switchTile = tester.widget<SwitchListTile>(switchFinder);
+    expect(switchTile.value, isFalse);
+  });
+
   // ── payload של ConfirmPluginInstall ──────────────────────────────────────
   //
   // בודקים שהאירוע שנשלח לבלוק מכיל את ערכי ההרשאות הנכונים —
@@ -463,5 +534,32 @@ void main() {
         reason: 'app.run_on_startup חייב להיות false');
     expect(perms['app.info.read'], isTrue,
         reason: 'app.info.read חייב להיות true');
+  });
+
+  testWidgets(
+      'כיבוי האפשרות להופיע לפני כלים מובנים נשלח ב-ConfirmPluginInstall',
+      (tester) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(allowOrderBeforeBuiltIns: true),
+      screenHeight: 1400,
+    );
+
+    final switchFinder = find.ancestor(
+      of: find.text('אפשר לתוסף להופיע לפני הכלים המובנים'),
+      matching: find.byType(SwitchListTile),
+    );
+    await tester.ensureVisible(switchFinder);
+    await tester.tap(switchFinder);
+    await tester.pump();
+
+    await tester.ensureVisible(find.text('התקן'));
+    await tester.tap(find.text('התקן'));
+    await tester.pumpAndSettle();
+
+    final confirmEvents = bloc.capturedEvents.whereType<ConfirmPluginInstall>();
+    expect(confirmEvents, isNotEmpty);
+    expect(confirmEvents.first.allowOrderBeforeBuiltInsGranted, isFalse);
   });
 }

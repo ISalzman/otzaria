@@ -16,6 +16,13 @@ class InstalledPlugin {
   /// בניגוד ל-[enabled] שמשבית את הריצה, [hiddenFromTools] משאיר את התוסף
   /// פעיל אך לא מציג אותו למשתמש.
   final bool hiddenFromTools;
+
+  /// האם המשתמש אישר בפועל לתוסף להופיע לפני כלים מובנים במסך "כלים".
+  ///
+  /// זהו מתג התקנה/עדכון שנשמר על ההתקנה עצמה. גם אם התוסף מבקש את היכולת
+  /// במניפסט, המשתמש יכול לכבות אותה. אם המניפסט לא ביקש את היכולת, הערך
+  /// הזה לבדו לא מספיק כדי להפעיל אותה.
+  final bool allowOrderBeforeBuiltInsGranted;
   final PluginManifest manifest;
   final DateTime installedAt;
   final DateTime updatedAt;
@@ -26,20 +33,27 @@ class InstalledPlugin {
   /// בסדר ברירת המחדל מתוך המניפסט ([PluginManifest.toolTabOrder]).
   ///
   /// הערכים נשמרים כאינדקסים פשוטים (0,1,2...) ומומרים בתצוגה לטווח
-  /// שמבטיח שהתוספים יישארו אחרי הכלים המובנים — ראו
+  /// גבוה שמונע התנגשות מספרית עם סדרי הכלים המובנים — ראו
   /// [effectiveToolTabOrder] ו-[userOrderToolTabOffset].
   final int? userOrder;
 
   /// בסיס הסדר עבור תוספים בעלי [userOrder]. ערך גבוה מספיק כדי שכל הכלים
-  /// המובנים (`builtin.*`, סדרים 10-100) יישארו לפני התוספים.
+  /// המובנים (`builtin.*`, סדרים 10-100) יישארו בטווח מספרי נפרד.
   static const int userOrderToolTabOffset = 1000;
 
   /// הסדר האפקטיבי שבו יוצג התוסף ברשימת הכלים. אם המשתמש קבע סדר ידני
-  /// משתמשים בו (עם [userOrderToolTabOffset] כדי להישאר אחרי הכלים המובנים);
-  /// אחרת משתמשים בערך מהמניפסט.
+  /// משתמשים בו (עם [userOrderToolTabOffset] כדי לשמור על טווח נפרד מהכלים
+  /// המובנים); אחרת משתמשים בערך מהמניפסט.
+  ///
+  /// ההחלטה האם תוסף רשאי בכלל להופיע לפני כלים מובנים נקבעת בנפרד ע"י
+  /// [PluginManifest.allowOrderBeforeBuiltIns] במסך "כלים".
   int get effectiveToolTabOrder => userOrder != null
       ? userOrderToolTabOffset + userOrder!
       : manifest.toolTabOrder;
+
+  /// האם התוסף רשאי בפועל להקדים כלים מובנים במסך "כלים".
+  bool get allowsOrderBeforeBuiltIns =>
+      manifest.allowOrderBeforeBuiltIns && allowOrderBeforeBuiltInsGranted;
 
   bool get isDevelopment => sourceType == 'development';
   String get resolvedRootPath => isDevelopment ? devRootPath! : installPath;
@@ -59,15 +73,19 @@ class InstalledPlugin {
     required this.pinned,
     this.pinnedToNavRail = false,
     this.hiddenFromTools = false,
+    bool? allowOrderBeforeBuiltInsGranted,
     required this.manifest,
     required this.installedAt,
     required this.updatedAt,
     this.sourceType = 'packaged',
     this.devRootPath,
     this.userOrder,
-  });
+  }) : allowOrderBeforeBuiltInsGranted = allowOrderBeforeBuiltInsGranted ??
+            manifest.allowOrderBeforeBuiltIns;
 
   factory InstalledPlugin.fromDbMap(Map<String, dynamic> map) {
+    final manifest =
+        PluginManifest.fromJson(jsonDecode(map['manifest_json'] as String));
     return InstalledPlugin(
       pluginId: map['plugin_id'] as String,
       name: map['name'] as String,
@@ -79,8 +97,11 @@ class InstalledPlugin {
       pinned: (map['pinned'] as int) != 0,
       pinnedToNavRail: ((map['pinned_to_nav_rail'] as int?) ?? 0) != 0,
       hiddenFromTools: ((map['hidden_from_tools'] as int?) ?? 0) != 0,
-      manifest:
-          PluginManifest.fromJson(jsonDecode(map['manifest_json'] as String)),
+      allowOrderBeforeBuiltInsGranted:
+          ((map['allow_order_before_built_ins_granted'] as int?) ??
+                  (manifest.allowOrderBeforeBuiltIns ? 1 : 0)) !=
+              0,
+      manifest: manifest,
       installedAt: DateTime.parse(map['installed_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
       sourceType: map['source_type'] as String? ?? 'packaged',
@@ -101,6 +122,8 @@ class InstalledPlugin {
       'pinned': pinned ? 1 : 0,
       'pinned_to_nav_rail': pinnedToNavRail ? 1 : 0,
       'hidden_from_tools': hiddenFromTools ? 1 : 0,
+      'allow_order_before_built_ins_granted':
+          allowOrderBeforeBuiltInsGranted ? 1 : 0,
       'manifest_json': jsonEncode(manifest.toJson()),
       'installed_at': installedAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
@@ -121,6 +144,7 @@ class InstalledPlugin {
     bool? pinned,
     bool? pinnedToNavRail,
     bool? hiddenFromTools,
+    bool? allowOrderBeforeBuiltInsGranted,
     PluginManifest? manifest,
     DateTime? installedAt,
     DateTime? updatedAt,
@@ -141,6 +165,8 @@ class InstalledPlugin {
       pinned: pinned ?? this.pinned,
       pinnedToNavRail: pinnedToNavRail ?? this.pinnedToNavRail,
       hiddenFromTools: hiddenFromTools ?? this.hiddenFromTools,
+      allowOrderBeforeBuiltInsGranted: allowOrderBeforeBuiltInsGranted ??
+          this.allowOrderBeforeBuiltInsGranted,
       manifest: manifest ?? this.manifest,
       installedAt: installedAt ?? this.installedAt,
       updatedAt: updatedAt ?? this.updatedAt,

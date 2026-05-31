@@ -163,6 +163,8 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         manifest: prepareInfo.manifest,
         tempDirPath: prepareInfo.tempDirPath,
         previousVersion: prepareInfo.previousVersion,
+        previousAllowOrderBeforeBuiltInsGranted:
+            prepareInfo.previousAllowOrderBeforeBuiltInsGranted,
       ));
     } on PluginOverwriteException catch (e) {
       emit(PluginSystemOverwriteRequired(
@@ -195,6 +197,8 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         manifest: prepareInfo.manifest,
         tempDirPath: prepareInfo.tempDirPath,
         previousVersion: prepareInfo.previousVersion,
+        previousAllowOrderBeforeBuiltInsGranted:
+            prepareInfo.previousAllowOrderBeforeBuiltInsGranted,
       ));
     } on PluginOverwriteException catch (e) {
       UiSnack.show(
@@ -225,7 +229,10 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     try {
       // finalizeInstall מגרנט את כל ההרשאות כברירת מחדל
       await _installerService.finalizeInstall(
-          event.tempDirPath, event.manifest);
+        event.tempDirPath,
+        event.manifest,
+        allowOrderBeforeBuiltInsGranted: event.allowOrderBeforeBuiltInsGranted,
+      );
 
       // כתוב את כל בחירות המשתמש במפורש (גם true וגם false) —
       // כך הבחירה הנוכחית גוברת על החלטות עבר בהתקנה חוזרת/עדכון
