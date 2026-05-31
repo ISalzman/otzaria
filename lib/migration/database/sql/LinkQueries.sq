@@ -62,6 +62,26 @@ AND sl.lineIndex < ?
 GROUP BY l.targetBookId, b.title, a.name
 ORDER BY b.orderIndex, b.title;
 
+-- מחזיר את מפרשי ברירת המחדל ("מפרשים בסיסיים") של ספר, ממוינים לפי position.
+-- position ממיין את המפרשים בתוך טבלה זו בלבד (תרגומים יושבים בטבלה נפרדת
+-- עם position משלהם) — הוא קובע את ההקדמה ברשימה ואת סדר המיקומים בצורת הדף.
+-- פרמטר: (bookId).
+selectDefaultCommentators:
+SELECT b.title AS targetBookTitle, dc.position
+FROM default_commentator dc
+JOIN book b ON dc.commentatorBookId = b.id
+WHERE dc.bookId = ?
+ORDER BY dc.position;
+
+-- מחזיר את תרגומי ברירת המחדל של ספר, ממוינים לפי position.
+-- פרמטר: (bookId).
+selectDefaultTargums:
+SELECT b.title AS targetBookTitle, dt.position
+FROM default_targum dt
+JOIN book b ON dt.targumBookId = b.id
+WHERE dt.bookId = ?
+ORDER BY dt.position;
+
 insert:
 INSERT INTO link (sourceBookId, targetBookId, sourceLineId, targetLineId, connectionTypeId)
 VALUES (?, ?, ?, ?, ?);
