@@ -34,6 +34,7 @@ class _BooksListDialogState extends State<_BooksListDialog> {
   late final List<_BookRow> _rows;
   late List<_BookRow> _visibleRows;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   bool _isExporting = false;
 
   @override
@@ -50,6 +51,7 @@ class _BooksListDialogState extends State<_BooksListDialog> {
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -150,7 +152,10 @@ class _BooksListDialogState extends State<_BooksListDialog> {
                           ),
                         )
                       : Scrollbar(
+                          controller: _scrollController,
+                          thumbVisibility: true,
                           child: ListView.separated(
+                            controller: _scrollController,
                             itemCount: _visibleRows.length,
                             separatorBuilder: (_, __) => Divider(
                               height: 1,
