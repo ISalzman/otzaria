@@ -91,7 +91,7 @@ dart tool/plugins/package_plugin.dart <path/to/your/plugin/folder> [--force]
 
 שתי הדרכים משתמשות באותה לוגיקה (`PluginPackager` ב־[lib/plugins/services/plugin_packager.dart](../../lib/plugins/services/plugin_packager.dart)):
 
-1. **ולידציית מבנה (חוסמת)** — בודקת ש־`manifest.json` קיים, JSON תקין, גרסת סכמה, פורמט `id` ו־SemVer, קיום קובץ ה־entrypoint, ושכל ההרשאות המבוקשות נמצאות ברשימת ההרשאות הרשמית.
+1. **ולידציית מבנה (חוסמת)** — בודקת ש־`manifest.json` קיים, JSON תקין, גרסת סכמה, פורמט `id` ו־SemVer, קיום קובץ ה־entrypoint, ושכל ההרשאות המבוקשות נמצאות ברשימת ההרשאות הרשמית. בתוך `contributes.toolTab`, השדה `allowOrderBeforeBuiltIns` הוא דגל בוליאני אופציונלי שמגדיר חריג תצוגתי בלבד: הוא לא מעניק הרשאה, אלא רק מאפשר לתוסף להתחרות מול הכלים המובנים על מיקום במסך "כלים".
 
 2. **ולידציה מורחבת** — מפיקה דו"ח עם שלושה חלקים:
    - **`errors`** — חוסמות אריזה (כיום: רק חריגות מ־ולידציית המבנה).

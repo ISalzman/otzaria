@@ -37,9 +37,10 @@ class PreparedInstall {
 
   /// גרסה מותקנת קודמת — null אם זו התקנה ראשונה.
   final String? previousVersion;
+  final bool? previousAllowOrderBeforeBuiltInsGranted;
 
   PreparedInstall(this.manifest, this.tempDirPath, this.isOverwrite,
-      {this.previousVersion});
+      {this.previousVersion, this.previousAllowOrderBeforeBuiltInsGranted});
 }
 
 class PluginInstallerService {
@@ -92,7 +93,9 @@ class PluginInstallerService {
       );
 
       return PreparedInstall(manifest, tempDir.path, isOverwrite,
-          previousVersion: existingPlugin?.version);
+          previousVersion: existingPlugin?.version,
+          previousAllowOrderBeforeBuiltInsGranted:
+              existingPlugin?.allowOrderBeforeBuiltInsGranted);
     } catch (e) {
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
@@ -101,8 +104,8 @@ class PluginInstallerService {
     }
   }
 
-  Future<void> finalizeInstall(
-      String tempDirPath, PluginManifest manifest) async {
+  Future<void> finalizeInstall(String tempDirPath, PluginManifest manifest,
+      {required bool allowOrderBeforeBuiltInsGranted}) async {
     final tempDir = Directory(tempDirPath);
     try {
       final existingPlugin = await _repository.getPlugin(manifest.id);
@@ -136,6 +139,7 @@ class PluginInstallerService {
         enabled: existingPlugin?.enabled ?? true,
         pinned: existingPlugin?.pinned ?? manifest.defaultPinned,
         pinnedToNavRail: existingPlugin?.pinnedToNavRail ?? false,
+        allowOrderBeforeBuiltInsGranted: allowOrderBeforeBuiltInsGranted,
         manifest: manifest,
         installedAt: existingPlugin?.installedAt ?? DateTime.now(),
         updatedAt: DateTime.now(),

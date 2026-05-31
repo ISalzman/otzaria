@@ -94,6 +94,7 @@ my-plugin/
     "toolTab": {
       "title": "שם הטאב",
       "order": 200,
+      "allowOrderBeforeBuiltIns": false,
       "defaultPinned": true,
       "iconName": "calendar_24_regular"
     },
@@ -142,8 +143,8 @@ my-plugin/
 | `network.allowlist` | `[]` | **שדה הצהרתי בלבד** — לתיעוד/שקיפות מול המשתמש. רשימת ה-URLs שאליהם תוסף יכול לגשת בפועל מנוהלת אך ורק על-ידי אוצריא בקוד (`pluginNetworkAllowlist` ב-[`lib/plugins/models/plugin_network_allowlist.dart`](../lib/plugins/models/plugin_network_allowlist.dart)). הצהרה ב-manifest **אינה** מעניקה גישה. |
 | `contributes.toolTab.title` | שם התוסף | כותרת הטאב |
 | `contributes.toolTab.order` | `900` | סדר הופעה בטאבים (מספר נמוך = קודם) |
+| `contributes.toolTab.allowOrderBeforeBuiltIns` | `false` | חריג מפורש שמאפשר לתוסף להתחרות מול הכלים המובנים ולהופיע לפניהם במסך "כלים" |
 | `contributes.toolTab.defaultPinned` | `true` | האם להצמיד אוטומטית בהתקנה |
-
 `homepage` הוא שדה אופציונלי, אבל מומלץ מאוד כשמעלים תוסף לחנות. זה המקום לשים קישור לעמוד ה־GitHub של התוסף, לתיעוד, לאתר הפרויקט, או לכל דף רשמי אחר שמסביר על התוסף ונותן למשתמש מקום לקבל מידע נוסף.
 | `contributes.toolTab.iconName` | `null` | שם אייקון FluentUI 24px שיוצג בטאב, למשל `"book_24_regular"` |
 | `contributes.publishedDataTypes` | `[]` | סוגי נתונים שהתוסף מפרסם |
@@ -151,6 +152,8 @@ my-plugin/
 `iconName` חייב להיות שם תקני של אייקון FluentUI בגודל 24px, המסתיים ב-`_24_regular` או `_24_filled`. השם נפתר באוצריא ל-`IconData` קבוע באמצעות מפה סטטית, מה שמאפשר ל-Flutter לבצע tree-shaking של פונט האייקונים ב-Release. שמות שאינם נמצאים במפה יוצגו כאייקון פאזל ברירת מחדל.
 
 דוגמאות תקפות: `"calendar_24_regular"`, `"calendar_24_filled"`, `"book_24_regular"`, `"settings_24_filled"`.
+
+`allowOrderBeforeBuiltIns` אינו שדה הרשאות ואינו קשור לאבטחה. זהו דגל מיקום תצוגתי בלבד: כברירת מחדל תוספים מופיעים אחרי הכלים המובנים, גם אם ה-`order` שלהם נמוך יותר. רק אם תוסף מצהיר במפורש על `allowOrderBeforeBuiltIns: true`, המערכת תאפשר לו להופיע לפני כלים מובנים בהתאם ל-`order`.
 
 ---
 
