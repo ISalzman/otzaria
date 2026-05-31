@@ -645,7 +645,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
             }
 
             if (textMaxWidth > 0) {
-              return Center(
+              // יישור לראש (topCenter) ולא Center — אחרת כשהמפרשים מכווצים
+              // הרשימה (shrinkWrap) נמוכה ומתמרכזת אנכית, ונוצר רווח למעלה.
+              return Align(
+                alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: textMaxWidth),
                   child: listContent,

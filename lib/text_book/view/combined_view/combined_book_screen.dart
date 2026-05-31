@@ -2010,9 +2010,11 @@ class _CommentaryCardState extends State<_CommentaryCard> {
               ),
             );
 
-            // אם יש רוחב מקסימלי, נמרכז את המפרשים באותו רוחב כמו הטקסט
+            // מרכוז אופקי בלבד (topCenter) באותו רוחב כמו הטקסט. Center מלא
+            // היה ממרכז גם אנכית וגורם לרווח למעלה כשהמפרשים מכווצים/קצרים.
             if (textMaxWidth > 0) {
-              return Center(
+              return Align(
+                alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: textMaxWidth),
                   child: commentaryContainer,
