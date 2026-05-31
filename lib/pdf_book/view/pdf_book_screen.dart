@@ -185,6 +185,66 @@ AppContextMenuEntry buildPdfLinksContextMenuEntry({
   );
 }
 
+/// בונה את פריטי תפריט ההקשר של המפרשים, מקובצים לפי תקופה.
+///
+/// לכל קבוצה לא-ריקה מתווסף פריט "הצג את כל <תקופה>" שמסמן/מבטל את כל
+/// מפרשי הקבוצה (כמו בספרי טקסט), ואחריו המפרשים הבודדים. מפרשים שאינם
+/// משויכים לאף קבוצה מוצגים בסוף ללא כותרת.
+@visibleForTesting
+List<AppContextMenuEntry> buildGroupedCommentatorEntries({
+  required List<String> relevantCommentators,
+  required List<CommentatorGroup> commentatorGroups,
+  required Set<String> activeCommentators,
+  required void Function(String commentator) onToggleCommentator,
+  required void Function(List<String> commentators) onToggleAll,
+}) {
+  final items = <AppContextMenuEntry>[];
+
+  AppContextMenuEntry buildItem(String commentator) => AppContextMenuEntry(
+        label: commentator,
+        isSelected: activeCommentators.contains(commentator),
+        onTap: () => onToggleCommentator(commentator),
+      );
+
+  if (commentatorGroups.isNotEmpty) {
+    final allGrouped =
+        commentatorGroups.expand((group) => group.commentators).toSet();
+
+    for (final group in commentatorGroups) {
+      final groupItems = group.commentators
+          .where((commentator) => relevantCommentators.contains(commentator))
+          .toList();
+      if (groupItems.isNotEmpty) {
+        if (items.isNotEmpty) {
+          items.add(const AppContextMenuEntry.divider());
+        }
+        // פריט "הצג את כל <תקופה>" שמסמן/מבטל את כל הקבוצה (כמו בספרי טקסט)
+        final groupActive = activeCommentators.containsAll(groupItems);
+        items.add(AppContextMenuEntry(
+          label: 'הצג את כל ${group.title}',
+          isSelected: groupActive,
+          onTap: () => onToggleAll(groupItems),
+        ));
+        items.addAll(groupItems.map(buildItem));
+      }
+    }
+
+    final ungrouped = relevantCommentators
+        .where((commentator) => !allGrouped.contains(commentator))
+        .toList();
+    if (ungrouped.isNotEmpty) {
+      if (items.isNotEmpty) {
+        items.add(const AppContextMenuEntry.divider());
+      }
+      items.addAll(ungrouped.map(buildItem));
+    }
+  } else {
+    items.addAll(relevantCommentators.map(buildItem));
+  }
+
+  return items;
+}
+
 class _PdfBookScreenState extends State<PdfBookScreen>
     with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   static const int _defaultPdfLineRange = 50;
@@ -842,44 +902,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   List<AppContextMenuEntry> _buildGroupedCommentatorEntries(
       List<String> relevantCommentators) {
-    final items = <AppContextMenuEntry>[];
-
-    AppContextMenuEntry buildItem(String commentator) => AppContextMenuEntry(
-          label: commentator,
-          isSelected: widget.tab.activeCommentators.contains(commentator),
-          onTap: () => _toggleCommentator(commentator),
-        );
-
-    if (_commentatorGroups.isNotEmpty) {
-      final allGrouped =
-          _commentatorGroups.expand((group) => group.commentators).toSet();
-
-      for (final group in _commentatorGroups) {
-        final groupItems = group.commentators
-            .where((commentator) => relevantCommentators.contains(commentator))
-            .toList();
-        if (groupItems.isNotEmpty) {
-          if (items.isNotEmpty) {
-            items.add(const AppContextMenuEntry.divider());
-          }
-          items.addAll(groupItems.map(buildItem));
-        }
-      }
-
-      final ungrouped = relevantCommentators
-          .where((commentator) => !allGrouped.contains(commentator))
-          .toList();
-      if (ungrouped.isNotEmpty) {
-        if (items.isNotEmpty) {
-          items.add(const AppContextMenuEntry.divider());
-        }
-        items.addAll(ungrouped.map(buildItem));
-      }
-    } else {
-      items.addAll(relevantCommentators.map(buildItem));
-    }
-
-    return items;
+    return buildGroupedCommentatorEntries(
+      relevantCommentators: relevantCommentators,
+      commentatorGroups: _commentatorGroups,
+      activeCommentators: widget.tab.activeCommentators,
+      onToggleCommentator: _toggleCommentator,
+      onToggleAll: _toggleAllCommentators,
+    );
   }
 
   List<AppContextMenuEntry> _buildPdfContextMenuEntries(
