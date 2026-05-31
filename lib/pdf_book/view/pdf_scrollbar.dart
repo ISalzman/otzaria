@@ -177,7 +177,8 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                 final computedThumbTop = scrollableExtent == 0
                     ? 0.0
                     : maxThumbTop * (currentTop / scrollableExtent);
-                final bool isDragging = _activeDragThumbTop != null;
+                final bool isDragging =
+                    !widget.freezeThumb && _activeDragThumbTop != null;
                 final double thumbTop;
                 if (isDragging) {
                   thumbTop =
@@ -225,12 +226,14 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                 }
 
                 void startThumbDrag(DragStartDetails details) {
+                  if (widget.freezeThumb) return;
                   _dragPointerOffsetWithinThumb = details.localPosition.dy;
                   // נצמד מיד לאצבע מהמיקום הנוכחי של המחוון.
                   setState(() => _activeDragThumbTop = thumbTop);
                 }
 
                 void updateThumbDrag(DragUpdateDetails details) {
+                  if (widget.freezeThumb) return;
                   final trackContext = _trackKey.currentContext;
                   if (trackContext == null) return;
                   final trackBox =
