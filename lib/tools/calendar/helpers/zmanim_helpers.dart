@@ -102,13 +102,31 @@ Map<String, String> calculateDailyTimes(DateTime date, String city) {
   return times;
 }
 
-/// מעצב שעה לפורמט HH:MM עם תמיכה ב-timezone
+/// מחזיר את סימן השניות בשיטת "לוח עיתים לבינה": נקודה (`.`) כשהשניות
+/// 0–29, נקודותיים (`:`) כשהן 30–59. הסימן מציין לקורא אם הזמן האמיתי
+/// נופל במחצית הראשונה או השנייה של הדקה (הזמן עצמו אינו מעוגל).
+String secondsMarker(DateTime dt) => dt.second < 30 ? '.' : ':';
+
+/// תווי בידי לעטיפת השעה כיחידת LTR: LEFT-TO-RIGHT ISOLATE ו-POP.
+/// בלעדיהם סימן השניות (תו ניטרלי) נדחף משמאל למספרים בהקשר RTL, כי
+/// ספרות נחשבות לכיוון ימני בפתרון תווים ניטרליים. העטיפה מקבעת את סדר
+/// המקטע כ-LTR ומשאירה את הסימן צמוד מימין למספרים.
+const String _ltrIsolateStart = '\u2066';
+const String _ltrIsolateEnd = '\u2069';
+
+/// מעצב שעה לפורמט HH:MM עם תמיכה ב-timezone, ובסופו סימן שניות
+/// ([secondsMarker]) בשיטת לוח עיתים לבינה. הזמן נחתך לדקה ואינו מעוגל,
+/// והמקטע עטוף ב-LTR isolate לתצוגה תקינה ב-RTL.
 String formatZmanTime(DateTime dt, tz.Location tzLocation) {
   final tzDateTime = tz.TZDateTime.from(dt, tzLocation);
-  return '${tzDateTime.hour.toString().padLeft(2, '0')}:${tzDateTime.minute.toString().padLeft(2, '0')}';
+  final hh = tzDateTime.hour.toString().padLeft(2, '0');
+  final mm = tzDateTime.minute.toString().padLeft(2, '0');
+  return '$_ltrIsolateStart$hh:$mm${secondsMarker(tzDateTime)}$_ltrIsolateEnd';
 }
 
-final RegExp _clockTimePattern = RegExp(r'^\d{1,2}:\d{2}$');
+// תומך בעטיפת ה-LTR isolate ובסימן השניות האופציונלי (`.`/`:`).
+final RegExp _clockTimePattern =
+    RegExp('^$_ltrIsolateStart?' r'\d{1,2}:\d{2}[.:]?' '$_ltrIsolateEnd?\$');
 
 /// בודק אם מחרוזת זמן היא שעת-שעון (HH:MM) — שעבורה מיון לקסיקוגרפי שקול
 /// למיון כרונולוגי. זמני קידוש לבנה מוצגים כתאריך עברי ("ליל ... HH:MM")
@@ -192,7 +210,7 @@ String _formatHebrewNightLabel(
   required bool advanceToNextDay,
 }) {
   final time =
-      '${moment.hour.toString().padLeft(2, '0')}:${moment.minute.toString().padLeft(2, '0')}';
+      '$_ltrIsolateStart${moment.hour.toString().padLeft(2, '0')}:${moment.minute.toString().padLeft(2, '0')}${secondsMarker(moment)}$_ltrIsolateEnd';
   final jewishDate =
       JewishDate.fromDateTime(DateTime(moment.year, moment.month, moment.day));
   if (advanceToNextDay) jewishDate.forward();

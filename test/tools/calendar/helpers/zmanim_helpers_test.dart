@@ -54,9 +54,11 @@ void main() {
   });
 
   group('calculateDailyTimes — פורמט וחוקיות', () {
-    test('כל הזמנים בפורמט HH:MM (למעט קידוש לבנה שמציג תאריך עברי)', () {
+    test('כל הזמנים בפורמט HH:MM עם סימן שניות (למעט קידוש לבנה)', () {
       final times = calculateDailyTimes(summerDate, city);
-      final pattern = RegExp(r'^\d{2}:\d{2}$');
+      // כל זמן עטוף ב-LTR isolate ומסתיים בסימן שניות: נקודה (0–29) או
+      // נקודותיים (30–59).
+      final pattern = RegExp(r'^\u2066?\d{2}:\d{2}[.:]\u2069?$');
       // קידוש לבנה מוצג עם ליל-שבוע ותאריך עברי, לא כ-HH:MM בלבד.
       const hebrewDateKeys = {
         'tchilasKidushLevana3',
@@ -140,11 +142,11 @@ void main() {
       final value = times['tchilasKidushLevana3']!;
       // למשל: "ליל שני ט"ו לחודש 20:02"
       expect(value, startsWith('ליל '));
-      expect(value, matches(RegExp(r'לחודש \d{2}:\d{2}$')));
+      expect(value, matches(RegExp(r'לחודש \u2066?\d{2}:\d{2}[.:]\u2069?$')));
     });
 
-    int hourOf(String label) =>
-        int.parse(RegExp(r'(\d{2}):\d{2}$').firstMatch(label)!.group(1)!);
+    int hourOf(String label) => int.parse(
+        RegExp(r'(\d{2}):\d{2}[.:]?\u2069?$').firstMatch(label)!.group(1)!);
 
     test('השעה מותאמת לאזור הזמן של העיר — לא זהה בין ערים', () {
       // לפני התיקון כל הערים קיבלו את אותה שעה (זמן ירושלים), כי הרגע
@@ -212,16 +214,55 @@ void main() {
     });
   });
 
+  group('secondsMarker — סימן שניות בשיטת לוח עיתים לבינה', () {
+    test('שניות 0–29 → נקודה (.)', () {
+      expect(secondsMarker(DateTime(2026, 5, 31, 19, 43, 0)), '.');
+      expect(secondsMarker(DateTime(2026, 5, 31, 19, 43, 29)), '.');
+    });
+
+    test('שניות 30–59 → נקודותיים (:)', () {
+      expect(secondsMarker(DateTime(2026, 5, 31, 19, 43, 30)), ':');
+      expect(secondsMarker(DateTime(2026, 5, 31, 19, 43, 58)), ':');
+    });
+  });
+
+  group('formatZmanTime — פורמט HH:MM עם סימן שניות (ללא עיגול)', () {
+    // הזמן עטוף ב-LTR isolate (\u2066…\u2069) לתצוגה תקינה ב-RTL.
+    test('שקיעה 19:43:58 → "19:43:" (דקה נחתכת, נקודותיים כי 58≥30)', () {
+      final jerusalem = tz.getLocation('Asia/Jerusalem');
+      final t = tz.TZDateTime(jerusalem, 2026, 5, 31, 19, 43, 58);
+      expect(formatZmanTime(t, jerusalem), '\u206619:43:\u2069');
+    });
+
+    test('שקיעה מישורית 19:39:10 → "19:39." (נקודה כי 10<30)', () {
+      final jerusalem = tz.getLocation('Asia/Jerusalem');
+      final t = tz.TZDateTime(jerusalem, 2026, 5, 31, 19, 39, 10);
+      expect(formatZmanTime(t, jerusalem), '\u206619:39.\u2069');
+    });
+  });
+
+  group('isClockTime — סובלנות לעטיפה ולסימן השניות', () {
+    test('מזהה שעת-שעון עם/בלי עטיפת isolate וסימן שניות', () {
+      expect(isClockTime('19:43.'), isTrue);
+      expect(isClockTime('19:43:'), isTrue);
+      expect(isClockTime('19:43'), isTrue);
+      expect(isClockTime('\u206619:43:\u2069'), isTrue);
+      expect(isClockTime('\u206619:39.\u2069'), isTrue);
+    });
+  });
+
   group('calculateDailyTimes — חצות לילה אסטרונומי', () {
     test('מחזיר ערך תקין לחצות לילה', () {
       final times = calculateDailyTimes(summerDate, city);
       expect(times['chatzosLayla'], isNotNull);
-      expect(times['chatzosLayla'], matches(RegExp(r'^\d{2}:\d{2}$')));
+      expect(times['chatzosLayla'],
+          matches(RegExp(r'^\u2066?\d{2}:\d{2}[.:]\u2069?$')));
     });
 
     test('חצות לילה סביב חצות (00:00-02:00 בקיץ ירושלים)', () {
       final times = calculateDailyTimes(summerDate, city);
-      final hour = int.parse(times['chatzosLayla']!.split(':')[0]);
+      final hour = int.parse(
+          RegExp(r'(\d{2}):').firstMatch(times['chatzosLayla']!)!.group(1)!);
       expect(hour, anyOf(equals(0), equals(1)),
           reason: 'חצות לילה בקיץ בין 00:00 ל-02:00 '
               '(התקבל: ${times['chatzosLayla']})');
