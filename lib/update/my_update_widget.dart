@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
@@ -366,6 +367,9 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   File? _installerFile;
   bool _windowCloseHookInstalled = false;
 
+  /// טיימר להעלמה אוטומטית של צ'יפ השגיאה אחרי 4 שניות.
+  Timer? _errorDismissTimer;
+
   @override
   void initState() {
     super.initState();
@@ -375,11 +379,26 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
 
   @override
   void dispose() {
+    _errorDismissTimer?.cancel();
     if (_windowCloseHookInstalled) {
       windowManager.removeListener(_windowListener);
       _windowCloseHookInstalled = false;
     }
     super.dispose();
+  }
+
+  /// מציג מצב שגיאה זמני: מרענן את הצ'יפ ומתזמן העלמה אוטומטית אחרי 4 שניות.
+  /// לחיצה על הצ'יפ מפעילה בדיקה חוזרת (`_checkForUpdate`) שמבטלת את הטיימר.
+  void _showTransientError() {
+    if (!mounted) return;
+    setState(() {
+      _status = UpdatStatus.error;
+    });
+    _errorDismissTimer?.cancel();
+    _errorDismissTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted || _status != UpdatStatus.error) return;
+      _dismissUpdate();
+    });
   }
 
   Future<void> _installWindowCloseHook() async {
@@ -429,6 +448,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   }
 
   Future<void> _checkForUpdate() async {
+    _errorDismissTimer?.cancel();
     setState(() {
       _status = UpdatStatus.checking;
     });
@@ -471,10 +491,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         _status = UpdatStatus.upToDate;
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _status = UpdatStatus.error;
-      });
+      _showTransientError();
     }
   }
 
@@ -663,10 +680,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         _status = UpdatStatus.readyToInstall;
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _status = UpdatStatus.error;
-      });
+      _showTransientError();
     }
   }
 
@@ -682,11 +696,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       await wrappedLaunchInstaller();
       return true;
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _status = UpdatStatus.error;
-        });
-      }
+      _showTransientError();
       return false;
     }
   }
@@ -705,11 +715,21 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // ה-Stack עוטף את כל החלון, כולל סרגל הניווט הצדי. בדסקטופ בפריסת
+    // landscape הסרגל (ברוחב 74) והקו המפריד (1) יושבים בצד ההתחלה — בקצה
+    // הימני ב-RTL. ללא היסט הצ'יפ נצמד לקצה הימני המוחלט ולכן נמתח מעל הסרגל
+    // ואל תוך תוכן המסך. ההיסט מצמיד אותו לקצה תוכן המסך בלבד.
+    const navRailWidth = 75.0; // 74 רוחב הסרגל + 1 הקו המפריד
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    final railInset = isLandscape && isRtl ? navRailWidth : 0.0;
+
     return Stack(
       children: [
         Positioned.fill(child: widget.child),
         Positioned(
-          right: 10,
+          right: 10 + railInset,
           bottom: 10,
           child: hebrewFlatChip(
             context: context,
