@@ -17,7 +17,6 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/widgets/navigation/scrollable_tab_bar.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/history/view/history_screen.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
@@ -63,47 +62,16 @@ final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
   ),
 );
 
-class _CustomTitleBarState extends State<CustomTitleBar>
-    with TickerProviderStateMixin {
-  bool _tabsOverflow = false;
-  TabController? _tabController;
+class _CustomTitleBarState extends State<CustomTitleBar> {
+  // ScrollController לשורת הטאבים הראשית (ReorderableListView). הבחירה מנוהלת
+  // דרך TabsBloc (currentTabIndex) + onTap, ולא דרך TabController — האינדיקטור
+  // מצויר ידנית (CustomPaint) ולא ע"י ה-indicator של TabBar.
+  final ScrollController _tabsScrollController = ScrollController();
 
   @override
   void dispose() {
-    _tabController?.dispose();
+    _tabsScrollController.dispose();
     super.dispose();
-  }
-
-  void _handleReadingTabControllerChange() {
-    final controller = _tabController;
-    if (controller == null) return;
-    final tabsState = context.read<TabsBloc>().state;
-    if (!tabsState.hasOpenTabs) return;
-
-    if (controller.indexIsChanging &&
-        controller.index != tabsState.currentTabIndex) {
-      context.read<TabsBloc>().add(SetCurrentTab(controller.index));
-    }
-  }
-
-  void _ensureReadingTabController(TabsState state) {
-    if (!state.hasOpenTabs) return;
-
-    final validIndex = state.currentTabIndex.clamp(0, state.tabs.length - 1);
-    if (_tabController == null || _tabController!.length != state.tabs.length) {
-      _tabController?.dispose();
-      _tabController = TabController(
-        length: state.tabs.length,
-        vsync: this,
-        initialIndex: validIndex,
-      )..addListener(_handleReadingTabControllerChange);
-      return;
-    }
-
-    if (_tabController!.index != validIndex &&
-        !_tabController!.indexIsChanging) {
-      _tabController!.animateTo(validIndex);
-    }
   }
 
   bool _useStackedTabs(BuildContext context, NavigationState navState) {
@@ -382,8 +350,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
           );
         }
 
-        _ensureReadingTabController(state);
-
         return Row(
           children: [
             Expanded(child: _buildScrollableTabsArea(state)),
@@ -396,44 +362,104 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   }
 
   Widget _buildScrollableTabsArea(TabsState state) {
-    return DragTarget<OpenedTab>(
-      onWillAcceptWithDetails: (details) => state.tabs.length > 1,
-      onAcceptWithDetails: (details) {
-        final renderBox = context.findRenderObject() as RenderBox;
-        final localOffset = renderBox.globalToLocal(details.offset);
-        final isLeftHalf = localOffset.dx < (renderBox.size.width / 2);
-        final isRtl = Directionality.of(context) == TextDirection.rtl;
-
-        final newIndex = isRtl
-            ? (isLeftHalf ? state.tabs.length - 1 : 0)
-            : (isLeftHalf ? 0 : state.tabs.length - 1);
-
-        final draggedTab = details.data;
-        final currentIndex = state.tabs.indexOf(draggedTab);
-        if (currentIndex != -1 && currentIndex != newIndex) {
-          context.read<TabsBloc>().add(MoveTab(draggedTab, newIndex));
-        }
+    // ReorderableListView מטפל במלוא הגרירה-לסידור: הרמת הטאב, ה-placeholder
+    // היחיד שזז, סידור שאר הטאבים לתצוגת התוצאה, והאנימציה — ללא לולאת ה-shift
+    // של hit-test ידני. הבחירה היא ב-onPointerDown (ב-_buildTab), כך שכל
+    // אינטראקציה בוחרת את הטאב; הגרירה היא מיידית דרך ReorderableDragStartListener.
+    final reorderList = ReorderableListView.builder(
+      scrollController: _tabsScrollController,
+      scrollDirection: Axis.horizontal,
+      buildDefaultDragHandles: false,
+      itemCount: state.tabs.length,
+      proxyDecorator: (child, index, animation) => Material(
+        color: Colors.transparent,
+        child: Opacity(opacity: 0.85, child: child),
+      ),
+      onReorderItem: (oldIndex, newIndex) {
+        // onReorderItem כבר מתאים את newIndex להסרת הפריט (remove-then-insert),
+        // בדיוק ה-convention ש-_onMoveTab מצפה לו — אין צורך בתיקון ידני.
+        if (oldIndex == newIndex) return;
+        final tab = state.tabs[oldIndex];
+        context.read<TabsBloc>().add(MoveTab(tab, newIndex));
       },
-      builder: (context, candidateData, rejectedData) {
-        return DragToMoveArea(
-          child: KeyedSubtree(
-            key: tourReadingTabsTargetKey,
-            child: ScrollableTabBarWithArrows(
-              controller: _tabController!,
-              tabAlignment: TabAlignment.start,
-              hideArrowsWhenNotScrollable: true,
-              onOverflowChanged: (overflow) {
-                if (mounted && _tabsOverflow != overflow) {
-                  setState(() => _tabsOverflow = overflow);
-                }
-              },
-              tabs: state.tabs
-                  .map((tab) => _buildTab(context, tab, state))
-                  .toList(),
-            ),
-          ),
+      itemBuilder: (context, index) {
+        final tab = state.tabs[index];
+        return ReorderableDragStartListener(
+          key: ObjectKey(tab),
+          index: index,
+          child: _buildTab(context, tab, state),
         );
       },
+    );
+
+    return DragToMoveArea(
+      child: KeyedSubtree(
+        key: tourReadingTabsTargetKey,
+        // חיצי גלילה מוצגים רק כשהטאבים גולשים מעבר לרוחב הזמין.
+        // ה-AnimatedBuilder מאזין ל-ScrollController לעדכון בזמן גלילה (offset),
+        // וה-NotificationListener תופס שינויי מידות התוכן (maxScrollExtent) —
+        // למשל בטעינה ראשונית או בהוספת/הסרת טאבים — שאינם מפעילים את ה-controller,
+        // ומאלץ הערכה מחדש של זמינות החיצים בפריים הבא.
+        child: NotificationListener<ScrollMetricsNotification>(
+          onNotification: (_) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() {});
+            });
+            return false;
+          },
+          child: AnimatedBuilder(
+            animation: _tabsScrollController,
+            builder: (context, _) {
+              final position = _tabsScrollController.hasClients &&
+                      _tabsScrollController.position.hasContentDimensions
+                  ? _tabsScrollController.position
+                  : null;
+              final canLeft = position != null &&
+                  position.pixels > position.minScrollExtent + 0.5;
+              final canRight = position != null &&
+                  position.pixels < position.maxScrollExtent - 0.5;
+              final hasOverflow = canLeft || canRight;
+
+              if (!hasOverflow) return reorderList;
+
+              return Row(
+                children: [
+                  _buildTabsScrollArrow(
+                      FluentIcons.chevron_left_24_regular, canLeft, -150),
+                  Expanded(child: reorderList),
+                  _buildTabsScrollArrow(
+                      FluentIcons.chevron_right_24_regular, canRight, 150),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabsScrollArrow(IconData icon, bool enabled, double delta) {
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        iconSize: 18,
+        onPressed: enabled ? () => _scrollTabsBy(delta) : null,
+        icon: Icon(icon),
+      ),
+    );
+  }
+
+  void _scrollTabsBy(double delta) {
+    if (!_tabsScrollController.hasClients) return;
+    final pos = _tabsScrollController.position;
+    final target = (_tabsScrollController.offset + delta)
+        .clamp(pos.minScrollExtent, pos.maxScrollExtent);
+    _tabsScrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
     );
   }
 
@@ -462,7 +488,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     return BlocBuilder<TabsBloc, TabsState>(
       builder: (context, state) {
         if (!state.hasOpenTabs) return const SizedBox.shrink();
-        _ensureReadingTabController(state);
         return Container(
           color: Theme.of(context).colorScheme.surface,
           height: 40,
@@ -546,7 +571,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     final isSelected = index == state.currentTabIndex;
     final closeTabShortcut =
         Settings.getValue<String>('key-shortcut-close-tab') ?? 'ctrl+w';
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
 
     bool isTabActive(int tabIndex) => tabIndex == state.currentTabIndex;
     bool isTabHovered = false;
@@ -732,9 +756,15 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     }
 
     return Listener(
+      // בחירת הטאב על pointer-down: לחצן אמצעי סוגר, וכל לחצן אחר בוחר מיד.
+      // משתמשים ב-Listener פסיבי (ולא ב-onTap) כי הגרירה המיידית
+      // (ReorderableDragStartListener) זוכה ב-gesture arena וחוסמת onTap. כך כל
+      // אינטראקציה — לחיצה רגילה או תחילת גרירה — בוחרת את הטאב מיד.
       onPointerDown: (PointerDownEvent event) {
         if (event.buttons == 4) {
           closeTab(tab, context);
+        } else if (index != state.currentTabIndex) {
+          context.read<TabsBloc>().add(SetCurrentTab(index));
         }
       },
       child: AppContextMenuRegion(
@@ -743,61 +773,14 @@ class _CustomTitleBarState extends State<CustomTitleBar>
             _buildTabContextMenuEntries(menuCtx, tab, state),
         menuItemKeysByLabel:
             isSelected ? {'הצג לצד': tourTabSideBySideMenuItemTargetKey} : null,
-        child: Draggable<OpenedTab>(
-          axis: Axis.horizontal,
-          data: tab,
-          childWhenDragging: TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 1.0, end: 0.0),
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, child) {
-              return Align(
-                alignment: isRtl ? Alignment.centerRight : Alignment.centerLeft,
-                widthFactor: value,
-                child: Opacity(
-                  opacity: value.clamp(0.0, 1.0),
-                  child: child,
-                ),
-              );
-            },
-            child: buildTabAppearance(null),
-          ),
-          feedback: Material(
-            color: Colors.transparent,
-            child: Opacity(
-              opacity: 0.85,
-              child: buildTabAppearance(null),
-            ),
-          ),
-          child: DragTarget<OpenedTab>(
-            onAcceptWithDetails: (draggedTab) {
-              if (draggedTab.data == tab) return;
-              final newIndex = state.tabs.indexOf(tab);
-              context.read<TabsBloc>().add(MoveTab(draggedTab.data, newIndex));
-            },
-            builder: (context, candidateData, rejectedData) {
-              final isHovered =
-                  candidateData.isNotEmpty && candidateData.first != tab;
-
-              return StatefulBuilder(
-                builder: (context, setState) {
-                  return MouseRegion(
-                    onEnter: (_) => setState(() => isTabHovered = true),
-                    onExit: (_) => setState(() => isTabHovered = false),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeOutCubic,
-                      margin: EdgeInsets.only(
-                        right: isHovered && isRtl ? 120.0 : 0.0,
-                        left: isHovered && !isRtl ? 120.0 : 0.0,
-                      ),
-                      child: buildTabAppearance(setState),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
+        child: StatefulBuilder(
+          builder: (context, setLocalState) {
+            return MouseRegion(
+              onEnter: (_) => setLocalState(() => isTabHovered = true),
+              onExit: (_) => setLocalState(() => isTabHovered = false),
+              child: buildTabAppearance(setLocalState),
+            );
+          },
         ),
       ),
     );
