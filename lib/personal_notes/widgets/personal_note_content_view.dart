@@ -18,6 +18,11 @@ class PersonalNoteContentView extends StatefulWidget {
   final bool allowSelection;
   final void Function(String url)? onLinkTap;
 
+  /// כשמוגדר, מקצר את התוכן ל-N התווים הראשונים. נועד לתצוגות מקדימות
+  /// (כרטיסי רשת) כדי לא לרנדר הערות ארוכות מאוד במלואן — QuillEditor
+  /// במצב לא-נגלל מחשב layout לכל הטקסט, כך שהקיצור הוא שמונע jank.
+  final int? maxPreviewChars;
+
   const PersonalNoteContentView({
     super.key,
     required this.note,
@@ -25,6 +30,7 @@ class PersonalNoteContentView extends StatefulWidget {
     this.textAlign = TextAlign.justify,
     this.allowSelection = true,
     this.onLinkTap,
+    this.maxPreviewChars,
   });
 
   @override
@@ -48,7 +54,8 @@ class _PersonalNoteContentViewState extends State<PersonalNoteContentView> {
   void didUpdateWidget(PersonalNoteContentView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.note.content != widget.note.content ||
-        oldWidget.note.contentFormat != widget.note.contentFormat) {
+        oldWidget.note.contentFormat != widget.note.contentFormat ||
+        oldWidget.maxPreviewChars != widget.maxPreviewChars) {
       _disposeControllers();
       _buildContent();
     }
@@ -76,8 +83,12 @@ class _PersonalNoteContentViewState extends State<PersonalNoteContentView> {
       decoded = null;
     }
 
-    final document = decoded != null
-        ? quill.Document.fromJson(decoded)
+    final effectiveDelta = decoded != null && widget.maxPreviewChars != null
+        ? _truncateDelta(decoded, widget.maxPreviewChars!)
+        : decoded;
+
+    final document = effectiveDelta != null
+        ? quill.Document.fromJson(effectiveDelta)
         : (quill.Document()..insert(0, note.content));
 
     _controller = quill.QuillController(
@@ -86,7 +97,9 @@ class _PersonalNoteContentViewState extends State<PersonalNoteContentView> {
     )..readOnly = true;
     _focusNode = FocusNode();
     _scrollController = ScrollController();
-    _links = decoded != null ? _extractLinks(decoded) : const [];
+    // חילוץ הקישורים מה-Delta האפקטיבי (המקוצר בתצוגה מקדימה, המלא אחרת)
+    // כדי שלא נבנה chips לקישורים שכלל לא מוצגים בתצוגה המקוצרת.
+    _links = effectiveDelta != null ? _extractLinks(effectiveDelta) : const [];
   }
 
   void _disposeControllers() {
@@ -137,7 +150,7 @@ class _PersonalNoteContentViewState extends State<PersonalNoteContentView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          widget.note.contentPlain,
+          _previewPlain,
           style: widget.textStyle,
           textAlign: widget.textAlign,
           textDirection: TextDirection.rtl,
@@ -173,12 +186,60 @@ class _PersonalNoteContentViewState extends State<PersonalNoteContentView> {
       children: links.map((link) {
         final label = link.label.isNotEmpty ? link.label : link.url;
         return ActionChip(
-          label: Text(label, overflow: TextOverflow.ellipsis),
+          // מגבילים את רוחב התווית כדי ש-ellipsis יחתוך קישורים ארוכים
+          // (Wrap נותן רוחב בלתי-מוגבל לילדיו, ובלי מגבלה ellipsis לא פועל).
+          label: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220),
+            child: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1),
+          ),
           onPressed: widget.onLinkTap == null
               ? null
               : () => widget.onLinkTap!(link.url),
         );
       }).toList(),
     );
+  }
+
+  /// גרסת טקסט פשוט מקוצרת לתצוגה מקדימה (כש-[maxPreviewChars] מוגדר).
+  String get _previewPlain {
+    final text = widget.note.contentPlain;
+    final max = widget.maxPreviewChars;
+    if (max != null && text.length > max) {
+      return '${text.substring(0, max)}…';
+    }
+    return text;
+  }
+
+  /// מקצר Delta ל-[maxChars] התווים הראשונים, תוך שמירה על מבנה תקין
+  /// (סיום בתו שורה כפי ש-Quill דורש). אובייקטים מוטמעים מדולגים בתצוגה
+  /// מקדימה. ה-attributes של כל קטע נשמרים כך שהעיצוב נותר.
+  List<dynamic> _truncateDelta(List<dynamic> decoded, int maxChars) {
+    final result = <Map<String, dynamic>>[];
+    var count = 0;
+    var truncated = false;
+
+    for (final op in decoded) {
+      if (op is! Map<String, dynamic>) continue;
+      final insert = op['insert'];
+      if (insert is! String) continue; // embed — מדלגים בתצוגה מקדימה
+      final remaining = maxChars - count;
+      if (insert.length <= remaining) {
+        result.add(op);
+        count += insert.length;
+      } else {
+        if (remaining > 0) {
+          result.add({...op, 'insert': insert.substring(0, remaining)});
+        }
+        truncated = true;
+        break;
+      }
+    }
+
+    // Document תקין חייב להסתיים בתו שורה.
+    final last = result.isEmpty ? null : result.last['insert'] as String?;
+    if (last == null || !last.endsWith('\n')) {
+      result.add({'insert': truncated ? '…\n' : '\n'});
+    }
+    return result;
   }
 }
