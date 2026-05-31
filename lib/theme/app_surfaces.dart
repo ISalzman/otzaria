@@ -53,6 +53,12 @@ class AppSurfaces {
   static Color selectedItem(ColorScheme cs) =>
       cs.primaryContainer.withValues(alpha: 0.3);
 
+  /// רקע הדגשה לשורה שמעליה מרחפים בגרירה (drag target).
+  ///
+  /// 8% primary — רמז עדין למקום השחרור מבלי להסתיר את תוכן השורה.
+  static Color dragTargetHighlight(ColorScheme cs) =>
+      cs.primary.withValues(alpha: 0.08);
+
   /// רקע רצועת [PanelOpenHandle] — מתפוגג מעט במצב רגיל, אטום יותר ב-hover.
   static Color panelOpenHandle(ColorScheme cs, {required bool isHovering}) =>
       cs.surfaceContainerHighest.withValues(alpha: isHovering ? 0.95 : 0.8);

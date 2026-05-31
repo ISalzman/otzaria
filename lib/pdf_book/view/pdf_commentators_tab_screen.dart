@@ -575,6 +575,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
         'מפרשים על ${widget.tab.sourceTab.book.title}',
         style: const TextStyle(fontSize: 16),
         overflow: TextOverflow.ellipsis,
+        textDirection: TextDirection.rtl,
       ),
       actions: [
         ResponsiveActionBar(
@@ -763,6 +764,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
         'מפרשים על ${widget.tab.sourceTab.book.title}',
         style: const TextStyle(fontSize: 16),
         overflow: TextOverflow.ellipsis,
+        textDirection: TextDirection.rtl,
       ),
       actions: [
         ResponsiveActionBar(
@@ -988,7 +990,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   Widget _buildNavPanel() {
     final headings = _sortedHeadings;
     if (headings == null || headings.isEmpty) {
-      return const Center(child: Text('אין ניווט'));
+      return const Center(
+        child: Text('אין ניווט', textDirection: TextDirection.rtl),
+      );
     }
 
     return ValueListenableBuilder<TextEditingValue>(
