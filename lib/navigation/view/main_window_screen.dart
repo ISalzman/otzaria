@@ -204,6 +204,22 @@ class MainWindowScreenState extends State<MainWindowScreen>
   // (ראה _handleOrientationChange) כדי למנוע מצב שבו pixel offset מהציר
   // הישן (vertical) מתפרש כעמוד שגוי בציר החדש (horizontal).
   late PageController pageController;
+
+  // --- מצב מעבר slide בין מסכים לא-סמוכים ---
+  // כדי לקבל החלקה (slide) ישירה מ"ספריה" ל"כלים" בלי שעמוד הביניים ("עיון")
+  // ייראה, מציבים זמנית את מסך היעד בעמוד-השכן בכיוון התנועה, מחליקים מרחק 1,
+  // ובסיום קופצים למיקום האמיתי של היעד (ה-GlobalKey מעביר את ה-Element בלי
+  // בנייה מחדש, כך שה-WebView של הכלים אינו נטען מחדש).
+
+  /// אינדקס היעד האמיתי במהלך slide חוצה (null כשאין מעבר פעיל).
+  int? _transitionTargetIndex;
+
+  /// העמוד-השכן הזמני שאליו מחליקים בפועל (current ± 1).
+  int? _transitionSlotIndex;
+
+  /// שמירה מפני מעברים חופפים (לחיצות ניווט מהירות).
+  bool _isCrossSliding = false;
+
   late final CalendarCubit _calendarCubit;
   late final SettingsScreenController _settingsScreenController;
   final ExternalActivationQueue _externalActivationQueue =
@@ -226,6 +242,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
   Widget? _cachedReadingPage;
   Widget? _cachedMorePage;
   Widget? _cachedSettingsPage;
+
+  // GlobalKeys יציבים למסכי עיון והגדרות. במהלך slide חוצה (buildTransitionPages)
+  // המסכים זזים בעץ דרך swap; ה-keys מאפשרים ל-Flutter לזהות שמדובר באותם מסכים
+  // ולהעביר (reparent) את ה-State במקום לפרק ולבנות מחדש. (מסך הכלים כבר מותג
+  // ב-moreScreenKey; מסך הספרייה ב-libraryBrowserKey.)
+  final GlobalKey _readingScreenKey = GlobalKey();
+  final GlobalKey _settingsScreenKey = GlobalKey();
 
   // שמירת BLoC של EmptyLibrary כדי שלא יאבד את המצב
   EmptyLibraryBloc? _emptyLibraryBloc;
@@ -904,6 +927,18 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final targetPage = _pageIndexForScreen(currentScreen) ?? _currentPageIndex;
     _currentPageIndex = targetPage;
 
+    // אם מתבצע slide חוצה בזמן שינוי אוריינטציה — מבטלים אותו ונוחתים על היעד
+    // האמיתי. איפוס _isCrossSliding גורם ל-slide הישן להפסיק בסיום ה-await שלו;
+    // ה-setState הנדחה כופה rebuild עם הסידור הקנוני (ה-controller החדש כבר ביעד).
+    if (_isCrossSliding || _transitionTargetIndex != null) {
+      _transitionTargetIndex = null;
+      _transitionSlotIndex = null;
+      _isCrossSliding = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    }
+
     final oldController = pageController;
     pageController = PageController(initialPage: targetPage);
 
@@ -923,6 +958,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
   /// ודאו שה-PageView מסונכרן למצב הניווט הנוכחי גם אם בחרו שוב באותו יעד.
   Future<void> _syncPageWithState() async {
     if (!mounted || !pageController.hasClients) return;
+    // לא לגעת ב-controller בזמן slide חוצה פעיל — הוא יסתיים על היעד הנכון.
+    if (_isCrossSliding) return;
     final currentScreen = context.read<NavigationBloc>().state.currentScreen;
     final targetPage = _pageIndexForScreen(currentScreen);
     if (targetPage == null) return;
@@ -970,6 +1007,84 @@ class MainWindowScreenState extends State<MainWindowScreen>
     ];
   }
 
+  /// סדר העמודים במהלך slide חוצה: מחליף (swap) בין מסך היעד ([targetIndex])
+  /// למסך שיושב בעמוד-השכן ([slotIndex]), כך שמסך היעד מוצג בשכן לצורך ההחלקה.
+  ///
+  /// כל ארבעת המסכים נשארים בעץ (התוצאה היא תמורה של [canonical]) — כך אף מסך
+  /// עם keep-alive כמו `ToolsScreen` אינו נדחק מהעץ ונבנה מחדש, וה-WebView שלו
+  /// אינו נטען מחדש. מסך שכן מעורב ב-swap (עם GlobalKey) רק *זז* בעץ ולכן ה-State
+  /// שלו נשמר דרך reparenting. כל GlobalKey יושב בעמוד אחד בלבד.
+  ///
+  /// במנוחה ([targetIndex] או [slotIndex] הם null) — מוחזר הסדר הקנוני כמות שהוא.
+  @visibleForTesting
+  static List<Widget> buildTransitionPages(
+    List<Widget> canonical, {
+    required int? targetIndex,
+    required int? slotIndex,
+  }) {
+    if (targetIndex == null || slotIndex == null) {
+      return canonical;
+    }
+    final pages = List<Widget>.of(canonical);
+    pages[slotIndex] = canonical[targetIndex];
+    pages[targetIndex] = canonical[slotIndex];
+    return pages;
+  }
+
+  /// בונה את רשימת עמודי ה-PageView לפי מצב המעבר הנוכחי (ראה
+  /// [buildTransitionPages]).
+  List<Widget> _buildPagesList() {
+    final canonical = <Widget>[
+      _cachedLibraryPage!,
+      _cachedReadingPage!,
+      _cachedMorePage!,
+      _cachedSettingsPage!,
+    ];
+    return buildTransitionPages(
+      canonical,
+      targetIndex: _transitionTargetIndex,
+      slotIndex: _transitionSlotIndex,
+    );
+  }
+
+  /// החלקה (slide) ישירה בין מסכים לא-סמוכים בלי שעמודי הביניים ייראו.
+  ///
+  /// הטכניקה: מציבים זמנית את מסך היעד בעמוד-השכן בכיוון התנועה ([slot]),
+  /// מחליקים מרחק עמוד אחד בלבד (כך נראים רק המסך היוצא והיעד — לא הביניים),
+  /// ובסיום קופצים למיקום האמיתי של היעד. ה-GlobalKey של מסך היעד גורם ל-Flutter
+  /// להעביר (reparent) את ה-Element החי מ-[slot] ל-[to] בלי בנייה מחדש, כך
+  /// שה-WebView של מסך הכלים אינו נטען מחדש ואין הבהוב.
+  Future<void> _slideToDistantPage(int from, int to) async {
+    final slot = from + (to > from ? 1 : -1);
+    setState(() {
+      _isCrossSliding = true;
+      _transitionTargetIndex = to;
+      _transitionSlotIndex = slot;
+    });
+
+    // המתנה לסוף ה-frame כדי שהסידור הזמני (מסך היעד בעמוד-השכן) יעבור layout
+    // לפני תחילת האנימציה.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || !pageController.hasClients || !_isCrossSliding) return;
+
+    await pageController.animateToPage(
+      slot,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+    if (!mounted || !pageController.hasClients || !_isCrossSliding) return;
+
+    // סיום: שחזור הסידור הקנוני וקפיצה ליעד האמיתי — שתי הפעולות סינכרוניות
+    // באותו tick, כך שה-build הבא רואה את שתיהן יחד (ללא frame ביניים מהבהב).
+    setState(() {
+      _currentPageIndex = to;
+      _transitionTargetIndex = null;
+      _transitionSlotIndex = null;
+      _isCrossSliding = false;
+    });
+    pageController.jumpToPage(to);
+  }
+
   void _handleNavigationChange(
     BuildContext context,
     NavigationState state,
@@ -990,25 +1105,41 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     final targetPage = _pageIndexForScreen(state.currentScreen);
     if (targetPage != null && _currentPageIndex != targetPage) {
-      setState(() {
-        _currentPageIndex = targetPage;
-      });
-      if (pageController.hasClients) {
-        // מעבר שחוצה את עמוד "כלים" (index 2) — מ"הגדרות" אל מסכים שלפניו
-        // או אליהם — לא יעבור ויזואלית דרך "כלים", כדי שמערכת התוספים
-        // (כולל ה-WebView הראשי) לא תיטען לחינם.
-        final currentPage = pageController.page?.round() ?? _currentPageIndex;
-        final crossesTools = (currentPage < 2 && targetPage > 2) ||
-            (currentPage > 2 && targetPage < 2);
-        if (crossesTools) {
+      if (_isCrossSliding) {
+        // הגיע מעבר חדש באמצע slide פעיל — מסיימים אותו מיד ונוחתים על היעד
+        // החדש בקפיצה. איפוס _isCrossSliding גורם ל-slide הקודם להפסיק בסיום
+        // ה-await שלו (ההגנה !_isCrossSliding).
+        setState(() {
+          _currentPageIndex = targetPage;
+          _transitionTargetIndex = null;
+          _transitionSlotIndex = null;
+          _isCrossSliding = false;
+        });
+        if (pageController.hasClients) {
           pageController.jumpToPage(targetPage);
-        } else {
+        }
+      } else if (pageController.hasClients) {
+        // עמודים סמוכים — החלקה (slide) רגילה. עמודים לא-סמוכים
+        // (למשל "ספריה" → "כלים") — החלקה ישירה דרך _slideToDistantPage, כך
+        // שעמוד הביניים ("עיון") אינו נראה ומערכת התוספים/WebView אינה נטענת לחינם.
+        final currentPage = pageController.page?.round() ?? _currentPageIndex;
+        final isAdjacent = (currentPage - targetPage).abs() == 1;
+        if (isAdjacent) {
+          setState(() {
+            _currentPageIndex = targetPage;
+          });
           pageController.animateToPage(
             targetPage,
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
           );
+        } else {
+          unawaited(_slideToDistantPage(currentPage, targetPage));
         }
+      } else {
+        setState(() {
+          _currentPageIndex = targetPage;
+        });
       }
     }
 
@@ -2234,17 +2365,14 @@ class MainWindowScreenState extends State<MainWindowScreen>
               _cachedLibraryPage = const SizedBox.shrink();
             }
 
-            _cachedReadingPage ??= const ReadingScreen();
+            _cachedReadingPage ??= ReadingScreen(key: _readingScreenKey);
             _cachedMorePage ??= ToolsScreen(key: moreScreenKey);
-            _cachedSettingsPage ??=
-                MySettingsScreen(controller: _settingsScreenController);
+            _cachedSettingsPage ??= MySettingsScreen(
+              key: _settingsScreenKey,
+              controller: _settingsScreenController,
+            );
 
-            _pages = [
-              _cachedLibraryPage!,
-              _cachedReadingPage!,
-              _cachedMorePage!,
-              _cachedSettingsPage!,
-            ];
+            _pages = _buildPagesList();
 
             if (state.hasCheckedLibrary) {
               _scheduleTourStartIfNeeded(libraryLoaded: !state.isLibraryEmpty);
