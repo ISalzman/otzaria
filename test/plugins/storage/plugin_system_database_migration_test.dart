@@ -199,5 +199,23 @@ void main() {
           cols.where((c) => c['name'] == 'hidden_from_tools').toList();
       expect(hiddenCols, hasLength(1));
     });
+
+    test(
+        'adds allow_order_before_built_ins_granted column without forcing old rows to false',
+        () {
+      db.execute(_legacyCreateTable);
+      _seedLegacyRow(db, 'legacy.a');
+      expect(_hasColumn(db, 'allow_order_before_built_ins_granted'), isFalse);
+
+      PluginSystemDatabase.ensureSchemaUpgrades(db);
+
+      expect(_hasColumn(db, 'allow_order_before_built_ins_granted'), isTrue);
+      final rows = db.select(
+          'SELECT allow_order_before_built_ins_granted FROM plugin_installation WHERE plugin_id = ?',
+          ['legacy.a']);
+      expect(rows.first['allow_order_before_built_ins_granted'], isNull,
+          reason: 'legacy rows should stay undecided so runtime fallback can '
+              'preserve pre-existing behavior');
+    });
   });
 }

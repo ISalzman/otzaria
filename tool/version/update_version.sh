@@ -47,16 +47,59 @@ sedi() {
 }
 
 # ---- .gitignore ----
-sedi -E "s|installer/otzaria-[0-9.]+-windows\.exe|installer/otzaria-$NEW_VERSION-windows.exe|" .gitignore
-sedi -E "s|installer/otzaria-[0-9.]+-windows-full\.exe|installer/otzaria-$NEW_VERSION-windows-full.exe|" .gitignore
-if grep -qE "installer/otzaria-[0-9.]+-windows-silent\.exe" .gitignore; then
-    sedi -E "s|installer/otzaria-[0-9.]+-windows-silent\.exe|installer/otzaria-$NEW_VERSION-windows-silent.exe|" .gitignore
-else
-    # Insert silent line right after the -full line to keep the three lines grouped.
-    sedi -E "/installer\/otzaria-[0-9.]+-windows-full\.exe/a\\
-installer/otzaria-$NEW_VERSION-windows-silent.exe
-" .gitignore
-fi
+GITIGNORE_TMP=$(mktemp)
+awk \
+    -v start_marker="# Generated Windows installers" \
+    -v end_marker="# End generated Windows installers" \
+    -v new_version="$NEW_VERSION" '
+BEGIN {
+    managed_count = 4
+    managed[1] = "installer/otzaria-" new_version "-windows.exe"
+    managed[2] = "installer/otzaria-" new_version "-windows-full.exe"
+    managed[3] = "installer/otzaria-" new_version "-windows-silent.exe"
+    managed[4] = "installer/otzaria-" new_version "-windows-full-silent.exe"
+    inside_block = 0
+    inserted_block = 0
+}
+$0 == start_marker {
+    inside_block = 1
+    next
+}
+$0 == end_marker {
+    inside_block = 0
+    next
+}
+inside_block {
+    next
+}
+$0 ~ /^installer\/otzaria-[0-9.]+-windows(-full)?(-silent)?\.exe$/ {
+    next
+}
+{
+    print
+    if (!inserted_block && $0 == "external/") {
+        print start_marker
+        for (i = 1; i <= managed_count; i++) {
+            print managed[i]
+        }
+        print end_marker
+        inserted_block = 1
+    }
+}
+END {
+    if (!inserted_block) {
+        if (NR > 0) {
+            print ""
+        }
+        print start_marker
+        for (i = 1; i <= managed_count; i++) {
+            print managed[i]
+        }
+        print end_marker
+    }
+}
+' .gitignore > "$GITIGNORE_TMP"
+mv "$GITIGNORE_TMP" .gitignore
 echo "Updated .gitignore"
 
 # ---- pubspec.yaml ----
@@ -85,6 +128,13 @@ ISS_SILENT="installer/otzaria_silent.iss"
 if [[ -f "$ISS_SILENT" ]]; then
     sedi -E "s/^#define MyAppVersion .*/#define MyAppVersion \"$NEW_VERSION\"/" "$ISS_SILENT"
     echo "Updated $ISS_SILENT"
+fi
+
+# ---- installer/otzaria_full_silent.iss ----
+ISS_FULL_SILENT="installer/otzaria_full_silent.iss"
+if [[ -f "$ISS_FULL_SILENT" ]]; then
+    sedi -E "s/^#define MyAppVersion .*/#define MyAppVersion \"$NEW_VERSION\"/" "$ISS_FULL_SILENT"
+    echo "Updated $ISS_FULL_SILENT"
 fi
 
 # ---- android/local.properties ----
@@ -131,6 +181,7 @@ git add ".gitignore" "pubspec.yaml" "$VERSION_FILE" "$MAIN_DART" "$CHANGELOG"
 [[ -f "$ISS_FULL" ]]   && git add "$ISS_FULL"
 [[ -f "$ISS" ]]        && git add "$ISS"
 [[ -f "$ISS_SILENT" ]] && git add "$ISS_SILENT"
+[[ -f "$ISS_FULL_SILENT" ]] && git add "$ISS_FULL_SILENT"
 # project.pbxproj is tracked but lives under a path matched by .gitignore (macos/*),
 # so plain `git add` prints a warning and exits 1 — killing the script under `set -e`.
 # -f forces the add for this already-tracked file.

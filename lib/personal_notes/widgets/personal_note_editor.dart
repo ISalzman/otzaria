@@ -357,6 +357,11 @@ class _PersonalNoteToolbar extends StatelessWidget {
           onPressed: () => _toggleAttribute(quill.Attribute.underline),
         ),
         IconButton(
+          tooltip: 'קו חוצה',
+          icon: const Icon(FluentIcons.text_strikethrough_24_regular, size: 18),
+          onPressed: () => _toggleAttribute(quill.Attribute.strikeThrough),
+        ),
+        IconButton(
           tooltip: 'הדגשה',
           icon: const Icon(FluentIcons.circle_highlight_24_regular, size: 18),
           onPressed: () => _toggleAttribute(

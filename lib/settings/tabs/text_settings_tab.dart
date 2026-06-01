@@ -723,10 +723,13 @@ class TextSettingsTab extends StatelessWidget {
           Padding(
             padding:
                 const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: NeutralActionButton(
-              onPressed: () => _resetPerBookSettings(context),
-              icon: FluentIcons.delete_24_regular,
-              text: 'אפס את כל הגדרות אלו, בכל הספרים',
+            child: SizedBox(
+              width: double.infinity,
+              child: NeutralActionButton(
+                onPressed: () => _resetPerBookSettings(context),
+                icon: FluentIcons.delete_24_regular,
+                text: 'אפס את כל הגדרות אלו, בכל הספרים',
+              ),
             ),
           ),
       ],

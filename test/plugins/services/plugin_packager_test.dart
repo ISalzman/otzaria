@@ -14,6 +14,7 @@ Map<String, dynamic> _minimalManifest({
   String version = '1.0.0',
   String entrypoint = 'index.html',
   String? title,
+  bool allowOrderBeforeBuiltIns = false,
   List<String> permissions = const [],
   Map<String, dynamic>? network,
 }) =>
@@ -34,6 +35,7 @@ Map<String, dynamic> _minimalManifest({
         'toolTab': {
           'title': title ?? name,
           'order': 900,
+          'allowOrderBeforeBuiltIns': allowOrderBeforeBuiltIns,
           'defaultPinned': true,
         },
         'publishedDataTypes': const [],
@@ -212,6 +214,19 @@ void main() {
       expect(result.validation.hasErrors, isFalse);
     });
 
+    test('packaging preserves allowOrderBeforeBuiltIns from the manifest',
+        () async {
+      final manifest = _minimalManifest(allowOrderBeforeBuiltIns: true);
+      final pluginDir = _writePluginDir(tempDir, manifestOverride: manifest);
+
+      final result =
+          await PluginPackager.packDirectory(directoryPath: pluginDir);
+
+      expect(result.manifest.allowOrderBeforeBuiltIns, isTrue,
+          reason: 'the packager must preserve the explicit placement flag from '
+              'manifest.json so packaged plugins behave like development ones');
+    });
+
     test('blocks packaging when manifest validator throws (bad permission)',
         () async {
       // הרשאה לא קיימת ברשימה הרשמית => PluginManifestValidator זורק.
@@ -355,7 +370,8 @@ void main() {
         outputPath: p.join(tempDir.path, 'out.otzplugin'),
       );
 
-      expect(result.fileCount, 3); // manifest.json + index.html (root) + src/app/index.html
+      expect(result.fileCount,
+          3); // manifest.json + index.html (root) + src/app/index.html
       final bytes = File(result.outputPath).readAsBytesSync();
       final archive = ZipDecoder().decodeBytes(bytes);
       expect(

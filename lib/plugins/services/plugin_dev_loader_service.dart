@@ -59,6 +59,9 @@ class PluginDevLoaderService {
       enabled: existingPlugin?.enabled ?? true,
       pinned: existingPlugin?.pinned ?? manifest.defaultPinned,
       pinnedToNavRail: existingPlugin?.pinnedToNavRail ?? false,
+      allowOrderBeforeBuiltInsGranted:
+          existingPlugin?.allowOrderBeforeBuiltInsGranted ??
+              manifest.allowOrderBeforeBuiltIns,
       manifest: manifest,
       installedAt: existingPlugin?.installedAt ?? DateTime.now(),
       updatedAt: DateTime.now(),

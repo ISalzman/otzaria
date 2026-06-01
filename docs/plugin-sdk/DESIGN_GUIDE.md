@@ -632,6 +632,7 @@ popover.addEventListener('click', function(e) {
   "toolTab": {
     "title": "לוח שנה",
     "order": 100,
+    "allowOrderBeforeBuiltIns": false,
     "defaultPinned": true,
     "iconName": "calendar_24_regular"
   }
@@ -640,7 +641,10 @@ popover.addEventListener('click', function(e) {
 
 | שדה | סוג | ברירת מחדל | תיאור |
 |-----|-----|------------|-------|
+| `allowOrderBeforeBuiltIns` | `boolean` | `false` | האם התוסף רשאי להופיע לפני הכלים המובנים במסך "כלים" |
 | `iconName` | `string` | ללא (ללא אייקון) | שם אייקון FluentUI 24px, המסתיים ב-`_24_regular` או `_24_filled` |
+
+כברירת מחדל, גם תוסף עם `order` נמוך יופיע אחרי הכלים המובנים. אם אתם באמת צריכים להקדים אותם, יש להצהיר במפורש על `allowOrderBeforeBuiltIns: true`. השתמשו בזה במשורה, ורק כאשר המיקום המוקדם הוא חלק מהותי מחוויית התוסף.
 
 #### כיצד בוחרים `iconName`?
 

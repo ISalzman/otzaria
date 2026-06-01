@@ -38,12 +38,18 @@ class ConfirmPluginInstall extends PluginSystemEvent {
 
   /// מיפוי הרשאה → האם הוענקה. הרשאות עם ערך false יישמרו כחסומות.
   final Map<String, bool> grantedPermissions;
+  final bool allowOrderBeforeBuiltInsGranted;
 
-  const ConfirmPluginInstall(
-      this.tempDirPath, this.manifest, this.grantedPermissions);
+  const ConfirmPluginInstall(this.tempDirPath, this.manifest,
+      this.grantedPermissions, this.allowOrderBeforeBuiltInsGranted);
 
   @override
-  List<Object?> get props => [tempDirPath, manifest, grantedPermissions];
+  List<Object?> get props => [
+        tempDirPath,
+        manifest,
+        grantedPermissions,
+        allowOrderBeforeBuiltInsGranted,
+      ];
 }
 
 class CancelPluginInstall extends PluginSystemEvent {

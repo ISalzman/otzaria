@@ -78,7 +78,7 @@ class CombinedView extends StatefulWidget {
   final double textSize;
   final bool showCommentaryAsExpansionTiles;
   final TextBookTab tab;
-  final ValueChanged<String?>? onSelectedTextChanged;
+  final void Function(String? text, int? lineIndex)? onSelectedTextChanged;
   final bool isPreviewMode;
   final VoidCallback? onOpenPersonalNotes;
   final VoidCallback? onOpenCommentatorsPane;
@@ -374,7 +374,7 @@ class _CombinedViewState extends State<CombinedView> {
       _savedSelectedIndex.value = null;
       _currentSelectedIndex.value = null;
     });
-    widget.onSelectedTextChanged?.call(null);
+    widget.onSelectedTextChanged?.call(null, null);
   }
 
   // עדכון האינדקס הנוכחי ב-tab — חייב להמיר segmentIndex לשורת מקור.
@@ -1209,7 +1209,7 @@ class _CombinedViewState extends State<CombinedView> {
                   _savedSelectedText.value = fixedPlain;
                   _savedSelectedIndex.value = foundIndex;
                   _currentSelectedIndex.value = foundIndex;
-                  widget.onSelectedTextChanged?.call(fixedPlain);
+                  widget.onSelectedTextChanged?.call(fixedPlain, foundIndex);
 
                   // שליחת event לפלאגינים עם ה-index המדויק
                   final selectionText = fixedPlain?.trim() ?? '';
@@ -1276,7 +1276,7 @@ class _CombinedViewState extends State<CombinedView> {
                           _savedSelectedText.value = null;
                           _savedSelectedIndex.value = null;
                           _currentSelectedIndex.value = null;
-                          widget.onSelectedTextChanged?.call(null);
+                          widget.onSelectedTextChanged?.call(null, null);
                           return null;
                         },
                       ),
@@ -1480,7 +1480,7 @@ class _CombinedViewState extends State<CombinedView> {
                 _savedSelectedText.value = null;
                 _savedSelectedIndex.value = null;
                 _currentSelectedIndex.value = null;
-                widget.onSelectedTextChanged?.call(null);
+                widget.onSelectedTextChanged?.call(null, null);
               }
               // פשוט מעדכן את selectedIndex - זה יגרום לבנייה מחדש
               if (isSelected) {
@@ -1785,7 +1785,7 @@ class _CombinedViewState extends State<CombinedView> {
         _savedSelectedText.value = null;
         _savedSelectedIndex.value = null;
         _currentSelectedIndex.value = lineIndex;
-        widget.onSelectedTextChanged?.call(null);
+        widget.onSelectedTextChanged?.call(null, null);
         if (isLineSelected) {
           _addTextBookEventIfOpen(const UpdateSelectedIndex(null));
         } else {
@@ -2010,9 +2010,11 @@ class _CommentaryCardState extends State<_CommentaryCard> {
               ),
             );
 
-            // אם יש רוחב מקסימלי, נמרכז את המפרשים באותו רוחב כמו הטקסט
+            // מרכוז אופקי בלבד (topCenter) באותו רוחב כמו הטקסט. Center מלא
+            // היה ממרכז גם אנכית וגורם לרווח למעלה כשהמפרשים מכווצים/קצרים.
             if (textMaxWidth > 0) {
-              return Center(
+              return Align(
+                alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: textMaxWidth),
                   child: commentaryContainer,

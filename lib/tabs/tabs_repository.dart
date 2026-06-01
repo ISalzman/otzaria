@@ -12,8 +12,6 @@ class TabsRepository {
   static const String _currentTabKey = 'key-current-tab';
   static const String _sideBySideModeKey = 'key-side-by-side-mode';
 
-  bool _isPersistableTab(OpenedTab tab) => tab is! PdfCommentatorsTab;
-
   int _resolvePersistedCurrentTabIndex(
     Map<int, int> persistedIndexByOriginalIndex,
     int currentTabIndex,
@@ -81,12 +79,13 @@ class TabsRepository {
     }
   }
 
-  /// כמו OpenedTab.fromJson אבל תומך גם ב-CommentatorsTab.
-  /// PdfCommentatorsTab לא אמור להגיע לכאן כי הוא לא נשמר מלכתחילה.
+  /// כמו OpenedTab.fromJson אבל תומך גם ב-CommentatorsTab וב-PdfCommentatorsTab.
   OpenedTab? _tabFromJson(Map<String, dynamic> json) {
-    if (json['type'] == 'PdfCommentatorsTab') return null;
     if (json['type'] == 'CommentatorsTab') {
       return CommentatorsTab.fromJson(json);
+    }
+    if (json['type'] == 'PdfCommentatorsTab') {
+      return PdfCommentatorsTab.fromJson(json);
     }
     return OpenedTab.fromJson(json);
   }
@@ -114,10 +113,8 @@ class TabsRepository {
     final persistedIndexByOriginalIndex = <int, int>{};
 
     for (var i = 0; i < tabs.length; i++) {
-      final tab = tabs[i];
-      if (!_isPersistableTab(tab)) continue;
       persistedIndexByOriginalIndex[i] = persistedTabs.length;
-      persistedTabs.add(tab);
+      persistedTabs.add(tabs[i]);
     }
 
     final persistedCurrentIndex = _resolvePersistedCurrentTabIndex(
@@ -140,5 +137,28 @@ class TabsRepository {
     } else {
       await box.delete(_sideBySideModeKey);
     }
+  }
+
+  /// שומר רק את אינדקס הטאב הנוכחי, בלי לקודד מחדש את כל הטאבים.
+  ///
+  /// מיועד למעבר בין טאבים, שבו רשימת הטאבים עצמה לא משתנה — אין טעם
+  /// להריץ `toJson()` על כל הטאבים בכל מעבר. מבצע רק מיפוי אינדקסים קל
+  /// ושומר ערך בודד. הכתיבה ל-Hive אסינכרונית ואינה חוסמת את ה-UI.
+  Future<void> saveCurrentTabIndex(
+      List<OpenedTab> tabs, int currentTabIndex) async {
+    final persistedIndexByOriginalIndex = <int, int>{};
+    var persistedCount = 0;
+    for (var i = 0; i < tabs.length; i++) {
+      persistedIndexByOriginalIndex[i] = persistedCount;
+      persistedCount++;
+    }
+
+    final persistedCurrentIndex = _resolvePersistedCurrentTabIndex(
+      persistedIndexByOriginalIndex,
+      currentTabIndex,
+      tabs.length,
+    );
+
+    await Hive.box('tabs').put(_currentTabKey, persistedCurrentIndex);
   }
 }

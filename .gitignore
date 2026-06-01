@@ -86,6 +86,12 @@ android/app/google-services.json
 build/
 fonts/
 external/
+# Generated Windows installers
+installer/otzaria-0.9.93-windows.exe
+installer/otzaria-0.9.93-windows-full.exe
+installer/otzaria-0.9.93-windows-silent.exe
+installer/otzaria-0.9.93-windows-full-silent.exe
+# End generated Windows installers
 
 pubspec.lock
 flutter/
@@ -115,4 +121,3 @@ temp/
 seforim.db-shm
 .gitignore
 seforim.db-wal
-installer/otzaria-0.9.93-windows-silent.exe

@@ -65,15 +65,22 @@ class PluginSystemInstallRequiresPermissions extends PluginSystemState {
 
   /// גרסה מותקנת קודמת — null אם זו התקנה ראשונה.
   final String? previousVersion;
+  final bool? previousAllowOrderBeforeBuiltInsGranted;
 
   const PluginSystemInstallRequiresPermissions({
     required this.manifest,
     required this.tempDirPath,
     this.previousVersion,
+    this.previousAllowOrderBeforeBuiltInsGranted,
   });
 
   bool get isUpdate => previousVersion != null;
 
   @override
-  List<Object?> get props => [manifest, tempDirPath, previousVersion];
+  List<Object?> get props => [
+        manifest,
+        tempDirPath,
+        previousVersion,
+        previousAllowOrderBeforeBuiltInsGranted,
+      ];
 }

@@ -4,6 +4,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/pdf_book/view/pdf_book_screen.dart';
 import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
 
 import '../helpers/memory_settings_cache.dart';
 
@@ -311,6 +312,113 @@ void main() {
         ),
         isFalse,
       );
+    });
+  });
+
+  group('buildGroupedCommentatorEntries', () {
+    final groups = [
+      const CommentatorGroup(title: 'ראשונים', commentators: ['רש"י', 'רמב"ן']),
+      const CommentatorGroup(
+          title: 'אחרונים', commentators: ['מצודת דוד', 'מלבי"ם']),
+      const CommentatorGroup(title: 'שאר מפרשים', commentators: ['מפרש פלוני']),
+    ];
+
+    test('מוסיף פריט "הצג את כל <תקופה>" לכל קבוצה לא-ריקה', () {
+      final entries = buildGroupedCommentatorEntries(
+        relevantCommentators: const ['רש"י', 'רמב"ן', 'מצודת דוד', 'מלבי"ם'],
+        commentatorGroups: groups,
+        activeCommentators: const <String>{},
+        onToggleCommentator: (_) {},
+        onToggleAll: (_) {},
+      );
+
+      final labels = entries.map((e) => e.label).toList();
+      expect(labels, contains('הצג את כל ראשונים'));
+      expect(labels, contains('הצג את כל אחרונים'));
+      // הכותרת מופיעה לפני המפרשים הבודדים של אותה קבוצה
+      expect(labels.indexOf('הצג את כל ראשונים'),
+          lessThan(labels.indexOf('רש"י')));
+    });
+
+    test('פריט הקבוצה מסומן כשכל מפרשי הקבוצה הרלוונטיים פעילים', () {
+      final entries = buildGroupedCommentatorEntries(
+        relevantCommentators: const ['רש"י', 'רמב"ן', 'מצודת דוד'],
+        commentatorGroups: groups,
+        activeCommentators: const {'רש"י', 'רמב"ן'},
+        onToggleCommentator: (_) {},
+        onToggleAll: (_) {},
+      );
+
+      final rishonim =
+          entries.firstWhere((e) => e.label == 'הצג את כל ראשונים');
+      final acharonim =
+          entries.firstWhere((e) => e.label == 'הצג את כל אחרונים');
+      expect(rishonim.isSelected, isTrue);
+      expect(acharonim.isSelected, isFalse);
+    });
+
+    test('לחיצה על "הצג את כל <תקופה>" מעבירה את מפרשי הקבוצה הרלוונטיים', () {
+      List<String>? toggled;
+      final entries = buildGroupedCommentatorEntries(
+        // רק רש"י רלוונטי לדף מתוך הראשונים
+        relevantCommentators: const ['רש"י', 'מצודת דוד'],
+        commentatorGroups: groups,
+        activeCommentators: const <String>{},
+        onToggleCommentator: (_) {},
+        onToggleAll: (list) => toggled = list,
+      );
+
+      entries.firstWhere((e) => e.label == 'הצג את כל ראשונים').onTap!();
+
+      // רק המפרשים הרלוונטיים לדף, לא כל הקבוצה
+      expect(toggled, ['רש"י']);
+    });
+
+    test('קבוצה בלי מפרשים רלוונטיים אינה יוצרת פריט כותרת', () {
+      final entries = buildGroupedCommentatorEntries(
+        relevantCommentators: const ['רש"י'], // אין אחרונים רלוונטיים
+        commentatorGroups: groups,
+        activeCommentators: const <String>{},
+        onToggleCommentator: (_) {},
+        onToggleAll: (_) {},
+      );
+
+      final labels = entries.map((e) => e.label).toList();
+      expect(labels, contains('הצג את כל ראשונים'));
+      expect(labels, isNot(contains('הצג את כל אחרונים')));
+    });
+
+    test('מפרשים שאינם משויכים לאף קבוצה מוצגים ללא כותרת', () {
+      final entries = buildGroupedCommentatorEntries(
+        relevantCommentators: const ['רש"י', 'מפרש לא ידוע'],
+        commentatorGroups: groups,
+        activeCommentators: const <String>{},
+        onToggleCommentator: (_) {},
+        onToggleAll: (_) {},
+      );
+
+      final labels = entries.map((e) => e.label).toList();
+      expect(labels, contains('מפרש לא ידוע'));
+      // אין כותרת "הצג את כל" עבור מפרש שלא קוטלג
+      expect(
+          labels.any((l) =>
+              l != null && l.contains('מפרש לא ידוע') && l.startsWith('הצג')),
+          isFalse);
+    });
+
+    test('בלי קבוצות — מציג את המפרשים בלבד ללא כותרות', () {
+      final entries = buildGroupedCommentatorEntries(
+        relevantCommentators: const ['רש"י', 'רמב"ן'],
+        commentatorGroups: const [],
+        activeCommentators: const <String>{},
+        onToggleCommentator: (_) {},
+        onToggleAll: (_) {},
+      );
+
+      final labels = entries.map((e) => e.label).toList();
+      expect(labels, ['רש"י', 'רמב"ן']);
+      expect(
+          labels.any((l) => l != null && l.startsWith('הצג את כל')), isFalse);
     });
   });
 

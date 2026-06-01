@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
@@ -8,7 +9,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
-import 'package:updat/utils/file_handler.dart' show getDownloadFileLocation, openInstaller;
+import 'package:updat/utils/file_handler.dart'
+    show getDownloadFileLocation, openInstaller;
 import 'package:window_manager/window_manager.dart';
 import 'hebrew_update_widgets.dart';
 import 'linux_installer.dart';
@@ -120,9 +122,11 @@ Future<Map<String, dynamic>> _fetchRelease(String version) async {
   Map<String, dynamic> release;
 
   if (isDev) {
-    final data = await http.get(Uri.parse(
-      "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases",
-    )).timeout(_kGithubTimeout);
+    final data = await http
+        .get(Uri.parse(
+          "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases",
+        ))
+        .timeout(_kGithubTimeout);
     final releases = jsonDecode(data.body) as List;
     final byPrefix = releases
         .where((r) => r["tag_name"].toString().startsWith(version))
@@ -130,13 +134,17 @@ Future<Map<String, dynamic>> _fetchRelease(String version) async {
     final pool = byPrefix.isNotEmpty ? byPrefix : releases;
     release = pickLatestDevRelease(pool);
   } else {
-    var resp = await http.get(Uri.parse(
-      "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/tags/$version",
-    )).timeout(_kGithubTimeout);
+    var resp = await http
+        .get(Uri.parse(
+          "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/tags/$version",
+        ))
+        .timeout(_kGithubTimeout);
     if (resp.statusCode == 404) {
-      resp = await http.get(Uri.parse(
-        "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/tags/v$version",
-      )).timeout(_kGithubTimeout);
+      resp = await http
+          .get(Uri.parse(
+            "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/tags/v$version",
+          ))
+          .timeout(_kGithubTimeout);
     }
     if (resp.statusCode >= 400) {
       throw Exception(
@@ -315,34 +323,6 @@ String changelogBetweenVersionsForUpdateDialog({
   return result;
 }
 
-/// עוטף את [hebrewFlatChip] ומחיל launchInstaller מותאם ללינוקס.
-Widget _hebrewFlatChipWithLinuxInstaller({
-  required BuildContext context,
-  required String? latestVersion,
-  required String appVersion,
-  required UpdatStatus status,
-  required void Function() checkForUpdate,
-  required void Function() openDialog,
-  required void Function() startUpdate,
-  required Future<void> Function() launchInstaller,
-  required void Function() dismissUpdate,
-}) {
-  // Wrap launchInstaller for Linux
-  final wrappedLaunchInstaller = wrapLinuxInstaller(launchInstaller, 'otzaria');
-
-  return hebrewFlatChip(
-    context: context,
-    latestVersion: latestVersion,
-    appVersion: appVersion,
-    status: status,
-    checkForUpdate: checkForUpdate,
-    openDialog: openDialog,
-    startUpdate: startUpdate,
-    launchInstaller: wrappedLaunchInstaller,
-    dismissUpdate: dismissUpdate,
-  );
-}
-
 class MyUpdatWidget extends StatelessWidget {
   const MyUpdatWidget({super.key, required this.child});
 
@@ -387,6 +367,9 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   File? _installerFile;
   bool _windowCloseHookInstalled = false;
 
+  /// טיימר להעלמה אוטומטית של צ'יפ השגיאה אחרי 4 שניות.
+  Timer? _errorDismissTimer;
+
   @override
   void initState() {
     super.initState();
@@ -396,11 +379,26 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
 
   @override
   void dispose() {
+    _errorDismissTimer?.cancel();
     if (_windowCloseHookInstalled) {
       windowManager.removeListener(_windowListener);
       _windowCloseHookInstalled = false;
     }
     super.dispose();
+  }
+
+  /// מציג מצב שגיאה זמני: מרענן את הצ'יפ ומתזמן העלמה אוטומטית אחרי 4 שניות.
+  /// לחיצה על הצ'יפ מפעילה בדיקה חוזרת (`_checkForUpdate`) שמבטלת את הטיימר.
+  void _showTransientError() {
+    if (!mounted) return;
+    setState(() {
+      _status = UpdatStatus.error;
+    });
+    _errorDismissTimer?.cancel();
+    _errorDismissTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted || _status != UpdatStatus.error) return;
+      _dismissUpdate();
+    });
   }
 
   Future<void> _installWindowCloseHook() async {
@@ -433,7 +431,24 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     }
   }
 
+  /// מפעיל את ההתקנה ביוזמת המשתמש (כפתור "מוכן להתקנה"): משגר את המתקין
+  /// ורק אם השיגור הצליח סוגר את אוצריא. כך המתקין מופעל כפעולה האחרונה
+  /// לפני היציאה — אוצריא כבר אינה רצה כשהמתקין מעתיק קבצים, ולכן אין צורך
+  /// שהמתקין יבקש לסגור אותה ואין מצב שבו סגירה ידנית קוטעת מתקין שרץ.
+  ///
+  /// בשונה מ-[_handleWindowClose] (שמופעל כשהמשתמש סוגר את החלון ולכן חייב
+  /// לסגור בכל מקרה), כאן אם השיגור נכשל אנו משאירים את החלון פתוח כדי
+  /// שהמשתמש יראה את מצב השגיאה ויוכל לנסות שוב.
+  Future<void> _installNow() async {
+    if (_installerFile == null) return;
+    final launched = await _launchInstaller();
+    if (launched) {
+      await windowManager.destroy();
+    }
+  }
+
   Future<void> _checkForUpdate() async {
+    _errorDismissTimer?.cancel();
     setState(() {
       _status = UpdatStatus.checking;
     });
@@ -476,10 +491,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         _status = UpdatStatus.upToDate;
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _status = UpdatStatus.error;
-      });
+      _showTransientError();
     }
   }
 
@@ -489,12 +501,16 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     final isDevChannel = _isDevChannelEnabled();
 
     if (isDevChannel) {
-      final devData = await http.get(Uri.parse(
-        "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases",
-      )).timeout(_kGithubTimeout);
-      final stableData = await http.get(Uri.parse(
-        "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/latest",
-      )).timeout(_kGithubTimeout);
+      final devData = await http
+          .get(Uri.parse(
+            "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases",
+          ))
+          .timeout(_kGithubTimeout);
+      final stableData = await http
+          .get(Uri.parse(
+            "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/latest",
+          ))
+          .timeout(_kGithubTimeout);
       final releases = jsonDecode(devData.body) as List;
       final preRelease = pickLatestDevRelease(releases);
       final stableRelease =
@@ -503,14 +519,17 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         stableRelease: stableRelease,
         devRelease: preRelease,
       );
-      final normalized = _normalizeVersion(selectedRelease["tag_name"] as String);
+      final normalized =
+          _normalizeVersion(selectedRelease["tag_name"] as String);
       _cacheRelease(normalized, selectedRelease, isDev: true);
       return normalized;
     }
 
-    final data = await http.get(Uri.parse(
-      "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/latest",
-    )).timeout(_kGithubTimeout);
+    final data = await http
+        .get(Uri.parse(
+          "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/latest",
+        ))
+        .timeout(_kGithubTimeout);
     final release = (jsonDecode(data.body) as Map).cast<String, dynamic>();
     final normalized = _normalizeVersion(release["tag_name"] as String);
     _cacheRelease(normalized, release, isDev: false);
@@ -561,7 +580,9 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     } else if (platform == 'macos') {
       for (final a in assets) {
         final n = (a["name"] as String).toLowerCase();
-        if ((n.contains('macos') || n.contains('darwin') || n.contains('mac')) &&
+        if ((n.contains('macos') ||
+                n.contains('darwin') ||
+                n.contains('mac')) &&
             n.endsWith('.zip')) {
           assetUrl = a["browser_download_url"] as String;
           break;
@@ -590,7 +611,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         for (final a in assets) {
           final n = (a["name"] as String).toLowerCase();
           final u = a["browser_download_url"] as String;
-          if ((n.contains('linux') || n.contains('gnu')) && n.endsWith('.zip')) {
+          if ((n.contains('linux') || n.contains('gnu')) &&
+              n.endsWith('.zip')) {
             assetUrl = u;
             break;
           }
@@ -630,7 +652,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     }
 
     if (_status == UpdatStatus.readyToInstall) {
-      return _launchInstaller();
+      return _installNow();
     }
 
     if (_status != UpdatStatus.available &&
@@ -658,25 +680,24 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         _status = UpdatStatus.readyToInstall;
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _status = UpdatStatus.error;
-      });
+      _showTransientError();
     }
   }
 
-  Future<void> _launchInstaller() async {
-    if (_installerFile == null) return;
+  /// משגר את המתקין ומחזיר `true` אם השיגור הצליח. כשל בשיגור נבלע ומעדכן
+  /// את המצב ל-[UpdatStatus.error] (ללא זריקת חריגה), ומחזיר `false`, כדי
+  /// שהקוראים יחליטו האם לסגור את החלון בהתאם.
+  Future<bool> _launchInstaller() async {
+    if (_installerFile == null) return false;
 
     final wrappedLaunchInstaller =
         wrapLinuxInstaller(_launchInstallerDirect, 'otzaria');
     try {
       await wrappedLaunchInstaller();
+      return true;
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _status = UpdatStatus.error;
-      });
+      _showTransientError();
+      return false;
     }
   }
 
@@ -694,13 +715,23 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // ה-Stack עוטף את כל החלון, כולל סרגל הניווט הצדי. בדסקטופ בפריסת
+    // landscape הסרגל (ברוחב 74) והקו המפריד (1) יושבים בצד ההתחלה — בקצה
+    // הימני ב-RTL. ללא היסט הצ'יפ נצמד לקצה הימני המוחלט ולכן נמתח מעל הסרגל
+    // ואל תוך תוכן המסך. ההיסט מצמיד אותו לקצה תוכן המסך בלבד.
+    const navRailWidth = 75.0; // 74 רוחב הסרגל + 1 הקו המפריד
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    final railInset = isLandscape && isRtl ? navRailWidth : 0.0;
+
     return Stack(
       children: [
         Positioned.fill(child: widget.child),
         Positioned(
-          right: 10,
+          right: 10 + railInset,
           bottom: 10,
-          child: _hebrewFlatChipWithLinuxInstaller(
+          child: hebrewFlatChip(
             context: context,
             latestVersion: _latestVersion,
             appVersion: _currentVersion ?? 'unknown',
@@ -716,12 +747,12 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
                 checkForUpdate: _checkForUpdate,
                 openDialog: () {},
                 startUpdate: _startUpdate,
-                launchInstaller: _launchInstaller,
+                launchInstaller: _installNow,
                 dismissUpdate: _dismissUpdate,
               );
             },
             startUpdate: _startUpdate,
-            launchInstaller: _launchInstaller,
+            launchInstaller: _installNow,
             dismissUpdate: _dismissUpdate,
           ),
         ),

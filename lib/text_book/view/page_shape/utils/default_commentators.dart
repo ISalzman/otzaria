@@ -1,70 +1,90 @@
-import 'dart:convert';
 import 'package:collection/collection.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/models/links.dart';
-import 'package:otzaria/models/link_types.dart';
-import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
-import 'package:otzaria/utils/text/text_manipulation.dart'
-    show normalizeCategoryPath;
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 
-/// מחלקה לניהול ברירות מחדל של מפרשים לפי סוג הספר
-/// ההגדרות נטענות מקובץ JSON חיצוני
+/// מחלקה לניהול מפרשי ברירת המחדל ("מפרשים בסיסיים") של ספר.
+///
+/// המקור הבלעדי לנתונים הוא טבלאות `default_commentator` ו-`default_targum`
+/// ב-seforim.db. ה-`position` ממיין כל טבלה בנפרד (אין מרחב position משותף
+/// בין שתי הטבלאות) — הוא קובע את סדר ההקדמה ברשימה ואת סדר המיקומים בצורת
+/// הדף בתוך כל סוג. היחס בין מפרשים לתרגומים קבוע: המפרשים תמיד קודמים
+/// לתרגומים (ב-[getBaseCommentators] וב-[getDefaults] כאחד).
 class DefaultCommentators {
-  // Cache לקובץ ה-JSON
-  static Map<String, dynamic>? _configCache;
+  /// מחזיר את מפרשי ותרגומי ברירת המחדל של [book], ממוינים לפי `position`.
+  ///
+  /// ספרים אישיים אינם נכללים ב-seforim.db ולכן מחזירים רשימות ריקות.
+  static Future<({List<String> commentators, List<String> targums})>
+      _fetchDefaults(TextBook book) async {
+    const empty = (commentators: <String>[], targums: <String>[]);
 
-  /// מחזיר מפרשי ברירת מחדל לפי קטגוריית הספר
-  /// מקבל גם את רשימת הקישורים כדי למצוא את השמות המלאים של המפרשים
-  static Future<Map<String, String?>> getDefaults(TextBook book,
-      {List<Link>? links, List<String>? availableCommentators}) async {
-    final config = await _loadConfig();
+    if (book.isUserBook) return empty;
 
-    // קבלת נתיב הספר
-    final titleToPath = await FileSystemData.instance.titleToPath;
-    var bookPath = titleToPath[book.title] ?? '';
+    final repository = SqliteDataProvider.instance.repository;
+    if (repository == null) return empty;
 
-    // נסיון לקבלת נתיב מתוך אובייקט הספר (עבור ספרים ממסד הנתונים)
-    if (bookPath.isEmpty) {
-      bookPath = book.category?.path ?? book.categoryPath ?? '';
-    }
-    bookPath = normalizeCategoryPath(bookPath);
+    final dbBook = book.categoryId != null
+        ? await repository.getBookByTitleAndCategory(
+            book.title, book.categoryId!)
+        : await repository.getBookByTitle(book.title);
+    if (dbBook == null) return empty;
 
-    // קבלת שמות המפרשים מה-JSON
-    final defaults = _getDefaultsFromConfig(config, book.title, bookPath);
+    final linkDao = repository.database.linkDao;
+    final commentatorRows = await linkDao.selectDefaultCommentators(dbBook.id);
+    final targumRows = await linkDao.selectDefaultTargums(dbBook.id);
 
-    // אם יש links, נחפש את השמות המלאים של המפרשים
+    return (
+      commentators: commentatorRows
+          .map((row) => row['targetBookTitle'] as String)
+          .toList(),
+      targums:
+          targumRows.map((row) => row['targetBookTitle'] as String).toList(),
+    );
+  }
+
+  /// מחזיר את רשימת המפרשים הבסיסיים של [book] (מפרשים ואחריהם תרגומים),
+  /// ממוינת לפי `position`. משמש להקדמת המפרשים הבסיסיים בתוך קבוצות הדורות.
+  static Future<List<String>> getBaseCommentators(TextBook book) async {
+    final data = await _fetchDefaults(book);
+    return [...data.commentators, ...data.targums];
+  }
+
+  /// מחזיר מפרשי ברירת מחדל למיקומי צורת הדף (right/left/bottom/bottomRight).
+  ///
+  /// המיפוי: המפרשים והתרגומים מאוחדים לרשימה אחת לפי `position` (מפרשים
+  /// ואחריהם תרגומים), והמיקומים ממולאים לפי הסדר: ימין, שמאל, תחתון,
+  /// תחתון-ימני. כלומר המפרש הראשון בימין, השני בשמאל וכן הלאה.
+  /// [availableCommentators] משמש להתאמת השם המלא הזמין בספר הנוכחי.
+  static Future<Map<String, String?>> getDefaults(
+    TextBook book, {
+    List<String>? availableCommentators,
+  }) async {
+    final data = await _fetchDefaults(book);
+    final defaults = mapToPageShape(data.commentators, data.targums);
+
     if (availableCommentators != null && availableCommentators.isNotEmpty) {
       return _resolveCommentatorNamesFromAvailable(
           defaults, availableCommentators);
     }
 
-    if (links != null && links.isNotEmpty) {
-      return _resolveCommentatorNames(defaults, links);
-    }
-
     return defaults;
   }
 
-  /// מחפש את השמות המלאים של המפרשים מתוך רשימת הקישורים
-  static Map<String, String?> _resolveCommentatorNames(
-      Map<String, String?> defaults, List<Link> links) {
-    // קבלת רשימת שמות המפרשים הזמינים
-    final availableCommentators = links
-        .where((link) => LinkTypes.isCommentaryOrTargum(link.connectionType))
-        .map((link) => utils.getTitleFromPath(link.path2))
-        .toSet()
-        .toList();
+  /// ממפה רשימת מפרשים ותרגומים (מאוחדים לפי position) ל-4 מיקומי צורת הדף
+  /// לפי הסדר: ימין, שמאל, תחתון, תחתון-ימני.
+  @visibleForTesting
+  static Map<String, String?> mapToPageShape(
+    List<String> commentators,
+    List<String> targums,
+  ) {
+    final all = [...commentators, ...targums];
+    String? at(int index) => index < all.length ? all[index] : null;
 
     return {
-      'right':
-          _findMatchingCommentator(defaults['right'], availableCommentators),
-      'left': _findMatchingCommentator(defaults['left'], availableCommentators),
-      'bottom':
-          _findMatchingCommentator(defaults['bottom'], availableCommentators),
-      'bottomRight': _findMatchingCommentator(
-          defaults['bottomRight'], availableCommentators),
+      'right': at(0),
+      'left': at(1),
+      'bottom': at(2),
+      'bottomRight': at(3),
     };
   }
 
@@ -81,120 +101,26 @@ class DefaultCommentators {
     };
   }
 
-  /// מחפש מפרש שמתאים לשם הנתון
-  /// מחזיר את השם המלא אם נמצא, או null אם לא
+  /// מחפש מפרש שמתאים לשם הנתון מתוך הזמינים בפועל בספר.
+  /// מחזיר את השם המלא אם נמצא, או null אם לא.
   static String? _findMatchingCommentator(
-      String? shortName, List<String> available) {
-    if (shortName == null) return null;
+      String? name, List<String> available) {
+    if (name == null) return null;
 
     // 1. התאמה מדויקת
-    String? match = available.firstWhereOrNull((name) => name == shortName);
-    if (match != null) {
-      return match;
-    }
+    String? match = available.firstWhereOrNull((item) => item == name);
+    if (match != null) return match;
 
     // 2. התאמה של התחלה
-    match = available.firstWhereOrNull((name) => name.startsWith(shortName));
-    if (match != null) {
-      return match;
-    }
+    match = available.firstWhereOrNull((item) => item.startsWith(name));
+    if (match != null) return match;
 
     // 3. התאמה של הכלה
-    match = available.firstWhereOrNull((name) => name.contains(shortName));
-    if (match != null) {
-      return match;
-    }
+    match = available.firstWhereOrNull((item) => item.contains(name));
+    if (match != null) return match;
 
-    // 4. התאמה הפוכה - אם השם בהגדרות הוא נתיב מלא והשם הזמין הוא רק הכותרת
-    // נבדוק אם השם בהגדרות מכיל את השם הזמין
-    match = available.firstWhereOrNull((name) => shortName.contains(name));
-    if (match != null) {
-      return match;
-    }
-
-    return null;
-  }
-
-  static Future<Map<String, dynamic>> _loadConfig() async {
-    // שימוש ב-cache אם כבר נטען
-    if (_configCache != null) {
-      return _configCache!;
-    }
-
-    try {
-      final jsonString =
-          await rootBundle.loadString('assets/default_commentators.json');
-      _configCache = json.decode(jsonString) as Map<String, dynamic>;
-      return _configCache!;
-    } catch (e) {
-      return {
-        'categories': [],
-        'default': {
-          'right': null,
-          'left': null,
-          'bottom': null,
-          'bottomRight': null,
-        }
-      };
-    }
-  }
-
-  static Map<String, String?> _getDefaultsFromConfig(
-      Map<String, dynamic> config, String bookTitle, String bookPath) {
-    final categories = config['categories'] as List<dynamic>;
-
-    for (final category in categories) {
-      if (_matchesCategory(bookPath, category as Map<String, dynamic>)) {
-        return _parseCommentators(
-            category['commentators'] as Map<String, dynamic>, bookTitle);
-      }
-    }
-
-    final defaultConfig = config['default'] as Map<String, dynamic>;
-    return _parseCommentators(defaultConfig, bookTitle);
-  }
-
-  static bool _matchesCategory(String bookPath, Map<String, dynamic> category) {
-    // pathContains - כל המחרוזות חייבות להיות בנתיב (AND)
-    if (category.containsKey('pathContains')) {
-      final pathContains = category['pathContains'] as List<dynamic>;
-      if (!pathContains.every((p) => bookPath.contains(p as String))) {
-        return false;
-      }
-    }
-
-    // pathContainsAny - לפחות מחרוזת אחת חייבת להיות בנתיב (OR)
-    if (category.containsKey('pathContainsAny')) {
-      final pathContainsAny = category['pathContainsAny'] as List<dynamic>;
-      if (!pathContainsAny.any((p) => bookPath.contains(p as String))) {
-        return false;
-      }
-    }
-
-    // pathNotContains - אף מחרוזת לא יכולה להיות בנתיב
-    if (category.containsKey('pathNotContains')) {
-      final pathNotContains = category['pathNotContains'] as List<dynamic>;
-      if (pathNotContains.any((p) => bookPath.contains(p as String))) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  static Map<String, String?> _parseCommentators(
-      Map<String, dynamic> commentators, String bookTitle) {
-    return {
-      'right': _replaceBookTitle(commentators['right'] as String?, bookTitle),
-      'left': _replaceBookTitle(commentators['left'] as String?, bookTitle),
-      'bottom': _replaceBookTitle(commentators['bottom'] as String?, bookTitle),
-      'bottomRight':
-          _replaceBookTitle(commentators['bottomRight'] as String?, bookTitle),
-    };
-  }
-
-  static String? _replaceBookTitle(String? template, String bookTitle) {
-    if (template == null) return null;
-    return template.replaceAll('{bookTitle}', bookTitle);
+    // 4. התאמה הפוכה - השם בהגדרות מכיל את השם הזמין
+    match = available.firstWhereOrNull((item) => name.contains(item));
+    return match;
   }
 }
