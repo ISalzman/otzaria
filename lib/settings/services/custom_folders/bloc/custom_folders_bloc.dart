@@ -235,13 +235,20 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
         Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
             '';
     final userBooksDbPath = await UserBooksDatabaseHolder.resolveDbPath();
-    return runCustomFoldersDbSyncInIsolate(
-      dbPath: dbPath,
-      userBooksDbPath: userBooksDbPath,
-      libraryPath: libraryPath,
-      customFolders: folders,
-      folderName: folderName,
-    );
+
+    // seforim.db פתוח read-only בחיבור הראשי; העובד פותח אותו לכתיבה בנפרד.
+    await sqliteProvider.closeForExternalWrite();
+    try {
+      return await runCustomFoldersDbSyncInIsolate(
+        dbPath: dbPath,
+        userBooksDbPath: userBooksDbPath,
+        libraryPath: libraryPath,
+        customFolders: folders,
+        folderName: folderName,
+      );
+    } finally {
+      await sqliteProvider.reopenAfterExternalWrite();
+    }
   }
 
   Future<void> _deleteFromDatabase(CustomFolder folder) async {
@@ -273,12 +280,18 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     }
     if (folderCategory == null) return;
 
-    await runDeleteFolderFromDbInIsolate(
-      dbPath: sqliteProvider.dbPath,
-      userBooksDbPath: userBooksDbPath,
-      folderCategoryId: folderCategory.id,
-      personalCategoryId: personalCategory.id,
-    );
+    // seforim.db פתוח read-only בחיבור הראשי; העובד פותח אותו לכתיבה בנפרד.
+    await sqliteProvider.closeForExternalWrite();
+    try {
+      await runDeleteFolderFromDbInIsolate(
+        dbPath: sqliteProvider.dbPath,
+        userBooksDbPath: userBooksDbPath,
+        folderCategoryId: folderCategory.id,
+        personalCategoryId: personalCategory.id,
+      );
+    } finally {
+      await sqliteProvider.reopenAfterExternalWrite();
+    }
   }
 
   Future<void> _saveFolders(List<CustomFolder> folders) async {

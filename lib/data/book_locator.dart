@@ -70,6 +70,7 @@ class BookLocator {
             filePath: null,
             categoryId: resolved.book.categoryId,
             repository: resolved.repository,
+            isUserBooks: resolved.isUserBooks,
           );
         }
 
@@ -89,6 +90,7 @@ class BookLocator {
             filePath: null,
             categoryId: candidate.book.categoryId,
             repository: candidate.repository,
+            isUserBooks: candidate.isUserBooks,
           );
         }
 
@@ -106,6 +108,7 @@ class BookLocator {
           filePath: null,
           categoryId: resolved.book.categoryId,
           repository: resolved.repository,
+          isUserBooks: resolved.isUserBooks,
         );
       }
     } catch (e) {
@@ -284,9 +287,19 @@ class BookLocator {
   }
 
   /// מחיקת ספר ממסד הנתונים
+  ///
+  /// מותרת **רק** לספרי `user_books.db` (ספרים אישיים, DB כתיב). הספרייה
+  /// הרשמית (`seforim.db`) היא read-only ואינה ניתנת למחיקה — ניסיון למחוק
+  /// ספר רשמי מסורב.
   static Future<bool> _deleteFromDatabase(BookLocation location) async {
     final repository = location.repository;
     if (repository == null || location.book == null) {
+      return false;
+    }
+
+    if (!location.isUserBooks) {
+      debugPrint('⛔ Refusing to delete official (read-only) book: '
+          '${location.book!.title}');
       return false;
     }
 
@@ -381,12 +394,18 @@ class BookLocation {
   /// ה-repository שבו הספר נמצא בפועל.
   final SeforimRepository? repository;
 
+  /// האם הספר נמצא ב-`user_books.db` (כתיב) ולא ב-`seforim.db` הרשמי
+  /// (read-only). קובע אם מחיקה יכולה לרוץ ישירות על [repository] או שהיא
+  /// חייבת לעבור דרך write-session.
+  final bool isUserBooks;
+
   BookLocation({
     required this.book,
     required this.source,
     required this.filePath,
     required this.categoryId,
     this.repository,
+    this.isUserBooks = false,
   });
 }
 

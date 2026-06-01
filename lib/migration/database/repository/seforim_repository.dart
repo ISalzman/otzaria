@@ -67,13 +67,20 @@ class SeforimRepository {
     await _database.database;
 
     // Database schema creation is handled by MyDatabase
-    // SQLite optimizations for normal operations
-    await _trySetWal();
-    await _executeRawQuery('PRAGMA synchronous=NORMAL');
+    // SQLite optimizations for normal operations.
+    // In read-only mode we must not run any PRAGMA that mutates the file
+    // (journal_mode/synchronous/page_size). Per-connection read tunables
+    // (cache_size/temp_store/mmap_size) are safe and still applied.
+    if (!_database.isReadOnly) {
+      await _trySetWal();
+      await _executeRawQuery('PRAGMA synchronous=NORMAL');
+    }
     await _executeRawQuery('PRAGMA cache_size=100000');
     await _executeRawQuery('PRAGMA temp_store=MEMORY');
     await _executeRawQuery('PRAGMA mmap_size=268435456');
-    await _executeRawQuery('PRAGMA page_size=4096');
+    if (!_database.isReadOnly) {
+      await _executeRawQuery('PRAGMA page_size=4096');
+    }
 
     // Check if the database is empty
     try {
@@ -1194,7 +1201,14 @@ class SeforimRepository {
 
     for (final type in types) {
       // Force creation/retrieval and cache it
-      _connectionTypeCache[type] = await _fetchOrCreateConnectionType(type);
+      try {
+        _connectionTypeCache[type] = await _fetchOrCreateConnectionType(type);
+      } catch (e) {
+        // In read-only mode a missing connection type cannot be created.
+        // A properly generated seforim.db already has all types, so this is
+        // only a safety net — skip the missing type rather than aborting.
+        if (!_database.isReadOnly) rethrow;
+      }
     }
     _logger.info('Initialized connection types cache: $_connectionTypeCache');
   }
@@ -1206,6 +1220,11 @@ class SeforimRepository {
         'SELECT id FROM connection_type WHERE name = ?', [name]).toMapList();
     if (existingResult.isNotEmpty) {
       return existingResult.first['id'] as int;
+    }
+
+    if (_database.isReadOnly) {
+      throw StateError(
+          'Connection type "$name" is missing in a read-only database');
     }
 
     db.execute('INSERT INTO connection_type (name) VALUES (?)', [name]);
