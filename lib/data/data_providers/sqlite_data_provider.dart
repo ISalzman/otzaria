@@ -49,6 +49,17 @@ class SqliteDataProvider {
       return;
     }
 
+    // אם יש write-session פעיל, החיבור ה-RO סגור בכוונה. אסור לפתוח אותו
+    // מחדש כאן במקביל לחיבור ה-RW (היה גורם ל"database locked"). ממתינים
+    // לסיום שרשרת הכתיבה — היא פותחת מחדש את ה-RO בעצמה. קוראים בזמן הזה
+    // מקבלים null זמנית (כמו בזרימת dispose-בזמן-סנכרון הקיימת).
+    if (_activeWriteSessions > 0) {
+      try {
+        await _writeChain;
+      } catch (_) {}
+      return;
+    }
+
     // If initialization already started, await the same future
     if (_initializationFuture != null) {
       return _initializationFuture!;
@@ -123,6 +134,11 @@ class SqliteDataProvider {
   /// במקביל על seforim.db.
   Future<void> _writeChain = Future<void>.value();
 
+  /// מספר ה-write-sessions הפעילים. כשהוא > 0 חיבור ה-RO סגור ו-[initialize]
+  /// לא יפתח אותו מחדש (כדי לא להתנגש עם חיבור ה-RW). יורד רק לאחר שה-session
+  /// פתח מחדש את ה-RO.
+  int _activeWriteSessions = 0;
+
   /// מנרמל את מצב היומן של [dbPath] ל-DELETE (best-effort) כדי שניתן יהיה
   /// לפתוח אותו read-only.
   ///
@@ -159,10 +175,16 @@ class SqliteDataProvider {
   Future<T> withWritableSession<T>(
     Future<T> Function(SeforimRepository repository) action,
   ) {
+    // מסומן כפעיל באופן סינכרוני כדי שקריאות מקבילות שיגיעו מיד יזהו את
+    // ה-session ולא ינסו לפתוח חיבור RO מתנגש. יורד רק לאחר שה-session
+    // (כולל פתיחת ה-RO מחדש ב-finally) הסתיים.
+    _activeWriteSessions++;
     final result = _writeChain.then((_) => _runWritableSession(action));
     // שומר את השרשרת חיה גם בכשל, בלי להדליף שגיאות לקריאה הבאה.
     _writeChain = result.then((_) {}, onError: (_) {});
-    return result;
+    return result.whenComplete(() {
+      _activeWriteSessions--;
+    });
   }
 
   Future<T> _runWritableSession<T>(
@@ -192,8 +214,15 @@ class SqliteDataProvider {
       return result;
     } finally {
       writableDb.close();
-      // פתיחה מחדש read-only.
-      await initialize();
+      // פתיחה מחדש read-only ישירות דרך _initializeInternal — לא דרך
+      // initialize(), כי זו ממתינה ל-_writeChain שכולל את ה-session הזה
+      // עצמו (deadlock). עוטפים ב-try כדי לא להסוות שגיאה מקורית מה-action.
+      try {
+        await _initializeInternal();
+      } catch (e) {
+        debugPrint('[SqliteDataProvider] Failed to re-open RO connection after '
+            'write session: $e');
+      }
     }
   }
 

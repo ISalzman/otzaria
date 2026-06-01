@@ -41,7 +41,13 @@ class CacheDatabaseHolder {
     debugPrint('🗂️ [CacheDB] Opening cache.db at $dbPath');
     final db = MyDatabase.withPath(dbPath);
     final repo = SeforimRepository(db);
-    await repo.ensureInitialized();
+    try {
+      await repo.ensureInitialized();
+    } catch (e) {
+      // כשל באתחול — סוגרים את החיבור כדי לא להדליף קובץ פתוח/נעול.
+      db.close();
+      rethrow;
+    }
     _database = db;
     _repository = repo;
     return repo;

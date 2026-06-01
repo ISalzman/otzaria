@@ -22,9 +22,13 @@ class PluginWebView2MissingView extends StatelessWidget {
 
   Future<void> _download() async {
     final uri = Uri.parse(_webView2DownloadUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
+    // קוראים ישירות ל-launchUrl (ללא canLaunchUrl) ובודקים את ערך ההחזרה:
+    // canLaunchUrl עלול להחזיר false שקרי כשאין הצהרת <queries> מתאימה.
+    try {
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) UiSnack.showError('לא ניתן לפתוח את קישור ההורדה');
+    } catch (_) {
       UiSnack.showError('לא ניתן לפתוח את קישור ההורדה');
     }
   }
