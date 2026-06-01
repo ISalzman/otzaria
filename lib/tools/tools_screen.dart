@@ -1093,7 +1093,7 @@ class ToolsScreenState extends State<ToolsScreen>
                           ContextOverlayPanel(
                             isOpen: _isPanelOpen,
                             onClose: () => setState(() => _isPanelOpen = false),
-                            width: 300,
+                            width: 400,
                             child: PluginSidePanel(
                               onPluginSelected: (plugin) {
                                 openPluginTransiently(plugin);
