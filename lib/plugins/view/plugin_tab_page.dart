@@ -34,6 +34,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/view/plugin_crashed_view.dart';
+import 'package:otzaria/plugins/view/plugin_webview2_missing_view.dart';
 
 // ---------------------------------------------------------------------------
 // Stub SDK — injected at AT_DOCUMENT_START before any page JS runs.
@@ -84,8 +85,20 @@ class PluginTabPage extends StatefulWidget {
   State<PluginTabPage> createState() => _PluginTabPageState();
 }
 
+/// תוצאת בדיקת התנאים המוקדמים ל-WebView לפני הצגת התוסף.
+enum _WebViewPrereqStatus {
+  /// סביבת ה-WebView מוכנה — אפשר לבנות את ה-WebView.
+  ready,
+
+  /// WebView2 Runtime אינו מותקן (Windows) — יש להציג מסך הכוונה להתקנה.
+  runtimeMissing,
+}
+
 class _PluginTabPageState extends State<PluginTabPage> {
-  static Future<void>? _webViewPrerequisitesFuture;
+  // future של בדיקת התנאים המוקדמים. שמור ברמת המופע (לא static) כדי
+  // שכפתור "בדוק שוב" יוכל לאפסו (setState(() => _prereqFuture = null))
+  // ולהריץ בדיקה מחדש לאחר שהמשתמש התקין את WebView2.
+  Future<_WebViewPrereqStatus>? _prereqFuture;
 
   InAppWebViewController? webViewController;
   Offset _pendingTrackpadDelta = Offset.zero;
@@ -305,8 +318,8 @@ class _PluginTabPageState extends State<PluginTabPage> {
     }
 
     if (_needsWebViewPrerequisites) {
-      return FutureBuilder<void>(
-        future: _ensureWebViewPrerequisitesConfigured(),
+      return FutureBuilder<_WebViewPrereqStatus>(
+        future: _prereqFuture ??= _resolveWebViewPrerequisites(),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const SizedBox.shrink();
@@ -318,6 +331,18 @@ class _PluginTabPageState extends State<PluginTabPage> {
                 'שגיאה באתחול סביבת הדפדפן: ${snapshot.error}',
                 textDirection: TextDirection.rtl,
               ),
+            );
+          }
+          if (snapshot.data == _WebViewPrereqStatus.runtimeMissing) {
+            return PluginWebView2MissingView(
+              onRetry: () {
+                if (!mounted) return;
+                // מרעננים גם את מערכת התוספים: אם WebView2 הותקן בינתיים,
+                // RefreshPlugins יגרום לסנכרון מחדש של ה-background host כך
+                // שתוספי run_on_startup יחזרו לרוץ — בלי הפעלה מחדש.
+                _pluginSystemBloc.add(RefreshPlugins());
+                setState(() => _prereqFuture = null);
+              },
             );
           }
           return _buildWebView();
@@ -605,17 +630,23 @@ class _PluginTabPageState extends State<PluginTabPage> {
     return !kIsWeb && (Platform.isAndroid || Platform.isWindows);
   }
 
-  static Future<void> _ensureWebViewPrerequisitesConfigured() {
-    return _webViewPrerequisitesFuture ??= _configureWebViewPrerequisites();
-  }
-
-  static Future<void> _configureWebViewPrerequisites() async {
+  /// מבצע את בדיקת/אתחול התנאים המוקדמים ל-WebView לפי הפלטפורמה.
+  ///
+  /// ב-Windows נבדק תחילה אם WebView2 Runtime מותקן; אם לא — מוחזר
+  /// [_WebViewPrereqStatus.runtimeMissing] **בלי** לנסות אתחול שייכשל, כדי
+  /// שהמשתמש יראה מסך הכוונה להתקנה ולא שגיאה טכנית גולמית.
+  static Future<_WebViewPrereqStatus> _resolveWebViewPrerequisites() async {
     if (Platform.isAndroid) {
       await InAppWebViewController.setWebContentsDebuggingEnabled(kDebugMode);
+      return _WebViewPrereqStatus.ready;
     }
     if (Platform.isWindows) {
+      if (!await WebViewEnvironmentHolder.isRuntimeAvailable()) {
+        return _WebViewPrereqStatus.runtimeMissing;
+      }
       await WebViewEnvironmentHolder.initialize();
     }
+    return _WebViewPrereqStatus.ready;
   }
 }
 
