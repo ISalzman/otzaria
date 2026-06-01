@@ -10,6 +10,7 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 
@@ -262,7 +263,8 @@ class _PluginListTile extends StatelessWidget {
       leading: Stack(
         clipBehavior: Clip.none,
         children: [
-          const Icon(FluentIcons.puzzle_piece_24_regular),
+          Icon(fluentIconFromName(plugin.manifest.toolTabIconName) ??
+              FluentIcons.puzzle_piece_24_regular),
           if (plugin.isDevelopment)
             Positioned(
               right: -8,
