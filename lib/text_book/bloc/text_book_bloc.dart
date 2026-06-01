@@ -210,7 +210,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   @visibleForTesting
-  static List<({int startLine, int endLine})> mergeLoadedContentRangesForTesting(
+  static List<({int startLine, int endLine})>
+      mergeLoadedContentRangesForTesting(
     List<({int startLine, int endLine})> ranges, {
     required int startLine,
     required int endLine,
@@ -260,9 +261,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     final normalizedStart = startLine < 0 ? 0 : startLine;
     for (final range in loadedRanges) {
-      final hasStartMargin =
-          (normalizedStart == 0 && range.startLine == 0) ||
-              normalizedStart >= range.startLine + reloadThresholdLines;
+      final hasStartMargin = (normalizedStart == 0 && range.startLine == 0) ||
+          normalizedStart >= range.startLine + reloadThresholdLines;
       if (hasStartMargin && endLine <= range.endLine - reloadThresholdLines) {
         return true;
       }
@@ -315,7 +315,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     final firstVisible = visibleIndices.isEmpty ? 0 : visibleIndices.first;
-    final lastVisible = visibleIndices.isEmpty ? firstVisible : visibleIndices.last;
+    final lastVisible =
+        visibleIndices.isEmpty ? firstVisible : visibleIndices.last;
 
     ({int startLine, int endLine})? anchorRange;
     for (final range in loadedRanges) {
@@ -2172,9 +2173,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     try {
       final availableCommentators =
           await repository.getAvailableCommentators(book);
+      final baseCommentators =
+          await DefaultCommentators.getBaseCommentators(book);
 
       final eras = await utils.splitByEra(availableCommentators);
-      final groups = buildCommentatorGroups(eras, availableCommentators);
+      final groups = buildCommentatorGroups(
+        eras,
+        availableCommentators,
+        baseCommentators: baseCommentators,
+      );
 
       if (isClosed || state is! TextBookLoaded) {
         return;

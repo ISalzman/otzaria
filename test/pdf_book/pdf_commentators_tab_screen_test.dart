@@ -4,6 +4,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/pdf_headings.dart';
+import 'package:otzaria/pdf_book/view/pdf_commentary_panel.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentators_tab_screen.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
@@ -90,14 +91,19 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('פרק א'), findsOneWidget);
+    // הסנכרון משתקף בטווח השורות שמועבר ל-PdfCommentaryPanel:
+    // 'פרק א' מתחיל בשורה 1.
+    PdfCommentaryPanel panel() =>
+        tester.widget<PdfCommentaryPanel>(find.byType(PdfCommentaryPanel));
+    expect(panel().lineStartOverride, 1);
 
     sourceTab.currentTitle.value = 'פרק ב';
     sourceTab.currentTextLineNumber = 10;
     sourceTab.currentTextLineNumberEnd = 19;
     await tester.pump();
 
-    expect(find.text('פרק ב'), findsOneWidget);
+    // הבחירה התעדכנה ל'פרק ב' (מתחיל בשורה 10)
+    expect(panel().lineStartOverride, 10);
   });
 
   testWidgets(

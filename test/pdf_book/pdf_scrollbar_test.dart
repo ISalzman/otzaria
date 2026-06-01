@@ -25,6 +25,119 @@ class _ControllerWithThrowingLayout extends PdfViewerController {
   PdfPageLayout get layout => throw StateError('layout not available');
 }
 
+class _InteractiveController extends PdfViewerController {
+  _InteractiveController({
+    Rect visibleRect = const Rect.fromLTWH(0, 0, 100, 100),
+    Size documentSize = const Size(1000, 200),
+    this.page = 1234,
+  })  : _visibleRect = visibleRect,
+        _layout =
+            PdfPageLayout(pageLayouts: const [], documentSize: documentSize);
+
+  final int page;
+  final PdfPageLayout _layout;
+  final Rect _visibleRect;
+  final List<Duration> goToDurations = [];
+  final List<Offset> calcMatrixPositions = [];
+
+  @override
+  bool get isReady => true;
+
+  @override
+  Rect get visibleRect => _visibleRect;
+
+  @override
+  PdfPageLayout get layout => _layout;
+
+  @override
+  int? get pageNumber => page;
+
+  @override
+  Matrix4 get value => Matrix4.identity();
+
+  @override
+  Size get viewSize => const Size(100, 100);
+
+  @override
+  Matrix4 calcMatrixFor(Offset position, {double? zoom, Size? viewSize}) {
+    calcMatrixPositions.add(position);
+    return Matrix4.identity();
+  }
+
+  @override
+  Future<void> goTo(Matrix4? destination,
+      {Duration duration = const Duration(milliseconds: 200)}) async {
+    goToDurations.add(duration);
+  }
+}
+
+const _verticalHostKey = Key('vertical-scroll-host');
+const _horizontalHostKey = Key('horizontal-scroll-host');
+
+Widget _buildVerticalScrollbarHarness(
+  _InteractiveController controller, {
+  bool freezeThumb = false,
+}) {
+  return MaterialApp(
+    home: Scaffold(
+      body: Center(
+        child: SizedBox(
+          key: _verticalHostKey,
+          width: 24,
+          height: 200,
+          child: PdfScrollbar(
+            controller: controller,
+            orientation: ScrollbarOrientation.right,
+            trackThickness: 16,
+            thumbMinSize: 40,
+            trackColor: Colors.black,
+            thumbColor: Colors.green,
+            scrollBoundsBuilder: (_) => const Rect.fromLTWH(0, 0, 100, 1000),
+            freezeThumb: freezeThumb,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildHorizontalScrollbarHarness(_InteractiveController controller) {
+  return MaterialApp(
+    home: Scaffold(
+      body: Center(
+        child: SizedBox(
+          key: _horizontalHostKey,
+          width: 200,
+          height: 16,
+          child: PdfHorizontalScrollbar(
+            controller: controller,
+            trackThickness: 12,
+            thumbColor: Colors.orange,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Finder _thumbFinder(Color color) => find.byWidgetPredicate((widget) {
+      if (widget is! Container || widget.decoration is! BoxDecoration) {
+        return false;
+      }
+      final decoration = widget.decoration! as BoxDecoration;
+      return decoration.color == color;
+    });
+
+Finder _verticalDragGestureFinder() => find.byWidgetPredicate(
+      (widget) =>
+          widget is GestureDetector && widget.onVerticalDragUpdate != null,
+    );
+
+Finder _horizontalDragGestureFinder() => find.byWidgetPredicate(
+      (widget) =>
+          widget is GestureDetector && widget.onHorizontalDragUpdate != null,
+    );
+
 void main() {
   group('PdfScrollbar - לפני חיבור ל-viewer', () {
     testWidgets('גלילה אופקית לא קורסת לפני חיבור', (tester) async {
@@ -203,6 +316,159 @@ void main() {
         await tester.pump(const Duration(seconds: 4));
       }
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('PdfScrollbar - אינטראקציות drag', () {
+    testWidgets('drag אנכי משתמש ב-Duration.zero בזמן גרירה', (tester) async {
+      final controller = _InteractiveController();
+      await tester.pumpWidget(_buildVerticalScrollbarHarness(controller));
+
+      final thumb = _thumbFinder(Colors.green);
+      expect(thumb, findsOneWidget);
+      final initialCenter = tester.getCenter(thumb);
+      final dragGesture =
+          tester.widget<GestureDetector>(_verticalDragGestureFinder());
+
+      dragGesture.onVerticalDragStart!(
+        DragStartDetails(localPosition: const Offset(8, 20)),
+      );
+      await tester.pump();
+      dragGesture.onVerticalDragUpdate!(
+        DragUpdateDetails(globalPosition: initialCenter + const Offset(0, 60)),
+      );
+      await tester.pump();
+
+      expect(controller.goToDurations, isNotEmpty);
+      expect(controller.goToDurations.last, Duration.zero);
+
+      dragGesture.onVerticalDragEnd!(DragEndDetails());
+    });
+
+    testWidgets('thumb אנכי נצמד ויזואלית לאצבע בזמן גרירה', (tester) async {
+      final controller = _InteractiveController();
+      await tester.pumpWidget(_buildVerticalScrollbarHarness(controller));
+
+      final thumb = _thumbFinder(Colors.green);
+      final initialTop = tester.getTopLeft(thumb).dy;
+      final initialCenter = tester.getCenter(thumb);
+      final dragGesture =
+          tester.widget<GestureDetector>(_verticalDragGestureFinder());
+
+      dragGesture.onVerticalDragStart!(
+        DragStartDetails(localPosition: const Offset(8, 20)),
+      );
+      await tester.pump();
+      dragGesture.onVerticalDragUpdate!(
+        DragUpdateDetails(globalPosition: initialCenter + const Offset(0, 60)),
+      );
+      await tester.pump();
+
+      final movedTop = tester.getTopLeft(thumb).dy;
+      expect(movedTop, greaterThan(initialTop + 30));
+
+      dragGesture.onVerticalDragEnd!(DragEndDetails());
+    });
+
+    testWidgets('freezeThumb מונע drag ויזואלי וגם goTo', (tester) async {
+      final controller = _InteractiveController();
+      await tester.pumpWidget(
+        _buildVerticalScrollbarHarness(controller, freezeThumb: true),
+      );
+
+      final thumb = _thumbFinder(Colors.green);
+      final initialTop = tester.getTopLeft(thumb).dy;
+      final initialCenter = tester.getCenter(thumb);
+      final dragGesture =
+          tester.widget<GestureDetector>(_verticalDragGestureFinder());
+
+      dragGesture.onVerticalDragStart!(
+        DragStartDetails(localPosition: const Offset(8, 20)),
+      );
+      await tester.pump();
+      dragGesture.onVerticalDragUpdate!(
+        DragUpdateDetails(globalPosition: initialCenter + const Offset(0, 60)),
+      );
+      await tester.pump();
+
+      expect(controller.goToDurations, isEmpty);
+      expect(tester.getTopLeft(thumb).dy, initialTop);
+
+      dragGesture.onVerticalDragEnd!(DragEndDetails());
+    });
+
+    testWidgets('tap על track אנכי שומר אנימציית 200ms', (tester) async {
+      final controller = _InteractiveController();
+      await tester.pumpWidget(_buildVerticalScrollbarHarness(controller));
+
+      final hostTopLeft = tester.getTopLeft(find.byKey(_verticalHostKey));
+      await tester.tapAt(Offset(hostTopLeft.dx + 12, hostTopLeft.dy + 140));
+      await tester.pump();
+
+      expect(controller.goToDurations, isNotEmpty);
+      expect(
+        controller.goToDurations.last,
+        const Duration(milliseconds: 200),
+      );
+    });
+
+    testWidgets('מספר עמוד ארוך מרונדר בתוך FittedBox בפס האנכי',
+        (tester) async {
+      final controller = _InteractiveController(page: 1234);
+      await tester.pumpWidget(_buildVerticalScrollbarHarness(controller));
+
+      expect(find.text('1234'), findsOneWidget);
+      expect(find.byType(FittedBox), findsOneWidget);
+    });
+
+    testWidgets('drag אופקי משתמש ב-Duration.zero בזמן גרירה', (tester) async {
+      final controller = _InteractiveController();
+      await tester.pumpWidget(_buildHorizontalScrollbarHarness(controller));
+
+      final thumb = _thumbFinder(Colors.orange);
+      expect(thumb, findsOneWidget);
+      final initialCenter = tester.getCenter(thumb);
+      final dragGesture =
+          tester.widget<GestureDetector>(_horizontalDragGestureFinder());
+
+      dragGesture.onHorizontalDragStart!(
+        DragStartDetails(localPosition: const Offset(30, 6)),
+      );
+      await tester.pump();
+      dragGesture.onHorizontalDragUpdate!(
+        DragUpdateDetails(globalPosition: initialCenter + const Offset(60, 0)),
+      );
+      await tester.pump();
+
+      expect(controller.goToDurations, isNotEmpty);
+      expect(controller.goToDurations.last, Duration.zero);
+
+      dragGesture.onHorizontalDragEnd!(DragEndDetails());
+    });
+
+    testWidgets('thumb אופקי נצמד ויזואלית לאצבע בזמן גרירה', (tester) async {
+      final controller = _InteractiveController();
+      await tester.pumpWidget(_buildHorizontalScrollbarHarness(controller));
+
+      final thumb = _thumbFinder(Colors.orange);
+      final initialLeft = tester.getTopLeft(thumb).dx;
+      final initialCenter = tester.getCenter(thumb);
+      final dragGesture =
+          tester.widget<GestureDetector>(_horizontalDragGestureFinder());
+
+      dragGesture.onHorizontalDragStart!(
+        DragStartDetails(localPosition: const Offset(30, 6)),
+      );
+      await tester.pump();
+      dragGesture.onHorizontalDragUpdate!(
+        DragUpdateDetails(globalPosition: initialCenter + const Offset(60, 0)),
+      );
+      await tester.pump();
+
+      final movedLeft = tester.getTopLeft(thumb).dx;
+      expect(movedLeft, greaterThan(initialLeft + 30));
+
+      dragGesture.onHorizontalDragEnd!(DragEndDetails());
     });
   });
 

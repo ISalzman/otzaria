@@ -134,6 +134,36 @@ const { data } = await Otzaria.call('library.listRecentBooks');
 // [{ bookId: "בראשית", title: "בראשית", ref: "פרק א" }, ...]
 ```
 
+### `library.getTree`
+**הרשאה:** `library.books.read`
+
+קבלת מבנה עץ הספרייה המלא — כל הקטגוריות, תתי-הקטגוריות והספרים, כפי שמוצג במסך הראשי (כולל ספרים אישיים שהמשתמש הוסיף). העץ מתעדכן אוטומטית כשהספרייה משתנה.
+
+```javascript
+const { data } = await Otzaria.call('library.getTree', {
+  path: '/תנך/ראשונים',  // אופציונלי: צמצום לתת-קטגוריה לפי נתיב. ברירת מחדל: כל הספרייה
+  includeBooks: true       // אופציונלי, ברירת מחדל: true — האם לכלול את רשימות הספרים
+});
+// {
+//   title: "ספריית אוצריא",
+//   path: "/",
+//   categories: [
+//     {
+//       title: "תנך",
+//       path: "/תנך",
+//       categories: [ ... ],
+//       books: [
+//         { bookId: "בראשית", title: "בראשית", type: "text", author: "...", topics: "..." },
+//         ...
+//       ]
+//     },
+//     ...
+//   ],
+//   books: []
+// }
+// כש-path לא נמצא: מוחזר null.
+```
+
 ### `library.getBookContent`
 **הרשאה:** `library.content.read`
 

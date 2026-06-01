@@ -29,6 +29,25 @@ import 'package:otzaria/search/utils/snippet_builder.dart';
 
 const _kAllChapter = -1;
 
+/// אינדקס השורה האחרונה של [chapter] ברשימת [chapters].
+///
+/// פרק שאינו האחרון נתחם ע"י תחילת הפרק העוקב פחות 1. לפרק האחרון אין פרק
+/// עוקב לתחום אותו, ולכן הגבול הוא שורת התוכן האחרונה ([contentLength] - 1).
+/// זה מקור-האמת היחיד לגבול הפרק — בלעדיו "כל הדף" בדף האחרון זוהה כשורה
+/// בודדת (ללא מפרשים) ונוצרו פסקאות רפאים עד שורה 200.
+@visibleForTesting
+int chapterEndLineIndex(
+  List<TocEntry> chapters,
+  TocEntry chapter,
+  int contentLength,
+) {
+  final ci = chapters.indexOf(chapter);
+  if (ci >= 0 && ci + 1 < chapters.length) {
+    return chapters[ci + 1].index - 1;
+  }
+  return contentLength - 1;
+}
+
 /// קובע אם ה-listener של מסך המפרשים צריך לפעול עבור מעבר state נתון.
 ///
 /// חובה לפעול במעבר הראשון למצב טעון (`TextBookLoading → TextBookLoaded`)
@@ -320,8 +339,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     return spans;
   }
 
-  List<int>? _computeIndexes(
-      List<TocEntry> chapters, TocEntry? chapter, int verseIdx) {
+  List<int>? _computeIndexes(List<TocEntry> chapters, TocEntry? chapter,
+      int verseIdx, int contentLength) {
     if (chapter == null) return null;
 
     if (verseIdx != _kAllChapter) {
@@ -345,34 +364,19 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       }
     }
 
-    // כל הפרק
-    final ci = chapters.indexOf(chapter);
-    if (ci >= 0 && ci + 1 < chapters.length) {
-      final nextStart = chapters[ci + 1].index;
-      final count = nextStart - chapter.index;
-      if (count > 0) {
-        return List.generate(count.clamp(1, 3000), (j) => chapter.index + j);
-      }
-    }
-    if (chapter.children.isNotEmpty) {
-      final lastChild = chapter.children.last;
-      final count = lastChild.index - chapter.index + 1;
-      if (count > 0) {
-        return List.generate(count.clamp(1, 3000), (j) => chapter.index + j);
-      }
+    // כל הפרק — מתחילת הפרק ועד שורתו האחרונה.
+    final end = chapterEndLineIndex(chapters, chapter, contentLength);
+    final count = end - chapter.index + 1;
+    if (count > 0) {
+      return List.generate(count.clamp(1, 3000), (j) => chapter.index + j);
     }
     return [chapter.index];
   }
 
   /// מחשב כמה שורות יש בפרק (לספרים ללא TOC ברמת פסוק)
-  int _chapterLineCount(List<TocEntry> chapters, TocEntry chapter) {
-    final ci = chapters.indexOf(chapter);
-    final int end;
-    if (ci >= 0 && ci + 1 < chapters.length) {
-      end = chapters[ci + 1].index - 1;
-    } else {
-      end = chapter.index + 199;
-    }
+  int _chapterLineCount(
+      List<TocEntry> chapters, TocEntry chapter, int contentLength) {
+    final end = chapterEndLineIndex(chapters, chapter, contentLength);
     return (end - chapter.index + 1).clamp(0, 200);
   }
 
@@ -391,15 +395,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   /// כדי שתת-פריט "כל הפרק" יוכל להפעיל את עדכון ה-state ע"י [reduceSubItemTap]
   /// ואז לטעון את ה-links בלי setState כפול.
   void _loadLinksForChapter(TocEntry ch, List<TocEntry> chapters) {
-    final ci = chapters.indexOf(ch);
-    final int endIdx;
-    if (ci + 1 < chapters.length) {
-      endIdx = chapters[ci + 1].index - 1;
-    } else if (ch.children.isNotEmpty) {
-      endIdx = ch.children.last.index;
-    } else {
-      endIdx = ch.index + 100;
-    }
+    final state = widget.tab.bloc.state;
+    final contentLength = state is TextBookLoaded ? state.content.length : 0;
+    final endIdx = chapterEndLineIndex(chapters, ch, contentLength);
     final count = (endIdx - ch.index + 1).clamp(1, 3000);
     _triggerLinkLoad(List.generate(count, (j) => ch.index + j));
   }
@@ -479,6 +477,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     'מפרשים על ${widget.tab.sourceTab.book.title}',
                     style: const TextStyle(fontSize: 16),
                     overflow: TextOverflow.ellipsis,
+                    textDirection: TextDirection.rtl,
                   ),
                   actions: [
                     ResponsiveActionBar(
@@ -540,8 +539,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
             final chapters = _getChapters(state.tableOfContents);
 
-            final effectiveIndexes =
-                _computeIndexes(chapters, _selectedChapter, _selectedVerseIdx);
+            final effectiveIndexes = _computeIndexes(chapters, _selectedChapter,
+                _selectedVerseIdx, state.content.length);
 
             return Scaffold(
               appBar: _buildAppBar(context, state, chapters),
@@ -647,7 +646,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
             }
 
             if (textMaxWidth > 0) {
-              return Center(
+              // יישור לראש (topCenter) ולא Center — אחרת כשהמפרשים מכווצים
+              // הרשימה (shrinkWrap) נמוכה ומתמרכזת אנכית, ונוצר רווח למעלה.
+              return Align(
+                alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: textMaxWidth),
                   child: listContent,
@@ -690,6 +692,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   }
 
   void _navigateToPrevVerse(List<TocEntry> chapters) {
+    if (_selectedChapter == null) return;
     final currentState = widget.tab.bloc.state;
     final content = currentState is TextBookLoaded
         ? currentState.content
@@ -722,6 +725,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   }
 
   void _navigateToNextVerse(List<TocEntry> chapters) {
+    if (_selectedChapter == null) return;
     final currentState = widget.tab.bloc.state;
     final content = currentState is TextBookLoaded
         ? currentState.content
@@ -827,6 +831,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         'מפרשים על ${state.book.title}',
         style: const TextStyle(fontSize: 16),
         overflow: TextOverflow.ellipsis,
+        textDirection: TextDirection.rtl,
       ),
       actions: [
         ResponsiveActionBar(
@@ -921,6 +926,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                       chapters,
                       _selectedChapter,
                       _selectedVerseIdx,
+                      state.content.length,
                     )),
               ),
               icon: FluentIcons.bookmark_add_24_regular,
@@ -928,7 +934,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               onPressed: () => _addBookmark(
                 context,
                 state,
-                _computeIndexes(chapters, _selectedChapter, _selectedVerseIdx),
+                _computeIndexes(chapters, _selectedChapter, _selectedVerseIdx,
+                    state.content.length),
               ),
             ),
             // הגדל טקסט
@@ -1056,24 +1063,29 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                         icon: Icon(FluentIcons.navigation_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('ניווט', style: TextStyle(fontSize: 11)),
+                        child: Text('ניווט',
+                            style: TextStyle(fontSize: 11),
+                            textDirection: TextDirection.rtl),
                       ),
                       Tab(
                         icon: Icon(FluentIcons.apps_list_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('מפרשים', style: TextStyle(fontSize: 11)),
+                        child: Text('מפרשים',
+                            style: TextStyle(fontSize: 11),
+                            textDirection: TextDirection.rtl),
                       ),
                       Tab(
                         icon: Icon(FluentIcons.search_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('חיפוש', style: TextStyle(fontSize: 11)),
+                        child: Text('חיפוש',
+                            style: TextStyle(fontSize: 11),
+                            textDirection: TextDirection.rtl),
                       ),
                     ],
                     labelColor: colorScheme.primary,
-                    unselectedLabelColor:
-                        colorScheme.onSurface.withValues(alpha: 0.6),
+                    unselectedLabelColor: colorScheme.onSurfaceVariant,
                     indicatorColor: colorScheme.primary,
                     dividerColor: Colors.transparent,
                     splashBorderRadius: BorderRadius.circular(12),
@@ -1216,6 +1228,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         child: Text(
           'טוען תוצאות...',
           style: Theme.of(context).textTheme.bodySmall,
+          textDirection: TextDirection.rtl,
         ),
       );
     }
@@ -1258,6 +1271,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     textAlign: TextAlign.right,
+                    textDirection: TextDirection.rtl,
                   ),
                 ),
               ],
@@ -1316,7 +1330,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     required List<String> content,
   }) {
     if (chapters.isEmpty) {
-      return const Center(child: Text('אין תוכן עניינים'));
+      return const Center(
+        child: Text('אין תוכן עניינים', textDirection: TextDirection.rtl),
+      );
     }
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -1538,7 +1554,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     TocEntry chapter,
     List<String> content,
   ) {
-    final lineCount = _chapterLineCount(chapters, chapter);
+    final lineCount = _chapterLineCount(chapters, chapter, content.length);
     return List<int>.generate(lineCount, (i) => i)
         .where(
           (offset) => !_isHeadingOnlyParagraphOffset(
@@ -1569,8 +1585,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       items.add(
         _TocListItem.subItem(
           text: allUnitLabel(chapter.text),
-          isSelected:
-              isSelectionContext && _selectedVerseIdx == _kAllChapter,
+          isSelected: isSelectionContext && _selectedVerseIdx == _kAllChapter,
           isAllChapter: true,
           // _onChapterSelected מעדכן את ה-state במלואו דרך reduceSubItemTap
           // עם verseIdx=_kAllChapter — אין צורך ב-setState נוסף כאן.

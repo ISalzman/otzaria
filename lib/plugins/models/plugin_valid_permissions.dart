@@ -6,6 +6,14 @@ const Map<String, String> apiCallToPermissionHint = {
   'database.query': 'database.read',
   'database.batchQuery': 'database.read',
 
+  // library.*
+  'library.findBooks': 'library.books.read',
+  'library.getBookMetadata': 'library.books.read',
+  'library.listRecentBooks': 'library.books.read',
+  'library.getTree': 'library.books.read',
+  'library.getBookContent': 'library.content.read',
+  'library.getBookToc': 'library.content.read',
+
   // app.*
   'app.getUserEmail': 'app.user_email.read',
   'app.getInfo': 'app.info.read',

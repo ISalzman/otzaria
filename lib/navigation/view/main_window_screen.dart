@@ -2128,6 +2128,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                       manifest: state.manifest,
                       tempDirPath: state.tempDirPath,
                       previousVersion: state.previousVersion,
+                      previousAllowOrderBeforeBuiltInsGranted:
+                          state.previousAllowOrderBeforeBuiltInsGranted,
                     ),
                   ),
                 );

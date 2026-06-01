@@ -138,6 +138,41 @@ void main() {
       );
     });
 
+    test('prepareInstall parses allowOrderBeforeBuiltIns from manifest',
+        () async {
+      final archivePath = p.join(tempDir.path, 'plugin_allow_before.zip');
+      final archive = Archive()
+        ..addFile(
+          ArchiveFile.string(
+            'manifest.json',
+            jsonEncode({
+              'schemaVersion': 1,
+              'id': 'test.allow.before.builtins',
+              'version': '1.0.0',
+              'name': 'Leading Plugin',
+              'entrypoint': 'index.html',
+              'contributes': {
+                'toolTab': {
+                  'title': 'Leading Plugin',
+                  'order': 5,
+                  'allowOrderBeforeBuiltIns': true,
+                },
+              },
+            }),
+          ),
+        )
+        ..addFile(ArchiveFile.string('index.html', '<html></html>'));
+
+      final zipData = ZipEncoder().encode(archive);
+      expect(zipData, isNotNull);
+      File(archivePath).writeAsBytesSync(zipData);
+
+      final preparedInstall = await installer.prepareInstall(archivePath);
+
+      expect(preparedInstall.manifest.allowOrderBeforeBuiltIns, isTrue);
+      await Directory(preparedInstall.tempDirPath).delete(recursive: true);
+    });
+
     test(
         'prepareInstall tolerates installed pre-release version without crashing',
         () async {
@@ -227,7 +262,11 @@ void main() {
         'entrypoint': 'index.html',
       });
 
-      await installer.finalizeInstall(stagedDir.path, newManifest);
+      await installer.finalizeInstall(
+        stagedDir.path,
+        newManifest,
+        allowOrderBeforeBuiltInsGranted: true,
+      );
 
       expect(repository.savedPlugins, hasLength(1));
       expect(repository.savedPlugins.single.userOrder, 7,
@@ -264,7 +303,11 @@ void main() {
         'entrypoint': 'index.html',
       });
 
-      await installer.finalizeInstall(stagedDir.path, newManifest);
+      await installer.finalizeInstall(
+        stagedDir.path,
+        newManifest,
+        allowOrderBeforeBuiltInsGranted: false,
+      );
 
       expect(repository.savedPlugins.single.userOrder, isNull,
           reason: 'a fresh install with no prior manual order should '
@@ -302,11 +345,70 @@ void main() {
         'entrypoint': 'index.html',
       });
 
-      await installer.finalizeInstall(stagedDir.path, newManifest);
+      await installer.finalizeInstall(
+        stagedDir.path,
+        newManifest,
+        allowOrderBeforeBuiltInsGranted: false,
+      );
 
       expect(repository.savedPlugins.single.userOrder, 3,
           reason: 'new plugin must inherit max+1 so it lands AFTER the '
               'manually-ordered block, not before it');
+    });
+
+    test(
+        'finalizeInstall stores allowOrderBeforeBuiltInsGranted from the install screen',
+        () async {
+      const pluginId = 'test.leading.plugin';
+
+      final stagedDir =
+          Directory.systemTemp.createTempSync('otzaria_install_staging_');
+      File(p.join(stagedDir.path, 'manifest.json')).writeAsStringSync(
+        jsonEncode({
+          'schemaVersion': 1,
+          'id': pluginId,
+          'version': '1.0.0',
+          'name': 'Leading Plugin',
+          'entrypoint': 'index.html',
+          'contributes': {
+            'toolTab': {
+              'title': 'Leading Plugin',
+              'order': 5,
+              'allowOrderBeforeBuiltIns': true,
+            },
+          },
+        }),
+      );
+      File(p.join(stagedDir.path, 'index.html')).writeAsStringSync('<html/>');
+
+      final newManifest = PluginManifest.fromJson({
+        'schemaVersion': 1,
+        'id': pluginId,
+        'version': '1.0.0',
+        'name': 'Leading Plugin',
+        'entrypoint': 'index.html',
+        'contributes': {
+          'toolTab': {
+            'title': 'Leading Plugin',
+            'order': 5,
+            'allowOrderBeforeBuiltIns': true,
+          },
+        },
+      });
+
+      await installer.finalizeInstall(
+        stagedDir.path,
+        newManifest,
+        allowOrderBeforeBuiltInsGranted: false,
+      );
+
+      expect(
+        repository.savedPlugins.single.allowOrderBeforeBuiltInsGranted,
+        isFalse,
+      );
+      expect(repository.savedPlugins.single.allowsOrderBeforeBuiltIns, isFalse,
+          reason: 'when the user disables the feature at install time, the '
+              'plugin must not be able to use it later');
     });
   });
 }

@@ -1066,10 +1066,15 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     final dStream = bindings.ZSTD_createDStream();
     if (dStream == nullptr) throw Exception('ZSTD_createDStream נכשל');
 
+    // ממיר קוד שגיאה גולמי של ZSTD לתיאור טקסטואלי קריא (למשל קוד 16 →
+    // "Frame requires too much memory for decoding").
+    String zstdError(int code) =>
+        bindings.ZSTD_getErrorName(code).cast<Utf8>().toDartString();
+
     try {
       final initRet = bindings.ZSTD_initDStream(dStream);
       if (bindings.ZSTD_isError(initRet) != 0) {
-        throw Exception('ZSTD_initDStream נכשל: $initRet');
+        throw Exception('ZSTD_initDStream נכשל: ${zstdError(initRet)}');
       }
 
       // ברירת המחדל של ה-streaming decompressor מגבילה את חלון הדחיסה ל-
@@ -1080,7 +1085,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       final paramRet = bindings.ZSTD_DCtx_setParameter(
           dStream, ZSTD_dParameter.ZSTD_d_windowLogMax, 31);
       if (bindings.ZSTD_isError(paramRet) != 0) {
-        throw Exception('ZSTD_DCtx_setParameter(windowLogMax) נכשל: $paramRet');
+        throw Exception(
+            'ZSTD_DCtx_setParameter(windowLogMax) נכשל: ${zstdError(paramRet)}');
       }
 
       final inNative = malloc.allocate<Uint8>(inBufSize);
@@ -1116,7 +1122,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
               lastRet = bindings.ZSTD_decompressStream(dStream, outBuf, inBuf);
 
               if (bindings.ZSTD_isError(lastRet) != 0) {
-                throw Exception('שגיאת ZSTD בחילוץ (קוד: $lastRet)');
+                throw Exception(
+                    'שגיאת ZSTD בחילוץ: ${zstdError(lastRet)} (קוד: $lastRet)');
               }
 
               if (outBuf.ref.pos > 0) {

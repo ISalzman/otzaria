@@ -185,6 +185,43 @@ void main() {
       expect(find.text('קטגוריה ב'), findsWidgets);
     });
 
+    testWidgets('space key is not swallowed while typing in search field',
+        (tester) async {
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<ShamorZachorDataProvider>(
+              create: (_) => _FakeShamorZachorDataProvider(),
+            ),
+            ChangeNotifierProvider<ShamorZachorProgressProvider>(
+              create: (_) => _FakeShamorZachorProgressProvider(),
+            ),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: BlocProvider.value(
+                value: settingsBloc,
+                child: const ShamorZachorMainScreen(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // מיקוד שדה החיפוש
+      await tester.tap(find.byType(EditableText).first);
+      await tester.pumpAndSettle();
+
+      // הקלדת רווח אסור שתיתפס על-ידי מטפל המקלדת של החלון (גלילת תוכן),
+      // אחרת המנוע מבטל את הוספת תו הרווח לשדה.
+      final handled = await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+
+      expect(handled, isFalse);
+    });
+
     testWidgets('retry reloads progress error state', (tester) async {
       final progressProvider = _RetryableShamorZachorProgressProvider();
 

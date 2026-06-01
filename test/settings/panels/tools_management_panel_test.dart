@@ -12,6 +12,7 @@ import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/panels/tools_management_panel.dart';
+import 'package:otzaria/tools/built_in_tools_catalog.dart';
 
 // ─── Test doubles ─────────────────────────────────────────────────────────────
 
@@ -101,17 +102,18 @@ Widget _wrap({
   required SettingsBloc settingsBloc,
   required PluginSystemBloc pluginBloc,
 }) {
+  // הפאנל מחזיר sliver ולכן חייב להיות בתוך CustomScrollView.
   return MaterialApp(
     home: Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        body: SingleChildScrollView(
-          child: MultiBlocProvider(
-            providers: [
-              BlocProvider<SettingsBloc>.value(value: settingsBloc),
-              BlocProvider<PluginSystemBloc>.value(value: pluginBloc),
-            ],
-            child: const ToolsManagementPanel(),
+        body: MultiBlocProvider(
+          providers: [
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+            BlocProvider<PluginSystemBloc>.value(value: pluginBloc),
+          ],
+          child: const CustomScrollView(
+            slivers: [ToolsManagementPanel()],
           ),
         ),
       ),
@@ -119,11 +121,32 @@ Widget _wrap({
   );
 }
 
+/// פותח/סוגר את אזור "כלים מובנים" דרך שורת הסיכום בכרטיס הלבן.
+Future<void> _expandBuiltIn(WidgetTester tester) async {
+  await tester.tap(find.text('רשימת הכלים'));
+  await tester.pumpAndSettle();
+}
+
+/// פותח/סוגר את אזור "תוספים מותקנים" דרך שורת הסיכום בכרטיס הלבן.
+Future<void> _expandPlugins(WidgetTester tester) async {
+  await tester.tap(find.text('רשימת התוספים'));
+  await tester.pumpAndSettle();
+}
+
+/// מאתר לחצן (לפי tooltip) בתוך שורת הכלי שמכילה [label].
+Finder _rowButton(String label, String tooltip) => find.descendant(
+      of: find.ancestor(
+        of: find.text(label),
+        matching: find.byType(ListTile),
+      ),
+      matching: find.byTooltip(tooltip),
+    );
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 void main() {
   testWidgets(
-    'shows built-in tools section with all catalog entries',
+    'built-in section is collapsed by default and expands on tap',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -134,7 +157,13 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
+      // כותרת האזור מופיעה, אבל התוכן סגור.
       expect(find.text('כלים מובנים'), findsOneWidget);
+      expect(find.text('לוח שנה'), findsNothing);
+
+      await _expandBuiltIn(tester);
+
+      // לאחר פתיחה — כל הכלים מהקטלוג מופיעים.
       expect(find.text('לוח שנה'), findsOneWidget);
       expect(find.text('גימטריה'), findsOneWidget);
       expect(find.text('שמור וזכור'), findsOneWidget);
@@ -155,7 +184,7 @@ void main() {
   );
 
   testWidgets(
-    'plugins card is shown when plugins are installed',
+    'plugins section header is shown (collapsed) when plugins are installed',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -168,13 +197,17 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
+      // הכותרת מופיעה, אבל התוסף עצמו סגור עד שפותחים.
       expect(find.text('תוספים מותקנים'), findsOneWidget);
+      expect(find.textContaining('תוסף-A'), findsNothing);
+
+      await _expandPlugins(tester);
       expect(find.textContaining('תוסף-A'), findsOneWidget);
     },
   );
 
   testWidgets(
-    'selecting a built-in tool reveals the action bar',
+    'built-in tool rows have no checkboxes (button-based actions)',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -184,20 +217,22 @@ void main() {
         pluginBloc: _FakePluginSystemBloc(const []),
       ));
       await tester.pumpAndSettle();
+      await _expandBuiltIn(tester);
 
+      // אין תיבות סימון באזור הכלים המובנים, אבל יש לחצני הסתרה/הצמדה —
+      // אחד לכל כלי בקטלוג.
+      final toolCount = kBuiltInToolsCatalog.length;
+      expect(find.byType(Checkbox), findsNothing);
+      expect(find.byTooltip('הסתר מהממשק'), findsNWidgets(toolCount));
+      expect(find.byTooltip('הצמד לסרגל הניווט'), findsNWidgets(toolCount));
+      // אין סרגל בחירה מרובה (אין "נבחרו").
       expect(find.textContaining('נבחרו'), findsNothing);
-
-      await tester.tap(find.text('לוח שנה'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('1 נבחרו'), findsOneWidget);
-      expect(find.text('הסתר'), findsOneWidget);
-      expect(find.text('הצמד לסרגל הניווט'), findsOneWidget);
     },
   );
 
   testWidgets(
-    'tapping "Hide" on selected built-in tool dispatches UpdateHiddenBuiltInToolIds',
+    'tapping the hide button on a built-in tool dispatches '
+    'UpdateHiddenBuiltInToolIds',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -209,11 +244,9 @@ void main() {
         pluginBloc: _FakePluginSystemBloc(const []),
       ));
       await tester.pumpAndSettle();
+      await _expandBuiltIn(tester);
 
-      await tester.tap(find.text('לוח שנה'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('הסתר'));
+      await tester.tap(_rowButton('לוח שנה', 'הסתר מהממשק'));
       await tester.pumpAndSettle();
 
       final updates = settingsBloc.dispatched
@@ -225,7 +258,7 @@ void main() {
   );
 
   testWidgets(
-    'tapping "Pin to nav rail" on selected built-in tool dispatches '
+    'tapping the pin button on a built-in tool dispatches '
     'UpdateBuiltInToolsPinnedToNavRail',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
@@ -238,11 +271,9 @@ void main() {
         pluginBloc: _FakePluginSystemBloc(const []),
       ));
       await tester.pumpAndSettle();
+      await _expandBuiltIn(tester);
 
-      await tester.tap(find.text('גימטריה'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('הצמד לסרגל הניווט'));
+      await tester.tap(_rowButton('גימטריה', 'הצמד לסרגל הניווט'));
       await tester.pumpAndSettle();
 
       final updates = settingsBloc.dispatched
@@ -255,53 +286,7 @@ void main() {
   );
 
   testWidgets(
-    'selecting only plugins reveals plugin-specific actions (delete)',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(1000, 1400));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await tester.pumpWidget(_wrap(
-        settingsBloc: _FakeSettingsBloc(),
-        pluginBloc: _FakePluginSystemBloc([
-          _plugin(id: 'p1', name: 'תוסף-A'),
-        ]),
-      ));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.textContaining('תוסף-A'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('מחק'), findsOneWidget);
-      expect(find.text('השבת'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'selecting only built-in tools does NOT show plugin-only actions',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(1000, 1400));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await tester.pumpWidget(_wrap(
-        settingsBloc: _FakeSettingsBloc(),
-        pluginBloc: _FakePluginSystemBloc([
-          _plugin(id: 'p1', name: 'תוסף-A'),
-        ]),
-      ));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('לוח שנה'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('מחק'), findsNothing);
-      expect(find.text('השבת'), findsNothing);
-      expect(find.textContaining('פעולות נוספות זמינות רק לתוספים'),
-          findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'hide on a hidden built-in shows "Show" instead',
+    'a hidden built-in tool shows the "show" button and the "מוסתר" badge',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -315,17 +300,101 @@ void main() {
         pluginBloc: _FakePluginSystemBloc(const []),
       ));
       await tester.pumpAndSettle();
+      await _expandBuiltIn(tester);
 
       // הכלי עדיין מופיע בטבלה — רק הוא מוסתר מהממשק הראשי.
       expect(find.text('לוח שנה'), findsOneWidget);
-      // וגם תווית "מוסתר" צריכה להופיע.
+      // תווית "מוסתר" צריכה להופיע.
       expect(find.text('מוסתר'), findsOneWidget);
+      // הלחצן בשורת לוח-שנה צריך להציע "הצג בממשק" (ולא "הסתר").
+      expect(_rowButton('לוח שנה', 'הצג בממשק'), findsOneWidget);
+    },
+  );
 
-      await tester.tap(find.text('לוח שנה'));
+  testWidgets(
+    'selecting a plugin reveals the action bar with plugin actions',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(id: 'p1', name: 'תוסף-A'),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+      await _expandPlugins(tester);
+
+      expect(find.textContaining('נבחרו'), findsNothing);
+
+      await tester.tap(find.textContaining('תוסף-A'));
       await tester.pumpAndSettle();
 
-      // כשהפריט הנבחר כבר מוסתר, הכפתור צריך לעבור ל"הצג".
-      expect(find.text('הצג'), findsOneWidget);
+      expect(find.text('1 נבחרו'), findsOneWidget);
+      expect(find.text('מחק'), findsOneWidget);
+      expect(find.text('השבת'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    '"בחר הכל" row is always visible when expanded and toggles all plugins',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(id: 'p1', name: 'תוסף-A'),
+          _plugin(id: 'p2', name: 'תוסף-B'),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+      await _expandPlugins(tester);
+
+      // "בחר הכל" גלוי גם ללא בחירה מוקדמת.
+      expect(find.text('בחר הכל'), findsOneWidget);
+      expect(find.textContaining('נבחרו'), findsNothing);
+
+      // לחיצה — כל התוספים נבחרים, וסרגל הפעולות מופיע.
+      await tester.tap(find.text('בחר הכל'));
+      await tester.pumpAndSettle();
+      expect(find.text('2 נבחרו'), findsOneWidget);
+
+      // לחיצה חוזרת — מנקה את הבחירה.
+      await tester.tap(find.text('בחר הכל'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('נבחרו'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'collapsing the plugins section clears the selection',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(id: 'p1', name: 'תוסף-A'),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+      await _expandPlugins(tester);
+
+      await tester.tap(find.textContaining('תוסף-A'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 נבחרו'), findsOneWidget);
+
+      // סגירה — מנקה את הבחירה; פתיחה מחדש מראה שאין סרגל פעולות.
+      await _expandPlugins(tester); // toggle -> collapse
+      await tester.pumpAndSettle();
+      await _expandPlugins(tester); // toggle -> expand again
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('נבחרו'), findsNothing);
     },
   );
 
@@ -344,6 +413,7 @@ void main() {
         pluginBloc: pluginBloc,
       ));
       await tester.pumpAndSettle();
+      await _expandPlugins(tester);
 
       await tester.tap(find.textContaining('תוסף-A'));
       await tester.pumpAndSettle();
@@ -373,6 +443,7 @@ void main() {
         pluginBloc: pluginBloc,
       ));
       await tester.pumpAndSettle();
+      await _expandPlugins(tester);
 
       await tester.tap(find.textContaining('תוסף-A'));
       await tester.pumpAndSettle();
@@ -407,6 +478,7 @@ void main() {
         pluginBloc: pluginBloc,
       ));
       await tester.pumpAndSettle();
+      await _expandPlugins(tester);
 
       await tester.tap(find.textContaining('תוסף-A'));
       await tester.pumpAndSettle();
@@ -446,6 +518,7 @@ void main() {
         pluginBloc: pluginBloc,
       ));
       await tester.pumpAndSettle();
+      await _expandPlugins(tester);
 
       await tester.tap(find.textContaining('תוסף-A'));
       await tester.pumpAndSettle();
@@ -483,6 +556,7 @@ void main() {
         pluginBloc: pluginBloc,
       ));
       await tester.pumpAndSettle();
+      await _expandPlugins(tester);
 
       final handles =
           find.byIcon(FluentIcons.re_order_dots_vertical_24_regular);
@@ -525,6 +599,7 @@ void main() {
         pluginBloc: pluginBloc,
       ));
       await tester.pumpAndSettle();
+      await _expandPlugins(tester);
 
       await tester.tap(find.textContaining('תוסף-A'));
       await tester.pumpAndSettle();

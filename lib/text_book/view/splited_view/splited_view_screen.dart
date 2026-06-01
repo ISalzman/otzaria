@@ -34,7 +34,7 @@ class SplitedViewScreen extends StatefulWidget {
   final void Function(OpenedTab) openBookCallback;
   final TextEditingValue searchTextController;
   final void Function(int, {String? searchText}) openLeftPaneTab;
-  final ValueChanged<String?>? onSelectedTextChanged;
+  final void Function(String? text, int? lineIndex)? onSelectedTextChanged;
   final TextBookTab tab;
   final int? initialTabIndex;
   final bool showSplitView;

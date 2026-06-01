@@ -924,6 +924,14 @@ class _FakeTabsRepository extends TabsRepository {
     _currentTabIndex = currentTabIndex;
     _sideBySideMode = sideBySideMode;
   }
+
+  @override
+  Future<void> saveCurrentTabIndex(
+    List<OpenedTab> tabs,
+    int currentTabIndex,
+  ) async {
+    _currentTabIndex = currentTabIndex;
+  }
 }
 
 class _MemoryCacheProvider extends CacheProvider {

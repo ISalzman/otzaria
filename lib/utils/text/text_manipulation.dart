@@ -589,6 +589,9 @@ String getTitleFromPath(String path) {
 
 // Cache for the CSV data to avoid reading the file multiple times
 Map<String, String>? _csvCache;
+// טעינת ה-cache שעדיין מתבצעת — מבטיח שקריאות מקבילות ימתינו לאותה טעינה
+// במקום לראות cache ריק באמצע ה-await ולסווג מפרשים כ"שאר מפרשים".
+Future<void>? _csvCacheLoading;
 
 // Era categories constant - used across multiple functions
 const List<String> _eraCategories = [
@@ -617,9 +620,9 @@ int countMatches(String text, String searchQuery) {
 }
 
 Future<bool> hasTopic(String title, String topic) async {
-  // Load CSV data once and cache it
+  // Load CSV data once and cache it (קריאות מקבילות חולקות את אותה טעינה)
   if (_csvCache == null) {
-    await _loadCsvCache();
+    await (_csvCacheLoading ??= _loadCsvCache());
   }
 
   // For non-era topics (like 'על ברכות'), check if the commentator title contains the topic.
@@ -648,7 +651,9 @@ Future<bool> hasTopic(String title, String topic) async {
 
 /// טוען את ה-cache של תקופות מפרשים מה-DB
 Future<void> _loadCsvCache() async {
-  _csvCache = {};
+  // לא מגדירים _csvCache={} כאן — אחרת קריאה מקבילה שתבדוק `_csvCache == null`
+  // תראה מפה ריקה באמצע ה-await ותסווג את כל המפרשים כ"שאר מפרשים".
+  // _csvCache מקבל ערך רק בסיום הטעינה (בהצלחה או בכשל).
   try {
     final provider = SqliteDataProvider.instance;
     if (!provider.isInitialized) {
@@ -658,6 +663,7 @@ Future<void> _loadCsvCache() async {
     if (db != null) {
       _csvCache = await db.authorDao.getAllBookTitleToGeneration();
     } else {
+      _csvCache = {};
       debugPrint('⚠️ SqliteDataProvider repository is null');
     }
   } catch (e) {
@@ -669,6 +675,7 @@ Future<void> _loadCsvCache() async {
 /// מנקה את ה-cache של תקופות כדי לאלץ טעינה מחדש
 void clearCommentatorOrderCache() {
   _csvCache = null;
+  _csvCacheLoading = null;
 }
 
 // ממפה שם תקופה מה-DB לקטגוריה (השמות זהים, רק fallback)
@@ -1135,9 +1142,10 @@ String replaceParaphrases(String s) {
 Future<Map<String, List<String>>> splitByEra(
   List<String> titles,
 ) async {
-  // טעינת ה-cache פעם אחת בהתחלה (אם עדיין לא נטען)
+  // טעינת ה-cache פעם אחת בהתחלה (אם עדיין לא נטען).
+  // קריאות מקבילות חולקות את אותה טעינה ולא רואות מפה ריקה באמצע.
   if (_csvCache == null) {
-    await _loadCsvCache();
+    await (_csvCacheLoading ??= _loadCsvCache());
   }
 
   // טעינת titleToPath פעם אחת (לא בכל איטרציה)

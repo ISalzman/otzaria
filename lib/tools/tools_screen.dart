@@ -63,7 +63,14 @@ void setActiveToolIdSafely(String? id, {bool Function()? isMounted}) {
   }
 }
 
-/// ממיין רשימת [ToolDescriptor] לפי [ToolDescriptor.order] במיון *יציב*.
+/// ממיין רשימת [ToolDescriptor] במיון *יציב*.
+///
+/// כברירת מחדל, כלים מובנים ([BuiltInToolDescriptor]) מופיעים לפני תוספים
+/// ([PluginToolDescriptor]) — גם אם לתוסף יש `order` נמוך יותר.
+///
+/// חריג מפורש: תוסף שהצהיר במניפסט על
+/// `allowOrderBeforeBuiltIns=true` רשאי להתחרות מול הכלים המובנים ולהופיע
+/// לפניהם. בתוך כל קבוצה המיון הוא לפי [ToolDescriptor.order] עולה.
 ///
 /// כש-N כלים חולקים את אותו `order` (למשל כמה תוספים בברירת המחדל 900
 /// מהמניפסט), הסדר היחסי ביניהם נשמר כפי שהגיע ברשימת הקלט — סדר שכבר נקבע
@@ -71,7 +78,41 @@ void setActiveToolIdSafely(String? id, {bool Function()? isMounted}) {
 /// הרגיל אינו יציב והיה משבש את הסדר הזה בין הרצות.
 @visibleForTesting
 void sortToolDescriptorsStably(List<ToolDescriptor> descriptors) {
-  insertionSort(descriptors, compare: (a, b) => a.order.compareTo(b.order));
+  insertionSort(descriptors, compare: (a, b) {
+    final byKind = a.sortGroupPriority.compareTo(b.sortGroupPriority);
+    if (byKind != 0) return byKind;
+    return a.order.compareTo(b.order);
+  });
+}
+
+typedef MobileToolGroupDef = ({String label, List<String> toolIds});
+typedef MobileToolGroup = ({String label, List<ToolDescriptor> tools});
+
+/// בונה את קבוצות התצוגה של תפריט המובייל מתוך הסדר שכבר חושב ב-descriptors.
+///
+/// כך תוספים שמורשים להופיע לפני כלים מובנים נשארים במקומם גם במובייל.
+/// אם תוסף "חותך" קבוצה מובנית, אותה כותרת יכולה להופיע יותר מפעם אחת —
+/// זה מכוון, כדי לא לשבור את הסדר האפקטיבי של הכלים.
+@visibleForTesting
+List<MobileToolGroup> buildMobileToolGroups(
+  List<ToolDescriptor> descriptors, {
+  required List<MobileToolGroupDef> groupDefs,
+}) {
+  final labelByToolId = <String, String>{
+    for (final group in groupDefs)
+      for (final toolId in group.toolIds) toolId: group.label,
+  };
+
+  final groups = <MobileToolGroup>[];
+  for (final descriptor in descriptors) {
+    final label = labelByToolId[descriptor.toolId] ?? 'תוספים';
+    if (groups.isNotEmpty && groups.last.label == label) {
+      groups.last.tools.add(descriptor);
+      continue;
+    }
+    groups.add((label: label, tools: [descriptor]));
+  }
+  return groups;
 }
 
 abstract class ToolDescriptor {
@@ -80,6 +121,7 @@ abstract class ToolDescriptor {
   final int order;
   const ToolDescriptor(
       {required this.toolId, required this.label, required this.order});
+  int get sortGroupPriority => 2;
   Widget buildTab(BuildContext context);
   Widget buildPage(BuildContext context);
   TopNavItem buildTopNavItem(
@@ -103,6 +145,9 @@ class BuiltInToolDescriptor extends ToolDescriptor {
     this.imageIcon,
     required this.pageBuilder,
   });
+
+  @override
+  int get sortGroupPriority => 1;
 
   @override
   Widget buildTab(BuildContext context) {
@@ -158,6 +203,9 @@ class PluginToolDescriptor extends ToolDescriptor {
             toolId: plugin.pluginId,
             label: plugin.manifest.toolTabTitle,
             order: plugin.effectiveToolTabOrder);
+
+  @override
+  int get sortGroupPriority => plugin.allowsOrderBeforeBuiltIns ? 0 : 2;
 
   @override
   Widget buildTab(BuildContext context) {
@@ -264,7 +312,7 @@ class ToolsScreenState extends State<ToolsScreen>
   Timer? _pendingToolTimeoutTimer;
   static const Duration _pendingToolTimeout = Duration(seconds: 5);
 
-  static const _mobileGroupDefs = [
+  static const List<MobileToolGroupDef> _mobileGroupDefs = [
     (label: 'לוח שנה', toolIds: <String>['builtin.calendar']),
     (
       label: 'תורה שלמדתי',
@@ -756,24 +804,10 @@ class ToolsScreenState extends State<ToolsScreen>
 
   Widget _buildMobileMenu(Color bgColor) {
     final cs = Theme.of(context).colorScheme;
-
-    final groupedDescriptors = <({String label, List<ToolDescriptor> tools})>[];
-    for (final group in _mobileGroupDefs) {
-      final tools = [
-        for (final id in group.toolIds)
-          ..._descriptors.where((d) => d.toolId == id),
-      ];
-      if (tools.isNotEmpty) {
-        groupedDescriptors.add((label: group.label, tools: tools));
-      }
-    }
-
-    final groupedIds = _mobileGroupDefs.expand((g) => g.toolIds).toSet();
-    final ungroupedPlugins =
-        _descriptors.where((d) => !groupedIds.contains(d.toolId)).toList();
-    if (ungroupedPlugins.isNotEmpty) {
-      groupedDescriptors.add((label: 'תוספים', tools: ungroupedPlugins));
-    }
+    final groupedDescriptors = buildMobileToolGroups(
+      _descriptors,
+      groupDefs: _mobileGroupDefs,
+    );
 
     Widget buildIcon(ToolDescriptor descriptor) {
       if (descriptor is BuiltInToolDescriptor) {

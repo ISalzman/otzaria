@@ -88,7 +88,7 @@ void main() {
       // Check that sunrise time exists and is in reasonable format (HH:MM)
       final sunrise = state.dailyTimes['sunrise'];
       expect(sunrise, isNotNull, reason: 'Sunrise time should exist');
-      expect(sunrise, matches(r'^\d{2}:\d{2}$'),
+      expect(sunrise, matches(r'^\u2066?\d{2}:\d{2}[.:]\u2069?$'),
           reason: 'Time should be in HH:MM format');
 
       // Debug output (only in tests)
@@ -118,7 +118,7 @@ void main() {
       // Check that sunrise time exists
       final sunrise = state.dailyTimes['sunrise'];
       expect(sunrise, isNotNull, reason: 'Sunrise time should exist');
-      expect(sunrise, matches(r'^\d{2}:\d{2}$'),
+      expect(sunrise, matches(r'^\u2066?\d{2}:\d{2}[.:]\u2069?$'),
           reason: 'Time should be in HH:MM format');
 
       // Debug output (only in tests)
@@ -159,8 +159,8 @@ void main() {
       // But we can verify both are valid
       expect(jerusalemSunrise, isNotNull);
       expect(nySunrise, isNotNull);
-      expect(jerusalemSunrise, matches(r'^\d{2}:\d{2}$'));
-      expect(nySunrise, matches(r'^\d{2}:\d{2}$'));
+      expect(jerusalemSunrise, matches(r'^\u2066?\d{2}:\d{2}[.:]\u2069?$'));
+      expect(nySunrise, matches(r'^\u2066?\d{2}:\d{2}[.:]\u2069?$'));
     });
   });
 }

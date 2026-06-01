@@ -14,6 +14,29 @@ void main() {
   TocEntry chapterA() => TocEntry(text: 'פרק א', index: 0);
   TocEntry chapterB() => TocEntry(text: 'פרק ב', index: 5);
 
+  group('chapterEndLineIndex — גבול הפרק', () {
+    // דף ראשון (אינדקס 0), דף אחרון (אינדקס 10) בספר בן 25 שורות.
+    final firstDaf = TocEntry(text: 'דף ב', index: 0);
+    final lastDaf = TocEntry(text: 'דף יג', index: 10);
+    final chapters = [firstDaf, lastDaf];
+
+    test('פרק שאינו אחרון נתחם ע"י תחילת הפרק העוקב פחות 1', () {
+      expect(chapterEndLineIndex(chapters, firstDaf, 25), equals(9));
+    });
+
+    test('הפרק האחרון נתחם עד שורת התוכן האחרונה (לא שורה בודדת)', () {
+      // הרגרסיה: בעבר "כל הדף" בדף האחרון הוחזר כשורה בודדת (index 10) בלבד,
+      // ולכן לא זוהו מפרשים. כעת הגבול הוא שורת התוכן האחרונה (24).
+      expect(chapterEndLineIndex(chapters, lastDaf, 25), equals(24));
+      expect(chapterEndLineIndex(chapters, lastDaf, 25), greaterThan(10));
+    });
+
+    test('פרק יחיד נתחם עד סוף התוכן', () {
+      final only = TocEntry(text: 'דף ב', index: 0);
+      expect(chapterEndLineIndex([only], only, 40), equals(39));
+    });
+  });
+
   group('reduceChevronTap — שמירה על בחירת המפרשים', () {
     test('לחיצה על חץ הפרק הנבחר (הרגרסיה המקורית) לא מבטלת את הבחירה', () {
       final chA = chapterA();

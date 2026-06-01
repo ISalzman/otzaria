@@ -630,6 +630,133 @@ void main() {
       expect(result, '');
     });
   });
+
+  group('PluginBridgeAdapter.library.getTree', () {
+    late PluginBridgeAdapter adapter;
+
+    setUp(() {
+      // עץ דו-שכבתי: תנך -> {ספר בראשית טקסט} ו-ראשונים -> {רשי PDF}.
+      final genesis = TextBook(title: 'בראשית', categoryId: 1, fileType: 'txt')
+        ..author = 'משה רבנו'
+        ..topics = 'תורה';
+      final rashi = PdfBook(
+        title: 'רשי',
+        path: '/tmp/rashi.pdf',
+        categoryId: 2,
+        fileType: 'pdf',
+      );
+
+      final tanach = Category(
+        title: 'תנך',
+        description: '',
+        shortDescription: '',
+        order: 0,
+        subCategories: [],
+        books: [genesis],
+        parent: null,
+      );
+      final rishonim = Category(
+        title: 'ראשונים',
+        description: '',
+        shortDescription: '',
+        order: 1,
+        subCategories: const [],
+        books: [rashi],
+        parent: tanach,
+      );
+      tanach.subCategories.add(rishonim);
+
+      final library = Library(categories: [tanach]);
+      // קישור parent של הקטגוריה העליונה לספרייה (כפי שנבנה בקטלוג האמיתי)
+      // כדי שחישוב ה-path יעבוד נכון.
+      tanach.parent = library;
+      DataRepository.instance.library = Future.value(library);
+
+      adapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(permissions: const ['library.books.read']),
+        dependencies: PluginBridgeDependencies(
+          historyBloc: _MockHistoryBloc(),
+          tabsBloc: _StubTabsBloc(),
+          navigationBloc: _MockNavigationBloc(),
+          calendarCubit: _StubCalendarCubit(
+            _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+          ),
+          workspaceBloc: _MockWorkspaceBloc(),
+          searchRepository: _MockSearchRepository(),
+          personalNotesRepository: _MockPersonalNotesRepository(),
+          bookOpenCoordinator: _MockBookOpenCoordinator(),
+          themePayloadBuilder: () => <String, dynamic>{},
+          showConfirmDialog: ({required title, required content}) async => true,
+          showWarningDialog: ({
+            required title,
+            required content,
+            required subtitle,
+          }) async =>
+              true,
+        ),
+        pluginRepository: _StubPluginRegistryRepository(),
+      );
+    });
+
+    test('מחזיר את העץ המלא עם קטגוריות מקוננות וספרים', () async {
+      final result = await adapter.execute('library', 'getTree', const {})
+          as Map<String, dynamic>;
+
+      expect(result['title'], 'ספריית אוצריא');
+      expect(result['path'], '/');
+      final topCategories = result['categories'] as List<dynamic>;
+      expect(topCategories, hasLength(1));
+
+      final tanach = topCategories.first as Map<String, dynamic>;
+      expect(tanach['title'], 'תנך');
+      expect(tanach['path'], '/תנך');
+
+      final tanachBooks = tanach['books'] as List<dynamic>;
+      expect(tanachBooks, hasLength(1));
+      final genesis = tanachBooks.first as Map<String, dynamic>;
+      expect(genesis['bookId'], 'בראשית');
+      expect(genesis['type'], 'text');
+      expect(genesis['author'], 'משה רבנו');
+      expect(genesis['topics'], 'תורה');
+
+      final subCategories = tanach['categories'] as List<dynamic>;
+      expect(subCategories, hasLength(1));
+      final rishonim = subCategories.first as Map<String, dynamic>;
+      expect(rishonim['title'], 'ראשונים');
+      final rashi =
+          (rishonim['books'] as List<dynamic>).first as Map<String, dynamic>;
+      expect(rashi['type'], 'pdf');
+    });
+
+    test('path מצמצם את העץ לתת-קטגוריה', () async {
+      final result = await adapter
+              .execute('library', 'getTree', const {'path': '/תנך/ראשונים'})
+          as Map<String, dynamic>;
+
+      expect(result['title'], 'ראשונים');
+      final books = result['books'] as List<dynamic>;
+      expect((books.first as Map<String, dynamic>)['title'], 'רשי');
+    });
+
+    test('path שאינו קיים מחזיר null', () async {
+      final result = await adapter
+          .execute('library', 'getTree', const {'path': '/לא-קיים'});
+
+      expect(result, isNull);
+    });
+
+    test('includeBooks=false משמיט את רשימות הספרים', () async {
+      final result = await adapter
+              .execute('library', 'getTree', const {'includeBooks': false})
+          as Map<String, dynamic>;
+
+      expect(result.containsKey('books'), isFalse);
+      final tanach =
+          (result['categories'] as List<dynamic>).first as Map<String, dynamic>;
+      expect(tanach.containsKey('books'), isFalse);
+      expect(tanach['title'], 'תנך');
+    });
+  });
 }
 
 /// Provider פיקטיבי שמחזיר טקסט לפי מפתחות מוגדרים מראש.

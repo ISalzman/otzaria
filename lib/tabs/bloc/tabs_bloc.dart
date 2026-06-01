@@ -612,9 +612,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       // לא מבטלים את מצב side-by-side - פשוט עוברים לטאב
       // הפונקציה _shouldShowSideBySideView תחליט אם להציג side-by-side או TabBarView
       final tabsToSave = state.tabs;
-      final modeToSave = state.sideBySideMode;
       emit(state.copyWith(currentTabIndex: event.index));
-      await _repository.saveTabs(tabsToSave, event.index, modeToSave);
+      // מעבר טאב לא משנה את רשימת הטאבים — שומרים רק את האינדקס הנוכחי
+      // במקום לקודד מחדש את כל הטאבים.
+      await _repository.saveCurrentTabIndex(tabsToSave, event.index);
     }
   }
 
@@ -722,7 +723,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     final newIndex = (state.currentTabIndex + 1) % state.tabs.length;
     final tabsToSave = state.tabs;
     emit(state.copyWith(currentTabIndex: newIndex));
-    await _repository.saveTabs(tabsToSave, newIndex);
+    await _repository.saveCurrentTabIndex(tabsToSave, newIndex);
   }
 
   Future<void> _onNavigateToPreviousTab(
@@ -733,7 +734,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         : state.currentTabIndex - 1;
     final tabsToSave = state.tabs;
     emit(state.copyWith(currentTabIndex: newIndex));
-    await _repository.saveTabs(tabsToSave, newIndex);
+    await _repository.saveCurrentTabIndex(tabsToSave, newIndex);
   }
 
   Future<void> _onTogglePinTab(
