@@ -27,11 +27,16 @@ class AltTocSidebarView extends StatefulWidget {
   final void Function() closeLeftPaneCallback;
   final ItemScrollController scrollController;
 
+  /// פוקוס-נוד לשדה החיפוש של הכותרות, מנוהל ע"י המסך האב כדי לאפשר
+  /// פוקוס אוטומטי בפתיחת הפאנל ובמעבר ללשונית 'כותרות'.
+  final FocusNode? focusNode;
+
   const AltTocSidebarView({
     super.key,
     required this.book,
     required this.closeLeftPaneCallback,
     required this.scrollController,
+    this.focusNode,
   });
 
   @override
@@ -466,6 +471,10 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
           padding: const EdgeInsets.all(8.0),
           child: RtlTextField(
             controller: _searchController,
+            // ללא autofocus: הפוקוס מנוהל אך ורק דרך focusNode מהמסך האב
+            // (_focusActiveTabSearchField), שמכבד את ההגנה מפני פוקוס אוטומטי
+            // באנדרואיד. autofocus היה עוקף הגנה זו וקופץ מקלדת.
+            focusNode: widget.focusNode,
             onChanged: _onSearchChanged,
             decoration: InputDecoration(
               hintText: 'איתור כותרת...',
