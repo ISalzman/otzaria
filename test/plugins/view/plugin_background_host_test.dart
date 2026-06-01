@@ -7,9 +7,12 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_installer_service.dart';
 import 'package:otzaria/plugins/view/plugin_background_host.dart';
+import 'package:otzaria/plugins/view/webview_environment_holder.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 // ── fakes ─────────────────────────────────────────────────────────────────────
 
@@ -55,6 +58,7 @@ InstalledPlugin _plugin({
   String installPath = '/install/path',
   String entrypointPath = 'index.html',
   String? devRootPath,
+  List<String> permissions = const [],
 }) =>
     InstalledPlugin(
       pluginId: id,
@@ -75,8 +79,9 @@ InstalledPlugin _plugin({
         entrypoint: entrypointPath,
         minAppVersion: '0.0.0',
         sdkVersion: '1.0.0',
-        // ← ללא app.run_on_startup, מונע קריאות SQLite ב-_syncBackgroundPlugins
-        permissions: const [],
+        // ברירת מחדל: ללא app.run_on_startup, מונע קריאות SQLite
+        // ב-_syncBackgroundPlugins
+        permissions: permissions,
         networkEnabled: false,
         networkAllowlist: const [],
         toolTabTitle: 'Tab',
@@ -220,6 +225,43 @@ void main() {
       final before = base.copyWith(devRootPath: '/dev/old');
       final after = base.copyWith(devRootPath: '/dev/new');
       expect(backgroundKey(before), isNot(equals(backgroundKey(after))));
+    });
+  });
+
+  // ── WebView2 Runtime gate ──────────────────────────────────────────────────
+  // כש-WebView2 Runtime חסר, ה-host לא רשאי לבנות WebView מוסתר ברקע (זה
+  // נכשל native). ה-gate מדלג על כל תוספי הרקע לפני כל גישה ל-DB/WebView.
+
+  group('gate חוסר WebView2 Runtime', () {
+    tearDown(
+      () => WebViewEnvironmentHolder.debugOverrideRuntimeAvailable(null),
+    );
+
+    testWidgets('override(false) — תוסף עם run_on_startup לא בונה WebView ברקע',
+        (
+      tester,
+    ) async {
+      WebViewEnvironmentHolder.debugOverrideRuntimeAvailable(false);
+      bloc.testEmit(
+        PluginSystemLoaded([
+          _plugin(permissions: const [pluginRunOnStartupPermission]),
+        ]),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BlocProvider<PluginSystemBloc>.value(
+            value: bloc,
+            child: const Scaffold(body: PluginBackgroundHost()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // ה-gate חסם את כל המסלול לפני בניית WebView — אין InAppWebView,
+      // וה-host נטען ללא קריסה.
+      expect(find.byType(PluginBackgroundHost), findsOneWidget);
+      expect(find.byType(InAppWebView), findsNothing);
     });
   });
 }

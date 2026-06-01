@@ -29,6 +29,37 @@ class WebViewEnvironmentHolder {
   /// מחזיר את ה-WebViewEnvironment שנוצר באתחול, או null בפלטפורמות שאינן Windows.
   static WebViewEnvironment? get environment => _environment;
 
+  /// override לבדיקות בלבד: כשמוגדר, [isRuntimeAvailable] מחזיר את ערכו
+  /// במקום לפנות ל-platform channel (שאינו זמין בטסטים).
+  static bool? _runtimeAvailableOverride;
+
+  /// מגדיר ערך קבוע ל-[isRuntimeAvailable] בבדיקות. העבר `null` לאיפוס.
+  @visibleForTesting
+  static void debugOverrideRuntimeAvailable(bool? value) {
+    _runtimeAvailableOverride = value;
+  }
+
+  /// בודק אם WebView2 Runtime מותקן במחשב (Windows בלבד).
+  ///
+  /// מחזיר `true` בכל פלטפורמה שאינה Windows — שם הבדיקה אינה רלוונטית.
+  /// ב-Windows מחזיר `false` כאשר לא נמצא WebView2 Runtime מותקן, מצב שבו
+  /// יצירת [WebViewEnvironment]/[InAppWebView] נכשלת. הבדיקה מאפשרת להציג
+  /// למשתמש מסך הכוונה להתקנת ה-Runtime במקום שגיאה טכנית גולמית.
+  ///
+  /// מסתמך על [WebViewEnvironment.getAvailableVersion] שמחזיר `null` כשאין
+  /// התקנה זמינה. כל חריגה נחשבת אף היא כ"חסר", כי משמעותה שלא ניתן לוודא
+  /// קיום Runtime תקין.
+  static Future<bool> isRuntimeAvailable() async {
+    if (_runtimeAvailableOverride != null) return _runtimeAvailableOverride!;
+    if (!Platform.isWindows) return true;
+    try {
+      final version = await WebViewEnvironment.getAvailableVersion();
+      return version != null && version.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// מאתחל את סביבת WebView2 עם תיקיית נתונים הניתנת לכתיבה.
   /// חייב להיקרא לפני יצירת כל InAppWebView.
   ///
