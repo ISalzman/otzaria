@@ -3,7 +3,10 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/bloc/tour_state.dart';
 import 'package:updat/updat.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -370,15 +373,47 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   /// טיימר להעלמה אוטומטית של צ'יפ השגיאה אחרי 4 שניות.
   Timer? _errorDismissTimer;
 
+  /// מנוי על מצב הסיור המודרך, פעיל רק כל עוד אנו ממתינים לסיומו לפני
+  /// בדיקת העדכון הראשונית.
+  StreamSubscription<TourState>? _tourSubscription;
+
+  /// מסמן שהבדיקה האוטומטית הראשונית כבר הופעלה, כדי שלא תופעל פעמיים.
+  bool _initialCheckTriggered = false;
+
   @override
   void initState() {
     super.initState();
     _installWindowCloseHook();
-    _checkForUpdate();
+    // דוחים את הבדיקה הראשונית ל-post-frame כדי שהסיור המודרך (שמופעל אף הוא
+    // ב-post-frame, מוקדם יותר באותו פריים) יספיק לעדכן את מצבו לפני שנחליט.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _startInitialUpdateCheckRespectingTour();
+    });
+  }
+
+  /// מפעיל את בדיקת העדכון הראשונית רק כשהסיור המודרך אינו פעיל. אם הסיור פעיל,
+  /// מאזין למצבו וממתין עד שיסתיים (סיום או דילוג) לפני הבדיקה.
+  void _startInitialUpdateCheckRespectingTour() {
+    if (_initialCheckTriggered) return;
+    final tourCubit = context.read<TourCubit>();
+    if (!tourCubit.state.isActive) {
+      _initialCheckTriggered = true;
+      _checkForUpdate();
+      return;
+    }
+    _tourSubscription ??= tourCubit.stream.listen((tourState) {
+      if (tourState.isActive || _initialCheckTriggered) return;
+      _initialCheckTriggered = true;
+      _tourSubscription?.cancel();
+      _tourSubscription = null;
+      if (mounted) _checkForUpdate();
+    });
   }
 
   @override
   void dispose() {
+    _tourSubscription?.cancel();
     _errorDismissTimer?.cancel();
     if (_windowCloseHookInstalled) {
       windowManager.removeListener(_windowListener);
