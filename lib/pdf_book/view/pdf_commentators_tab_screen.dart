@@ -41,7 +41,12 @@ class PdfCommentatorsTabScreen extends StatefulWidget {
 }
 
 class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  // שומר את ה-State חי כשהטאב יוצא מתחום ה-PageView, כדי שבחירת הכותרת/פסקה
+  // לא תאבד במעבר לטאב אחר וחזרה.
+  @override
+  bool get wantKeepAlive => true;
+
   List<MapEntry<String, int>>? _sortedHeadings;
   int _selectedHeadingIdx = 0;
   int _selectedParagraphIdx = 0;
@@ -406,6 +411,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // נדרש ע"י AutomaticKeepAliveClientMixin
     if (_sortedHeadings == null) _initHeadings();
     final paragraphs = _getParagraphs(_selectedHeadingIdx);
     final safeParaIdx = _selectedParagraphIdx == _kAllPara || paragraphs.isEmpty
