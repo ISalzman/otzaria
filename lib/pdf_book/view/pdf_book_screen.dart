@@ -3680,14 +3680,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
       ActionButtonData.simple(
         icon: FluentIcons.zoom_in_24_regular,
-        tooltip: 'הגדל את גודל הטקסט',
+        tooltip: 'הגדל את התצוגה',
         onPressed: _zoomIn,
         compact: false,
         visual: ActionButtonVisual.iconButton,
       ),
       ActionButtonData.simple(
         icon: FluentIcons.zoom_out_24_regular,
-        tooltip: 'הקטן את גודל הטקסט',
+        tooltip: 'הקטן את התצוגה',
         onPressed: _zoomOut,
         compact: false,
         visual: ActionButtonVisual.iconButton,
