@@ -10,18 +10,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
+import 'package:otzaria/migration/database/daos/database.dart';
+import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/models/category.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(() {
+  late MyDatabase cacheDb;
+  late SeforimRepository cacheRepo;
+
+  setUp(() async {
+    // warmUp() מפעיל ברקע prune + prewarm של מטמון ה-outline. בלי override
+    // אלה היו פותחים cache.db אמיתי תחת AppData בזמן הטסט. DB in-memory מבודד
+    // את הגישה.
+    cacheDb = MyDatabase.withPath(':memory:');
+    cacheRepo = SeforimRepository(cacheDb);
+    await cacheRepo.ensureInitialized();
+
     // ניקוי שלושת הקאשים לסטטוס ידוע — singletons שמשותפים בין טסטים.
     ReferenceBooksCache.instance.clear();
     BooksCache.instance.clear();
     AcronymsCache.instance.clear();
     ReferenceBooksCache.instance.categoriesProviderOverride = null;
-    ReferenceBooksCache.instance.pdfOutlineCacheRepositoryOverride = null;
+    ReferenceBooksCache.instance.pdfOutlineCacheRepositoryOverride = cacheRepo;
     ReferenceBooksCache.instance.pdfFileMetadataProviderOverride = null;
     ReferenceBooksCache.instance.nowProviderOverride = null;
   });
@@ -31,6 +43,7 @@ void main() {
     ReferenceBooksCache.instance.pdfOutlineCacheRepositoryOverride = null;
     ReferenceBooksCache.instance.pdfFileMetadataProviderOverride = null;
     ReferenceBooksCache.instance.nowProviderOverride = null;
+    cacheDb.close();
   });
 
   group('ReferenceBooksCache — race condition מול clear()', () {

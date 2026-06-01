@@ -6,6 +6,7 @@ import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/book_database_resolver.dart';
+import 'package:otzaria/data/data_providers/cache_database_holder.dart';
 import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
@@ -641,9 +642,24 @@ class ReferenceBooksCache {
     }
   }
 
-  SeforimRepository? get _persistentPdfOutlineRepository =>
-      pdfOutlineCacheRepositoryOverride ??
-      SqliteDataProvider.instance.repository;
+  /// מחזיר את ה-repository הכתיב למטמון ה-outline. ברירת המחדל היא
+  /// [CacheDatabaseHolder] (קובץ `cache.db` נפרד וכתיב) ולא `seforim.db`,
+  /// כדי ש-`seforim.db` יוכל להיפתח read-only. בבדיקות ניתן לדרוס דרך
+  /// [pdfOutlineCacheRepositoryOverride].
+  Future<SeforimRepository?> _resolvePdfOutlineRepository() async {
+    final override = pdfOutlineCacheRepositoryOverride;
+    if (override != null) return override;
+
+    try {
+      return await CacheDatabaseHolder.instance.repository;
+    } catch (e) {
+      debugPrint(
+        '[ReferenceBooksCache] Failed to open cache.db for PDF outline '
+        'persistence: $e',
+      );
+      return null;
+    }
+  }
 
   int _nowMillis() => (nowProviderOverride ?? _defaultNowMillis).call();
 
@@ -651,7 +667,7 @@ class ReferenceBooksCache {
 
   Future<PdfOutlineCacheEntry?> _loadPersistentPdfOutline(
       String filePath) async {
-    final repository = _persistentPdfOutlineRepository;
+    final repository = await _resolvePdfOutlineRepository();
     if (repository == null) return null;
 
     try {
@@ -666,7 +682,7 @@ class ReferenceBooksCache {
   }
 
   Future<void> _savePersistentPdfOutline(PdfOutlineCacheEntry entry) async {
-    final repository = _persistentPdfOutlineRepository;
+    final repository = await _resolvePdfOutlineRepository();
     if (repository == null) return;
 
     try {
@@ -680,7 +696,7 @@ class ReferenceBooksCache {
   }
 
   Future<void> _touchPersistentPdfOutline(String filePath) async {
-    final repository = _persistentPdfOutlineRepository;
+    final repository = await _resolvePdfOutlineRepository();
     if (repository == null) return;
 
     try {
@@ -694,7 +710,7 @@ class ReferenceBooksCache {
   }
 
   Future<void> _deletePersistentPdfOutline(String filePath) async {
-    final repository = _persistentPdfOutlineRepository;
+    final repository = await _resolvePdfOutlineRepository();
     if (repository == null) return;
 
     try {
@@ -712,7 +728,7 @@ class ReferenceBooksCache {
     Set<String>? knownFilePaths,
     Duration ttl = _persistentPdfOutlineCacheTtl,
   }) async {
-    final repository = _persistentPdfOutlineRepository;
+    final repository = await _resolvePdfOutlineRepository();
     if (repository == null) return;
 
     final cutoffMillis = _nowMillis() - ttl.inMilliseconds;

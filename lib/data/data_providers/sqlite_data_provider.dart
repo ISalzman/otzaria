@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:otzaria/data/data_providers/book_database_resolver.dart';
@@ -8,7 +9,7 @@ import 'package:otzaria/migration/database/daos/database.dart';
 import 'package:otzaria/migration/models/model_adapters.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
-import 'package:sqlite3/sqlite3.dart' show SqliteException;
+import 'package:sqlite3/sqlite3.dart' show SqliteException, sqlite3;
 
 /// A data provider that manages SQLite database operations for the library.
 ///
@@ -73,8 +74,14 @@ class SqliteDataProvider {
       return;
     }
 
+    // seforim.db נפתח read-only כברירת מחדל. עדכוני ספרייה (sync/generator/
+    // מחיקה) פותחים חיבור כתיב זמני דרך [withWritableSession]. לפני הפתיחה
+    // ה-read-only יש לוודא שהקובץ אינו במצב WAL — אחרת SQLite לא יוכל לפתוח
+    // אותו ללא יצירת קובצי -wal/-shm (שדורשים הרשאת כתיבה).
+    await _normalizeJournalModeForReadOnly(_dbPath);
+
     try {
-      final database = MyDatabase.withPath(_dbPath);
+      final database = MyDatabase.withPath(_dbPath, readOnly: true);
       _repository = SeforimRepository(database);
       await _repository.ensureInitialized();
       _isInitialized = true;
@@ -110,6 +117,97 @@ class SqliteDataProvider {
       _repository.database.close();
       _isInitialized = false;
     }
+  }
+
+  /// שרשרת לסריאליזציה של write-sessions — מבטיחה שלא ירוצו שתי כתיבות
+  /// במקביל על seforim.db.
+  Future<void> _writeChain = Future<void>.value();
+
+  /// מנרמל את מצב היומן של [dbPath] ל-DELETE (best-effort) כדי שניתן יהיה
+  /// לפתוח אותו read-only.
+  ///
+  /// התקנות קיימות שמרו את seforim.db במצב WAL. פתיחת קובץ WAL ב-read-only
+  /// דורשת יצירת קובצי -wal/-shm (כתיבה לתיקייה). פתיחה כתיבה חד-פעמית כאן,
+  /// checkpoint, והמרה ל-DELETE פותרים זאת. אם התיקייה אינה כתיבה (מדיה
+  /// read-only אמיתית) — נכשל בשקט; הקובץ המופץ כבר במצב DELETE.
+  Future<void> _normalizeJournalModeForReadOnly(String dbPath) async {
+    try {
+      if (!await File(dbPath).exists()) return;
+      final db = sqlite3.open(dbPath);
+      try {
+        try {
+          db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+        } catch (_) {}
+        db.execute('PRAGMA journal_mode=DELETE');
+      } finally {
+        db.close();
+      }
+    } catch (e) {
+      debugPrint('[SqliteDataProvider] Could not normalise journal mode '
+          '(directory may be read-only): $e');
+    }
+  }
+
+  /// מריץ פעולת כתיבה על seforim.db דרך חיבור כתיב זמני, ואז חוזר ל-read-only.
+  ///
+  /// בזמן רגיל seforim.db פתוח read-only. כדי לעדכן את הספרייה (הוספת/מחיקת
+  /// ספרים, generator) נדרשת כתיבה: המתודה סוגרת את חיבור ה-RO, פותחת חיבור
+  /// RW מלא (כולל WAL ו-DDL), מריצה את [action] עם ה-repository הכתיב, מבצעת
+  /// checkpoint והמרה חזרה ל-DELETE, ואז מאתחלת מחדש את חיבור ה-RO.
+  ///
+  /// קריאות מקבילות מסונכרנות דרך שרשרת פנימית כדי למנוע שתי כתיבות במקביל.
+  Future<T> withWritableSession<T>(
+    Future<T> Function(SeforimRepository repository) action,
+  ) {
+    final result = _writeChain.then((_) => _runWritableSession(action));
+    // שומר את השרשרת חיה גם בכשל, בלי להדליף שגיאות לקריאה הבאה.
+    _writeChain = result.then((_) {}, onError: (_) {});
+    return result;
+  }
+
+  Future<T> _runWritableSession<T>(
+    Future<T> Function(SeforimRepository repository) action,
+  ) async {
+    final dbPath =
+        _dbPath.isNotEmpty ? _dbPath : DatabaseConstants.getDatabasePath();
+
+    // שחרור חיבור ה-RO כדי לפנות את נעילת הקובץ.
+    if (_isInitialized) {
+      _repository.database.close();
+      _isInitialized = false;
+    }
+
+    final writableDb = MyDatabase.withPath(dbPath, readOnly: false);
+    final writableRepo = SeforimRepository(writableDb);
+    try {
+      await writableRepo.ensureInitialized();
+      final result = await action(writableRepo);
+      // checkpoint + המרה ל-DELETE כדי שהפתיחה ה-RO הבאה לא תצטרך -wal/-shm.
+      try {
+        await writableRepo.executeRawQuery('PRAGMA wal_checkpoint(TRUNCATE)');
+      } catch (_) {}
+      try {
+        await writableRepo.setJournalMode('DELETE');
+      } catch (_) {}
+      return result;
+    } finally {
+      writableDb.close();
+      // פתיחה מחדש read-only.
+      await initialize();
+    }
+  }
+
+  /// סוגר את חיבור ה-RO לפני שאיזולייט חיצוני (diff-sync / background sync)
+  /// פותח את seforim.db לכתיבה, כדי שלא תתפוס נעילת קובץ מתנגשת.
+  ///
+  /// יש לקרוא ל-[reopenAfterExternalWrite] לאחר שהאיזולייט סיים.
+  Future<void> closeForExternalWrite() async {
+    await dispose();
+  }
+
+  /// פותח מחדש את seforim.db read-only לאחר שאיזולייט חיצוני סיים לכתוב.
+  Future<void> reopenAfterExternalWrite() async {
+    await initialize();
   }
 
   /// Checks if a book exists in the database
@@ -414,17 +512,15 @@ class SqliteDataProvider {
   }
 
   /// Optimizes the database (VACUUM)
+  ///
+  /// VACUUM כותב לקובץ ולכן רץ דרך write-session זמני (החיבור הרגיל פתוח
+  /// read-only).
   Future<void> optimizeDatabase() async {
-    if (!_isInitialized) {
-      await initialize();
-    }
-    if (!_isInitialized) {
-      throw Exception('Database not initialized');
-    }
-
     try {
-      final db = await _repository.database.database;
-      db.execute('VACUUM');
+      await withWritableSession((repository) async {
+        final db = await repository.database.database;
+        db.execute('VACUUM');
+      });
     } catch (e) {
       debugPrint('❌ Error optimizing database: $e');
       rethrow;

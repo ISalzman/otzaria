@@ -23,7 +23,12 @@ class DataCollectionService {
       if (await dbProvider.databaseExists()) {
         sqlite3.Database? db;
         try {
-          db = sqlite3.sqlite3.open(DatabaseConstants.getDatabasePath());
+          // קריאה בלבד — נפתח read-only כדי לתמוך ב-seforim.db על מדיה
+          // לקריאה-בלבד ולא ליצור קובצי WAL צדדיים.
+          db = sqlite3.sqlite3.open(
+            DatabaseConstants.getDatabasePath(),
+            mode: sqlite3.OpenMode.readOnly,
+          );
           final result = db.select(
             'SELECT value FROM db_meta WHERE key = ? LIMIT 1',
             ['content_version_str'],

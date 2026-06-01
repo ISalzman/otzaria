@@ -584,7 +584,9 @@ class _BookGridActionColumn extends StatelessWidget {
             fileType: book.fileType,
           ),
           builder: (context, snapshot) {
-            if (snapshot.data != 'DB') {
+            // מחיקה מה-DB מותרת רק לספרים אישיים (user_books.db). הספרייה
+            // הרשמית (seforim.db) היא read-only ואינה ניתנת למחיקה ע"י המשתמש.
+            if (snapshot.data != 'DB' || !book.isUserBook) {
               return const SizedBox.shrink();
             }
 
