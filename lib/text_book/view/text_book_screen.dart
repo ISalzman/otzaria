@@ -131,12 +131,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   bool get wantKeepAlive => true;
   final FocusNode textSearchFocusNode = FocusNode();
   final FocusNode navigationSearchFocusNode = FocusNode();
+  final FocusNode altTitlesSearchFocusNode = FocusNode();
   final FocusNode _bookContentFocusNode = FocusNode(); // FocusNode לתוכן הספר
   late TabController tabController;
   late final ValueNotifier<double> _sidebarWidth;
   late final StreamSubscription<SettingsState> _settingsSub;
   int? _sidebarTabIndex; // אינדקס הכרטיסייה בסרגל הצדי
-  bool _isInitialFocusDone = false;
+  // עוקב אחרי מצב הפאנל הצדדי כדי לבקש פוקוס לשדה החיפוש רק ברגע שהפאנל
+  // נפתח (false→true) ולא בכל rebuild - אחרת היה גונב פוקוס מתוכן הספר.
+  bool _wasLeftPaneShown = false;
   FocusRepository? _focusRepository; // שמירת הפניה לשימוש ב-dispose
   final GlobalKey _viewModeMenuKey = GlobalKey(); // מפתח לתפריט בחירת התצוגה
   String? _selectedTextForSearch;
@@ -561,6 +564,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       vsync: this,
       initialIndex: initialIndex,
     );
+    tabController.addListener(_handleTabChange);
 
     // בדיקה האם יש כותרות חלופיות
     _checkAltTitles();
@@ -651,10 +655,35 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             vsync: this,
             initialIndex: newIndex,
           );
+          tabController.addListener(_handleTabChange);
         });
       }
     } catch (e) {
       debugPrint('Error checking alt titles: $e');
+    }
+  }
+
+  /// מאזין למעבר בין לשוניות הפאנל הצדדי. מעביר פוקוס לשדה החיפוש של
+  /// הלשונית החדשה רק לאחר שהמעבר הושלם (לא במהלך אנימציית המעבר).
+  void _handleTabChange() {
+    if (tabController.indexIsChanging) return;
+    _focusActiveTabSearchField();
+  }
+
+  /// מבקש פוקוס לשדה החיפוש של הלשונית הפעילה בפאנל הצדדי
+  /// ('ניווט' / 'כותרות' / 'חיפוש'). לא עושה דבר באנדרואיד או כשהפאנל סגור.
+  void _focusActiveTabSearchField() {
+    if (Platform.isAndroid) return;
+    final state = context.read<TextBookBloc>().state;
+    if (state is! TextBookLoaded || !state.showLeftPane) return;
+
+    final int searchTabIndex = _hasAltTitles ? 2 : 1;
+    if (tabController.index == 0) {
+      navigationSearchFocusNode.requestFocus();
+    } else if (_hasAltTitles && tabController.index == 1) {
+      altTitlesSearchFocusNode.requestFocus();
+    } else if (tabController.index == searchTabIndex) {
+      textSearchFocusNode.requestFocus();
     }
   }
 
@@ -739,6 +768,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     tabController.dispose();
     textSearchFocusNode.dispose();
     navigationSearchFocusNode.dispose();
+    altTitlesSearchFocusNode.dispose();
     _bookContentFocusNode.dispose();
     _sidebarWidth.dispose();
     _pageShapeSidebarTabNotifier.dispose();
@@ -1143,7 +1173,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
                     if (!_bookContentFocusNode.hasFocus &&
                         !textSearchFocusNode.hasFocus &&
-                        !navigationSearchFocusNode.hasFocus) {
+                        !navigationSearchFocusNode.hasFocus &&
+                        !altTitlesSearchFocusNode.hasFocus) {
                       _bookContentFocusNode.requestFocus();
                     }
                   });
@@ -2415,19 +2446,20 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Widget _buildLeftPaneContent(TextBookLoaded state) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (state.showLeftPane && !Platform.isAndroid && !_isInitialFocusDone) {
-        final hasSearchText = state.searchText.trim().isNotEmpty;
-        if (hasSearchText) {
-          if (tabController.index == (_hasAltTitles ? 2 : 1)) {
-            textSearchFocusNode.requestFocus();
-          } else if (tabController.index == 0) {
-            navigationSearchFocusNode.requestFocus();
-          }
-        }
-        _isInitialFocusDone = true;
-      }
-    });
+    // ברגע שהפאנל הצדדי נפתח (false→true) מעבירים פוקוס לשדה החיפוש של
+    // הלשונית הפעילה. ההחלטה מבוצעת בפונקציה טהורה (resolveLeftPaneSearchFocus)
+    // שמבטיחה שלא נבקש פוקוס בכל rebuild - הגנה מפני רגרסיה לבאג הגלילה
+    // האינסופית (commit 41a5816fc).
+    final focusDecision = resolveLeftPaneSearchFocus(
+      showLeftPane: state.showLeftPane,
+      wasShown: _wasLeftPaneShown,
+    );
+    _wasLeftPaneShown = focusDecision.wasShownNext;
+    if (focusDecision.shouldFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusActiveTabSearchField();
+      });
+    }
     return Column(
       children: [
         SidebarTabHeader(
@@ -2465,6 +2497,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               if (_hasAltTitles)
                 AltTocSidebarView(
                   book: widget.tab.book,
+                  focusNode: altTitlesSearchFocusNode,
                   closeLeftPaneCallback: () => context
                       .read<TextBookBloc>()
                       .add(const ToggleLeftPane(false)),
@@ -2526,6 +2559,23 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
     );
   }
+}
+
+/// מחליטה אם לבקש פוקוס לשדה החיפוש של הפאנל הצדדי, ומחזירה גם את המצב
+/// הבא של "הפאנל הוצג".
+///
+/// מבקשים פוקוס אך ורק במעבר של הפאנל מסגור לפתוח. בכל rebuild שבו הפאנל
+/// כבר פתוח (למשל בזמן גלילה, שבה ה-bloc פולט states חדשים שוב ושוב) —
+/// [shouldFocus] יהיה false. זו ההגנה מפני רגרסיה לבאג "הגלילה האינסופית"
+/// (commit 41a5816fc): קריאת requestFocus חוזרת בכל build חטפה פוקוס מתוכן
+/// הספר ויצרה לולאת גלילה עד סוף המסמך.
+({bool shouldFocus, bool wasShownNext}) resolveLeftPaneSearchFocus({
+  required bool showLeftPane,
+  required bool wasShown,
+}) {
+  if (!showLeftPane) return (shouldFocus: false, wasShownNext: false);
+  if (wasShown) return (shouldFocus: false, wasShownNext: true);
+  return (shouldFocus: true, wasShownNext: true);
 }
 
 int _topmostVisibleIndex(TextBookLoaded state) =>

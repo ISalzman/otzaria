@@ -502,8 +502,10 @@ class _TocViewerState extends State<TocViewer>
                   child: RtlTextField(
                     controller: searchController,
                     onChanged: (value) => setState(() {}),
+                    // ללא autofocus: הפוקוס מנוהל אך ורק דרך focusNode מהמסך
+                    // האב (_focusActiveTabSearchField), שמכבד את ההגנה מפני
+                    // פוקוס אוטומטי באנדרואיד. autofocus היה עוקף הגנה זו.
                     focusNode: widget.focusNode,
-                    autofocus: true,
                     onSubmitted: (_) {
                       widget.focusNode.requestFocus();
                     },
