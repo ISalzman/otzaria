@@ -16,16 +16,16 @@ Future<String> refFromIndex(
         searchToc(entry.children, index);
         continue;
       }
-      if (entry.level > texts.length) {
-        texts.add(entry.text);
-      } else {
-        final targetIndex = entry.level - 1;
-        // Guard against negative index
-        if (targetIndex >= 0 && targetIndex < texts.length) {
-          texts[targetIndex] = entry.text;
-          texts = texts.getRange(0, entry.level).toList();
-        }
+      // ממקמים כל כותרת לפי הרמה האמיתית שלה (level-1). אם חסרות רמות-על
+      // (למשל ספר שמתחיל ברמה 2 בלי כותרת-חלק ברמה 1), ממלאים את המקומות
+      // החסרים במחרוזות ריקות במקום לדחוף את הכותרת לאינדקס 0 — אחרת
+      // הכותרת הראשונה הייתה "נתקעת" באינדקס 0 ומזהמת כל כתובת אחריה.
+      final targetIndex = entry.level - 1;
+      while (texts.length <= targetIndex) {
+        texts.add('');
       }
+      texts[targetIndex] = entry.text;
+      texts = texts.getRange(0, entry.level).toList();
 
       searchToc(entry.children, index);
     }
@@ -33,7 +33,7 @@ Future<String> refFromIndex(
 
   searchToc(toc, index);
 
-  texts = texts.map((e) => e.trim()).toList();
+  texts = texts.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
   return texts.join(', ');
 }
 
