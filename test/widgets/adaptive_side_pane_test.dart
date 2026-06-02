@@ -638,28 +638,36 @@ void main() {
   testWidgets('פאנל בצד ימין (centerEnd): פס הגלילה בקצה החיצוני (ימין)',
       (tester) async {
     // הפס נבנה דרך ScrollBehavior שמוסיף Scrollbar רק בדסקטופ — כופים פלטפורמה.
+    // try/finally מבטיח איפוס גם אם pumpWidget/pumpAndSettle/expect יזרקו: כך
+    // ה-override לא דולף, ולא נוצרת שגיאה משנית שמסתירה את הכשל האמיתי. (אסור
+    // להשתמש כאן ב-addTearDown — הוא רץ אחרי בדיקת ה-invariant של foundation.)
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
-    await tester.pumpWidget(
-      buildScrollablePane(alignment: AlignmentDirectional.centerEnd),
-    );
-    await tester.pumpAndSettle();
-    // מאפסים מיד אחרי הבנייה (לפני בדיקת ה-invariants של הטסט).
-    debugDefaultTargetPlatformOverride = null;
+    try {
+      await tester.pumpWidget(
+        buildScrollablePane(alignment: AlignmentDirectional.centerEnd),
+      );
+      await tester.pumpAndSettle();
 
-    final scrollbar = tester.widget<Scrollbar>(find.byType(Scrollbar));
-    expect(scrollbar.scrollbarOrientation, ScrollbarOrientation.right);
+      final scrollbar = tester.widget<Scrollbar>(find.byType(Scrollbar));
+      expect(scrollbar.scrollbarOrientation, ScrollbarOrientation.right);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets('פאנל בצד שמאל (centerStart): פס הגלילה בקצה החיצוני (שמאל)',
       (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
-    await tester.pumpWidget(
-      buildScrollablePane(alignment: AlignmentDirectional.centerStart),
-    );
-    await tester.pumpAndSettle();
-    debugDefaultTargetPlatformOverride = null;
+    try {
+      await tester.pumpWidget(
+        buildScrollablePane(alignment: AlignmentDirectional.centerStart),
+      );
+      await tester.pumpAndSettle();
 
-    final scrollbar = tester.widget<Scrollbar>(find.byType(Scrollbar));
-    expect(scrollbar.scrollbarOrientation, ScrollbarOrientation.left);
+      final scrollbar = tester.widget<Scrollbar>(find.byType(Scrollbar));
+      expect(scrollbar.scrollbarOrientation, ScrollbarOrientation.left);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }

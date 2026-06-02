@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_rpc_request.dart';
@@ -29,19 +30,26 @@ class RateLimiter {
 class PluginBridgeHandler {
   final InstalledPlugin plugin;
   final PluginBridgeAdapter adapter;
-  final RateLimiter _rateLimiter = RateLimiter();
+  final RateLimiter _rateLimiter;
   final PluginRegistryRepository _registry;
 
   PluginBridgeHandler(
     this.plugin, {
     required this.adapter,
     PluginRegistryRepository? registry,
-  }) : _registry = registry ?? PluginRegistryRepository();
+    RateLimiter? rateLimiter,
+  })  : _registry = registry ?? PluginRegistryRepository(),
+        _rateLimiter = rateLimiter ?? RateLimiter();
 
   void register(InAppWebViewController controller) {
     controller.addJavaScriptHandler(
         handlerName: 'otzaria_rpc', callback: _handleRpc);
   }
+
+  /// נקודת כניסה לבדיקות בלבד: מריצה את אותו נתיב RPC שמופעל מ-JavaScript,
+  /// כדי לבדוק את אכיפת ההרשאות וצימוד ההחרגה-מ-throttle ב-[_handleRpc].
+  @visibleForTesting
+  Future<dynamic> handleRpcForTesting(List<dynamic> args) => _handleRpc(args);
 
   /// קובע אם קריאת RPC מוחרגת ממגביל הקצב.
   ///
