@@ -26,6 +26,9 @@ import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:otzaria/services/commentary_service.dart';
+import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/printing/commentary_print_builder.dart';
+import 'package:otzaria/printing/view/printing_screen.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'dart:async'; // Added for Timer
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -660,6 +663,39 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           onPressed: _openInlineSearch,
         ),
       ],
+    );
+  }
+
+  /// פותח את מסך ההדפסה עם המפרשים המוצגים כעת (מקובצים לפי מפרש).
+  /// פומבי כדי שכרטיסיית המפרשים הייעודית תפעיל אותו מהסרגל/קיצור המקלדת.
+  Future<void> printDisplayedCommentaries() async {
+    final visibleContent = _getVisibleContent();
+    if (visibleContent == null || visibleContent.commentaryLinks.isEmpty) {
+      UiSnack.show('אין מפרשים להדפסה');
+      return;
+    }
+
+    final groups = await visibleContent.sortedGroupsFuture;
+    final blocks = await buildCommentaryPrintBlocks(groups);
+    if (blocks.isEmpty) {
+      UiSnack.show('אין מפרשים להדפסה');
+      return;
+    }
+    if (!mounted) return;
+
+    final bookTitle = widget.tab.book.title;
+    final removeTaamim = !context.read<SettingsBloc>().state.showTeamim;
+    await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PrintingScreen(
+        data: Future.value(''),
+        bookId: bookTitle,
+        documentTitle: bookTitle,
+        prebuiltBlocks: blocks,
+        removeNikud: widget.removeNikud,
+        removeTaamim: removeTaamim,
+      ),
     );
   }
 
