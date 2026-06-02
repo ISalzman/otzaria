@@ -1704,8 +1704,18 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return super.close();
   }
 
+  // אורך הרשימה חייב להיות אורך הספר המלא (totalLines) ולא רק עד endLine,
+  // אחרת itemCount של הרשימה/פס-הגלילה קטן מדי בפתיחה באמצע הספר, ופס
+  // הגלילה מתחיל קרוב לתחתית ו"גולש" למקומו רק כשהתוכן המלא נטען ברקע.
+  // השורות שמעבר לחלון הטעון נשארות placeholders ריקים — בדיוק כמו השורות
+  // שלפני תחילת החלון.
+  int _fullContentLength(BookContentRange range) =>
+      range.totalLines > range.endLine + 1
+          ? range.totalLines
+          : range.endLine + 1;
+
   List<String> _contentWithAppliedRange(BookContentRange range) {
-    final content = List<String>.filled(range.endLine + 1, '');
+    final content = List<String>.filled(_fullContentLength(range), '');
     for (var offset = 0; offset < range.lines.length; offset++) {
       final targetIndex = range.startLine + offset;
       if (targetIndex >= 0 && targetIndex < content.length) {
@@ -1716,7 +1726,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   List<bool> _loadedContentFlagsWithAppliedRange(BookContentRange range) {
-    final loadedFlags = List<bool>.filled(range.endLine + 1, false);
+    final loadedFlags = List<bool>.filled(_fullContentLength(range), false);
     for (var offset = 0; offset < range.lines.length; offset++) {
       final targetIndex = range.startLine + offset;
       if (targetIndex >= 0 && targetIndex < loadedFlags.length) {

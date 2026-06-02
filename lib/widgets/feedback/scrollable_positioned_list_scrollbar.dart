@@ -115,8 +115,13 @@ class _ScrollablePositionedListScrollbarState
     // אם maxIndex הוא itemCount-1 -> bottom 1.0 (בערך)
 
     final maxScrollableIndex = max(widget.itemCount - visibleItems, 1);
-    final newPosition =
-        (minIndex / maxScrollableIndex).clamp(0.0, 1.0 - newHeight);
+    // המיפוי ההפוך (אינדקס → מיקום אגודל) חייב להכפיל ב-(1 - newHeight) כדי
+    // להיות עקבי עם המיפוי הקדים ב-_indexFromThumbPosition (שמחלק ב-
+    // (1 - _thumbHeight)). בלי ההכפלה, אחרי לחיצה/גרירה שקפצה ליעד, העדכון
+    // הזה דרס את מיקום האגודל לערך גבוה ב-1/(1-thumbHeight) — והאגודל "ירד"
+    // ביחס למקום שנלחץ, בעוצמה שגדלה ככל שמתקדמים בספר.
+    final newPosition = ((minIndex / maxScrollableIndex) * (1.0 - newHeight))
+        .clamp(0.0, 1.0 - newHeight);
 
     // כל התוכן נראה אם הפריט הראשון מתחיל בתוך המסך, האחרון מסתיים בתוכו,
     // וכל הפריטים בטווח הזה מיוצגים — במצב כזה אין מה לגלול ואין טעם
