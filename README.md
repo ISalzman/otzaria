@@ -17,27 +17,28 @@
 
 
 
+<div dir="rtl">
 
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
   <a href="https://github.com/otzaria/otzaria">
-    <img src="images/white_sketch128x128.ico" alt="Logo" width="80" height="80">
+    <img src="images/white_sketch128x128.ico" alt="לוגו" width="80" height="80">
   </a>
 
-  <h3 align="center">Otzaria</h3>
+  <h3 align="center">אוצריא</h3>
 
   <p align="center">
-    Making the jewish library accessible to everyone by creating an app with a modern UI/UX that could run on any device
+    הנגשת הספרייה היהודית לכל אחד, על ידי יצירת אפליקציה עם ממשק וחווית משתמש מודרניים שיכולה לרוץ על כל מכשיר
     <br />
-    <a href="https://www.otzaria.org/"><strong>See our site »</strong></a>
+    <a href="https://www.otzaria.org/"><strong>לאתר שלנו »</strong></a>
     <br />
     <br/>  
-    <a href="https://github.com/otzaria/otzaria/issues/new?labels=bug&template=bug-report---.md">Report a Bug</a>
+    <a href="https://github.com/otzaria/otzaria/issues/new?labels=bug&template=bug-report---.md">דיווח על באג</a>
     ·
-    <a href="https://github.com/otzaria/otzaria/issues/new?labels=enhancement&template=feature-request---.md">Request A Feature</a>
+    <a href="https://github.com/otzaria/otzaria/issues/new?labels=enhancement&template=feature-request---.md">בקשת תכונה</a>
     ·
-    <a href="https://github.com/otzaria/otzaria/wiki">User manual</a>
+    <a href="https://github.com/otzaria/otzaria/wiki">מדריך למשתמש</a>
   </p>
 </div>
 
@@ -45,228 +46,230 @@
 
 <!-- TABLE OF CONTENTS -->
 <details>
-  <summary>Table of Contents</summary>
+  <summary>תוכן עניינים</summary>
   <ol>
     <li>
-      <a href="#about-the-project">About The Project</a>
+      <a href="#about-the-project">אודות הפרויקט</a>
       <ul>
-        <li><a href="#built-with">Built With</a></li>
+        <li><a href="#built-with">נבנה באמצעות</a></li>
       </ul>
     </li>
     <li>
-      <a href="#getting-started">Getting Started</a>
+      <a href="#getting-started">תחילת העבודה</a>
       <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
+        <li><a href="#prerequisites">דרישות מקדימות</a></li>
+        <li><a href="#installation">התקנה</a></li>
       </ul>
     </li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
-    <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgments">Acknowledgments</a></li>
+    <li><a href="#usage">שימוש</a></li>
+    <li><a href="#roadmap">מפת דרכים</a></li>
+    <li><a href="#contributing">תרומה לפרויקט</a></li>
+    <li><a href="#license">רישיון</a></li>
+    <li><a href="#contact">יצירת קשר</a></li>
+    <li><a href="#acknowledgments">תודות</a></li>
   </ol>
 </details>
 
 
 
 <!-- ABOUT THE PROJECT -->
-## About The Project
+## אודות הפרויקט
 
 ![alt text](image.png)
 
-I felt the lack of an open source app of the jewish library, for PCs.
+הרגשתי בחסרונה של אפליקציה בקוד פתוח לספרייה היהודית, עבור מחשבים.
 
 
-Torat Emet is old and no longer maintained, and Sefaria's app is great, however, it does not work well on computers.
+תורת אמת היא ישנה ואינה מתוחזקת עוד, והאפליקציה של ספריא נהדרת, אך היא אינה עובדת היטב על מחשבים.
 
-So I decided to make one myself. I did not know Dart and Flutter at all in the beginning, but it was fun. I **love** to learn new technologies!
+לכן החלטתי לבנות אחת בעצמי. בהתחלה לא הכרתי כלל את Dart ו-Flutter, אבל זה היה כיף. אני **אוהב** ללמוד טכנולוגיות חדשות!
 
-The database itself is accessible to everyone following the important work of the Sefaria organization, so a big thank to them for that.
+מסד הנתונים עצמו נגיש לכולם בעקבות עבודתם החשובה של ארגון ספריא, אז תודה גדולה להם על כך.
 
-Key features of the project:
-* The software is FREE and will remain ALWAYS FREE.
-* Built to work effeciently on any device, including Windows, Linux, and Android.
-* The app is designed to be as user friendly as possible.
-* A thorough selection process has been undertaken to ensure that the books are suitable for the Torah community
-* The library is flexible, means that you can add or remove books from the library.
-* Fast search engine, including user-added books.
-* The app supports the following formats: TXT, Docx and PDF.
+תכונות עיקריות של הפרויקט:
+* התוכנה היא חינמית ותישאר חינמית לעד.
+* נבנתה לעבוד ביעילות על כל מכשיר, כולל Windows, Linux ו-Android.
+* האפליקציה תוכננה להיות ידידותית למשתמש ככל האפשר.
+* נעשה תהליך בחירה קפדני כדי להבטיח שהספרים מתאימים לציבור התורני.
+* הספרייה גמישה, כלומר ניתן להוסיף או להסיר ספרים מהספרייה.
+* מנוע חיפוש מהיר, כולל ספרים שהמשתמש הוסיף.
+* האפליקציה תומכת בפורמטים הבאים: TXT, Docx ו-PDF.
 
-I hope that my work will help the Torah community to learn easily and effectively anytime and anywhere.
+אני מקווה שעבודתי תסייע לציבור התורני ללמוד בקלות וביעילות בכל זמן ובכל מקום.
 
-<p align="right">(<a href="#readme-top">&#8679;</a>)</p>
+<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
 
 
-### Built With
+### נבנה באמצעות
 
 
 
 * [![Dart][dart]][Dart-url]
 * [![Flutter][Flutter]][Flutter-url]
 
-I Chose to use Dart and Flutter. I think that is the most efficient and most modern way to build a GUI app.
+בחרתי להשתמש ב-Dart וב-Flutter. אני חושב שזו הדרך היעילה והמודרנית ביותר לבנות אפליקציה עם ממשק גרפי.
 
-Also, it is a multiplatform framework.
+בנוסף, זוהי מסגרת רב-פלטפורמית.
 
-<p align="right">(<a href="#readme-top">&#8679;</a>)</p>
+<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
 
 
 <!-- GETTING STARTED -->
-## Getting Started
+## תחילת העבודה
 
-### windows
-#### Installation
+### Windows
+#### התקנה
 
-**Choose your installer:**
+**בחרו את קובץ ההתקנה שלכם:**
 
-1. **Full Installer (Recommended)** - `otzaria-x.x.x-windows-full.exe`
-   - Includes all required dependencies (Visual C++ Redistributable)
-   - Automatically installs missing components
-   - Best choice for most users
-   - Larger download size (~100MB more)
+1. **התקנה מלאה (מומלץ)** - `otzaria-x.x.x-windows-full.exe`
+   - כולל את כל התלויות הנדרשות (Visual C++ Redistributable)
+   - מתקין אוטומטית רכיבים חסרים
+   - הבחירה הטובה ביותר לרוב המשתמשים
+   - גודל הורדה גדול יותר (כ-100MB יותר)
 
-2. **Regular Installer** - `otzaria-x.x.x-windows.exe`
-   - Smaller download size
-   - Requires Visual C++ Redistributable to be pre-installed
-   - For users who know they already have the required dependencies
+2. **התקנה רגילה** - `otzaria-x.x.x-windows.exe`
+   - גודל הורדה קטן יותר
+   - דורש ש-Visual C++ Redistributable יהיה מותקן מראש
+   - עבור משתמשים שיודעים שכבר יש להם את התלויות הנדרשות
 
-Download the latest build for Windows from [releases](https://github.com/otzaria/otzaria/releases). 
+הורידו את הגרסה האחרונה ל-Windows מ-[releases](https://github.com/otzaria/otzaria/releases). 
 
-**Note:** The library is included in the .exe file.
-In case you need only the app itself for upgrading, download the Windows ZIP build from releases.
+**הערה:** הספרייה כלולה בקובץ ה-.exe.
+במקרה שאתם זקוקים רק לאפליקציה עצמה לצורך שדרוג, הורידו את גרסת ה-ZIP ל-Windows מ-releases.
 
-#### Prerequisites (for Regular Installer only)
-If using the regular installer, make sure that Visual C++ Redistributable is installed on your computer. If not, download it from [here](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) and install it.
+#### דרישות מקדימות (להתקנה הרגילה בלבד)
+אם אתם משתמשים בהתקנה הרגילה, ודאו ש-Visual C++ Redistributable מותקן במחשב שלכם. אם לא, הורידו אותו מ-[כאן](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) והתקינו אותו.
 
-### linux
-#### Prerequisites
+### Linux
+#### דרישות מקדימות
 ```sudo apt-get install libgtk-3-0 libblkid1 liblzma5```
-#### Installation
-* Download the linux build from releases, extract and run Otzaria.
-* For version releases there is also a FULL bundle: `otzaria-linux-full.tar.gz`.
-* The FULL bundle includes the app and the library together. Extract it and run `run-otzaria.sh`.
-* When first running the app, you will be asked to download the library.
-* Llternatively, you can download the library manually from [here](https://github.com/otzaria/otzaria/releases), extract it and provide its path to the app.
+#### התקנה
+* הורידו את גרסת Linux מ-releases, חלצו והריצו את Otzaria.
+* עבור גרסאות רשמיות קיים גם חבילה מלאה (FULL): `otzaria-linux-full.tar.gz`.
+* החבילה המלאה כוללת את האפליקציה והספרייה יחד. חלצו אותה והריצו את `run-otzaria.sh`.
+* בהרצה הראשונה של האפליקציה, תתבקשו להוריד את הספרייה.
+* לחלופין, ניתן להוריד את הספרייה ידנית מ-[כאן](https://github.com/otzaria/otzaria/releases), לחלץ אותה ולספק את הנתיב שלה לאפליקציה.
 
-### android
-* The app is available on Google Play: [link](https://play.google.com/store/apps/details?id=org.otzaria.otzaria)
-* Alternatively, you can download the .apk file from the releases page, and install it.
-* For version releases there is also a FULL bundle: `otzaria-android-full.zip`.
-* The Android FULL bundle includes the APK together with the offline library payload for distribution.
-* When first running the app, you will be asked to download the library.
-* Alternatively, you can download the library manually from [here](https://github.com/otzaria/otzaria/releases) and provide the zip file to the app.
+### Android
+* האפליקציה זמינה ב-Google Play: [קישור](https://play.google.com/store/apps/details?id=org.otzaria.otzaria)
+* לחלופין, ניתן להוריד את קובץ ה-.apk מדף ה-releases ולהתקין אותו.
+* עבור גרסאות רשמיות קיים גם חבילה מלאה (FULL): `otzaria-android-full.zip`.
+* החבילה המלאה ל-Android כוללת את ה-APK יחד עם תוכן הספרייה הלא-מקוון להפצה.
+* בהרצה הראשונה של האפליקציה, תתבקשו להוריד את הספרייה.
+* לחלופין, ניתן להוריד את הספרייה ידנית מ-[כאן](https://github.com/otzaria/otzaria/releases) ולספק את קובץ ה-zip לאפליקציה.
 
-### iOS (iPhone/iPad)
-* The app is available on AppStore: [link](https://apps.apple.com/us/app/otzaria/id6738098031)
-* When first running the app, you will be asked to download the library.
+### iOS (אייפון/אייפד)
+* האפליקציה זמינה ב-AppStore: [קישור](https://apps.apple.com/us/app/otzaria/id6738098031)
+* בהרצה הראשונה של האפליקציה, תתבקשו להוריד את הספרייה.
 
-### macos
-* Download the latest MacOS build from the releases page.
-* For version releases there is also a FULL bundle: `otzaria-macos-full.zip`.
-* The FULL bundle includes the app and the library together. Extract it and launch `Run Otzaria.command`.
-* Run the app while pressing the ctrl key.
-* When first running the app, you will be asked to download the library.
-* Alternatively, you can download the library manually from [here](https://github.com/otzaria/otzaria/releases), extract it and provide its path to the app.
+### macOS
+* הורידו את גרסת MacOS האחרונה מדף ה-releases.
+* עבור גרסאות רשמיות קיים גם חבילה מלאה (FULL): `otzaria-macos-full.zip`.
+* החבילה המלאה כוללת את האפליקציה והספרייה יחד. חלצו אותה והפעילו את `Run Otzaria.command`.
+* הריצו את האפליקציה תוך לחיצה על מקש ctrl.
+* בהרצה הראשונה של האפליקציה, תתבקשו להוריד את הספרייה.
+* לחלופין, ניתן להוריד את הספרייה ידנית מ-[כאן](https://github.com/otzaria/otzaria/releases), לחלץ אותה ולספק את הנתיב שלה לאפליקציה.
 
 
 
-<p align="right">(<a href="#readme-top">&#8679;</a>)</p>
+<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
 
 
 <!-- USAGE EXAMPLES -->
-## Usage
+## שימוש
 
-See the Wiki section for documentation.
+לתיעוד, ראו את מדור ה-Wiki.
 
-<p align="right">(<a href="#readme-top">&#8679;</a>)</p>
+<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
 
 
 <!-- ROADMAP -->
-## Roadmap
+## מפת דרכים
 
-- [ ] Add business logic layer by switching the state management library to Bloc.
-- [ ] Transfer books data from text files to SQLite database
-- [ ] Add option for semantic search using an embedding ML model and vector database
-- [ ] Language Support
-    - [ ] English
-    - [X] Hebrew
+- [x] הוספת שכבת לוגיקה עסקית על ידי החלפת ספריית ניהול המצב ל-Bloc.
+- [x] העברת נתוני הספרים מקובצי טקסט למסד נתונים SQLite
+- [ ] הוספת אפשרות לחיפוש סמנטי באמצעות מודל ML להטמעות (embedding) ומסד נתונים 
 
-See the [open issues](https://github.com/otzaria/otzaria/issues) for a full list of proposed features (and known issues).
+ראו את [הבעיות הפתוחות](https://github.com/otzaria/otzaria/issues) לרשימה מלאה של תכונות מוצעות (ובעיות ידועות).
 
-<p align="right">(<a href="#readme-top">&#8679;</a>)</p>
+<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
 
 
 <!-- CONTRIBUTING -->
-## Contributing
+## תרומה לפרויקט
 
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+תרומות הן מה שהופך את קהילת הקוד הפתוח למקום כה מדהים ללמוד, לתת השראה וליצור. כל תרומה שתתרמו **מוערכת מאוד**.
 
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
-Don't forget to give the project a star! Thanks again!
+אם יש לכם הצעה שתשפר את הפרויקט, אנא בצעו fork למאגר וצרו pull request. ניתן גם פשוט לפתוח issue עם התגית "enhancement".
+אל תשכחו לתת לפרויקט כוכב! תודה שוב!
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+1. בצעו Fork לפרויקט
+2. צרו ענף תכונה משלכם (`git checkout -b feature/AmazingFeature`)
+3. בצעו Commit לשינויים שלכם (`git commit -m 'Add some AmazingFeature'`)
+4. בצעו Push לענף (`git push origin feature/AmazingFeature`)
+5. פתחו Pull Request
 
-### Build Troubleshooting
+### פתרון בעיות בבנייה (Build)
 
-**SSL Certificate Error on Filtered Networks (NetFree, etc.)**
+**שגיאת תעודת SSL ברשתות מסוננות (NetFree וכדומה)**
 
-If you encounter an SSL certificate error when building for Windows (e.g., `status_code: 60`, `CERT_TRUST_REVOCATION_STATUS_UNKNOWN`), it is likely due to network filtering.
+אם אתם נתקלים בשגיאת תעודת SSL בעת בנייה ל-Windows (למשל `status_code: 60`, `CERT_TRUST_REVOCATION_STATUS_UNKNOWN`), סביר להניח שהדבר נובע מסינון רשת.
 
-For a detailed step-by-step solution, please refer to the **[NetFree Wiki - Flutter Setup Guide](https://netfree.link/wiki/%D7%94%D7%AA%D7%A7%D7%A0%D7%AA_%D7%AA%D7%A2%D7%95%D7%93%D7%94_%D7%A2%D7%91%D7%95%D7%A8_%D7%A1%D7%91%D7%99%D7%91%D7%AA_Flutter#windows)**.
+לפתרון מפורט שלב-אחר-שלב, אנא עיינו ב-**[ויקי NetFree - מדריך הגדרת Flutter](https://netfree.link/wiki/%D7%94%D7%AA%D7%A7%D7%A0%D7%AA_%D7%AA%D7%A2%D7%95%D7%93%D7%94_%D7%A2%D7%91%D7%95%D7%A8_%D7%A1%D7%91%D7%99%D7%91%D7%AA_Flutter#windows)**.
 
-**Quick Fix (PowerShell):**
-If you need a quick workaround before building, run:
+**פתרון מהיר (PowerShell):**
+אם אתם זקוקים לעקיפה מהירה לפני הבנייה, הריצו:
 ```powershell
 $env:CMAKE_TLS_VERIFY="0"
 flutter build windows
 ```
 
-<p align="right">(<a href="#readme-top">&#8679;</a>)</p>
+<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
 
 
 <!-- LICENSE -->
-## License
+## רישיון
 
-The code is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
+הקוד מורשה תחת [רישיון GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
-This means:
-- ✅ You can use, modify, and distribute this software
-- ✅ Any modifications must be released under the same GPL-3.0 license
-- ✅ Source code must be made available when distributing
-- ❌ Commercial use requires sharing all modifications and improvements
+משמעות הדבר:
+- ✅ ניתן להשתמש בתוכנה זו, לשנות אותה ולהפיץ אותה
+- ✅ כל שינוי חייב להיות מופץ תחת אותו רישיון GPL-3.0
+- ✅ קוד המקור חייב להיות זמין בעת ההפצה
+- ❌ שימוש מסחרי מחייב שיתוף של כל השינויים והשיפורים
 
-The texts have different open licenses. You may check Sefaria's site for more info on that.
+לטקסטים יש רישיונות פתוחים שונים. ניתן לבדוק באתר של ספריא למידע נוסף על כך.
 
-<p align="right">(<a href="#readme-top">&#8679;</a>)</p>
+<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
 
 
 <!-- CONTACT -->
-## Contact
+## יצירת קשר
 
-Support: otzaria.1@gmail.com
+תמיכה: otzaria.1@gmail.com
 
-Project Link: [https://github.com/otzaria/otzaria](https://github.com/otzaria/otzaria)
+קישור לפרויקט: [https://github.com/otzaria/otzaria](https://github.com/otzaria/otzaria)
 
-<p align="right">(<a href="#readme-top">&#8679;</a>)</p>
+<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
 
 
 <!-- ACKNOWLEDGMENTS -->
-## Acknowledgments
+## תודות
 
-תוכנה זו נוצרה והוקדשה על ידי: [sivan22](https://github.com/Sivan22), [Y.PL.](https://github.com/Y-PLONI), [YOSEFTT](https://github.com/YOSEFTT), [zevisvei](https://github.com/zevisvei), [NHLOCAL (פיתוח "זכור ושמור")](https://github.com/NHLOCAL/Shamor-Zachor), [evel-avalim (פיתוח הגימטריות)](https://github.com/evel-avalim).
+תוכנה זו נוצרה והוקדשה על ידי: [sivan22](https://github.com/Sivan22), [ר. נבון (השקעה עצומה במעבר ל-SQLite)](https://github.com/rachelGrayover), [Y.PL.](https://github.com/Y-PLONI), [YOSEFTT](https://github.com/YOSEFTT), [zevisvei](https://github.com/zevisvei), [evel-avalim](https://github.com/evel-avalim), [userbot](https://github.com/userbot000), [mosh-dvd](https://github.com/mosh-dvd), [NHLOCAL (פיתוח "שמור וזכור")](https://github.com/NHLOCAL/Shamor-Zachor).
 <br>
 <br>
 
 
-The project was possible because of Sefaria's amazing project. 
+תודה מיוחדת ל-**[אליהו גמבש](https://github.com/kdroidFilter)** על העבודה העצומה בהמרת נתוני ספריא ל-SQLite.
 <br>
-and Dicta association, by which many important books were added.
+<br>
+
+
+הפרויקט התאפשר בזכות הפרויקט המדהים של ספריא. 
+<br>
+ובזכות עמותת דיקטה, שבאמצעותה נוספו ספרים חשובים רבים.
 <br>
 <br>
 <a href="https://www.sefaria.org/texts" title="ספריא" target="_blank"><img src="images/safria logo.png" alt="ספריא" width="154" height="80"/></a>
@@ -282,12 +285,13 @@ and Dicta association, by which many important books were added.
 
 <!--a href="https://github.com/projectbenyehuda/public_domain_dump" title="פרוייקט בן יהודה" target="_blank"><img src="images/Project Ben-Yehuda logo.jpg" alt="פרוייקט בן יהודה" width="80" height="80"/></a -->
 
-The PDF viewer is powered by [pdfrx](https://pub.dev/packages/pdfrx).
+מציג ה-PDF מופעל באמצעות [pdfrx](https://pub.dev/packages/pdfrx).
 
-For automatic updates, I used [updat](https://pub.dev/packages/updat).
+עבור עדכונים אוטומטיים, השתמשתי ב-[updat](https://pub.dev/packages/updat).
 
-<p align="right">(<a href="#readme-top">&#8679;</a>)</p>
+<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
 
+</div>
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
