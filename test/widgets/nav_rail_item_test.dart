@@ -1,6 +1,7 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/navigation/nav_rail_item.dart';
 
 void main() {
@@ -133,5 +134,76 @@ void main() {
         );
       },
     );
+  });
+
+  group('NavRailItem — RTL icon rendering (regression: no mirrorIcon)', () {
+    testWidgets('משתמש ב-RtlIcon לניהול כיווניות', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Directionality(
+            textDirection: TextDirection.rtl,
+            child: NavRailItem(
+              icon: FluentIcons.arrow_left_24_regular,
+              label: 'חזרה',
+              isSelected: false,
+              onTap: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(RtlIcon), findsOneWidget,
+          reason: 'NavRailItem חייב להשתמש ב-RtlIcon ולא ב-Icon ישירות');
+    });
+
+    testWidgets('arrow_left מוצג כ-arrow_right בהקשר RTL', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Directionality(
+            textDirection: TextDirection.rtl,
+            child: NavRailItem(
+              icon: FluentIcons.arrow_left_24_regular,
+              label: 'חזרה',
+              isSelected: false,
+              onTap: () {},
+            ),
+          ),
+        ),
+      );
+
+      final icon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byType(RtlIcon),
+          matching: find.byType(Icon),
+        ),
+      );
+      expect(icon.icon, FluentIcons.arrow_right_24_regular,
+          reason: 'חץ שמאל חייב להפוך לחץ ימין בממשק RTL');
+    });
+
+    testWidgets('אייקון סימטרי (book) מוצג ללא שינוי כיוון ב-LTR',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Directionality(
+            textDirection: TextDirection.ltr,
+            child: NavRailItem(
+              icon: FluentIcons.book_24_regular,
+              label: 'ספרייה',
+              isSelected: false,
+              onTap: () {},
+            ),
+          ),
+        ),
+      );
+
+      // RtlIcon לא אמור לעטוף ב-Transform בהקשר LTR
+      expect(
+        find.descendant(
+            of: find.byType(RtlIcon), matching: find.byType(Transform)),
+        findsNothing,
+        reason: 'LTR — RtlIcon לא אמור להפוך אייקון',
+      );
+    });
   });
 }

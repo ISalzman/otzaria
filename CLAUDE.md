@@ -116,20 +116,29 @@ lib/
 
 ## MANDATORY UI Components
 
-### 1. Icons - ONLY from `fluentui_system_icons`
+### 1. Icons - ONLY from `fluentui_system_icons`, rendered via `RtlIcon`
 ```dart
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
-// Examples:
-Icon(FluentIcons.search_24_regular)
-Icon(FluentIcons.book_24_filled)
-Icon(FluentIcons.settings_24_regular)
+// CORRECT — always wrap with RtlIcon:
+RtlIcon(FluentIcons.search_24_regular)
+RtlIcon(FluentIcons.book_24_filled)
+RtlIcon(FluentIcons.arrow_left_24_regular)   // auto-mirrors to arrow_right in RTL
+
+// WRONG — bare Icon() ignores RTL:
+// Icon(FluentIcons.arrow_left_24_regular)   ❌
 ```
 **Never use:**
 - Material Icons
 - Cupertino Icons
 - Custom icon fonts
 - Random icon packages
+- Bare `Icon(...)` where directionality matters — use `RtlIcon` instead
+- `mirrorIcon` parameter on any widget — **FORBIDDEN**, removed in commit 3b4d357. RTL mirroring is handled automatically by `RtlIcon`.
+- Manual `Transform.scale(scaleX: -1, ...)` or `Transform.flip(flipX: true, ...)` around icons
+
+**Why `RtlIcon`:** reads `Directionality` from context and automatically swaps directional icons (arrows/chevrons) via a lookup table, geometrically flips book-family icons without an RTL variant, and leaves symmetric icons untouched.
 
 ### 2. User Messages - ONLY via `UiSnack`
 ```dart
@@ -635,7 +644,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 1. **No progression with errors** - Fix ALL analyzer errors before next step
 2. **Run `flutter analyze` after EVERY file change** - Don't accumulate errors
 3. **RTL text fields** - Use `RtlTextField` exclusively, never `TextField`
-4. **Icons** - Only `fluentui_system_icons`, no exceptions
+4. **Icons** - Only `fluentui_system_icons` wrapped in `RtlIcon` — no bare `Icon()`, no `mirrorIcon`, no manual `Transform` on icons
 5. **User messages** - Only through `UiSnack`, never direct SnackBar
 6. **Dialogs** - Only through `custom_ui_components` (SingleActionDialog, TwoActionsDialog, WarningDialog)
 7. **Action buttons** - Only `RecommendedActionButton` or `NeutralActionButton` from `custom_ui_components`
@@ -657,6 +666,9 @@ if (Platform.isAndroid || Platform.isIOS) {
 - Writing a large diff to fix what should be a small bug
 - Using `TextField` instead of `RtlTextField`
 - Using Material/Cupertino icons instead of FluentUI
+- Using bare `Icon(...)` where RTL matters — wrap with `RtlIcon` from `lib/widgets/misc/rtl_icon.dart`
+- Adding `mirrorIcon` parameter to any widget — FORBIDDEN (removed in commit 3b4d357)
+- Manual `Transform.scale(scaleX: -1)` or `Transform.flip` on icons — let `RtlIcon` handle it
 - Showing messages without `UiSnack`
 - Using custom dialogs instead of `custom_ui_components` dialogs
 - Using `ElevatedButton`/`TextButton` instead of `RecommendedActionButton`/`NeutralActionButton`
