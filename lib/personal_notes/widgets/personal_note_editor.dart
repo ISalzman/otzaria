@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -111,6 +112,52 @@ class PersonalNoteEditorBody extends StatefulWidget {
 }
 
 class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
+  // עוטף את אזור הכתיבה כדי לגלול אותו לתוך התצוגה כשהוא יורד מתחת לחלון.
+  final GlobalKey _editorAreaKey = GlobalKey();
+  Timer? _settleTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_handleFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _settleTimer?.cancel();
+    widget.focusNode.removeListener(_handleFocusChange);
+    super.dispose();
+  }
+
+  void _handleFocusChange() {
+    if (!widget.focusNode.hasFocus) return;
+    // ה-QuillEditor מקבל פוקוס לפני שאנימציית פתיחת הכרטיס (AnimatedSize)
+    // והגלילה של הפאנל הסתיימו. גלילה ראשונה ב-post-frame, ושנייה אחרי
+    // שהאנימציה מתייצבת (animPanel ~200ms) כדי לתפוס את המיקום הסופי הנמוך.
+    _scrollEditorIntoView();
+    _settleTimer?.cancel();
+    _settleTimer = Timer(
+      const Duration(milliseconds: 250),
+      _scrollEditorIntoView,
+    );
+  }
+
+  void _scrollEditorIntoView() {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _editorAreaKey.currentContext;
+      if (ctx == null) return;
+      // keepVisibleAtEnd גולל רק אם תחתית אזור הכתיבה מוסתרת מתחת לתצוגה —
+      // אם הוא כבר גלוי לא מתבצעת גלילה, כך שאין קפיצות מיותרות.
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+    });
+  }
+
   Future<void> _insertLink() async {
     final result = await showDialog<PersonalNoteLinkTarget>(
       context: context,
@@ -146,6 +193,14 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final referenceStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w500,
+          color: colorScheme.onSurfaceVariant,
+        );
+    // מגבילים את טקסט ההקשר ל~3 שורות + גלילה פנימית, כדי שטקסט נבחר ארוך
+    // לא ידחוף את אזור הכתיבה מטה ומחוץ למסך. הגובה נגזר מסגנון הטקסט בפועל.
+    final referenceMaxHeight =
+        (referenceStyle?.fontSize ?? 14) * (referenceStyle?.height ?? 1.4) * 3;
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Column(
@@ -163,17 +218,20 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
                   topRight: Radius.circular(6),
                 ),
               ),
-              child: Text(
-                widget.referenceText!,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                textAlign: TextAlign.right,
-                textDirection: TextDirection.rtl,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: referenceMaxHeight),
+                child: SingleChildScrollView(
+                  child: Text(
+                    widget.referenceText!,
+                    style: referenceStyle,
+                    textAlign: TextAlign.right,
+                    textDirection: TextDirection.rtl,
+                  ),
+                ),
               ),
             ),
           Container(
+            key: _editorAreaKey,
             decoration: BoxDecoration(
               border: Border.all(
                 color: colorScheme.outline.withValues(alpha: 0.6),

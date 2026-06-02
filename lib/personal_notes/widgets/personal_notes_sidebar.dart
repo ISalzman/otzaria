@@ -439,6 +439,8 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).colorScheme.primary,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               IconButton(
