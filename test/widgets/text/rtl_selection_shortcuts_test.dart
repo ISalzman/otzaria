@@ -107,6 +107,99 @@ void main() {
         reason: 'תחילת הבחירה (anchor) חייבת להישמר — לא "$sel"');
   });
 
+  testWidgets('רב-שורתי מאפס כיוון גרירה מאזור קודם (אנטי-זיהום בין-אזורי)',
+      (tester) async {
+    // מצב גלובלי "תקוע" מאזור אחר: reversed=false.
+    trackRtlSelection('');
+    trackRtlSelection('בג');
+    trackRtlSelection('אבג'); // גדל בהתחלה → reversed=false
+    expect(rtlInferredReversed, isFalse);
+
+    // אזור בחירה חדש (SelectableRegionState אחר). הבחירה הרב-שורתית הראשונה
+    // בו אסור שתשתמש ב-reversed=false שנשאר מהאזור הקודם.
+    const text = 'אבגדה והוזח טיכלמ נסעפצ קרשת אבגדה והוזח טיכלמ נסעפצ';
+    await pumpRegion(tester, text: text, width: 120);
+    await shiftPress(tester, LogicalKeyboardKey.arrowLeft);
+
+    // ה-Action זיהה אזור חדש ואיפס את ה-tracker (ה-onSelectionChanged של
+    // ה-harness אינו קורא ל-trackRtlSelection, ולכן הערך נשאר מאופס).
+    expect(rtlInferredReversed, isNull,
+        reason: 'מעבר אזור חייב לאפס כיוון גרירה ישן, לא לזהם בחירה רב-שורתית');
+  });
+
+  testWidgets('אין יעד בחירה → לא בולע את המקש (משוחרר במעלה העץ)',
+      (tester) async {
+    var outerFired = false;
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Directionality(
+          textDirection: TextDirection.rtl,
+          child: CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
+                  () => outerFired = true,
+            },
+            child: RtlSelectionShortcuts(
+              child: Focus(
+                focusNode: focusNode,
+                autofocus: true,
+                child: const SizedBox(width: 50, height: 50),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    focusNode.requestFocus();
+    await tester.pump();
+
+    await shiftPress(tester, LogicalKeyboardKey.arrowLeft);
+    expect(outerFired, isTrue,
+        reason: 'בלי EditableText/SelectableRegion אסור לבלוע את Shift+חץ');
+  });
+
+  testWidgets('יעד LTR מקונן ב-wrapper RTL → לא מוחל היפוך RTL',
+      (tester) async {
+    var outerFired = false;
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Directionality(
+          textDirection: TextDirection.rtl,
+          child: CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
+                  () => outerFired = true,
+            },
+            child: RtlSelectionShortcuts(
+              // אזור LTR מקונן בתוך wrapper RTL.
+              child: Directionality(
+                textDirection: TextDirection.ltr,
+                child: SelectableRegion(
+                  focusNode: focusNode,
+                  selectionControls: emptyTextSelectionControls,
+                  child: const Text('hello world',
+                      textDirection: TextDirection.ltr),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    focusNode.requestFocus();
+    await tester.pump();
+
+    await shiftPress(tester, LogicalKeyboardKey.arrowLeft);
+    // ההכרעה לפי כיווניות היעד (LTR) → לא מוחלת לוגיקת RTL, והמקש משוחרר.
+    expect(outerFired, isTrue, reason: 'יעד LTR אינו אמור לקבל לוגיקת RTL');
+  });
+
   group('trackRtlSelection — הסקת כיוון הגרירה', () {
     setUp(() {
       // איפוס המצב הגלובלי בין בדיקות.
