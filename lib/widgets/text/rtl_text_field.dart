@@ -177,29 +177,6 @@ class _RtlTextFieldState extends State<RtlTextField> {
     );
   }
 
-  /// מחזירה את ה-offset של גבול המילה הבא מ-[offset] בכיוון [forward]
-  /// (forward=true → לכיוון offset גבוה). מדלגת על רווחים ואז על תווי מילה.
-  static int _wordBoundary(String text, int offset, bool forward) {
-    bool isSpace(int i) => i >= 0 && i < text.length && text[i].trim().isEmpty;
-    int i = offset;
-    if (forward) {
-      while (i < text.length && isSpace(i)) {
-        i++;
-      }
-      while (i < text.length && !isSpace(i)) {
-        i++;
-      }
-    } else {
-      while (i > 0 && isSpace(i - 1)) {
-        i--;
-      }
-      while (i > 0 && !isSpace(i - 1)) {
-        i--;
-      }
-    }
-    return i;
-  }
-
   /// מטפל בלחיצת חץ עם תמיכה מלאה ב-RTL
   ///
   /// [isVisualRight] - האם המקש שנלחץ הוא חץ ימין (ויזואלית)
@@ -235,19 +212,36 @@ class _RtlTextFieldState extends State<RtlTextField> {
       return;
     }
 
+    // בחירה ברמת מילה: מאצילים לטיפול המובנה של Flutter
+    // (ExtendSelectionToNextWordBoundaryIntent) — גבולות מילה נכונים עבור
+    // פיסוק, גרשיים, מקף ואשכולות-גרפמה, במקום חיתוך לפי רווחים בלבד. ברמת
+    // מילה Flutter אינו מהפך לפי כיווניות, ולכן הכיוון הלוגי כאן ויזואלי-נכון:
+    // ויזואלית-שמאל = offset עולה = forward.
+    if (byWord) {
+      final focusContext = FocusManager.instance.primaryFocus?.context;
+      if (focusContext != null) {
+        Actions.invoke(
+          focusContext,
+          ExtendSelectionToNextWordBoundaryIntent(
+            forward: !isVisualRight,
+            collapseSelection: false,
+          ),
+        );
+      }
+      return;
+    }
+
     // חישוב תזוזה רגילה
     final int currentOffset =
         extendSelection ? selection.extentOffset : selection.baseOffset;
 
     // ב-RTL: ימינה = הקטנת אינדקס (offset נמוך), שמאלה = הגדלת אינדקס (offset גבוה).
-    // forward (offset עולה) = חץ שמאלה ויזואלית.
-    final int newOffset;
-    if (byWord) {
-      newOffset = _wordBoundary(text, currentOffset, !isVisualRight);
-    } else {
-      final int offsetChange = isVisualRight ? -1 : 1;
-      newOffset = (currentOffset + offsetChange).clamp(0, text.length);
-    }
+    // התנועה מכבדת אשכולות-גרפמה (CharacterBoundary), כך שניקוד/תווים מורכבים
+    // לא נחצים באמצע.
+    final boundary = CharacterBoundary(text);
+    final int newOffset = isVisualRight
+        ? (boundary.getLeadingTextBoundaryAt(currentOffset - 1) ?? 0)
+        : (boundary.getTrailingTextBoundaryAt(currentOffset) ?? text.length);
 
     if (extendSelection) {
       // מרחיבים/מצמצמים את הבחירה

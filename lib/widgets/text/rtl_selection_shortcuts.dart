@@ -53,6 +53,21 @@ void trackRtlSelection(String? text) {
   _rtlLastSel = t;
 }
 
+// זהות אזור הבחירה (SelectableRegionState) האחרון שעליו פעל ה-Action. ה-tracker
+// הוא גלובלי, ולכן כיוון גרירה שנשאר מאזור אחד עלול לזהם בחירה רב-שורתית באזור
+// אחר. שומרים הפניה חלשה (לא מעכבים GC) ומאפסים את ה-tracker כשהאזור משתנה.
+WeakReference<Object>? _rtlLastRegion;
+
+/// מאפס את ה-tracker אם אזור הבחירה הממוקד שונה מהאזור הקודם — מונע זליגת
+/// כיוון גרירה בין SelectionArea-ים שונים.
+void _resetRtlTrackerIfRegionChanged(Object region) {
+  if (!identical(_rtlLastRegion?.target, region)) {
+    _rtlReversed = null;
+    _rtlLastSel = null;
+    _rtlLastRegion = WeakReference<Object>(region);
+  }
+}
+
 /// Intent ביניים: בקשת הרחבת בחירה לפי הכיוון ה*פיזי* של מקש החץ
 /// (שמאל/ימין), לפני הכרעת הכיוון הלוגי (`forward`).
 @immutable
@@ -97,6 +112,9 @@ class RtlSelectionShortcuts extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // קיצור-דרך: בתת-עץ LTR לחלוטין אין צורך להתקין Shortcuts. ההכרעה
+    // הסופית לכל לחיצה נעשית לפי כיווניות ה*יעד הממוקד* (ראו ה-Action), כך
+    // שאזור LTR מקונן בתוך wrapper RTL לא יקבל לוגיקת RTL.
     if (Directionality.maybeOf(context) != TextDirection.rtl) {
       return child;
     }
@@ -114,6 +132,12 @@ class RtlSelectionShortcuts extends StatelessWidget {
 
 class _PhysicalExtendSelectionAction
     extends Action<_PhysicalExtendSelectionIntent> {
+  /// סימון "טיפלנו": מוחזר כאשר ניגשנו ליעד בחירה אמיתי (שדה קלט או
+  /// SelectableRegion), גם אם הפעולה הפנימית החזירה null. מאפשר ל-
+  /// [toKeyEventResult] להבדיל בין "טיפלנו" (בלע את המקש) לבין "אין יעד"
+  /// (משחרר את המקש להמשך טיפול במעלה העץ).
+  static const Object _handled = Object();
+
   @override
   Object? invoke(_PhysicalExtendSelectionIntent intent) {
     final focusContext = FocusManager.instance.primaryFocus?.context;
@@ -121,21 +145,37 @@ class _PhysicalExtendSelectionAction
       return null;
     }
 
-    final inTextInput = _isTextInputContext(focusContext);
+    // ההכרעה לפי כיווניות ה*יעד הממוקד*, לא לפי מיקום ה-wrapper. אזור LTR
+    // מקונן בתוך wrapper RTL לא יקבל לוגיקת RTL — נשחרר את המקש לברירת המחדל.
+    if (Directionality.maybeOf(focusContext) != TextDirection.rtl) {
+      return null;
+    }
 
     // --- שדה קלט (EditableText/Quill) ---
     // ברמת תו Flutter כבר מהפך נכון לפי כיווניות → כיוון לוגי מקורי. ברמת
     // מילה Flutter אינו מהפך (באג) → מהפכים.
-    if (inTextInput) {
+    if (_isTextInputContext(focusContext)) {
       final forward = intent.word ? intent.physicalLeft : !intent.physicalLeft;
-      return _dispatch(focusContext, word: intent.word, forward: forward);
+      _dispatch(focusContext, word: intent.word, forward: forward);
+      return _handled;
     }
 
-    final geo = _selectionGeometry(focusContext);
+    final state = focusContext.findAncestorStateOfType<SelectableRegionState>();
+    if (state == null) {
+      // אין EditableText ואין SelectableRegion — אין מה להרחיב; אל תבלע את
+      // המקש (כדי לא לחסום גלילה/קיצורים אחרים במעלה העץ).
+      return null;
+    }
+
+    // איפוס ה-tracker הגלובלי בעת מעבר בין אזורי בחירה — כיוון גרירה שנשאר
+    // מאזור קודם לא יזהם בחירה רב-שורתית באזור הנוכחי.
+    _resetRtlTrackerIfRegionChanged(state);
+
+    final geo = _selectionGeometry(state);
     if (geo == null) {
-      // אין מידע על בחירה — היפוך פשוט.
-      return _dispatch(focusContext,
-          word: intent.word, forward: intent.physicalLeft);
+      // יש SelectableRegion אך אין בחירה פעילה — היפוך פשוט.
+      _dispatch(focusContext, word: intent.word, forward: intent.physicalLeft);
+      return _handled;
     }
 
     // --- SelectableRegion: priming ---
@@ -151,7 +191,7 @@ class _PhysicalExtendSelectionAction
     // בשורה-אחת מעדיפים את הגאומטריה ה**מקומית** של האזור הנוכחי
     // (`geo.reversed`) — אמינה ולא מושפעת ממצב גלובלי של אזור אחר. רק
     // ברב-שורתי, שם `selectionEndpoints` ממיין לפי Y ומאבד את כיוון הגרירה,
-    // נופלים ל-tracker הגלובלי (שמתאפס כשעוברים אזור, דרך trackRtlSelection).
+    // נופלים ל-tracker הגלובלי (שאופס לעיל אם האזור התחלף).
     final bool myReversed;
     if (geo.multiLine) {
       myReversed = rtlInferredReversed ?? true;
@@ -165,8 +205,18 @@ class _PhysicalExtendSelectionAction
     _dispatch(focusContext, word: false, forward: lockForward); // נעילת extent
     _dispatch(focusContext, word: false, forward: !lockForward); // שחזור
     rtlSelectionPriming = false;
-    return _dispatch(focusContext,
-        word: intent.word, forward: intent.physicalLeft);
+    _dispatch(focusContext, word: intent.word, forward: intent.physicalLeft);
+    return _handled;
+  }
+
+  @override
+  KeyEventResult toKeyEventResult(
+      _PhysicalExtendSelectionIntent intent, Object? invokeResult) {
+    // בלע את המקש רק אם באמת טיפלנו ביעד בחירה; אחרת השאר ignored כדי
+    // ש-Shortcuts/ברירת המחדל במעלה העץ יוכלו לטפל בו.
+    return identical(invokeResult, _handled)
+        ? KeyEventResult.handled
+        : KeyEventResult.ignored;
   }
 
   Object? _dispatch(BuildContext context,
@@ -190,9 +240,7 @@ class _PhysicalExtendSelectionAction
   ///
   /// מחזיר null כשאין בחירה פעילה או שאי אפשר לקבוע.
   ({bool multiLine, bool reversed})? _selectionGeometry(
-      BuildContext focusContext) {
-    final state = focusContext.findAncestorStateOfType<SelectableRegionState>();
-    if (state == null) return null;
+      SelectableRegionState state) {
     try {
       final points = state.selectionEndpoints;
       if (points.length < 2) return null;
