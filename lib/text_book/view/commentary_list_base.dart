@@ -31,6 +31,9 @@ import 'package:otzaria/text_book/utils/inline_notes_utils.dart'
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
+import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/printing/commentary_print_builder.dart';
+import 'package:otzaria/printing/view/printing_screen.dart';
 
 // Type alias לתאימות לאחור - משתמש ב-LinkGroup מה-Service
 typedef CommentaryGroup = LinkGroup;
@@ -429,6 +432,60 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           _buildClosePaneButton(),
         ],
       ],
+    );
+  }
+
+  /// פותח את מסך ההדפסה עם המפרשים המוצגים כעת (מקובצים לפי מפרש).
+  /// פומבי כדי שכרטיסיית המפרשים הייעודית תפעיל אותו מהסרגל/קיצור המקלדת.
+  Future<void> printDisplayedCommentaries() async {
+    final blocState = context.read<TextBookBloc>().state;
+    if (blocState is! TextBookLoaded) return;
+
+    final selectedCommentators = _selectedCommentators(blocState);
+    final rawIndexes = widget.indexes ??
+        (blocState.selectedIndex != null
+            ? [blocState.selectedIndex!]
+            : blocState.visibleIndices);
+    final indexes = rawIndexes.isNotEmpty
+        ? rawIndexes
+        : [
+            blocState.selectedIndex ??
+                (blocState.visibleIndices.isNotEmpty
+                    ? blocState.visibleIndices.first
+                    : 0)
+          ];
+
+    final links = await getLinksforIndexs(
+      indexes: indexes,
+      links: blocState.links,
+      commentatorsToShow: selectedCommentators,
+    );
+    if (links.isEmpty) {
+      UiSnack.show('אין מפרשים להדפסה');
+      return;
+    }
+
+    final groups = await _getCachedGroups(links);
+    final blocks = await buildCommentaryPrintBlocks(groups);
+    if (blocks.isEmpty) {
+      UiSnack.show('אין מפרשים להדפסה');
+      return;
+    }
+    if (!mounted) return;
+
+    final bookTitle = _bookTitle(blocState);
+    final removeTaamim = !context.read<SettingsBloc>().state.showTeamim;
+    await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PrintingScreen(
+        data: Future.value(''),
+        bookId: bookTitle,
+        documentTitle: bookTitle,
+        prebuiltBlocks: blocks,
+        removeNikud: blocState.removeNikud,
+        removeTaamim: removeTaamim,
+      ),
     );
   }
 
