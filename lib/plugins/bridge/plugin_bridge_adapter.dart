@@ -239,11 +239,57 @@ class PluginBridgeAdapter {
   // bookId → index → PluginHighlight (in-memory, per adapter instance)
   final Map<String, Map<int, PluginHighlight>> _highlights = {};
 
+  // bookId → טקסט מלא של הספר (מטמון LRU קצר, per adapter instance) עבור
+  // getBookContent. ראה _loadBookRawText.
+  final Map<String, String> _bookContentCache = {};
+  static const int _bookContentCacheMaxEntries = 4;
+
   void _closeHttpClient() => _httpClient.close(force: true);
 
   void dispose() {
     HttpClientRegistry.unregister(_closeHttpClient);
     _closeHttpClient();
+  }
+
+  /// טוען את הטקסט המלא של ספר עבור `getBookContent`, עם מטמון LRU קצר
+  /// (per adapter instance).
+  ///
+  /// `getBookContent` מחזירה מקטע באמצעות `substring`, והתוסף טוען ספר מלא
+  /// ב-chunks של 5000 תווים — כך שטעינה אחת מחייבת עשרות קריאות RPC רצופות.
+  /// בלי מטמון כל קריאה טוענת מחדש את כל הספר מה-DB (O(n²)), בזבוז שמתחדד
+  /// כשתוסף מבצע polling/prefetch אגרסיבי. המטמון מצמצם זאת ל-O(n) לספר
+  /// ומנטרל את עלות ה-IO החוזרת.
+  ///
+  /// המטמון מוגבל ל-[_bookContentCacheMaxEntries] ספרים ומתאפס עם dispose של
+  /// ה-adapter (טעינה/השבתה מחדש של התוסף). לכן ייתכן חלון קצר של תוכן
+  /// לא-מעודכן אם המשתמש עורך ספר בזמן שתוסף קורא אותו — מקרה קצה נדיר
+  /// בנתיב קריאה-בלבד.
+  Future<String> _loadBookRawText(String bookId, Library library) async {
+    final cached = _bookContentCache.remove(bookId);
+    if (cached != null) {
+      _bookContentCache[bookId] = cached; // רענון מיקום ב-LRU
+      return cached;
+    }
+    // איתור ה-TextBook מהקטלוג כדי לקבל categoryId/fileType נכונים מה-metadata.
+    // בלי זה, השכבה התחתונה מקבעת fileType='txt' ונכשלת לגבי ספרים בפורמט אחר
+    // אצל משתמשים שאין להם קבצי טקסט נפרדים בדיסק (רק seforim.db).
+    final cataloged = library
+        .getAllBooks()
+        .cast<dynamic>()
+        .firstWhere((b) => b?.title == bookId, orElse: () => null);
+    final String rawText;
+    if (cataloged is TextBook) {
+      rawText = await TextBookRepository(
+        fileSystem: FileSystemData.instance,
+      ).getBookContent(cataloged);
+    } else {
+      rawText = await DataRepository.instance.getBookText(bookId);
+    }
+    _bookContentCache[bookId] = rawText;
+    if (_bookContentCache.length > _bookContentCacheMaxEntries) {
+      _bookContentCache.remove(_bookContentCache.keys.first);
+    }
+    return rawText;
   }
 
   Future<dynamic> execute(
@@ -364,21 +410,7 @@ class PluginBridgeAdapter {
       case 'getBookContent':
         final bookId = (args['bookId'] ?? args['title']) as String?;
         if (bookId == null) throw Exception('bookId required');
-        // איתור ה-TextBook מהקטלוג כדי לקבל categoryId/fileType נכונים מה-metadata.
-        // בלי זה, השכבה התחתונה מקבעת fileType='txt' ונכשלת לגבי ספרים בפורמט אחר
-        // אצל משתמשים שאין להם קבצי טקסט נפרדים בדיסק (רק seforim.db).
-        final allBooks = library.getAllBooks();
-        final cataloged = allBooks
-            .cast<dynamic>()
-            .firstWhere((b) => b?.title == bookId, orElse: () => null);
-        String rawText;
-        if (cataloged is TextBook) {
-          rawText = await TextBookRepository(
-            fileSystem: FileSystemData.instance,
-          ).getBookContent(cataloged);
-        } else {
-          rawText = await DataRepository.instance.getBookText(bookId);
-        }
+        final rawText = await _loadBookRawText(bookId, library);
         final limit = args['limit'] as int? ?? 1000;
         final offset = args['offset'] as int? ?? 0;
         final section = args['section'] as String?;

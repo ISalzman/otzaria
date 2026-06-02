@@ -173,7 +173,8 @@ void main() {
   testWidgets('מציג פעולת מחיקה עבור ספר שמקורו ב-DB', (tester) async {
     FileSystemData.instance = _FakeFileSystemData('DB');
 
-    final book = TextBook(title: 'ספר DB לבדיקה', categoryId: 42);
+    final book =
+        TextBook(title: 'ספר DB לבדיקה', categoryId: 42, isUserBook: true);
 
     await tester.pumpWidget(buildTestWidget(book: book));
     await tester.pumpAndSettle();
@@ -202,7 +203,8 @@ void main() {
       (tester) async {
     FileSystemData.instance = _FakeFileSystemData('DB');
 
-    final book = TextBook(title: 'ספר לבדיקה', categoryId: 11);
+    final book =
+        TextBook(title: 'ספר לבדיקה', categoryId: 11, isUserBook: true);
 
     await tester.pumpWidget(buildTestWidget(book: book));
     await tester.pumpAndSettle();

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_rpc_request.dart';
@@ -29,25 +30,37 @@ class RateLimiter {
 class PluginBridgeHandler {
   final InstalledPlugin plugin;
   final PluginBridgeAdapter adapter;
-  final RateLimiter _rateLimiter = RateLimiter();
+  final RateLimiter _rateLimiter;
   final PluginRegistryRepository _registry;
 
   PluginBridgeHandler(
     this.plugin, {
     required this.adapter,
     PluginRegistryRepository? registry,
-  }) : _registry = registry ?? PluginRegistryRepository();
+    RateLimiter? rateLimiter,
+  })  : _registry = registry ?? PluginRegistryRepository(),
+        _rateLimiter = rateLimiter ?? RateLimiter();
 
   void register(InAppWebViewController controller) {
     controller.addJavaScriptHandler(
         handlerName: 'otzaria_rpc', callback: _handleRpc);
   }
 
-  Future<dynamic> _handleRpc(List<dynamic> args) async {
-    if (!_rateLimiter.consume()) {
-      return _errorResp("error.rate_limited", "Rate limit exceeded");
-    }
+  /// נקודת כניסה לבדיקות בלבד: מריצה את אותו נתיב RPC שמופעל מ-JavaScript,
+  /// כדי לבדוק את אכיפת ההרשאות וצימוד ההחרגה-מ-throttle ב-[_handleRpc].
+  @visibleForTesting
+  Future<dynamic> handleRpcForTesting(List<dynamic> args) => _handleRpc(args);
 
+  /// קובע אם קריאת RPC מוחרגת ממגביל הקצב.
+  ///
+  /// `library.getBookContent` מחולקת מראש ל-chunks של 5000 תווים, כך שטעינת
+  /// ספר מלא מחייבת מטבעה עשרות קריאות RPC רצופות. ספירתן במגביל הקצב מרוקנת
+  /// את דלי הטוקנים ומחזירה rate_limited באמצע — מה שגרם לתוספים לקבל טקסט
+  /// חתוך (חצי ספר). הקריאה לקריאה-בלבד ולכן מוחרגת.
+  static bool isRateLimitExempt(String method) =>
+      method == 'library.getBookContent';
+
+  Future<dynamic> _handleRpc(List<dynamic> args) async {
     if (args.isEmpty) {
       return _errorResp("error.invalid_params", "No arguments provided");
     }
@@ -67,16 +80,39 @@ class PluginBridgeHandler {
     final domain = parts[0];
     final action = parts[1];
 
+    final requiredPermission = _getRequiredPermission(domain, action);
+    final declaresPermission = requiredPermission == null ||
+        plugin.manifest.permissions.contains(requiredPermission);
+
+    // ההחרגה ממגביל הקצב חלה רק על קריאת תוכן שההרשאה לה *הוענקה בפועל* (לא רק
+    // הוצהרה במניפסט). לכן בודקים את ההענקה כבר עכשיו עבור getBookContent —
+    // תוסף ללא הרשאה מוענקת אינו עוקף את ה-throttle אלא עובר דרכו ומקבל
+    // permission_denied. כדי לא להוסיף קריאת DB לכל RPC, ההקדמה הזו מתבצעת רק
+    // לקריאות תוכן; שאר הקריאות נבדקות כרגיל בהמשך.
+    final isContentRead = isRateLimitExempt(request.method);
+    bool? grantedEarly;
+    if (isContentRead && declaresPermission && requiredPermission != null) {
+      grantedEarly =
+          await _registry.getPermission(plugin.pluginId, requiredPermission) ==
+              true;
+    }
+
+    final exempt = isContentRead && (grantedEarly ?? false);
+    if (!exempt && !_rateLimiter.consume()) {
+      return _errorResp("error.rate_limited", "Rate limit exceeded");
+    }
+
     try {
-      final requiredPermission = _getRequiredPermission(domain, action);
       if (requiredPermission != null) {
-        if (!plugin.manifest.permissions.contains(requiredPermission)) {
+        if (!declaresPermission) {
           return _errorResp(
               "permission_denied", "Missing permission: $requiredPermission");
         }
-        final granted =
-            await _registry.getPermission(plugin.pluginId, requiredPermission);
-        if (granted != true) {
+        final granted = grantedEarly ??
+            (await _registry.getPermission(
+                    plugin.pluginId, requiredPermission) ==
+                true);
+        if (!granted) {
           return _errorResp(
               "permission_denied", "Permission denied: $requiredPermission");
         }

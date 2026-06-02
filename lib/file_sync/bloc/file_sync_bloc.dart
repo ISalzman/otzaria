@@ -102,7 +102,7 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
         // Guard: a Stop or new Start may have fired while we waited in queue.
         if (!isCurrent()) return;
 
-        await SqliteDataProvider.instance.dispose();
+        await SqliteDataProvider.instance.closeForExternalWrite();
 
         _syncService = LibraryDiffSyncWorkerService();
         final dbPath = repository.getDbPath();
@@ -137,7 +137,7 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
         } finally {
           _syncService?.dispose();
           _syncService = null;
-          await SqliteDataProvider.instance.initialize();
+          await SqliteDataProvider.instance.reopenAfterExternalWrite();
         }
 
         // Guard after finally: _onStopSync may have already updated the UI.

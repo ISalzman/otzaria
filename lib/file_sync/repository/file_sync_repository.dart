@@ -117,7 +117,9 @@ class FileSyncRepository {
   Future<int> getCurrentLibraryVersion() async {
     sqlite3.Database? db;
     try {
-      db = _openRawDatabase();
+      // קריאה בלבד — נפתח read-only כדי לשמר את האינווריאנט ש-seforim.db
+      // אינו נפתח לכתיבה מחוץ למסלול העדכונים, ולתמוך ב-DB על מדיה RO.
+      db = _openRawDatabase(readOnly: true);
       final result = db.select(
         'SELECT value FROM db_meta WHERE key = ? LIMIT 1',
         ['content_version_int'],
@@ -298,9 +300,12 @@ class FileSyncRepository {
     }
   }
 
-  sqlite3.Database _openRawDatabase() {
+  sqlite3.Database _openRawDatabase({bool readOnly = false}) {
     return sqlite3.sqlite3.open(
       DatabaseConstants.getDatabasePath(),
+      mode: readOnly
+          ? sqlite3.OpenMode.readOnly
+          : sqlite3.OpenMode.readWriteCreate,
     );
   }
 

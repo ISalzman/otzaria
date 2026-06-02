@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
@@ -594,5 +595,79 @@ void main() {
     expect(coloredBox.color, isNot(equals(floatingPanel.color)),
         reason: 'הצבע של ColoredBox הפנימי שונה מצבע FloatingPanel — '
             'זו ראיה לדריסה ויזואלית אסורה');
+  });
+
+  // ── מיקום פס הגלילה בקצה החיצוני ─────────────────────────────────────────
+  //
+  // רגרסיה: ידית הגרירה (ResizableDragHandle) יושבת בקצה הפנימי של הפאנל.
+  // אם פס הגלילה נשאר בקצה ה-trailing הרגיל (אותו צד ב-RTL) הידית חוסמת את
+  // הלחיצה עליו. AdaptiveSidePane חייב לדחוף את הפס לקצה החיצוני (הצמוד לדופן
+  // החלון), בצד הנגדי לידית.
+
+  Widget buildScrollablePane({required AlignmentDirectional alignment}) {
+    return MaterialApp(
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: SizedBox(
+            width: 1200,
+            height: 700,
+            child: AdaptiveSidePane(
+              isOpen: true,
+              alignment: alignment,
+              paneWidth: 300,
+              minMainContentWidth: 420,
+              onClose: () {},
+              mainContent: const SizedBox.expand(),
+              paneContent: ListView(
+                children: List.generate(
+                  50,
+                  (i) => SizedBox(height: 40, child: Text('item $i')),
+                ),
+              ),
+              isResizable: true,
+              onPaneWidthChanged: (_) {},
+              autoHandleResponsiveVisibility: false,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  testWidgets('פאנל בצד ימין (centerEnd): פס הגלילה בקצה החיצוני (ימין)',
+      (tester) async {
+    // הפס נבנה דרך ScrollBehavior שמוסיף Scrollbar רק בדסקטופ — כופים פלטפורמה.
+    // try/finally מבטיח איפוס גם אם pumpWidget/pumpAndSettle/expect יזרקו: כך
+    // ה-override לא דולף, ולא נוצרת שגיאה משנית שמסתירה את הכשל האמיתי. (אסור
+    // להשתמש כאן ב-addTearDown — הוא רץ אחרי בדיקת ה-invariant של foundation.)
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await tester.pumpWidget(
+        buildScrollablePane(alignment: AlignmentDirectional.centerEnd),
+      );
+      await tester.pumpAndSettle();
+
+      final scrollbar = tester.widget<Scrollbar>(find.byType(Scrollbar));
+      expect(scrollbar.scrollbarOrientation, ScrollbarOrientation.right);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('פאנל בצד שמאל (centerStart): פס הגלילה בקצה החיצוני (שמאל)',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await tester.pumpWidget(
+        buildScrollablePane(alignment: AlignmentDirectional.centerStart),
+      );
+      await tester.pumpAndSettle();
+
+      final scrollbar = tester.widget<Scrollbar>(find.byType(Scrollbar));
+      expect(scrollbar.scrollbarOrientation, ScrollbarOrientation.left);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }

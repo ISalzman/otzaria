@@ -137,6 +137,66 @@ void main() {
     });
   });
 
+  group('refFromIndex', () {
+    // רגרסיה: "מחנה אפרים חלק א - ב" — חלק א מתחיל ברמה 2 (אין כותרת חלק
+    // ברמה 1), ולכן הכותרת הראשונה ("הלכות שבועות") נתקעה באינדקס 0
+    // והודבקה לכל כתובת בחלק א (ראה הבאג: "הלכות שבועות, הלכות צדקה, סימן יב").
+
+    test('TOC שמתחיל ברמה 2 - לא מדביק את הכותרת הראשונה לכל כתובת', () async {
+      final toc = [
+        _entry('הלכות שבועות', 2, 2, children: [
+          _entry('סימן א', 3, 3),
+          _entry('סימן ב', 14, 3),
+        ]),
+        _entry('הלכות צדקה', 183, 2, children: [
+          _entry('סימן א', 184, 3),
+          _entry('סימן יב', 226, 3),
+        ]),
+      ];
+
+      // סימן יב תחת הלכות צדקה - לא אמור לכלול "הלכות שבועות"
+      expect(await refFromIndex(226, Future.value(toc)), 'הלכות צדקה, סימן יב');
+      // סימן ב תחת הלכות שבועות - הכתובת הנכונה שלו
+      expect(await refFromIndex(14, Future.value(toc)), 'הלכות שבועות, סימן ב');
+    });
+
+    test('TOC עם רמה 1 תקין - שומר על כל ההיררכיה', () async {
+      final toc = [
+        _entry('מחנה אפרים חלק ב', 1216, 1, children: [
+          _entry('הלכות שכירות פועלים', 1218, 2, children: [
+            _entry('סימן א', 1219, 3),
+          ]),
+          _entry('הלכות ערב', 1460, 2, children: [
+            _entry('סימן ב', 1468, 3),
+          ]),
+        ]),
+      ];
+
+      expect(
+        await refFromIndex(1468, Future.value(toc)),
+        'מחנה אפרים חלק ב, הלכות ערב, סימן ב',
+      );
+    });
+
+    test('דילוג על רמה (1 ואז 3) - לא משאיר מקטעים ריקים', () async {
+      final toc = [
+        _entry('חלק', 0, 1, children: [
+          _entry('סעיף', 5, 3),
+        ]),
+      ];
+
+      expect(await refFromIndex(5, Future.value(toc)), 'חלק, סעיף');
+    });
+
+    test('אינדקס לפני הכותרת הראשונה - מחזיר מחרוזת ריקה', () async {
+      final toc = [
+        _entry('הלכות שבועות', 2, 2),
+      ];
+
+      expect(await refFromIndex(0, Future.value(toc)), '');
+    });
+  });
+
   group('formatDisplayReference', () {
     test('adds the book title when resolved reference omits it', () {
       expect(

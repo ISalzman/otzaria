@@ -481,4 +481,13 @@ class AppPaths {
   static Future<String> resolvePluginsDbPath() async {
     return resolveNotesDbPath('plugins_host.db');
   }
+
+  /// מחזיר את הנתיב של ה-DB הכתיב למטמונים תפעוליים (למשל מטמון ה-outline
+  /// של קובצי PDF חיצוניים).
+  ///
+  /// נפרד מ-`seforim.db` הרשמי כדי ש-`seforim.db` יוכל להיפתח read-only —
+  /// כתיבות מטמון בזמן ריצה זורמות לקובץ כתיב זה תחת `<dataRoot>/databases/`.
+  static Future<String> resolveCacheDbPath() async {
+    return resolveNotesDbPath('cache.db');
+  }
 }
