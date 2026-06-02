@@ -360,6 +360,26 @@ void main() {
     );
   });
 
+  test('Shift לחוץ — הניווט מוותר כדי לאפשר הרחבת בחירה (Shift+חץ)', () {
+    final downEvent = KeyDownEvent(
+      physicalKey: PhysicalKeyboardKey.arrowDown,
+      logicalKey: LogicalKeyboardKey.arrowDown,
+      timeStamp: Duration.zero,
+    );
+
+    // ללא Shift — ממשיכים לטפל בניווט (גלילה/דילוג שורה)
+    expect(
+      shouldHandlePageShapeNavigationKeyEvent(downEvent),
+      isTrue,
+    );
+
+    // עם Shift — הניווט מוותר, האירוע יעבור להרחבת הבחירה
+    expect(
+      shouldHandlePageShapeNavigationKeyEvent(downEvent, isShiftPressed: true),
+      isFalse,
+    );
+  });
+
   testWidgets('פוקוס על MenuItemButton מזוהה כתפריט', (tester) async {
     final focusNode = FocusNode();
 

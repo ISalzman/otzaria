@@ -6,6 +6,7 @@ import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -1140,7 +1141,8 @@ class _CombinedViewState extends State<CombinedView> {
             _viewportHeight = constraints.maxHeight;
             context.watch<SettingsBloc>().state;
 
-            return SelectionArea(
+            return RtlSelectionShortcuts(
+                child: SelectionArea(
               key: ValueKey('combined_selection_$_selectionAreaRevision'),
               // SelectionArea אחד לכל הרשימה - מאפשר בחירה רציפה בין פסקאות
               contextMenuBuilder: (context, selectableRegionState) {
@@ -1148,6 +1150,10 @@ class _CombinedViewState extends State<CombinedView> {
               },
               onSelectionChanged: (selection) {
                 final plain = selection?.plainText;
+                // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
+                trackRtlSelection(plain);
+                // שינוי בחירה זמני בזמן priming — לא לעבד.
+                if (rtlSelectionPriming) return;
                 if (!shouldPersistSelectedText(plain)) {
                   widget.selectionSyncController?.clear(_selectionOwner);
                   _selectionManager.exitSelectionMode();
@@ -1344,7 +1350,7 @@ class _CombinedViewState extends State<CombinedView> {
                   ),
                 ),
               ),
-            );
+            ));
           },
         );
       },

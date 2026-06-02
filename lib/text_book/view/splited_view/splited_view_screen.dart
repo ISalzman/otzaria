@@ -291,46 +291,40 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                 },
                 paneContent: ValueListenableBuilder<String?>(
                   valueListenable: _savedSelectedText,
-                  child: SelectionArea(
-                    contextMenuBuilder: (context, selectableRegionState) {
-                      return const SizedBox.shrink();
-                    },
-                    onSelectionChanged: (selection) {
-                      if (selection != null && selection.plainText.isNotEmpty) {
-                        _savedSelectedText.value = selection.plainText;
+                  // אין SelectionArea חיצוני כאן: CommentaryListBase (בתוך
+                  // TabbedCommentaryPanel) עוטף את הרשימה ב-SelectionArea יחיד
+                  // משלו. קינון היה הופך את תוכן המפרשים ל"בלוק אטום" שבחירת
+                  // מקלדת (Shift+חץ) מדלגת עליו.
+                  child: TabbedCommentaryPanel(
+                    fontSize: state.fontSize,
+                    openBookCallback: widget.openBookCallback,
+                    showSearch: true,
+                    selectionSyncController: _selectionSyncController,
+                    openFilterRequest: _openFilterRequest,
+                    onClosePane: _togglePane,
+                    initialTabIndex: _currentTabIndex,
+                    showSplitView: widget.showSplitView,
+                    tab: widget.tab,
+                    openCommentatorsFilterNotifier:
+                        _openCommentatorsFilterNotifier,
+                    closeCommentatorsFilterNotifier:
+                        _closeCommentatorsFilterNotifier,
+                    onTabChanged: (index) {
+                      debugPrint(
+                          'DEBUG: Tab changed to $index, showSplitView: ${widget.showSplitView}');
+                      setState(() {
+                        _currentTabIndex = index;
+                      });
+                      widget.onSidebarTabChanged?.call(index);
+                      if (!widget.showSplitView) {
+                        debugPrint(
+                            'DEBUG: Saving tab $index to combined settings');
+                        Settings.setValue<int>(
+                            'key-sidebar-tab-index-combined', index);
+                      } else {
+                        debugPrint('DEBUG: NOT saving tab (split view mode)');
                       }
                     },
-                    child: TabbedCommentaryPanel(
-                      fontSize: state.fontSize,
-                      openBookCallback: widget.openBookCallback,
-                      showSearch: true,
-                      selectionSyncController: _selectionSyncController,
-                      openFilterRequest: _openFilterRequest,
-                      onClosePane: _togglePane,
-                      initialTabIndex: _currentTabIndex,
-                      showSplitView: widget.showSplitView,
-                      tab: widget.tab,
-                      openCommentatorsFilterNotifier:
-                          _openCommentatorsFilterNotifier,
-                      closeCommentatorsFilterNotifier:
-                          _closeCommentatorsFilterNotifier,
-                      onTabChanged: (index) {
-                        debugPrint(
-                            'DEBUG: Tab changed to $index, showSplitView: ${widget.showSplitView}');
-                        setState(() {
-                          _currentTabIndex = index;
-                        });
-                        widget.onSidebarTabChanged?.call(index);
-                        if (!widget.showSplitView) {
-                          debugPrint(
-                              'DEBUG: Saving tab $index to combined settings');
-                          Settings.setValue<int>(
-                              'key-sidebar-tab-index-combined', index);
-                        } else {
-                          debugPrint('DEBUG: NOT saving tab (split view mode)');
-                        }
-                      },
-                    ),
                   ),
                   builder: (context, selectedText, child) => child!,
                 ),

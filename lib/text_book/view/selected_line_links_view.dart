@@ -15,6 +15,7 @@ import 'package:otzaria/widgets/feedback/app_future_builder.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 
@@ -477,7 +478,8 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
       );
     }
 
-    return SelectionArea(
+    return RtlSelectionShortcuts(
+        child: SelectionArea(
       key: ValueKey(
         'selected_link_${buildSelectedLinkInstanceKey(link)}_$_selectionRevision',
       ),
@@ -485,6 +487,10 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
         return const SizedBox.shrink();
       },
       onSelectionChanged: (selection) {
+        // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
+        trackRtlSelection(selection?.plainText);
+        // שינוי בחירה זמני בזמן priming — לא לעבד.
+        if (rtlSelectionPriming) return;
         if (selection != null && selection.plainText.isNotEmpty) {
           widget.selectionSyncController?.activate(_selectionOwner);
           _savedSelectedText = selection.plainText;
@@ -532,7 +538,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           ),
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildHighlightedText(String content, Link link) {

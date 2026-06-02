@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
+import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -129,6 +131,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   final ItemPositionsListener _itemPositionsListener =
       ItemPositionsListener.create();
   final Map<String, GlobalKey> _itemKeys = {};
+  // טקסט פשוט מרונדר לכל מפרש מוצג — לשחזור מעברי שורה בהעתקה רב-שורתית.
+  final Map<String, String> _renderedTextByKey = {};
+  // כותרת מרונדרת (displayReference) לכל מפרש מוצג — לשחזור מעברי שורה כשהבחירה
+  // כוללת גם כותרות.
+  final Map<String, String> _renderedTitleByKey = {};
   final ValueNotifier<int> _currentSearchIndexNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> _totalSearchResultsNotifier = ValueNotifier<int>(0);
   final Map<String, int> _searchResultsPerLink = {};
@@ -975,19 +982,85 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           }
         });
       },
-      onLinkSelected: (link, text) {
-        _savedSelectedText.value = text;
-        _lastSelectedLink.value = link;
-        _focusNode.requestFocus();
-      },
-      onLinkSelectionCleared: () {
-        _savedSelectedText.value = null;
-        _lastSelectedLink.value = null;
-      },
-      selectionSyncController: widget.selectionSyncController,
-      selectionOwner: _selectionOwner,
-      selectionRevision: _selectionRevision,
+      // לחיצת עכבר על מפרש מסמנת אותו כיעד הייחוס להעתקת מקלדת (Ctrl+C),
+      // כי ל-SelectionArea היחיד אין מידע על המפרש הספציפי שבו הבחירה.
+      onLinkPointerDown: (link) => _lastSelectedLink.value = link,
+      // מטמון הטקסט/הכותרת המרונדרים לכל מפרש מוצג — לשחזור מעברי שורה בהעתקה.
+      onLinkRendered: (link, text) =>
+          _renderedTextByKey[_getLinkKey(link)] = text,
+      onLinkTitleRendered: (link, title) =>
+          _renderedTitleByKey[_getLinkKey(link)] =
+              title.replaceAll(RegExp(r'\s+'), ' ').trim(),
+      restoreLineBreaks: _restoreLineBreaks,
     );
+  }
+
+  /// טיפול בשינוי בחירה ב-SelectionArea היחיד שעוטף את כל רשימת המפרשים
+  /// (כשהרשימה אינה מקוננת בתוך SelectionArea חיצוני). מזין את הטקסט הנבחר
+  /// לצורך העתקה ומסנכרן בעלות בחירה מול אזורים אחרים במסך.
+  void _onListSelectionChanged(String? text) {
+    // עדכון מעקב כיוון הגרירה (משמש את RtlSelectionShortcuts לבחירת הקצה).
+    trackRtlSelection(text);
+    // שינוי בחירה זמני בזמן priming — לא לעבד (שמירת טקסט/סנכרון).
+    if (rtlSelectionPriming) return;
+    if (text != null && text.trim().isNotEmpty) {
+      _savedSelectedText.value = text;
+      widget.selectionSyncController?.activate(_selectionOwner);
+    } else {
+      _savedSelectedText.value = null;
+      _lastSelectedLink.value = null;
+      widget.selectionSyncController?.clear(_selectionOwner);
+    }
+  }
+
+  /// האם הבחירה הנוכחית חוצה יותר מפריט מפרש אחד (לפי מיקום שני קצותיה).
+  /// משמש כדי לא לייחס כותרת מקור (copyWithHeaders) למפרש בודד בהעתקת מקלדת
+  /// כשהטקסט הנבחר בא מכמה מפרשים. נכשל "בטוח" (false) כשלא ניתן לקבוע.
+  bool _selectionSpansMultipleItems() {
+    SelectableRegionState? sa;
+    for (final k in _itemKeys.values) {
+      sa = k.currentContext?.findAncestorStateOfType<SelectableRegionState>();
+      if (sa != null) break;
+    }
+    final saRender = sa?.context.findRenderObject();
+    if (saRender is! RenderBox) return false;
+    final List<TextSelectionPoint> eps;
+    try {
+      eps = sa!.selectionEndpoints;
+    } catch (_) {
+      return false;
+    }
+    if (eps.length < 2) return false;
+    final p1 = saRender.localToGlobal(eps.first.point);
+    final p2 = saRender.localToGlobal(eps.last.point);
+    String? k1;
+    String? k2;
+    for (final entry in _itemKeys.entries) {
+      final box = entry.value.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.attached) continue;
+      final rect = box.localToGlobal(Offset.zero) & box.size;
+      if (rect.contains(p1)) k1 = entry.key;
+      if (rect.contains(p2)) k2 = entry.key;
+    }
+    return k1 != null && k2 != null && k1 != k2;
+  }
+
+  /// משחזר מעברי שורה בטקסט נבחר רב-שורתי (Flutter מחזיר טקסט שטוח), לפי הטקסט
+  /// המרונדר המוטמן של המפרשים המוצגים. אם לא נמצא — מחזיר את הטקסט כמות שהוא.
+  String? _restoreLineBreaks(String? flat) {
+    if (flat == null || flat.isEmpty || flat.contains('\n')) return flat;
+    // סדר התצוגה לכל מפרש: כותרת (displayReference) ואז התוכן.
+    final lines = <String>[];
+    for (final link in _orderedLinks) {
+      final key = _getLinkKey(link);
+      final title = _renderedTitleByKey[key];
+      if (title != null && title.isNotEmpty) lines.add(title);
+      final content = _renderedTextByKey[key];
+      if (content != null && content.isNotEmpty) lines.add(content);
+    }
+    if (lines.isEmpty) return flat;
+    return restoreSelectedTextLineBreaks(
+        selectedText: flat, visibleLines: lines);
   }
 
   @override
@@ -1220,6 +1293,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     for (final key in currentLinkKeys) {
                       _itemKeys.putIfAbsent(key, () => GlobalKey());
                     }
+                    _renderedTextByKey.removeWhere(
+                        (key, value) => !currentLinkKeys.contains(key));
+                    _renderedTitleByKey.removeWhere(
+                        (key, value) => !currentLinkKeys.contains(key));
 
                     // ניקוי ספירות חיפוש מקישורים שאינם בקטע הנוכחי
                     // (מניעת ספירה מנופחת ממעבר בין קטעים)
@@ -1264,11 +1341,17 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                           _CopyCommentaryIntent:
                               CallbackAction<_CopyCommentaryIntent>(
                             onInvoke: (_) {
+                              // בחירה החוצה כמה מפרשים — לא מייחסים כותרת מקור
+                              // (היא הייתה משתייכת למפרש בודד בלבד).
+                              final link = _selectionSpansMultipleItems()
+                                  ? null
+                                  : _lastSelectedLink.value;
                               ContextMenuUtils.copyFormattedText(
                                 context: context,
-                                savedSelectedText: _savedSelectedText.value,
+                                savedSelectedText: _restoreLineBreaks(
+                                    _savedSelectedText.value),
                                 fontSize: widget.fontSize,
-                                link: _lastSelectedLink.value,
+                                link: link,
                               );
                               return null;
                             },
@@ -1286,7 +1369,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                     groupKey, () => _allExpanded);
                               }
 
-                              return ProgressiveScroll(
+                              final Widget listView = ProgressiveScroll(
                                 scrollController: scrollController,
                                 maxSpeed: 10000.0,
                                 curve: 10.0,
@@ -1312,6 +1395,22 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                   },
                                 ),
                               );
+
+                              // SelectionArea יחיד סביב כל הרשימה — מאפשר בחירה
+                              // רציפה ובחירת מקלדת (Shift+חץ) על תוכן המפרשים,
+                              // גם במצב "מפרשים למטה".
+                              return RtlSelectionShortcuts(
+                                child: SelectionArea(
+                                  key: ValueKey(
+                                      'commentary_list_$_selectionRevision'),
+                                  contextMenuBuilder: (context, _) =>
+                                      const SizedBox.shrink(),
+                                  onSelectionChanged: (selection) =>
+                                      _onListSelectionChanged(
+                                          selection?.plainText),
+                                  child: listView,
+                                ),
+                              );
                             },
                           ),
                         ),
@@ -1324,15 +1423,27 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                   return commentaryWidget;
                 }
 
-                return Column(
-                  children: [
-                    Flexible(
-                      fit: FlexFit.loose,
-                      child: notesWidget,
-                    ),
-                    const Divider(height: 1),
-                    Expanded(child: commentaryWidget),
-                  ],
+                // "הערות" + מפרשים. אסור ש"הערות" יתפוס חצי קבוע: `Flexible`
+                // ו-`Expanded` שניהם flex:1 התחלקו 50/50, כך שהמפרשים קיבלו רק
+                // חצי מהגובה (וכש"הערות" קצר נותר חלל ריק). במקום זאת מגבילים
+                // את "הערות" לגובה התוכן שלו (עד ~45% מהגובה; הוא SingleChild-
+                // ScrollView ולכן יגלול אם ארוך), והמפרשים מקבלים את כל השאר.
+                return LayoutBuilder(
+                  builder: (ctx, c) {
+                    final maxNotes = c.maxHeight.isFinite
+                        ? c.maxHeight * 0.45
+                        : double.infinity;
+                    return Column(
+                      children: [
+                        ConstrainedBox(
+                          constraints: BoxConstraints(maxHeight: maxNotes),
+                          child: notesWidget,
+                        ),
+                        const Divider(height: 1),
+                        Expanded(child: commentaryWidget),
+                      ],
+                    );
+                  },
                 );
               },
             );
@@ -1537,11 +1648,18 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   final ValueListenable<String?> savedSelectedTextListenable;
   final ValueListenable<Link?> lastSelectedLinkListenable;
   final void Function(bool) onExpansionChanged;
-  final void Function(Link link, String text) onLinkSelected;
-  final VoidCallback onLinkSelectionCleared;
-  final SelectionSyncController? selectionSyncController;
-  final Object? selectionOwner;
-  final int selectionRevision;
+
+  /// נקרא בלחיצת עכבר על פריט מפרש — לסימון המפרש הנבחר לייחוס העתקה.
+  final void Function(Link link)? onLinkPointerDown;
+
+  /// מדווח את הטקסט המרונדר של פריט מפרש — לשחזור מעברי שורה בהעתקה.
+  final void Function(Link link, String renderedPlainText)? onLinkRendered;
+
+  /// מדווח את כותרת הפריט המרונדרת (displayReference) — לשחזור מעברי שורה.
+  final void Function(Link link, String renderedTitle)? onLinkTitleRendered;
+
+  /// משחזר מעברי שורה בטקסט נבחר רב-שורתי (להעתקה מתפריט ההקשר).
+  final String? Function(String?)? restoreLineBreaks;
 
   const _CollapsibleCommentaryGroup({
     super.key,
@@ -1564,11 +1682,10 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     required this.savedSelectedTextListenable,
     required this.lastSelectedLinkListenable,
     required this.onExpansionChanged,
-    required this.onLinkSelected,
-    required this.onLinkSelectionCleared,
-    this.selectionSyncController,
-    this.selectionOwner,
-    this.selectionRevision = 0,
+    this.onLinkPointerDown,
+    this.onLinkRendered,
+    this.onLinkTitleRendered,
+    this.restoreLineBreaks,
   });
 
   @override
@@ -1651,129 +1768,127 @@ class _CollapsibleCommentaryGroupState
         // תוכן המפרשים - מוצג רק כשמורחב
         if (_isExpanded)
           ...widget.group.links.map((link) {
-            return SelectionArea(
-              key: ValueKey(
-                'commentary_${widget.getLinkKey(link)}_${widget.selectionRevision}',
-              ),
-              contextMenuBuilder: (context, selectableRegionState) {
-                return const SizedBox.shrink();
-              },
-              onSelectionChanged: (selection) {
-                if (selection != null && selection.plainText.isNotEmpty) {
-                  final owner = widget.selectionOwner;
-                  if (owner != null) {
-                    widget.selectionSyncController?.activate(owner);
-                  }
-                  widget.onLinkSelected(link, selection.plainText);
-                } else if (selection == null ||
-                    selection.plainText.trim().isEmpty) {
-                  final owner = widget.selectionOwner;
-                  if (owner != null) {
-                    widget.selectionSyncController?.clear(owner);
-                  }
-                  widget.onLinkSelectionCleared();
-                }
-              },
-              child: ValueListenableBuilder<String?>(
-                valueListenable: widget.savedSelectedTextListenable,
-                child: Padding(
-                  key: widget.itemKeys[widget.getLinkKey(link)],
-                  padding: const EdgeInsets.only(
-                      right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      BlocBuilder<SettingsBloc, SettingsState>(
-                        builder: (context, settingsState) {
-                          return FutureBuilder<String>(
-                            future: link.displayReference,
-                            builder: (context, snapshot) {
-                              String displayTitle = snapshot.data ??
-                                  link.fallbackDisplayReference;
-                              if (settingsState.replaceHolyNames) {
-                                displayTitle =
-                                    utils.replaceHolyNames(displayTitle);
-                              }
-                              return Text(
-                                displayTitle,
-                                style: TextStyle(
-                                  fontSize: widget.fontSize * 0.75,
-                                  fontWeight: FontWeight.normal,
-                                  fontFamily:
-                                      settingsState.commentatorsFontFamily,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface
-                                      .withValues(alpha: 0.5),
-                                ),
-                                textDirection: TextDirection.rtl,
-                              );
-                            },
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 4),
-                      AnimatedBuilder(
-                        animation: Listenable.merge([
-                          widget.searchQueryListenable,
-                          widget.currentSearchIndexListenable,
-                          widget.totalSearchResultsListenable,
-                        ]),
-                        builder: (context, _) {
-                          final searchQuery = widget.showSearch
-                              ? widget.searchQueryListenable.value
-                              : '';
-                          final currentSearchIndex = widget.showSearch
-                              ? widget.getItemSearchIndex(link)
-                              : 0;
-                          return AppContextMenuRegion(
-                            menuBuilder: (menuCtx, _) =>
-                                ContextMenuUtils.buildCommentaryContextMenu(
-                              context: menuCtx,
-                              link: link,
-                              openBookCallback: widget.openBookCallback,
-                              fontSize: widget.fontSize,
-                              savedSelectedText:
-                                  widget.savedSelectedTextListenable.value,
-                              onCopySelected: () =>
-                                  ContextMenuUtils.copyFormattedText(
-                                context: menuCtx,
-                                savedSelectedText:
-                                    widget.savedSelectedTextListenable.value,
-                                fontSize: widget.fontSize,
-                                link: widget.lastSelectedLinkListenable.value,
+            final Widget itemContent = ValueListenableBuilder<String?>(
+              valueListenable: widget.savedSelectedTextListenable,
+              child: Padding(
+                key: widget.itemKeys[widget.getLinkKey(link)],
+                padding: const EdgeInsets.only(
+                    right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    BlocBuilder<SettingsBloc, SettingsState>(
+                      builder: (context, settingsState) {
+                        return FutureBuilder<String>(
+                          future: link.displayReference,
+                          builder: (context, snapshot) {
+                            String displayTitle =
+                                snapshot.data ?? link.fallbackDisplayReference;
+                            if (settingsState.replaceHolyNames) {
+                              displayTitle =
+                                  utils.replaceHolyNames(displayTitle);
+                            }
+                            final reportedTitle = displayTitle;
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              widget.onLinkTitleRendered
+                                  ?.call(link, reportedTitle);
+                            });
+                            return Text(
+                              displayTitle,
+                              style: TextStyle(
+                                fontSize: widget.fontSize * 0.75,
+                                fontWeight: FontWeight.normal,
+                                fontFamily:
+                                    settingsState.commentatorsFontFamily,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.5),
                               ),
-                            ),
-                            child: CommentaryContent(
-                              key: ValueKey(
-                                  '${link.index1}_${link.path2}_${link.index2}'),
-                              link: link,
+                              textDirection: TextDirection.rtl,
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    AnimatedBuilder(
+                      animation: Listenable.merge([
+                        widget.searchQueryListenable,
+                        widget.currentSearchIndexListenable,
+                        widget.totalSearchResultsListenable,
+                      ]),
+                      builder: (context, _) {
+                        final searchQuery = widget.showSearch
+                            ? widget.searchQueryListenable.value
+                            : '';
+                        final currentSearchIndex = widget.showSearch
+                            ? widget.getItemSearchIndex(link)
+                            : 0;
+                        return AppContextMenuRegion(
+                          menuBuilder: (menuCtx, _) =>
+                              ContextMenuUtils.buildCommentaryContextMenu(
+                            context: menuCtx,
+                            link: link,
+                            openBookCallback: widget.openBookCallback,
+                            fontSize: widget.fontSize,
+                            savedSelectedText:
+                                widget.savedSelectedTextListenable.value,
+                            onCopySelected: () =>
+                                ContextMenuUtils.copyFormattedText(
+                              context: menuCtx,
+                              savedSelectedText:
+                                  (widget.restoreLineBreaks ?? (s) => s)(
+                                      widget.savedSelectedTextListenable.value),
                               fontSize: widget.fontSize,
-                              openBookCallback: widget.openBookCallback,
-                              removeNikud: widget.removeNikud,
-                              removePunctuation: widget.removePunctuation,
-                              searchQuery: searchQuery,
-                              currentSearchIndex: currentSearchIndex,
-                              onSearchResultsCountChanged: widget.showSearch
-                                  ? (count) => widget.updateSearchResultsCount(
-                                        link,
-                                        count,
-                                      )
-                                  : null,
-                              onSearchSnippetsChanged: widget.showSearch &&
-                                      widget.updateSearchSnippets != null
-                                  ? (snippets) => widget.updateSearchSnippets!(
-                                      link, snippets)
-                                  : null,
+                              // במצב הפאנל/כרטיסייה אין מעקב פר-פריט אחר
+                              // המפרש הנבחר (אין SelectionArea פר-פריט), לכן
+                              // נופלים חזרה ל-link של הפריט שעליו נפתח התפריט.
+                              link: widget.lastSelectedLinkListenable.value ??
+                                  link,
                             ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+                          ),
+                          child: CommentaryContent(
+                            key: ValueKey(
+                                '${link.index1}_${link.path2}_${link.index2}'),
+                            link: link,
+                            fontSize: widget.fontSize,
+                            openBookCallback: widget.openBookCallback,
+                            removeNikud: widget.removeNikud,
+                            removePunctuation: widget.removePunctuation,
+                            searchQuery: searchQuery,
+                            currentSearchIndex: currentSearchIndex,
+                            onSearchResultsCountChanged: widget.showSearch
+                                ? (count) => widget.updateSearchResultsCount(
+                                      link,
+                                      count,
+                                    )
+                                : null,
+                            onSearchSnippetsChanged: widget.showSearch &&
+                                    widget.updateSearchSnippets != null
+                                ? (snippets) =>
+                                    widget.updateSearchSnippets!(link, snippets)
+                                : null,
+                            onRendered: (text) =>
+                                widget.onLinkRendered?.call(link, text),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
-                builder: (context, selectedText, child) => child!,
               ),
+              builder: (context, selectedText, child) => child!,
+            );
+
+            // הרשימה כולה עטופה ב-SelectionArea יחיד (בפאנל/בכרטיסייה/בתצוגה
+            // המשולבת), ולכן מחזירים את התוכן ישירות — בלי SelectionArea
+            // פר-פריט (שהיה הופך כל פריט ל"בלוק אטום" בבחירת מקלדת). עוטפים
+            // ב-Listener שקוף כדי לזהות על איזה מפרש לחץ המשתמש (לייחוס בהעתקת
+            // מקלדת Ctrl+C, שאין לה פריט-יעד).
+            return Listener(
+              onPointerDown: (_) => widget.onLinkPointerDown?.call(link),
+              child: itemContent,
             );
           }),
         const Divider(height: 1),

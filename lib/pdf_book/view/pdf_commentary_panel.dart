@@ -22,6 +22,7 @@ import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:otzaria/services/commentary_service.dart';
@@ -468,11 +469,15 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     if (widget.isFullScreen) {
       // במצב fullscreen: הכותרת + הניווט מופעלים מ-PdfCommentatorsTabScreen.
       // הפאנל מציג רק את תוכן המפרשים (כולל שורת חיפוש ופילטר)
-      return SelectionArea(
+      return RtlSelectionShortcuts(
+          child: SelectionArea(
         contextMenuBuilder: (context, selectableRegionState) {
           return const SizedBox.shrink();
         },
         onSelectionChanged: (selection) {
+          // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
+          trackRtlSelection(selection?.plainText);
+          if (rtlSelectionPriming) return; // שינוי זמני בזמן priming
           if (selection != null && selection.plainText.isNotEmpty) {
             setState(() {
               _savedSelectedText = selection.plainText;
@@ -480,7 +485,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           }
         },
         child: _buildCommentariesView(),
-      );
+      ));
     }
 
     return Column(
@@ -511,11 +516,15 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         ),
         // תוכן הכרטיסיות - עטוף ב-SelectionArea כדי לאפשר בחירת טקסט
         Expanded(
-          child: SelectionArea(
+          child: RtlSelectionShortcuts(
+              child: SelectionArea(
             contextMenuBuilder: (context, selectableRegionState) {
               return const SizedBox.shrink();
             },
             onSelectionChanged: (selection) {
+              // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
+              trackRtlSelection(selection?.plainText);
+              if (rtlSelectionPriming) return; // שינוי זמני בזמן priming
               if (selection != null && selection.plainText.isNotEmpty) {
                 setState(() {
                   _savedSelectedText = selection.plainText;
@@ -546,7 +555,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                 ),
               ],
             ),
-          ),
+          )),
         ),
       ],
     );

@@ -10,6 +10,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/feedback/app_future_builder.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
+import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 
 class CommentaryContent extends StatefulWidget {
   const CommentaryContent({
@@ -23,6 +24,7 @@ class CommentaryContent extends StatefulWidget {
     this.currentSearchIndex = 0,
     this.onSearchResultsCountChanged,
     this.onSearchSnippetsChanged,
+    this.onRendered,
   });
   final bool removeNikud;
   final bool removePunctuation;
@@ -33,6 +35,10 @@ class CommentaryContent extends StatefulWidget {
   final int currentSearchIndex;
   final Function(int)? onSearchResultsCountChanged;
   final Function(List<String>)? onSearchSnippetsChanged;
+
+  /// מדווח את הטקסט הפשוט המרונדר (כפי שמופיע במסך) — משמש לשחזור מעברי שורה
+  /// בהעתקה רב-שורתית של מפרשים.
+  final void Function(String renderedPlainText)? onRendered;
 
   @override
   State<CommentaryContent> createState() => _CommentaryContentState();
@@ -155,19 +161,23 @@ class _CommentaryContentState extends State<CommentaryContent> {
                       });
                     }
 
+                    final renderSettings = RenderSettings(
+                      removeNikud: effectiveRemoveNikud,
+                      removePunctuation: widget.removePunctuation,
+                      removeTeamim: !settingsState.showTeamim,
+                      replaceHolyNames: settingsState.replaceHolyNames,
+                      searchText: widget.searchQuery,
+                      currentSearchIndex: widget.currentSearchIndex,
+                      fontSize: widget.fontSize,
+                      fontFamily: settingsState.commentatorsFontFamily,
+                      lineHeight: settingsState.lineHeight,
+                    );
+
+                    _reportRenderedText(data, renderSettings);
+
                     return SmartTextWidget(
                       text: data,
-                      settings: RenderSettings(
-                        removeNikud: effectiveRemoveNikud,
-                        removePunctuation: widget.removePunctuation,
-                        removeTeamim: !settingsState.showTeamim,
-                        replaceHolyNames: settingsState.replaceHolyNames,
-                        searchText: widget.searchQuery,
-                        currentSearchIndex: widget.currentSearchIndex,
-                        fontSize: widget.fontSize,
-                        fontFamily: settingsState.commentatorsFontFamily,
-                        lineHeight: settingsState.lineHeight,
-                      ),
+                      settings: renderSettings,
                     );
                   },
                 );
@@ -175,6 +185,23 @@ class _CommentaryContentState extends State<CommentaryContent> {
             );
           }),
     );
+  }
+
+  String? _lastRenderKey;
+
+  /// מחשב את הטקסט הפשוט המרונדר (memoized) ומדווח אותו דרך [widget.onRendered]
+  /// לאחר ה-frame — לשחזור מעברי שורה בהעתקה רב-שורתית.
+  void _reportRenderedText(String data, RenderSettings settings) {
+    if (widget.onRendered == null) return;
+    // הטקסט הפשוט אינו תלוי בחיפוש/הדגשה (אלה מוסרים ב-stripHtml).
+    final key = '${settings.removeNikud}|${settings.removePunctuation}|'
+        '${settings.removeTeamim}|${settings.replaceHolyNames}|$data';
+    if (key == _lastRenderKey) return;
+    _lastRenderKey = key;
+    final rendered = renderSelectionLine(rawText: data, settings: settings);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onRendered?.call(rendered);
+    });
   }
 
   /// בניית skeleton loading לתוכן פרשנות - שלוש שורות
