@@ -527,6 +527,7 @@ class TextSettingsTab extends StatelessWidget {
           },
         ),
         SwitchSettingsTile(
+          leading: const Icon(FluentIcons.text_more_24_regular),
           title: const Text('הצגת טעמי המקרא', style: kSettingsTitleStyle),
           subtitle: Text(
               state.showTeamim ? 'המקרא יוצג עם טעמים' : 'המקרא יוצג ללא טעמים',
@@ -705,6 +706,7 @@ class TextSettingsTab extends StatelessWidget {
       title: 'הגדרות לפי ספר',
       children: [
         SwitchSettingsTile(
+          leading: const Icon(FluentIcons.book_open_24_regular),
           title: const Text('שמירת התאמות לכל ספר בנפרד',
               style: kSettingsTitleStyle),
           subtitle: Text(
@@ -720,18 +722,18 @@ class TextSettingsTab extends StatelessWidget {
           },
         ),
         if (state.enablePerBookSettings)
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: SizedBox(
-              width: double.infinity,
-              child: NeutralActionButton(
+          ListTile(
+            hoverColor: Colors.transparent,
+            leading: const Icon(FluentIcons.delete_24_regular),
+            title: const Text('איפוס הגדרות לפי ספר',
+                style: kSettingsTitleStyle),
+            subtitle: const Text('מחיקת כל ההתאמות שנשמרו לכל ספר בנפרד',
+                style: kSettingsSubtitleStyle),
+            trailing: NeutralActionButton(
                 onPressed: () => _resetPerBookSettings(context),
-                icon: FluentIcons.delete_24_regular,
-                text: 'אפס את כל הגדרות אלו, בכל הספרים',
+                text: 'איפוס',
               ),
             ),
-          ),
       ],
     );
   }
@@ -739,16 +741,16 @@ class TextSettingsTab extends StatelessWidget {
   Future<void> _resetPerBookSettings(BuildContext context) async {
     final confirm = await showWarningDialog(
       context: context,
-      title: 'אישור מחיקה',
-      content: 'האם אתה בטוח שברצונך למחוק את כל ההגדרות לפי ספר?',
+      title: 'אישור איפוס הגדרות לפי ספר',
+      content: 'האם אתה בטוח שברצונך לאפס ולמחוק את כל ההגדרות לפי ספר?',
       subtitle: 'פעולה זו אינה ניתנת לביטול.',
       cancelText: 'ביטול',
-      confirmText: 'מחק הכל',
+      confirmText: 'איפוס',
     );
 
     if (confirm == true && context.mounted) {
       await PerBookSettings.deleteAllSettings();
-      UiSnack.show('כל ההגדרות המיוחדות נמחקו בהצלחה');
+      UiSnack.show('כל ההגדרות המיוחדות אופסו בהצלחה');
     }
   }
 }
@@ -947,7 +949,7 @@ class _TextWidthSliderState extends State<_TextWidthSlider> {
     return Column(
       children: [
         ListTile(
-          leading: const Icon(FluentIcons.text_align_justify_24_regular),
+          leading: const Icon(FluentIcons.text_align_distributed_24_regular),
           title: const Text('רוחב הטקסט', style: kSettingsTitleStyle),
           subtitle: Text(
             currentLevel == 0
