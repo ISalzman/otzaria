@@ -1790,6 +1790,7 @@ class _CollapsibleCommentaryGroupState
                             }
                             final reportedTitle = displayTitle;
                             WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (!mounted) return;
                               widget.onLinkTitleRendered
                                   ?.call(link, reportedTitle);
                             });
