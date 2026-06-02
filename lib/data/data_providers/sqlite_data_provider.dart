@@ -20,7 +20,8 @@ import 'package:sqlite3/sqlite3.dart' show SqliteException, sqlite3;
 /// - Falling back to file system when data is not in database
 class SqliteDataProvider {
   late SeforimRepository _repository;
-  late String _dbPath;
+  // לא late: withWritableSession/optimizeDatabase עשויים להיקרא לפני initialize.
+  String _dbPath = '';
   bool _isInitialized = false;
   Future<void>? _initializationFuture;
 
@@ -148,7 +149,27 @@ class SqliteDataProvider {
   /// read-only אמיתית) — נכשל בשקט; הקובץ המופץ כבר במצב DELETE.
   Future<void> _normalizeJournalModeForReadOnly(String dbPath) async {
     try {
-      if (!await File(dbPath).exists()) return;
+      final file = File(dbPath);
+      if (!await file.exists()) return;
+
+      // זיהוי מצב היומן דרך כותרת SQLite — בייטים 18/19 (write/read format
+      // version): 1 = rollback (DELETE/TRUNCATE), 2 = WAL. זו קריאת בייטים
+      // בלבד, ללא פתיחת DB ולכן ללא כתיבה. רוב ההתקנות (וה-DB המופץ) כבר
+      // ב-rollback, ולכן ב-runtime רגיל לא נפתח כלל חיבור RW.
+      bool isWal;
+      final raf = await file.open();
+      try {
+        await raf.setPosition(18);
+        final header = await raf.read(2);
+        isWal = header.length == 2 && (header[0] == 2 || header[1] == 2);
+      } finally {
+        await raf.close();
+      }
+
+      if (!isWal) return;
+
+      // התקנה ישנה במצב WAL: המרה חד-פעמית ל-DELETE (דורשת פתיחת RW זמנית).
+      // לאחר ההמרה, פתיחות עתידיות יזהו rollback וידלגו על השלב הזה.
       final db = sqlite3.open(dbPath);
       try {
         try {
@@ -229,13 +250,19 @@ class SqliteDataProvider {
   /// סוגר את חיבור ה-RO לפני שאיזולייט חיצוני (diff-sync / background sync)
   /// פותח את seforim.db לכתיבה, כדי שלא תתפוס נעילת קובץ מתנגשת.
   ///
+  /// מסמן write-session פעיל (כמו [withWritableSession]) כדי ש-[initialize]
+  /// של קוראים מקבילים לא יפתח חיבור RO מתנגש בזמן שהאיזולייט כותב.
   /// יש לקרוא ל-[reopenAfterExternalWrite] לאחר שהאיזולייט סיים.
   Future<void> closeForExternalWrite() async {
+    _activeWriteSessions++;
     await dispose();
   }
 
   /// פותח מחדש את seforim.db read-only לאחר שאיזולייט חיצוני סיים לכתוב.
   Future<void> reopenAfterExternalWrite() async {
+    if (_activeWriteSessions > 0) {
+      _activeWriteSessions--;
+    }
     await initialize();
   }
 
