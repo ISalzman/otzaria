@@ -43,6 +43,7 @@ import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
+import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/helpers/editor_settings_helper.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
@@ -2759,6 +2760,11 @@ bool _handleGlobalKeyEvent(
 
   // הוספת הערה
   if (ShortcutHelper.matchesShortcut(event, addNoteShortcut)) {
+    // בצורת הדף, כשהבחירה במפרש, חלונית המפרש כבר פתחה הערה תחת ספר המפרש.
+    // האירוע ממשיך להתבעבע לכאן, ולכן נמנעים מפתיחת הערה כפולה על גוף הספר.
+    if (SimpleTextViewer.commentaryNoteHandledRecently) {
+      return true;
+    }
     _addNoteFromKeyboard(
       context,
       state,
