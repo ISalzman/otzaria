@@ -166,12 +166,22 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     final shadowColor =
         Theme.of(context).colorScheme.shadow.withValues(alpha: 0.22);
 
+    // ממקם את פסי הגלילה בקצה החיצוני של הפאנל (הצמוד לדופן החלון) ולא בקצה
+    // הפנימי, שם יושבת ידית הגרירה (ResizableDragHandle) וחוסמת את הלחיצה על
+    // הפס. בצד ימין של המסך הקצה החיצוני הוא ימין, ולהיפך.
     final scrollbarWrapped = ScrollbarTheme(
       data: ScrollbarThemeData(
         crossAxisMargin: 2,
         mainAxisMargin: widget.scrollbarTopMargin ?? _kWideTopGap,
       ),
-      child: child,
+      child: ScrollConfiguration(
+        behavior: _OuterEdgePaneScrollBehavior(
+          paneOnRight
+              ? ScrollbarOrientation.right
+              : ScrollbarOrientation.left,
+        ),
+        child: child,
+      ),
     );
 
     if (widget.wrapPaneInFloatingPanel) {
@@ -470,5 +480,42 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         ),
       ],
     );
+  }
+}
+
+/// התנהגות גלילה המציבה את פס הגלילה האנכי בקצה הנבחר של הפאנל במקום בקצה
+/// ה-trailing שנקבע אוטומטית לפי כיוון הטקסט. נחוץ כי ידית הגרירה לשינוי רוחב
+/// הפאנל יושבת בקצה הפנימי וחוסמת את הלחיצה על פס שנמצא באותו צד.
+///
+/// משכפלת את לוגיקת [MaterialScrollBehavior] (פס אנכי בדסקטופ בלבד) ומוסיפה
+/// רק את [scrollbarOrientation].
+class _OuterEdgePaneScrollBehavior extends MaterialScrollBehavior {
+  const _OuterEdgePaneScrollBehavior(this.orientation);
+
+  final ScrollbarOrientation orientation;
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    if (axisDirectionToAxis(details.direction) != Axis.vertical) {
+      return child;
+    }
+    switch (getPlatform(context)) {
+      case TargetPlatform.linux:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
+        return Scrollbar(
+          controller: details.controller,
+          scrollbarOrientation: orientation,
+          child: child,
+        );
+      case TargetPlatform.android:
+      case TargetPlatform.fuchsia:
+      case TargetPlatform.iOS:
+        return child;
+    }
   }
 }

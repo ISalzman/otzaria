@@ -96,6 +96,14 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
   /// משמש כדי למנוע בקשות חוזרות מקבילות.
   final Set<String> _pluginsBeingEvaluated = {};
 
+  /// האם WebView2 Runtime זמין. ברגע שנמצא זמין הערך נשמר ולא נבדק שוב —
+  /// Runtime אינו "נעלם" בזמן ריצה. אך כל עוד הוא חסר, הבדיקה חוזרת בכל
+  /// סנכרון: כך אם המשתמש מתקין WebView2 בזמן שהאפליקציה פתוחה, הסנכרון
+  /// הבא (למשל RefreshPlugins מכפתור "בדוק שוב" בטאב) יחזיר את תוספי הרקע
+  /// לפעולה בלי צורך בהפעלה מחדש.
+  bool _runtimeAvailable = false;
+  bool _loggedRuntimeMissing = false;
+
   @override
   void initState() {
     super.initState();
@@ -146,6 +154,25 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
   }
 
   Future<void> _syncBackgroundPlugins(List<InstalledPlugin> plugins) async {
+    // ללא WebView2 Runtime (Windows) בניית ה-WebView המוסתר נכשלת. מדלגים
+    // על כל תוספי הרקע — הם יוצגו עם מסך ההכוונה כשהמשתמש יפתח אותם ידנית.
+    // כל עוד ה-Runtime חסר בודקים מחדש בכל סנכרון, כדי שהתקנה תוך כדי ריצה
+    // תחזיר את תוספי הרקע בסנכרון הבא.
+    if (!_runtimeAvailable) {
+      _runtimeAvailable = await WebViewEnvironmentHolder.isRuntimeAvailable();
+      if (!mounted) return;
+      if (!_runtimeAvailable) {
+        if (!_loggedRuntimeMissing) {
+          _loggedRuntimeMissing = true;
+          debugPrint(
+            'PluginBackgroundHost: WebView2 Runtime missing — '
+            'skipping background plugins',
+          );
+        }
+        return;
+      }
+    }
+
     final enabledById = {
       for (final p in plugins.where((p) => p.enabled)) p.pluginId: p,
     };

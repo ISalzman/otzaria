@@ -24,6 +24,15 @@ class MyDatabase {
   sqlite3.Database? _database;
   final String _path;
 
+  /// כשהוא true, ה-DB נפתח read-only: ללא יצירת קובצי WAL, ללא DDL
+  /// (`CREATE TABLE`), ועם `PRAGMA query_only=ON`. משמש כדי לפתוח את
+  /// `seforim.db` הרשמי בלי לדרוש הרשאת כתיבה. ברירת המחדל היא כתיב
+  /// (false) כדי לשמר את התנהגות user_books.db / cache.db / ה-generator.
+  final bool _readOnly;
+
+  /// האם החיבור נפתח במצב read-only.
+  bool get isReadOnly => _readOnly;
+
   // (no platform initialization required – sqlite3 handles all platforms natively)
 
   // DAOs
@@ -137,7 +146,9 @@ class MyDatabase {
   /// אין סינגלטון ברירת-מחדל — כל קוד הצורך גישה ל-seforim.db עובר דרך
   /// [SqliteDataProvider], וקוד הצורך גישה ל-user_books.db דרך
   /// [UserBooksDatabaseHolder].
-  MyDatabase.withPath(String path) : _path = path;
+  MyDatabase.withPath(String path, {bool readOnly = false})
+      : _path = path,
+        _readOnly = readOnly;
 
   Future<sqlite3.Database> get database async {
     if (_database != null) return _database!;
@@ -149,6 +160,18 @@ class MyDatabase {
   }
 
   sqlite3.Database _initDatabase() {
+    if (_readOnly) {
+      // Read-only open: never create WAL side-files (-wal/-shm) and never run
+      // DDL. This lets seforim.db be opened from read-only media / without
+      // write permission. Assumes the file is already in a rollback journal
+      // mode (DELETE) — SqliteDataProvider normalises it before opening.
+      final db = sqlite3.sqlite3.open(_path, mode: sqlite3.OpenMode.readOnly);
+      try {
+        db.execute('PRAGMA query_only=ON');
+      } catch (_) {}
+      return db;
+    }
+
     final db = sqlite3.sqlite3.open(_path);
 
     // Enable WAL for concurrent read/write access (uniform across all platforms).

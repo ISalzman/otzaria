@@ -158,7 +158,12 @@ class CommentatorsTabScreen extends StatefulWidget {
 }
 
 class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  // שומר את ה-State חי כשהטאב יוצא מתחום ה-PageView, כדי שבחירת הפרק/קטע
+  // (_selectedChapter / _selectedVerseIdx) לא תאבד במעבר לטאב אחר וחזרה.
+  @override
+  bool get wantKeepAlive => true;
+
   TocEntry? _selectedChapter;
   int _selectedVerseIdx = _kAllChapter;
   // הפרק שתתי-הפריטים שלו פרושים בניווט. עצמאי מ-_selectedChapter כדי
@@ -424,6 +429,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // נדרש ע"י AutomaticKeepAliveClientMixin
     return BlocProvider<TextBookBloc>.value(
       value: widget.tab.bloc,
       child: Builder(builder: (context) {

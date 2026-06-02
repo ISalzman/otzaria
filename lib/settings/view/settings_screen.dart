@@ -101,6 +101,17 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
     _searchResults = const [];
   }
 
+  // ── מובייל: כפתור "חזור" — סוגר קודם את החיפוש הפעיל, אחרת חוזר לתפריט ────
+  void _handleMobileBack() {
+    setState(() {
+      if (_searchQuery.trim().isNotEmpty) {
+        _clearSearch();
+      } else {
+        _showMobileMenu = true;
+      }
+    });
+  }
+
   // ── חיפוש: לחיצה על תוצאה — נווט לטאב + גלול והבזק ───────────────────────
   void _onSearchResultTap(SettingsSearchEntry entry) {
     SettingsSearchRegistry.instance.navigateToEntry(entry);
@@ -277,6 +288,9 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     // panelBackground מוגדר ב-AppSurfaces ומשמש גם ספריה, כלים, והגדרות
     final bgColor = AppSurfaces.panelBackground(context);
+    // במצב חיפוש מציגים תוצאות חוצות-קטגוריות, ולכן הכותרת אינה שם
+    // הלשונית האחרונה ואף לשונית בצד אינה "פעילה".
+    final isSearching = _searchQuery.trim().isNotEmpty;
 
     return ProtectedSettingsWrapper(
       child: Directionality(
@@ -293,13 +307,23 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                   currentTabIndex: _selectedIndex,
                   totalTabs: _tabsData.length,
                   onTabChange: (i) => setState(() => _selectedIndex = i),
-                  onBack: null,
+                  onBack: showResults ? _handleMobileBack : null,
                   child: Scaffold(
                     backgroundColor: bgColor,
                     appBar: AppBar(
                       backgroundColor: bgColor,
                       elevation: 0,
-                      title: const Text('הגדרות'),
+                      title: Text(showResults ? 'תוצאות חיפוש' : 'הגדרות'),
+                      leading: showResults
+                          ? Tooltip(
+                              message: 'חזור (Esc)',
+                              child: IconButton(
+                                icon: const RtlIcon(
+                                    FluentIcons.arrow_right_24_regular),
+                                onPressed: _handleMobileBack,
+                              ),
+                            )
+                          : null,
                     ),
                     body: Column(
                       children: [
@@ -362,20 +386,21 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                   currentTabIndex: _selectedIndex,
                   totalTabs: _tabsData.length,
                   onTabChange: _changeTab,
-                  onBack: () => setState(() => _showMobileMenu = true),
+                  onBack: _handleMobileBack,
                   child: Scaffold(
                     backgroundColor: bgColor,
                     appBar: AppBar(
                       backgroundColor: bgColor,
                       elevation: 0,
-                      title: Text(_tabsData[_selectedIndex].label),
+                      title: Text(isSearching
+                          ? 'תוצאות חיפוש'
+                          : _tabsData[_selectedIndex].label),
                       leading: Tooltip(
                         message: 'חזור (Esc)',
                         child: IconButton(
                           icon:
                               const RtlIcon(FluentIcons.arrow_right_24_regular),
-                          onPressed: () =>
-                              setState(() => _showMobileMenu = true),
+                          onPressed: _handleMobileBack,
                         ),
                       ),
                     ),
@@ -460,7 +485,8 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                                     icon: _tabsData[index].icon,
                                     iconFilled: _tabsData[index].iconFilled,
                                     label: _tabsData[index].label,
-                                    isSelected: _selectedIndex == index,
+                                    isSelected:
+                                        !isSearching && _selectedIndex == index,
                                     onTap: () => _changeTab(index),
                                     mirrorIcon: _tabsData[index].icon ==
                                         FluentIcons.book_24_regular,
@@ -476,7 +502,9 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                       Expanded(
                         child: _SettingsContentPane(
                           key: ValueKey(_selectedIndex),
-                          label: _tabsData[_selectedIndex].label,
+                          label: isSearching
+                              ? 'תוצאות חיפוש'
+                              : _tabsData[_selectedIndex].label,
                           bgColor: bgColor,
                           focusNode: _contentFocusNode,
                           scrollController: _contentScrollController,

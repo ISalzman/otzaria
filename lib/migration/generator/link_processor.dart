@@ -494,8 +494,8 @@ class LinkProcessor {
 
     // Update connection flags in book table
     await _repository.executeRawQuery('''
-      WITH booctions AS (
-        SELECT 
+      WITH book_connections AS (
+        SELECT
             book_id,
             MAX(CASE WHEN connectionTypeId = 2 THEN 1 ELSE 0 END) as has_targum,
             MAX(CASE WHEN connectionTypeId = 3 THEN 1 ELSE 0 END) as has_reference,

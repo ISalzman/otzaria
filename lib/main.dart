@@ -619,6 +619,14 @@ Future<void> _preWarmWebViewEnvironment() async {
       }
       return;
     }
+    // אם WebView2 Runtime אינו מותקן, אתחול הסביבה ייכשל ממילא. מדלגים כדי
+    // לא לזרוק חריגה מיותרת ולא להצמיח תהליכי Edge חלקיים.
+    if (!await WebViewEnvironmentHolder.isRuntimeAvailable()) {
+      if (kDebugMode) {
+        debugPrint('WebView2 pre-warm skipped: runtime not installed');
+      }
+      return;
+    }
     await WebViewEnvironmentHolder.initialize();
   } catch (error, stackTrace) {
     _logNonFatalInitializationError(

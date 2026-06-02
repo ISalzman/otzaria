@@ -8,6 +8,8 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
+import 'package:otzaria/migration/database/daos/database.dart';
+import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 
 ReferenceBookHit _hit(String filePath) => ReferenceBookHit(
       bookId: -1,
@@ -24,10 +26,20 @@ ReferenceBookHit _hit(String filePath) => ReferenceBookHit(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(() {
+  late MyDatabase cacheDb;
+  late SeforimRepository cacheRepo;
+
+  setUp(() async {
+    // persistent cache מבודד ב-DB in-memory — בלי override היה נפתח cache.db
+    // אמיתי תחת AppData, מה שמזהם מצב בין הרצות וגורם לפרסר לא להיקרא בריצה
+    // השנייה (הנתונים נטענים מהמטמון הקבוע).
+    cacheDb = MyDatabase.withPath(':memory:');
+    cacheRepo = SeforimRepository(cacheDb);
+    await cacheRepo.ensureInitialized();
+
     // singleton — מבטיח מצב נקי בין טסטים.
     ReferenceBooksCache.instance.clear();
-    ReferenceBooksCache.instance.pdfOutlineCacheRepositoryOverride = null;
+    ReferenceBooksCache.instance.pdfOutlineCacheRepositoryOverride = cacheRepo;
     ReferenceBooksCache.instance.pdfFileMetadataProviderOverride =
         (filePath) async {
       if (filePath.isEmpty) return null;
@@ -37,6 +49,12 @@ void main() {
       );
     };
     ReferenceBooksCache.instance.nowProviderOverride = null;
+  });
+
+  tearDown(() {
+    ReferenceBooksCache.instance.clear();
+    ReferenceBooksCache.instance.pdfOutlineCacheRepositoryOverride = null;
+    cacheDb.close();
   });
 
   group('prewarmAllPdfOutlines', () {
