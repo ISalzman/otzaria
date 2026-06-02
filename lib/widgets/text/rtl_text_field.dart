@@ -239,9 +239,18 @@ class _RtlTextFieldState extends State<RtlTextField> {
     // התנועה מכבדת אשכולות-גרפמה (CharacterBoundary), כך שניקוד/תווים מורכבים
     // לא נחצים באמצע.
     final boundary = CharacterBoundary(text);
-    final int newOffset = isVisualRight
-        ? (boundary.getLeadingTextBoundaryAt(currentOffset - 1) ?? 0)
-        : (boundary.getTrailingTextBoundaryAt(currentOffset) ?? text.length);
+    final int newOffset;
+    if (isVisualRight) {
+      // ויזואלית-ימין = אחורה ב-offset. ב-offset 0 אין לאן לזוז (ונמנעים
+      // מהעברת אינדקס שלילי ל-getLeadingTextBoundaryAt).
+      newOffset = currentOffset > 0
+          ? (boundary.getLeadingTextBoundaryAt(currentOffset - 1) ?? 0)
+          : 0;
+    } else {
+      newOffset = currentOffset < text.length
+          ? (boundary.getTrailingTextBoundaryAt(currentOffset) ?? text.length)
+          : text.length;
+    }
 
     if (extendSelection) {
       // מרחיבים/מצמצמים את הבחירה

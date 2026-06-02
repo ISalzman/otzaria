@@ -101,4 +101,16 @@ void main() {
     expect(controller.selection.extentOffset, 2,
         reason: 'התזוזה חייבת לדלג על האות+ניקוד כיחידה אחת');
   });
+
+  testWidgets('חץ ימין ב-offset 0 אינו קורס (אין אינדקס שלילי)',
+      (tester) async {
+    // ויזואלית-ימין מ-offset 0 = אחורה אל מעבר לתחילת הטקסט. אסור להעביר
+    // אינדקס שלילי ל-CharacterBoundary; נשארים ב-0.
+    final controller = await pumpField(tester, text: 'אבג');
+    controller.selection = const TextSelection.collapsed(offset: 0);
+    await tester.pump();
+
+    await charSelect(tester, LogicalKeyboardKey.arrowRight);
+    expect(controller.selection.extentOffset, 0);
+  });
 }
