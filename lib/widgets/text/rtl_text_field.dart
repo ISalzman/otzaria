@@ -135,12 +135,32 @@ class _RtlTextFieldState extends State<RtlTextField> {
           const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
               _handleArrowKey(isVisualRight: true, extendSelection: false),
 
-          // Shift+חיצים
+          // Shift+חיצים (בחירה ברמת תו)
           const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
               () =>
                   _handleArrowKey(isVisualRight: false, extendSelection: true),
           const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
               () => _handleArrowKey(isVisualRight: true, extendSelection: true),
+
+          // Ctrl+Shift+חיצים (בחירה ברמת מילה — Windows/Linux)
+          const SingleActivator(LogicalKeyboardKey.arrowLeft,
+                  shift: true, control: true):
+              () => _handleArrowKey(
+                  isVisualRight: false, extendSelection: true, byWord: true),
+          const SingleActivator(LogicalKeyboardKey.arrowRight,
+                  shift: true, control: true):
+              () => _handleArrowKey(
+                  isVisualRight: true, extendSelection: true, byWord: true),
+
+          // Alt+Shift+חיצים (בחירה ברמת מילה — macOS)
+          const SingleActivator(LogicalKeyboardKey.arrowLeft,
+                  shift: true, alt: true):
+              () => _handleArrowKey(
+                  isVisualRight: false, extendSelection: true, byWord: true),
+          const SingleActivator(LogicalKeyboardKey.arrowRight,
+                  shift: true, alt: true):
+              () => _handleArrowKey(
+                  isVisualRight: true, extendSelection: true, byWord: true),
         },
         child: textField,
       );
@@ -157,13 +177,38 @@ class _RtlTextFieldState extends State<RtlTextField> {
     );
   }
 
+  /// מחזירה את ה-offset של גבול המילה הבא מ-[offset] בכיוון [forward]
+  /// (forward=true → לכיוון offset גבוה). מדלגת על רווחים ואז על תווי מילה.
+  static int _wordBoundary(String text, int offset, bool forward) {
+    bool isSpace(int i) => i >= 0 && i < text.length && text[i].trim().isEmpty;
+    int i = offset;
+    if (forward) {
+      while (i < text.length && isSpace(i)) {
+        i++;
+      }
+      while (i < text.length && !isSpace(i)) {
+        i++;
+      }
+    } else {
+      while (i > 0 && isSpace(i - 1)) {
+        i--;
+      }
+      while (i > 0 && !isSpace(i - 1)) {
+        i--;
+      }
+    }
+    return i;
+  }
+
   /// מטפל בלחיצת חץ עם תמיכה מלאה ב-RTL
   ///
   /// [isVisualRight] - האם המקש שנלחץ הוא חץ ימין (ויזואלית)
   /// [extendSelection] - האם להרחיב בחירה (Shift לחוץ)
+  /// [byWord] - האם לנוע ביחידות מילה (Ctrl/Alt+Shift+חץ) ולא ביחידות תו
   void _handleArrowKey({
     required bool isVisualRight,
     required bool extendSelection,
+    bool byWord = false,
   }) {
     final text = _effectiveController.text;
     final selection = _effectiveController.selection;
@@ -194,9 +239,15 @@ class _RtlTextFieldState extends State<RtlTextField> {
     final int currentOffset =
         extendSelection ? selection.extentOffset : selection.baseOffset;
 
-    // ב-RTL: ימינה = הקטנת אינדקס (-1), שמאלה = הגדלת אינדקס (+1)
-    final int offsetChange = isVisualRight ? -1 : 1;
-    final int newOffset = (currentOffset + offsetChange).clamp(0, text.length);
+    // ב-RTL: ימינה = הקטנת אינדקס (offset נמוך), שמאלה = הגדלת אינדקס (offset גבוה).
+    // forward (offset עולה) = חץ שמאלה ויזואלית.
+    final int newOffset;
+    if (byWord) {
+      newOffset = _wordBoundary(text, currentOffset, !isVisualRight);
+    } else {
+      final int offsetChange = isVisualRight ? -1 : 1;
+      newOffset = (currentOffset + offsetChange).clamp(0, text.length);
+    }
 
     if (extendSelection) {
       // מרחיבים/מצמצמים את הבחירה

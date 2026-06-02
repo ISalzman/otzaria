@@ -21,6 +21,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
@@ -50,8 +51,17 @@ import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart
 import 'package:otzaria/utils/text/html_link_handler.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 
-/// מחזירה האם אירוע המקלדת צריך להניע גלילה רציפה בצורת הדף.
-bool shouldHandlePageShapeNavigationKeyEvent(KeyEvent event) {
+/// מחזירה האם אירוע המקלדת צריך להניע גלילה/ניווט שורה בצורת הדף.
+///
+/// [isShiftPressed] - כש-Shift לחוץ הניווט מוותר, כדי שחיצים ירחיבו את בחירת
+/// הטקסט (Shift+חץ) במקום לדלג בין שורות או לגלול.
+bool shouldHandlePageShapeNavigationKeyEvent(
+  KeyEvent event, {
+  bool isShiftPressed = false,
+}) {
+  if (isShiftPressed) {
+    return false;
+  }
   return event is KeyDownEvent || event is KeyRepeatEvent;
 }
 
@@ -307,6 +317,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         _pendingKeyboardFocusRestore ||
         _isTextInputFocused() ||
         _isMenuFocused()) {
+      return;
+    }
+
+    // אם אזור אחר (מפרש) מחזיק כעת בחירת טקסט פעילה - אל תחטוף ממנו פוקוס.
+    // אחרת ה-SelectableRegion של המפרש יאבד פוקוס מקלדת, ו-Shift+חץ ירחיב
+    // את בחירת הטקסט הראשי (או יתחיל בחירה חדשה) במקום את בחירת המפרש.
+    final activeOwner = widget.selectionSyncController?.activeOwner;
+    if (activeOwner != null && !identical(activeOwner, _selectionOwner)) {
       return;
     }
 
@@ -704,6 +722,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   }
 
   Future<void> _handleSelectionChange(String? plainText) async {
+    // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
+    trackRtlSelection(plainText);
+    // שינוי בחירה זמני בזמן priming — לא לעבד.
+    if (rtlSelectionPriming) return;
     final persistedText = resolvePersistedSelectedText(
       previousSelectedText: _savedSelectedText,
       latestSelectedText: plainText,
@@ -1435,7 +1457,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                   final itemCount = segments.isNotEmpty
                       ? segments.length
                       : widget.content.length;
-                  return SelectableRegion(
+                  return RtlSelectionShortcuts(
+                      child: SelectableRegion(
                     key: _selectionRegionKey,
                     focusNode: _selectionFocusNode,
                     selectionControls: switch (defaultTargetPlatform) {
@@ -1506,7 +1529,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                           },
                           onKeyEvent: (_, event) {
                             if (!shouldHandlePageShapeNavigationKeyEvent(
-                                event)) {
+                              event,
+                              isShiftPressed:
+                                  HardwareKeyboard.instance.isShiftPressed,
+                            )) {
                               return KeyEventResult.ignored;
                             }
 
@@ -1558,7 +1584,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                         ),
                       ),
                     ),
-                  );
+                  ));
                 },
               );
             },

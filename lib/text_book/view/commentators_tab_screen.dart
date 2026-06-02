@@ -622,28 +622,28 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         }
         return false;
       },
-      child: SelectionArea(
-        contextMenuBuilder: (context, _) => const SizedBox.shrink(),
-        child: BlocBuilder<SettingsBloc, SettingsState>(
-          builder: (context, settingsState) => CommentaryListBase(
-            key: _commentaryKey,
-            openBookCallback: widget.openBookCallback,
-            fontSize: settingsState.commentatorsFontSize,
-            indexes: effectiveIndexes,
-            showSearch: true,
-            useAvailableCommentators: _selectedCommentatorsOverride == null,
-            selectedCommentatorsOverride: _selectedCommentatorsOverride,
-            onSelectedCommentatorsOverrideChanged: (list) {
-              setState(() => _selectedCommentatorsOverride = list);
-            },
-            onFilterOpenRequested: _openCommentatorsSelectionPane,
-            externalSearchController: _commentarySearchController,
-            externalCurrentIndexNotifier: _externalCurrentIndex,
-            externalTotalResultsNotifier: _externalTotalResults,
-            externalSearchResultsByPathNotifier: _externalSearchResultsByPath,
-            externalSearchSnippetsNotifier: _externalSearchSnippets,
-            externalAllExpandedNotifier: _allExpandedInChild,
-          ),
+      // אין SelectionArea חיצוני כאן: CommentaryListBase עוטף את הרשימה כולה
+      // ב-SelectionArea יחיד משלו. קינון היה הופך את תוכן המפרשים ל"בלוק אטום"
+      // שבחירת מקלדת (Shift+חץ) מדלגת עליו (עברה רק על שמות המפרשים).
+      child: BlocBuilder<SettingsBloc, SettingsState>(
+        builder: (context, settingsState) => CommentaryListBase(
+          key: _commentaryKey,
+          openBookCallback: widget.openBookCallback,
+          fontSize: settingsState.commentatorsFontSize,
+          indexes: effectiveIndexes,
+          showSearch: true,
+          useAvailableCommentators: _selectedCommentatorsOverride == null,
+          selectedCommentatorsOverride: _selectedCommentatorsOverride,
+          onSelectedCommentatorsOverrideChanged: (list) {
+            setState(() => _selectedCommentatorsOverride = list);
+          },
+          onFilterOpenRequested: _openCommentatorsSelectionPane,
+          externalSearchController: _commentarySearchController,
+          externalCurrentIndexNotifier: _externalCurrentIndex,
+          externalTotalResultsNotifier: _externalTotalResults,
+          externalSearchResultsByPathNotifier: _externalSearchResultsByPath,
+          externalSearchSnippetsNotifier: _externalSearchSnippets,
+          externalAllExpandedNotifier: _allExpandedInChild,
         ),
       ),
     );
