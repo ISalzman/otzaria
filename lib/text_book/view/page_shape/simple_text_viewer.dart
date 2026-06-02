@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -63,6 +64,55 @@ bool shouldHandlePageShapeNavigationKeyEvent(
     return false;
   }
   return event is KeyDownEvent || event is KeyRepeatEvent;
+}
+
+/// הפעולה שיש לבצע על אירוע מקלדת בחלונית מפרש (בצורת הדף).
+enum CommentaryKeyAction { none, copy, addNote }
+
+/// מחליטה איזו פעולה לבצע על אירוע מקלדת בחלונית מפרש, ללא תופעות לוואי.
+///
+/// המפרשים בצורת הדף לוכדים קיצורים גלובלית (ללא פוקוס): רק חלונית המפרש
+/// שבה סומן טקסט לאחרונה ([isActiveCommentary]) מטפלת. בלי טיפול כאן, קיצור
+/// "הוסף הערה" מתבעבע אל ה-`KeyboardListener` של הספר הראשי ופותח הערה על
+/// גוף הספר במקום על המפרש — וגם מבטל את הבחירה.
+///
+/// [addNoteShortcut] - מחרוזת קיצור "הוסף הערה" מההגדרות (כגון `'ctrl+n'`).
+/// פרמטרי ה-modifiers האופציונליים מאפשרים בדיקות יחידה בלי מצב חומרה אמיתי.
+CommentaryKeyAction resolveCommentaryKeyAction({
+  required KeyEvent event,
+  required bool isActiveCommentary,
+  required bool hasSelection,
+  required bool hasSelectedIndex,
+  required String addNoteShortcut,
+  bool? isControlPressed,
+  bool? isShiftPressed,
+  bool? isAltPressed,
+  bool? isMetaPressed,
+}) {
+  // כל הקיצורים כאן רלוונטיים רק במפרש הפעיל וכשיש בו טקסט מסומן.
+  if (!isActiveCommentary) return CommentaryKeyAction.none;
+  if (event is! KeyDownEvent) return CommentaryKeyAction.none;
+  if (!hasSelection) return CommentaryKeyAction.none;
+
+  final ctrl = isControlPressed ?? HardwareKeyboard.instance.isControlPressed;
+  final meta = isMetaPressed ?? HardwareKeyboard.instance.isMetaPressed;
+  if ((ctrl || meta) && event.logicalKey == LogicalKeyboardKey.keyC) {
+    return CommentaryKeyAction.copy;
+  }
+
+  final matchesAddNote = ShortcutHelper.matchesShortcut(
+    event,
+    addNoteShortcut,
+    isControlPressed: isControlPressed,
+    isShiftPressed: isShiftPressed,
+    isAltPressed: isAltPressed,
+    isMetaPressed: isMetaPressed,
+  );
+  if (matchesAddNote && hasSelectedIndex) {
+    return CommentaryKeyAction.addNote;
+  }
+
+  return CommentaryKeyAction.none;
 }
 
 /// בודקת האם הפוקוס הנוכחי נמצא בתוך שדה קלט טקסטואלי.
@@ -237,6 +287,14 @@ class SimpleTextViewer extends StatefulWidget {
     this.notesRepository,
   });
 
+  /// האם חלונית מפרש זה עתה טיפלה בקיצור "הוסף הערה".
+  ///
+  /// בצורת הדף הפוקוס נשאר על הטקסט הראשי גם כשהבחירה במפרש, ולכן אירוע
+  /// הקיצור מתבעבע אל ה-`KeyboardListener` של הספר הראשי גם אחרי שהמפרש טיפל
+  /// בו. הספר הראשי בודק דגל זה כדי לא לפתוח הערה כפולה על גוף הספר.
+  static bool get commentaryNoteHandledRecently =>
+      _SimpleTextViewerState._commentaryNoteHandled;
+
   @override
   State<SimpleTextViewer> createState() => _SimpleTextViewerState();
 }
@@ -244,6 +302,8 @@ class SimpleTextViewer extends StatefulWidget {
 class _SimpleTextViewerState extends State<SimpleTextViewer> {
   // דגל סטטי: מונע מהטקסט הראשי לדרוס העתקה שכבר בוצעה ע"י מפרש
   static bool _commentaryCopyHandled = false;
+  // דגל סטטי: מונע מהטקסט הראשי לפתוח הערה כפולה אחרי שמפרש טיפל בקיצור
+  static bool _commentaryNoteHandled = false;
   // מצביע סטטי: רק הפרשן האחרון שנבחר בו טקסט מטפל ב-Ctrl+C
   static _SimpleTextViewerState? _lastActiveCommentary;
 
@@ -390,9 +450,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     _selectionFocusNode = FocusNode(debugLabel: 'SelectionAreaFocus');
     _resolvedKeyboardFocusNode;
 
-    // מאזין גלובלי ל-Ctrl+C במפרשים (ללא צורך בפוקוס)
+    // מאזין גלובלי לקיצורי מפרש (העתקה / הוספת הערה) ללא צורך בפוקוס
     if (!widget.isMainText) {
-      HardwareKeyboard.instance.addHandler(_handleCommentaryCopyKeyEvent);
+      HardwareKeyboard.instance.addHandler(_handleCommentaryKeyEvent);
     }
 
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
@@ -421,26 +481,43 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     widget.selectionSyncController?.addListener(_handleExternalSelectionChange);
   }
 
-  bool _handleCommentaryCopyKeyEvent(KeyEvent event) {
-    // רק הפרשן שנבחר בו טקסט לאחרונה מטפל
-    if (_lastActiveCommentary != this) return false;
-    if (event is! KeyDownEvent) return false;
-    final isCtrlC = HardwareKeyboard.instance.isControlPressed &&
-        event.logicalKey == LogicalKeyboardKey.keyC;
-    final isMetaC = HardwareKeyboard.instance.isMetaPressed &&
-        event.logicalKey == LogicalKeyboardKey.keyC;
-    if ((isCtrlC || isMetaC) &&
-        _savedSelectedText != null &&
-        _savedSelectedText!.trim().isNotEmpty) {
-      _commentaryCopyHandled = true;
-      _copyFormattedText().whenComplete(() {
-        Future.delayed(const Duration(milliseconds: 100), () {
-          _commentaryCopyHandled = false;
+  bool _handleCommentaryKeyEvent(KeyEvent event) {
+    final addNoteShortcut =
+        Settings.getValue<String>('key-shortcut-add-note') ?? 'ctrl+n';
+    final action = resolveCommentaryKeyAction(
+      event: event,
+      isActiveCommentary: _lastActiveCommentary == this,
+      hasSelection:
+          _savedSelectedText != null && _savedSelectedText!.trim().isNotEmpty,
+      hasSelectedIndex: _savedSelectedIndex != null,
+      addNoteShortcut: addNoteShortcut,
+    );
+
+    switch (action) {
+      case CommentaryKeyAction.copy:
+        _commentaryCopyHandled = true;
+        _copyFormattedText().whenComplete(() {
+          Future.delayed(const Duration(milliseconds: 100), () {
+            _commentaryCopyHandled = false;
+          });
         });
-      });
-      return true;
+        return true;
+      case CommentaryKeyAction.addNote:
+        // הערה אישית ממפרש חייבת להישמר תחת ספר המפרש (דרך
+        // _createNoteForCurrentLine), ולא על גוף הספר הראשי. האירוע מתבעבע אל
+        // ה-KeyboardListener של הספר הראשי גם אחרי טיפול כאן, ולכן מסמנים דגל
+        // שהספר הראשי בודק כדי לא לפתוח הערה כפולה.
+        _commentaryNoteHandled = true;
+        // איפוס קצר ובלתי תלוי באורך חיי הדיאלוג — צריך להישאר דולק רק למשך
+        // התבעבוע הסינכרוני אל ה-KeyboardListener של הספר הראשי.
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _commentaryNoteHandled = false;
+        });
+        _createNoteForCurrentLine(_savedSelectedIndex!);
+        return true;
+      case CommentaryKeyAction.none:
+        return false;
     }
-    return false;
   }
 
   @override
@@ -451,7 +528,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       FocusManager.instance.removeListener(_handleGlobalFocusChange);
     }
     if (!widget.isMainText) {
-      HardwareKeyboard.instance.removeHandler(_handleCommentaryCopyKeyEvent);
+      HardwareKeyboard.instance.removeHandler(_handleCommentaryKeyEvent);
       if (_lastActiveCommentary == this) _lastActiveCommentary = null;
     }
     _selectionFocusNode.dispose();
