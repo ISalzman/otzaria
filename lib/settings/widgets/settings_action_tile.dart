@@ -48,15 +48,18 @@ class SettingsActionTile extends StatelessWidget {
     required this.actions,
   })  : title = Text(title, style: kSettingsTitleStyle),
         subtitle = Text(
-          path != null ? _formatPath(path) : placeholder,
+          (path != null && path.isNotEmpty) ? _formatPath(path) : placeholder,
           style: kSettingsSubtitleStyle,
-          textDirection:
-              path != null ? TextDirection.ltr : TextDirection.rtl,
-          textAlign: path != null ? TextAlign.end : null,
+          textDirection: (path != null && path.isNotEmpty)
+              ? TextDirection.ltr
+              : TextDirection.rtl,
+          textAlign: (path != null && path.isNotEmpty) ? TextAlign.end : null,
         );
 
+  static final RegExp _pathSeparatorRegExp = RegExp(r'[/\\]');
+
   static String _formatPath(String path) =>
-      path.replaceAllMapped(RegExp(r'[/\\]'), (m) => '${m[0]!}‎');
+      path.replaceAllMapped(_pathSeparatorRegExp, (m) => '${m[0]!}\u200E');
 
   @override
   Widget build(BuildContext context) {

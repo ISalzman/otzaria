@@ -156,8 +156,8 @@ void main() {
       final texts = tester.widgetList<Text>(find.byType(Text));
       final subtitleText =
           texts.firstWhere((t) => t.data?.contains('Users') ?? false);
-      // בודק שיש סימן LTR (‎) אחרי כל \
-      expect(subtitleText.data, contains('‎'));
+      // בודק שיש סימן LTR (\u200E) אחרי כל \
+      expect(subtitleText.data, contains('\u200E'));
     });
 
     testWidgets('כשיש נתיב עם / הסימן נוסף גם אחריו', (tester) async {
@@ -165,7 +165,7 @@ void main() {
       final texts = tester.widgetList<Text>(find.byType(Text));
       final subtitleText =
           texts.firstWhere((t) => t.data?.contains('home') ?? false);
-      expect(subtitleText.data, contains('‎'));
+      expect(subtitleText.data, contains('\u200E'));
     });
 
     testWidgets('placeholder מוצג ב-RTL', (tester) async {
