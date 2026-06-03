@@ -42,6 +42,7 @@ import 'package:otzaria/plugins/models/plugin_highlight.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
+import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 
 // ===================================================================
@@ -1587,6 +1588,10 @@ class PluginBridgeAdapter {
       String action, Map<String, dynamic> args) async {
     switch (action) {
       case 'fetch':
+        if (!plugin.manifest.networkEnabled) {
+          throw Exception('error.permission_denied: network.enabled required');
+        }
+
         final granted =
             await _pluginRepo.getPermission(plugin.pluginId, 'network.access');
         if (granted != true) {
@@ -1599,7 +1604,9 @@ class PluginBridgeAdapter {
         final uri = Uri.tryParse(url);
         if (uri == null) throw Exception('error.invalid_params: invalid URL');
 
-        if (!isUriAllowedForPluginNetwork(uri)) {
+        final allowed = await PluginNetworkAccessResolver.instance
+            .isUriAllowedForPlugin(uri, plugin.manifest);
+        if (!allowed) {
           throw Exception(
               'error.forbidden: URL not in plugin network allowlist');
         }
@@ -1615,6 +1622,10 @@ class PluginBridgeAdapter {
         // הורדה רגילה של קובץ מ-URL מותר אל תיקיית ההורדות של המערכת.
         // הכל מתבצע בצד Flutter — ה-WebView (origin file://) אינו יכול
         // לכתוב לדיסק. נדרשת אותה הרשאה network.access.
+        if (!plugin.manifest.networkEnabled) {
+          throw Exception('error.permission_denied: network.enabled required');
+        }
+
         final granted =
             await _pluginRepo.getPermission(plugin.pluginId, 'network.access');
         if (granted != true) {
@@ -1627,7 +1638,9 @@ class PluginBridgeAdapter {
         final uri = Uri.tryParse(url);
         if (uri == null) throw Exception('error.invalid_params: invalid URL');
 
-        if (!isUriAllowedForPluginNetwork(uri)) {
+        final allowed = await PluginNetworkAccessResolver.instance
+            .isUriAllowedForPlugin(uri, plugin.manifest);
+        if (!allowed) {
           throw Exception(
               'error.forbidden: URL not in plugin network allowlist');
         }
@@ -1636,7 +1649,8 @@ class PluginBridgeAdapter {
         final result = await _downloadService.downloadToDownloads(
           uri,
           filename: filename,
-          isAllowed: isUriAllowedForPluginNetwork,
+          isAllowed: (candidate) => PluginNetworkAccessResolver.instance
+              .isUriAllowedForPlugin(candidate, plugin.manifest),
           isRedirectAllowed: isGithubReleaseRedirectAllowed,
         );
         return {'path': result.path, 'filename': result.filename};

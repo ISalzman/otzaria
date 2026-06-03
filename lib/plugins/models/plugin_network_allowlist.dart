@@ -64,6 +64,21 @@ const Set<String> _githubReleaseCdnHosts = <String>{
   'release-assets.githubusercontent.com',
 };
 
+/// מחלץ מתוך קובץ Dart את הערכים של `pluginNetworkAllowlist`.
+///
+/// משמש לקריאת קובץ ה-allowlist הרשמי מהריפו של אוצריא ב-GitHub, בלי
+/// לשמור עותק בדיסק המקומי. אם לא נמצא מבנה תואם מוחזרת רשימה ריקה.
+List<String> extractPluginNetworkAllowlistFromDartSource(String source) {
+  final listMatch = RegExp(
+    r'const\s+List<String>\s+pluginNetworkAllowlist\s*=\s*<String>\s*\[(.*?)\];',
+    dotAll: true,
+  ).firstMatch(source);
+  if (listMatch == null) return const <String>[];
+
+  final body = listMatch.group(1)!;
+  return RegExp(r"'([^']*)'").allMatches(body).map((m) => m.group(1)!).toList();
+}
+
 /// בודקת האם מותר לעקוב אחרי redirect מ-[previous] אל [target].
 ///
 /// מתירה אך ורק את התרחיש של הורדת asset מ-GitHub Releases: ה-hop הקודם
@@ -92,9 +107,17 @@ bool isGithubReleaseRedirectAllowed(Uri previous, Uri target) {
 ///
 /// השוואת קידומת מתבצעת case-insensitive על ה-scheme וה-host
 /// (תקני URI), ו-case-sensitive על הנתיב.
-bool isUriAllowedForPluginNetwork(Uri uri) {
+bool isUriAllowedForPluginNetwork(Uri uri) =>
+    matchingNetworkAllowlistPrefix(uri, pluginNetworkAllowlist) != null;
+
+/// מחזיר את ערך הקידומת הראשון שתואם ל-[uri], או `null` אם אין התאמה.
+///
+/// ההתאמה מתבצעת לפי אותם כללים של [isUriAllowedForPluginNetwork], אך על
+/// כל רשימת קידומות נתונה. משמש הן לרשימה הגלובלית המובנית והן לרשימות
+/// הצהרתיות/זמניות.
+String? matchingNetworkAllowlistPrefix(Uri uri, Iterable<String> allowlist) {
   if (uri.scheme != 'http' && uri.scheme != 'https') {
-    return false;
+    return null;
   }
 
   // מנרמלים scheme + host ל-lowercase כפי שדורש תקן ה-URI,
@@ -122,7 +145,7 @@ bool isUriAllowedForPluginNetwork(Uri uri) {
   }
   final fullUrl = normalizedUrl.toString();
 
-  for (final rawPrefix in pluginNetworkAllowlist) {
+  for (final rawPrefix in allowlist) {
     // מנרמלים את הקידומת באותו אופן.
     final prefixUri = Uri.tryParse(rawPrefix);
     if (prefixUri == null) continue;
@@ -140,11 +163,11 @@ bool isUriAllowedForPluginNetwork(Uri uri) {
     normalizedPrefix.write(prefixUri.path);
     final prefix = normalizedPrefix.toString();
 
-    if (fullUrl == prefix) return true;
-    if (fullUrl.startsWith('$prefix/')) return true;
-    if (fullUrl.startsWith('$prefix?')) return true;
-    if (fullUrl.startsWith('$prefix#')) return true;
+    if (fullUrl == prefix) return rawPrefix;
+    if (fullUrl.startsWith('$prefix/')) return rawPrefix;
+    if (fullUrl.startsWith('$prefix?')) return rawPrefix;
+    if (fullUrl.startsWith('$prefix#')) return rawPrefix;
   }
 
-  return false;
+  return null;
 }

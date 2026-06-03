@@ -51,6 +51,22 @@ void main() {
     });
   });
 
+  group('extractPluginNetworkAllowlistFromDartSource', () {
+    test('מחלץ את הערכים מתוך קובץ ה-Dart הרשמי', () {
+      const source = '''
+const List<String> pluginNetworkAllowlist = <String>[
+  'https://a.example.com',
+  'https://b.example.com/path',
+];
+''';
+
+      expect(
+        extractPluginNetworkAllowlistFromDartSource(source),
+        ['https://a.example.com', 'https://b.example.com/path'],
+      );
+    });
+  });
+
   group('isGithubReleaseRedirectAllowed', () {
     final allowedGithubRelease = Uri.parse(
         'https://github.com/YairDaniel123/Otzarya-Library/releases/latest/download/a.zip');

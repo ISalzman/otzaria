@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
-import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_handler.dart';
 import 'dart:async';
@@ -35,6 +34,7 @@ import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/view/plugin_crashed_view.dart';
 import 'package:otzaria/plugins/view/plugin_webview2_missing_view.dart';
+import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 
 // ---------------------------------------------------------------------------
 // Stub SDK — injected at AT_DOCUMENT_START before any page JS runs.
@@ -432,7 +432,10 @@ class _PluginTabPageState extends State<PluginTabPage> {
                 widget.plugin.pluginId,
                 'network.access',
               );
-              if (granted == true && isUriAllowedForPluginNetwork(uri)) {
+              final allowed = granted == true &&
+                  await PluginNetworkAccessResolver.instance
+                      .isUriAllowedForPlugin(uri, widget.plugin.manifest);
+              if (allowed) {
                 return NavigationActionPolicy.ALLOW;
               }
             }
@@ -464,7 +467,10 @@ class _PluginTabPageState extends State<PluginTabPage> {
                 widget.plugin.pluginId,
                 'network.access',
               );
-              if (granted == true && isUriAllowedForPluginNetwork(uri)) {
+              final allowed = granted == true &&
+                  await PluginNetworkAccessResolver.instance
+                      .isUriAllowedForPlugin(uri, widget.plugin.manifest);
+              if (allowed) {
                 return null;
               }
             }

@@ -61,7 +61,7 @@ class PluginFileDownloadService {
   /// (קוד סטטוס מחוץ ל-2xx), בקפיצה לא-מותרת, או חריגה ממספר ה-redirects.
   Future<PluginFileDownloadResult> downloadToDownloads(
     Uri downloadUri, {
-    required bool Function(Uri) isAllowed,
+    required Future<bool> Function(Uri) isAllowed,
     bool Function(Uri previous, Uri target)? isRedirectAllowed,
     String? filename,
     Directory? targetDir,
@@ -105,7 +105,7 @@ class PluginFileDownloadService {
   /// מחזירה את התשובה הסופית (2xx). מנקזת תשובות-ביניים כדי לשחרר sockets.
   Future<http.StreamedResponse> _fetchFollowingAllowedRedirects(
     Uri initialUri,
-    bool Function(Uri) isAllowed,
+    Future<bool> Function(Uri) isAllowed,
     bool Function(Uri previous, Uri target)? isRedirectAllowed,
   ) async {
     var current = initialUri;
@@ -113,7 +113,7 @@ class PluginFileDownloadService {
     for (var hop = 0; hop <= _maxRedirects; hop++) {
       // ה-URL ההתחלתי חייב להיות ברשימה הגלובלית. יעד redirect מותר אם הוא
       // ברשימה הגלובלית, או שאושר במפורש ע"י isRedirectAllowed לפי ה-hop הקודם.
-      final permitted = isAllowed(current) ||
+      final permitted = await isAllowed(current) ||
           (previous != null &&
               (isRedirectAllowed?.call(previous, current) ?? false));
       if (!permitted) {

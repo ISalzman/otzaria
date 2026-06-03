@@ -216,7 +216,7 @@ const { data } = await Otzaria.call('network.fetch', {
 מתבצעת בצד אוצריא (Flutter), כך שאין צורך ב-`showDirectoryPicker` או
 ב-File System Access API (שאינם זמינים ל-WebView של התוסף).
 
-- ה-`url` חייב להיות ברשימת ההיתר של הרשת (`pluginNetworkAllowlist`).
+- ה-`url` חייב להופיע גם ב-`network.allowlist` של התוסף וגם ברשימת ההיתר הרשמית של אוצריא (`pluginNetworkAllowlist` המקומי או הקובץ המקביל הרשמי ב-GitHub).
   redirect של גיטהאב ל-CDN מטופל אוטומטית בצד אוצריא.
 - `filename` אופציונלי; אם לא סופק, שם הקובץ נגזר מה-URL.
 - אם קיים כבר קובץ באותו שם, נוספת סיומת מספרית (` (1)`) כדי לא לדרוס.
@@ -1377,13 +1377,25 @@ Otzaria.on('plugin.boot', async (payload) => {
 
 ## ⚠️ הרשאת `network.access` — דרישה מיוחדת: PR לאוצריא
 
-הצהרה על ההרשאה `network.access` ב-`manifest.json` **אינה מספיקה** כדי שתוסף יוכל לגשת לרשת. בפועל, רשימת ה-URLs המאושרים מנוהלת **בקוד אוצריא עצמו** ולא במניפסט של התוסף — בקובץ:
+הצהרה על ההרשאה `network.access` ב-`manifest.json` **אינה מספיקה** כדי שתוסף יוכל לגשת לרשת. בפועל, ה-URL חייב לעבור שתי בדיקות מצטברות:
+
+1. להופיע ב-`network.allowlist` של התוסף עצמו.
+2. להופיע במקור אמון רשמי של אוצריא — או בקוד המקומי המובנה, או בקובץ המקביל הרשמי ב-GitHub.
+
+מקור האמון המקומי נמצא בקובץ:
 
 [`lib/plugins/models/plugin_network_allowlist.dart`](../../lib/plugins/models/plugin_network_allowlist.dart) → הקבוע `pluginNetworkAllowlist`.
 
+בנוסף, אוצריא בודקת גם את הקובץ המקביל בריפו הרשמי `Otzaria/otzaria` ב-GitHub, וטוענת אישורים ממנו **לזיכרון בלבד** עד סגירת האפליקציה.
+
 ### תהליך הוספת URL חדש
 
-כל תוסף שזקוק לגישה ל-URL כלשהו ברשת **חייב לפתוח Pull Request** למאגר אוצריא שמוסיף את ה-URLs הרלוונטיים לקובץ הנ"ל. ללא PR שאושר ומוזג — ה-URL ייחסם ב-runtime עם `403 Forbidden`, גם אם המשתמש אישר את הרשאת `network.access`.
+כל תוסף שזקוק לגישה ל-URL כלשהו ברשת **חייב**:
+
+1. להצהיר על ה-URL ב-`manifest.json` תחת `network.allowlist`.
+2. לפתוח Pull Request למאגר אוצריא שמוסיף את ה-URL לקובץ הנ"ל.
+
+ללא שני השלבים יחד — ה-URL ייחסם ב-runtime עם `403 Forbidden`, גם אם המשתמש אישר את הרשאת `network.access`.
 
 ### חובה: כתובות מדויקות בלבד
 
