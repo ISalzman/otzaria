@@ -41,6 +41,10 @@ const List<String> pluginNetworkAllowlist = <String>[
   'https://rambam.alhatorah.org',
   'https://shas.alhatorah.org',
   'https://turshulchanarukh.alhatorah.org',
+  // שרתי הנקדן של Dicta
+  'https://nakdan.dicta.org.il/api',
+  'https://nakdan-u1-0.loadbalancer.dicta.org.il/api',
+  'https://nakdan-5-1.loadbalancer.dicta.org.il/api',
   // Google Apps Script — תוסף ספריית אוצריא
   'https://script.google.com/macros/s/AKfycbwU7ktk7_VdSqIxlMBnj4L8dIOKX7C5XIYxxyJsr2gohCtJuLEKA4RPUWO6d88Ry8TAoA/exec',
   // GitHub API — ספריית YairDaniel123/Otzarya-Library

@@ -31,6 +31,24 @@ void main() {
         isFalse,
       );
     });
+
+    test('מתיר גישה לשרתי הנקדן המאושרים של Dicta', () {
+      expect(
+        isUriAllowedForPluginNetwork(
+            Uri.parse('https://nakdan.dicta.org.il/api')),
+        isTrue,
+      );
+      expect(
+        isUriAllowedForPluginNetwork(
+            Uri.parse('https://nakdan-u1-0.loadbalancer.dicta.org.il/api')),
+        isTrue,
+      );
+      expect(
+        isUriAllowedForPluginNetwork(Uri.parse(
+            'https://nakdan-5-1.loadbalancer.dicta.org.il/api?text=שלום')),
+        isTrue,
+      );
+    });
   });
 
   group('isGithubReleaseRedirectAllowed', () {
