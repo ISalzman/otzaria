@@ -58,15 +58,25 @@ class _MockBookOpenCoordinator extends Mock implements BookOpenCoordinator {}
 
 class _StubPluginRegistryRepository extends PluginRegistryRepository {
   List<PluginPermissionGrant> permissions = [];
+  bool? permissionGrant;
 
   @override
   Future<List<PluginPermissionGrant>> getPluginPermissions(
       String pluginId) async {
     return permissions;
   }
+
+  @override
+  Future<bool?> getPermission(String pluginId, String permission) async {
+    return permissionGrant;
+  }
 }
 
-InstalledPlugin _buildInstalledPlugin({List<String> permissions = const []}) {
+InstalledPlugin _buildInstalledPlugin({
+  List<String> permissions = const [],
+  bool networkEnabled = false,
+  List<String> networkAllowlist = const [],
+}) {
   return InstalledPlugin(
     pluginId: 'test.plugin',
     name: 'Test Plugin',
@@ -87,8 +97,8 @@ InstalledPlugin _buildInstalledPlugin({List<String> permissions = const []}) {
       minAppVersion: '1.0.0',
       sdkVersion: '1.x',
       permissions: permissions,
-      networkEnabled: false,
-      networkAllowlist: const [],
+      networkEnabled: networkEnabled,
+      networkAllowlist: networkAllowlist,
       toolTabTitle: 'Test Plugin',
       toolTabOrder: 1,
       defaultPinned: true,
@@ -755,6 +765,107 @@ void main() {
           (result['categories'] as List<dynamic>).first as Map<String, dynamic>;
       expect(tanach.containsKey('books'), isFalse);
       expect(tanach['title'], 'תנך');
+    });
+  });
+
+  group('PluginBridgeAdapter.network', () {
+    late _StubPluginRegistryRepository pluginRegistryRepository;
+    late PluginBridgeAdapter adapter;
+
+    setUp(() {
+      pluginRegistryRepository = _StubPluginRegistryRepository()
+        ..permissionGrant = true;
+
+      adapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(
+          permissions: const ['network.access'],
+          networkEnabled: true,
+          networkAllowlist: const [],
+        ),
+        dependencies: PluginBridgeDependencies(
+          historyBloc: _MockHistoryBloc(),
+          tabsBloc: _StubTabsBloc(),
+          navigationBloc: _MockNavigationBloc(),
+          calendarCubit: _StubCalendarCubit(
+            _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+          ),
+          workspaceBloc: _MockWorkspaceBloc(),
+          searchRepository: _MockSearchRepository(),
+          personalNotesRepository: _MockPersonalNotesRepository(),
+          bookOpenCoordinator: _MockBookOpenCoordinator(),
+          themePayloadBuilder: () => <String, dynamic>{},
+          showConfirmDialog: ({required title, required content}) async => true,
+          showWarningDialog: ({
+            required title,
+            required content,
+            required subtitle,
+          }) async =>
+              true,
+        ),
+        pluginRepository: pluginRegistryRepository,
+      );
+    });
+
+    test('network.fetch חוסם גם URL מובנה אם המניפסט של התוסף לא הצהיר עליו',
+        () async {
+      await expectLater(
+        () => adapter.execute('network', 'fetch', const {
+          'url': 'https://nakdan.dicta.org.il/api',
+        }),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('error.forbidden'),
+          ),
+        ),
+      );
+    });
+
+    test(
+        'network.fetch חסום כשהמניפסט כיבה network.enabled גם אם יש grant ו-allowlist',
+        () async {
+      final disabledAdapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(
+          permissions: const ['network.access'],
+          networkEnabled: false,
+          networkAllowlist: const ['https://nakdan.dicta.org.il/api'],
+        ),
+        dependencies: PluginBridgeDependencies(
+          historyBloc: _MockHistoryBloc(),
+          tabsBloc: _StubTabsBloc(),
+          navigationBloc: _MockNavigationBloc(),
+          calendarCubit: _StubCalendarCubit(
+            _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+          ),
+          workspaceBloc: _MockWorkspaceBloc(),
+          searchRepository: _MockSearchRepository(),
+          personalNotesRepository: _MockPersonalNotesRepository(),
+          bookOpenCoordinator: _MockBookOpenCoordinator(),
+          themePayloadBuilder: () => <String, dynamic>{},
+          showConfirmDialog: ({required title, required content}) async => true,
+          showWarningDialog: ({
+            required title,
+            required content,
+            required subtitle,
+          }) async =>
+              true,
+        ),
+        pluginRepository: pluginRegistryRepository,
+      );
+
+      await expectLater(
+        () => disabledAdapter.execute('network', 'fetch', const {
+          'url': 'https://nakdan.dicta.org.il/api',
+        }),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('network.enabled required'),
+          ),
+        ),
+      );
     });
   });
 }

@@ -20,7 +20,7 @@ void main() {
     }
   });
 
-  bool allowAll(Uri _) => true;
+  Future<bool> allowAll(Uri _) async => true;
 
   PluginFileDownloadService serviceReturning(
     List<int> body, {
@@ -108,7 +108,8 @@ void main() {
 
   // isAllowed המדמה את הרשימה הגלובלית: רק github.com מורשה ישירות (ה-CDN
   // אינו ברשימה הגלובלית בכוונה).
-  bool globalAllowsGithubOnly(Uri uri) => uri.host == 'github.com';
+  Future<bool> globalAllowsGithubOnly(Uri uri) async =>
+      uri.host == 'github.com';
 
   // isRedirectAllowed המדמה את isGithubReleaseRedirectAllowed: מתיר redirect
   // ל-CDN רק כש-hop הקודם הוא github.com.

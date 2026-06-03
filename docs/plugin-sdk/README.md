@@ -100,7 +100,7 @@ dart tool/plugins/package_plugin.dart <path/to/your/plugin/folder> [--force]
      - הרשמה לאירוע לא מוכר (`Otzaria.on('...')` / `.off(...)`).
      - שימוש ב־method שדורש הרשאה שלא הוכרזה ב־`manifest.permissions`.
      - הרשמה לאירוע שדורשת `events.subscribe:X` שלא הוכרזה.
-     - `network.access` או `network.enabled` בלי `network.allowlist` מפורט — אזהרה בלבד, כי `allowlist` הוא שדה הצהרתי (ההרשאה בפועל מנוהלת באוצריא).
+     - `network.access` או `network.enabled` בלי `network.allowlist` מפורט — אזהרה בלבד; בפועל ה-URLים חייבים להופיע גם במניפסט וגם במקור אמון רשמי של אוצריא בזמן ריצה.
    - **`design`** — דו"ח תאימות ל־[DESIGN_GUIDE.md](DESIGN_GUIDE.md): דורש `<html lang="he" dir="rtl">`, ניצול CSS variables (`var(--color-*)`, `var(--font-*)`, `var(--radius-*)`), ואיסור hex/rgb/named colors מחוץ להגדרות `:root`. גם זה אינו חוסם אריזה — נועד לעזור למפתח לוודא שהתוסף משתלב באוצריא.
 
 3. **אריזה** — `.otzplugin` (ZIP) עם כל קבצי התיקייה. אם נתיב הפלט יושב בתוך התיקייה הנארזת, הקובץ מוחרג מהארכיון כדי שלא ייכלל בעצמו.
