@@ -45,7 +45,41 @@ const List<String> pluginNetworkAllowlist = <String>[
   'https://script.google.com/macros/s/AKfycbwU7ktk7_VdSqIxlMBnj4L8dIOKX7C5XIYxxyJsr2gohCtJuLEKA4RPUWO6d88Ry8TAoA/exec',
   // GitHub API — ספריית YairDaniel123/Otzarya-Library
   'https://api.github.com/repos/YairDaniel123/Otzarya-Library',
+  // GitHub Releases — הורדת קבצי ZIP של מאגר YairDaniel123/Otzarya-Library
+  // (מכסה את כל הנתיבים תחת המאגר, כולל /releases/latest/download/...).
+  'https://github.com/YairDaniel123/Otzarya-Library',
 ];
+
+/// דומייני ה-CDN שאליהם GitHub מפנה (redirect) בהורדת asset של release.
+///
+/// אינם ברשימת ההיתר הגלובלית בכוונה — אסור לאפשר אליהם גישה *ישירה*
+/// (`network.fetch`/`network.download`), אלא רק כיעד של redirect שמקורו
+/// ב-URL מורשה של GitHub Releases. ראו [isGithubReleaseRedirectAllowed].
+const Set<String> _githubReleaseCdnHosts = <String>{
+  'objects.githubusercontent.com',
+  'release-assets.githubusercontent.com',
+};
+
+/// בודקת האם מותר לעקוב אחרי redirect מ-[previous] אל [target].
+///
+/// מתירה אך ורק את התרחיש של הורדת asset מ-GitHub Releases: ה-hop הקודם
+/// הוא URL מורשה (לפי [isUriAllowedForPluginNetwork]) של `github.com`,
+/// והיעד הוא אחד מדומייני ה-CDN של גיטהאב. מאחר שלא ניתן להגיע לדומיין
+/// CDN ככתובת התחלתית (הוא אינו ברשימה הגלובלית), שרשרת redirect שכבר
+/// הגיעה ל-CDN לגיטימית רשאית להמשיך בין דומייני CDN בלבד.
+///
+/// כך נסגרת עקיפת ה-allowlist דרך redirects, מבלי לפתוח את ה-CDN לגישה
+/// ישירה מצד תוספים.
+bool isGithubReleaseRedirectAllowed(Uri previous, Uri target) {
+  if (target.scheme != 'https') return false;
+  if (!_githubReleaseCdnHosts.contains(target.host.toLowerCase())) return false;
+
+  final previousHost = previous.host.toLowerCase();
+  if (previousHost == 'github.com') {
+    return isUriAllowedForPluginNetwork(previous);
+  }
+  return _githubReleaseCdnHosts.contains(previousHost);
+}
 
 /// בודקת האם [uri] מורשה לגישה על-ידי תוספים.
 ///

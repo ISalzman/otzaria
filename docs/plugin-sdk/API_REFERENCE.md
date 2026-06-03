@@ -193,6 +193,48 @@ const { data } = await Otzaria.call('library.getBookToc', {
 
 ---
 
+## network.* - גישה לרשת
+
+> כל גישת רשת מוגבלת לרשימת ההיתר של אוצריא — ראו [⚠️ הרשאת `network.access`](#️-הרשאת-networkaccess--דרישה-מיוחדת-pr-לאוצריא).
+
+### `network.fetch`
+**הרשאה:** `network.access`
+
+שליפת תוכן מ-URL מותר (ללא מעקב אחר redirects). מחזירה את גוף התשובה כטקסט.
+
+```javascript
+const { data } = await Otzaria.call('network.fetch', {
+  url: 'https://api.github.com/repos/Owner/Repo/releases/latest'
+});
+// { status: 200, body: "..." }
+```
+
+### `network.download`
+**הרשאה:** `network.access`
+
+הורדה רגילה של קובץ מ-URL מותר אל **תיקיית ההורדות** של המערכת. ההורדה
+מתבצעת בצד אוצריא (Flutter), כך שאין צורך ב-`showDirectoryPicker` או
+ב-File System Access API (שאינם זמינים ל-WebView של התוסף).
+
+- ה-`url` חייב להיות ברשימת ההיתר של הרשת (`pluginNetworkAllowlist`).
+  redirect של גיטהאב ל-CDN מטופל אוטומטית בצד אוצריא.
+- `filename` אופציונלי; אם לא סופק, שם הקובץ נגזר מה-URL.
+- אם קיים כבר קובץ באותו שם, נוספת סיומת מספרית (` (1)`) כדי לא לדרוס.
+
+```javascript
+const { data } = await Otzaria.call('network.download', {
+  url: 'https://github.com/Owner/Repo/releases/latest/download/books.zip',
+  filename: 'books.zip' // אופציונלי
+});
+// { path: "C:\\Users\\...\\Downloads\\books.zip", filename: "books.zip" }
+```
+
+שגיאות אפשריות: `error.permission_denied` (אין הרשאת network.access),
+`error.forbidden` (URL לא ברשימת ההיתר), `error.invalid_params`
+(URL חסר/לא תקין), `error.internal` (כשל הורדה).
+
+---
+
 ## search.* - חיפוש
 
 ### `search.fullText`
