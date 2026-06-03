@@ -5,7 +5,7 @@ import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/data/book_locator.dart';
-import 'package:otzaria/utils/file/docx_to_otzaria.dart';
+import 'package:otzaria/utils/file/docx_cache.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'dart:io';
@@ -68,8 +68,7 @@ class TextBookRepository {
         if (await file.exists()) {
           final ext = (dbBook.fileType ?? '').toLowerCase();
           if (ext == 'docx') {
-            final bytes = await file.readAsBytes();
-            return await Isolate.run(() => docxToText(bytes, title));
+            return await convertDocxWithCache(file, title);
           }
           if (ext == 'pdf') return '';
           return await file.readAsString();
@@ -224,8 +223,7 @@ class TextBookRepository {
           final ext = (dbBook.fileType ?? '').toLowerCase();
           final String content;
           if (ext == 'docx') {
-            final bytes = await file.readAsBytes();
-            content = await Isolate.run(() => docxToText(bytes, title));
+            content = await convertDocxWithCache(file, title);
           } else if (ext == 'pdf') {
             content = '';
           } else {

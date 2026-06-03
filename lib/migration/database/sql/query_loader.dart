@@ -34,6 +34,7 @@ class QueryLoader {
       'CategoryQueries.sq',
       'ConnectionTypeQueries.sq',
       'Database.sq',
+      'DocxTextCacheQueries.sq',
       'GenerationQueries.sq',
       'LineQueries.sq',
       'LineTocQueries.sq',

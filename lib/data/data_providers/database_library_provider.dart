@@ -26,6 +26,7 @@ import 'package:otzaria/migration/models/alt_toc_entry.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/utils/file/docx_to_otzaria.dart';
+import 'package:otzaria/utils/file/docx_cache.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -154,7 +155,10 @@ Future<void> _collectBookFilesRecursive(
 
         // ── DB existence check ─────────────────────────────────────────────
         // Perform BEFORE any expensive IO (TOC parse) so unchanged books are
-        // skipped entirely without reading file content.
+        // skipped entirely without reading file content. A *changed* file
+        // falls through to re-parse its TOC (so the navigation stays in sync
+        // with the edited content), keeping its existing book id.
+        int? existingBookId;
         if (db != null) {
           final rows = db.select(
             'SELECT id, fileSize, lastModified FROM book WHERE filePath = ? LIMIT 1',
@@ -168,23 +172,12 @@ Future<void> _collectBookFilesRecursive(
               // Unchanged — skip entirely, no work needed.
               continue;
             }
-            // File has changed — report for metadata-only update.
-            books.add(_DiscoveredBook(
-              path: entity.path,
-              title: title,
-              fileType: fileType,
-              fileSize: fileSize,
-              lastModified: lastModified,
-              categoryPath: categoryPath,
-              tocEntries: null, // no re-parse on metadata update
-              existingBookId: row['id'] as int,
-            ));
-            continue;
+            existingBookId = row['id'] as int; // changed — re-parse TOC below
           }
         }
         // ──────────────────────────────────────────────────────────────────
 
-        // Genuinely new book — parse TOC for TXT / DOCX.
+        // New or changed book — parse TOC for TXT / DOCX.
         List<_RawTocEntry>? rawToc;
         String? conversionError;
         if (fileType == 'txt') {
@@ -221,6 +214,7 @@ Future<void> _collectBookFilesRecursive(
           categoryPath: categoryPath,
           tocEntries: rawToc,
           conversionError: conversionError,
+          existingBookId: existingBookId,
         ));
       }
     } catch (e) {
@@ -1167,6 +1161,11 @@ class DatabaseLibraryProvider implements LibraryProvider {
         if (book.isFileBacked && book.filePath != null) {
           final file = File(book.filePath!);
           if (await file.exists()) {
+            // DOCX הוא בינארי — חובה להמיר, לא readAsString (שמחזיר זבל/זורק).
+            if ((book.fileType ?? '').toLowerCase() == 'docx' ||
+                file.path.toLowerCase().endsWith('.docx')) {
+              return await convertDocxWithCache(file, title);
+            }
             return await file.readAsString();
           }
         }
@@ -1187,9 +1186,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           final file = File(book.filePath!);
           if (await file.exists()) {
             if ((book.fileType ?? '').toLowerCase() == 'docx') {
-              final bytes = await file.readAsBytes();
-              final t = title;
-              return await Isolate.run(() => docxToText(bytes, t));
+              return await convertDocxWithCache(file, title);
             }
             return await file.readAsString();
           }
@@ -1880,15 +1877,12 @@ class DatabaseLibraryProvider implements LibraryProvider {
           _userBooksCategoryIds.add(pickedFolder.id);
 
           // ספרים בתוך התיקייה הנבחרת עצמה — לשורש הספרייה.
-          final booksInPickedFolder =
-              (booksByCategory[pickedFolder.id] ?? [])
-                ..sort((a, b) {
-                  final orderA =
-                      (a['orderIndex'] as num?)?.toDouble() ?? 999.0;
-                  final orderB =
-                      (b['orderIndex'] as num?)?.toDouble() ?? 999.0;
-                  return orderA.compareTo(orderB);
-                });
+          final booksInPickedFolder = (booksByCategory[pickedFolder.id] ?? [])
+            ..sort((a, b) {
+              final orderA = (a['orderIndex'] as num?)?.toDouble() ?? 999.0;
+              final orderB = (b['orderIndex'] as num?)?.toDouble() ?? 999.0;
+              return orderA.compareTo(orderB);
+            });
           for (final dbBook in booksInPickedFolder) {
             final book = _convertMinimalBookMapToBook(
               dbBook,
@@ -1949,8 +1943,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           final created = Category(
             title: 'ספרים אישיים',
             description: metadata['ספרים אישיים']?['heDesc'] ?? '',
-            shortDescription:
-                metadata['ספרים אישיים']?['heShortDesc'] ?? '',
+            shortDescription: metadata['ספרים אישיים']?['heShortDesc'] ?? '',
             order: personalRootInUserDb.orderIndex,
             subCategories: [],
             books: [],
@@ -2609,13 +2602,21 @@ class DatabaseLibraryProvider implements LibraryProvider {
         }
         try {
           if (book.existingBookId != null) {
-            // Metadata-only update (file changed since last scan).
+            // File changed since last scan — update metadata, and refresh the
+            // TOC if it was re-parsed (so navigation matches the new content).
             await repository.updateExternalBookMetadata(
               book.existingBookId!,
               book.fileSize,
               book.lastModified,
             );
-            debugPrint('📁 Updated external book metadata: ${book.title}');
+            if (book.tocEntries != null) {
+              await repository.replaceExternalBookToc(
+                book.existingBookId!,
+                _rawTocToDbEntries(book.tocEntries!),
+              );
+            }
+            debugPrint(
+                '📁 Updated external book (metadata+TOC): ${book.title}');
             updated++;
             continue;
           }
