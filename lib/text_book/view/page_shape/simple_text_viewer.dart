@@ -1886,12 +1886,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 return textWidget;
               }
 
-              final note = notesForLine.first;
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Tooltip(
-                    message: note.contentPlain,
+                    message:
+                        notesForLine.map((n) => n.contentPlain).join('\n\n'),
                     child: GestureDetector(
                       onTap: () {
                         context
@@ -1911,8 +1911,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                       onLongPress: () {
                         showSingleActionDialog(
                           context: context,
-                          title: 'הערה לשורה זו',
-                          customContent: PersonalNoteContentView(note: note),
+                          title: notesForLine.length > 1
+                              ? 'הערות לשורה זו'
+                              : 'הערה לשורה זו',
+                          customContent:
+                              PersonalNotesListView(notes: notesForLine),
                           confirmText: 'סגור',
                         );
                       },

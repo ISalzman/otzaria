@@ -179,9 +179,11 @@ class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog> {
           return KeyEventResult.ignored;
         }
 
-        // Alt + Enter - שליחת הטופס מכל מקום
+        // Ctrl+Enter (מומלץ, ללא צליל) / Alt+Enter (תאימות לאחור) -
+        // שליחת הטופס מכל מקום
         if (event.logicalKey == LogicalKeyboardKey.enter &&
-            HardwareKeyboard.instance.isAltPressed) {
+            (HardwareKeyboard.instance.isControlPressed ||
+                HardwareKeyboard.instance.isAltPressed)) {
           _submit();
           return KeyEventResult.handled;
         }

@@ -274,11 +274,20 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
                     },
                     child: CallbackShortcuts(
                       bindings: {
-                        if (widget.onSaveShortcut != null)
+                        if (widget.onSaveShortcut != null) ...{
+                          // Ctrl+Enter — קיצור השמירה המומלץ (ללא צליל מערכת).
+                          const SingleActivator(
+                            LogicalKeyboardKey.enter,
+                            control: true,
+                          ): widget.onSaveShortcut!,
+                          // Alt+Enter — נשמר לתאימות לאחור. ב-Windows מפיק
+                          // צליל "דינג" של המערכת (מאפיין של צירופי Alt
+                          // ב-Flutter), ולכן Ctrl+Enter עדיף.
                           const SingleActivator(
                             LogicalKeyboardKey.enter,
                             alt: true,
                           ): widget.onSaveShortcut!,
+                        },
                       },
                       child: quill.QuillEditor(
                         controller: widget.controller.quillController,
@@ -289,7 +298,7 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
                           expands: false,
                           padding: const EdgeInsets.all(12),
                           placeholder: widget.hintText ??
-                              'כתוב כאן... (Alt+Enter לשמירה)',
+                              'כתוב כאן... (Ctrl+Enter לשמירה)',
                           customShortcuts: _rtlArrowShortcuts,
                           // Quill מציגה אוטומטית תפריט סלקציה ב-desktop
                           // בסיום גרירה — בהערות אישיות זה מטריד.
