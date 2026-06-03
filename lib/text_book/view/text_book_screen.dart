@@ -1168,7 +1168,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     }
 
                     if (state.showPageShapeView) {
-                      if (_bookContentFocusNode.hasFocus) {
+                      // hasPrimaryFocus ולא hasFocus: ה-KeyboardListener הזה עוטף
+                      // את כל גוף המסך (כולל פאנל החיפוש), ו-hasFocus מחזיר true
+                      // גם כשצאצא (שדה החיפוש) ממוקד. unfocus כזה היה מסיר פוקוס
+                      // מכל התת-עץ ומבריח את הסמן משדה החיפוש בכל הקלדה. כאן
+                      // משחררים פוקוס רק אם ה-node הזה עצמו מחזיק בפוקוס.
+                      if (_bookContentFocusNode.hasPrimaryFocus) {
                         _bookContentFocusNode.unfocus();
                       }
                       return;
