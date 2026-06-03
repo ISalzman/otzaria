@@ -38,6 +38,7 @@ import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
+import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
@@ -315,6 +316,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   bool _wasMenuFocused = false;
   String? _savedSelectedText;
   int? _savedSelectedIndex;
+  // טווח אינדקסי השורות שבתוך הבחירה הנוכחית (כולל הקצוות). משמש כדי שלחיצה
+  // ימנית ברווח שבין שורות נבחרות תזוהה כלחיצה "על הבחירה" ולא תבטל אותה —
+  // הרווח הוויזואלי שייך הית-טסטית לווידג'ט של שורה נבחרת.
+  int? _selectionLineStart;
+  int? _selectionLineEnd;
+  // עמודת ההתחלה של הבחירה בשורה הראשונה (רמז לזיהוי מופע נכון בטקסט חוזר).
+  int? _selectionStartColumn;
   int _initialScrollRestoreAttempts = 0;
   bool? _lastContinuousReadingMode;
   int? _pendingDisplayModeRestoreLineIndex;
@@ -568,6 +576,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     setState(() {
       _savedSelectedText = null;
       _savedSelectedIndex = null;
+      _selectionLineStart = null;
+      _selectionLineEnd = null;
+      _selectionStartColumn = null;
     });
 
     if (!widget.isMainText && _lastActiveCommentary == this) {
@@ -809,7 +820,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     );
 
     if (!shouldPersistSelectedText(plainText)) {
-      if (mounted) setState(() => _savedSelectedText = null);
+      if (mounted) {
+        setState(() {
+          _savedSelectedText = null;
+          _selectionLineStart = null;
+          _selectionLineEnd = null;
+          _selectionStartColumn = null;
+        });
+      }
       return;
     }
 
@@ -847,19 +865,84 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     );
 
     int? selectedIndex = _savedSelectedIndex;
+    int? lineStart;
+    int? lineEnd;
+    int? startColumn;
     final visibleText = renderedLines.join('\n');
     final selectionStart = visibleText.indexOf(restoredText);
     if (selectionStart >= 0 && sourceIndices.isNotEmpty) {
       final before = visibleText.substring(0, selectionStart);
       selectedIndex = sourceIndices.first + '\n'.allMatches(before).length;
+      // השורה הראשונה והאחרונה שהבחירה משתרעת עליהן (לפי מעברי השורה בתוכה).
+      lineStart = selectedIndex;
+      lineEnd = selectedIndex + '\n'.allMatches(restoredText).length;
+      // עמודת ההתחלה של הבחירה בתוך השורה הראשונה — רמז לזיהוי המופע הנכון
+      // כאשר אותו טקסט חוזר באותה שורה.
+      startColumn = selectionStart - (before.lastIndexOf('\n') + 1);
     }
 
     if (!mounted) return;
     setState(() {
       _savedSelectedText = restoredText;
       _savedSelectedIndex = selectedIndex;
+      _selectionLineStart = lineStart;
+      _selectionLineEnd = lineEnd;
+      _selectionStartColumn = startColumn;
     });
     _prefetchDictionaryLookups(restoredText);
+  }
+
+  /// האם יש לשמר את הבחירה בלחיצה ימנית בנקודה [globalPosition] על השורה
+  /// [lineIndex], כאשר [lineContext] הוא ה-context של אותה שורה (לאיתור הפסקה).
+  ///
+  /// שומר את הבחירה כאשר הלחיצה נופלת על הטקסט המסומן בפועל — כולל הרווח שבין
+  /// שורות-תצוגה של אותה שורת-מקור שנשברה (wrap), שמגושר ע"י
+  /// `includeLineSpacingMiddle`. לחיצה על חלק לא-מסומן בשורה מחזירה `false` כדי
+  /// שהבחירה תתבטל (כמו בתוכנה רגילה). כשהבדיקה הגאומטרית אינה ניתנת להכרעה
+  /// (טקסט HTML מורכב וכו') חוזרים לברירת מחדל סלחנית — שמירת הבחירה כל עוד
+  /// השורה בטווח, כדי לא לבטל בטעות.
+  bool _shouldPreserveSelectionAt(
+    Offset globalPosition,
+    int lineIndex,
+    BuildContext lineContext,
+  ) {
+    final start = _selectionLineStart;
+    final end = _selectionLineEnd;
+    if (start == null || end == null) return false;
+    final lo = start <= end ? start : end;
+    final hi = start <= end ? end : start;
+    if (lineIndex < lo || lineIndex > hi) return false; // שורה מחוץ לבחירה
+
+    final selectedText = _savedSelectedText;
+    if (selectedText == null || selectedText.isEmpty) {
+      return false; // אין בחירה פעילה — אין מה לשמר
+    }
+    final root = lineContext.findRenderObject();
+    if (root == null) {
+      return true; // יש בחירה אך אי אפשר לבדוק גאומטרית — סלחני
+    }
+
+    final segments = selectedText.split('\n');
+    final offsetInRange = lineIndex - lo;
+    final segment = (offsetInRange >= 0 && offsetInRange < segments.length)
+        ? segments[offsetInRange]
+        : selectedText;
+    final edge = lo == hi
+        ? SelectionSegmentEdge.substring
+        : lineIndex == lo
+            ? SelectionSegmentEdge.suffix
+            : lineIndex == hi
+                ? SelectionSegmentEdge.prefix
+                : SelectionSegmentEdge.full;
+
+    final onSelection = clickIsOnRenderedSelection(
+      root: root,
+      globalPosition: globalPosition,
+      selectedSegment: segment,
+      edge: edge,
+      segmentStartHint: _selectionStartColumn,
+    );
+    return onSelection ?? true; // לא הוכרע — סלחני
   }
 
   void _prefetchDictionaryLookups(String? selectedText) {
@@ -1737,6 +1820,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
               setState(() {
                 _savedSelectedText = null;
                 _savedSelectedIndex = null;
+                _selectionLineStart = null;
+                _selectionLineEnd = null;
+                _selectionStartColumn = null;
               });
               // עדכון selectedIndex רק בטקסט המרכזי
               if (isSelected) {
@@ -1763,13 +1849,20 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
               ));
             }
           : null,
-      onSecondaryTapDown: (details) {
-        // שמירת האינדקס לשימוש בתפריט ההקשר
-        setState(() {
-          _savedSelectedIndex = primaryLineIndex;
-        });
-      },
       child: AppContextMenuRegion(
+        // שמירת האינדקס דרך ה-Listener של AppContextMenuRegion (מחוסן מהזירה),
+        // כך שגם כשלחיצה ימנית חוסמת את SelectableRegion ושומרת בחירה — האינדקס
+        // עדיין נשמר עבור פעולות התפריט.
+        onSecondaryTapDown: (_) {
+          setState(() {
+            _savedSelectedIndex = primaryLineIndex;
+          });
+        },
+        // לחיצה ימנית על הטקסט המסומן (כולל הרווח שבין שורות-תצוגה של שורת-מקור
+        // שנשברה) לא תשחרר את הבחירה; לחיצה על חלק לא-מסומן מבטלת כרגיל.
+        shouldPreserveSelectionOnSecondaryTap: (globalPosition) =>
+            _shouldPreserveSelectionAt(
+                globalPosition, primaryLineIndex, context),
         menuBuilder: (menuCtx, tapPos) {
           return _buildContextMenu(
             state,
@@ -1980,6 +2073,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         setState(() {
           _savedSelectedText = null;
           _savedSelectedIndex = lineIndex;
+          _selectionLineStart = null;
+          _selectionLineEnd = null;
+          _selectionStartColumn = null;
         });
         if (isLineSelected) {
           context.read<TextBookBloc>().add(const UpdateSelectedIndex(null));

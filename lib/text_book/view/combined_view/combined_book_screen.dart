@@ -38,6 +38,7 @@ import 'package:otzaria/text_book/view/selection/text_selection_manager.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/text_book/view/selection/enhanced_gesture_detector.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
+import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
@@ -219,6 +220,12 @@ class _CombinedViewState extends State<CombinedView> {
       ValueNotifier<String?>(null);
   // שמירת האינדקס של השורה שממנה הטקסט הודגש
   final ValueNotifier<int?> _savedSelectedIndex = ValueNotifier<int?>(null);
+  // טווח אינדקסי השורות שבתוך הבחירה הנוכחית (כולל הקצוות). משמש כדי שלחיצה
+  // ימנית ברווח שבין שורות נבחרות תזוהה כלחיצה "על הבחירה" ולא תבטל אותה.
+  int? _selectionLineStart;
+  int? _selectionLineEnd;
+  // עמודת ההתחלה של הבחירה בשורה הראשונה (רמז לזיהוי מופע נכון בטקסט חוזר).
+  int? _selectionStartColumn;
   // שמירת reference ל-BLoC לשימוש ב-listeners
   late final TextBookBloc _textBookBloc;
 
@@ -375,8 +382,64 @@ class _CombinedViewState extends State<CombinedView> {
       _savedSelectedText.value = null;
       _savedSelectedIndex.value = null;
       _currentSelectedIndex.value = null;
+      _selectionLineStart = null;
+      _selectionLineEnd = null;
+      _selectionStartColumn = null;
     });
     widget.onSelectedTextChanged?.call(null, null);
+  }
+
+  /// האם יש לשמר את הבחירה בלחיצה ימנית בנקודה [globalPosition] על השורה
+  /// [lineIndex], כאשר [lineContext] הוא ה-context של אותה שורה (לאיתור הפסקה).
+  ///
+  /// שומר את הבחירה כאשר הלחיצה נופלת על הטקסט המסומן בפועל — כולל הרווח שבין
+  /// שורות-תצוגה של אותה שורת-מקור שנשברה (wrap), שמגושר ע"י
+  /// `includeLineSpacingMiddle`. לחיצה על חלק לא-מסומן בשורה מחזירה `false` כדי
+  /// שהבחירה תתבטל (כמו בתוכנה רגילה). כשהבדיקה הגאומטרית אינה ניתנת להכרעה
+  /// (טקסט HTML מורכב וכו') חוזרים לברירת מחדל סלחנית — שמירת הבחירה כל עוד
+  /// השורה בטווח, כדי לא לבטל בטעות.
+  bool _shouldPreserveSelectionAt(
+    Offset globalPosition,
+    int lineIndex,
+    BuildContext lineContext,
+  ) {
+    final start = _selectionLineStart;
+    final end = _selectionLineEnd;
+    if (start == null || end == null) return false;
+    final lo = start <= end ? start : end;
+    final hi = start <= end ? end : start;
+    if (lineIndex < lo || lineIndex > hi) return false; // שורה מחוץ לבחירה
+
+    final selectedText = _savedSelectedText.value;
+    if (selectedText == null || selectedText.isEmpty) {
+      return false; // אין בחירה פעילה — אין מה לשמר
+    }
+    final root = lineContext.findRenderObject();
+    if (root == null) {
+      return true; // יש בחירה אך אי אפשר לבדוק גאומטרית — סלחני
+    }
+
+    final segments = selectedText.split('\n');
+    final offsetInRange = lineIndex - lo;
+    final segment = (offsetInRange >= 0 && offsetInRange < segments.length)
+        ? segments[offsetInRange]
+        : selectedText;
+    final edge = lo == hi
+        ? SelectionSegmentEdge.substring
+        : lineIndex == lo
+            ? SelectionSegmentEdge.suffix
+            : lineIndex == hi
+                ? SelectionSegmentEdge.prefix
+                : SelectionSegmentEdge.full;
+
+    final onSelection = clickIsOnRenderedSelection(
+      root: root,
+      globalPosition: globalPosition,
+      selectedSegment: segment,
+      edge: edge,
+      segmentStartHint: _selectionStartColumn,
+    );
+    return onSelection ?? true; // לא הוכרע — סלחני
   }
 
   // עדכון האינדקס הנוכחי ב-tab — חייב להמיר segmentIndex לשורת מקור.
@@ -1159,6 +1222,9 @@ class _CombinedViewState extends State<CombinedView> {
                   widget.selectionSyncController?.clear(_selectionOwner);
                   _selectionManager.exitSelectionMode();
                   _savedSelectedText.value = null;
+                  _selectionLineStart = null;
+                  _selectionLineEnd = null;
+                  _selectionStartColumn = null;
                   return;
                 }
                 widget.selectionSyncController?.activate(_selectionOwner);
@@ -1206,6 +1272,19 @@ class _CombinedViewState extends State<CombinedView> {
                     final before = visibleText.substring(0, selectionStart);
                     final offset = '\n'.allMatches(before).length;
                     foundIndex = baseIndex + offset;
+                    // טווח השורות שהבחירה משתרעת עליהן — לזיהוי סלחני של לחיצה
+                    // ימנית על הבחירה (כולל ברווח שבין שורות נבחרות).
+                    _selectionLineStart = foundIndex;
+                    _selectionLineEnd =
+                        foundIndex + '\n'.allMatches(fixedPlain).length;
+                    // עמודת ההתחלה של הבחירה בשורה הראשונה — רמז לזיהוי המופע
+                    // הנכון כאשר אותו טקסט חוזר באותה שורה.
+                    _selectionStartColumn =
+                        selectionStart - (before.lastIndexOf('\n') + 1);
+                  } else {
+                    _selectionLineStart = null;
+                    _selectionLineEnd = null;
+                    _selectionStartColumn = null;
                   }
 
                   // fallback: אם לא הצלחנו לחשב אינדקס, נשתמש בשורה שנבחרה (אם קיימת)
@@ -1283,6 +1362,9 @@ class _CombinedViewState extends State<CombinedView> {
                           _savedSelectedText.value = null;
                           _savedSelectedIndex.value = null;
                           _currentSelectedIndex.value = null;
+                          _selectionLineStart = null;
+                          _selectionLineEnd = null;
+                          _selectionStartColumn = null;
                           widget.onSelectedTextChanged?.call(null, null);
                           return null;
                         },
@@ -1487,6 +1569,9 @@ class _CombinedViewState extends State<CombinedView> {
                 _savedSelectedText.value = null;
                 _savedSelectedIndex.value = null;
                 _currentSelectedIndex.value = null;
+                _selectionLineStart = null;
+                _selectionLineEnd = null;
+                _selectionStartColumn = null;
                 widget.onSelectedTextChanged?.call(null, null);
               }
               // פשוט מעדכן את selectedIndex - זה יגרום לבנייה מחדש
@@ -1724,6 +1809,12 @@ class _CombinedViewState extends State<CombinedView> {
               ),
               builder: (context, selectedText, child) {
                 return AppContextMenuRegion(
+                  // לחיצה ימנית על הטקסט המסומן (כולל הרווח שבין שורות-תצוגה של
+                  // שורת-מקור שנשברה) לא תשחרר את הבחירה; לחיצה על חלק לא-מסומן
+                  // מבטלת כרגיל.
+                  shouldPreserveSelectionOnSecondaryTap: (globalPosition) =>
+                      _shouldPreserveSelectionAt(
+                          globalPosition, primaryLineIndex, context),
                   menuBuilder: (menuCtx, tapPos) => _buildContextMenuForIndex(
                     state,
                     primaryLineIndex,
@@ -1788,6 +1879,9 @@ class _CombinedViewState extends State<CombinedView> {
         _savedSelectedText.value = null;
         _savedSelectedIndex.value = null;
         _currentSelectedIndex.value = lineIndex;
+        _selectionLineStart = null;
+        _selectionLineEnd = null;
+        _selectionStartColumn = null;
         widget.onSelectedTextChanged?.call(null, null);
         if (isLineSelected) {
           _addTextBookEventIfOpen(const UpdateSelectedIndex(null));
