@@ -23,6 +23,7 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
@@ -107,17 +108,9 @@ List<Link> buildCombinedViewContextMenuLinksForParagraph({
         link.end == null;
   }).toList();
 
-  final titles = <Link, String>{};
-  final pathCache = <String, String>{};
-  for (final link in visibleLinks) {
-    titles[link] = pathCache.putIfAbsent(
-      link.path2,
-      () => utils.getTitleFromPath(link.path2),
-    );
-  }
-  visibleLinks.sort((a, b) => titles[a]!.compareTo(titles[b]!));
-
-  return visibleLinks;
+  // מיון לפי סדר הדורות (כמו במפרשים ובחלונית הקישורים).
+  // מיון סינכרוני מהמטמון - הדורות נטענים מראש ב-BLoC בעת טעינת הקישורים.
+  return CommentaryService.sortLinksByEraSync(visibleLinks);
 }
 
 @visibleForTesting

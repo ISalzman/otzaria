@@ -12,7 +12,12 @@ class LinkTypes {
   static const String reference = 'REFERENCE';
 
   /// Checks if a connection type is a commentary or targum
+  ///
+  /// ההשוואה אינה תלוית רישיות — חלק ממקורות הנתונים עשויים לספק
+  /// 'commentary'/'targum' באותיות קטנות (כפי שקורה גם בטסטים).
   static bool isCommentaryOrTargum(String? connectionType) {
-    return connectionType == commentary || connectionType == targum;
+    if (connectionType == null) return false;
+    final upper = connectionType.toUpperCase();
+    return upper == commentary || upper == targum;
   }
 }

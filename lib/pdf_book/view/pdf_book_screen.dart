@@ -15,6 +15,8 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart' as otz_links;
+import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart' as pdf_events;
 import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
@@ -807,7 +809,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     final sortedCommentators = commentators.toList()..sort();
 
-    return (commentators: sortedCommentators, links: links);
+    return (
+      commentators: sortedCommentators,
+      links: CommentaryService.sortLinksByEraSync(links),
+    );
   }
 
   void _recordCommentaryOpenedIfNeeded() {
@@ -2753,6 +2758,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         final loadedLinks = await textBook.links
           ..sort((a, b) => a.index1.compareTo(b.index1));
         widget.tab.links = loadedLinks;
+        // טעינת דורות מראש כדי שמיון הקישורים לפי דורות יעבוד סינכרונית
+        // (תפריט הקשר + פאנל קישורים)
+        CommentaryService.preloadEras(loadedLinks
+            .where((l) => !LinkTypes.isCommentaryOrTargum(l.connectionType))
+            .map((l) => utils.getTitleFromPath(l.path2)));
         final commentaryCount = loadedLinks
             .where((l) =>
                 l.connectionType.toUpperCase() == 'COMMENTARY' ||
