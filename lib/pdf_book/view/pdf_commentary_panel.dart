@@ -7,6 +7,7 @@ import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
 import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -289,6 +290,23 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       }
     }
     final availableCommentators = commentatorsSet.toList();
+
+    // טעינת דורות הקישורים הרגילים (לא מפרשים) מראש - fire-and-forget כדי לא
+    // לחסום את בניית קבוצות המפרשים. כשתסתיים, מאפסים את מטמון התוכן הנראה
+    // ומרעננים, כדי שסדר fallback (אלפבתי) שאולי נקבע מוקדם לא יישאר תקוע.
+    final nonCommentaryTitles = <String>{
+      for (final link in widget.tab.links)
+        if (!LinkTypes.isCommentaryOrTargum(link.connectionType))
+          utils.getTitleFromPath(link.path2),
+    };
+    if (nonCommentaryTitles.isNotEmpty) {
+      CommentaryService.preloadEras(nonCommentaryTitles).then((_) {
+        if (mounted) {
+          setState(() => _visibleContentCache = null);
+        }
+      });
+    }
+
     final eras = await utils.splitByEra(availableCommentators);
     final known = <String>{
       ...?eras['תורה שבכתב'],
@@ -1370,13 +1388,14 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       }
       return a.index1.compareTo(b.index1);
     });
-    nonCommentaryLinks.sort((a, b) => a.index1.compareTo(b.index1));
+    final sortedNonCommentaryLinks =
+        CommentaryService.sortLinksByEraSync(nonCommentaryLinks);
 
     final groups = _groupConsecutiveLinks(commentaryLinks);
     final cache = _PdfVisibleContentCache(
       cacheKey: cacheKey,
       commentaryLinks: List.unmodifiable(commentaryLinks),
-      links: List.unmodifiable(nonCommentaryLinks),
+      links: List.unmodifiable(sortedNonCommentaryLinks),
       hasAnyCommentaryLinks: hasAnyCommentaryLinks,
       sortedGroupsFuture: CommentaryService.sortGroupsByEra(groups),
     );

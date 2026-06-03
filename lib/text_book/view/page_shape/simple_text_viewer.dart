@@ -18,6 +18,7 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_se
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -1096,33 +1097,34 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         ));
         items.add(const AppContextMenuEntry.divider());
       }
-      items.addAll(lineLinks
+      final sortedLinks = CommentaryService.sortLinksByEraSync(lineLinks
           .where((link) =>
               !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
               link.start == null &&
               link.end == null)
-          .map((link) => AppContextMenuEntry(
-                label: link.fallbackDisplayReference,
-                labelWidget: FutureBuilder<String>(
-                  future: link.displayReference,
-                  builder: (context, snapshot) => Text(
-                    snapshot.data ?? link.fallbackDisplayReference,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textDirection: TextDirection.rtl,
-                  ),
-                ),
-                onTap: () => widget.openBookCallback(
-                  TextBookTab(
-                    book: TextBook(title: utils.getTitleFromPath(link.path2)),
-                    index: link.index2 - 1,
-                    openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                            false) ||
+          .toList());
+      items.addAll(sortedLinks.map((link) => AppContextMenuEntry(
+            label: link.fallbackDisplayReference,
+            labelWidget: FutureBuilder<String>(
+              future: link.displayReference,
+              builder: (context, snapshot) => Text(
+                snapshot.data ?? link.fallbackDisplayReference,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textDirection: TextDirection.rtl,
+              ),
+            ),
+            onTap: () => widget.openBookCallback(
+              TextBookTab(
+                book: TextBook(title: utils.getTitleFromPath(link.path2)),
+                index: link.index2 - 1,
+                openLeftPane:
+                    (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
                         (Settings.getValue<bool>('key-default-sidebar-open') ??
                             false),
-                  ),
-                ),
-              )));
+              ),
+            ),
+          )));
       return items;
     }
 

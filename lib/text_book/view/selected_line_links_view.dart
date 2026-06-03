@@ -5,6 +5,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -270,14 +271,17 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   Future<List<Link>> _filterLinksAsync(List<Link> links) async {
     _linksWithSearchResults.clear(); // איפוס רשימת הקישורים עם תוצאות
 
+    // מיון הקישורים לפי סדר הדורות (כמו במפרשים)
+    final sortedLinks = await CommentaryService.sortLinksByEra(links);
+
     if (_searchQuery.isEmpty) {
-      return links;
+      return sortedLinks;
     }
 
     final query = _searchQuery.toLowerCase();
     final filteredLinks = <Link>[];
 
-    for (final link in links) {
+    for (final link in sortedLinks) {
       final instanceKey = buildSelectedLinkInstanceKey(link);
       final contentKey = buildSelectedLinkContentKey(link);
       final title = link.heRef.toLowerCase();

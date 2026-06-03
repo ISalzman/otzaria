@@ -5,6 +5,8 @@ import 'package:otzaria/models/books.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -2118,6 +2120,21 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     ));
     _activeLinksTargetBookTitlesSignature =
         event.targetBookTitlesSignature ?? _allTargetBookTitlesSignature;
+
+    // טעינת דורות הספרים מראש למטמון, כדי שתפריט ההקשר יוכל למיין
+    // את הקישורים לפי סדר הדורות באופן סינכרוני.
+    _preloadLinkEras(processedLinks.links);
+  }
+
+  /// טוען מראש את דורות ספרי היעד של הקישורים הרגילים (לא מפרשים)
+  void _preloadLinkEras(List<Link> links) {
+    final titles = <String>{
+      for (final link in links)
+        if (!LinkTypes.isCommentaryOrTargum(link.connectionType))
+          utils.getTitleFromPath(link.path2),
+    };
+    if (titles.isEmpty) return;
+    CommentaryService.preloadEras(titles);
   }
 
   void _onSetLinksLoading(

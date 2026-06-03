@@ -1,6 +1,7 @@
 import 'package:otzaria/models/links.dart';
-import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'dart:isolate';
 
 /// מייצג קבוצת קטעי פירוש רצופים מאותו ספר
@@ -49,6 +50,17 @@ enum CommentaryEra {
 /// - סינון לפי מפרשים פעילים
 class CommentaryService {
   static const int _asyncGroupingThreshold = 80;
+
+  /// מטמון דורות לפי שם ספר - ממולא ע"י [preloadEras]
+  ///
+  /// מאפשר מיון סינכרוני (כמו בתפריט ההקשר) לאחר שהדורות נטענו פעם אחת
+  static final Map<String, CommentaryEra> _eraCache = {};
+
+  /// מנקה את מטמון הדורות
+  ///
+  /// יש לקרוא בעת רענון/איפוס הספרייה, כדי שסיווגי דורות ישנים לא יישארו
+  /// בזיכרון לאחר החלפת נתונים.
+  static void clearEraCache() => _eraCache.clear();
 
   /// מקבץ רשימת קישורים לקבוצות לפי שם הספר (רק קטעים רצופים)
   ///
@@ -114,49 +126,101 @@ class CommentaryService {
     return Isolate.run(() => groupConsecutiveLinks(links));
   }
 
-  /// מחזיר את הדור של ספר לפי שמו
+  /// מחזיר את הדור של ספר מפרש לפי שמו (מתוך טבלת המחברים ב-DB)
   ///
   /// [bookTitle] - שם הספר
   ///
-  /// מחזיר את הדור המתאים, או [CommentaryEra.other] אם לא נמצא
+  /// מחזיר את הדור המתאים, או [CommentaryEra.other] אם לא נמצא.
+  /// משמש למיון קבוצות מפרשים ([sortGroupsByEra]). למיון קישורים רגילים
+  /// יש להשתמש ב-[preloadEras] + [getCachedBookEra] שתומכים גם בספרי מקור.
   static Future<CommentaryEra> getBookEra(String bookTitle) async {
     try {
       final repo = SqliteDataProvider.instance.repository;
-      if (repo == null) {
-        // אם ה-DB לא מאותחל, נחזיר "שאר מפרשים"
-        return CommentaryEra.other;
-      }
-
+      if (repo == null) return CommentaryEra.other;
       final generationInfo = await repo.getBookGenerationInfoByTitle(bookTitle);
-
-      if (generationInfo == null) {
-        return CommentaryEra.other;
-      }
-
-      // מיפוי שם הדור ל-CommentaryEra
+      if (generationInfo == null) return CommentaryEra.other;
       return _mapGenerationNameToEra(generationInfo.generationName);
     } catch (e) {
-      // במקרה של שגיאה, מחזירים "שאר מפרשים"
       return CommentaryEra.other;
     }
   }
 
-  /// ממפה שם דור מה-DB ל-CommentaryEra enum
+  /// ממפה שם דור מה-DB ל-CommentaryEra
   static CommentaryEra _mapGenerationNameToEra(String generationName) {
-    switch (generationName) {
-      case 'תורה שבכתב':
-        return CommentaryEra.torahShebichtav;
-      case 'חז"ל':
-        return CommentaryEra.chazal;
-      case 'ראשונים':
-        return CommentaryEra.rishonim;
-      case 'אחרונים':
-        return CommentaryEra.acharonim;
-      case 'מחברי זמננו':
-        return CommentaryEra.modern;
-      default:
-        return CommentaryEra.other;
+    for (final era in CommentaryEra.values) {
+      if (era.hebrewName == generationName) return era;
     }
+    return CommentaryEra.other;
+  }
+
+  /// מחזיר את הדור של ספר מהמטמון בלבד (סינכרוני)
+  ///
+  /// מחזיר [CommentaryEra.other] אם הדור עדיין לא נטען.
+  /// יש להפעיל [preloadEras] מראש כדי למלא את המטמון.
+  static CommentaryEra getCachedBookEra(String bookTitle) =>
+      _eraCache[bookTitle] ?? CommentaryEra.other;
+
+  /// טוען מראש את דורות הקישורים אל המטמון (לשימוש [sortLinksByEraSync])
+  ///
+  /// משתמש ב-[utils.splitByEra] (אותו מנגנון שמסווג מפרשים לדורות), ובנוסף
+  /// מסווג ספרי מקור (תנ"ך, תלמוד) לפי קטגוריית המקור שבנתיב שלהם.
+  ///
+  /// [bookTitles] - שמות הספרים לטעינה (כפילויות מסוננות אוטומטית)
+  static Future<void> preloadEras(Iterable<String> bookTitles) async {
+    final missing =
+        bookTitles.toSet().where((t) => !_eraCache.containsKey(t)).toList();
+    if (missing.isEmpty) return;
+
+    try {
+      final byEra = await utils.splitByEra(missing);
+      final unresolved = <String>[];
+      for (final entry in byEra.entries) {
+        final era = _eraFromCategory(entry.key);
+        for (final title in entry.value) {
+          // ספרים שלא סווגו דרך המפרשים - ננסה לפי קטגוריית המקור (תנ"ך/תלמוד)
+          if (era == CommentaryEra.other) {
+            unresolved.add(title);
+          } else {
+            _eraCache[title] = era;
+          }
+        }
+      }
+
+      // ספרי מקור (תנ"ך, תלמוד, משנה) אין להם דור מתויג ב-DB ולא בשם הנתיב,
+      // לכן מסווגים אותם לפי קטגוריית המקור שבנתיב הספר.
+      if (unresolved.isNotEmpty) {
+        final titleToPath = await FileSystemData.instance.titleToPath;
+        for (final title in unresolved) {
+          _eraCache[title] = _eraFromSourcePath(titleToPath[title] ?? '');
+        }
+      }
+    } catch (_) {
+      // אם הסיווג נכשל (למשל DB לא זמין) - הספרים יישארו ללא דור במטמון
+      // והמיון ייפול חזרה לסדר אלפבתי. אין צורך לקרוס.
+    }
+  }
+
+  /// ממפה שם קטגוריית דור (כפי שמחזירה [utils.splitByEra]) ל-CommentaryEra
+  static CommentaryEra _eraFromCategory(String category) {
+    for (final era in CommentaryEra.values) {
+      if (era.hebrewName == category) return era;
+    }
+    // 'מפרשים נוספים' וכל קטגוריה לא מוכרת -> שאר מפרשים
+    return CommentaryEra.other;
+  }
+
+  /// מסווג ספר מקור לדור לפי קטגוריית המקור שבנתיב שלו
+  ///
+  /// תנ"ך -> תורה שבכתב; משנה/תלמוד/מדרש -> חז"ל; אחרת -> שאר מפרשים
+  static CommentaryEra _eraFromSourcePath(String path) {
+    // קטגוריות מקרא (כולן תחת שורש "תנ"ך")
+    const torahKeywords = ['תנ"ך', 'נביאים', 'כתובים'];
+    // קטגוריות חז"ל - שמות שורש ייחודיים שאינם מופיעים בשמות ספרים אחרים
+    const chazalKeywords = ['תלמוד', 'תוספתא', 'מדרש', 'משנה'];
+
+    if (torahKeywords.any(path.contains)) return CommentaryEra.torahShebichtav;
+    if (chazalKeywords.any(path.contains)) return CommentaryEra.chazal;
+    return CommentaryEra.other;
   }
 
   /// ממיין קבוצות מפרשים לפי סדר הדורות
@@ -168,9 +232,9 @@ class CommentaryService {
   static Future<List<LinkGroup>> sortGroupsByEra(List<LinkGroup> groups) async {
     if (groups.isEmpty) return groups;
 
-    // יצירת מפה של כל שם ספר לדור שלו - הרצה במקביל לשיפור ביצועים
-    final eraFutures = groups.map((group) => getBookEra(group.bookTitle));
-    final eras = await Future.wait(eraFutures);
+    // שליפת הדור של כל ספר מפרש מה-DB - הרצה במקביל לשיפור ביצועים
+    final eras =
+        await Future.wait(groups.map((group) => getBookEra(group.bookTitle)));
     final Map<String, CommentaryEra> eraMap = {
       for (int i = 0; i < groups.length; i++) groups[i].bookTitle: eras[i],
     };
@@ -190,6 +254,69 @@ class CommentaryService {
     });
 
     return sortedGroups;
+  }
+
+  /// ממיין רשימת קישורים שטוחה לפי סדר הדורות
+  ///
+  /// [links] - רשימת הקישורים למיון
+  ///
+  /// מחזיר רשימה ממוינת לפי: תורה שבכתב -> חז"ל -> ראשונים -> אחרונים -> מחברי זמננו -> שאר מפרשים
+  /// בתוך כל דור המיון הוא אלפביתי לפי שם הספר, ובתוך אותו ספר לפי מיקום הקטע
+  static Future<List<Link>> sortLinksByEra(List<Link> links) async {
+    if (links.length <= 1) return links;
+
+    // טעינת הדורות של כל ספרי היעד מראש, ואז מיון סינכרוני מהמטמון
+    await preloadEras(links.map((link) => utils.getTitleFromPath(link.path2)));
+    return sortLinksByEraSync(links);
+  }
+
+  /// ממיין רשימת קישורים לפי דורות באופן סינכרוני מתוך המטמון
+  ///
+  /// משמש בהקשרים סינכרוניים (כמו תפריט הקשר) שבהם אי אפשר להמתין ל-DB.
+  /// ספרים שדורם עדיין לא במטמון יטופלו כ"שאר מפרשים".
+  /// יש לקרוא ל-[preloadEras] מראש כדי לוודא שהמטמון מלא.
+  static List<Link> sortLinksByEraSync(List<Link> links) {
+    if (links.length <= 1) return links;
+
+    final titlesByPath = <String, String>{};
+    for (final link in links) {
+      titlesByPath.putIfAbsent(
+        link.path2,
+        () => utils.getTitleFromPath(link.path2),
+      );
+    }
+
+    final eraMap = <String, CommentaryEra>{
+      for (final title in titlesByPath.values) title: getCachedBookEra(title),
+    };
+
+    final sorted = List<Link>.from(links);
+    sorted.sort((a, b) => _compareLinksByEra(a, b, titlesByPath, eraMap));
+    return sorted;
+  }
+
+  /// משווה שני קישורים לפי דור -> שם ספר -> מיקום קטע
+  static int _compareLinksByEra(
+    Link a,
+    Link b,
+    Map<String, String> titlesByPath,
+    Map<String, CommentaryEra> eraMap,
+  ) {
+    final titleA = titlesByPath[a.path2]!;
+    final titleB = titlesByPath[b.path2]!;
+    final eraA = eraMap[titleA] ?? CommentaryEra.other;
+    final eraB = eraMap[titleB] ?? CommentaryEra.other;
+
+    if (eraA.order != eraB.order) {
+      return eraA.order.compareTo(eraB.order);
+    }
+
+    // באותו דור - מיון אלפביתי לפי שם הספר
+    final titleCompare = titleA.compareTo(titleB);
+    if (titleCompare != 0) return titleCompare;
+
+    // באותו ספר - שמירת סדר הקטעים
+    return a.index2.compareTo(b.index2);
   }
 
   /// מקבץ וממיין קישורים בפעולה אחת
