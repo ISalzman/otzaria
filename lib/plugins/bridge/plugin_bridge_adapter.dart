@@ -42,6 +42,7 @@ import 'package:otzaria/plugins/models/plugin_highlight.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
+import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 
 // ===================================================================
 // Spec-compliant allowlist for settings.get/getMany
@@ -236,6 +237,12 @@ class PluginBridgeAdapter {
 
   final HttpClient _httpClient = HttpClient();
 
+  // שירות הורדת קבצים — מופע יחיד לכל adapter, נוצר עם השימוש הראשון
+  // ומשוחרר ב-dispose (אחרת כל הורדה תדליף client ורישום ב-registry).
+  PluginFileDownloadService? _fileDownloadService;
+  PluginFileDownloadService get _downloadService =>
+      _fileDownloadService ??= PluginFileDownloadService();
+
   // bookId → index → PluginHighlight (in-memory, per adapter instance)
   final Map<String, Map<int, PluginHighlight>> _highlights = {};
 
@@ -249,6 +256,7 @@ class PluginBridgeAdapter {
   void dispose() {
     HttpClientRegistry.unregister(_closeHttpClient);
     _closeHttpClient();
+    _fileDownloadService?.dispose();
   }
 
   /// טוען את הטקסט המלא של ספר עבור `getBookContent`, עם מטמון LRU קצר
@@ -1602,6 +1610,36 @@ class PluginBridgeAdapter {
         final response = await request.close();
         final body = await response.transform(utf8.decoder).join();
         return {'status': response.statusCode, 'body': body};
+
+      case 'download':
+        // הורדה רגילה של קובץ מ-URL מותר אל תיקיית ההורדות של המערכת.
+        // הכל מתבצע בצד Flutter — ה-WebView (origin file://) אינו יכול
+        // לכתוב לדיסק. נדרשת אותה הרשאה network.access.
+        final granted =
+            await _pluginRepo.getPermission(plugin.pluginId, 'network.access');
+        if (granted != true) {
+          throw Exception('error.permission_denied: network.access required');
+        }
+
+        final url = args['url'] as String?;
+        if (url == null) throw Exception('error.invalid_params: url required');
+
+        final uri = Uri.tryParse(url);
+        if (uri == null) throw Exception('error.invalid_params: invalid URL');
+
+        if (!isUriAllowedForPluginNetwork(uri)) {
+          throw Exception(
+              'error.forbidden: URL not in plugin network allowlist');
+        }
+
+        final filename = args['filename'] as String?;
+        final result = await _downloadService.downloadToDownloads(
+          uri,
+          filename: filename,
+          isAllowed: isUriAllowedForPluginNetwork,
+          isRedirectAllowed: isGithubReleaseRedirectAllowed,
+        );
+        return {'path': result.path, 'filename': result.filename};
 
       default:
         throw Exception('Unknown action in network: $action');

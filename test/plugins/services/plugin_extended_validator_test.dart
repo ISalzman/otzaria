@@ -163,17 +163,46 @@ void main() {
       );
     });
 
-    test('does not flag known undocumented APIs (network.fetch et al.)', () {
+    test('does not flag known network APIs as unknown', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['network.access'],
+          network: const {
+            'enabled': true,
+            'allowlist': ['https://example.com'],
+          },
+        ),
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('network.fetch', {url: 'x'});"
+              "Otzaria.call('network.download', {url: 'y'});",
+        },
+      );
+      // לא מסומנים כ-API לא מוכר, ואין אזהרת הרשאה חסרה (היא הוצהרה).
+      expect(
+        report.warnings.any((w) => w.contains('network.fetch')),
+        isFalse,
+      );
+      expect(
+        report.warnings.any((w) => w.contains('network.download')),
+        isFalse,
+      );
+    });
+
+    test('warns when network.download is used but network.access is missing',
+        () {
       final report = _runOn(
         tempDir,
         files: {
           'index.html': '<html lang="he" dir="rtl"></html>',
-          'app.js': "Otzaria.call('network.fetch', {url: 'x'});",
+          'app.js': "Otzaria.call('network.download', {url: 'y'});",
         },
       );
       expect(
-        report.warnings.any((w) => w.contains('network.fetch')),
-        isFalse,
+        report.warnings.any((w) =>
+            w.contains('network.download') && w.contains('network.access')),
+        isTrue,
       );
     });
 

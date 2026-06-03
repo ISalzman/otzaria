@@ -417,6 +417,8 @@ export type OtzariaMethod =
   | 'database.describeSource'
   | 'database.query'
   | 'database.batchQuery'
+  | 'network.fetch'
+  | 'network.download'
   | 'reader.addContextMenuItem'
   | 'reader.removeContextMenuItem'
   | 'reader.setHighlight'

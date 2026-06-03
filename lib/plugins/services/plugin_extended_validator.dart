@@ -100,11 +100,12 @@ const Set<String> _knownApiMethods = {
   'database.describeSource',
   'database.query',
   'database.batchQuery',
+  'network.fetch',
+  'network.download',
 };
 
 /// APIs קיימות בתוספים אך אינן מתועדות פומבית — לא נאזהיר עליהן.
 const Set<String> _knownUndocumentedMethods = {
-  'network.fetch',
   'plugin.listInstalled',
   'plugin.requestInstall',
   'plugin.uninstall',
@@ -191,6 +192,8 @@ const Map<String, String> _methodRequiredPermission = {
   'database.describeSource': 'database.read',
   'database.query': 'database.read',
   'database.batchQuery': 'database.read',
+  'network.fetch': 'network.access',
+  'network.download': 'network.access',
 };
 
 /// שדות שמורים שאינם API methods (כדי שלא ייתפסו ב-shorthand scanner).
