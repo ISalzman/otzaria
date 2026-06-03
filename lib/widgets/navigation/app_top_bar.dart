@@ -15,6 +15,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  AppTopBarItem
@@ -211,7 +212,7 @@ class _AppTopBarState extends State<AppTopBar>
       builder: (context, settingsState) {
         final isCompact = settingsState.compactMenuMode;
         final cs = Theme.of(context).colorScheme;
-        final barColor = cs.surfaceContainerHigh;
+        final barColor = AppSurfaces.topBarBackground(context);
         final shadowColor = cs.shadow.withValues(alpha: 0.14);
         final barH = isCompact ? _kCompactHeight : _kTouchHeight;
         final hPad = isCompact ? 6.0 : 8.0;
