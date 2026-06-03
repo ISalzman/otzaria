@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
+import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -1668,9 +1669,10 @@ class _CombinedViewState extends State<CombinedView> {
                           );
                         }
 
-                        final note = notesForLine.first;
                         final indicator = Tooltip(
-                          message: note.contentPlain,
+                          message: notesForLine
+                              .map((n) => n.contentPlain)
+                              .join('\n\n'),
                           child: GestureDetector(
                             onTap: () {
                               _addTextBookEventIfOpen(
@@ -1687,19 +1689,14 @@ class _CombinedViewState extends State<CombinedView> {
                               }
                             },
                             onLongPress: () {
-                              showDialog<void>(
+                              showSingleActionDialog(
                                 context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('הערה לשורה זו'),
-                                  content: PersonalNoteContentView(note: note),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(),
-                                      child: const Text('סגור'),
-                                    ),
-                                  ],
-                                ),
+                                title: notesForLine.length > 1
+                                    ? 'הערות לשורה זו'
+                                    : 'הערה לשורה זו',
+                                customContent:
+                                    PersonalNotesListView(notes: notesForLine),
+                                confirmText: 'סגור',
                               );
                             },
                             child: Padding(
