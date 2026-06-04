@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -158,6 +159,15 @@ class PerBookSettings {
             isRedundant = false;
           }
 
+          // רוחבי הטורים בצורת הדף הם מאפיין פר-ספר אמיתי שאין לו ברירת מחדל
+          // קבועה (תלוי בגודל המסך), לכן קובץ שמכיל אותם לעולם אינו מיותר.
+          if (json['pageShapeLeftWidth'] != null ||
+              json['pageShapeRightWidth'] != null ||
+              json['pageShapeBottomHeight'] != null ||
+              json['pageShapeBottomLeftWidth'] != null) {
+            isRedundant = false;
+          }
+
           if (isRedundant) {
             await file.delete();
             cleanedCount++;
@@ -185,12 +195,22 @@ class TextBookPerBookSettings {
   final bool? removePunctuation;
   final bool? continuousReadingMode;
 
+  // רוחב/גודל הטורים בצורת הדף (נשמר רק אם המשתמש שינה אותם בתצוגה זו)
+  final double? pageShapeLeftWidth; // רוחב טור המפרש השמאלי
+  final double? pageShapeRightWidth; // רוחב טור המפרש הימני
+  final double? pageShapeBottomHeight; // גובה הטור התחתון
+  final double? pageShapeBottomLeftWidth; // רוחב המפרש התחתון-שמאלי
+
   TextBookPerBookSettings({
     this.fontSize,
     this.commentatorsBelow,
     this.removeNikud,
     this.removePunctuation,
     this.continuousReadingMode,
+    this.pageShapeLeftWidth,
+    this.pageShapeRightWidth,
+    this.pageShapeBottomHeight,
+    this.pageShapeBottomLeftWidth,
   });
 
   Map<String, dynamic> toJson() => {
@@ -200,6 +220,14 @@ class TextBookPerBookSettings {
         if (removePunctuation != null) 'removePunctuation': removePunctuation,
         if (continuousReadingMode != null)
           'continuousReadingMode': continuousReadingMode,
+        if (pageShapeLeftWidth != null)
+          'pageShapeLeftWidth': pageShapeLeftWidth,
+        if (pageShapeRightWidth != null)
+          'pageShapeRightWidth': pageShapeRightWidth,
+        if (pageShapeBottomHeight != null)
+          'pageShapeBottomHeight': pageShapeBottomHeight,
+        if (pageShapeBottomLeftWidth != null)
+          'pageShapeBottomLeftWidth': pageShapeBottomLeftWidth,
       };
 
   factory TextBookPerBookSettings.fromJson(Map<String, dynamic> json) {
@@ -209,12 +237,83 @@ class TextBookPerBookSettings {
       removeNikud: json['removeNikud'] as bool?,
       removePunctuation: json['removePunctuation'] as bool?,
       continuousReadingMode: json['continuousReadingMode'] as bool?,
+      pageShapeLeftWidth: (json['pageShapeLeftWidth'] as num?)?.toDouble(),
+      pageShapeRightWidth: (json['pageShapeRightWidth'] as num?)?.toDouble(),
+      pageShapeBottomHeight:
+          (json['pageShapeBottomHeight'] as num?)?.toDouble(),
+      pageShapeBottomLeftWidth:
+          (json['pageShapeBottomLeftWidth'] as num?)?.toDouble(),
     );
   }
 
-  /// שמירת הגדרות
-  Future<void> save(String bookName) async {
-    await PerBookSettings.saveSettings(bookName, toJson());
+  TextBookPerBookSettings copyWith({
+    double? fontSize,
+    bool? commentatorsBelow,
+    bool? removeNikud,
+    bool? removePunctuation,
+    bool? continuousReadingMode,
+    double? pageShapeLeftWidth,
+    double? pageShapeRightWidth,
+    double? pageShapeBottomHeight,
+    double? pageShapeBottomLeftWidth,
+  }) {
+    return TextBookPerBookSettings(
+      fontSize: fontSize ?? this.fontSize,
+      commentatorsBelow: commentatorsBelow ?? this.commentatorsBelow,
+      removeNikud: removeNikud ?? this.removeNikud,
+      removePunctuation: removePunctuation ?? this.removePunctuation,
+      continuousReadingMode:
+          continuousReadingMode ?? this.continuousReadingMode,
+      pageShapeLeftWidth: pageShapeLeftWidth ?? this.pageShapeLeftWidth,
+      pageShapeRightWidth: pageShapeRightWidth ?? this.pageShapeRightWidth,
+      pageShapeBottomHeight:
+          pageShapeBottomHeight ?? this.pageShapeBottomHeight,
+      pageShapeBottomLeftWidth:
+          pageShapeBottomLeftWidth ?? this.pageShapeBottomLeftWidth,
+    );
+  }
+
+  /// תור כתיבות פר-ספר, לסנכרון רצף load→merge→save לאותו ספר ולמניעת
+  /// דריסה הדדית בין שמירות מקבילות (race condition).
+  static final Map<String, Future<void>> _pendingWrites = {};
+
+  /// עדכון אטומי של ההגדרות הפר-ספריות לספר נתון.
+  ///
+  /// [transform] מקבלת את ההגדרות הקיימות (או null אם אין) ומחזירה את
+  /// ההגדרות לשמירה. אם התוצאה null או ריקה (כל השדות null) — הקובץ נמחק.
+  /// כל הקריאות לאותו [bookName] מבוצעות בזו אחר זו, כך שה-load תמיד רואה
+  /// את התוצאה של הכתיבה הקודמת.
+  static Future<void> mutate(
+    String bookName,
+    FutureOr<TextBookPerBookSettings?> Function(
+      TextBookPerBookSettings? existing,
+    ) transform,
+  ) async {
+    final previousWrite = _pendingWrites[bookName] ?? Future.value();
+    final currentWrite = previousWrite
+        // התעלמות מכשל הכתיבה הקודמת לצורך המשכיות התור בלבד: כשל transient
+        // בכתיבה אחת לא יפיל את הכתיבות שכבר עומדות בתור. כל קריאה עדיין
+        // מקבלת את השגיאה שלה עצמה דרך ה-await בהמשך.
+        .then<void>((_) {}, onError: (_) {})
+        .then((_) async {
+      final existing = await load(bookName);
+      final updated = await transform(existing);
+      if (updated == null || updated.toJson().isEmpty) {
+        await delete(bookName);
+      } else {
+        await PerBookSettings.saveSettings(bookName, updated.toJson());
+      }
+    });
+
+    _pendingWrites[bookName] = currentWrite;
+
+    try {
+      await currentWrite;
+    } finally {
+      if (identical(_pendingWrites[bookName], currentWrite)) {
+        _pendingWrites.remove(bookName);
+      }
+    }
   }
 
   /// טעינת הגדרות
@@ -286,7 +385,12 @@ class PdfBookPerBookSettings {
   /// שמירת הגדרות
   Future<void> save(String bookName) async {
     final previousWrite = _pendingWrites[bookName] ?? Future.value();
-    final currentWrite = previousWrite.then((_) async {
+    final currentWrite = previousWrite
+        // התעלמות מכשל הכתיבה הקודמת לצורך המשכיות התור בלבד: כשל transient
+        // בכתיבה אחת לא יפיל את הכתיבות שכבר עומדות בתור. כל קריאה עדיין
+        // מקבלת את השגיאה שלה עצמה דרך ה-await בהמשך.
+        .then<void>((_) {}, onError: (_) {})
+        .then((_) async {
       final existingSettings = await PdfBookPerBookSettings.load(bookName);
       final settingsToSave = existingSettings?.copyWith(
             zoom: zoom,

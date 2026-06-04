@@ -2881,70 +2881,64 @@ Future<void> _savePerBookSettingsDirectly(
     return;
   }
 
-  // טעינת ההגדרות הקיימות
-  final existingSettings = await TextBookPerBookSettings.load(state.book.title);
-
-  // קבלת ברירות המחדל הגלובליות
+  // קבלת ברירות המחדל הגלובליות (אינן תלויות בקובץ, נחשבות פעם אחת)
   final defaultFontSize = settingsBloc.state.fontSize;
   final defaultRemoveNikud = settingsBloc.state.defaultRemoveNikud;
   final defaultShowSplitView =
       Settings.getValue<bool>('key-splited-view') ?? true;
 
-  // בניית הגדרות חדשות - רק שדות ששונו מברירת המחדל
-  double? newFontSize = existingSettings?.fontSize;
-  bool? newCommentatorsBelow = existingSettings?.commentatorsBelow;
-  bool? newRemoveNikud = existingSettings?.removeNikud;
-  bool? newRemovePunctuation = existingSettings?.removePunctuation;
-  bool? newContinuousReadingMode = existingSettings?.continuousReadingMode;
+  // עדכון אטומי: ה-load וה-merge מבוצעים בתוך תור הכתיבה כדי למנוע דריסה
+  // הדדית עם שמירת רוחבי הטורים (_saveSizes) על אותו קובץ.
+  await TextBookPerBookSettings.mutate(state.book.title, (existingSettings) {
+    // בניית הגדרות חדשות - רק שדות ששונו מברירת המחדל
+    double? newFontSize = existingSettings?.fontSize;
+    bool? newCommentatorsBelow = existingSettings?.commentatorsBelow;
+    bool? newRemoveNikud = existingSettings?.removeNikud;
+    bool? newRemovePunctuation = existingSettings?.removePunctuation;
+    bool? newContinuousReadingMode = existingSettings?.continuousReadingMode;
 
-  // עדכון רק השדה שהשתנה
-  if (fontSize != null) {
-    // אם הערך שווה לברירת המחדל, מוחקים את השדה
-    newFontSize = (fontSize == defaultFontSize) ? null : fontSize;
-  }
+    // עדכון רק השדה שהשתנה
+    if (fontSize != null) {
+      // אם הערך שווה לברירת המחדל, מוחקים את השדה
+      newFontSize = (fontSize == defaultFontSize) ? null : fontSize;
+    }
 
-  if (showSplitView != null) {
-    final commentatorsBelow = !showSplitView;
-    // אם הערך שווה לברירת המחדל, מוחקים את השדה
-    newCommentatorsBelow =
-        (showSplitView == defaultShowSplitView) ? null : commentatorsBelow;
-  }
+    if (showSplitView != null) {
+      final commentatorsBelow = !showSplitView;
+      // אם הערך שווה לברירת המחדל, מוחקים את השדה
+      newCommentatorsBelow =
+          (showSplitView == defaultShowSplitView) ? null : commentatorsBelow;
+    }
 
-  if (removeNikud != null) {
-    // אם הערך שווה לברירת המחדל, מוחקים את השדה
-    newRemoveNikud = (removeNikud == defaultRemoveNikud) ? null : removeNikud;
-  }
+    if (removeNikud != null) {
+      // אם הערך שווה לברירת המחדל, מוחקים את השדה
+      newRemoveNikud = (removeNikud == defaultRemoveNikud) ? null : removeNikud;
+    }
 
-  if (removePunctuation != null) {
-    newRemovePunctuation = removePunctuation ? true : null;
-  }
+    if (removePunctuation != null) {
+      newRemovePunctuation = removePunctuation ? true : null;
+    }
 
-  if (continuousReadingMode != null) {
-    // ברירת המחדל למצב רצף היא false (אין הגדרה גלובלית), כך שרק true שווה
-    // לשמירה.
-    newContinuousReadingMode = continuousReadingMode ? true : null;
-  }
+    if (continuousReadingMode != null) {
+      // ברירת המחדל למצב רצף היא false (אין הגדרה גלובלית), כך שרק true שווה
+      // לשמירה.
+      newContinuousReadingMode = continuousReadingMode ? true : null;
+    }
 
-  // אם כל השדות null, מוחקים את הקובץ כולו
-  if (newFontSize == null &&
-      newCommentatorsBelow == null &&
-      newRemoveNikud == null &&
-      newRemovePunctuation == null &&
-      newContinuousReadingMode == null) {
-    await TextBookPerBookSettings.delete(state.book.title);
-    return;
-  }
-
-  // שמירת ההגדרות המעודכנות
-  final settings = TextBookPerBookSettings(
-    fontSize: newFontSize,
-    commentatorsBelow: newCommentatorsBelow,
-    removeNikud: newRemoveNikud,
-    removePunctuation: newRemovePunctuation,
-    continuousReadingMode: newContinuousReadingMode,
-  );
-
-  await settings.save(state.book.title);
+    // רוחבי הטורים בצורת הדף נשמרים בנפרד (ב-_saveSizes); כאן מעבירים אותם
+    // הלאה כדי לא לדרוס אותם. אם כל השדות יתבררו כ-null, mutate ימחק את הקובץ.
+    return TextBookPerBookSettings(
+      fontSize: newFontSize,
+      commentatorsBelow: newCommentatorsBelow,
+      removeNikud: newRemoveNikud,
+      removePunctuation: newRemovePunctuation,
+      continuousReadingMode: newContinuousReadingMode,
+      pageShapeLeftWidth: existingSettings?.pageShapeLeftWidth,
+      pageShapeRightWidth: existingSettings?.pageShapeRightWidth,
+      pageShapeBottomHeight: existingSettings?.pageShapeBottomHeight,
+      pageShapeBottomLeftWidth: existingSettings?.pageShapeBottomLeftWidth,
+    );
+  });
 }
 
 /// Helper function to add bookmark from keyboard shortcut
