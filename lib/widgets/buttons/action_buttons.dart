@@ -296,11 +296,11 @@ class ToolbarActionButton extends StatelessWidget {
 
     final Color fg = selected ? cs.onSecondaryContainer : cs.onSurfaceVariant;
 
-    final double iconSize = compact ? 16 : 20;
+    final double iconSize = compact ? 20 : 20;
     final double fontSize = compact ? 12 : 14;
-    final double minSize = compact ? 30 : 40;
+    final double minSize = compact ? 36 : 40;
     final EdgeInsets padding = compact
-        ? const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0)
+        ? const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0)
         : const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0);
 
     // אייקון עם הצבע הנכון — IconTheme מאפשר לwidgets מורכבים (RotatedBox, Transform)
@@ -321,7 +321,7 @@ class ToolbarActionButton extends StatelessWidget {
           foregroundColor: fg,
           padding: padding,
           shape: const StadiumBorder(),
-          minimumSize: compact ? const Size(0, 28) : const Size(0, 40),
+          minimumSize: compact ? const Size(0, 36) : const Size(0, 40),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         icon: iconEl,
@@ -339,7 +339,7 @@ class ToolbarActionButton extends StatelessWidget {
         onPressed: onPressed,
         icon: iconEl,
         padding:
-            compact ? const EdgeInsets.all(6.0) : const EdgeInsets.all(8.0),
+            compact ? const EdgeInsets.all(8.0) : const EdgeInsets.all(8.0),
         constraints: BoxConstraints(minWidth: minSize, minHeight: minSize),
         style: IconButton.styleFrom(
           backgroundColor: Colors.transparent,
