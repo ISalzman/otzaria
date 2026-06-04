@@ -1691,11 +1691,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       if (!widget.isInCombinedView)
         ActionButtonData(
           widget: IconButton(
-            icon: const Icon(FluentIcons.info_24_regular),
+            icon: const Icon(FluentIcons.book_information_24_regular),
             tooltip: 'אודות הספר',
             onPressed: () => showBookSourceDialog(context, state),
           ),
-          icon: FluentIcons.info_24_regular,
+          icon: FluentIcons.book_information_24_regular,
           tooltip: 'אודות הספר',
           onPressed: () => showBookSourceDialog(context, state),
         ),
@@ -1731,7 +1731,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             ),
             ActionButtonData(
               widget: const SizedBox.shrink(),
-              icon: FluentIcons.info_24_regular,
+              icon: FluentIcons.book_information_24_regular,
               tooltip: 'אודות הספר',
               onPressed: () => showBookSourceDialog(context, state),
             ),
