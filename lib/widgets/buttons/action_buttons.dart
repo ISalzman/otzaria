@@ -304,16 +304,16 @@ class ToolbarActionButton extends StatelessWidget {
   Color _bgColor(ColorScheme cs) {
     if (!selected) return Colors.transparent;
     return switch (emphasis) {
-      ToolbarActionButtonEmphasis.prominent => cs.primary,
+      ToolbarActionButtonEmphasis.prominent => cs.onSurface.withValues(alpha: 0.12),
       ToolbarActionButtonEmphasis.subtle =>
-        cs.secondaryContainer.withValues(alpha: 0.72),
+        cs.onSurface.withValues(alpha: 0.12),
     };
   }
 
   Color _fgColor(ColorScheme cs) {
     if (!selected) return cs.onSurfaceVariant;
     return switch (emphasis) {
-      ToolbarActionButtonEmphasis.prominent => cs.onPrimary,
+      ToolbarActionButtonEmphasis.prominent => cs.onSecondaryContainer,
       ToolbarActionButtonEmphasis.subtle => cs.onSecondaryContainer,
     };
   }
