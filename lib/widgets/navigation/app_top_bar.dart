@@ -178,9 +178,14 @@ class _AppTopBarState extends State<AppTopBar>
       BuildContext context, List<AppTopBarItem> items) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     final List<Widget> result = [];
-    for (final item in items) {
+    final double buttonSpacing = isCompact ? 4.0 : 8.0;
+    for (int i = 0; i < items.length; i++) {
+      final item = items[i];
       if (item.dividerBefore && result.isNotEmpty) {
         result.add(_buildDivider(context, isCompact));
+      }
+      if (result.isNotEmpty) {
+        result.add(SizedBox(width: buttonSpacing));
       }
       result.add(item.widget);
     }
@@ -188,14 +193,15 @@ class _AppTopBarState extends State<AppTopBar>
   }
 
   Widget _buildDivider(BuildContext context, bool isCompact) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
       child: SizedBox(
-        height: isCompact ? 18.0 : 24.0,
+        height: isCompact ? 20.0 : 24.0,
         child: VerticalDivider(
-          width: 9.0,
+          width: 1.0,
           thickness: 1.0,
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.32),
+          color: cs.outlineVariant.withValues(alpha: 0.5),
         ),
       ),
     );
