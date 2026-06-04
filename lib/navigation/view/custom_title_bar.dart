@@ -798,7 +798,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             ),
             child: CustomPaint(
               painter: isSelected
-                  ? _TabBackgroundPainter(colorScheme.surfaceContainer)
+                  ? _TabBackgroundPainter(AppSurfaces.topBarBackground(context))
                   : null,
               foregroundPainter: isTabHovered && !isSelected
                   ? _TabBackgroundPainter(
