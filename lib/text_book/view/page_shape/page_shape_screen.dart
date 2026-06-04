@@ -40,6 +40,7 @@ import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
@@ -145,14 +146,54 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
             screenWidth * 0.5;
 
     setState(() {});
+
+    // אם הופעלה שמירת הגדרות פר-ספר, טען את רוחבי הטורים השמורים לספר זה
+    // (סרגל הצד נשאר גלובלי).
+    if (context.read<SettingsBloc>().state.enablePerBookSettings) {
+      _loadPerBookSizes();
+    }
+  }
+
+  /// טעינת רוחבי הטורים השמורים לספר הנוכחי (אסינכרוני).
+  /// דורס את הערכים הגלובליים שנטענו ב-[_loadSizes] רק עבור שדות שנשמרו לספר.
+  Future<void> _loadPerBookSizes() async {
+    final bookTitle = widget.tab?.book.title;
+    if (bookTitle == null) return;
+
+    final settings = await TextBookPerBookSettings.load(bookTitle);
+    if (settings == null || !mounted) return;
+
+    setState(() {
+      if (settings.pageShapeLeftWidth != null) {
+        _leftWidth = settings.pageShapeLeftWidth;
+      }
+      if (settings.pageShapeRightWidth != null) {
+        _rightWidth = settings.pageShapeRightWidth;
+      }
+      if (settings.pageShapeBottomHeight != null) {
+        _bottomHeight = settings.pageShapeBottomHeight;
+      }
+      if (settings.pageShapeBottomLeftWidth != null) {
+        _bottomLeftWidth = settings.pageShapeBottomLeftWidth;
+      }
+    });
   }
 
   /// שמירת גדלים
   void _saveSizes() {
+    // סרגל הצד נשמר תמיד גלובלית (אינו חלק מרוחב הטורים).
     if (_leftSidebarWidth != null) {
       Settings.setValue<double>(
           'page_shape_left_sidebar_width', _leftSidebarWidth!);
     }
+
+    // אם הופעלה שמירת הגדרות פר-ספר, רוחבי הטורים נשמרים לספר הנוכחי בלבד.
+    if (context.read<SettingsBloc>().state.enablePerBookSettings) {
+      _savePerBookSizes();
+      return;
+    }
+
+    // אחרת - שמירה גלובלית כמו קודם.
     if (_leftWidth != null) {
       Settings.setValue<double>('page_shape_left_width', _leftWidth!);
     }
@@ -166,6 +207,29 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       Settings.setValue<double>(
           'page_shape_bottom_left_width', _bottomLeftWidth!);
     }
+  }
+
+  /// שמירת רוחבי הטורים לספר הנוכחי, תוך שימור שאר ההגדרות הפר-ספריות.
+  /// השמירה אטומית (דרך [TextBookPerBookSettings.mutate]) כדי שלא תדרוס
+  /// שמירה מקבילה של גופן/ניקוד וכו' על אותו ספר.
+  Future<void> _savePerBookSizes() async {
+    final bookTitle = widget.tab?.book.title;
+    if (bookTitle == null) return;
+
+    final leftWidth = _leftWidth;
+    final rightWidth = _rightWidth;
+    final bottomHeight = _bottomHeight;
+    final bottomLeftWidth = _bottomLeftWidth;
+
+    await TextBookPerBookSettings.mutate(
+      bookTitle,
+      (existing) => (existing ?? TextBookPerBookSettings()).copyWith(
+        pageShapeLeftWidth: leftWidth,
+        pageShapeRightWidth: rightWidth,
+        pageShapeBottomHeight: bottomHeight,
+        pageShapeBottomLeftWidth: bottomLeftWidth,
+      ),
+    );
   }
 
   void _refreshLinksForCurrentConfiguration(String reason) {
