@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 
 class PageNumberDisplay extends StatefulWidget {
   final PdfViewerController controller;
@@ -76,7 +77,7 @@ class _PageNumberDisplayState extends State<PageNumberDisplay> {
                 focusNode: _focusNode,
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium,
+                style: AppTopBar.titleStyle(context),
                 decoration: InputDecoration(
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
@@ -108,7 +109,7 @@ class _PageNumberDisplayState extends State<PageNumberDisplay> {
                     },
                     child: Text(
                       '$pageNumber/$pageCount',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: AppTopBar.titleStyle(context),
                     ),
                   )),
             ),

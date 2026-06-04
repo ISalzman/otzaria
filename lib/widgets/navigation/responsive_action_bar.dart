@@ -217,7 +217,7 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
             AppMenuMetrics.create(compactMenus: false);
         final menuButton = AppPopupMenuButton<ActionButtonData>(
           key: widget.overflowButtonKey,
-          icon: const Icon(FluentIcons.more_vertical_24_regular),
+          iconData: FluentIcons.more_vertical_24_regular,
           tooltip: 'עוד פעולות',
           position: PopupMenuPosition.under,
           offset: widget.overflowMenuOffset,
