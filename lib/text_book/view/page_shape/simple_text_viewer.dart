@@ -962,7 +962,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       final preview = hasSelectedText ? previewForLabel(cleanedText) : '';
       entries.add(AppContextMenuEntry(
         label: 'חיפוש',
-        icon: FluentIcons.search_24_regular,
+        icon: FluentIcons.book_search_24_regular,
         enabled: hasSelectedText,
         children: hasSelectedText
             ? [

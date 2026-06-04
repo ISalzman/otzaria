@@ -459,7 +459,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
       controller: _searchController,
       decoration: InputDecoration(
         hintText: 'איתור קטגוריה או ספר...',
-        prefixIcon: const Icon(FluentIcons.search_24_regular),
+        prefixIcon: const Icon(FluentIcons.book_search_24_regular),
         suffixIcon: _searchController.text.isEmpty
             ? null
             : IconButton(
