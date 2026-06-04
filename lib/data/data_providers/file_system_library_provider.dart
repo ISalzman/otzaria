@@ -9,7 +9,7 @@ import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/library/models/library.dart';
-import 'package:otzaria/utils/file/docx_to_otzaria.dart';
+import 'package:otzaria/utils/file/docx_cache.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -285,8 +285,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
     }
 
     if (path.endsWith('.docx')) {
-      final bytes = await file.readAsBytes();
-      return Isolate.run(() => docxToText(bytes, title));
+      return convertDocxWithCache(file, title);
     } else {
       return file.readAsString();
     }

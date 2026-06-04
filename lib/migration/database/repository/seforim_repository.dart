@@ -5,6 +5,7 @@ import '../../../utils/text/text_manipulation.dart';
 import '../../models/author.dart';
 import '../../models/book.dart';
 import '../../models/category.dart';
+import '../../models/docx_text_cache_entry.dart';
 import '../../models/line.dart';
 import '../../models/link.dart';
 import '../../models/pdf_outline_cache_entry.dart';
@@ -854,6 +855,17 @@ class SeforimRepository {
         .updateExternalMetadata(bookId, fileSize, lastModified);
   }
 
+  /// מחליף את ה-TOC של ספר חיצוני קיים (מחיקת הישן + הוספת החדש). נדרש
+  /// כשקובץ DOCX/TXT נערך — כדי שהניווט יתעדכן לפי התוכן החדש, ולא יישאר
+  /// לפי הגרסה הישנה.
+  Future<void> replaceExternalBookToc(
+      int bookId, List<TocEntry> tocEntries) async {
+    await deleteBookTocEntries(bookId);
+    if (tocEntries.isNotEmpty) {
+      await _insertTocEntriesForExternalBook(bookId, tocEntries);
+    }
+  }
+
   /// Updates a book's storage details (file path, file size, last modified).
   /// Required when a book transitions between being stored externally and within the DB.
   Future<void> updateBookStorage(
@@ -1064,6 +1076,28 @@ class SeforimRepository {
 
   Future<void> prunePdfOutlineCacheAccessedBefore(int cutoffMillis) async {
     await _database.pdfOutlineCacheDao.deleteAccessedBefore(cutoffMillis);
+  }
+
+  // --- Persistent external DOCX text cache ---
+
+  Future<DocxTextCacheEntry?> getDocxTextCacheEntry(String filePath) async {
+    return _database.docxTextCacheDao.selectByFilePath(filePath);
+  }
+
+  Future<void> upsertDocxTextCacheEntry(DocxTextCacheEntry entry) async {
+    await _database.docxTextCacheDao.upsert(entry);
+  }
+
+  Future<void> deleteDocxTextCacheEntry(String filePath) async {
+    await _database.docxTextCacheDao.deleteByFilePath(filePath);
+  }
+
+  Future<void> touchDocxTextCacheEntry(String filePath, int accessedAt) async {
+    await _database.docxTextCacheDao.updateAccessedAt(filePath, accessedAt);
+  }
+
+  Future<void> pruneDocxTextCacheAccessedBefore(int cutoffMillis) async {
+    await _database.docxTextCacheDao.deleteAccessedBefore(cutoffMillis);
   }
 
   Future<void> prunePdfOutlineCacheExceptFilePaths(

@@ -6,6 +6,7 @@ import 'book_dao.dart';
 import 'book_has_links_dao.dart';
 import 'category_dao.dart';
 import 'connection_type_dao.dart';
+import 'docx_text_cache_dao.dart';
 import 'generation_dao.dart';
 import 'line_dao.dart';
 import 'link_dao.dart';
@@ -42,6 +43,7 @@ class MyDatabase {
   BookHasLinksDao? _bookHasLinksDao;
   CategoryDao? _categoryDao;
   ConnectionTypeDao? _connectionTypeDao;
+  DocxTextCacheDao? _docxTextCacheDao;
   GenerationDao? _generationDao;
   LineDao? _lineDao;
   LinkDao? _linkDao;
@@ -81,6 +83,11 @@ class MyDatabase {
   ConnectionTypeDao get connectionTypeDao {
     _ensureDaosInitialized();
     return _connectionTypeDao!;
+  }
+
+  DocxTextCacheDao get docxTextCacheDao {
+    _ensureDaosInitialized();
+    return _docxTextCacheDao!;
   }
 
   GenerationDao get generationDao {
@@ -203,6 +210,7 @@ class MyDatabase {
     _bookHasLinksDao = BookHasLinksDao(this);
     _categoryDao = CategoryDao(this);
     _connectionTypeDao = ConnectionTypeDao(this);
+    _docxTextCacheDao = DocxTextCacheDao(this);
     _generationDao = GenerationDao(this);
     _lineDao = LineDao(this);
     _linkDao = LinkDao(this);
@@ -480,6 +488,20 @@ class MyDatabase {
         );
         ''',
       'CREATE INDEX IF NOT EXISTS idx_pdf_outline_cache_accessed_at ON pdf_outline_cache(accessedAt);',
+
+      // Persistent cache of converted external DOCX text (populated in cache.db)
+      '''
+        CREATE TABLE IF NOT EXISTS docx_text_cache (
+          filePath TEXT PRIMARY KEY,
+          fileSize INTEGER NOT NULL,
+          lastModified INTEGER NOT NULL,
+          converterVersion INTEGER NOT NULL DEFAULT 0,
+          text TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          accessedAt INTEGER NOT NULL
+        );
+        ''',
+      'CREATE INDEX IF NOT EXISTS idx_docx_text_cache_accessed_at ON docx_text_cache(accessedAt);',
 
       // Links table
       '''
