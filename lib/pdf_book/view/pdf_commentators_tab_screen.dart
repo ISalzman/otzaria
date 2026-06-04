@@ -583,7 +583,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
         AppTopBarItem(
           widget: ToolbarActionButton(
             tooltip: 'חיפוש',
-            icon: FluentIcons.search_24_regular,
+            icon: FluentIcons.book_search_24_regular,
             compact: isCompact,
             onPressed: _openSearchPanel,
           ),
@@ -804,7 +804,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                             textDirection: TextDirection.rtl),
                       ),
                       Tab(
-                        icon: Icon(FluentIcons.search_24_regular, size: 16),
+                        icon: Icon(FluentIcons.book_search_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
                         child: Text('חיפוש',
