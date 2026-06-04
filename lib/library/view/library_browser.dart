@@ -491,7 +491,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       compact: isCompact,
       tooltip: 'פתח לוח שנה',
       icon: FluentIcons.calendar_24_regular,
-      emphasis: ToolbarActionButtonEmphasis.subtle,
       onPressed: () {
         context.read<NavigationBloc>().add(
               const NavigateToScreen(Screen.more),
