@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/settings/settings_exports.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AppMenuEntry — נתוני פריט בתפריט
@@ -114,6 +117,13 @@ class AppPopupMenuButton<T> extends StatefulWidget {
   final bool enabled;
   final T? initialValue;
 
+  /// כשמוגדר, הכפתור יוצג כ-ToolbarActionButton (סרגל כלים) במקום IconButton.
+  /// הערך [icon] (Widget) ישמש כ-iconWidget ב-ToolbarActionButton.
+  final IconData? iconData;
+
+  /// מצב נבחר — מועבר ל-ToolbarActionButton כשמשתמשים ב-[iconData].
+  final bool selected;
+
   const AppPopupMenuButton({
     super.key,
     this.entries,
@@ -128,6 +138,8 @@ class AppPopupMenuButton<T> extends StatefulWidget {
     this.offset = const Offset(0, 4),
     this.enabled = true,
     this.initialValue,
+    this.iconData,
+    this.selected = false,
   });
 
   @override
@@ -213,6 +225,24 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
         label: Text(
           widget.tooltip!,
           textDirection: TextDirection.rtl,
+        ),
+      );
+    } else if (widget.iconData != null) {
+      // מצב Toolbar: ToolbarActionButton עם אייקון מסוגנן
+      final isCompact =
+          context.read<SettingsBloc>().state.compactMenuMode;
+      trigger = Opacity(
+        opacity: widget.enabled ? 1.0 : 0.38,
+        child: IgnorePointer(
+          ignoring: !widget.enabled,
+          child: ToolbarActionButton(
+            tooltip: widget.tooltip ?? '',
+            icon: widget.iconData!,
+            iconWidget: widget.icon,
+            compact: isCompact,
+            selected: widget.selected,
+            onPressed: _showAdaptiveMenu,
+          ),
         ),
       );
     } else {

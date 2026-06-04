@@ -303,6 +303,15 @@ class ToolbarActionButton extends StatelessWidget {
         ? const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0)
         : const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0);
 
+    // אייקון עם הצבע הנכון — IconTheme מאפשר לwidgets מורכבים (RotatedBox, Transform)
+    // לרשת את הצבע באופן אוטומטי דרך nested Icon.
+    final Widget iconEl = iconWidget != null
+        ? IconTheme(
+            data: IconThemeData(color: fg, size: iconSize),
+            child: iconWidget!,
+          )
+        : Icon(icon, size: iconSize, color: fg);
+
     Widget button;
     if (label != null) {
       button = FilledButton.icon(
@@ -315,7 +324,7 @@ class ToolbarActionButton extends StatelessWidget {
           minimumSize: compact ? const Size(0, 28) : const Size(0, 40),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
-        icon: iconWidget ?? Icon(icon, size: iconSize, color: fg),
+        icon: iconEl,
         label: AnimatedDefaultTextStyle(
           duration: AppTokens.animFast,
           style: TextStyle(
@@ -328,7 +337,7 @@ class ToolbarActionButton extends StatelessWidget {
     } else {
       button = IconButton(
         onPressed: onPressed,
-        icon: iconWidget ?? Icon(icon, size: iconSize, color: fg),
+        icon: iconEl,
         padding:
             compact ? const EdgeInsets.all(6.0) : const EdgeInsets.all(8.0),
         constraints: BoxConstraints(minWidth: minSize, minHeight: minSize),

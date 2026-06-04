@@ -2973,35 +2973,37 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             AppTopBar(
               leadingItems: [
                 AppTopBarItem(
-                  widget: IconButton(
+                  widget: ToolbarActionButton(
                     key: widget.enableTourTargets
                         ? pdfBookNavigationTourTargetKey
                         : null,
-                    icon: const Icon(FluentIcons.navigation_24_regular),
                     tooltip: 'חיפוש וניווט',
+                    icon: FluentIcons.navigation_24_regular,
+                    compact: context
+                        .read<SettingsBloc>()
+                        .state
+                        .compactMenuMode,
                     onPressed: () {
                       _setLeftPaneVisibility(!widget.tab.showLeftPane.value);
                     },
                   ),
                 ),
+                AppTopBarItem(
+                  widget: ToolbarActionButton(
+                    key: widget.enableTourTargets
+                        ? pdfBookSearchTourTargetKey
+                        : null,
+                    tooltip: 'חיפוש',
+                    icon: FluentIcons.search_24_regular,
+                    compact: context
+                        .read<SettingsBloc>()
+                        .state
+                        .compactMenuMode,
+                    onPressed: _ensureSearchTabIsActive,
+                  ),
+                ),
               ],
-              center: ValueListenableBuilder(
-                valueListenable: widget.tab.currentTitle,
-                builder: (context, value, child) {
-                  String displayTitle = value;
-                  if (value.isNotEmpty &&
-                      !value.contains(widget.tab.book.title)) {
-                    displayTitle = "${widget.tab.book.title}, $value";
-                  }
-                  return SelectionArea(
-                    child: Text(
-                      displayTitle,
-                      style: const TextStyle(fontSize: 17),
-                      textAlign: TextAlign.end,
-                    ),
-                  );
-                },
-              ),
+              center: _buildPdfCenter(context),
               trailingItems: [
                 AppTopBarItem(
                   widget: Row(
@@ -3675,7 +3677,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   List<ActionButtonData> _buildDisplayOrderPdfActions(BuildContext context) {
-    final navigationActions = _buildNavigationActions();
+    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return [
       ActionButtonData(
         widget: _buildTextButton(
@@ -3693,8 +3695,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 insertAdjacent: true,
               ),
             ),
-        compact: false,
-        visual: ActionButtonVisual.iconButton,
+        compact: isCompact,
       ),
       ActionButtonData(
         widget: BlocBuilder<PdfBookBloc, PdfBookState>(
@@ -3712,36 +3713,27 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         icon: FluentIcons.zoom_in_24_regular,
         tooltip: 'הגדל את התצוגה',
         onPressed: _zoomIn,
-        compact: false,
-        visual: ActionButtonVisual.iconButton,
+        compact: isCompact,
       ),
       ActionButtonData.simple(
         icon: FluentIcons.zoom_out_24_regular,
         tooltip: 'הקטן את התצוגה',
         onPressed: _zoomOut,
-        compact: false,
-        visual: ActionButtonVisual.iconButton,
+        compact: isCompact,
       ),
-      ActionButtonData.simple(
-        key: widget.enableTourTargets ? pdfBookSearchTourTargetKey : null,
-        icon: FluentIcons.search_24_regular,
-        tooltip: 'חיפוש',
-        onPressed: _ensureSearchTabIsActive,
-        compact: false,
-        visual: ActionButtonVisual.iconButton,
-      ),
-      if (!widget.isInCombinedView) ...navigationActions,
     ];
   }
 
   List<ActionButtonData> _buildAlwaysInMenuPdfActions(BuildContext context) {
-    final navigationActions = _buildNavigationActions();
+    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
+    final navigationActions = _buildNavigationActions(context);
     return [
       if (widget.isInCombinedView) ...navigationActions,
       ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.note_24_regular),
+        widget: ToolbarActionButton(
           tooltip: 'הצג הערות אישיות',
+          icon: FluentIcons.note_24_regular,
+          compact: isCompact,
           onPressed: _openPersonalNotesPane,
         ),
         icon: FluentIcons.note_24_regular,
@@ -3752,14 +3744,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         icon: FluentIcons.note_add_24_regular,
         tooltip: 'הוסף הערה לעמוד זה',
         onPressed: () => _handleAddNotePress(context),
-        compact: false,
-        visual: ActionButtonVisual.iconButton,
+        compact: isCompact,
       ),
       ActionButtonData(
-        widget: IconButton(
+        widget: ToolbarActionButton(
           key: widget.enableTourTargets ? pdfBookBookmarkTourTargetKey : null,
-          icon: const Icon(FluentIcons.bookmark_add_24_regular),
           tooltip: 'הוסף סימניה',
+          icon: FluentIcons.bookmark_add_24_regular,
+          compact: isCompact,
           onPressed: () => _handleBookmarkPress(context),
         ),
         icon: FluentIcons.bookmark_add_24_regular,
@@ -3767,9 +3759,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onPressed: () => _handleBookmarkPress(context),
       ),
       ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.bookmark_multiple_24_regular),
+        widget: ToolbarActionButton(
           tooltip: 'סימניות בספר זה',
+          icon: FluentIcons.bookmark_multiple_24_regular,
+          compact: isCompact,
           onPressed: () => _showBookmarksForCurrentBook(context),
         ),
         icon: FluentIcons.bookmark_multiple_24_regular,
@@ -3782,8 +3775,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           icon: FluentIcons.arrow_reset_24_regular,
           tooltip: 'אפס הגדרות ספר זה',
           onPressed: _resetPerBookSettings,
-          compact: false,
-          visual: ActionButtonVisual.iconButton,
+          compact: isCompact,
         ),
       if (!widget.isInCombinedView)
         ActionButtonData.simple(
@@ -3791,8 +3783,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           icon: FluentIcons.print_24_regular,
           tooltip: 'הדפס',
           onPressed: () => _handlePrintPress(context),
-          compact: false,
-          visual: ActionButtonVisual.iconButton,
+          compact: isCompact,
         ),
       // העתק קישור ישיר
       ActionButtonData(
@@ -3852,51 +3843,121 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     ];
   }
 
-  List<ActionButtonData> _buildNavigationActions() {
+  /// כפתורי ניווט לתפריט overflow — בשימוש בתצוגה משולבת (isInCombinedView) בלבד.
+  /// בתצוגה רגילה הניווט מוצג במרכז הסרגל דרך [_buildPdfCenter].
+  List<ActionButtonData> _buildNavigationActions(BuildContext context) {
+    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return buildBookViewNavigationActions(
       firstAction: buildBookViewFirstNavigationAction(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.arrow_previous_24_filled),
+        widget: ToolbarActionButton(
           tooltip: 'תחילת הספר (CTRL + HOME)',
+          icon: FluentIcons.arrow_previous_24_filled,
+          compact: isCompact,
           onPressed: () => _goToPageWithSpreadLock(1),
         ),
         tooltip: 'תחילת הספר (CTRL + HOME)',
         onPressed: () => _goToPageWithSpreadLock(1),
       ),
       previousAction: buildBookViewPreviousNavigationAction(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.chevron_left_24_regular),
+        widget: ToolbarActionButton(
           tooltip: 'הקודם',
+          icon: FluentIcons.chevron_left_24_regular,
+          compact: isCompact,
           onPressed: _goPreviousPage,
         ),
         tooltip: 'הקודם',
         onPressed: _goPreviousPage,
       ),
-      middleAction: ActionButtonData(
-        widget: PageNumberDisplay(controller: widget.tab.pdfViewerController),
-        icon: FluentIcons.text_font_24_regular,
-        tooltip: 'מספר עמוד',
-        onPressed: null,
-      ),
       nextAction: buildBookViewNextNavigationAction(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.chevron_right_24_regular),
+        widget: ToolbarActionButton(
           tooltip: 'הבא',
+          icon: FluentIcons.chevron_right_24_regular,
+          compact: isCompact,
           onPressed: _goNextPage,
         ),
         tooltip: 'הבא',
         onPressed: _goNextPage,
       ),
       lastAction: buildBookViewLastNavigationAction(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.arrow_next_24_filled),
+        widget: ToolbarActionButton(
           tooltip: 'סוף הספר (CTRL + END)',
+          icon: FluentIcons.arrow_next_24_filled,
+          compact: isCompact,
           onPressed: () =>
               _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
         ),
         tooltip: 'סוף הספר (CTRL + END)',
         onPressed: () =>
             _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
+      ),
+    );
+  }
+
+  /// אזור המרכז של הסרגל העליון — כותרת + כפתורי ניווט (בתצוגה רגילה).
+  /// בתצוגה משולבת: כותרת בלבד, ניווט עובר לתפריט overflow.
+  Widget _buildPdfCenter(BuildContext context) {
+    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
+
+    final title = ValueListenableBuilder<String>(
+      valueListenable: widget.tab.currentTitle,
+      builder: (context, value, child) {
+        String displayTitle = value;
+        if (value.isNotEmpty && !value.contains(widget.tab.book.title)) {
+          displayTitle = '${widget.tab.book.title}, $value';
+        }
+        return SelectionArea(
+          child: Text(
+            displayTitle,
+            style: AppTopBar.titleStyle(context),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+      },
+    );
+
+    if (widget.isInCombinedView) {
+      return title;
+    }
+
+    const gap = 4.0;
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ToolbarActionButton(
+            tooltip: 'תחילת הספר (CTRL + HOME)',
+            icon: FluentIcons.arrow_previous_24_filled,
+            compact: isCompact,
+            onPressed: () => _goToPageWithSpreadLock(1),
+          ),
+          ToolbarActionButton(
+            tooltip: 'הקודם',
+            icon: FluentIcons.chevron_left_24_regular,
+            compact: isCompact,
+            onPressed: _goPreviousPage,
+          ),
+          const SizedBox(width: gap),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 80, maxWidth: 340),
+            child: title,
+          ),
+          PageNumberDisplay(controller: widget.tab.pdfViewerController),
+          const SizedBox(width: gap),
+          ToolbarActionButton(
+            tooltip: 'הבא',
+            icon: FluentIcons.chevron_right_24_regular,
+            compact: isCompact,
+            onPressed: _goNextPage,
+          ),
+          ToolbarActionButton(
+            tooltip: 'סוף הספר (CTRL + END)',
+            icon: FluentIcons.arrow_next_24_filled,
+            compact: isCompact,
+            onPressed: () =>
+                _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
+          ),
+        ],
       ),
     );
   }
@@ -4074,13 +4135,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   Widget _buildTextButton(
       BuildContext context, PdfBook book, PdfViewerController controller) {
+    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return FutureBuilder(
       future: DataRepository.instance.library
           .then((library) => library.findBookByTitle(book.title, TextBook)),
       builder: (context, snapshot) => snapshot.hasData
-          ? IconButton(
-              icon: const Icon(FluentIcons.document_text_24_regular),
+          ? ToolbarActionButton(
               tooltip: 'פתח ספר במהדורת טקסט',
+              icon: FluentIcons.document_text_24_regular,
+              compact: isCompact,
               onPressed: () async {
                 final currentPage = controller.isReady
                     ? controller.pageNumber ?? 1
@@ -4102,17 +4165,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   Widget _buildLayoutModeDropdown(BuildContext context, PdfBookLoaded state) {
     final isBookViewMode = state.layoutMode == PdfLayoutMode.bookView;
+    final iconData = isBookViewMode
+        ? FluentIcons.book_open_24_regular
+        : FluentIcons.book_24_regular;
 
-    return PopupMenuButton<PdfLayoutMode>(
+    return AppPopupMenuButton<PdfLayoutMode>(
       tooltip: 'בחר מצב תצוגה',
+      iconData: iconData,
       icon: Transform.scale(
         scaleX: isBookViewMode ? 1.0 : -1.0,
-        child: Icon(
-          isBookViewMode
-              ? FluentIcons.book_open_24_regular
-              : FluentIcons.book_24_regular,
-        ),
+        child: Icon(iconData),
       ),
+      selected: isBookViewMode,
       position: PopupMenuPosition.under,
       onSelected: (layoutMode) {
         _lockedSpreadStartPage = null;

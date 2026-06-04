@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
+import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
@@ -372,11 +374,13 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                   AppTopBar(
                     leadingItems: [
                       AppTopBarItem(
-                        widget: IconButton(
+                        widget: ToolbarActionButton(
                           tooltip: 'הצג/הסתר עץ ספרים',
-                          icon: const Icon(
-                            FluentIcons.line_horizontal_3_20_regular,
-                          ),
+                          icon: FluentIcons.line_horizontal_3_20_regular,
+                          compact: context
+                              .read<SettingsBloc>()
+                              .state
+                              .compactMenuMode,
                           onPressed: () {
                             widget.tab.isLeftPaneOpen.value =
                                 !widget.tab.isLeftPaneOpen.value;
@@ -414,15 +418,17 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              IconButton(
-                                icon: Icon(
-                                  _showEditPanel
-                                      ? FluentIcons.chevron_up_24_regular
-                                      : FluentIcons.edit_24_regular,
-                                  size: 20,
-                                ),
+                              ToolbarActionButton(
                                 tooltip:
                                     _showEditPanel ? 'סגור עריכה' : 'ערוך חיפוש',
+                                icon: _showEditPanel
+                                    ? FluentIcons.chevron_up_24_regular
+                                    : FluentIcons.edit_24_regular,
+                                selected: _showEditPanel,
+                                compact: context
+                                    .read<SettingsBloc>()
+                                    .state
+                                    .compactMenuMode,
                                 onPressed: () {
                                   setState(() {
                                     _showEditPanel = !_showEditPanel;

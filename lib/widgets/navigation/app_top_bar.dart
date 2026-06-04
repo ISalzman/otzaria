@@ -69,6 +69,24 @@ class AppTopBar extends StatefulWidget {
   static double barHeight(bool isCompact) =>
       isCompact ? _kCompactHeight : _kTouchHeight;
 
+  /// סגנון טקסט אחיד לכותרת הסרגל העליון — ישמש בכל מסכי הקריאה.
+  static TextStyle titleStyle(BuildContext context) {
+    return TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      color: Theme.of(context).colorScheme.onSurface,
+    );
+  }
+
+  /// סגנון טקסט אחיד לכותרת משנה/מחבר בסרגל העליון.
+  static TextStyle subtitleStyle(BuildContext context) {
+    return TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w400,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+  }
+
   @override
   State<AppTopBar> createState() => _AppTopBarState();
 }
