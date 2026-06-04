@@ -65,6 +65,7 @@ import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dar
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
+import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 
 // קבועים למצבי תצוגה (למניעת magic strings)
 const String _viewModeSplit = 'split';
@@ -1195,8 +1196,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                       selectedLineForNote: _selectedLineForNote,
                     ),
                     child: Scaffold(
-                      appBar: _buildAppBar(context, state, wideScreen),
-                      body: _buildBody(context, state),
+                      body: Column(
+                        children: [
+                          _buildAppBar(context, state, wideScreen),
+                          Expanded(child: _buildBody(context, state)),
+                        ],
+                      ),
                     ),
                   );
                 }
@@ -1211,35 +1216,27 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-  PreferredSizeWidget _buildAppBar(
+  Widget _buildAppBar(
     BuildContext context,
     TextBookLoaded state,
     bool wideScreen,
   ) {
-    return AppBar(
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-      shape: Border(
-        bottom: BorderSide(
-          color: Theme.of(context).colorScheme.outlineVariant,
-          width: 0.3,
+    return AppTopBar(
+      leadingItems: [
+        AppTopBarItem(widget: _buildMenuButton(context, state)),
+        if (state.showPageShapeView)
+          AppTopBarItem(
+              widget: _buildPageShapeSettingsButton(context, state)),
+      ],
+      center: _buildTitle(state),
+      trailingItems: [
+        AppTopBarItem(
+          widget: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: _buildActions(context, state, wideScreen),
+          ),
         ),
-      ),
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      centerTitle: false,
-      title: _buildTitle(state),
-      leadingWidth:
-          state.showPageShapeView ? 96 : null, // רוחב מורחב לשני כפתורים
-      leading: state.showPageShapeView
-          ? Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildMenuButton(context, state),
-                _buildPageShapeSettingsButton(context, state),
-              ],
-            )
-          : _buildMenuButton(context, state),
-      actions: _buildActions(context, state, wideScreen),
+      ],
     );
   }
 

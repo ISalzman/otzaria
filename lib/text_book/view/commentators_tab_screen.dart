@@ -21,6 +21,7 @@ import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
+import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -549,26 +550,34 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                 _selectedVerseIdx, state.content.length);
 
             return Scaffold(
-              appBar: _buildAppBar(context, state, chapters),
-              body: Stack(
+              body: Column(
                 children: [
-                  AdaptiveSidePane(
-                    isOpen: _navPaneOpen || _pinLeftPane,
-                    onClose: () {
-                      if (!_pinLeftPane) setState(() => _navPaneOpen = false);
-                    },
-                    alignment: AlignmentDirectional.centerEnd,
-                    paneWidth: 320,
-                    minMainContentWidth: 400,
-                    mainContent: _buildCommentaryMainContent(
-                      context,
-                      state,
-                      effectiveIndexes,
-                    ),
-                    paneContent: _buildNavPanel(
-                      context,
-                      state: state,
-                      chapters: chapters,
+                  _buildAppBar(context, state, chapters),
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        AdaptiveSidePane(
+                          isOpen: _navPaneOpen || _pinLeftPane,
+                          onClose: () {
+                            if (!_pinLeftPane) {
+                              setState(() => _navPaneOpen = false);
+                            }
+                          },
+                          alignment: AlignmentDirectional.centerEnd,
+                          paneWidth: 320,
+                          minMainContentWidth: 400,
+                          mainContent: _buildCommentaryMainContent(
+                            context,
+                            state,
+                            effectiveIndexes,
+                          ),
+                          paneContent: _buildNavPanel(
+                            context,
+                            state: state,
+                            chapters: chapters,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -811,36 +820,30 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   // ── AppBar ─────────────────────────────────────────────────────────────────
 
-  PreferredSizeWidget _buildAppBar(
+  Widget _buildAppBar(
     BuildContext context,
     TextBookLoaded state,
     List<TocEntry> chapters,
   ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return AppBar(
-      backgroundColor: colorScheme.surfaceContainer,
-      shape: Border(
-        bottom: BorderSide(
-          color: colorScheme.outlineVariant,
-          width: 0.3,
+    return AppTopBar(
+      leadingItems: [
+        AppTopBarItem(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.navigation_24_regular, size: 20),
+            tooltip: 'ניווט',
+            onPressed: () => setState(() => _navPaneOpen = !_navPaneOpen),
+          ),
         ),
-      ),
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      centerTitle: false,
-      leading: IconButton(
-        icon: const Icon(FluentIcons.navigation_24_regular, size: 20),
-        tooltip: 'ניווט',
-        onPressed: () => setState(() => _navPaneOpen = !_navPaneOpen),
-      ),
-      title: Text(
+      ],
+      center: Text(
         'מפרשים על ${state.book.title}',
         style: const TextStyle(fontSize: 16),
         overflow: TextOverflow.ellipsis,
         textDirection: TextDirection.rtl,
       ),
-      actions: [
-        ResponsiveActionBar(
+      trailingItems: [
+        AppTopBarItem(
+          widget: ResponsiveActionBar(
           overflowMenuOffset: const Offset(0, 8),
           maxVisibleButtons: 999,
           actions: [
@@ -1031,6 +1034,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               onPressed: () => _navigateToNextChapter(chapters),
             ),
           ],
+        ),
         ),
       ],
     );

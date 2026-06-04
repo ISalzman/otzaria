@@ -61,6 +61,7 @@ import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/utils/link_helpers.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 
 final GlobalKey pdfBookNavigationTourTargetKey = GlobalKey(
   debugLabel: 'pdf_book_navigation_tour_target',
@@ -2967,46 +2968,51 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             _zoomOut,
       },
       child: Scaffold(
-        appBar: AppBar(
-          centerTitle: false,
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-          shape: Border(
-            bottom: BorderSide(
-              color: Theme.of(context).colorScheme.outlineVariant,
-              width: 0.3,
-            ),
-          ),
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          title: ValueListenableBuilder(
-            valueListenable: widget.tab.currentTitle,
-            builder: (context, value, child) {
-              String displayTitle = value;
-              if (value.isNotEmpty && !value.contains(widget.tab.book.title)) {
-                displayTitle = "${widget.tab.book.title}, $value";
-              }
-              return SelectionArea(
-                child: Text(
-                  displayTitle,
-                  style: const TextStyle(fontSize: 17),
-                  textAlign: TextAlign.end,
+        body: Column(
+          children: [
+            AppTopBar(
+              leadingItems: [
+                AppTopBarItem(
+                  widget: IconButton(
+                    key: widget.enableTourTargets
+                        ? pdfBookNavigationTourTargetKey
+                        : null,
+                    icon: const Icon(FluentIcons.navigation_24_regular),
+                    tooltip: 'חיפוש וניווט',
+                    onPressed: () {
+                      _setLeftPaneVisibility(!widget.tab.showLeftPane.value);
+                    },
+                  ),
                 ),
-              );
-            },
-          ),
-          leading: IconButton(
-            key: widget.enableTourTargets
-                ? pdfBookNavigationTourTargetKey
-                : null,
-            icon: const Icon(FluentIcons.navigation_24_regular),
-            tooltip: 'חיפוש וניווט',
-            onPressed: () {
-              _setLeftPaneVisibility(!widget.tab.showLeftPane.value);
-            },
-          ),
-          actions: _buildPdfActions(context, wideScreen),
-        ),
-        body: BlocBuilder<PdfBookBloc, PdfBookState>(
+              ],
+              center: ValueListenableBuilder(
+                valueListenable: widget.tab.currentTitle,
+                builder: (context, value, child) {
+                  String displayTitle = value;
+                  if (value.isNotEmpty &&
+                      !value.contains(widget.tab.book.title)) {
+                    displayTitle = "${widget.tab.book.title}, $value";
+                  }
+                  return SelectionArea(
+                    child: Text(
+                      displayTitle,
+                      style: const TextStyle(fontSize: 17),
+                      textAlign: TextAlign.end,
+                    ),
+                  );
+                },
+              ),
+              trailingItems: [
+                AppTopBarItem(
+                  widget: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: _buildPdfActions(context, wideScreen),
+                  ),
+                ),
+              ],
+            ),
+            Expanded(
+              child: BlocBuilder<PdfBookBloc, PdfBookState>(
           buildWhen: (prev, curr) {
             if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
               return prev.showLeftPane != curr.showLeftPane ||
@@ -3066,6 +3072,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               minMainContentWidth: 200,
             );
           },
+        ),
+            ),
+          ],
         ),
       ),
     );
