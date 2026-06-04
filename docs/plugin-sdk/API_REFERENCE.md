@@ -202,11 +202,32 @@ const { data } = await Otzaria.call('library.getBookToc', {
 
 שליפת תוכן מ-URL מותר (ללא מעקב אחר redirects). מחזירה את גוף התשובה כטקסט.
 
+**חשוב — מתי להשתמש בזה במקום `fetch()` רגיל:** קריאת `fetch()` ישירה מתוך
+ה-WebView של התוסף כפופה ל-CORS (ה-origin הוא `null` כי הדף נטען מ-`file://`).
+שרת שלא מחזיר `Access-Control-Allow-Origin` יחסום את הבקשה. `network.fetch`
+רץ בצד אוצריא (Flutter) ואינו כפוף ל-CORS — לכן לקריאות ל-APIs חיצוניים
+(במיוחד `POST`) יש להשתמש בו ולא ב-`fetch()` ישיר.
+
+פרמטרים: `url` (חובה), `method` (ברירת מחדל `GET`), `headers` (אובייקט,
+אופציונלי), `body` (מחרוזת, אופציונלי).
+
 ```javascript
+// GET פשוט
 const { data } = await Otzaria.call('network.fetch', {
   url: 'https://api.github.com/repos/Owner/Repo/releases/latest'
 });
-// { status: 200, body: "..." }
+// { status: 200, ok: true, body: "..." }
+
+// POST עם גוף JSON (למשל קריאה ל-API חיצוני)
+const res = await Otzaria.call('network.fetch', {
+  url: 'https://api.example.com/endpoint',
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json;charset=UTF-8' },
+  body: JSON.stringify({ key: 'value' })
+});
+if (res.success && res.data.ok) {
+  const parsed = JSON.parse(res.data.body);
+}
 ```
 
 ### `network.download`

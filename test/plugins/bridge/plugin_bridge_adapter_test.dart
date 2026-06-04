@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:mockito/mockito.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
@@ -17,6 +19,7 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -866,6 +869,111 @@ void main() {
           ),
         ),
       );
+    });
+  });
+
+  group('PluginBridgeAdapter.network.fetch (HTTP contract)', () {
+    late _StubPluginRegistryRepository pluginRegistryRepository;
+
+    PluginBridgeAdapter buildAdapter(PluginNetworkFetchService fetchService) {
+      return PluginBridgeAdapter(
+        _buildInstalledPlugin(
+          permissions: const ['network.access'],
+          networkEnabled: true,
+          networkAllowlist: const ['https://nakdan.dicta.org.il/api'],
+        ),
+        dependencies: PluginBridgeDependencies(
+          historyBloc: _MockHistoryBloc(),
+          tabsBloc: _StubTabsBloc(),
+          navigationBloc: _MockNavigationBloc(),
+          calendarCubit: _StubCalendarCubit(
+            _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+          ),
+          workspaceBloc: _MockWorkspaceBloc(),
+          searchRepository: _MockSearchRepository(),
+          personalNotesRepository: _MockPersonalNotesRepository(),
+          bookOpenCoordinator: _MockBookOpenCoordinator(),
+          themePayloadBuilder: () => <String, dynamic>{},
+          showConfirmDialog: ({required title, required content}) async => true,
+          showWarningDialog: ({
+            required title,
+            required content,
+            required subtitle,
+          }) async =>
+              true,
+        ),
+        pluginRepository: pluginRegistryRepository,
+        networkFetchService: fetchService,
+      );
+    }
+
+    setUp(() {
+      pluginRegistryRepository = _StubPluginRegistryRepository()
+        ..permissionGrant = true;
+    });
+
+    test('POST מעביר method/headers/body ומחזיר {status, ok, body}', () async {
+      late http.Request captured;
+      final fetchService = PluginNetworkFetchService(
+        client: MockClient((req) async {
+          captured = req;
+          return http.Response('{"data":[]}', 200);
+        }),
+      );
+      final adapter = buildAdapter(fetchService);
+
+      final result = await adapter.execute('network', 'fetch', const {
+        'url': 'https://nakdan.dicta.org.il/api',
+        'method': 'POST',
+        'headers': {'Content-Type': 'application/json;charset=UTF-8'},
+        'body': '{"task":"nakdan"}',
+      }) as Map<String, dynamic>;
+
+      expect(captured.method, 'POST');
+      expect(captured.body, '{"task":"nakdan"}');
+      expect(
+          captured.headers['content-type'], 'application/json;charset=UTF-8');
+      expect(result['status'], 200);
+      expect(result['ok'], isTrue);
+      expect(result['body'], '{"data":[]}');
+    });
+
+    test('סטטוס שאינו 2xx מוחזר עם ok=false', () async {
+      final fetchService = PluginNetworkFetchService(
+        client: MockClient((req) async => http.Response('err', 500)),
+      );
+      final adapter = buildAdapter(fetchService);
+
+      final result = await adapter.execute('network', 'fetch', const {
+        'url': 'https://nakdan.dicta.org.il/api',
+      }) as Map<String, dynamic>;
+
+      expect(result['status'], 500);
+      expect(result['ok'], isFalse);
+    });
+
+    test('method לא תקין נדחה לפני ביצוע הבקשה', () async {
+      var hit = false;
+      final fetchService = PluginNetworkFetchService(
+        client: MockClient((req) async {
+          hit = true;
+          return http.Response('', 200);
+        }),
+      );
+      final adapter = buildAdapter(fetchService);
+
+      await expectLater(
+        () => adapter.execute('network', 'fetch', const {
+          'url': 'https://nakdan.dicta.org.il/api',
+          'method': 'POST DELETE',
+        }),
+        throwsA(isA<Exception>().having(
+          (e) => e.toString(),
+          'message',
+          contains('invalid method'),
+        )),
+      );
+      expect(hit, isFalse);
     });
   });
 }
