@@ -43,30 +43,21 @@
 
 
 <!-- TABLE OF CONTENTS -->
-<details>
-  <summary>תוכן עניינים</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">אודות הפרויקט</a>
-      <ul>
-        <li><a href="#built-with">נבנה באמצעות</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">תחילת העבודה</a>
-      <ul>
-        <li><a href="#prerequisites">דרישות מקדימות</a></li>
-        <li><a href="#installation">התקנה</a></li>
-      </ul>
-    </li>
-    <li><a href="#roadmap">מפת דרכים</a></li>
-    <li><a href="#contributing">תרומה לפרויקט</a></li>
-    <li><a href="#license">רישיון</a></li>
-    <li><a href="#contact">יצירת קשר</a></li>
-    <li><a href="#acknowledgments">תודות</a></li>
-  </ol>
-</details>
+---
 
+## תוכן עניינים
+1. [אודות הפרויקט](#about-the-project)
+   - [נבנה באמצעות](#built-with)
+2. [תחילת העבודה](#getting-started)
+   - [דרישות מקדימות](#prerequisites)
+   - [התקנה](#installation)
+3. [מפת דרכים](#roadmap)
+4. [תרומה לפרויקט](#contributing)
+5. [רישיון](#license)
+6. [יצירת קשר](#contact)
+7. [תודות](#acknowledgments)
+
+---
 
 
 <!-- ABOUT THE PROJECT -->
@@ -92,8 +83,7 @@
 
 אני מקווה שעבודתי תסייע לציבור התורני ללמוד בקלות וביעילות בכל זמן ובכל מקום.
 
-<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
-
+([⇧](#readme-top))
 
 ### נבנה באמצעות
 
@@ -106,7 +96,7 @@
 
 בנוסף, זוהי מסגרת רב-פלטפורמית.
 
-<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
+([⇧](#readme-top))
 
 
 <!-- GETTING STARTED -->
@@ -168,7 +158,7 @@
 
 
 
-<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
+([⇧](#readme-top))
 
 
 <!-- ROADMAP -->
@@ -180,7 +170,7 @@
 
 ראו את [הבעיות הפתוחות](https://github.com/otzaria/otzaria/issues) לרשימה מלאה של תכונות מוצעות (ובעיות ידועות).
 
-<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
+([⇧](#readme-top))
 
 
 <!-- CONTRIBUTING -->
@@ -212,7 +202,7 @@ $env:CMAKE_TLS_VERIFY="0"
 flutter build windows
 ```
 
-<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
+([⇧](#readme-top))
 
 
 <!-- LICENSE -->
@@ -228,7 +218,7 @@ flutter build windows
 
 לטקסטים יש רישיונות פתוחים שונים. ניתן לבדוק באתר של ספריא למידע נוסף על כך.
 
-<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
+([⇧](#readme-top))
 
 
 <!-- CONTACT -->
@@ -238,23 +228,19 @@ flutter build windows
 
 קישור לפרויקט: [https://github.com/otzaria/otzaria](https://github.com/otzaria/otzaria)
 
-<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
+([⇧](#readme-top))
 
 
 <!-- ACKNOWLEDGMENTS -->
 ## תודות
 
 תוכנה זו נוצרה והוקדשה על ידי: [sivan22](https://github.com/Sivan22), [ר. נבון (השקעה עצומה במעבר ל-SQLite)](https://github.com/rachelGrayover), [Y.PL.](https://github.com/Y-PLONI), [YOSEFTT](https://github.com/YOSEFTT), [zevisvei](https://github.com/zevisvei), [evel-avalim](https://github.com/evel-avalim), [userbot](https://github.com/userbot000), [mosh-dvd](https://github.com/mosh-dvd), [NHLOCAL (פיתוח "שמור וזכור")](https://github.com/NHLOCAL/Shamor-Zachor).
-<br>
-<br>
 
 
 תודה מיוחדת ל-**[אליהו גמבש](https://github.com/kdroidFilter)** על העבודה העצומה בהמרת נתוני ספריא ל-SQLite.
-<br>
-<br>
 
 
-הפרויקט התאפשר בזכות הפרויקט המדהים של ספריא. 
+הפרויקט התאפשר בזכות הפרויקט המדהים של ספריא.
 <br>
 ובזכות עמותת דיקטה, שבאמצעותה נוספו ספרים חשובים רבים.
 <br>
@@ -276,7 +262,7 @@ flutter build windows
 
 עבור עדכונים אוטומטיים, השתמשתי ב-[updat](https://pub.dev/packages/updat).
 
-<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
+([⇧](#readme-top))
 
 </div>
 
@@ -293,21 +279,7 @@ flutter build windows
 [Github-downloads]: https://img.shields.io/github/downloads/otzaria/otzaria/total.svg?style=for-the-badge
 [license-shield]: https://img.shields.io/github/license/otzaria/otzaria.svg?style=for-the-badge
 [license-url]: https://github.com/otzaria/otzaria/blob/master/LICENSE.txt
-[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[linkedin-url]: https://linkedin.com/in/othneildrew
 [dart]: https://img.shields.io/badge/dart-000000?style=for-the-badge&logo=dart&logoColor=61DAFB
 [Dart-url]: https://dart.dev/
 [Flutter]: https://img.shields.io/badge/Flutter-20232A?style=for-the-badge&logo=flutter&logoColor=61DAFB
 [Flutter-url]: https://flutter.dev/
-[Vue.js]: https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D
-[Vue-url]: https://vuejs.org/
-[Angular.io]: https://img.shields.io/badge/Angular-DD0031?style=for-the-badge&logo=angular&logoColor=white
-[Angular-url]: https://angular.io/
-[Svelte.dev]: https://img.shields.io/badge/Svelte-4A4A55?style=for-the-badge&logo=svelte&logoColor=FF3E00
-[Svelte-url]: https://svelte.dev/
-[Laravel.com]: https://img.shields.io/badge/Laravel-FF2D20?style=for-the-badge&logo=laravel&logoColor=white
-[Laravel-url]: https://laravel.com
-[Bootstrap.com]: https://img.shields.io/badge/Bootstrap-563D7C?style=for-the-badge&logo=bootstrap&logoColor=white
-[Bootstrap-url]: https://getbootstrap.com
-[JQuery.com]: https://img.shields.io/badge/jQuery-0769AD?style=for-the-badge&logo=jquery&logoColor=white
-[JQuery-url]: https://jquery.com
