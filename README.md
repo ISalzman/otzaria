@@ -37,8 +37,6 @@
     <a href="https://github.com/otzaria/otzaria/issues/new?labels=bug&template=bug-report---.md">דיווח על באג</a>
     ·
     <a href="https://github.com/otzaria/otzaria/issues/new?labels=enhancement&template=feature-request---.md">בקשת תכונה</a>
-    ·
-    <a href="https://github.com/otzaria/otzaria/wiki">מדריך למשתמש</a>
   </p>
 </div>
 
@@ -61,7 +59,6 @@
         <li><a href="#installation">התקנה</a></li>
       </ul>
     </li>
-    <li><a href="#usage">שימוש</a></li>
     <li><a href="#roadmap">מפת דרכים</a></li>
     <li><a href="#contributing">תרומה לפרויקט</a></li>
     <li><a href="#license">רישיון</a></li>
@@ -74,8 +71,6 @@
 
 <!-- ABOUT THE PROJECT -->
 ## אודות הפרויקט
-
-![alt text](image.png)
 
 הרגשתי בחסרונה של אפליקציה בקוד פתוח לספרייה היהודית, עבור מחשבים.
 
@@ -172,14 +167,6 @@
 * לחלופין, ניתן להוריד את הספרייה ידנית מ-[כאן](https://github.com/otzaria/otzaria/releases), לחלץ אותה ולספק את הנתיב שלה לאפליקציה.
 
 
-
-<p align="left">(<a href="#readme-top">&#8679;</a>)</p>
-
-
-<!-- USAGE EXAMPLES -->
-## שימוש
-
-לתיעוד, ראו את מדור ה-Wiki.
 
 <p align="left">(<a href="#readme-top">&#8679;</a>)</p>
 
