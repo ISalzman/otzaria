@@ -754,8 +754,9 @@ class ReferenceBooksCache {
 
   static Future<List<(String, String, int)>> _parsePdfOutlineEntries(
       String filePath) async {
+    PdfDocument? doc;
     try {
-      final doc = await PdfDocument.openFile(filePath);
+      doc = await PdfDocument.openFile(filePath);
       final outline = await doc.loadOutline();
       final entries = <(String, String, int)>[];
       _collectOutlineEntries(outline, entries, maxDepth: 2, currentDepth: 0);
@@ -766,6 +767,10 @@ class ReferenceBooksCache {
       debugPrint(
           '[ReferenceBooksCache] Failed to parse outline for $filePath: $e');
       return const [];
+    } finally {
+      // סגירת המסמך משחררת את ה-pdfrx worker. בלי זה הוא נשאר פתוח עד GC
+      // ומציף את ה-worker היחיד (פוגע בפעולות pdfrx אחרות כמו תצוגת הדפסה).
+      await doc?.dispose();
     }
   }
 

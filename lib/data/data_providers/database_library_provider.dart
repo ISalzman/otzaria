@@ -1600,8 +1600,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   /// Parses PDF outline and converts to TocEntry format.
   Future<List<TocEntry>> _parsePdfOutline(File file) async {
+    PdfDocument? document;
     try {
-      final document = await PdfDocument.openFile(file.path);
+      document = await PdfDocument.openFile(file.path);
       final outline = await document.loadOutline();
 
       if (outline.isEmpty) {
@@ -1615,6 +1616,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
     } catch (e) {
       debugPrint('⚠️ Failed to parse PDF outline: $e');
       return [];
+    } finally {
+      // סגירת המסמך משחררת את ה-pdfrx worker היחיד (אחרת נשאר פתוח עד GC).
+      await document?.dispose();
     }
   }
 

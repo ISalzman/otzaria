@@ -423,8 +423,9 @@ class DatabaseGenerator {
 
   /// Processes PDF outline and inserts TOC entries into the database.
   Future<void> _processPdfOutline(String bookPath, int bookId) async {
+    PdfDocument? document;
     try {
-      final document = await PdfDocument.openFile(bookPath);
+      document = await PdfDocument.openFile(bookPath);
       final outline = await document.loadOutline();
 
       if (outline.isEmpty) {
@@ -438,6 +439,9 @@ class DatabaseGenerator {
       _log.info('Processed PDF outline: $bookPath');
     } catch (e, stackTrace) {
       _log.warning('Failed to process PDF outline: $bookPath', e, stackTrace);
+    } finally {
+      // סגירת המסמך משחררת את ה-pdfrx worker היחיד (אחרת נשאר פתוח עד GC).
+      await document?.dispose();
     }
   }
 
