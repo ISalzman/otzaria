@@ -227,6 +227,57 @@ void main() {
       expect(hebrewBook.externalLibraryId, 'hb:77');
     });
 
+    test('getHebrewBooksByIds מחזיר רק את המזהים המבוקשים', () async {
+      final db = sqlite3.open(repository.databasePath);
+      db.execute('''
+            CREATE TABLE hebrew_books (
+              id_book INTEGER PRIMARY KEY,
+              title TEXT,
+              author TEXT,
+              printing_place TEXT,
+              printing_year TEXT,
+              pub_date INTEGER,
+              pages INTEGER,
+              tags TEXT
+            )
+          ''');
+      for (final id in [1, 2, 3, 4]) {
+        db.execute(
+          'INSERT INTO hebrew_books (id_book, title, author, printing_place, printing_year, pub_date, pages, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [id, 'ספר $id', 'מחבר', 'מקום', 'שנה', 1900, 10, '[]'],
+        );
+      }
+      db.close();
+
+      final books = await repository.getHebrewBooksByIds([1, 3]);
+
+      expect(books, hasLength(2));
+      expect(
+        books.map((b) => b.id).toSet(),
+        {1, 3},
+      );
+      expect(books.map((b) => b.externalLibraryId).toSet(), {'hb:1', 'hb:3'});
+    });
+
+    test('getHebrewBooksByIds מחזיר רשימה ריקה לקבוצת מזהים ריקה', () async {
+      final db = sqlite3.open(repository.databasePath);
+      db.execute('''
+            CREATE TABLE hebrew_books (
+              id_book INTEGER PRIMARY KEY,
+              title TEXT,
+              author TEXT,
+              printing_place TEXT,
+              printing_year TEXT,
+              pub_date INTEGER,
+              pages INTEGER,
+              tags TEXT
+            )
+          ''');
+      db.close();
+
+      expect(await repository.getHebrewBooksByIds(const []), isEmpty);
+    });
+
     test('getOtzarBooks מחזיר רשימה ריקה כשה-DB לא קיים', () async {
       expect(await repository.databaseExists(), isFalse);
       expect(await repository.getOtzarBooks(), isEmpty);
