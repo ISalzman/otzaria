@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_colors.dart';
 
 ColorScheme _cs(BuildContext context) => Theme.of(context).colorScheme;
 
@@ -14,7 +15,7 @@ class AppSurfaces {
   /// נקודת ה-override היחידה לרקע מסך העיון (טקסט, PDF, חיפוש).
   /// הכנה לערכות נושא עתידיות שייתכן וירצו להפריד בין רקע מסך עיון לרקע מסכי לוח.
   static Color readerBackground(BuildContext context) =>
-      _cs(context).surface;
+      _cs(context).isDark ? AppColors.darkScaffold : _cs(context).surface;
 
   /// רקע מסכי לוח — הגדרות, ספריה, כלים וכל מסך משני
   ///

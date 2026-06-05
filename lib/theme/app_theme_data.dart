@@ -35,98 +35,20 @@ class AppThemeData {
 
   // ── Light Theme ──────────────────────────────────────────────────────────
   static ThemeData light(
-    ColorScheme colorScheme, {
+    ColorScheme cs, {
     required bool compactMenuMode,
   }) {
     final compactMenus = _usesCompactMenus(compactMenuMode);
-    final menuBackground = _menuBackground(colorScheme);
+    final menuBackground = _menuBackground(cs);
     final menuMetrics = AppMenuMetrics.create(compactMenus: compactMenus);
 
     return ThemeData(
       useMaterial3: true,
       visualDensity: VisualDensity.adaptivePlatformDensity,
       fontFamily: 'Roboto',
-      colorScheme: colorScheme,
+      colorScheme: cs,
       textTheme: const TextTheme(
         bodyMedium: TextStyle(fontSize: 18.0, fontFamily: 'candara'),
-      ),
-      iconButtonTheme: _iconButtonTheme(colorScheme),
-      filledButtonTheme: _filledButtonTheme(colorScheme),
-      textButtonTheme: _textButtonTheme(colorScheme),
-      outlinedButtonTheme: _outlinedButtonTheme(colorScheme),
-      tabBarTheme: _tabBarTheme(colorScheme),
-      dropdownMenuTheme: _dropdownMenuTheme(colorScheme, menuMetrics),
-      menuButtonTheme: _menuButtonTheme(colorScheme, menuMetrics),
-      popupMenuTheme: _popupMenuTheme(
-        colorScheme,
-        backgroundColor: menuBackground,
-        metrics: menuMetrics,
-      ),
-      menuTheme: _menuTheme(
-        colorScheme,
-        backgroundColor: menuBackground,
-        metrics: menuMetrics,
-      ),
-      extensions: [menuMetrics],
-    ).copyWith(
-      dialogTheme: DialogThemeData(
-        barrierColor: AppColors.dialogBarrier,
-        backgroundColor: colorScheme.surfaceContainerHigh,
-      ),
-    );
-  }
-
-  // ── Dark Theme ───────────────────────────────────────────────────────────
-  static ThemeData dark(
-    Color darkSeedColor, {
-    required bool compactMenuMode,
-  }) {
-    final cs = ColorScheme.fromSeed(
-      seedColor: darkSeedColor,
-      brightness: Brightness.dark,
-    ).copyWith(
-      surface: AppColors.darkScaffold,
-      surfaceContainer: AppColors.darkCard,
-      onSurface: AppColors.darkOnSurface,
-      outline: AppColors.darkOutline,
-    );
-    final compactMenus = _usesCompactMenus(compactMenuMode);
-    final menuBackground = _menuBackground(cs);
-    final menuMetrics = AppMenuMetrics.create(compactMenus: compactMenus);
-
-    return ThemeData.dark(useMaterial3: true).copyWith(
-      scaffoldBackgroundColor: AppColors.darkScaffold,
-      cardColor: AppColors.darkCard,
-      colorScheme: cs,
-      textTheme: ThemeData.dark()
-          .textTheme
-          .apply(
-            fontFamily: 'Roboto',
-            bodyColor: AppColors.darkOnSurface,
-            displayColor: AppColors.darkOnSurface,
-          )
-          .copyWith(
-            bodyMedium: const TextStyle(
-              fontSize: 18.0,
-              fontFamily: 'candara',
-              color: AppColors.darkOnSurface,
-            ),
-          ),
-      cardTheme: CardThemeData(
-        color: AppColors.darkCard,
-        elevation: AppTokens.elevation2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-          side: const BorderSide(color: AppColors.darkOutline, width: 1),
-        ),
-      ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.darkAppBar,
-        foregroundColor: AppColors.darkOnSurface,
-      ),
-      dialogTheme: DialogThemeData(
-        barrierColor: AppColors.dialogBarrier,
-        backgroundColor: cs.surfaceContainerHigh,
       ),
       iconButtonTheme: _iconButtonTheme(cs),
       filledButtonTheme: _filledButtonTheme(cs),
@@ -146,6 +68,57 @@ class AppThemeData {
         metrics: menuMetrics,
       ),
       extensions: [menuMetrics],
+    ).copyWith(
+      dialogTheme: DialogThemeData(
+        barrierColor: AppColors.dialogBarrier,
+        backgroundColor: cs.surfaceContainerHigh,
+      ),
+    );
+  }
+
+  // ── Dark Theme ───────────────────────────────────────────────────────────
+  static ThemeData dark(
+    ColorScheme cs, {
+    required bool compactMenuMode,
+  }) {
+    final compactMenus = _usesCompactMenus(compactMenuMode);
+    final menuBackground = _menuBackground(cs);
+    final menuMetrics = AppMenuMetrics.create(compactMenus: compactMenus);
+
+    return ThemeData(
+      useMaterial3: true,
+      visualDensity: VisualDensity.adaptivePlatformDensity,
+      fontFamily: 'Roboto',
+      colorScheme: cs,
+      textTheme: const TextTheme(
+        bodyMedium: TextStyle(
+          fontSize: 18.0,
+          fontFamily: 'candara',
+        ),
+      ),
+      iconButtonTheme: _iconButtonTheme(cs),
+      filledButtonTheme: _filledButtonTheme(cs),
+      textButtonTheme: _textButtonTheme(cs),
+      outlinedButtonTheme: _outlinedButtonTheme(cs),
+      tabBarTheme: _tabBarTheme(cs),
+      dropdownMenuTheme: _dropdownMenuTheme(cs, menuMetrics),
+      menuButtonTheme: _menuButtonTheme(cs, menuMetrics),
+      popupMenuTheme: _popupMenuTheme(
+        cs,
+        backgroundColor: menuBackground,
+        metrics: menuMetrics,
+      ),
+      menuTheme: _menuTheme(
+        cs,
+        backgroundColor: menuBackground,
+        metrics: menuMetrics,
+      ),
+      extensions: [menuMetrics],
+    ).copyWith(
+      dialogTheme: DialogThemeData(
+        barrierColor: AppColors.dialogBarrier,
+        backgroundColor: cs.surfaceContainerHigh,
+      ),
     );
   }
 
@@ -155,7 +128,7 @@ class AppThemeData {
     required AppMenuMetrics metrics,
   }) {
     return PopupMenuThemeData(
-      color: backgroundColor,
+      color: cs.surfaceContainer,
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.black.withValues(alpha: 0.22),
       elevation: AppTokens.elevation2,
