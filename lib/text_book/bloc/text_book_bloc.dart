@@ -105,6 +105,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   // pinpoint highlight ממתין להחלה כשה-bloc יגיע ל-Loaded
   ({String text, int? sectionIndex})? _pendingPinpoint;
 
+  /// גודל גופן שהגיע (דרך `UpdateFontSize`) לפני שהטעינה הסתיימה. בעליית
+  /// התוכנה ההגדרות נטענות מהר יותר מתוכן הספר, כך שעדכון הגופן עלול להגיע
+  /// בזמן `Loading`. נשמר כאן ויוחל ב-`_onLoadContent` במעבר ל-`Loaded`.
+  double? _pendingFontSize;
+
   TextBookBloc({
     required this.repository,
     Future<String?> Function(
@@ -694,7 +699,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         linksByLine: const {},
         availableCommentators: existingAvailableCommentators,
         tableOfContents: tableOfContents,
-        fontSize: event.fontSize,
+        fontSize: _pendingFontSize ?? event.fontSize,
         showLeftPane: event.forceCloseLeftPane
             ? false
             : resolveInitialReadingLeftPaneVisibility(
@@ -755,6 +760,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       emit(loadedState);
 
       _pendingPinpoint = null;
+      _pendingFontSize = null;
 
       _resetLoadedLinksWindow(book);
 
@@ -802,6 +808,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         fontSize: event.fontSize,
         selectedIndex: currentState.selectedIndex,
       ));
+    } else {
+      // האירוע הגיע לפני סיום הטעינה (מרוץ בעליית התוכנה). שומרים כ-pending
+      // כדי שלא יאבד, ומחילים ב-_onLoadContent בבניית מצב ה-Loaded.
+      _pendingFontSize = event.fontSize;
     }
   }
 

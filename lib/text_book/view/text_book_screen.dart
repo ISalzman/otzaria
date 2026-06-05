@@ -589,10 +589,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
         if (!mounted) return;
 
-        final currentState = context.read<TextBookBloc>().state;
-        if (currentState is TextBookLoaded) {
-          context.read<TextBookBloc>().add(UpdateFontSize(state.fontSize));
-        }
+        // נשלח תמיד, גם אם הבלוק עדיין בטעינה: _onUpdateFontSize ישמור את
+        // הערך כ-pending ויחיל אותו במעבר ל-Loaded. כך לא נאבד שינוי גופן
+        // שמגיע מההגדרות לפני שתוכן הספר סיים להיטען (מרוץ בעליית התוכנה).
+        context.read<TextBookBloc>().add(UpdateFontSize(state.fontSize));
       }
 
       // אם משפחת הגופן או הסרת ניקוד השתנו, טען מחדש את התוכן
