@@ -745,8 +745,10 @@ class _CombinedViewState extends State<CombinedView> {
         final preview = hasSelectedText ? previewForLabel(cleanedText) : '';
         return AppContextMenuEntry(
           label: 'חיפוש',
-          icon: FluentIcons.book_search_24_regular,
-          enabled: hasSelectedText,
+          icon: FluentIcons.search_24_regular,
+          enabled: true,
+          // ללא טקסט נבחר: פתיחת חיפוש רגיל בספר ללא שאילתה.
+          onTap: hasSelectedText ? null : () => widget.openLeftPaneTab(1),
           children: hasSelectedText
               ? [
                   AppContextMenuEntry(
