@@ -749,9 +749,12 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
+      // צבע הכרטיס מערכת הנושא (במקום לבן קשיח) כדי שיתאים לרקע הפופאפ
+      color: colorScheme.surfaceContainerHighest,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
@@ -862,7 +865,7 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              color: AppSurfaces.card(context),
+              color: colorScheme.surfaceContainer,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
