@@ -720,7 +720,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     const gap = 4.0;
     return Center(
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           ToolbarActionButton(
             tooltip: 'הכותרת הקודמת',
@@ -735,13 +734,13 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
             onPressed: _navigateToPrevParagraph,
           ),
           const SizedBox(width: gap),
-          ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 80, maxWidth: 340),
+          Flexible(
             child: Text(
               'מפרשים על ${widget.tab.sourceTab.book.title}',
               style: AppTopBar.titleStyle(context),
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
+              maxLines: 1,
               textDirection: TextDirection.rtl,
             ),
           ),

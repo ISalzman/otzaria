@@ -15,7 +15,7 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/tabs/design_settings_tab.dart';
 import 'package:otzaria/theme/app_seed_colors.dart';
 
-import '../../test_helpers/memory_cache_provider.dart';
+import '../test_helpers/memory_cache_provider.dart';
 
 class _MockSettingsBloc extends MockBloc<SettingsEvent, SettingsState>
     implements SettingsBloc {}

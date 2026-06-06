@@ -345,6 +345,7 @@ class ToolbarActionButton extends StatelessWidget {
           backgroundColor: Colors.transparent,
           foregroundColor: fg,
           shape: const CircleBorder(),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       );
     }
