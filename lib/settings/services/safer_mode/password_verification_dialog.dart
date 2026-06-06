@@ -84,15 +84,15 @@ class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
       textFieldFocusNode: _textFieldFocusNode,
       child: AlertDialog(
         title: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
+            const Icon(FluentIcons.lock_closed_24_regular),
+            const SizedBox(width: 8),
             Text(
               widget.title,
               textDirection: TextDirection.rtl,
               style: const TextStyle(fontSize: 20),
             ),
-            const SizedBox(width: 8),
-            const Icon(FluentIcons.lock_closed_24_regular),
           ],
         ),
         content: SizedBox(

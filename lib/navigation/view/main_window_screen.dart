@@ -2949,7 +2949,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       tourTargetKey: tourMainNavigationTargetKeys[index],
       tourItemKey: tourMainNavigationItemTargetKeys[index],
       isTourHighlighted: isTourHighlighted,
-      mirrorIcon: item.screen == Screen.find,
     );
   }
 

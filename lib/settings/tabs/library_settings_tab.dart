@@ -10,7 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
-import 'package:otzaria/settings/tabs/widgets/location_settings_tile.dart';
+import 'package:otzaria/settings/widgets/settings_action_tile.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
@@ -224,10 +224,11 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
       ),
     ];
 
-    return LocationSettingsTile(
+    return SettingsActionTile.path(
       icon: FluentIcons.folder_24_regular,
       title: 'מיקום ספריית אוצריא',
-      subtitle: hasPath ? pathStr : 'בחר מיקום עבור מאגר הספרים',
+      path: hasPath ? pathStr : null,
+      placeholder: 'בחר מיקום עבור מאגר הספרים',
       actions: actions,
     );
   }
@@ -276,10 +277,11 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
         ),
     ];
 
-    return LocationSettingsTile(
+    return SettingsActionTile.path(
       icon: FluentIcons.folder_24_regular,
       title: 'מיקום ספרי היברובוקס',
-      subtitle: hasPath ? pathStr : 'במידה וקיימים ברשותך ספרים ממאגר זה',
+      path: hasPath ? pathStr : null,
+      placeholder: 'במידה וקיימים ברשותך ספרים ממאגר זה',
       actions: actions,
     );
   }

@@ -2,18 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/layout_tokens.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
-/// שורת הגדרה למיקום (אייקון + כותרת + תת-כותרת + כפתורי פעולה).
+/// שורת הגדרה עם אייקון, כותרת, תת-כותרת וכפתורי פעולה.
 ///
 /// במסך רחב הכפתורים מוצגים ב-`trailing` של [ListTile]. במסך צר
-/// (`<LayoutBreakpoints.compact`) הם עוברים לשורה תחת ה-subtitle כדי
-/// שטקסט הנתיב לא יקרוס לתו-לשורה.
-class LocationSettingsTile extends StatelessWidget {
+/// (`<LayoutBreakpoints.compact`) הם עוברים לשורה תחת ה-subtitle.
+class SettingsActionTile extends StatelessWidget {
   final IconData icon;
-  final String title;
-  final String subtitle;
+  final Widget title;
+  final Widget subtitle;
   final List<Widget> actions;
 
-  const LocationSettingsTile({
+  const SettingsActionTile({
     super.key,
     required this.icon,
     required this.title,
@@ -21,17 +20,52 @@ class LocationSettingsTile extends StatelessWidget {
     required this.actions,
   });
 
+  SettingsActionTile.text({
+    super.key,
+    required this.icon,
+    required String title,
+    required String subtitle,
+    TextDirection subtitleDirection = TextDirection.rtl,
+    required this.actions,
+  })  : title = Text(title, style: kSettingsTitleStyle),
+        subtitle = Text(
+          subtitle,
+          style: kSettingsSubtitleStyle,
+          textDirection: subtitleDirection,
+          textAlign: subtitleDirection == TextDirection.ltr
+              ? TextAlign.end
+              : null,
+        );
+
+  /// קונסטרקטור ייעודי לנתיבי קבצים.
+  /// מוסיף אוטומטית סימן LTR אחרי כל מפריד כדי למנוע שיבוש BiDi בנתיבים מעורבים.
+  SettingsActionTile.path({
+    super.key,
+    required this.icon,
+    required String title,
+    required String? path,
+    required String placeholder,
+    required this.actions,
+  })  : title = Text(title, style: kSettingsTitleStyle),
+        subtitle = Text(
+          (path != null && path.isNotEmpty) ? _formatPath(path) : placeholder,
+          style: kSettingsSubtitleStyle,
+          textDirection: (path != null && path.isNotEmpty)
+              ? TextDirection.ltr
+              : TextDirection.rtl,
+          textAlign: (path != null && path.isNotEmpty) ? TextAlign.end : null,
+        );
+
+  static final RegExp _pathSeparatorRegExp = RegExp(r'[/\\]');
+
+  static String _formatPath(String path) =>
+      path.replaceAllMapped(_pathSeparatorRegExp, (m) => '${m[0]!}\u200E');
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isNarrow = constraints.maxWidth < LayoutBreakpoints.compact;
-        final titleWidget = Text(title, style: kSettingsTitleStyle);
-        final subtitleWidget = Text(
-          subtitle,
-          style: kSettingsSubtitleStyle,
-          textDirection: TextDirection.rtl,
-        );
         final actionsRow = Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -41,12 +75,10 @@ class LocationSettingsTile extends StatelessWidget {
 
         if (!isNarrow) {
           return ListTile(
-            // השורה עוטפת כפתורי פעולה ב-trailing — מבטלים את ה-hover של
-            // ה-ListTile כדי שה-hover יופיע רק על הכפתורים, בלי double-hover.
             hoverColor: Colors.transparent,
             leading: Icon(icon),
-            title: titleWidget,
-            subtitle: subtitleWidget,
+            title: title,
+            subtitle: subtitle,
             trailing: actionsRow,
           );
         }
@@ -67,9 +99,9 @@ class LocationSettingsTile extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        titleWidget,
+                        title,
                         const SizedBox(height: 4),
-                        subtitleWidget,
+                        subtitle,
                       ],
                     ),
                   ),

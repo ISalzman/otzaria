@@ -488,8 +488,6 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                                     isSelected:
                                         !isSearching && _selectedIndex == index,
                                     onTap: () => _changeTab(index),
-                                    mirrorIcon: _tabsData[index].icon ==
-                                        FluentIcons.book_24_regular,
                                   ),
                                 ),
                               ),
