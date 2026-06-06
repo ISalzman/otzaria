@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/services/ad_popup_service.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
 
 /// פופאפ פרסומת עם אנימציה מתקדמת
 class AdPopupDialog extends StatefulWidget {
@@ -134,6 +135,7 @@ class _AdPopupDialogState extends State<AdPopupDialog>
       child: FadeTransition(
         opacity: _fadeAnimation,
         child: Dialog(
+          backgroundColor: AppSurfaces.panelBackground(context),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -402,19 +404,19 @@ class _OrganizationsList extends StatelessWidget {
   final List<Map<String, dynamic>> emergencyLines = [
     {
       'name': 'צבע שחור',
-      'phone': '073-888-1250',
+      'phone': '073-888-1234',
       'logo': 'assets/logos/tzeva_shahor.png',
       'phones': [
         '073-888-1250 (דיווח)',
         '073-888-1245 (הרשמה)',
         '073-888-1234 (הרשמה)'
       ],
-      'details': '''לדיווח בעת ניסיון מעצר הקש כוכבית
+      'details': '''**לדיווח בעת ניסיון מעצר הקש כוכבית**
 0 - הרשמה לקבלת התרעות
 1 - היסטוריית ההתרעות
 2 - שלוחת הרכבים
 5 - שלוחת רישום למקבלי הצווים
-7 - כמות הנרשמים (מעל 77,435)
+7 - כמות הנרשמים (מעל 96,703)
 8 - דיווח על תקלות במערכת
 9 - הסרה מרשימת התפוצה
 
@@ -484,16 +486,11 @@ class _OrganizationsList extends StatelessWidget {
       'name': 'החוטפים הגיעו',
       'phone': '02-800-8080',
       'logo': 'assets/logos/hachotfim_higiu.jpg',
-      'details': '''**שימו לב! המערכת חודשה ושודרגה**
-נוספו עשרות ערים חדשות ואפשרויות רבות נוספות
-גם מי שנרשם כבר במערכת הישנה, יש לבצע רישום מחדש 
-לנרשמים ברשימה של כל הארץ ישלח צינתוק ולא מבזק
-
-1 - לרישום
+      'details': '''1 - לרישום
 2 - להסרה מרשימת התפוצה
 3 - להגבלת שעות כפי המידע שנמסר בהוראות
 (לע"ע האפשרות להגבלת שעות היא רק על מבזקים ולא על צינתוקים)
-4 - לדיווח חירום בעת נסיון מעצר
+4 - **לדיווח חירום בעת נסיון מעצר**
 5 - לדיווח על מחסומים
 6 - להשארת הודעות למערכת
 7 - להוראות רישום ומידע מורחב על המערכת החדשה
@@ -920,7 +917,7 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              color: Colors.grey[50],
+              color: AppSurfaces.card(context),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
