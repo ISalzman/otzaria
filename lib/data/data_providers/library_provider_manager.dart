@@ -319,6 +319,17 @@ class LibraryProviderManager {
     return located.provider.sourceIndicator;
   }
 
+  /// מחזיר האם ספר משתמש הוא "עותק עצמאי" (תוכנו שמור בתוכנה).
+  /// ראה [DatabaseLibraryProvider.isUserBookContentInDb].
+  Future<bool> isUserBookContentInDb(
+    String title,
+    int categoryId,
+    String fileType,
+  ) async {
+    if (!_isInitialized) await initialize();
+    return databaseProvider.isUserBookContentInDb(title, categoryId, fileType);
+  }
+
   /// Gets the text content of a book from the appropriate provider
   Future<String?> getBookText(
     String title, {

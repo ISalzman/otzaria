@@ -88,6 +88,135 @@ void main() {
     expect(result.errors, isEmpty);
   });
 
+  test('רענון מוחק ספר "קריאה מהקבצים" שקובצו נמחק, ומשאיר "עותק עצמאי"',
+      () async {
+    final libraryPath = path.join(tempDir.path, 'library');
+    // שתי תיקיות: אחת file-backed (קריאה מהקבצים) ואחת content-in-db
+    // (עותק עצמאי), כדי לבדוק את שתי ההתנהגויות הנגדיות באותו רענון.
+    final fileBackedDir = path.join(tempDir.path, 'מהקבצים');
+    final inDbDir = path.join(tempDir.path, 'בתוכנה');
+    await Directory(path.join(libraryPath, 'אוצריא')).create(recursive: true);
+    await Directory(fileBackedDir).create(recursive: true);
+    await Directory(inDbDir).create(recursive: true);
+    final fileBackedFile = File(path.join(fileBackedDir, 'ספר מקובץ.txt'));
+    final inDbFile = File(path.join(inDbDir, 'ספר עצמאי.txt'));
+    await fileBackedFile.writeAsString('תוכן מקובץ');
+    await inDbFile.writeAsString('תוכן עצמאי');
+
+    await Settings.setValue<String>(
+      SettingsRepository.keyLibraryPath,
+      libraryPath,
+    );
+    await Settings.setValue<String>(
+      SettingsRepository.keyCustomFolders,
+      CustomFoldersManager.saveFolders([
+        CustomFolder(
+          path: fileBackedDir,
+          addToDatabase: false, // קריאה מהקבצים — תלוי בקובץ
+          addedAt: DateTime(2026, 4, 13),
+        ),
+        CustomFolder(
+          path: inDbDir,
+          addToDatabase: true, // עותק עצמאי — שורד מחיקת קובץ
+          addedAt: DateTime(2026, 4, 13),
+        ),
+      ]),
+    );
+
+    final service = await FileSyncService.getInstance(repository);
+
+    // סריקה ראשונה — שני הספרים נכנסים ל-DB.
+    await service!.syncFiles();
+
+    final personalCategory = (await repository.getRootCategories())
+        .where((category) => category.title == 'ספרים אישיים')
+        .first;
+    final fileBackedCat = await repository.getCategoryByTitleAndParent(
+        'מהקבצים', personalCategory.id);
+    final inDbCat = await repository.getCategoryByTitleAndParent(
+        'בתוכנה', personalCategory.id);
+    expect(await repository.getBooksByCategory(fileBackedCat!.id), isNotEmpty);
+    expect(await repository.getBooksByCategory(inDbCat!.id), isNotEmpty);
+
+    // מוחקים את שני הקבצים מהדיסק וסורקים מחדש.
+    await fileBackedFile.delete();
+    await inDbFile.delete();
+    await service.syncFiles();
+
+    expect(
+      await repository.getBooksByCategory(fileBackedCat.id),
+      isEmpty,
+      reason: 'ספר "קריאה מהקבצים" תלוי בקובץ — נמחק כשהקובץ נעלם',
+    );
+    expect(
+      (await repository.getBooksByCategory(inDbCat.id))
+          .map((book) => book.title),
+      ['ספר עצמאי'],
+      reason: 'ספר "עותק עצמאי" שורד מחיקת קובץ — נמחק רק דרך הספרייה',
+    );
+  });
+
+  test('רענון לא פוגע בספרי תיקייה אחרת בעלת אותו basename (זיהוי לפי source)',
+      () async {
+    final libraryPath = path.join(tempDir.path, 'library');
+    // שתי תיקיות שונות עם אותו basename "shared" — ממוזגות לאותה קטגוריה.
+    final alphaShared = path.join(tempDir.path, 'alpha', 'shared');
+    final betaShared = path.join(tempDir.path, 'beta', 'shared');
+    await Directory(path.join(libraryPath, 'אוצריא')).create(recursive: true);
+    await Directory(alphaShared).create(recursive: true);
+    await Directory(betaShared).create(recursive: true);
+    final alphaFile = File(path.join(alphaShared, 'ספר אלפא.txt'));
+    await alphaFile.writeAsString('תוכן אלפא');
+    await File(path.join(betaShared, 'ספר בטא.txt')).writeAsString('תוכן בטא');
+
+    await Settings.setValue<String>(
+      SettingsRepository.keyLibraryPath,
+      libraryPath,
+    );
+    await Settings.setValue<String>(
+      SettingsRepository.keyCustomFolders,
+      CustomFoldersManager.saveFolders([
+        // file-backed (קריאה מהקבצים) — כדי שמחיקת הקובץ תפעיל prune.
+        CustomFolder(
+          path: alphaShared,
+          addToDatabase: false,
+          addedAt: DateTime(2026, 4, 13),
+        ),
+        CustomFolder(
+          path: betaShared,
+          addToDatabase: false,
+          addedAt: DateTime(2026, 4, 13),
+        ),
+      ]),
+    );
+
+    final service = await FileSyncService.getInstance(repository);
+    await service!.syncFiles();
+
+    final personalCategory = (await repository.getRootCategories())
+        .where((category) => category.title == 'ספרים אישיים')
+        .first;
+    final sharedCategory = await repository.getCategoryByTitleAndParent(
+      'shared',
+      personalCategory.id,
+    );
+    // שני הספרים יושבים תחת אותה קטגוריה "shared".
+    var books = await repository.getBooksByCategory(sharedCategory!.id);
+    expect(books.map((book) => book.title).toSet(), {'ספר אלפא', 'ספר בטא'});
+
+    // מוחקים את הקובץ של alpha בלבד וסורקים מחדש.
+    await alphaFile.delete();
+    await service.syncFiles();
+
+    books = await repository.getBooksByCategory(sharedCategory.id);
+    expect(
+      books.map((book) => book.title),
+      ['ספר בטא'],
+      reason: 'prune של alpha הסיר רק את ספרו, ולא פגע בספר של beta '
+          'למרות אותו basename',
+    );
+  });
+
   test(
       'pruneRemovedCustomFoldersFromDatabase משאיר תיקייה פעילה בלי filePath ומוחק ישנה',
       () async {

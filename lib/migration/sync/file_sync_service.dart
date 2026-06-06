@@ -205,33 +205,15 @@ class FileSyncService {
   /// Delete a folder from the database (without restoring files)
   /// Used when removing a folder from the app completely.
   /// פועל על ה-DB של תיקיות מותאמות אישית.
-  Future<void> deleteFolderFromDatabase(
-      int folderCategoryId, int personalCategoryId) async {
-    final repo = _customFoldersRepo;
-    _log.info('Deleting folder category from DB: $folderCategoryId');
-    debugPrint(
-        '[FileSyncService] deleteFolderFromDatabase START: folderCategoryId=$folderCategoryId, personalCategoryId=$personalCategoryId');
-
-    // Delete the folder category and all its contents
-    await _deleteCategoryRecursive(folderCategoryId);
-    debugPrint(
-        '[FileSyncService] deleteFolderFromDatabase: recursive delete done, cleaning up empty parents...');
-
-    // Clean up empty parent categories
-    await _cleanupEmptyParentCategories(personalCategoryId);
-
-    // Clean up orphaned tocText entries (shared lookup table, not deleted per-book)
-    await repo.deleteOrphanedTocTexts();
-    debugPrint(
-        '[FileSyncService] deleteFolderFromDatabase: orphaned tocText cleaned up');
-
-    // Clean up any orphaned line_toc rows (e.g. (-1,-1) artifact from prior bugs)
-    await repo.deleteOrphanedLineToc();
-    debugPrint(
-        '[FileSyncService] deleteFolderFromDatabase: orphaned line_toc cleaned up');
-
-    debugPrint('[FileSyncService] deleteFolderFromDatabase END');
-    _log.info('Folder deleted from DB');
+  ///
+  /// הזיהוי הוא לפי [folderPath] (שם ה-source הייחודי), ולא לפי שם
+  /// הקטגוריה — כך הסרת תיקייה לא תפגע בספרי תיקייה אחרת בעלת אותו
+  /// basename שממוזגת לאותה קטגוריה. קטגוריות שהתרוקנו נמחקות, אך קטגוריה
+  /// שעדיין מכילה ספרים של תיקייה אחרת נשמרת.
+  Future<void> deleteFolderFromDatabase(String folderPath) async {
+    _log.info('Deleting folder books from DB by source: $folderPath');
+    final removed = await _removeFolderBooksBySource(folderPath);
+    _log.info('Folder deleted from DB ($removed books removed)');
   }
 
   String _normalizeFolderPath(String folderPath) {
@@ -347,6 +329,90 @@ class FileSyncService {
     await repo.deleteOrphanedLineToc();
   }
 
+  /// מוחק מ-`user_books.db` ספרים שקובצם הפיזי כבר לא קיים בתיקייה.
+  ///
+  /// [validBookKeys] הם המפתחות (`categoryId|title|fileType`) של הקבצים
+  /// שנמצאו בסריקת [folder]; ספר השייך לתיקייה שמפתחו אינו ביניהם — קובצו
+  /// נמחק, ולכן הוא מוסר. שיוך ספר לתיקייה נקבע לפי שם ה-`source` (הנתיב
+  /// המלא), כך ש-basename כפול לא יפגע בתיקייה השנייה.
+  Future<int> _pruneDeletedBooksInFolder(
+    CustomFolder folder,
+    Set<String> validBookKeys,
+  ) =>
+      _removeFolderBooksBySource(folder.path, keepKeys: validBookKeys);
+
+  /// מסיר מ-`user_books.db` את ספרי התיקייה [folderPath], לפי שם ה-`source`
+  /// הייחודי (הנתיב המלא) — לא לפי שם הקטגוריה. כך שתי תיקיות שונות בעלות
+  /// אותו basename (למשל `C:\alpha\shared` ו-`D:\beta\shared`), שממוזגות
+  /// לאותה קטגוריה `shared`, לא יפגעו זו בספרים של זו.
+  ///
+  /// אם [keepKeys] מסופק (זרימת prune) — ספרים שמפתחם
+  /// (`categoryId|title|fileType`) נמצא בו נשמרים, והשאר מוסרים. אם null
+  /// (זרימת מחיקת תיקייה) — כל ספרי התיקייה מוסרים.
+  ///
+  /// קטגוריות שהתרוקנו נמחקות; קטגוריה שעדיין מכילה ספרים (של תיקייה אחרת)
+  /// נשמרת. מחזיר את מספר הספרים שהוסרו.
+  Future<int> _removeFolderBooksBySource(
+    String folderPath, {
+    Set<String>? keepKeys,
+  }) async {
+    final repo = _customFoldersRepo;
+    final rootCategories = await repo.getRootCategories();
+    final personalCategory = rootCategories
+        .where((category) => category.title == 'ספרים אישיים')
+        .firstOrNull;
+    if (personalCategory == null) return 0;
+
+    final folderSourceName = _buildCustomFolderSourceName(folderPath);
+
+    final categoryIds = <int>{
+      personalCategory.id,
+      ...await repo.getDescendantCategoryIds(personalCategory.id),
+    };
+
+    final sourceNameCache = <int, String?>{};
+    final affectedCategoryIds = <int>{};
+    var removed = 0;
+    for (final categoryId in categoryIds) {
+      final books = await repo.getBooksByCategory(categoryId);
+      for (final book in books) {
+        final sourceName = sourceNameCache.containsKey(book.sourceId)
+            ? sourceNameCache[book.sourceId]
+            : (sourceNameCache[book.sourceId] =
+                (await repo.getSourceById(book.sourceId))?.name);
+        // לא שייך לתיקייה הנוכחית — לא נוגעים בו.
+        if (sourceName != folderSourceName) continue;
+        if (keepKeys != null) {
+          // זרימת prune (רענון): ספר "עותק עצמאי" (התוכן נשמר בתוכנה,
+          // filePath=null) נועד לשרוד גם אם הקובץ נמחק מהדיסק — זה כל
+          // הרעיון של ההכנסה לתוכנה. לכן מוחקים רק ספרי "קריאה מהקבצים"
+          // (file-backed) שקובצם נעלם; עותק עצמאי נמחק רק דרך הספרייה.
+          if (!book.isFileBacked) continue;
+          final key = '${book.categoryId}|${book.title}|'
+              '${(book.fileType ?? '').toLowerCase()}';
+          if (keepKeys.contains(key)) continue;
+        }
+        _log.info('Removing book from DB: "${book.title}" (id=${book.id})');
+        try {
+          await repo.deleteBookCompletely(book.id);
+          removed++;
+          affectedCategoryIds.add(categoryId);
+        } catch (e, st) {
+          _log.warning('Failed to remove book ${book.id}, continuing', e, st);
+        }
+      }
+    }
+
+    if (removed > 0) {
+      for (final categoryId in affectedCategoryIds) {
+        await _cleanupEmptyParentCategories(categoryId);
+      }
+      await repo.deleteOrphanedTocTexts();
+      await repo.deleteOrphanedLineToc();
+    }
+    return removed;
+  }
+
   Future<void> refreshSourcesAndPruneRemovedCustomFolders(
     List<CustomFolder> customFolders,
   ) async {
@@ -362,7 +428,8 @@ class FileSyncService {
       required List<String> categoryPrefix,
       required bool insertContent,
       String? customSourceName,
-      required DatabaseGenerator generator}) async {
+      required DatabaseGenerator generator,
+      Set<String>? validBookKeys}) async {
     int addedBooks = 0;
     int updatedBooks = 0;
     int addedCategories = 0;
@@ -390,6 +457,7 @@ class FileSyncService {
           insertContent: insertContent,
           customSourceName: customSourceName,
           generator: generator,
+          validBookKeys: validBookKeys,
         );
 
         if (result.wasAdded) {
@@ -429,6 +497,7 @@ class FileSyncService {
     required bool insertContent,
     String? customSourceName,
     required DatabaseGenerator generator,
+    Set<String>? validBookKeys,
   }) async {
     final title = path.basenameWithoutExtension(filePath);
     final extension = path.extension(filePath).toLowerCase();
@@ -454,6 +523,11 @@ class FileSyncService {
 
     // Extract file type from extension (remove the dot)
     final fileType = extension.replaceFirst('.', '').toLowerCase();
+
+    // רישום מפתח הספר — הקובץ קיים בדיסק, ולכן ה-prune של קבצים שנמחקו
+    // לא יסיר אותו מה-DB. המפתח אינו תלוי ב-filePath, כדי לכסות גם ספרים
+    // ששמורים כעותק עצמאי (txt עם content בתוך ה-DB, filePath=null).
+    validBookKeys?.add('$categoryId|$title|$fileType');
 
     // Check if book already exists in this category with the same file type
     final existingBook = await _repository
@@ -571,12 +645,14 @@ class FileSyncService {
           _log.info(
               'Scanning custom folder: ${folder.path} (addToDatabase: ${folder.addToDatabase})');
 
+          final folderValidKeys = <String>{};
           final result = await _scanAndImportPath(
             rootPath: folder.path,
             categoryPrefix: ['ספרים אישיים', folder.name],
             insertContent: folder.addToDatabase,
             customSourceName: _buildCustomFolderSourceName(folder.path),
             generator: customFoldersGenerator,
+            validBookKeys: folderValidKeys,
           );
 
           addedBooks += result.addedBooks;
@@ -584,6 +660,13 @@ class FileSyncService {
           addedCategories += result.addedCategories;
           skippedFiles += result.skippedFiles;
           errors.addAll(result.errors);
+
+          // הסרת ספרים מה-DB שקובצם נמחק מהתיקייה. רץ רק אם הסריקה
+          // הושלמה (לא בוטלה) — אחרת folderValidKeys חלקי והיינו עלולים
+          // למחוק ספרים שקבציהם עדיין קיימים.
+          if (_isSyncing) {
+            await _pruneDeletedBooksInFolder(folder, folderValidKeys);
+          }
         }
       }
 
@@ -715,24 +798,6 @@ class FileSyncService {
 
     // Remove the filename (last part)
     return parts.sublist(0, parts.length - 1);
-  }
-
-  /// Delete the physical files/directory of a custom folder
-  /// Used when the user explicitly confirms file deletion
-  Future<bool> deletePhysicalFolder(String folderPath) async {
-    try {
-      final dir = Directory(folderPath);
-      if (await dir.exists()) {
-        await dir.delete(recursive: true);
-        _log.info('Deleted physical folder: $folderPath');
-        return true;
-      }
-      return false;
-    } catch (e, stackTrace) {
-      _log.warning(
-          'Error deleting physical folder: $folderPath', e, stackTrace);
-      return false;
-    }
   }
 
   /// Report progress to callback
