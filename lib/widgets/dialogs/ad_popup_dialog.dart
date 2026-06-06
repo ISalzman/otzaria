@@ -51,89 +51,91 @@ class AdPopupDialog extends StatefulWidget {
 
 class _AdPopupDialogState extends State<AdPopupDialog>
     with TickerProviderStateMixin {
-  late AnimationController _mainController;
-  late AnimationController _stage1Controller;
-  late AnimationController _stage2Controller;
+  // אנימציית כניסת הדיאלוג עצמו (scale + fade עדין)
+  late final AnimationController _entryController;
+  late final Animation<double> _entryScale;
+  late final Animation<double> _entryFade;
 
-  late Animation<Offset> _slideAnimation;
-  late Animation<double> _fadeAnimation;
+  // אנימציה רציפה של הופעת הטקסט ליד הלוגו (0 -> 1)
+  late final AnimationController _textController;
+  late final Animation<double> _textReveal;
 
-  int _animationStage = 0; // 0: לוגו במרכז, 1: לוגו+טקסט, 2: הכל למעלה+רשימה
+  // אנימציה רציפה של כיווץ הכותרת למעלה + הופעת הרשימה (0 -> 1)
+  late final AnimationController _collapseController;
+  late final Animation<double> _collapse;
 
   @override
   void initState() {
     super.initState();
 
-    // אנימציה ראשית - כניסה של הדיאלוג
-    _mainController = AnimationController(
+    // כניסת הדיאלוג: scale עדין מ-0.92 ל-1 יחד עם fade
+    _entryController = AnimationController(
+      duration: const Duration(milliseconds: 350),
+      vsync: this,
+    );
+    _entryScale = Tween<double>(begin: 0.92, end: 1.0).animate(
+      CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic),
+    );
+    _entryFade = CurvedAnimation(
+      parent: _entryController,
+      curve: Curves.easeOut,
+    );
+
+    // הופעת הטקסט ליד הלוגו
+    _textController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
     );
-
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0.0, -1.0),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _mainController,
+    _textReveal = CurvedAnimation(
+      parent: _textController,
       curve: Curves.easeOutCubic,
-    ));
-
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _mainController,
-      curve: Curves.easeIn,
-    ));
-
-    // אנימציה של שלב 1 - הופעת הטקסט
-    _stage1Controller = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
     );
 
-    // אנימציה של שלב 2 - מעבר למעלה והופעת הרשימה
-    _stage2Controller = AnimationController(
-      duration: const Duration(milliseconds: 700),
+    // כיווץ הכותרת למעלה והופעת הרשימה
+    _collapseController = AnimationController(
+      duration: const Duration(milliseconds: 650),
       vsync: this,
     );
+    _collapse = CurvedAnimation(
+      parent: _collapseController,
+      curve: Curves.easeInOutCubic,
+    );
 
-    _mainController.forward();
+    _entryController.forward();
     _startAnimationSequence();
   }
 
   void _startAnimationSequence() async {
-    // שלב 0: לוגו במרכז (1.2 שניות)
+    // הלוגו לבדו במרכז לרגע קצר
+    await Future.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+
+    // הטקסט מופיע ליד הלוגו (ברציפות, בלי החלפת layout)
+    await _textController.forward();
+    if (!mounted) return;
+
+    // שהייה קצרה לקריאת הכותרת
     await Future.delayed(const Duration(milliseconds: 1200));
     if (!mounted) return;
 
-    // שלב 1: הטקסט מופיע
-    setState(() => _animationStage = 1);
-    await _stage1Controller.forward();
-
-    // המתנה לפני המעבר לשלב 2 (1.5 שניות)
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (!mounted) return;
-
-    // שלב 2: הכל זז למעלה והרשימה מופיעה
-    setState(() => _animationStage = 2);
-    await _stage2Controller.forward();
+    // הכותרת מתכווצת למעלה והרשימה מופיעה ברציפות
+    await _collapseController.forward();
   }
 
   @override
   void dispose() {
-    _mainController.dispose();
-    _stage1Controller.dispose();
-    _stage2Controller.dispose();
+    _entryController.dispose();
+    _textController.dispose();
+    _collapseController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return SlideTransition(
-      position: _slideAnimation,
-      child: FadeTransition(
-        opacity: _fadeAnimation,
+    return FadeTransition(
+      opacity: _entryFade,
+      child: ScaleTransition(
+        scale: _entryScale,
         child: Dialog(
           backgroundColor: AppSurfaces.panelBackground(context),
           shape: RoundedRectangleBorder(
@@ -149,9 +151,9 @@ class _AdPopupDialogState extends State<AdPopupDialog>
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // תוכן דינמי לפי שלב
+                    // תוכן עם אנימציה רציפה (לוגו -> לוגו+טקסט -> כיווץ למעלה)
                     Flexible(
-                      child: _buildStageContent(),
+                      child: _buildAnimatedContent(),
                     ),
                     const Divider(height: 1),
                     // כפתורים תחתונים
@@ -180,151 +182,94 @@ class _AdPopupDialogState extends State<AdPopupDialog>
     );
   }
 
-  Widget _buildStageContent() {
-    switch (_animationStage) {
-      case 0:
-        return _buildStage0(); // לוגו במרכז
-      case 1:
-        return _buildStage1(); // לוגו+טקסט
-      case 2:
-        return _buildStage2(); // הכל למעלה+רשימה
-      default:
-        return _buildStage0();
-    }
-  }
+  /// תוכן הפופאפ עם אנימציה רציפה אחת:
+  /// הלוגו והטקסט נמצאים תמיד באותו עץ widget (אין החלפת layout שגורמת
+  /// לקפיצות). הלוגו מתחיל גדול וממורכז, הטקסט מופיע לצידו ב-fade,
+  /// ולבסוף הכל מתכווץ למעלה והרשימה נפתחת מלמטה ברציפות.
+  Widget _buildAnimatedContent() {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_textReveal, _collapse]),
+      builder: (context, child) {
+        final c = _collapse.value; // 0 -> 1: התקדמות הכיווץ למעלה
+        final t = _textReveal.value; // 0 -> 1: הופעת הטקסט
 
-  // שלב 0: לוגו במרכז
-  Widget _buildStage0() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Image.asset(
-          'assets/icon/iconnew.png',
-          width: 120,
-          height: 120,
-        ),
-      ),
-    );
-  }
+        // הלוגו מתכווץ מ-120 (לבד במרכז) ל-50 (למעלה ליד הרשימה)
+        final logoSize = 120.0 - (c * 70.0);
+        final fontSize = 22.0 - (c * 4.0);
+        final verticalPadding = 44.0 - (c * 28.0);
+        final horizontalPadding = 40.0 - (c * 24.0);
+        // הרווח בין לוגו לטקסט גדל כשהטקסט מופיע ומתכווץ מעט בכיווץ
+        final gap = (20.0 * t) - (c * 8.0);
 
-  // שלב 1: לוגו במרכז וטקסט מופיע לידו
-  Widget _buildStage1() {
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        // הכותרת ממורכזת אנכית כל עוד אין רשימה, וצמודה לראש כשהרשימה נפתחת
+        return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // לוגו
-            Image.asset(
-              'assets/icon/iconnew.png',
-              width: 100,
-              height: 100,
-            ),
-            const SizedBox(width: 20),
-            // טקסט מופיע עם אנימציה (נכנס מהקצה החיצוני פנימה אל הלוגו)
+            // אזור הכותרת (לוגו + טקסט) — ממורכז עד שמתחילים להתכווץ
             Flexible(
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: Offset(isRtl ? -0.5 : 0.5, 0),
-                  end: Offset.zero,
-                ).animate(CurvedAnimation(
-                  parent: _stage1Controller,
-                  curve: Curves.easeOutCubic,
-                )),
-                child: FadeTransition(
-                  opacity: _stage1Controller,
-                  child: Text(
-                    widget.title,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+              flex: 0,
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: horizontalPadding,
+                  vertical: verticalPadding,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      'assets/icon/iconnew.png',
+                      width: logoSize,
+                      height: logoSize,
                     ),
-                    textAlign: TextAlign.right,
+                    SizedBox(width: gap),
+                    // הטקסט מופיע ב-fade ומתרחב מ-0 רוחב כדי שלא יקפוץ
+                    Flexible(
+                      child: ClipRect(
+                        child: Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          widthFactor: t,
+                          child: Opacity(
+                            opacity: t,
+                            child: Text(
+                              widget.title,
+                              style: TextStyle(
+                                fontSize: fontSize,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                              textAlign: TextAlign.center,
+                              softWrap: false,
+                              overflow: TextOverflow.visible,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // הרשימה נפתחת מלמטה ברציפות לפי התקדמות הכיווץ
+            Flexible(
+              child: ClipRect(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: c,
+                  child: Opacity(
+                    opacity: c,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                      child: _OrganizationsList(),
+                    ),
                   ),
                 ),
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  // שלב 2: הכל מתכווץ למעלה ורשימה מופיעה
-  Widget _buildStage2() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // כותרת מתכווצת עם אנימציה
-        AnimatedBuilder(
-          animation: _stage2Controller,
-          builder: (context, child) {
-            // גודל הלוגו מתכווץ מ-100 ל-50
-            final logoSize = 100.0 - (_stage2Controller.value * 50.0);
-            // גודל הטקסט מתכווץ מ-22 ל-18
-            final fontSize = 22.0 - (_stage2Controller.value * 4.0);
-            // הפדינג מתכווץ מ-40 ל-16
-            final verticalPadding = 40.0 - (_stage2Controller.value * 24.0);
-            final horizontalPadding = 40.0 - (_stage2Controller.value * 20.0);
-
-            return Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: horizontalPadding,
-                vertical: verticalPadding,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // לוגו מתכווץ
-                  Image.asset(
-                    'assets/icon/iconnew.png',
-                    width: logoSize,
-                    height: logoSize,
-                  ),
-                  SizedBox(width: 20 - (_stage2Controller.value * 8)),
-                  // טקסט מתכווץ
-                  Flexible(
-                    child: Text(
-                      widget.title,
-                      style: TextStyle(
-                        fontSize: fontSize,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.visible,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-        // רשימת ארגונים מופיעה מלמטה
-        Flexible(
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.3), // מתחיל מתחת
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: _stage2Controller,
-              curve: Curves.easeOutCubic,
-            )),
-            child: FadeTransition(
-              opacity: _stage2Controller,
-              child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                child: _OrganizationsList(),
-              ),
-            ),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 
