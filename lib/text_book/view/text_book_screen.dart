@@ -43,6 +43,7 @@ import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
+import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/helpers/editor_settings_helper.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
@@ -588,10 +589,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
         if (!mounted) return;
 
-        final currentState = context.read<TextBookBloc>().state;
-        if (currentState is TextBookLoaded) {
-          context.read<TextBookBloc>().add(UpdateFontSize(state.fontSize));
-        }
+        // נשלח תמיד, גם אם הבלוק עדיין בטעינה: _onUpdateFontSize ישמור את
+        // הערך כ-pending ויחיל אותו במעבר ל-Loaded. כך לא נאבד שינוי גופן
+        // שמגיע מההגדרות לפני שתוכן הספר סיים להיטען (מרוץ בעליית התוכנה).
+        context.read<TextBookBloc>().add(UpdateFontSize(state.fontSize));
       }
 
       // אם משפחת הגופן או הסרת ניקוד השתנו, טען מחדש את התוכן
@@ -1167,7 +1168,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     }
 
                     if (state.showPageShapeView) {
-                      if (_bookContentFocusNode.hasFocus) {
+                      // hasPrimaryFocus ולא hasFocus: ה-KeyboardListener הזה עוטף
+                      // את כל גוף המסך (כולל פאנל החיפוש), ו-hasFocus מחזיר true
+                      // גם כשצאצא (שדה החיפוש) ממוקד. unfocus כזה היה מסיר פוקוס
+                      // מכל התת-עץ ומבריח את הסמן משדה החיפוש בכל הקלדה. כאן
+                      // משחררים פוקוס רק אם ה-node הזה עצמו מחזיק בפוקוס.
+                      if (_bookContentFocusNode.hasPrimaryFocus) {
                         _bookContentFocusNode.unfocus();
                       }
                       return;
@@ -2759,6 +2765,11 @@ bool _handleGlobalKeyEvent(
 
   // הוספת הערה
   if (ShortcutHelper.matchesShortcut(event, addNoteShortcut)) {
+    // בצורת הדף, כשהבחירה במפרש, חלונית המפרש כבר פתחה הערה תחת ספר המפרש.
+    // האירוע ממשיך להתבעבע לכאן, ולכן נמנעים מפתיחת הערה כפולה על גוף הספר.
+    if (SimpleTextViewer.commentaryNoteHandledRecently) {
+      return true;
+    }
     _addNoteFromKeyboard(
       context,
       state,
@@ -2870,70 +2881,64 @@ Future<void> _savePerBookSettingsDirectly(
     return;
   }
 
-  // טעינת ההגדרות הקיימות
-  final existingSettings = await TextBookPerBookSettings.load(state.book.title);
-
-  // קבלת ברירות המחדל הגלובליות
+  // קבלת ברירות המחדל הגלובליות (אינן תלויות בקובץ, נחשבות פעם אחת)
   final defaultFontSize = settingsBloc.state.fontSize;
   final defaultRemoveNikud = settingsBloc.state.defaultRemoveNikud;
   final defaultShowSplitView =
       Settings.getValue<bool>('key-splited-view') ?? true;
 
-  // בניית הגדרות חדשות - רק שדות ששונו מברירת המחדל
-  double? newFontSize = existingSettings?.fontSize;
-  bool? newCommentatorsBelow = existingSettings?.commentatorsBelow;
-  bool? newRemoveNikud = existingSettings?.removeNikud;
-  bool? newRemovePunctuation = existingSettings?.removePunctuation;
-  bool? newContinuousReadingMode = existingSettings?.continuousReadingMode;
+  // עדכון אטומי: ה-load וה-merge מבוצעים בתוך תור הכתיבה כדי למנוע דריסה
+  // הדדית עם שמירת רוחבי הטורים (_saveSizes) על אותו קובץ.
+  await TextBookPerBookSettings.mutate(state.book.title, (existingSettings) {
+    // בניית הגדרות חדשות - רק שדות ששונו מברירת המחדל
+    double? newFontSize = existingSettings?.fontSize;
+    bool? newCommentatorsBelow = existingSettings?.commentatorsBelow;
+    bool? newRemoveNikud = existingSettings?.removeNikud;
+    bool? newRemovePunctuation = existingSettings?.removePunctuation;
+    bool? newContinuousReadingMode = existingSettings?.continuousReadingMode;
 
-  // עדכון רק השדה שהשתנה
-  if (fontSize != null) {
-    // אם הערך שווה לברירת המחדל, מוחקים את השדה
-    newFontSize = (fontSize == defaultFontSize) ? null : fontSize;
-  }
+    // עדכון רק השדה שהשתנה
+    if (fontSize != null) {
+      // אם הערך שווה לברירת המחדל, מוחקים את השדה
+      newFontSize = (fontSize == defaultFontSize) ? null : fontSize;
+    }
 
-  if (showSplitView != null) {
-    final commentatorsBelow = !showSplitView;
-    // אם הערך שווה לברירת המחדל, מוחקים את השדה
-    newCommentatorsBelow =
-        (showSplitView == defaultShowSplitView) ? null : commentatorsBelow;
-  }
+    if (showSplitView != null) {
+      final commentatorsBelow = !showSplitView;
+      // אם הערך שווה לברירת המחדל, מוחקים את השדה
+      newCommentatorsBelow =
+          (showSplitView == defaultShowSplitView) ? null : commentatorsBelow;
+    }
 
-  if (removeNikud != null) {
-    // אם הערך שווה לברירת המחדל, מוחקים את השדה
-    newRemoveNikud = (removeNikud == defaultRemoveNikud) ? null : removeNikud;
-  }
+    if (removeNikud != null) {
+      // אם הערך שווה לברירת המחדל, מוחקים את השדה
+      newRemoveNikud = (removeNikud == defaultRemoveNikud) ? null : removeNikud;
+    }
 
-  if (removePunctuation != null) {
-    newRemovePunctuation = removePunctuation ? true : null;
-  }
+    if (removePunctuation != null) {
+      newRemovePunctuation = removePunctuation ? true : null;
+    }
 
-  if (continuousReadingMode != null) {
-    // ברירת המחדל למצב רצף היא false (אין הגדרה גלובלית), כך שרק true שווה
-    // לשמירה.
-    newContinuousReadingMode = continuousReadingMode ? true : null;
-  }
+    if (continuousReadingMode != null) {
+      // ברירת המחדל למצב רצף היא false (אין הגדרה גלובלית), כך שרק true שווה
+      // לשמירה.
+      newContinuousReadingMode = continuousReadingMode ? true : null;
+    }
 
-  // אם כל השדות null, מוחקים את הקובץ כולו
-  if (newFontSize == null &&
-      newCommentatorsBelow == null &&
-      newRemoveNikud == null &&
-      newRemovePunctuation == null &&
-      newContinuousReadingMode == null) {
-    await TextBookPerBookSettings.delete(state.book.title);
-    return;
-  }
-
-  // שמירת ההגדרות המעודכנות
-  final settings = TextBookPerBookSettings(
-    fontSize: newFontSize,
-    commentatorsBelow: newCommentatorsBelow,
-    removeNikud: newRemoveNikud,
-    removePunctuation: newRemovePunctuation,
-    continuousReadingMode: newContinuousReadingMode,
-  );
-
-  await settings.save(state.book.title);
+    // רוחבי הטורים בצורת הדף נשמרים בנפרד (ב-_saveSizes); כאן מעבירים אותם
+    // הלאה כדי לא לדרוס אותם. אם כל השדות יתבררו כ-null, mutate ימחק את הקובץ.
+    return TextBookPerBookSettings(
+      fontSize: newFontSize,
+      commentatorsBelow: newCommentatorsBelow,
+      removeNikud: newRemoveNikud,
+      removePunctuation: newRemovePunctuation,
+      continuousReadingMode: newContinuousReadingMode,
+      pageShapeLeftWidth: existingSettings?.pageShapeLeftWidth,
+      pageShapeRightWidth: existingSettings?.pageShapeRightWidth,
+      pageShapeBottomHeight: existingSettings?.pageShapeBottomHeight,
+      pageShapeBottomLeftWidth: existingSettings?.pageShapeBottomLeftWidth,
+    );
+  });
 }
 
 /// Helper function to add bookmark from keyboard shortcut

@@ -20,9 +20,9 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_handler.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
-import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
@@ -456,7 +456,10 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
                 widget.plugin.pluginId,
                 'network.access',
               );
-              if (granted == true && isUriAllowedForPluginNetwork(uri)) {
+              final allowed = granted == true &&
+                  await PluginNetworkAccessResolver.instance
+                      .isUriAllowedForPlugin(uri, widget.plugin.manifest);
+              if (allowed) {
                 return NavigationActionPolicy.ALLOW;
               }
             }
@@ -487,7 +490,10 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
                 widget.plugin.pluginId,
                 'network.access',
               );
-              if (granted == true && isUriAllowedForPluginNetwork(uri)) {
+              final allowed = granted == true &&
+                  await PluginNetworkAccessResolver.instance
+                      .isUriAllowedForPlugin(uri, widget.plugin.manifest);
+              if (allowed) {
                 return null;
               }
             }

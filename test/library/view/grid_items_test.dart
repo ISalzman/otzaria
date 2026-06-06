@@ -8,17 +8,19 @@ import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/models/books.dart';
 
 class _FakeFileSystemData extends FileSystemData {
-  _FakeFileSystemData(this.source);
+  _FakeFileSystemData({this.canDelete = false});
 
-  final String source;
+  /// האם מחיקה מהספרייה מותרת (מדמה ספר "עותק עצמאי" כשהוא true).
+  final bool canDelete;
 
   @override
-  Future<String> getBookDataSource(
-    String title, {
+  Future<bool> canDeleteUserBookFromLibrary({
+    required String title,
     int? categoryId,
-    String? fileType = 'txt',
+    String fileType = 'txt',
+    required bool isUserBook,
   }) async {
-    return source;
+    return canDelete;
   }
 }
 
@@ -106,7 +108,8 @@ void main() {
   });
 
   setUp(() {
-    FileSystemData.instance = _FakeFileSystemData('ק');
+    // ברירת מחדל: מחיקה מהספרייה אסורה (כמו ספר רשמי / קריאה מהקבצים).
+    FileSystemData.instance = _FakeFileSystemData(canDelete: false);
   });
 
   tearDown(() {
@@ -170,11 +173,12 @@ void main() {
     expect(find.byTooltip('א'), findsNothing);
   });
 
-  testWidgets('מציג פעולת מחיקה עבור ספר שמקורו ב-DB', (tester) async {
-    FileSystemData.instance = _FakeFileSystemData('DB');
+  testWidgets('מציג פעולת מחיקה עבור ספר "עותק עצמאי"', (tester) async {
+    // עותק עצמאי (content-in-db) — ניתן למחיקה מהספרייה.
+    FileSystemData.instance = _FakeFileSystemData(canDelete: true);
 
     final book =
-        TextBook(title: 'ספר DB לבדיקה', categoryId: 42, isUserBook: true);
+        TextBook(title: 'ספר עצמאי לבדיקה', categoryId: 42, isUserBook: true);
 
     await tester.pumpWidget(buildTestWidget(book: book));
     await tester.pumpAndSettle();
@@ -185,10 +189,12 @@ void main() {
     );
   });
 
-  testWidgets('לא מציג פעולת מחיקה עבור ספר שמקורו בקבצים', (tester) async {
-    FileSystemData.instance = _FakeFileSystemData('ק');
+  testWidgets('לא מציג פעולת מחיקה עבור ספר "קריאה מהקבצים"', (tester) async {
+    // קריאה מהקבצים (file-backed) — נמחק רק מהדיסק, לא מהספרייה.
+    FileSystemData.instance = _FakeFileSystemData(canDelete: false);
 
-    final book = TextBook(title: 'ספר קבצים לבדיקה', categoryId: 7);
+    final book =
+        TextBook(title: 'ספר מקובץ לבדיקה', categoryId: 7, isUserBook: true);
 
     await tester.pumpWidget(buildTestWidget(book: book));
     await tester.pumpAndSettle();
@@ -201,7 +207,7 @@ void main() {
 
   testWidgets('מציג את אייקון הקובץ ותפריט האפשרויות בטור אנכי',
       (tester) async {
-    FileSystemData.instance = _FakeFileSystemData('DB');
+    FileSystemData.instance = _FakeFileSystemData(canDelete: true);
 
     final book =
         TextBook(title: 'ספר לבדיקה', categoryId: 11, isUserBook: true);

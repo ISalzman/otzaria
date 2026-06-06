@@ -193,6 +193,69 @@ const { data } = await Otzaria.call('library.getBookToc', {
 
 ---
 
+## network.* - גישה לרשת
+
+> כל גישת רשת מוגבלת לרשימת ההיתר של אוצריא — ראו [⚠️ הרשאת `network.access`](#️-הרשאת-networkaccess--דרישה-מיוחדת-pr-לאוצריא).
+
+### `network.fetch`
+**הרשאה:** `network.access`
+
+שליפת תוכן מ-URL מותר (ללא מעקב אחר redirects). מחזירה את גוף התשובה כטקסט.
+
+**חשוב — מתי להשתמש בזה במקום `fetch()` רגיל:** קריאת `fetch()` ישירה מתוך
+ה-WebView של התוסף כפופה ל-CORS (ה-origin הוא `null` כי הדף נטען מ-`file://`).
+שרת שלא מחזיר `Access-Control-Allow-Origin` יחסום את הבקשה. `network.fetch`
+רץ בצד אוצריא (Flutter) ואינו כפוף ל-CORS — לכן לקריאות ל-APIs חיצוניים
+(במיוחד `POST`) יש להשתמש בו ולא ב-`fetch()` ישיר.
+
+פרמטרים: `url` (חובה), `method` (ברירת מחדל `GET`), `headers` (אובייקט,
+אופציונלי), `body` (מחרוזת, אופציונלי).
+
+```javascript
+// GET פשוט
+const { data } = await Otzaria.call('network.fetch', {
+  url: 'https://api.github.com/repos/Owner/Repo/releases/latest'
+});
+// { status: 200, ok: true, body: "..." }
+
+// POST עם גוף JSON (למשל קריאה ל-API חיצוני)
+const res = await Otzaria.call('network.fetch', {
+  url: 'https://api.example.com/endpoint',
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json;charset=UTF-8' },
+  body: JSON.stringify({ key: 'value' })
+});
+if (res.success && res.data.ok) {
+  const parsed = JSON.parse(res.data.body);
+}
+```
+
+### `network.download`
+**הרשאה:** `network.access`
+
+הורדה רגילה של קובץ מ-URL מותר אל **תיקיית ההורדות** של המערכת. ההורדה
+מתבצעת בצד אוצריא (Flutter), כך שאין צורך ב-`showDirectoryPicker` או
+ב-File System Access API (שאינם זמינים ל-WebView של התוסף).
+
+- ה-`url` חייב להופיע גם ב-`network.allowlist` של התוסף וגם ברשימת ההיתר הרשמית של אוצריא (`pluginNetworkAllowlist` המקומי או הקובץ המקביל הרשמי ב-GitHub).
+  redirect של גיטהאב ל-CDN מטופל אוטומטית בצד אוצריא.
+- `filename` אופציונלי; אם לא סופק, שם הקובץ נגזר מה-URL.
+- אם קיים כבר קובץ באותו שם, נוספת סיומת מספרית (` (1)`) כדי לא לדרוס.
+
+```javascript
+const { data } = await Otzaria.call('network.download', {
+  url: 'https://github.com/Owner/Repo/releases/latest/download/books.zip',
+  filename: 'books.zip' // אופציונלי
+});
+// { path: "C:\\Users\\...\\Downloads\\books.zip", filename: "books.zip" }
+```
+
+שגיאות אפשריות: `error.permission_denied` (אין הרשאת network.access),
+`error.forbidden` (URL לא ברשימת ההיתר), `error.invalid_params`
+(URL חסר/לא תקין), `error.internal` (כשל הורדה).
+
+---
+
 ## search.* - חיפוש
 
 ### `search.fullText`
@@ -1335,13 +1398,25 @@ Otzaria.on('plugin.boot', async (payload) => {
 
 ## ⚠️ הרשאת `network.access` — דרישה מיוחדת: PR לאוצריא
 
-הצהרה על ההרשאה `network.access` ב-`manifest.json` **אינה מספיקה** כדי שתוסף יוכל לגשת לרשת. בפועל, רשימת ה-URLs המאושרים מנוהלת **בקוד אוצריא עצמו** ולא במניפסט של התוסף — בקובץ:
+הצהרה על ההרשאה `network.access` ב-`manifest.json` **אינה מספיקה** כדי שתוסף יוכל לגשת לרשת. בפועל, ה-URL חייב לעבור שתי בדיקות מצטברות:
+
+1. להופיע ב-`network.allowlist` של התוסף עצמו.
+2. להופיע במקור אמון רשמי של אוצריא — או בקוד המקומי המובנה, או בקובץ המקביל הרשמי ב-GitHub.
+
+מקור האמון המקומי נמצא בקובץ:
 
 [`lib/plugins/models/plugin_network_allowlist.dart`](../../lib/plugins/models/plugin_network_allowlist.dart) → הקבוע `pluginNetworkAllowlist`.
 
+בנוסף, אוצריא בודקת גם את הקובץ המקביל בריפו הרשמי `Otzaria/otzaria` ב-GitHub, וטוענת אישורים ממנו **לזיכרון בלבד** עד סגירת האפליקציה.
+
 ### תהליך הוספת URL חדש
 
-כל תוסף שזקוק לגישה ל-URL כלשהו ברשת **חייב לפתוח Pull Request** למאגר אוצריא שמוסיף את ה-URLs הרלוונטיים לקובץ הנ"ל. ללא PR שאושר ומוזג — ה-URL ייחסם ב-runtime עם `403 Forbidden`, גם אם המשתמש אישר את הרשאת `network.access`.
+כל תוסף שזקוק לגישה ל-URL כלשהו ברשת **חייב**:
+
+1. להצהיר על ה-URL ב-`manifest.json` תחת `network.allowlist`.
+2. לפתוח Pull Request למאגר אוצריא שמוסיף את ה-URL לקובץ הנ"ל.
+
+ללא שני השלבים יחד — ה-URL ייחסם ב-runtime עם `403 Forbidden`, גם אם המשתמש אישר את הרשאת `network.access`.
 
 ### חובה: כתובות מדויקות בלבד
 

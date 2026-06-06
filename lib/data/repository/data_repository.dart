@@ -32,8 +32,14 @@ class DataRepository {
   // Previously these ran getAllBooksWithRelations() eagerly at startup,
   // competing with library loading for DB I/O.
   Future<List<Book>>? _hebrewBooksFuture;
+  Future<List<Book>>? _localHebrewBooksFuture;
   Future<List<ExternalLibraryBook>>? _otzarBooksFuture;
   Future<List<Book>> get hebrewBooks => _hebrewBooksFuture ??= getHebrewBooks();
+
+  /// ספרי היברובוקס שקיים להם PDF מקומי (כ-[PdfBook]). נחשבים מקומיים
+  /// ומוצגים בחיפוש גם כשהצגת ספרים חיצוניים כבויה.
+  Future<List<Book>> get localHebrewBooks =>
+      _localHebrewBooksFuture ??= FileSystemData.getLocalHebrewBooks();
   Future<List<ExternalLibraryBook>> get otzarBooks =>
       _otzarBooksFuture ??= getOtzarBooks();
 
@@ -41,6 +47,7 @@ class DataRepository {
   /// Call this when the library is refreshed.
   void invalidateExternalBooksCache() {
     _hebrewBooksFuture = null;
+    _localHebrewBooksFuture = null;
     _otzarBooksFuture = null;
   }
 
@@ -155,6 +162,10 @@ class DataRepository {
     }
     if (includeHebrewBooks) {
       allBooks.addAll(await hebrewBooks);
+    } else {
+      // ספרי היברובוקס שיש להם PDF מקומי הם ספרים שכבר נמצאים במחשב,
+      // ולכן מוצגים תמיד — גם כשהצגת ספרים חיצוניים כבויה.
+      allBooks.addAll(await localHebrewBooks);
     }
 
     final searchEntries = <_BookSearchEntry>[

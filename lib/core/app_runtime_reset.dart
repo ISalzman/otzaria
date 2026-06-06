@@ -8,6 +8,7 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/find_ref/repository/find_ref_repository.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
+import 'package:otzaria/services/commentary_service.dart';
 
 /// מאפס מצב runtime מקומי כדי שהאפליקציה תוכל להיבנות מחדש בלי סגירת תהליך.
 Future<void> resetRuntimeStateForAppRestart() async {
@@ -27,6 +28,7 @@ Future<void> resetRuntimeStateForAppRestart() async {
   // ה-FindRefRepository מחזיק caches פנימיים (מפרשים, AltToc שטוח) שלא
   // ניזונים מהקאשים שלמעלה. בלי איפוס יזום הם ישרדו עד restart מלא.
   FindRefRepository.clearAllCaches();
+  CommentaryService.clearEraCache();
 }
 
 /// תאימות לשם הישן במסלול איפוס הגדרות.

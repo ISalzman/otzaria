@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
@@ -422,51 +424,66 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     final range =
         _getLineRangeForPara(_selectedHeadingIdx, paragraphs, safeParaIdx);
 
-    return Scaffold(
-      body: Column(
-        children: [
-          _buildAppTopBar(context),
-          Expanded(
-            child: AdaptiveSidePane(
-              isOpen: _navPaneOpen || _pinLeftPane,
-              alignment: AlignmentDirectional.centerEnd,
-              paneWidth: 320,
-              onClose: () {
-                if (!_pinLeftPane) setState(() => _navPaneOpen = false);
-              },
-              paneContent: _buildSidePane(context),
-              mainContent: ValueListenableBuilder<bool>(
-                valueListenable: widget.tab.sourceTab.linksLoadingNotifier,
-                builder: (context, linksLoading, _) => PdfCommentaryPanel(
-                  key: _panelKey,
-                  tab: widget.tab.sourceTab,
-                  linksCount: widget.tab.sourceTab.links.length,
-                  linksLoading: linksLoading,
-                  isFullScreen: true,
-                  enableInternalFilter: false,
-                  onSelectCommentatorsRequested: _openCommentatorsTab,
-                  lineStartOverride: range.start,
-                  lineEndOverride: range.end,
-                  removeNikud: _removeNikud,
-                  removePunctuation: _removePunctuation,
-                  openBookCallback: (tab) {
-                    if (tab is TextBookTab) {
-                      openBook(context, tab.book, tab.index, '',
-                          ignoreHistory: false);
-                    }
-                  },
-                  fontSize: 16.0,
-                  externalSearchController: _searchController,
-                  externalTotalResultsNotifier: _totalResultsNotifier,
-                  externalCurrentIndexNotifier: _currentIdxNotifier,
-                  externalAllExpandedNotifier: _allExpandedInChild,
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _handlePrintShortcut,
+      child: Scaffold(
+        body: Column(
+          children: [
+            _buildAppTopBar(context),
+            Expanded(
+              child: AdaptiveSidePane(
+                isOpen: _navPaneOpen || _pinLeftPane,
+                alignment: AlignmentDirectional.centerEnd,
+                paneWidth: 320,
+                onClose: () {
+                  if (!_pinLeftPane) setState(() => _navPaneOpen = false);
+                },
+                paneContent: _buildSidePane(context),
+                mainContent: ValueListenableBuilder<bool>(
+                  valueListenable: widget.tab.sourceTab.linksLoadingNotifier,
+                  builder: (context, linksLoading, _) => PdfCommentaryPanel(
+                    key: _panelKey,
+                    tab: widget.tab.sourceTab,
+                    linksCount: widget.tab.sourceTab.links.length,
+                    linksLoading: linksLoading,
+                    isFullScreen: true,
+                    enableInternalFilter: false,
+                    onSelectCommentatorsRequested: _openCommentatorsTab,
+                    lineStartOverride: range.start,
+                    lineEndOverride: range.end,
+                    removeNikud: _removeNikud,
+                    removePunctuation: _removePunctuation,
+                    openBookCallback: (tab) {
+                      if (tab is TextBookTab) {
+                        openBook(context, tab.book, tab.index, '',
+                            ignoreHistory: false);
+                      }
+                    },
+                    fontSize: 16.0,
+                    externalSearchController: _searchController,
+                    externalTotalResultsNotifier: _totalResultsNotifier,
+                    externalCurrentIndexNotifier: _currentIdxNotifier,
+                    externalAllExpandedNotifier: _allExpandedInChild,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  /// מטפל בקיצור ההדפסה המוגדר — פעיל רק בכרטיסיית המפרשים.
+  KeyEventResult _handlePrintShortcut(FocusNode node, KeyEvent event) {
+    final printShortcut =
+        Settings.getValue<String>('key-shortcut-print') ?? 'ctrl+p';
+    if (ShortcutHelper.matchesShortcut(event, printShortcut)) {
+      _panelKey.currentState?.printDisplayedCommentaries();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   void _navigateToPrevParagraph() {
@@ -604,8 +621,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                       ? FluentIcons.text_font_24_regular
                       : FluentIcons.text_font_info_24_regular,
                   compact: isCompact,
-                  onPressed: () =>
-                      setState(() => _removeNikud = !_removeNikud),
+                  onPressed: () => setState(() => _removeNikud = !_removeNikud),
                 ),
                 icon: _removeNikud
                     ? FluentIcons.text_font_24_regular
@@ -631,6 +647,20 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 onPressed: () =>
                     setState(() => _removePunctuation = !_removePunctuation),
               ),
+              // הדפסת המפרשים המוצגים
+              ActionButtonData(
+                widget: ToolbarActionButton(
+                  tooltip: 'הדפסה',
+                  icon: FluentIcons.print_24_regular,
+                  compact: isCompact,
+                  onPressed: () =>
+                      _panelKey.currentState?.printDisplayedCommentaries(),
+                ),
+                icon: FluentIcons.print_24_regular,
+                tooltip: 'הדפסה',
+                onPressed: () =>
+                    _panelKey.currentState?.printDisplayedCommentaries(),
+              ),
               // כיווץ/הרחבת כל המפרשים
               ActionButtonData(
                 widget: ValueListenableBuilder<bool>(
@@ -643,8 +673,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                       icon: allExpanded
                           ? FluentIcons.arrow_collapse_all_24_regular
                           : FluentIcons.arrow_expand_all_24_regular,
-                      compact:
-                          context.read<SettingsBloc>().state.compactMenuMode,
+                      compact: isCompact,
                       onPressed: () =>
                           _panelKey.currentState?.toggleAllExpanded(),
                     );
@@ -762,7 +791,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     );
   }
 
-
   /// פאנל הצד — סרגל 3 לשוניות זהה לכרטיסיית הטקסט (ניווט / מפרשים / חיפוש)
   /// עם כפתור נעיצה בפינה.
   Widget _buildSidePane(BuildContext context) {
@@ -803,7 +831,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                             textDirection: TextDirection.rtl),
                       ),
                       Tab(
-                        icon: Icon(FluentIcons.book_search_24_regular, size: 16),
+                        icon:
+                            Icon(FluentIcons.book_search_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
                         child: Text('חיפוש',

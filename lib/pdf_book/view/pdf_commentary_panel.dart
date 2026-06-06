@@ -7,6 +7,7 @@ import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
 import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -22,9 +23,13 @@ import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:otzaria/services/commentary_service.dart';
+import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/printing/commentary_print_builder.dart';
+import 'package:otzaria/printing/view/printing_screen.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'dart:async'; // Added for Timer
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -285,6 +290,23 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       }
     }
     final availableCommentators = commentatorsSet.toList();
+
+    // טעינת דורות הקישורים הרגילים (לא מפרשים) מראש - fire-and-forget כדי לא
+    // לחסום את בניית קבוצות המפרשים. כשתסתיים, מאפסים את מטמון התוכן הנראה
+    // ומרעננים, כדי שסדר fallback (אלפבתי) שאולי נקבע מוקדם לא יישאר תקוע.
+    final nonCommentaryTitles = <String>{
+      for (final link in widget.tab.links)
+        if (!LinkTypes.isCommentaryOrTargum(link.connectionType))
+          utils.getTitleFromPath(link.path2),
+    };
+    if (nonCommentaryTitles.isNotEmpty) {
+      CommentaryService.preloadEras(nonCommentaryTitles).then((_) {
+        if (mounted) {
+          setState(() => _visibleContentCache = null);
+        }
+      });
+    }
+
     final eras = await utils.splitByEra(availableCommentators);
     final known = <String>{
       ...?eras['תורה שבכתב'],
@@ -468,11 +490,15 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     if (widget.isFullScreen) {
       // במצב fullscreen: הכותרת + הניווט מופעלים מ-PdfCommentatorsTabScreen.
       // הפאנל מציג רק את תוכן המפרשים (כולל שורת חיפוש ופילטר)
-      return SelectionArea(
+      return RtlSelectionShortcuts(
+          child: SelectionArea(
         contextMenuBuilder: (context, selectableRegionState) {
           return const SizedBox.shrink();
         },
         onSelectionChanged: (selection) {
+          // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
+          trackRtlSelection(selection?.plainText);
+          if (rtlSelectionPriming) return; // שינוי זמני בזמן priming
           if (selection != null && selection.plainText.isNotEmpty) {
             setState(() {
               _savedSelectedText = selection.plainText;
@@ -480,7 +506,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           }
         },
         child: _buildCommentariesView(),
-      );
+      ));
     }
 
     return Column(
@@ -511,11 +537,15 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         ),
         // תוכן הכרטיסיות - עטוף ב-SelectionArea כדי לאפשר בחירת טקסט
         Expanded(
-          child: SelectionArea(
+          child: RtlSelectionShortcuts(
+              child: SelectionArea(
             contextMenuBuilder: (context, selectableRegionState) {
               return const SizedBox.shrink();
             },
             onSelectionChanged: (selection) {
+              // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
+              trackRtlSelection(selection?.plainText);
+              if (rtlSelectionPriming) return; // שינוי זמני בזמן priming
               if (selection != null && selection.plainText.isNotEmpty) {
                 setState(() {
                   _savedSelectedText = selection.plainText;
@@ -546,7 +576,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                 ),
               ],
             ),
-          ),
+          )),
         ),
       ],
     );
@@ -651,6 +681,39 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           onPressed: _openInlineSearch,
         ),
       ],
+    );
+  }
+
+  /// פותח את מסך ההדפסה עם המפרשים המוצגים כעת (מקובצים לפי מפרש).
+  /// פומבי כדי שכרטיסיית המפרשים הייעודית תפעיל אותו מהסרגל/קיצור המקלדת.
+  Future<void> printDisplayedCommentaries() async {
+    final visibleContent = _getVisibleContent();
+    if (visibleContent == null || visibleContent.commentaryLinks.isEmpty) {
+      UiSnack.show('אין מפרשים להדפסה');
+      return;
+    }
+
+    final groups = await visibleContent.sortedGroupsFuture;
+    final blocks = await buildCommentaryPrintBlocks(groups);
+    if (blocks.isEmpty) {
+      UiSnack.show('אין מפרשים להדפסה');
+      return;
+    }
+    if (!mounted) return;
+
+    final bookTitle = widget.tab.book.title;
+    final removeTaamim = !context.read<SettingsBloc>().state.showTeamim;
+    await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PrintingScreen(
+        data: Future.value(''),
+        bookId: bookTitle,
+        documentTitle: bookTitle,
+        prebuiltBlocks: blocks,
+        removeNikud: widget.removeNikud,
+        removeTaamim: removeTaamim,
+      ),
     );
   }
 
@@ -1325,13 +1388,14 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       }
       return a.index1.compareTo(b.index1);
     });
-    nonCommentaryLinks.sort((a, b) => a.index1.compareTo(b.index1));
+    final sortedNonCommentaryLinks =
+        CommentaryService.sortLinksByEraSync(nonCommentaryLinks);
 
     final groups = _groupConsecutiveLinks(commentaryLinks);
     final cache = _PdfVisibleContentCache(
       cacheKey: cacheKey,
       commentaryLinks: List.unmodifiable(commentaryLinks),
-      links: List.unmodifiable(nonCommentaryLinks),
+      links: List.unmodifiable(sortedNonCommentaryLinks),
       hasAnyCommentaryLinks: hasAnyCommentaryLinks,
       sortedGroupsFuture: CommentaryService.sortGroupsByEra(groups),
     );

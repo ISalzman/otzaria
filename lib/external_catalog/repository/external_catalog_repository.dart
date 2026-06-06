@@ -53,6 +53,20 @@ class ExternalCatalogRepository {
     );
   }
 
+  /// מחזיר ספרי היברובוקס לפי קבוצת מזהים בלבד (`id_book`).
+  ///
+  /// בניגוד ל-[getHebrewBooks] שטוען את כל הטבלה (~60K שורות), כאן נטענים
+  /// רק הספרים המבוקשים דרך `WHERE id_book IN (...)`. משמש לטעינת המטא-דאטה
+  /// של ספרים שיש להם PDF מקומי, בלי לשלם טעינת קטלוג מלאה בכל חיפוש.
+  Future<List<Book>> getHebrewBooksByIds(Iterable<int> ids) async {
+    return _loadBooks(
+      tableName: 'hebrew_books',
+      mapper: _mapHebrewBook,
+      idColumn: 'id_book',
+      ids: ids,
+    );
+  }
+
   /// מחזיר את גרסת מסד הקטלוגים המקומי, אם קיימת.
   Future<int?> getCurrentDatabaseVersion() async {
     if (!await databaseExists()) {
@@ -136,9 +150,19 @@ class ExternalCatalogRepository {
     await dbFile.writeAsBytes(dbBytes, flush: true);
   }
 
+  /// מספר המזהים המקסימלי לכל שאילתת `IN` — מתחת למגבלת המשתנים של SQLite.
+  static const int _idChunkSize = 900;
+
+  /// טוען ספרים מטבלה בקטלוג.
+  ///
+  /// כברירת מחדל טוען את כל הטבלה ממוינת לפי כותרת. אם הועברו [idColumn]
+  /// ו-[ids], נטענים רק הספרים שמזההם נמצא ב-[ids] (ב-chunks כדי לעמוד
+  /// במגבלת המשתנים של SQLite), ללא מיון.
   Future<List<T>> _loadBooks<T extends Book>({
     required String tableName,
     required T Function(Map<String, Object?> row) mapper,
+    String? idColumn,
+    Iterable<int>? ids,
   }) async {
     if (!await databaseExists()) {
       return <T>[];
@@ -147,6 +171,29 @@ class ExternalCatalogRepository {
     sqlite3.Database? db;
     try {
       db = sqlite3.sqlite3.open(databasePath, mode: sqlite3.OpenMode.readOnly);
+
+      if (idColumn != null && ids != null) {
+        final idList = ids.toList();
+        if (idList.isEmpty) {
+          return <T>[];
+        }
+        final results = <T>[];
+        for (var i = 0; i < idList.length; i += _idChunkSize) {
+          final end = (i + _idChunkSize < idList.length)
+              ? i + _idChunkSize
+              : idList.length;
+          final chunk = idList.sublist(i, end);
+          final placeholders = List.filled(chunk.length, '?').join(',');
+          final rows = db.select(
+            'SELECT * FROM $tableName WHERE $idColumn IN ($placeholders)',
+            chunk,
+          );
+          results.addAll(
+            rows.map((row) => mapper(row as Map<String, Object?>)),
+          );
+        }
+        return results;
+      }
 
       final rows = db.select(
         'SELECT * FROM $tableName ORDER BY title COLLATE NOCASE',

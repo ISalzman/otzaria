@@ -5,6 +5,8 @@ import 'package:otzaria/models/books.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -102,6 +104,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   // pinpoint highlight ממתין להחלה כשה-bloc יגיע ל-Loaded
   ({String text, int? sectionIndex})? _pendingPinpoint;
+
+  /// גודל גופן שהגיע (דרך `UpdateFontSize`) לפני שהטעינה הסתיימה. בעליית
+  /// התוכנה ההגדרות נטענות מהר יותר מתוכן הספר, כך שעדכון הגופן עלול להגיע
+  /// בזמן `Loading`. נשמר כאן ויוחל ב-`_onLoadContent` במעבר ל-`Loaded`.
+  double? _pendingFontSize;
 
   TextBookBloc({
     required this.repository,
@@ -692,7 +699,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         linksByLine: const {},
         availableCommentators: existingAvailableCommentators,
         tableOfContents: tableOfContents,
-        fontSize: event.fontSize,
+        fontSize: _pendingFontSize ?? event.fontSize,
         showLeftPane: event.forceCloseLeftPane
             ? false
             : resolveInitialReadingLeftPaneVisibility(
@@ -753,6 +760,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       emit(loadedState);
 
       _pendingPinpoint = null;
+      _pendingFontSize = null;
 
       _resetLoadedLinksWindow(book);
 
@@ -800,6 +808,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         fontSize: event.fontSize,
         selectedIndex: currentState.selectedIndex,
       ));
+    } else {
+      // האירוע הגיע לפני סיום הטעינה (מרוץ בעליית התוכנה). שומרים כ-pending
+      // כדי שלא יאבד, ומחילים ב-_onLoadContent בבניית מצב ה-Loaded.
+      _pendingFontSize = event.fontSize;
     }
   }
 
@@ -1704,8 +1716,18 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return super.close();
   }
 
+  // אורך הרשימה חייב להיות אורך הספר המלא (totalLines) ולא רק עד endLine,
+  // אחרת itemCount של הרשימה/פס-הגלילה קטן מדי בפתיחה באמצע הספר, ופס
+  // הגלילה מתחיל קרוב לתחתית ו"גולש" למקומו רק כשהתוכן המלא נטען ברקע.
+  // השורות שמעבר לחלון הטעון נשארות placeholders ריקים — בדיוק כמו השורות
+  // שלפני תחילת החלון.
+  int _fullContentLength(BookContentRange range) =>
+      range.totalLines > range.endLine + 1
+          ? range.totalLines
+          : range.endLine + 1;
+
   List<String> _contentWithAppliedRange(BookContentRange range) {
-    final content = List<String>.filled(range.endLine + 1, '');
+    final content = List<String>.filled(_fullContentLength(range), '');
     for (var offset = 0; offset < range.lines.length; offset++) {
       final targetIndex = range.startLine + offset;
       if (targetIndex >= 0 && targetIndex < content.length) {
@@ -1716,7 +1738,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   List<bool> _loadedContentFlagsWithAppliedRange(BookContentRange range) {
-    final loadedFlags = List<bool>.filled(range.endLine + 1, false);
+    final loadedFlags = List<bool>.filled(_fullContentLength(range), false);
     for (var offset = 0; offset < range.lines.length; offset++) {
       final targetIndex = range.startLine + offset;
       if (targetIndex >= 0 && targetIndex < loadedFlags.length) {
@@ -2108,6 +2130,21 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     ));
     _activeLinksTargetBookTitlesSignature =
         event.targetBookTitlesSignature ?? _allTargetBookTitlesSignature;
+
+    // טעינת דורות הספרים מראש למטמון, כדי שתפריט ההקשר יוכל למיין
+    // את הקישורים לפי סדר הדורות באופן סינכרוני.
+    _preloadLinkEras(processedLinks.links);
+  }
+
+  /// טוען מראש את דורות ספרי היעד של הקישורים הרגילים (לא מפרשים)
+  void _preloadLinkEras(List<Link> links) {
+    final titles = <String>{
+      for (final link in links)
+        if (!LinkTypes.isCommentaryOrTargum(link.connectionType))
+          utils.getTitleFromPath(link.path2),
+    };
+    if (titles.isEmpty) return;
+    CommentaryService.preloadEras(titles);
   }
 
   void _onSetLinksLoading(

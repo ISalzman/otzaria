@@ -663,9 +663,32 @@ begin
   end;
 end;
 
+// מריץ קובץ הרצה ולוכד את פלט ה-stderr/stdout שלו, כדי שבמקרה כשל
+// נוכל להציג את הודעת השגיאה האמיתית (למשל "אין מקום בדיסק" / "הקובץ נעול")
+// במקום קוד יציאה אטום כמו "קוד יציאה: 1".
+// מחזיר False רק אם ההרצה עצמה נכשלה; קוד היציאה מוחזר ב-ResultCode.
+function RunAndCaptureErrors(const Exe, Params: String;
+  var ResultCode: Integer; var CapturedOutput: String): Boolean;
+var
+  Output: TExecOutput;
+  I: Integer;
+begin
+  CapturedOutput := '';
+  Result := ExecAndCaptureOutput(Exe, Params, '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode, Output);
+  if not Result then
+    exit;
+  for I := 0 to GetArrayLength(Output.StdErr) - 1 do
+    if Trim(Output.StdErr[I]) <> '' then
+      CapturedOutput := CapturedOutput + Output.StdErr[I] + #13#10;
+  for I := 0 to GetArrayLength(Output.StdOut) - 1 do
+    if Trim(Output.StdOut[I]) <> '' then
+      CapturedOutput := CapturedOutput + Output.StdOut[I] + #13#10;
+end;
+
 procedure ExtractBundledDatabase(const ArchiveName, DatabaseName: String);
 var
-  ArchivePath, DatabasePath, ZstdPath, Params: String;
+  ArchivePath, DatabasePath, ZstdPath, Params, ErrOutput: String;
   ResultCode: Integer;
 begin
   ArchivePath := ExpandConstant('{app}\_staging\' + ArchiveName);
@@ -683,9 +706,11 @@ begin
   Log('Extracting bundled database from ' + ArchivePath);
   Params := '-d -f -T0 --long=31 "' + ArchivePath + '" -o "' + DatabasePath + '"';
 
-  if (not Exec(ZstdPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  if (not RunAndCaptureErrors(ZstdPath, Params, ResultCode, ErrOutput)) or (ResultCode <> 0) then
   begin
-    MsgBox('חילוץ מסד הנתונים נכשל. קוד יציאה: ' + IntToStr(ResultCode), mbCriticalError, MB_OK);
+    Log('zstd database extraction failed (' + IntToStr(ResultCode) + '): ' + ErrOutput);
+    MsgBox('חילוץ מסד הנתונים נכשל. קוד יציאה: ' + IntToStr(ResultCode)
+      + #13#10#13#10 + ErrOutput, mbCriticalError, MB_OK);
     Abort;
   end;
 
@@ -694,7 +719,7 @@ end;
 
 procedure ExtractBundledTarArchive(const ArchiveName, TargetDirName: String);
 var
-  ArchivePath, TarPath, ParentDir, TargetDir, ZstdPath, SevenZipPath, Params: String;
+  ArchivePath, TarPath, ParentDir, TargetDir, ZstdPath, SevenZipPath, Params, ErrOutput: String;
   ResultCode: Integer;
 begin
   ArchivePath := ExpandConstant('{app}\_staging\' + ArchiveName);
@@ -718,17 +743,21 @@ begin
   Log('Extracting bundled tar archive from ' + ArchivePath);
   Params := '-d -f -T0 --long=31 "' + ArchivePath + '" -o "' + TarPath + '"';
 
-  if (not Exec(ZstdPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  if (not RunAndCaptureErrors(ZstdPath, Params, ResultCode, ErrOutput)) or (ResultCode <> 0) then
   begin
-    MsgBox('חילוץ ארכיון ה-PDF נכשל. קוד יציאה: ' + IntToStr(ResultCode), mbCriticalError, MB_OK);
+    Log('zstd PDF archive extraction failed (' + IntToStr(ResultCode) + '): ' + ErrOutput);
+    MsgBox('חילוץ ארכיון ה-PDF נכשל. קוד יציאה: ' + IntToStr(ResultCode)
+      + #13#10#13#10 + ErrOutput, mbCriticalError, MB_OK);
     Abort;
   end;
 
   Params := 'x -y "' + TarPath + '" "-o' + ParentDir + '"';
-  if (not Exec(SevenZipPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
+  if (not RunAndCaptureErrors(SevenZipPath, Params, ResultCode, ErrOutput)) or
      (ResultCode <> 0) then
   begin
-    MsgBox('פתיחת ארכיון ה-PDF נכשלה. קוד יציאה: ' + IntToStr(ResultCode), mbCriticalError, MB_OK);
+    Log('7za PDF archive extraction failed (' + IntToStr(ResultCode) + '): ' + ErrOutput);
+    MsgBox('פתיחת ארכיון ה-PDF נכשלה. קוד יציאה: ' + IntToStr(ResultCode)
+      + #13#10#13#10 + ErrOutput, mbCriticalError, MB_OK);
     Abort;
   end;
 

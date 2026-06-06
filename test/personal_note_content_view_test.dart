@@ -205,4 +205,39 @@ void main() {
 
     expect(find.byType(ActionChip), findsOneWidget);
   });
+
+  testWidgets('PersonalNotesListView מציגה את כל ההערות של השורה עם מפריד',
+      (tester) async {
+    PersonalNote plainNote(String id, String text) => PersonalNote(
+          id: id,
+          bookId: 'Test',
+          lineNumber: 1,
+          displayTitle: 'כותרת',
+          lastKnownLineNumber: null,
+          status: PersonalNoteStatus.located,
+          content: text,
+          contentPlain: text,
+          contentFormat: PersonalNoteContentFormat.plain,
+          createdAt: DateTime(2025, 1, 1),
+          updatedAt: DateTime(2025, 1, 2),
+        );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PersonalNotesListView(
+            notes: [
+              plainNote('pn_1', 'הערה ראשונה'),
+              plainNote('pn_2', 'הערה שנייה'),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // שתי ההערות מוצגות (לא רק האחרונה), עם מפריד אחד ביניהן.
+    expect(find.text('הערה ראשונה'), findsOneWidget);
+    expect(find.text('הערה שנייה'), findsOneWidget);
+    expect(find.byType(Divider), findsOneWidget);
+  });
 }

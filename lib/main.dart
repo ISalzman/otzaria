@@ -798,6 +798,18 @@ class _AppBootstrapState extends State<AppBootstrap> {
             debugPrint('Failed to warm up ReferenceBooksCache: $e');
           }
         }));
+        // פרי-וורם של ספרי היברובוקס המקומיים (אם הוגדרה תיקייה): סריקת
+        // התיקייה וטעינת המטא-דאטה מהקטלוג מבוצעות ברקע כדי שהחיפוש הראשון
+        // לא ישלם עבורן. כשאין תיקייה — הקריאה מתקצרת מיד ללא עלות.
+        unawaited(() async {
+          try {
+            await DataRepository.instance.localHebrewBooks;
+          } catch (e) {
+            if (kDebugMode) {
+              debugPrint('Failed to warm up local HebrewBooks: $e');
+            }
+          }
+        }());
       });
     }).catchError((Object error, StackTrace stackTrace) {
       _appendUnhandledErrorToLocalLog(

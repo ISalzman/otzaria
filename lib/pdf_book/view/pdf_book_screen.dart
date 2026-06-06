@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
@@ -14,6 +15,8 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart' as otz_links;
+import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart' as pdf_events;
 import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
@@ -806,7 +809,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     final sortedCommentators = commentators.toList()..sort();
 
-    return (commentators: sortedCommentators, links: links);
+    return (
+      commentators: sortedCommentators,
+      links: CommentaryService.sortLinksByEraSync(links),
+    );
   }
 
   void _recordCommentaryOpenedIfNeeded() {
@@ -2752,6 +2758,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         final loadedLinks = await textBook.links
           ..sort((a, b) => a.index1.compareTo(b.index1));
         widget.tab.links = loadedLinks;
+        // טעינת דורות מראש כדי שמיון הקישורים לפי דורות יעבוד סינכרונית
+        // (תפריט הקשר + פאנל קישורים)
+        CommentaryService.preloadEras(loadedLinks
+            .where((l) => !LinkTypes.isCommentaryOrTargum(l.connectionType))
+            .map((l) => utils.getTitleFromPath(l.path2)));
         final commentaryCount = loadedLinks
             .where((l) =>
                 l.connectionType.toUpperCase() == 'COMMENTARY' ||
@@ -2979,10 +2990,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                         : null,
                     tooltip: 'חיפוש וניווט',
                     icon: FluentIcons.navigation_24_regular,
-                    compact: context
-                        .read<SettingsBloc>()
-                        .state
-                        .compactMenuMode,
+                    compact: context.read<SettingsBloc>().state.compactMenuMode,
                     onPressed: () {
                       _setLeftPaneVisibility(!widget.tab.showLeftPane.value);
                     },
@@ -2995,10 +3003,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                         : null,
                     tooltip: 'חיפוש',
                     icon: FluentIcons.book_search_24_regular,
-                    compact: context
-                        .read<SettingsBloc>()
-                        .state
-                        .compactMenuMode,
+                    compact: context.read<SettingsBloc>().state.compactMenuMode,
                     onPressed: _ensureSearchTabIsActive,
                   ),
                 ),
@@ -3015,66 +3020,65 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             ),
             Expanded(
               child: BlocBuilder<PdfBookBloc, PdfBookState>(
-          buildWhen: (prev, curr) {
-            if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-              return prev.showLeftPane != curr.showLeftPane ||
-                  prev.sidebarWidth != curr.sidebarWidth ||
-                  prev.showRightPane != curr.showRightPane ||
-                  prev.rightPaneWidth != curr.rightPaneWidth;
-            }
-            return true;
-          },
-          builder: (context, state) {
-            final leftPaneWidth =
-                state is PdfBookLoaded ? state.sidebarWidth : 300.0;
-            final rightPaneWidth =
-                state is PdfBookLoaded ? state.rightPaneWidth : 300.0;
-            final showLeftPane =
-                state is PdfBookLoaded ? state.showLeftPane : false;
-            final showRightPane =
-                state is PdfBookLoaded ? state.showRightPane : false;
-            return DualAdaptiveReaderPane(
-              mainContent: _buildReaderMainContent(),
-              showLeftPane: showLeftPane,
-              leftPaneContent: _buildLeftPaneContent(),
-              leftPaneWidth: leftPaneWidth,
-              leftMinPaneWidth: 200,
-              leftMaxPaneWidth: 600,
-              onLeftPaneWidthChanged: (nextWidth) {
-                _bloc.add(pdf_events.UpdateSidebarWidth(nextWidth));
-              },
-              onCloseLeftPane: () => _setLeftPaneVisibility(false),
-              onLeftPaneResizeEnd: () {
-                final current = _bloc.state;
-                if (current is PdfBookLoaded) {
-                  context
-                      .read<SettingsBloc>()
-                      .add(UpdateSidebarWidth(current.sidebarWidth));
-                }
-              },
-              showRightPane: showRightPane,
-              rightPaneContent: _buildRightPaneContent(),
-              rightPaneWidth: rightPaneWidth,
-              rightMinPaneWidth: 250,
-              rightMaxPaneWidth: 600,
-              onRightPaneWidthChanged: (nextWidth) {
-                _bloc.add(pdf_events.UpdateRightPaneWidth(nextWidth));
-              },
-              onCloseRightPane: () {
-                _bloc.add(const pdf_events.ToggleRightPane(show: false));
-              },
-              onRightPaneResizeEnd: () {
-                final current = _bloc.state;
-                if (current is PdfBookLoaded) {
-                  context
-                      .read<SettingsBloc>()
-                      .add(UpdateCommentaryPaneWidth(current.rightPaneWidth));
-                }
-              },
-              minMainContentWidth: 200,
-            );
-          },
-        ),
+                buildWhen: (prev, curr) {
+                  if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
+                    return prev.showLeftPane != curr.showLeftPane ||
+                        prev.sidebarWidth != curr.sidebarWidth ||
+                        prev.showRightPane != curr.showRightPane ||
+                        prev.rightPaneWidth != curr.rightPaneWidth;
+                  }
+                  return true;
+                },
+                builder: (context, state) {
+                  final leftPaneWidth =
+                      state is PdfBookLoaded ? state.sidebarWidth : 300.0;
+                  final rightPaneWidth =
+                      state is PdfBookLoaded ? state.rightPaneWidth : 300.0;
+                  final showLeftPane =
+                      state is PdfBookLoaded ? state.showLeftPane : false;
+                  final showRightPane =
+                      state is PdfBookLoaded ? state.showRightPane : false;
+                  return DualAdaptiveReaderPane(
+                    mainContent: _buildReaderMainContent(),
+                    showLeftPane: showLeftPane,
+                    leftPaneContent: _buildLeftPaneContent(),
+                    leftPaneWidth: leftPaneWidth,
+                    leftMinPaneWidth: 200,
+                    leftMaxPaneWidth: 600,
+                    onLeftPaneWidthChanged: (nextWidth) {
+                      _bloc.add(pdf_events.UpdateSidebarWidth(nextWidth));
+                    },
+                    onCloseLeftPane: () => _setLeftPaneVisibility(false),
+                    onLeftPaneResizeEnd: () {
+                      final current = _bloc.state;
+                      if (current is PdfBookLoaded) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateSidebarWidth(current.sidebarWidth));
+                      }
+                    },
+                    showRightPane: showRightPane,
+                    rightPaneContent: _buildRightPaneContent(),
+                    rightPaneWidth: rightPaneWidth,
+                    rightMinPaneWidth: 250,
+                    rightMaxPaneWidth: 600,
+                    onRightPaneWidthChanged: (nextWidth) {
+                      _bloc.add(pdf_events.UpdateRightPaneWidth(nextWidth));
+                    },
+                    onCloseRightPane: () {
+                      _bloc.add(const pdf_events.ToggleRightPane(show: false));
+                    },
+                    onRightPaneResizeEnd: () {
+                      final current = _bloc.state;
+                      if (current is PdfBookLoaded) {
+                        context.read<SettingsBloc>().add(
+                            UpdateCommentaryPaneWidth(current.rightPaneWidth));
+                      }
+                    },
+                    minMainContentWidth: 200,
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -3599,7 +3603,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       builder: (context) {
         return AlertDialog(
           title: const Text('לעבור לURL?'),
-          content: SelectionArea(
+          content: RtlSelectionShortcuts(
+              child: SelectionArea(
             child: Text.rich(
               TextSpan(
                 children: [
@@ -3611,7 +3616,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 ],
               ),
             ),
-          ),
+          )),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -3905,12 +3910,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         if (value.isNotEmpty && !value.contains(widget.tab.book.title)) {
           displayTitle = '${widget.tab.book.title}, $value';
         }
-        return SelectionArea(
-          child: Text(
-            displayTitle,
-            style: AppTopBar.titleStyle(context),
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis,
+        return RtlSelectionShortcuts(
+          child: SelectionArea(
+            child: Text(
+              displayTitle,
+              style: AppTopBar.titleStyle(context),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         );
       },
@@ -3954,8 +3961,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             tooltip: 'סוף הספר (CTRL + END)',
             icon: FluentIcons.arrow_next_24_filled,
             compact: isCompact,
-            onPressed: () =>
-                _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
+            onPressed: () => _goToPageWithSpreadLock(
+                widget.tab.pdfViewerController.pageCount),
           ),
         ],
       ),

@@ -494,6 +494,137 @@ void main() {
   });
 
   // ───────────────────────────────────────────────────────────────────────
+  // shouldPreserveSelectionOnSecondaryTap — חסימת שחרור הבחירה בלחיצה ימנית
+  //
+  // ב-Windows, ה-recognizer של SelectableRegion (אב) יורה onSecondaryTapDown
+  // אחרי kPressTimeout (100ms) ומשחרר את הבחירה. כשיש בחירה, AppContextMenuRegion
+  // זוכה באופן eager בכפתור הימני ודוחה את האב לפני ה-deadline. אנו מדמים את
+  // SelectableRegion עם GestureDetector אב, ובודקים שה-onSecondaryTapDown שלו
+  // אינו נורה — גם בהחזקה ארוכה (>100ms).
+  // ───────────────────────────────────────────────────────────────────────
+
+  Future<bool> rightClickAndReportOuterFired(
+    WidgetTester tester, {
+    required bool preserveSelection,
+  }) async {
+    var outerFired = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            // מדמה את ה-TapGestureRecognizer לכפתור הימני של SelectableRegion (אב)
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onSecondaryTapDown: (_) => outerFired = true,
+              child: AppContextMenuRegion(
+                shouldPreserveSelectionOnSecondaryTap: (_) => preserveSelection,
+                menuBuilder: (_, __) => [
+                  AppContextMenuEntry(label: 'העתק', onTap: () {}),
+                ],
+                child: const SizedBox(
+                  width: 100,
+                  height: 100,
+                  child: ColoredBox(color: Colors.amber),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryButton,
+    );
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
+    await gesture.moveTo(regionCenter);
+    await gesture.down(regionCenter);
+    // החזקה מעבר ל-kPressTimeout (100ms) — כך שאצל האב ה-deadline היה יורה
+    // onSecondaryTapDown אלמלא נדחה מהזירה.
+    await tester.pump(const Duration(milliseconds: 200));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    return outerFired;
+  }
+
+  testWidgets(
+      'בחירה פעילה: לחיצה ימנית חוסמת את ה-recognizer החיצוני (הבחירה נשמרת)',
+      (tester) async {
+    final outerFired =
+        await rightClickAndReportOuterFired(tester, preserveSelection: true);
+
+    expect(
+      outerFired,
+      isFalse,
+      reason: 'כשיש בחירה, AppContextMenuRegion זוכה eager בכפתור הימני — '
+          'SelectableRegion (האב) נדחה ולא משחרר את הבחירה',
+    );
+    expect(find.text('העתק'), findsOneWidget,
+        reason: 'התפריט עדיין נפתח דרך ה-Listener שאינו תלוי בזירה');
+  });
+
+  testWidgets(
+      'בלי בחירה: לחיצה ימנית אינה חוסמת את ה-recognizer החיצוני (התנהגות רגילה)',
+      (tester) async {
+    final outerFired =
+        await rightClickAndReportOuterFired(tester, preserveSelection: false);
+
+    expect(
+      outerFired,
+      isTrue,
+      reason: 'בלי בחירה ה-recognizer אינו מתערב — האב מקבל את הלחיצה כרגיל',
+    );
+    expect(find.text('העתק'), findsOneWidget,
+        reason: 'התפריט נפתח גם כשאין בחירה');
+  });
+
+  testWidgets('onSecondaryTapDown נקרא בלחיצה ימנית עבור שמירת ההקשר',
+      (tester) async {
+    var savedContext = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: AppContextMenuRegion(
+              onSecondaryTapDown: (_) => savedContext = true,
+              menuBuilder: (_, __) => [
+                AppContextMenuEntry(label: 'העתק', onTap: () {}),
+              ],
+              child: const SizedBox(
+                width: 100,
+                height: 100,
+                child: ColoredBox(color: Colors.amber),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryButton,
+    );
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
+    await gesture.moveTo(regionCenter);
+    await gesture.down(regionCenter);
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(savedContext, isTrue,
+        reason:
+            'onSecondaryTapDown חייב להיקרא כדי לשמור את הקשר השורה לתפריט');
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
   // openMenuAt — פתיחה פרוגרמטית (משמש ל-long press ב-PDF)
   // ───────────────────────────────────────────────────────────────────────
 

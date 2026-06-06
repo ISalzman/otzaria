@@ -1,4 +1,5 @@
 import 'package:collection/collection.dart';
+import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/models/books.dart';
@@ -49,13 +50,23 @@ class BookOpenCoordinator {
     final hasAnyHighlight = hasPinpoint || hasMarkText || markSection;
 
     final historyState = historyBloc.state;
+    // התאמה לפי זהות יציבה ([bookIdentity]) ולא לפי כותרת בלבד: שני קובצי PDF
+    // שונים עם אותה כותרת (id/נתיב שונה) מקבלים זהויות נפרדות, כך שפתיחת אחד
+    // לא תקפוץ למיקום שנשמר עבור השני.
+    final bookKey = bookIdentity(book);
     final lastOpened = (ignoreHistory || hasAnyHighlight)
         ? null
         : historyState.history
-            .firstWhereOrNull((b) => b.book.title == book.title);
-    final initialIndex = (ignoreHistory || hasAnyHighlight || index != 0)
-        ? index
-        : (lastOpened?.index ?? 0);
+            .firstWhereOrNull((b) => bookIdentity(b.book) == bookKey);
+    // ערך המיקום ההתחלתי ה"דיפולטי" תלוי בסוג הספר: בטקסט האינדקס מבוסס-0
+    // (0 = "ללא מיקום ספציפי"), אבל ב-PDF העמודים מבוססי-1 (1 = העמוד הראשון).
+    // הספרייה מעבירה את הדיפולט הזה. רק כשהמתקשר מעביר ערך שונה מהדיפולט מדובר
+    // במיקום מפורש שיש לכבד; אחרת נופלים לשחזור המיקום מההיסטוריה.
+    final int defaultIndex = book is PdfBook ? 1 : 0;
+    final initialIndex =
+        (ignoreHistory || hasAnyHighlight || index != defaultIndex)
+            ? index
+            : (lastOpened?.index ?? defaultIndex);
     // סמנטיקה של [initialCommentators]:
     //   null   → ברירת מחדל: נופלים להיסטוריה (commentatorsToShow).
     //   []     → bypass מפורש: פתיחה בלי מפרשים, גם אם בעבר נשמרו ב-history.

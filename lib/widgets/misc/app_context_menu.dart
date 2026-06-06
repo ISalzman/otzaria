@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 
@@ -30,11 +31,26 @@ class AppContextMenuRegion extends StatefulWidget {
   final List<AppContextMenuEntry> Function(BuildContext, Offset) menuBuilder;
   final Map<String, GlobalKey>? menuItemKeysByLabel;
 
+  /// נקרא בלחיצה ימנית (לפני פתיחת התפריט), דרך [Listener] שאינו תלוי בזירת
+  /// ה-gestures — ולכן נורה גם כאשר הבחירה נשמרת ו-[SelectableRegion] נחסם.
+  /// משמש לשמירת ההקשר (למשל אינדקס השורה) עבור פעולות התפריט.
+  final GestureTapDownCallback? onSecondaryTapDown;
+
+  /// מקבל את מיקום הלחיצה הגלובלי ומחזיר `true` כאשר יש לשמר את הבחירה הקיימת
+  /// (הלחיצה נופלת על הטקסט המסומן). במצב זה לחיצה ימנית זוכה באופן מיידי (eager)
+  /// בכפתור הימני, וכך מונעת מ-[SelectableRegion] של Flutter לאסוף/לשחרר את
+  /// הבחירה (התנהגות ברירת המחדל ב-Windows). כשהלחיצה מחוץ לטקסט המסומן — מחזיר
+  /// `false`, וה-recognizer אינו מתערב כך שההתנהגות הרגילה (ביטול) נשמרת.
+  final bool Function(Offset globalPosition)?
+      shouldPreserveSelectionOnSecondaryTap;
+
   const AppContextMenuRegion({
     super.key,
     required this.child,
     required this.menuBuilder,
     this.menuItemKeysByLabel,
+    this.onSecondaryTapDown,
+    this.shouldPreserveSelectionOnSecondaryTap,
   });
 
   @override
@@ -314,14 +330,38 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
           _openContextMenu(details.globalPosition);
         }
       },
-      child: Listener(
+      child: RawGestureDetector(
         behavior: HitTestBehavior.translucent,
-        onPointerDown: (event) {
-          if (event.buttons == 2) {
-            _openContextMenu(event.position);
-          }
+        gestures: <Type, GestureRecognizerFactory>{
+          // recognizer שזוכה באופן מיידי בכפתור הימני כשיש בחירה פעילה, כדי
+          // למנוע מ-SelectableRegion לשחרר את הבחירה (ראו תיעוד השדה).
+          _PreserveSelectionSecondaryTapRecognizer:
+              GestureRecognizerFactoryWithHandlers<
+                  _PreserveSelectionSecondaryTapRecognizer>(
+            () => _PreserveSelectionSecondaryTapRecognizer(
+              shouldPreserve: (globalPosition) =>
+                  widget.shouldPreserveSelectionOnSecondaryTap
+                      ?.call(globalPosition) ??
+                  false,
+            ),
+            (instance) {},
+          ),
         },
-        child: widget.child,
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (event) {
+            if (event.buttons == kSecondaryButton) {
+              widget.onSecondaryTapDown?.call(
+                TapDownDetails(
+                  globalPosition: event.position,
+                  localPosition: event.localPosition,
+                ),
+              );
+              _openContextMenu(event.position);
+            }
+          },
+          child: widget.child,
+        ),
       ),
     );
   }
@@ -927,6 +967,37 @@ class _AppContextMenuPanel extends StatelessWidget {
           ),
         ));
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// _PreserveSelectionSecondaryTapRecognizer — חוסם שחרור בחירה בלחיצה ימנית
+//
+// ב-Windows, ה-TapGestureRecognizer של SelectableRegion יורה onSecondaryTapDown
+// אחרי kPressTimeout (100ms) גם בלי לזכות בזירה, ומפעיל _collapseSelectionAt —
+// כך שלחיצה ימנית רגילה (החזקה >100ms) משחררת את הבחירה. recognizer זה זוכה
+// באופן מיידי (eager) בכפתור הימני כאשר קיימת בחירה, וכך SelectableRegion נדחה
+// מהזירה לפני שה-deadline שלו חולף — והבחירה נשמרת. כשאין בחירה הוא אינו מצטרף
+// לזירה, וההתנהגות הרגילה נשמרת.
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _PreserveSelectionSecondaryTapRecognizer extends EagerGestureRecognizer {
+  _PreserveSelectionSecondaryTapRecognizer({required this.shouldPreserve})
+      : super(
+          allowedButtonsFilter: (buttons) => buttons & kSecondaryButton != 0,
+        );
+
+  final bool Function(Offset globalPosition) shouldPreserve;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    if (shouldPreserve(event.position)) {
+      super.addAllowedPointer(event); // resolve(accepted) — זכייה מיידית
+    }
+    // אחרת: לא מצטרפים לזירה — SelectableRegion מטפל כרגיל (בחירה ריקה ממילא).
+  }
+
+  @override
+  String get debugDescription => 'preserve-selection secondary tap';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
