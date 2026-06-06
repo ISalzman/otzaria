@@ -594,14 +594,12 @@ class _CalendarTopBarState extends State<CalendarTopBar>
             compact: isCompact,
             tooltip: 'קודם',
             icon: FluentIcons.chevron_left_24_regular,
-            emphasis: ToolbarActionButtonEmphasis.subtle,
             onPressed: _withClose(widget.onPreviousPeriod),
           );
           final nextBtn = ToolbarActionButton(
             compact: isCompact,
             tooltip: 'הבא',
             icon: FluentIcons.chevron_right_24_regular,
-            emphasis: ToolbarActionButtonEmphasis.subtle,
             onPressed: _withClose(widget.onNextPeriod),
           );
           final todayBtn = RecommendedActionButton(
@@ -628,7 +626,6 @@ class _CalendarTopBarState extends State<CalendarTopBar>
                     ),
                   ),
             selected: widget.isJumpToDateSearchOpen,
-            emphasis: ToolbarActionButtonEmphasis.subtle,
             onPressed: widget.onToggleJumpToDateSearch,
           );
           final settingsBtn = ToolbarActionButton(
@@ -666,7 +663,6 @@ class _CalendarTopBarState extends State<CalendarTopBar>
             compact: isCompact,
             tooltip: 'הדפסה',
             icon: FluentIcons.print_24_regular,
-            emphasis: ToolbarActionButtonEmphasis.subtle,
             onPressed: _withClose(widget.onPrint),
           );
           final viewSwitcher = _buildViewSwitcher(state);

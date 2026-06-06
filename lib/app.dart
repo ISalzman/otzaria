@@ -35,6 +35,7 @@ class App extends StatelessWidget {
     return ColorScheme.fromSeed(
       seedColor: seedColor,
       brightness: brightness,
+      dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
     );
   }
 
@@ -52,6 +53,8 @@ class App extends StatelessWidget {
         final state = settingsState;
         final lightColorScheme =
             _createColorScheme(state.seedColor, Brightness.light);
+        final darkColorScheme =
+            _createColorScheme(state.darkSeedColor, Brightness.dark);
         final useVirtualWindowFrame = !kIsWeb &&
             (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
         return MaterialApp(
@@ -69,7 +72,7 @@ class App extends StatelessWidget {
           title: 'אוצריא',
           theme: AppThemeData.light(lightColorScheme,
               compactMenuMode: state.compactMenuMode),
-          darkTheme: AppThemeData.dark(state.darkSeedColor,
+          darkTheme: AppThemeData.dark(darkColorScheme,
               compactMenuMode: state.compactMenuMode),
           themeMode: state.followSystemTheme
               ? ThemeMode.system

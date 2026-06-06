@@ -9,6 +9,7 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 
 // ── RecommendedActionButton ───────────────────────────────────────────────────
 
@@ -264,18 +265,7 @@ class PrimaryIconButton extends StatelessWidget {
 }
 
 // ── ToolbarActionButton ──────────────────────────────────────────────────────
-
-/// כפתור סרגל כלים בסגנון M3 עם נראות מוגברת למצב נבחר.
-///
-/// **2 מצבים:**
-/// • [compact] = false (touch):   כפתור עגול/pill גדול, icon 20px
-/// • [compact] = true (desktop):  כפתור עגול/pill קטן, icon 16px
-///
-/// **צבעים:**
-/// • selected prominent: primary / onPrimary
-/// • selected subtle:    secondaryContainer / onSecondaryContainer
-/// • unselected:         transparent / onSurfaceVariant
-enum ToolbarActionButtonEmphasis { prominent, subtle }
+/// כפתור סרגל עליון בסגנון M3 והגדרת מראה במצב נבחר.
 
 class ToolbarActionButton extends StatelessWidget {
   final String tooltip;
@@ -284,9 +274,6 @@ class ToolbarActionButton extends StatelessWidget {
   final VoidCallback onPressed;
   final bool selected;
   final String? label;
-  final ToolbarActionButtonEmphasis emphasis;
-
-  /// true = desktop — כפתור קטן ועגול
   final bool compact;
 
   const ToolbarActionButton({
@@ -298,106 +285,83 @@ class ToolbarActionButton extends StatelessWidget {
     this.selected = false,
     this.label,
     this.compact = false,
-    this.emphasis = ToolbarActionButtonEmphasis.prominent,
   });
-
-  Color _bgColor(ColorScheme cs) {
-    if (!selected) return Colors.transparent;
-    return switch (emphasis) {
-      ToolbarActionButtonEmphasis.prominent => cs.primary,
-      ToolbarActionButtonEmphasis.subtle =>
-        cs.secondaryContainer.withValues(alpha: 0.72),
-    };
-  }
-
-  Color _fgColor(ColorScheme cs) {
-    if (!selected) return cs.onSurfaceVariant;
-    return switch (emphasis) {
-      ToolbarActionButtonEmphasis.prominent => cs.onPrimary,
-      ToolbarActionButtonEmphasis.subtle => cs.onSecondaryContainer,
-    };
-  }
 
   @override
   Widget build(BuildContext context) {
-    return compact ? _buildCompact(context) : _buildStandard(context);
-  }
-
-  // ── Touch ────────────────────────────────────────────────────────────────
-
-  Widget _buildStandard(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final bg = _bgColor(cs);
-    final fg = _fgColor(cs);
+
+    final Color bg =
+        selected ? cs.onSurface.withValues(alpha: 0.12) : Colors.transparent;
+
+    final Color fg = selected ? cs.onSecondaryContainer : cs.onSurfaceVariant;
+
+    final double iconSize = compact ? 20 : 20;
+    final double fontSize = compact ? 12 : 14;
+    final double minSize = compact ? 36 : 40;
+    final EdgeInsets padding = compact
+        ? const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0)
+        : const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0);
+
+    // אייקון עם הצבע הנכון — IconTheme מאפשר לwidgets מורכבים (RotatedBox, Transform)
+    // לרשת את הצבע באופן אוטומטי דרך nested Icon.
+    final Widget iconEl = iconWidget != null
+        ? IconTheme(
+            data: IconThemeData(color: fg, size: iconSize),
+            child: iconWidget!,
+          )
+        : Icon(icon, size: iconSize, color: fg);
 
     Widget button;
     if (label != null) {
       button = FilledButton.icon(
         onPressed: onPressed,
         style: FilledButton.styleFrom(
-          backgroundColor: bg,
+          backgroundColor: Colors.transparent,
           foregroundColor: fg,
-          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+          padding: padding,
           shape: const StadiumBorder(),
-          minimumSize: const Size(0, 40),
+          minimumSize: compact ? const Size(0, 36) : const Size(0, 40),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
-        icon: iconWidget ?? Icon(icon, size: 20),
-        label: Text(label!, style: const TextStyle(fontSize: 14.0)),
+        icon: iconEl,
+        label: AnimatedDefaultTextStyle(
+          duration: AppTokens.animFast,
+          style: TextStyle(
+              fontSize: fontSize,
+              color: fg,
+              fontWeight: selected ? FontWeight.bold : FontWeight.normal),
+          child: Text(label!),
+        ),
       );
     } else {
       button = IconButton(
         onPressed: onPressed,
-        icon: iconWidget ?? Icon(icon, size: 20),
-        padding: const EdgeInsets.all(8.0),
-        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        icon: iconEl,
+        padding:
+            compact ? const EdgeInsets.all(8.0) : const EdgeInsets.all(8.0),
+        constraints: BoxConstraints(minWidth: minSize, minHeight: minSize),
         style: IconButton.styleFrom(
-          backgroundColor: bg,
+          backgroundColor: Colors.transparent,
           foregroundColor: fg,
           shape: const CircleBorder(),
-        ),
-      );
-    }
-
-    return Tooltip(message: tooltip, child: button);
-  }
-
-  // ── Desktop ───────────────────────────────────────────────────────────────
-
-  Widget _buildCompact(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final bg = _bgColor(cs);
-    final fg = _fgColor(cs);
-
-    Widget button;
-    if (label != null) {
-      button = FilledButton.icon(
-        onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: bg,
-          foregroundColor: fg,
-          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
-          shape: const StadiumBorder(),
-          minimumSize: const Size(0, 28),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
-        icon: iconWidget ?? Icon(icon, size: 15),
-        label: Text(label!, style: const TextStyle(fontSize: 12.0)),
-      );
-    } else {
-      button = IconButton(
-        onPressed: onPressed,
-        icon: iconWidget ?? Icon(icon, size: 16),
-        padding: const EdgeInsets.all(6.0),
-        constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-        style: IconButton.styleFrom(
-          backgroundColor: bg,
-          foregroundColor: fg,
-          shape: const CircleBorder(),
-        ),
       );
     }
 
-    return Tooltip(message: tooltip, child: button);
+    return Tooltip(
+      message: tooltip,
+      child: AnimatedContainer(
+        duration: AppTokens.animFast,
+        curve: Curves.easeInOut,
+        decoration: BoxDecoration(
+          color: bg,
+          shape: label != null ? BoxShape.rectangle : BoxShape.circle,
+          borderRadius: label != null ? BorderRadius.circular(100) : null,
+        ),
+        child: button,
+      ),
+    );
   }
 }
