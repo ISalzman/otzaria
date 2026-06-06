@@ -140,7 +140,7 @@ my-plugin/
 | `icon` | `null` | נתיב לאייקון (PNG, 64×64 מומלץ) |
 | `maxAppVersion` | `null` | גרסת אוצריא המקסימלית הנתמכת |
 | `network.enabled` | `false` | האם להצהיר על שימוש ברשת (חובה כדי להפעיל את מנגנון הרשת בתוסף) |
-| `network.allowlist` | `[]` | **שדה הצהרתי בלבד** — לתיעוד/שקיפות מול המשתמש. רשימת ה-URLs שאליהם תוסף יכול לגשת בפועל מנוהלת אך ורק על-ידי אוצריא בקוד (`pluginNetworkAllowlist` ב-[`lib/plugins/models/plugin_network_allowlist.dart`](../lib/plugins/models/plugin_network_allowlist.dart)). הצהרה ב-manifest **אינה** מעניקה גישה. |
+| `network.allowlist` | `[]` | רשימת ה-URLs שהתוסף מצהיר שהוא צריך. ה-URL חייב להופיע כאן **וגם** להיות מאושר ע"י אוצריא: או ברשימה המובנית `pluginNetworkAllowlist`, או בקובץ המקביל הרשמי ב-GitHub של אוצריא. הצהרה ב-manifest לבדה **אינה** מספיקה. |
 | `contributes.toolTab.title` | שם התוסף | כותרת הטאב |
 | `contributes.toolTab.order` | `900` | סדר הופעה בטאבים (מספר נמוך = קודם) |
 | `contributes.toolTab.allowOrderBeforeBuiltIns` | `false` | חריג מפורש שמאפשר לתוסף להתחרות מול הכלים המובנים ולהופיע לפניהם במסך "כלים" |
@@ -547,11 +547,11 @@ Otzaria.on('plugin.boot', async (payload) => {
 ### רשת
 - חסומה כברירת מחדל
 - כדי שתוסף יוכל לגשת לרשת חייבות להתקיים **שלוש שכבות** במצטבר:
-  1. **הצהרה במניפסט** — `network.enabled: true` (וגם `network.access` ב-`permissions`).
+  1. **הצהרה במניפסט** — `network.enabled: true`, ההרשאה `network.access`, וגם שה-URL המבוקש יופיע ב-`network.allowlist` של התוסף.
   2. **אישור המשתמש** — המשתמש אישר את הרשאת `network.access` בעת ההתקנה.
-  3. **רשימת ה-URLs המאושרים בקוד אוצריא** — ה-URL חייב להיות תואם קידומת לאחד מהערכים ב-`pluginNetworkAllowlist` בקובץ [`lib/plugins/models/plugin_network_allowlist.dart`](../lib/plugins/models/plugin_network_allowlist.dart). זוהי **שכבת האבטחה הקשה** — היא לא ניתנת לעקיפה ע"י הצהרת התוסף.
+  3. **מקור אמון רשמי של אוצריא** — ה-URL חייב להיות תואם קידומת לערך שמופיע או ב-`pluginNetworkAllowlist` המובנה בקובץ [`lib/plugins/models/plugin_network_allowlist.dart`](../lib/plugins/models/plugin_network_allowlist.dart), או באותו קובץ בריפו הרשמי של אוצריא ב-GitHub. אישור מה-GitHub נטען לזיכרון בלבד עד סגירת האפליקציה.
 - ההתאמה היא **התאמת קידומת מלאה** — אם ברשימה רשום `https://github.com/Otzaria/otzaria-library`, יותרו רק URLs שמתחילים במחרוזת זו (ואחריה `/`, `?`, `#` או סוף המחרוזת). `https://github.com/` או `https://github.com/Otzaria/another-repo` ייחסמו.
-- ה-`network.allowlist` במניפסט הוא **שדה הצהרתי בלבד** — שימושי לשקיפות מול המשתמש בעת ההתקנה, אך אינו מעניק גישה בפועל.
+- ה-`network.allowlist` במניפסט הוא **תנאי חובה אך לא תנאי מספיק** — בלי הצהרה במניפסט ה-URL ייחסם, וגם עם הצהרה הוא ייחסם אם אינו מופיע במקור אמון רשמי של אוצריא.
 - אם תוסף מבקש גישה ל-URL שאינו ב-allowlist הגלובלי, יש לפנות למתחזקי אוצריא בבקשה להוסיף אותו.
 
 ### window.open

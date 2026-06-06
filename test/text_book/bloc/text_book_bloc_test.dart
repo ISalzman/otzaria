@@ -777,6 +777,57 @@ void main() {
       await bloc.close();
     });
 
+    test(
+      'UpdateFontSize שמגיע בזמן Loading מוחל כשהמצב עובר ל-Loaded',
+      () async {
+        // רגרסיה: בעליית התוכנה ההגדרות נטענות מהר יותר מתוכן הספר, כך
+        // ש-UpdateFontSize (מהאזנה ל-SettingsBloc) מגיע בזמן TextBookLoading.
+        // לפני התיקון הוא נבלע (no-op), והתצוגה נתקעה על גודל ברירת המחדל.
+        final repository = _DelayedContentTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: false,
+          quickPreviewLoader: (
+            String title,
+            int currentLine, {
+            int? categoryId,
+            String? fileType,
+          }) async =>
+              null, // ללא preview – הבלוק נשאר ב-Loading עד getBookContent
+        );
+
+        bloc.add(const LoadContent(
+          fontSize: 16, // ערך ברירת מחדל "תקוע" של SettingsState.initial()
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ));
+
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        expect(bloc.state, isA<TextBookLoading>());
+
+        // ההגדרות נטענו ושידרו 25 בעוד התוכן עדיין נטען
+        bloc.add(const UpdateFontSize(25));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        // השלמת טעינת התוכן → המעבר ל-Loaded חייב לשקף את 25, לא את 16
+        repository.completeFullContent(
+          List.generate(30, (index) => 'שורה $index').join('\n'),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        final state = bloc.state;
+        expect(state, isA<TextBookLoaded>());
+        expect(
+          (state as TextBookLoaded).fontSize,
+          25,
+          reason: 'שינוי גופן שהגיע בזמן הטעינה לא אמור ללכת לאיבוד',
+        );
+
+        await bloc.close();
+      },
+    );
+
     group('הדגשה מ-deep link', () {
       test('ApplyMarkHighlight מגדיר highlightText ו-permanentHighlightLine',
           () async {

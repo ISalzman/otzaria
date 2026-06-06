@@ -5,6 +5,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -15,6 +16,7 @@ import 'package:otzaria/widgets/feedback/app_future_builder.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 
@@ -269,14 +271,17 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   Future<List<Link>> _filterLinksAsync(List<Link> links) async {
     _linksWithSearchResults.clear(); // איפוס רשימת הקישורים עם תוצאות
 
+    // מיון הקישורים לפי סדר הדורות (כמו במפרשים)
+    final sortedLinks = await CommentaryService.sortLinksByEra(links);
+
     if (_searchQuery.isEmpty) {
-      return links;
+      return sortedLinks;
     }
 
     final query = _searchQuery.toLowerCase();
     final filteredLinks = <Link>[];
 
-    for (final link in links) {
+    for (final link in sortedLinks) {
       final instanceKey = buildSelectedLinkInstanceKey(link);
       final contentKey = buildSelectedLinkContentKey(link);
       final title = link.heRef.toLowerCase();
@@ -477,7 +482,8 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
       );
     }
 
-    return SelectionArea(
+    return RtlSelectionShortcuts(
+        child: SelectionArea(
       key: ValueKey(
         'selected_link_${buildSelectedLinkInstanceKey(link)}_$_selectionRevision',
       ),
@@ -485,6 +491,10 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
         return const SizedBox.shrink();
       },
       onSelectionChanged: (selection) {
+        // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
+        trackRtlSelection(selection?.plainText);
+        // שינוי בחירה זמני בזמן priming — לא לעבד.
+        if (rtlSelectionPriming) return;
         if (selection != null && selection.plainText.isNotEmpty) {
           widget.selectionSyncController?.activate(_selectionOwner);
           _savedSelectedText = selection.plainText;
@@ -532,7 +542,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           ),
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildHighlightedText(String content, Link link) {

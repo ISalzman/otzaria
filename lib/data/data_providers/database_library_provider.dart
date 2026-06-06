@@ -972,6 +972,42 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return book != null;
   }
 
+  /// מחזיר האם ספר משתמש (מ-`user_books.db`) הוא "עותק עצמאי"
+  /// (content-in-db) — כלומר תוכנו שמור בתוכנה ואינו תלוי בקובץ שבדיסק.
+  ///
+  /// משמש את מסך הספרייה כדי לאפשר מחיקה **רק** לספרי "עותק עצמאי": ספר
+  /// "קריאה מהקבצים" נמחק רק ע"י מחיקת הקובץ מהדיסק.
+  ///
+  /// fail-closed: מחזיר `false` אם הספר אינו ספר משתמש, אם לא נמצא, או אם
+  /// ה-lookup נכשל — כדי שלא תיחשף מחיקה לספר שאינו ודאי "עותק עצמאי".
+  Future<bool> isUserBookContentInDb(
+    String title,
+    int categoryId,
+    String fileType,
+  ) async {
+    if (!_shouldUseUserBooks(
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+      preferUserBooks: false,
+    )) {
+      return false;
+    }
+    try {
+      final repo = await UserBooksDatabaseHolder.instance.repository;
+      final book = await repo.getBookByTitleCategoryAndFileType(
+        title,
+        categoryId,
+        fileType,
+      );
+      if (book == null) return false;
+      return !book.isFileBacked;
+    } catch (e) {
+      debugPrint('⚠️ isUserBookContentInDb error: $e');
+      return false;
+    }
+  }
+
   /// Finds the category path for a given book title.
   /// Returns null if the book is not found in the database.
   Future<String?> findCategoryPathForBook(
@@ -1600,8 +1636,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   /// Parses PDF outline and converts to TocEntry format.
   Future<List<TocEntry>> _parsePdfOutline(File file) async {
+    PdfDocument? document;
     try {
-      final document = await PdfDocument.openFile(file.path);
+      document = await PdfDocument.openFile(file.path);
       final outline = await document.loadOutline();
 
       if (outline.isEmpty) {
@@ -1615,6 +1652,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
     } catch (e) {
       debugPrint('⚠️ Failed to parse PDF outline: $e');
       return [];
+    } finally {
+      // סגירת המסמך משחררת את ה-pdfrx worker היחיד (אחרת נשאר פתוח עד GC).
+      await document?.dispose();
     }
   }
 
@@ -1772,23 +1812,28 @@ class DatabaseLibraryProvider implements LibraryProvider {
         return;
       }
 
-      // ניקוי הקאשים מבוצע רק אחרי שווידאנו שיש user_books.db לטעון.
-      // ככה אם הקובץ נמחק בין קריאות לא נאבד את המצב הקודם בלי החלפה.
-      _userBooksCategoryIds.clear();
-      _userBooksCachedKeys.clear();
-
       final repo = await UserBooksDatabaseHolder.instance.repository;
 
       late final List<Map<String, dynamic>> userBooks;
       late final List<Map<String, dynamic>> userCats;
       late final Map<int, String> userAuthors;
 
+      // קריאת הנתונים מ-user_books.db מתבצעת *לפני* ניקוי הקאשים. אם
+      // הקריאה נכשלת (למשל "database is locked" בזמן כתיבה מקבילית),
+      // יוצאים דרך ה-catch בלי לגעת בקאשים או ב-library — והמצב הקודם
+      // (ספרי המשתמש שכבר נטענו) נשמר עד הניסיון הבא, במקום להיעלם.
       final db = await repo.database.database;
       withTransaction(db, () {
         userBooks = repo.database.bookDao.getAllBooksMinimal(db);
         userCats = repo.database.categoryDao.getAllCategoryRows(db);
         userAuthors = repo.database.bookDao.getBookAuthorsMap(db);
       });
+
+      // הקריאה הצליחה — עכשיו בטוח לנקות ולבנות מחדש. מכאן והלאה הבנייה
+      // פועלת על נתונים שכבר בזיכרון ואינה ניגשת ל-DB, כך שאם תיכשל בכל
+      // זאת, ה-library והקאשים יישארו חלקיים אך מסונכרנים זה עם זה.
+      _userBooksCategoryIds.clear();
+      _userBooksCachedKeys.clear();
 
       if (userBooks.isEmpty && userCats.isEmpty) {
         return;
@@ -2592,7 +2637,17 @@ class DatabaseLibraryProvider implements LibraryProvider {
       // Phase 2 (main isolate): only metadata updates + new-book inserts.
       // This is deliberately light: unchanged books were already filtered in
       // Phase 1, so no TOC parse or DB read happens here for them.
+      //
+      // ה-insert עצמו סינכרוני (sqlite3 חוסם את ה-thread), ולכן הוספה של
+      // ספרים רבים בבת אחת תוקעת את ה-UI. כדי למנוע זאת אנו משחררים את
+      // לולאת האירועים אחת לכמה ספרים — ה-UI ממשיך להגיב בלי לשנות את
+      // לוגיקת ה-DB עצמה.
+      var processedSinceYield = 0;
       for (final book in discovered) {
+        if (++processedSinceYield >= 8) {
+          processedSinceYield = 0;
+          await Future<void>.delayed(Duration.zero);
+        }
         if (book.conversionError != null) {
           debugPrint(
               '⚠️ DOCX conversion failed for ${book.title}: ${book.conversionError}');

@@ -6,7 +6,6 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
-import 'package:otzaria/migration/models/category.dart';
 import 'package:otzaria/migration/sync/background_db_sync_worker.dart';
 import 'package:otzaria/migration/sync/file_sync_service.dart'
     show FileSyncResult;
@@ -110,18 +109,18 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
         await _deleteFolderFromDb(event.folder);
         emit(state.copyWith(
           isSyncing: false,
-          message: 'התיקייה והספרים נמחקו ממסד הנתונים.',
+          message: 'התיקייה והספרים הוסרו מהתוכנה.',
         ));
       } catch (e) {
         emit(state.copyWith(
           isSyncing: false,
-          error: 'שגיאה במחיקת התיקייה ממסד הנתונים: $e',
+          error: 'שגיאה בהסרת הספרים מהתוכנה: $e',
         ));
         return;
       }
     } else {
       emit(state.copyWith(
-        message: 'התיקייה הוסרה. הספרים נשארו במסד הנתונים.',
+        message: 'התיקייה הוסרה. הספרים נשארו בתוכנה.',
       ));
     }
     _libraryBloc.add(RefreshLibrary());
@@ -255,39 +254,18 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     final sqliteProvider = SqliteDataProvider.instance;
     if (!sqliteProvider.isInitialized) await sqliteProvider.initialize();
 
-    final userBooksRepository =
-        await UserBooksDatabaseHolder.instance.repository;
     final userBooksDbPath = await UserBooksDatabaseHolder.resolveDbPath();
 
-    final rootCategories = await userBooksRepository.getRootCategories();
-    Category? personalCategory;
-    for (final cat in rootCategories) {
-      if (cat.title == 'ספרים אישיים') {
-        personalCategory = cat;
-        break;
-      }
-    }
-    if (personalCategory == null) return;
-
-    final folderCategories =
-        await userBooksRepository.getCategoryChildren(personalCategory.id);
-    Category? folderCategory;
-    for (final cat in folderCategories) {
-      if (cat.title == folder.name) {
-        folderCategory = cat;
-        break;
-      }
-    }
-    if (folderCategory == null) return;
-
+    // הזיהוי הוא לפי נתיב התיקייה (שם ה-source הייחודי), לא לפי שם
+    // הקטגוריה — כך הסרת תיקייה לא תפגע בספרי תיקייה אחרת בעלת אותו
+    // basename שממוזגת לאותה קטגוריה.
     // seforim.db פתוח read-only בחיבור הראשי; העובד פותח אותו לכתיבה בנפרד.
     await sqliteProvider.closeForExternalWrite();
     try {
       await runDeleteFolderFromDbInIsolate(
         dbPath: sqliteProvider.dbPath,
         userBooksDbPath: userBooksDbPath,
-        folderCategoryId: folderCategory.id,
-        personalCategoryId: personalCategory.id,
+        folderPath: folder.path,
       );
     } finally {
       await sqliteProvider.reopenAfterExternalWrite();

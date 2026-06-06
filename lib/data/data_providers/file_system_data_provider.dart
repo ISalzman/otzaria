@@ -149,6 +149,21 @@ class FileSystemData {
     );
   }
 
+  /// מחזיר האם מותר למחוק את הספר דרך הספרייה.
+  ///
+  /// מותר רק לספרי משתמש מסוג "עותק עצמאי" (תוכנם שמור בתוכנה). ספר
+  /// "קריאה מהקבצים" נמחק רק ע"י מחיקת הקובץ מהדיסק, והספרייה הרשמית אינה
+  /// ניתנת למחיקה. fail-closed: מחזיר false בכל מקרה לא-ודאי.
+  Future<bool> canDeleteUserBookFromLibrary({
+    required String title,
+    int? categoryId,
+    String fileType = 'txt',
+    required bool isUserBook,
+  }) async {
+    if (!isUserBook || categoryId == null) return false;
+    return _providerManager.isUserBookContentInDb(title, categoryId, fileType);
+  }
+
   /// Clears the book-in-database cache
   void clearBookCache() {
     _providerManager.clearCaches();
@@ -237,8 +252,121 @@ class FileSystemData {
   }
 
   /// Retrieves the list of books from HebrewBooks
+  ///
+  /// אם המשתמש הגדיר תיקיית ספרי היברובוקס מקומית, כל ספר שקובץ ה-PDF שלו
+  /// קיים בתיקייה מוחזר כ-[PdfBook] (נפתח בצפיין המקומי) במקום כ-
+  /// [ExternalLibraryBook] (שנפתח באתר היברובוקס).
   static Future<List<Book>> getHebrewBooks() async {
-    return ExternalCatalogRepository.instance.getHebrewBooks();
+    final pdfFiles = await _scanHebrewBooksPdfFiles();
+    final books = await ExternalCatalogRepository.instance.getHebrewBooks();
+    if (pdfFiles.isEmpty) {
+      return books;
+    }
+    return mapHebrewBooksToLocal(books, pdfFiles);
+  }
+
+  /// מחזיר רק את ספרי היברובוקס שקיים להם קובץ PDF מקומי (כ-[PdfBook]).
+  ///
+  /// ספרים אלו נמצאים פיזית במחשב ולכן נחשבים מקומיים — הם מוצגים בחיפוש
+  /// תמיד, גם כשהגדרת "הצגת ספרים מאתרים חיצוניים" כבויה. אם לא הוגדרה
+  /// תיקייה או שאין בה קבצי PDF — הקטלוג כלל אינו נטען (חיסכון ב-I/O).
+  static Future<List<Book>> getLocalHebrewBooks() async {
+    final pdfFiles = await _scanHebrewBooksPdfFiles();
+    if (pdfFiles.isEmpty) {
+      return const [];
+    }
+    // טוענים מהקטלוג רק את המזהים שיש להם קובץ מקומי — לא את כל הטבלה.
+    final ids = extractHebrewBookIds(pdfFiles.keys);
+    if (ids.isEmpty) {
+      return const [];
+    }
+    final books =
+        await ExternalCatalogRepository.instance.getHebrewBooksByIds(ids);
+    return mapHebrewBooksToLocal(books, pdfFiles).whereType<PdfBook>().toList();
+  }
+
+  /// מחלץ מזהי ספרי היברובוקס משמות קבצי PDF (lowercase).
+  ///
+  /// תומך בשתי תבניות השמות: `hebrewbooks_org_<id>.pdf` ו-`<id>.pdf`.
+  /// שמות שאינם תואמים מתעלמים מהם.
+  @visibleForTesting
+  static Set<int> extractHebrewBookIds(Iterable<String> pdfFileNames) {
+    final pattern = RegExp(r'^(?:hebrewbooks_org_)?(\d+)\.pdf$');
+    final ids = <int>{};
+    for (final name in pdfFileNames) {
+      final match = pattern.firstMatch(name);
+      if (match == null) {
+        continue;
+      }
+      final id = int.tryParse(match.group(1)!);
+      if (id != null) {
+        ids.add(id);
+      }
+    }
+    return ids;
+  }
+
+  /// סורק את תיקיית ספרי היברובוקס המוגדרת ובונה מפת שמות-קבצים.
+  ///
+  /// מחזיר מפה משם הקובץ (lowercase) לנתיב המלא, או מפה ריקה אם לא הוגדרה
+  /// תיקייה או שאינה קיימת. סורק פעם אחת בלבד כדי להימנע מבדיקת קיום קובץ
+  /// נפרדת לכל ספר בקטלוג.
+  static Future<Map<String, String>> _scanHebrewBooksPdfFiles() async {
+    final hebrewBooksPath =
+        Settings.getValue<String>(SettingsRepository.keyHebrewBooksPath);
+    if (hebrewBooksPath == null || hebrewBooksPath.isEmpty) {
+      return const {};
+    }
+
+    final dir = Directory(hebrewBooksPath);
+    if (!await dir.exists()) {
+      return const {};
+    }
+
+    final pdfFiles = <String, String>{};
+    await for (final entity in dir.list()) {
+      if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
+        pdfFiles[path.basename(entity.path).toLowerCase()] = entity.path;
+      }
+    }
+    return pdfFiles;
+  }
+
+  /// ממיר ספרי קטלוג ל-[PdfBook] עבור אלו שיש להם קובץ PDF מקומי.
+  ///
+  /// [pdfFilesByLowerName] - מפה משם קובץ (lowercase) לנתיב מלא.
+  /// תומך בשתי תבניות שמות: `Hebrewbooks_org_<id>.pdf` ו-`<id>.pdf`.
+  /// ספר ללא [Book.id] או ללא קובץ תואם מוחזר כמות שהוא.
+  @visibleForTesting
+  static List<Book> mapHebrewBooksToLocal(
+    List<Book> books,
+    Map<String, String> pdfFilesByLowerName,
+  ) {
+    return books.map((book) {
+      final id = book.id;
+      if (id == null) {
+        return book;
+      }
+      final localPath = pdfFilesByLowerName['hebrewbooks_org_$id.pdf'] ??
+          pdfFilesByLowerName['$id.pdf'];
+      if (localPath == null) {
+        return book;
+      }
+      return PdfBook(
+        id: id,
+        title: book.title,
+        path: localPath,
+        author: book.author,
+        pubPlace: book.pubPlace,
+        pubDate: book.pubDate,
+        topics: book.topics,
+        heShortDesc: book.heShortDesc,
+        // שימור המזהה החיצוני (למשל 'hb:1') כדי שהספר יישאר עקבי לזיהוי
+        // בחיפוש/סימניות/אינדוקס — בדומה לשימור המזהים ב-DocxBook.toTextBook.
+        // הפתיחה המקומית מנותבת לפי טיפוס (PdfBook), ולכן אינה מושפעת מכך.
+        externalLibraryId: book.externalLibraryId,
+      );
+    }).toList();
   }
 
   /// Retrieves all links associated with a specific book.

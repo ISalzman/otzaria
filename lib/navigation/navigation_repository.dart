@@ -9,6 +9,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/find_ref/repository/find_ref_repository.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
@@ -73,6 +74,7 @@ class NavigationRepository {
       // ה-FindRefRepository מחזיק caches פנימיים (מפרשים, AltToc שטוח) שלא
       // ניזונים מהקאשים שלמעלה. בלי איפוס יזום הם ישרדו עד restart מלא.
       FindRefRepository.clearAllCaches();
+      CommentaryService.clearEraCache();
 
       // עדכון נתיב הספרייה
       FileSystemData.instance.libraryPath = libraryPath;

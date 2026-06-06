@@ -282,6 +282,70 @@ void main() {
     expect(controller.jumps, isEmpty);
   });
 
+  testWidgets('אחרי לחיצה וקפיצה ליעד, האגודל אינו "יורד" כשהפוזיציות מתעדכנות',
+      (tester) async {
+    // רגרסיה: המיפוי הקדים (מיקום→אינדקס) חילק ב-(1-thumbHeight) אך המיפוי
+    // ההפוך (אינדקס→מיקום) לא הכפיל חזרה. לכן אחרי לחיצה שקפצה ליעד,
+    // _updateScrollPosition דרס את מיקום האגודל לערך גבוה יותר, והאגודל
+    // "ירד" ביחס למקום שנלחץ — בעוצמה שגדלה ככל שמתקדמים בספר.
+    final listener = ItemPositionsListener.create();
+    final positions =
+        listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>;
+    final controller = _RecordingItemScrollController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 100,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    // מצב התחלתי: ראש הספר (2 מתוך 100 גלויים) → אגודל בראש המסילה.
+    positions.value = const [
+      ItemPosition(index: 0, itemLeadingEdge: 0, itemTrailingEdge: 0.5),
+      ItemPosition(index: 1, itemLeadingEdge: 0.5, itemTrailingEdge: 1.0),
+    ];
+    await tester.pump();
+
+    final track = find.byType(GestureDetector);
+    final trackTopLeft = tester.getTopLeft(track);
+    final trackBottomRight = tester.getBottomRight(track);
+    // לחיצה במרכז המסילה.
+    final tapCenter = Offset(
+      (trackTopLeft.dx + trackBottomRight.dx) / 2,
+      (trackTopLeft.dy + trackBottomRight.dy) / 2,
+    );
+
+    await tester.tapAt(tapCenter);
+    await tester.pump();
+
+    // מיקום האגודל מיד אחרי הלחיצה (לפני שהפוזיציות מתעדכנות).
+    final thumbTopAfterTap =
+        tester.widget<Positioned>(find.byType(Positioned)).top!;
+    final targetIndex = controller.jumps.last;
+
+    // מדמים שהרשימה אכן קפצה ליעד: היעד נעשה הפריט הראשון הגלוי.
+    positions.value = [
+      ItemPosition(
+          index: targetIndex, itemLeadingEdge: 0, itemTrailingEdge: 0.5),
+      ItemPosition(
+          index: targetIndex + 1, itemLeadingEdge: 0.5, itemTrailingEdge: 1.0),
+    ];
+    await tester.pump();
+
+    final thumbTopAfterSettle =
+        tester.widget<Positioned>(find.byType(Positioned)).top!;
+
+    // האגודל חייב להישאר במקום שנלחץ — בלי "ירידה".
+    expect(thumbTopAfterSettle, closeTo(thumbTopAfterTap, 2.0));
+  });
+
   testWidgets('listener ישן לא מעדכן State אחרי החלפת widget ו-dispose',
       (tester) async {
     final firstListener = ItemPositionsListener.create();

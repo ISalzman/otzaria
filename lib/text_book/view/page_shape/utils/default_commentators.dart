@@ -14,9 +14,13 @@ class DefaultCommentators {
   /// מחזיר את מפרשי ותרגומי ברירת המחדל של [book], ממוינים לפי `position`.
   ///
   /// ספרים אישיים אינם נכללים ב-seforim.db ולכן מחזירים רשימות ריקות.
-  static Future<({List<String> commentators, List<String> targums})>
-      _fetchDefaults(TextBook book) async {
-    const empty = (commentators: <String>[], targums: <String>[]);
+  static Future<
+      ({
+        List<({String title, int position})> commentators,
+        List<String> targums
+      })> _fetchDefaults(TextBook book) async {
+    const empty =
+        (commentators: <({String title, int position})>[], targums: <String>[]);
 
     if (book.isUserBook) return empty;
 
@@ -35,7 +39,10 @@ class DefaultCommentators {
 
     return (
       commentators: commentatorRows
-          .map((row) => row['targetBookTitle'] as String)
+          .map((row) => (
+                title: row['targetBookTitle'] as String,
+                position: (row['position'] as num).toInt(),
+              ))
           .toList(),
       targums:
           targumRows.map((row) => row['targetBookTitle'] as String).toList(),
@@ -46,14 +53,11 @@ class DefaultCommentators {
   /// ממוינת לפי `position`. משמש להקדמת המפרשים הבסיסיים בתוך קבוצות הדורות.
   static Future<List<String>> getBaseCommentators(TextBook book) async {
     final data = await _fetchDefaults(book);
-    return [...data.commentators, ...data.targums];
+    return [...data.commentators.map((c) => c.title), ...data.targums];
   }
 
-  /// מחזיר מפרשי ברירת מחדל למיקומי צורת הדף (right/left/bottom/bottomRight).
-  ///
-  /// המיפוי: המפרשים והתרגומים מאוחדים לרשימה אחת לפי `position` (מפרשים
-  /// ואחריהם תרגומים), והמיקומים ממולאים לפי הסדר: ימין, שמאל, תחתון,
-  /// תחתון-ימני. כלומר המפרש הראשון בימין, השני בשמאל וכן הלאה.
+  /// מחזיר מפרשי ברירת מחדל למיקומי צורת הדף (right/left/bottom/bottomRight),
+  /// ממופים לפי ה-`position` של כל מפרש (פירוט המיפוי ב-[mapToPageShape]).
   /// [availableCommentators] משמש להתאמת השם המלא הזמין בספר הנוכחי.
   static Future<Map<String, String?>> getDefaults(
     TextBook book, {
@@ -70,21 +74,36 @@ class DefaultCommentators {
     return defaults;
   }
 
-  /// ממפה רשימת מפרשים ותרגומים (מאוחדים לפי position) ל-4 מיקומי צורת הדף
-  /// לפי הסדר: ימין, שמאל, תחתון, תחתון-ימני.
+  /// ממפה מפרשים (לפי `position` מהטבלה) ותרגומים ל-4 מיקומי צורת הדף:
+  /// position 0→ימין, 1→שמאל, 2→תחתון, 3→תחתון-ימני. position חסר (slot ריק
+  /// מכוון, ראה ה-sentinel "-" ב-seed) → המיקום נשאר ריק. התרגומים ממולאים
+  /// במיקומים שאחרי ה-position המקסימלי של המפרשים.
   @visibleForTesting
   static Map<String, String?> mapToPageShape(
-    List<String> commentators,
+    List<({String title, int position})> commentators,
     List<String> targums,
   ) {
-    final all = [...commentators, ...targums];
-    String? at(int index) => index < all.length ? all[index] : null;
+    final slots = <String?>[null, null, null, null];
+    var maxPosition = -1;
+    for (final c in commentators) {
+      if (c.position >= 0 && c.position < slots.length) {
+        slots[c.position] = c.title;
+      }
+      if (c.position > maxPosition) maxPosition = c.position;
+    }
+
+    var targumSlot = maxPosition + 1;
+    for (final targum in targums) {
+      if (targumSlot >= slots.length) break;
+      slots[targumSlot] = targum;
+      targumSlot++;
+    }
 
     return {
-      'right': at(0),
-      'left': at(1),
-      'bottom': at(2),
-      'bottomRight': at(3),
+      'right': slots[0],
+      'left': slots[1],
+      'bottom': slots[2],
+      'bottomRight': slots[3],
     };
   }
 

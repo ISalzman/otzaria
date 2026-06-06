@@ -163,6 +163,7 @@ void main() {
       final folderCatId = await userBooksRepository.insertCategory(
         Category(title: 'תיקיית-מחיקה', parentId: personalCatId, level: 1),
       );
+      // שם ה-source חייב להתאים ל-_buildCustomFolderSourceName('test').
       final sourceId =
           await userBooksRepository.insertSource('Personal::test', -1);
       await userBooksRepository.insertBook(
@@ -180,8 +181,7 @@ void main() {
       await runDeleteFolderFromDbInIsolate(
         dbPath: dbPath,
         userBooksDbPath: userBooksDbPath,
-        folderCategoryId: folderCatId,
-        personalCategoryId: personalCatId,
+        folderPath: 'test',
       );
 
       expect(await userBooksRepository.getCategory(folderCatId), isNull,
@@ -197,6 +197,7 @@ void main() {
       final folderCatId = await userBooksRepository.insertCategory(
         Category(title: 'תיקייה-יחידה', parentId: personalCatId, level: 1),
       );
+      // שם ה-source חייב להתאים ל-_buildCustomFolderSourceName('sole').
       final sourceId =
           await userBooksRepository.insertSource('Personal::sole', -1);
       await userBooksRepository.insertBook(
@@ -214,8 +215,7 @@ void main() {
       await runDeleteFolderFromDbInIsolate(
         dbPath: dbPath,
         userBooksDbPath: userBooksDbPath,
-        folderCategoryId: folderCatId,
-        personalCategoryId: personalCatId,
+        folderPath: 'sole',
       );
 
       expect(await userBooksRepository.getCategory(personalCatId), isNull,

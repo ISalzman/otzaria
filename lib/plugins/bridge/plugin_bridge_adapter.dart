@@ -15,7 +15,6 @@ import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
-import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
@@ -42,6 +41,9 @@ import 'package:otzaria/plugins/models/plugin_highlight.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
+import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
+import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
+import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
 
 // ===================================================================
 // Spec-compliant allowlist for settings.get/getMany
@@ -227,14 +229,24 @@ class PluginBridgeAdapter {
     PluginRegistryRepository? pluginRepository,
     NotificationService? notificationService,
     PluginDatabaseService? databaseService,
+    PluginNetworkFetchService? networkFetchService,
   })  : _dependencies = dependencies,
         _pluginRepo = pluginRepository ?? PluginRegistryRepository(),
         _notificationService = notificationService ?? NotificationService(),
-        _databaseService = databaseService ?? PluginDatabaseService() {
-    HttpClientRegistry.register(_closeHttpClient);
-  }
+        _databaseService = databaseService ?? PluginDatabaseService(),
+        _networkFetchService = networkFetchService;
 
-  final HttpClient _httpClient = HttpClient();
+  // שירות הורדת קבצים — מופע יחיד לכל adapter, נוצר עם השימוש הראשון
+  // ומשוחרר ב-dispose (אחרת כל הורדה תדליף client ורישום ב-registry).
+  PluginFileDownloadService? _fileDownloadService;
+  PluginFileDownloadService get _downloadService =>
+      _fileDownloadService ??= PluginFileDownloadService();
+
+  // שירות בקשות HTTP (network.fetch) — מופע יחיד לכל adapter; ניתן להזרקה
+  // לבדיקות, נוצר עם השימוש הראשון אם לא הוזרק, ומשוחרר ב-dispose.
+  PluginNetworkFetchService? _networkFetchService;
+  PluginNetworkFetchService get _fetchService =>
+      _networkFetchService ??= PluginNetworkFetchService();
 
   // bookId → index → PluginHighlight (in-memory, per adapter instance)
   final Map<String, Map<int, PluginHighlight>> _highlights = {};
@@ -244,11 +256,9 @@ class PluginBridgeAdapter {
   final Map<String, String> _bookContentCache = {};
   static const int _bookContentCacheMaxEntries = 4;
 
-  void _closeHttpClient() => _httpClient.close(force: true);
-
   void dispose() {
-    HttpClientRegistry.unregister(_closeHttpClient);
-    _closeHttpClient();
+    _networkFetchService?.dispose();
+    _fileDownloadService?.dispose();
   }
 
   /// טוען את הטקסט המלא של ספר עבור `getBookContent`, עם מטמון LRU קצר
@@ -1579,6 +1589,10 @@ class PluginBridgeAdapter {
       String action, Map<String, dynamic> args) async {
     switch (action) {
       case 'fetch':
+        if (!plugin.manifest.networkEnabled) {
+          throw Exception('error.permission_denied: network.enabled required');
+        }
+
         final granted =
             await _pluginRepo.getPermission(plugin.pluginId, 'network.access');
         if (granted != true) {
@@ -1591,17 +1605,80 @@ class PluginBridgeAdapter {
         final uri = Uri.tryParse(url);
         if (uri == null) throw Exception('error.invalid_params: invalid URL');
 
-        if (!isUriAllowedForPluginNetwork(uri)) {
+        final allowed = await PluginNetworkAccessResolver.instance
+            .isUriAllowedForPlugin(uri, plugin.manifest);
+        if (!allowed) {
           throw Exception(
               'error.forbidden: URL not in plugin network allowlist');
         }
 
-        final request = await _httpClient.getUrl(uri);
-        request.followRedirects = false;
-        request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-        final response = await request.close();
-        final body = await response.transform(utf8.decoder).join();
-        return {'status': response.statusCode, 'body': body};
+        // method/headers/body אופציונליים. הניתוב דרך הגשר נחוץ לתוספים
+        // שקוראים ל-APIs חיצוניים (כמו דיקטה) ב-POST: fetch ישיר מה-WebView
+        // (origin file://) נחסם ב-CORS, ואילו לקוח ה-HTTP של Flutter אינו
+        // כפוף ל-CORS.
+        final method = (args['method'] as String? ?? 'GET').toUpperCase();
+        if (!RegExp(r'^[A-Z]+$').hasMatch(method)) {
+          throw Exception('error.invalid_params: invalid method');
+        }
+        final requestBody = args['body'] as String?;
+        final rawHeaders = args['headers'];
+        final headers = <String, String>{};
+        if (rawHeaders is Map) {
+          rawHeaders.forEach((key, value) {
+            if (key is String && value != null) {
+              headers[key] = value.toString();
+            }
+          });
+        }
+
+        final result = await _fetchService.fetch(
+          uri,
+          method: method,
+          headers: headers.isEmpty ? null : headers,
+          body: requestBody,
+        );
+        return {
+          'status': result.status,
+          'ok': result.ok,
+          'body': result.body,
+        };
+
+      case 'download':
+        // הורדה רגילה של קובץ מ-URL מותר אל תיקיית ההורדות של המערכת.
+        // הכל מתבצע בצד Flutter — ה-WebView (origin file://) אינו יכול
+        // לכתוב לדיסק. נדרשת אותה הרשאה network.access.
+        if (!plugin.manifest.networkEnabled) {
+          throw Exception('error.permission_denied: network.enabled required');
+        }
+
+        final granted =
+            await _pluginRepo.getPermission(plugin.pluginId, 'network.access');
+        if (granted != true) {
+          throw Exception('error.permission_denied: network.access required');
+        }
+
+        final url = args['url'] as String?;
+        if (url == null) throw Exception('error.invalid_params: url required');
+
+        final uri = Uri.tryParse(url);
+        if (uri == null) throw Exception('error.invalid_params: invalid URL');
+
+        final allowed = await PluginNetworkAccessResolver.instance
+            .isUriAllowedForPlugin(uri, plugin.manifest);
+        if (!allowed) {
+          throw Exception(
+              'error.forbidden: URL not in plugin network allowlist');
+        }
+
+        final filename = args['filename'] as String?;
+        final result = await _downloadService.downloadToDownloads(
+          uri,
+          filename: filename,
+          isAllowed: (candidate) => PluginNetworkAccessResolver.instance
+              .isUriAllowedForPlugin(candidate, plugin.manifest),
+          isRedirectAllowed: isGithubReleaseRedirectAllowed,
+        );
+        return {'path': result.path, 'filename': result.filename};
 
       default:
         throw Exception('Unknown action in network: $action');

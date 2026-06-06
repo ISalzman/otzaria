@@ -43,6 +43,63 @@ void main() {
       expect(restored.removeNikud, isTrue);
     });
 
+    test('round-trip שומר את רוחבי הטורים בצורת הדף', () {
+      final original = TextBookPerBookSettings(
+        pageShapeLeftWidth: 240.5,
+        pageShapeRightWidth: 180.0,
+        pageShapeBottomHeight: 300.0,
+        pageShapeBottomLeftWidth: 400.0,
+      );
+
+      final restored = TextBookPerBookSettings.fromJson(original.toJson());
+
+      expect(restored.pageShapeLeftWidth, 240.5);
+      expect(restored.pageShapeRightWidth, 180.0);
+      expect(restored.pageShapeBottomHeight, 300.0);
+      expect(restored.pageShapeBottomLeftWidth, 400.0);
+    });
+
+    test('toJson משמיט רוחבי טורים null', () {
+      final settings = TextBookPerBookSettings(pageShapeLeftWidth: 100.0);
+      final json = settings.toJson();
+
+      expect(json.containsKey('pageShapeLeftWidth'), isTrue);
+      expect(json.containsKey('pageShapeRightWidth'), isFalse);
+      expect(json.containsKey('pageShapeBottomHeight'), isFalse);
+      expect(json.containsKey('pageShapeBottomLeftWidth'), isFalse);
+    });
+
+    test('fromJson מקבל גם ערכי רוחב שלמים (int) מ-JSON', () {
+      // הגנה מפני ערכים שנשמרו כ-int (JSON אינו מבחין בין int ל-double).
+      final restored = TextBookPerBookSettings.fromJson({
+        'pageShapeLeftWidth': 200,
+        'pageShapeBottomHeight': 250,
+      });
+      expect(restored.pageShapeLeftWidth, 200.0);
+      expect(restored.pageShapeBottomHeight, 250.0);
+      expect(restored.pageShapeRightWidth, isNull);
+    });
+
+    test('copyWith משמר שדות קיימים ומעדכן רק את שניתנו', () {
+      final base = TextBookPerBookSettings(
+        fontSize: 20.0,
+        removeNikud: true,
+        pageShapeLeftWidth: 100.0,
+      );
+
+      // עדכון רק רוחבי הטורים - שאר השדות נשמרים
+      final updated = base.copyWith(
+        pageShapeLeftWidth: 150.0,
+        pageShapeRightWidth: 90.0,
+      );
+
+      expect(updated.fontSize, 20.0);
+      expect(updated.removeNikud, isTrue);
+      expect(updated.pageShapeLeftWidth, 150.0);
+      expect(updated.pageShapeRightWidth, 90.0);
+      expect(updated.pageShapeBottomHeight, isNull);
+    });
+
     test('continuousReadingMode=false שורד round-trip', () {
       // toJson משמיט רק null (לא false). אם בעתיד מישהו ירצה לשמור
       // false במפורש — הוא חייב לעבוד. _savePerBookSettingsDirectly

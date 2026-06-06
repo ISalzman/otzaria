@@ -17,6 +17,7 @@ import 'package:otzaria/personal_notes/widgets/personal_note_editor_dialog.dart'
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -358,6 +359,128 @@ void main() {
       ),
       isFalse,
     );
+  });
+
+  test('Shift לחוץ — הניווט מוותר כדי לאפשר הרחבת בחירה (Shift+חץ)', () {
+    final downEvent = KeyDownEvent(
+      physicalKey: PhysicalKeyboardKey.arrowDown,
+      logicalKey: LogicalKeyboardKey.arrowDown,
+      timeStamp: Duration.zero,
+    );
+
+    // ללא Shift — ממשיכים לטפל בניווט (גלילה/דילוג שורה)
+    expect(
+      shouldHandlePageShapeNavigationKeyEvent(downEvent),
+      isTrue,
+    );
+
+    // עם Shift — הניווט מוותר, האירוע יעבור להרחבת הבחירה
+    expect(
+      shouldHandlePageShapeNavigationKeyEvent(downEvent, isShiftPressed: true),
+      isFalse,
+    );
+  });
+
+  group('resolveCommentaryKeyAction', () {
+    setUp(() => ShortcutHelper.isMacForTesting = false);
+    tearDown(() => ShortcutHelper.isMacForTesting = null);
+
+    KeyDownEvent keyDown(
+      PhysicalKeyboardKey physical,
+      LogicalKeyboardKey logical,
+    ) =>
+        KeyDownEvent(
+          physicalKey: physical,
+          logicalKey: logical,
+          timeStamp: Duration.zero,
+        );
+
+    final addNoteEvent =
+        keyDown(PhysicalKeyboardKey.keyN, LogicalKeyboardKey.keyN);
+
+    test('קיצור הוסף-הערה במפרש הפעיל עם בחירה ושורה ידועה → addNote', () {
+      expect(
+        resolveCommentaryKeyAction(
+          event: addNoteEvent,
+          isActiveCommentary: true,
+          hasSelection: true,
+          hasSelectedIndex: true,
+          addNoteShortcut: 'ctrl+n',
+          isControlPressed: true,
+        ),
+        CommentaryKeyAction.addNote,
+      );
+    });
+
+    test('הוסף-הערה כשהמפרש אינו הפעיל → none (לא מטפלים מכאן)', () {
+      expect(
+        resolveCommentaryKeyAction(
+          event: addNoteEvent,
+          isActiveCommentary: false,
+          hasSelection: true,
+          hasSelectedIndex: true,
+          addNoteShortcut: 'ctrl+n',
+          isControlPressed: true,
+        ),
+        CommentaryKeyAction.none,
+      );
+    });
+
+    test('הוסף-הערה בלי טקסט מסומן → none', () {
+      expect(
+        resolveCommentaryKeyAction(
+          event: addNoteEvent,
+          isActiveCommentary: true,
+          hasSelection: false,
+          hasSelectedIndex: true,
+          addNoteShortcut: 'ctrl+n',
+          isControlPressed: true,
+        ),
+        CommentaryKeyAction.none,
+      );
+    });
+
+    test('הוסף-הערה בלי שורת מקור ידועה לבחירה → none', () {
+      expect(
+        resolveCommentaryKeyAction(
+          event: addNoteEvent,
+          isActiveCommentary: true,
+          hasSelection: true,
+          hasSelectedIndex: false,
+          addNoteShortcut: 'ctrl+n',
+          isControlPressed: true,
+        ),
+        CommentaryKeyAction.none,
+      );
+    });
+
+    test('Ctrl+C במפרש הפעיל עם בחירה → copy', () {
+      expect(
+        resolveCommentaryKeyAction(
+          event: keyDown(PhysicalKeyboardKey.keyC, LogicalKeyboardKey.keyC),
+          isActiveCommentary: true,
+          hasSelection: true,
+          hasSelectedIndex: true,
+          addNoteShortcut: 'ctrl+n',
+          isControlPressed: true,
+        ),
+        CommentaryKeyAction.copy,
+      );
+    });
+
+    test('מקש ללא modifier מתאים → none (לא מיירטים מקלדת רגילה)', () {
+      expect(
+        resolveCommentaryKeyAction(
+          event: addNoteEvent,
+          isActiveCommentary: true,
+          hasSelection: true,
+          hasSelectedIndex: true,
+          addNoteShortcut: 'ctrl+n',
+          isControlPressed: false,
+        ),
+        CommentaryKeyAction.none,
+      );
+    });
   });
 
   testWidgets('פוקוס על MenuItemButton מזוהה כתפריט', (tester) async {

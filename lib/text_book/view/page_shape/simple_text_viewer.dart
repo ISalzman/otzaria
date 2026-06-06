@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -17,10 +18,12 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_se
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
@@ -36,6 +39,7 @@ import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
+import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
@@ -50,9 +54,67 @@ import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart
 import 'package:otzaria/utils/text/html_link_handler.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 
-/// מחזירה האם אירוע המקלדת צריך להניע גלילה רציפה בצורת הדף.
-bool shouldHandlePageShapeNavigationKeyEvent(KeyEvent event) {
+/// מחזירה האם אירוע המקלדת צריך להניע גלילה/ניווט שורה בצורת הדף.
+///
+/// [isShiftPressed] - כש-Shift לחוץ הניווט מוותר, כדי שחיצים ירחיבו את בחירת
+/// הטקסט (Shift+חץ) במקום לדלג בין שורות או לגלול.
+bool shouldHandlePageShapeNavigationKeyEvent(
+  KeyEvent event, {
+  bool isShiftPressed = false,
+}) {
+  if (isShiftPressed) {
+    return false;
+  }
   return event is KeyDownEvent || event is KeyRepeatEvent;
+}
+
+/// הפעולה שיש לבצע על אירוע מקלדת בחלונית מפרש (בצורת הדף).
+enum CommentaryKeyAction { none, copy, addNote }
+
+/// מחליטה איזו פעולה לבצע על אירוע מקלדת בחלונית מפרש, ללא תופעות לוואי.
+///
+/// המפרשים בצורת הדף לוכדים קיצורים גלובלית (ללא פוקוס): רק חלונית המפרש
+/// שבה סומן טקסט לאחרונה ([isActiveCommentary]) מטפלת. בלי טיפול כאן, קיצור
+/// "הוסף הערה" מתבעבע אל ה-`KeyboardListener` של הספר הראשי ופותח הערה על
+/// גוף הספר במקום על המפרש — וגם מבטל את הבחירה.
+///
+/// [addNoteShortcut] - מחרוזת קיצור "הוסף הערה" מההגדרות (כגון `'ctrl+n'`).
+/// פרמטרי ה-modifiers האופציונליים מאפשרים בדיקות יחידה בלי מצב חומרה אמיתי.
+CommentaryKeyAction resolveCommentaryKeyAction({
+  required KeyEvent event,
+  required bool isActiveCommentary,
+  required bool hasSelection,
+  required bool hasSelectedIndex,
+  required String addNoteShortcut,
+  bool? isControlPressed,
+  bool? isShiftPressed,
+  bool? isAltPressed,
+  bool? isMetaPressed,
+}) {
+  // כל הקיצורים כאן רלוונטיים רק במפרש הפעיל וכשיש בו טקסט מסומן.
+  if (!isActiveCommentary) return CommentaryKeyAction.none;
+  if (event is! KeyDownEvent) return CommentaryKeyAction.none;
+  if (!hasSelection) return CommentaryKeyAction.none;
+
+  final ctrl = isControlPressed ?? HardwareKeyboard.instance.isControlPressed;
+  final meta = isMetaPressed ?? HardwareKeyboard.instance.isMetaPressed;
+  if ((ctrl || meta) && event.logicalKey == LogicalKeyboardKey.keyC) {
+    return CommentaryKeyAction.copy;
+  }
+
+  final matchesAddNote = ShortcutHelper.matchesShortcut(
+    event,
+    addNoteShortcut,
+    isControlPressed: isControlPressed,
+    isShiftPressed: isShiftPressed,
+    isAltPressed: isAltPressed,
+    isMetaPressed: isMetaPressed,
+  );
+  if (matchesAddNote && hasSelectedIndex) {
+    return CommentaryKeyAction.addNote;
+  }
+
+  return CommentaryKeyAction.none;
 }
 
 /// בודקת האם הפוקוס הנוכחי נמצא בתוך שדה קלט טקסטואלי.
@@ -227,6 +289,14 @@ class SimpleTextViewer extends StatefulWidget {
     this.notesRepository,
   });
 
+  /// האם חלונית מפרש זה עתה טיפלה בקיצור "הוסף הערה".
+  ///
+  /// בצורת הדף הפוקוס נשאר על הטקסט הראשי גם כשהבחירה במפרש, ולכן אירוע
+  /// הקיצור מתבעבע אל ה-`KeyboardListener` של הספר הראשי גם אחרי שהמפרש טיפל
+  /// בו. הספר הראשי בודק דגל זה כדי לא לפתוח הערה כפולה על גוף הספר.
+  static bool get commentaryNoteHandledRecently =>
+      _SimpleTextViewerState._commentaryNoteHandled;
+
   @override
   State<SimpleTextViewer> createState() => _SimpleTextViewerState();
 }
@@ -234,6 +304,8 @@ class SimpleTextViewer extends StatefulWidget {
 class _SimpleTextViewerState extends State<SimpleTextViewer> {
   // דגל סטטי: מונע מהטקסט הראשי לדרוס העתקה שכבר בוצעה ע"י מפרש
   static bool _commentaryCopyHandled = false;
+  // דגל סטטי: מונע מהטקסט הראשי לפתוח הערה כפולה אחרי שמפרש טיפל בקיצור
+  static bool _commentaryNoteHandled = false;
   // מצביע סטטי: רק הפרשן האחרון שנבחר בו טקסט מטפל ב-Ctrl+C
   static _SimpleTextViewerState? _lastActiveCommentary;
 
@@ -245,6 +317,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   bool _wasMenuFocused = false;
   String? _savedSelectedText;
   int? _savedSelectedIndex;
+  // טווח אינדקסי השורות שבתוך הבחירה הנוכחית (כולל הקצוות). משמש כדי שלחיצה
+  // ימנית ברווח שבין שורות נבחרות תזוהה כלחיצה "על הבחירה" ולא תבטל אותה —
+  // הרווח הוויזואלי שייך הית-טסטית לווידג'ט של שורה נבחרת.
+  int? _selectionLineStart;
+  int? _selectionLineEnd;
+  // עמודת ההתחלה של הבחירה בשורה הראשונה (רמז לזיהוי מופע נכון בטקסט חוזר).
+  int? _selectionStartColumn;
   int _initialScrollRestoreAttempts = 0;
   bool? _lastContinuousReadingMode;
   int? _pendingDisplayModeRestoreLineIndex;
@@ -310,6 +389,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       return;
     }
 
+    // אם אזור אחר (מפרש) מחזיק כעת בחירת טקסט פעילה - אל תחטוף ממנו פוקוס.
+    // אחרת ה-SelectableRegion של המפרש יאבד פוקוס מקלדת, ו-Shift+חץ ירחיב
+    // את בחירת הטקסט הראשי (או יתחיל בחירה חדשה) במקום את בחירת המפרש.
+    final activeOwner = widget.selectionSyncController?.activeOwner;
+    if (activeOwner != null && !identical(activeOwner, _selectionOwner)) {
+      return;
+    }
+
     _pendingKeyboardFocusRestore = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _pendingKeyboardFocusRestore = false;
@@ -372,9 +459,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     _selectionFocusNode = FocusNode(debugLabel: 'SelectionAreaFocus');
     _resolvedKeyboardFocusNode;
 
-    // מאזין גלובלי ל-Ctrl+C במפרשים (ללא צורך בפוקוס)
+    // מאזין גלובלי לקיצורי מפרש (העתקה / הוספת הערה) ללא צורך בפוקוס
     if (!widget.isMainText) {
-      HardwareKeyboard.instance.addHandler(_handleCommentaryCopyKeyEvent);
+      HardwareKeyboard.instance.addHandler(_handleCommentaryKeyEvent);
     }
 
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
@@ -403,26 +490,43 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     widget.selectionSyncController?.addListener(_handleExternalSelectionChange);
   }
 
-  bool _handleCommentaryCopyKeyEvent(KeyEvent event) {
-    // רק הפרשן שנבחר בו טקסט לאחרונה מטפל
-    if (_lastActiveCommentary != this) return false;
-    if (event is! KeyDownEvent) return false;
-    final isCtrlC = HardwareKeyboard.instance.isControlPressed &&
-        event.logicalKey == LogicalKeyboardKey.keyC;
-    final isMetaC = HardwareKeyboard.instance.isMetaPressed &&
-        event.logicalKey == LogicalKeyboardKey.keyC;
-    if ((isCtrlC || isMetaC) &&
-        _savedSelectedText != null &&
-        _savedSelectedText!.trim().isNotEmpty) {
-      _commentaryCopyHandled = true;
-      _copyFormattedText().whenComplete(() {
-        Future.delayed(const Duration(milliseconds: 100), () {
-          _commentaryCopyHandled = false;
+  bool _handleCommentaryKeyEvent(KeyEvent event) {
+    final addNoteShortcut =
+        Settings.getValue<String>('key-shortcut-add-note') ?? 'ctrl+n';
+    final action = resolveCommentaryKeyAction(
+      event: event,
+      isActiveCommentary: _lastActiveCommentary == this,
+      hasSelection:
+          _savedSelectedText != null && _savedSelectedText!.trim().isNotEmpty,
+      hasSelectedIndex: _savedSelectedIndex != null,
+      addNoteShortcut: addNoteShortcut,
+    );
+
+    switch (action) {
+      case CommentaryKeyAction.copy:
+        _commentaryCopyHandled = true;
+        _copyFormattedText().whenComplete(() {
+          Future.delayed(const Duration(milliseconds: 100), () {
+            _commentaryCopyHandled = false;
+          });
         });
-      });
-      return true;
+        return true;
+      case CommentaryKeyAction.addNote:
+        // הערה אישית ממפרש חייבת להישמר תחת ספר המפרש (דרך
+        // _createNoteForCurrentLine), ולא על גוף הספר הראשי. האירוע מתבעבע אל
+        // ה-KeyboardListener של הספר הראשי גם אחרי טיפול כאן, ולכן מסמנים דגל
+        // שהספר הראשי בודק כדי לא לפתוח הערה כפולה.
+        _commentaryNoteHandled = true;
+        // איפוס קצר ובלתי תלוי באורך חיי הדיאלוג — צריך להישאר דולק רק למשך
+        // התבעבוע הסינכרוני אל ה-KeyboardListener של הספר הראשי.
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _commentaryNoteHandled = false;
+        });
+        _createNoteForCurrentLine(_savedSelectedIndex!);
+        return true;
+      case CommentaryKeyAction.none:
+        return false;
     }
-    return false;
   }
 
   @override
@@ -433,7 +537,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       FocusManager.instance.removeListener(_handleGlobalFocusChange);
     }
     if (!widget.isMainText) {
-      HardwareKeyboard.instance.removeHandler(_handleCommentaryCopyKeyEvent);
+      HardwareKeyboard.instance.removeHandler(_handleCommentaryKeyEvent);
       if (_lastActiveCommentary == this) _lastActiveCommentary = null;
     }
     _selectionFocusNode.dispose();
@@ -473,6 +577,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     setState(() {
       _savedSelectedText = null;
       _savedSelectedIndex = null;
+      _selectionLineStart = null;
+      _selectionLineEnd = null;
+      _selectionStartColumn = null;
     });
 
     if (!widget.isMainText && _lastActiveCommentary == this) {
@@ -704,13 +811,24 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   }
 
   Future<void> _handleSelectionChange(String? plainText) async {
+    // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
+    trackRtlSelection(plainText);
+    // שינוי בחירה זמני בזמן priming — לא לעבד.
+    if (rtlSelectionPriming) return;
     final persistedText = resolvePersistedSelectedText(
       previousSelectedText: _savedSelectedText,
       latestSelectedText: plainText,
     );
 
     if (!shouldPersistSelectedText(plainText)) {
-      if (mounted) setState(() => _savedSelectedText = null);
+      if (mounted) {
+        setState(() {
+          _savedSelectedText = null;
+          _selectionLineStart = null;
+          _selectionLineEnd = null;
+          _selectionStartColumn = null;
+        });
+      }
       return;
     }
 
@@ -748,19 +866,84 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     );
 
     int? selectedIndex = _savedSelectedIndex;
+    int? lineStart;
+    int? lineEnd;
+    int? startColumn;
     final visibleText = renderedLines.join('\n');
     final selectionStart = visibleText.indexOf(restoredText);
     if (selectionStart >= 0 && sourceIndices.isNotEmpty) {
       final before = visibleText.substring(0, selectionStart);
       selectedIndex = sourceIndices.first + '\n'.allMatches(before).length;
+      // השורה הראשונה והאחרונה שהבחירה משתרעת עליהן (לפי מעברי השורה בתוכה).
+      lineStart = selectedIndex;
+      lineEnd = selectedIndex + '\n'.allMatches(restoredText).length;
+      // עמודת ההתחלה של הבחירה בתוך השורה הראשונה — רמז לזיהוי המופע הנכון
+      // כאשר אותו טקסט חוזר באותה שורה.
+      startColumn = selectionStart - (before.lastIndexOf('\n') + 1);
     }
 
     if (!mounted) return;
     setState(() {
       _savedSelectedText = restoredText;
       _savedSelectedIndex = selectedIndex;
+      _selectionLineStart = lineStart;
+      _selectionLineEnd = lineEnd;
+      _selectionStartColumn = startColumn;
     });
     _prefetchDictionaryLookups(restoredText);
+  }
+
+  /// האם יש לשמר את הבחירה בלחיצה ימנית בנקודה [globalPosition] על השורה
+  /// [lineIndex], כאשר [lineContext] הוא ה-context של אותה שורה (לאיתור הפסקה).
+  ///
+  /// שומר את הבחירה כאשר הלחיצה נופלת על הטקסט המסומן בפועל — כולל הרווח שבין
+  /// שורות-תצוגה של אותה שורת-מקור שנשברה (wrap), שמגושר ע"י
+  /// `includeLineSpacingMiddle`. לחיצה על חלק לא-מסומן בשורה מחזירה `false` כדי
+  /// שהבחירה תתבטל (כמו בתוכנה רגילה). כשהבדיקה הגאומטרית אינה ניתנת להכרעה
+  /// (טקסט HTML מורכב וכו') חוזרים לברירת מחדל סלחנית — שמירת הבחירה כל עוד
+  /// השורה בטווח, כדי לא לבטל בטעות.
+  bool _shouldPreserveSelectionAt(
+    Offset globalPosition,
+    int lineIndex,
+    BuildContext lineContext,
+  ) {
+    final start = _selectionLineStart;
+    final end = _selectionLineEnd;
+    if (start == null || end == null) return false;
+    final lo = start <= end ? start : end;
+    final hi = start <= end ? end : start;
+    if (lineIndex < lo || lineIndex > hi) return false; // שורה מחוץ לבחירה
+
+    final selectedText = _savedSelectedText;
+    if (selectedText == null || selectedText.isEmpty) {
+      return false; // אין בחירה פעילה — אין מה לשמר
+    }
+    final root = lineContext.findRenderObject();
+    if (root == null) {
+      return true; // יש בחירה אך אי אפשר לבדוק גאומטרית — סלחני
+    }
+
+    final segments = selectedText.split('\n');
+    final offsetInRange = lineIndex - lo;
+    final segment = (offsetInRange >= 0 && offsetInRange < segments.length)
+        ? segments[offsetInRange]
+        : selectedText;
+    final edge = lo == hi
+        ? SelectionSegmentEdge.substring
+        : lineIndex == lo
+            ? SelectionSegmentEdge.suffix
+            : lineIndex == hi
+                ? SelectionSegmentEdge.prefix
+                : SelectionSegmentEdge.full;
+
+    final onSelection = clickIsOnRenderedSelection(
+      root: root,
+      globalPosition: globalPosition,
+      selectedSegment: segment,
+      edge: edge,
+      segmentStartHint: _selectionStartColumn,
+    );
+    return onSelection ?? true; // לא הוכרע — סלחני
   }
 
   void _prefetchDictionaryLookups(String? selectedText) {
@@ -914,33 +1097,34 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         ));
         items.add(const AppContextMenuEntry.divider());
       }
-      items.addAll(lineLinks
+      final sortedLinks = CommentaryService.sortLinksByEraSync(lineLinks
           .where((link) =>
               !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
               link.start == null &&
               link.end == null)
-          .map((link) => AppContextMenuEntry(
-                label: link.fallbackDisplayReference,
-                labelWidget: FutureBuilder<String>(
-                  future: link.displayReference,
-                  builder: (context, snapshot) => Text(
-                    snapshot.data ?? link.fallbackDisplayReference,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textDirection: TextDirection.rtl,
-                  ),
-                ),
-                onTap: () => widget.openBookCallback(
-                  TextBookTab(
-                    book: TextBook(title: utils.getTitleFromPath(link.path2)),
-                    index: link.index2 - 1,
-                    openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                            false) ||
+          .toList());
+      items.addAll(sortedLinks.map((link) => AppContextMenuEntry(
+            label: link.fallbackDisplayReference,
+            labelWidget: FutureBuilder<String>(
+              future: link.displayReference,
+              builder: (context, snapshot) => Text(
+                snapshot.data ?? link.fallbackDisplayReference,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textDirection: TextDirection.rtl,
+              ),
+            ),
+            onTap: () => widget.openBookCallback(
+              TextBookTab(
+                book: TextBook(title: utils.getTitleFromPath(link.path2)),
+                index: link.index2 - 1,
+                openLeftPane:
+                    (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
                         (Settings.getValue<bool>('key-default-sidebar-open') ??
                             false),
-                  ),
-                ),
-              )));
+              ),
+            ),
+          )));
       return items;
     }
 
@@ -1435,7 +1619,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                   final itemCount = segments.isNotEmpty
                       ? segments.length
                       : widget.content.length;
-                  return SelectableRegion(
+                  return RtlSelectionShortcuts(
+                      child: SelectableRegion(
                     key: _selectionRegionKey,
                     focusNode: _selectionFocusNode,
                     selectionControls: switch (defaultTargetPlatform) {
@@ -1506,7 +1691,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                           },
                           onKeyEvent: (_, event) {
                             if (!shouldHandlePageShapeNavigationKeyEvent(
-                                event)) {
+                              event,
+                              isShiftPressed:
+                                  HardwareKeyboard.instance.isShiftPressed,
+                            )) {
                               return KeyEventResult.ignored;
                             }
 
@@ -1558,7 +1746,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                         ),
                       ),
                     ),
-                  );
+                  ));
                 },
               );
             },
@@ -1634,6 +1822,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
               setState(() {
                 _savedSelectedText = null;
                 _savedSelectedIndex = null;
+                _selectionLineStart = null;
+                _selectionLineEnd = null;
+                _selectionStartColumn = null;
               });
               // עדכון selectedIndex רק בטקסט המרכזי
               if (isSelected) {
@@ -1660,13 +1851,20 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
               ));
             }
           : null,
-      onSecondaryTapDown: (details) {
-        // שמירת האינדקס לשימוש בתפריט ההקשר
-        setState(() {
-          _savedSelectedIndex = primaryLineIndex;
-        });
-      },
       child: AppContextMenuRegion(
+        // שמירת האינדקס דרך ה-Listener של AppContextMenuRegion (מחוסן מהזירה),
+        // כך שגם כשלחיצה ימנית חוסמת את SelectableRegion ושומרת בחירה — האינדקס
+        // עדיין נשמר עבור פעולות התפריט.
+        onSecondaryTapDown: (_) {
+          setState(() {
+            _savedSelectedIndex = primaryLineIndex;
+          });
+        },
+        // לחיצה ימנית על הטקסט המסומן (כולל הרווח שבין שורות-תצוגה של שורת-מקור
+        // שנשברה) לא תשחרר את הבחירה; לחיצה על חלק לא-מסומן מבטלת כרגיל.
+        shouldPreserveSelectionOnSecondaryTap: (globalPosition) =>
+            _shouldPreserveSelectionAt(
+                globalPosition, primaryLineIndex, context),
         menuBuilder: (menuCtx, tapPos) {
           return _buildContextMenu(
             state,
@@ -1783,12 +1981,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 return textWidget;
               }
 
-              final note = notesForLine.first;
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Tooltip(
-                    message: note.contentPlain,
+                    message:
+                        notesForLine.map((n) => n.contentPlain).join('\n\n'),
                     child: GestureDetector(
                       onTap: () {
                         context
@@ -1808,8 +2006,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                       onLongPress: () {
                         showSingleActionDialog(
                           context: context,
-                          title: 'הערה לשורה זו',
-                          customContent: PersonalNoteContentView(note: note),
+                          title: notesForLine.length > 1
+                              ? 'הערות לשורה זו'
+                              : 'הערה לשורה זו',
+                          customContent:
+                              PersonalNotesListView(notes: notesForLine),
                           confirmText: 'סגור',
                         );
                       },
@@ -1874,6 +2075,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         setState(() {
           _savedSelectedText = null;
           _savedSelectedIndex = lineIndex;
+          _selectionLineStart = null;
+          _selectionLineEnd = null;
+          _selectionStartColumn = null;
         });
         if (isLineSelected) {
           context.read<TextBookBloc>().add(const UpdateSelectedIndex(null));

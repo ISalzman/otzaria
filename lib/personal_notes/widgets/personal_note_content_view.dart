@@ -243,3 +243,38 @@ class _PersonalNoteContentViewState extends State<PersonalNoteContentView> {
     return result;
   }
 }
+
+/// מציגה את כל ההערות האישיות של שורה אחת, זו אחר זו עם מפריד ביניהן.
+///
+/// משמשת את הסימן שבצד השורה: כשיש יותר מהערה אחת באותה שורה, לחיצה ארוכה
+/// על הסימן פותחת דיאלוג עם כל ההערות (ולא רק האחרונה). התוכן נגלל אם הוא
+/// חורג מ-[maxHeight] כדי שדיאלוג עם הערות רבות לא יחרוג מהמסך.
+class PersonalNotesListView extends StatelessWidget {
+  final List<PersonalNote> notes;
+  final double maxHeight;
+
+  const PersonalNotesListView({
+    super.key,
+    required this.notes,
+    this.maxHeight = 400,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < notes.length; i++) ...[
+              if (i > 0) const Divider(height: 24),
+              PersonalNoteContentView(note: notes[i]),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}

@@ -135,12 +135,32 @@ class _RtlTextFieldState extends State<RtlTextField> {
           const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
               _handleArrowKey(isVisualRight: true, extendSelection: false),
 
-          // Shift+חיצים
+          // Shift+חיצים (בחירה ברמת תו)
           const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
               () =>
                   _handleArrowKey(isVisualRight: false, extendSelection: true),
           const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
               () => _handleArrowKey(isVisualRight: true, extendSelection: true),
+
+          // Ctrl+Shift+חיצים (בחירה ברמת מילה — Windows/Linux)
+          const SingleActivator(LogicalKeyboardKey.arrowLeft,
+                  shift: true, control: true):
+              () => _handleArrowKey(
+                  isVisualRight: false, extendSelection: true, byWord: true),
+          const SingleActivator(LogicalKeyboardKey.arrowRight,
+                  shift: true, control: true):
+              () => _handleArrowKey(
+                  isVisualRight: true, extendSelection: true, byWord: true),
+
+          // Alt+Shift+חיצים (בחירה ברמת מילה — macOS)
+          const SingleActivator(LogicalKeyboardKey.arrowLeft,
+                  shift: true, alt: true):
+              () => _handleArrowKey(
+                  isVisualRight: false, extendSelection: true, byWord: true),
+          const SingleActivator(LogicalKeyboardKey.arrowRight,
+                  shift: true, alt: true):
+              () => _handleArrowKey(
+                  isVisualRight: true, extendSelection: true, byWord: true),
         },
         child: textField,
       );
@@ -161,9 +181,11 @@ class _RtlTextFieldState extends State<RtlTextField> {
   ///
   /// [isVisualRight] - האם המקש שנלחץ הוא חץ ימין (ויזואלית)
   /// [extendSelection] - האם להרחיב בחירה (Shift לחוץ)
+  /// [byWord] - האם לנוע ביחידות מילה (Ctrl/Alt+Shift+חץ) ולא ביחידות תו
   void _handleArrowKey({
     required bool isVisualRight,
     required bool extendSelection,
+    bool byWord = false,
   }) {
     final text = _effectiveController.text;
     final selection = _effectiveController.selection;
@@ -190,13 +212,45 @@ class _RtlTextFieldState extends State<RtlTextField> {
       return;
     }
 
+    // בחירה ברמת מילה: מאצילים לטיפול המובנה של Flutter
+    // (ExtendSelectionToNextWordBoundaryIntent) — גבולות מילה נכונים עבור
+    // פיסוק, גרשיים, מקף ואשכולות-גרפמה, במקום חיתוך לפי רווחים בלבד. ברמת
+    // מילה Flutter אינו מהפך לפי כיווניות, ולכן הכיוון הלוגי כאן ויזואלי-נכון:
+    // ויזואלית-שמאל = offset עולה = forward.
+    if (byWord) {
+      final focusContext = FocusManager.instance.primaryFocus?.context;
+      if (focusContext != null) {
+        Actions.invoke(
+          focusContext,
+          ExtendSelectionToNextWordBoundaryIntent(
+            forward: !isVisualRight,
+            collapseSelection: false,
+          ),
+        );
+      }
+      return;
+    }
+
     // חישוב תזוזה רגילה
     final int currentOffset =
         extendSelection ? selection.extentOffset : selection.baseOffset;
 
-    // ב-RTL: ימינה = הקטנת אינדקס (-1), שמאלה = הגדלת אינדקס (+1)
-    final int offsetChange = isVisualRight ? -1 : 1;
-    final int newOffset = (currentOffset + offsetChange).clamp(0, text.length);
+    // ב-RTL: ימינה = הקטנת אינדקס (offset נמוך), שמאלה = הגדלת אינדקס (offset גבוה).
+    // התנועה מכבדת אשכולות-גרפמה (CharacterBoundary), כך שניקוד/תווים מורכבים
+    // לא נחצים באמצע.
+    final boundary = CharacterBoundary(text);
+    final int newOffset;
+    if (isVisualRight) {
+      // ויזואלית-ימין = אחורה ב-offset. ב-offset 0 אין לאן לזוז (ונמנעים
+      // מהעברת אינדקס שלילי ל-getLeadingTextBoundaryAt).
+      newOffset = currentOffset > 0
+          ? (boundary.getLeadingTextBoundaryAt(currentOffset - 1) ?? 0)
+          : 0;
+    } else {
+      newOffset = currentOffset < text.length
+          ? (boundary.getTrailingTextBoundaryAt(currentOffset) ?? text.length)
+          : text.length;
+    }
 
     if (extendSelection) {
       // מרחיבים/מצמצמים את הבחירה
