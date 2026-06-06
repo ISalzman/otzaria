@@ -51,8 +51,9 @@ Future<FileSyncResult> runCustomFoldersDbSyncInIsolate({
 
 /// Runs a folder-delete operation inside a background isolate.
 ///
-/// [folderCategoryId] and [personalCategoryId] must be resolved by the
-/// caller on the main isolate before invoking this function.
+/// [folderPath] הוא הנתיב המלא של התיקייה — ממנו נגזר שם ה-`source`
+/// הייחודי שלפיו מזוהים ספרי התיקייה למחיקה. זיהוי לפי source (ולא לפי שם
+/// קטגוריה) מונע פגיעה בתיקייה אחרת בעלת אותו basename.
 /// Serialised through the same [DatabaseLibraryProvider.operationQueue].
 ///
 /// [userBooksDbPath] — נתיב `user_books.db` (שם נמצאות התיקיות המותאמות).
@@ -60,8 +61,7 @@ Future<FileSyncResult> runCustomFoldersDbSyncInIsolate({
 Future<void> runDeleteFolderFromDbInIsolate({
   required String dbPath,
   required String userBooksDbPath,
-  required int folderCategoryId,
-  required int personalCategoryId,
+  required String folderPath,
 }) {
   return DatabaseLibraryProvider.operationQueue.enqueue(() async {
     await QueryLoader.initialize();
@@ -71,8 +71,7 @@ Future<void> runDeleteFolderFromDbInIsolate({
       'queryCache': QueryLoader.cacheSnapshot,
       'dbPath': dbPath,
       'userBooksDbPath': userBooksDbPath,
-      'folderCategoryId': folderCategoryId,
-      'personalCategoryId': personalCategoryId,
+      'folderPath': folderPath,
     };
     await Isolate.run(() => _deleteWorkerEntryPoint(payload));
   });
@@ -135,8 +134,7 @@ Future<void> _deleteWorkerEntryPoint(Map<String, Object?> payload) async {
 
   final dbPath = payload['dbPath'] as String;
   final userBooksDbPath = payload['userBooksDbPath'] as String;
-  final folderCategoryId = payload['folderCategoryId'] as int;
-  final personalCategoryId = payload['personalCategoryId'] as int;
+  final folderPath = payload['folderPath'] as String;
 
   final database = MyDatabase.withPath(dbPath);
   final repository = SeforimRepository(database);
@@ -152,8 +150,7 @@ Future<void> _deleteWorkerEntryPoint(Map<String, Object?> payload) async {
   );
 
   try {
-    await service.deleteFolderFromDatabase(
-        folderCategoryId, personalCategoryId);
+    await service.deleteFolderFromDatabase(folderPath);
   } finally {
     database.close();
     userBooksDatabase.close();

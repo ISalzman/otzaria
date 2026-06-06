@@ -149,6 +149,21 @@ class FileSystemData {
     );
   }
 
+  /// מחזיר האם מותר למחוק את הספר דרך הספרייה.
+  ///
+  /// מותר רק לספרי משתמש מסוג "עותק עצמאי" (תוכנם שמור בתוכנה). ספר
+  /// "קריאה מהקבצים" נמחק רק ע"י מחיקת הקובץ מהדיסק, והספרייה הרשמית אינה
+  /// ניתנת למחיקה. fail-closed: מחזיר false בכל מקרה לא-ודאי.
+  Future<bool> canDeleteUserBookFromLibrary({
+    required String title,
+    int? categoryId,
+    String fileType = 'txt',
+    required bool isUserBook,
+  }) async {
+    if (!isUserBook || categoryId == null) return false;
+    return _providerManager.isUserBookContentInDb(title, categoryId, fileType);
+  }
+
   /// Clears the book-in-database cache
   void clearBookCache() {
     _providerManager.clearCaches();

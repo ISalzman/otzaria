@@ -577,16 +577,13 @@ class _BookGridActionColumn extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        FutureBuilder<String>(
-          future: FileSystemData.instance.getBookDataSource(
-            book.title,
-            categoryId: book.categoryId,
-            fileType: book.fileType,
-          ),
+        FutureBuilder<bool>(
+          future: _canDeleteBookFromLibrary(book),
           builder: (context, snapshot) {
-            // מחיקה מה-DB מותרת רק לספרים אישיים (user_books.db). הספרייה
-            // הרשמית (seforim.db) היא read-only ואינה ניתנת למחיקה ע"י המשתמש.
-            if (snapshot.data != 'DB' || !book.isUserBook) {
+            // מחיקה מהספרייה מותרת רק לספרי משתמש מסוג "עותק עצמאי"
+            // (התוכן שמור בתוכנה). ספר "קריאה מהקבצים" נמחק רק ע"י מחיקת
+            // הקובץ מהדיסק, והספרייה הרשמית (seforim.db) אינה ניתנת למחיקה.
+            if (snapshot.data != true) {
               return const SizedBox.shrink();
             }
 
@@ -614,7 +611,7 @@ class _BookGridActionColumn extends StatelessWidget {
                 entries: const [
                   AppMenuEntry<String>(
                     value: 'delete',
-                    label: 'מחק מה-DB',
+                    label: 'מחק מהספרייה',
                     icon: FluentIcons.delete_24_regular,
                     isDestructive: true,
                   ),
@@ -681,12 +678,26 @@ class MyGridView extends StatelessWidget {
   }
 }
 
+/// בודק האם ניתן למחוק את [book] דרך הספרייה.
+///
+/// מותר רק לספרי משתמש מסוג "עותק עצמאי" (התוכן שמור בתוכנה). ספר
+/// "קריאה מהקבצים" (file-backed) נמחק רק ע"י מחיקת הקובץ מהדיסק, והספרייה
+/// הרשמית אינה ניתנת למחיקה ע"י המשתמש.
+Future<bool> _canDeleteBookFromLibrary(Book book) {
+  return FileSystemData.instance.canDeleteUserBookFromLibrary(
+    title: book.title,
+    categoryId: book.categoryId,
+    fileType: book.fileType ?? 'txt',
+    isUserBook: book.isUserBook,
+  );
+}
+
 Future<void> _showDeleteBookDialog(
     BuildContext context, Book book, VoidCallback? onBookDeleted) async {
   final confirmed = await showWarningDialog(
     context: context,
     title: 'למחוק את הספר?',
-    content: 'הספר "${book.title}" יימחק ממסד הנתונים.',
+    content: 'הספר "${book.title}" יימחק מהספרייה.',
     subtitle: 'לא ניתן לשחזר ספר שנמחק.',
     cancelText: 'ביטול',
     confirmText: 'מחק',
@@ -712,7 +723,7 @@ Future<void> _deleteBook(Book book) async {
       throw Exception('המחיקה נכשלה');
     }
 
-    UiSnack.show('הספר "${book.title}" נמחק בהצלחה ממסד הנתונים');
+    UiSnack.show('הספר "${book.title}" נמחק מהספרייה');
   } catch (e) {
     UiSnack.showError('שגיאה במחיקת הספר: $e');
   }

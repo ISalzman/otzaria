@@ -12,6 +12,22 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/dialogs/zip_extraction_progress_dialog.dart';
 
+/// סיווג הרכב הקבצים בתיקייה מותאמת אישית — קובע אילו אפשרויות אחסון
+/// רלוונטיות ואילו הסברים להציג למשתמש.
+enum _FolderContentKind {
+  /// אין קבצים נתמכים בתיקייה.
+  empty,
+
+  /// רק קבצי טקסט (TXT) — ניתן לשמור כעותק עצמאי בתוכנה.
+  textOnly,
+
+  /// רק קבצי PDF/Word — נקראים תמיד ישירות מהקבצים.
+  binaryOnly,
+
+  /// גם טקסט וגם PDF/Word — רק הטקסט יישמר כעותק עצמאי.
+  mixed,
+}
+
 /// Widget להוספה וניהול תיקיות מותאמות אישית
 class CustomFoldersTile extends StatefulWidget {
   const CustomFoldersTile({super.key});
@@ -22,6 +38,11 @@ class CustomFoldersTile extends StatefulWidget {
 
 class _CustomFoldersTileState extends State<CustomFoldersTile> {
   bool _isExpanded = false;
+
+  /// תוצאות סיווג הרכב הקבצים לכל תיקייה (לפי נתיב). מתמלא בעצלתיים
+  /// כשהרשימה נפתחת, כדי לא לסרוק תיקיות שאינן מוצגות.
+  final Map<String, _FolderContentKind> _folderKinds = {};
+  final Set<String> _scanningFolders = {};
 
   // מאזין לתור הגלובלי כדי שהכפתורים ייחסמו גם כשמסלול אחר (כגון file_sync)
   // כותב ל-DB באמצעות אותו תור.
@@ -45,6 +66,50 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
 
   static const String _customFoldersReloadNotice =
       'לאחר הוספת ספרים חדשים לתיקייה קיימת, יש ללחוץ על סמל הרענון.';
+
+  /// סורק את התיקייה (רק לפי סיומות, לא קורא תוכן) ומסווג את הרכב הקבצים.
+  /// הסריקה אסינכרונית ולא חוסמת את ה-UI, ועוצרת מוקדם ברגע שהתגלה גם
+  /// טקסט וגם קובץ בינארי (כלומר "מעורב").
+  Future<_FolderContentKind> _classifyFolder(String path) async {
+    var hasText = false;
+    var hasBinary = false;
+    try {
+      final dir = Directory(path);
+      if (!await dir.exists()) return _FolderContentKind.empty;
+      await for (final entity
+          in dir.list(recursive: true, followLinks: false)) {
+        if (entity is! File) continue;
+        final lower = entity.path.toLowerCase();
+        if (lower.endsWith('.txt')) {
+          hasText = true;
+        } else if (lower.endsWith('.pdf') || lower.endsWith('.docx')) {
+          hasBinary = true;
+        }
+        if (hasText && hasBinary) break;
+      }
+    } catch (_) {
+      return _FolderContentKind.empty;
+    }
+    if (hasText && hasBinary) return _FolderContentKind.mixed;
+    if (hasText) return _FolderContentKind.textOnly;
+    if (hasBinary) return _FolderContentKind.binaryOnly;
+    return _FolderContentKind.empty;
+  }
+
+  /// מתחיל סריקת סיווג לתיקייה אם טרם נסרקה. בטוח לקריאה חוזרת.
+  void _ensureFolderClassified(String path) {
+    if (_folderKinds.containsKey(path) || _scanningFolders.contains(path)) {
+      return;
+    }
+    _scanningFolders.add(path);
+    _classifyFolder(path).then((kind) {
+      if (!mounted) return;
+      setState(() {
+        _folderKinds[path] = kind;
+        _scanningFolders.remove(path);
+      });
+    });
+  }
 
   Future<void> _addFolder() async {
     final bloc = context.read<CustomFoldersBloc>();
@@ -84,6 +149,8 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
     }
 
     bloc.add(AddCustomFolder(path));
+    // אין צורך לאפס כאן את הסיווג — ה-listener מאפס את כל הקאש בסיום
+    // הסריקה (כולל חילוץ ZIP ששינה את הרכב הקבצים).
 
     String msg =
         'התיקייה "${path.split(Platform.pathSeparator).last}" נוספה בהצלחה';
@@ -99,38 +166,36 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       context: context,
       title: 'הסרת תיקייה',
       content: 'האם להסיר את התיקייה "${folder.name}" מהספרייה?\n'
-          'הקבצים המקוריים לא יימחקו.',
+          'הספרים יוסרו מהתוכנה, אך הקבצים המקוריים בדיסק לא יימחקו.',
       isDangerous: false,
     );
     if (confirmed != true || !mounted) return;
 
-    final deleteFromDb = await showTwoActionsDialog(
-      context: context,
-      title: 'מחיקה ממסד הנתונים',
-      content: 'התיקייה הוסרה מהרשימה.\n'
-          'האם למחוק גם את הספרים ממסד הנתונים?',
-      cancelText: 'השאר ב-DB',
-      confirmText: 'מחק מ-DB',
-    );
-
-    if (!mounted) return;
-    bloc.add(RemoveCustomFolder(folder, deleteFromDb: deleteFromDb == true));
+    // הסרת תיקייה תמיד מוחקת את ספריה מהתוכנה — גם אם תוכנם נשמר כעותק
+    // עצמאי וגם אם הם מוגדרים לקריאה ישירה מהקבצים. ה-prune שרץ ברענון
+    // ימחק אותם בכל מקרה, ולכן אין משמעות ל"השארה" שלהם ב-DB.
+    bloc.add(RemoveCustomFolder(folder, deleteFromDb: true));
   }
 
-  Future<void> _toggleAddToDatabase(CustomFolder folder, bool value) async {
+  /// מחליף את מצב האחסון של התיקייה: עותק עצמאי בתוכנה (true) או קריאה
+  /// ישירה מהקבצים (false).
+  Future<void> _setStorageMode(CustomFolder folder, bool toDatabase) async {
     final bloc = context.read<CustomFoldersBloc>();
-    if (value) {
+    if (toDatabase) {
       final confirmed = await showConfirmationDialog(
         context: context,
-        title: 'הכנסת תוכן ל-DB',
-        content: 'תוכן הספרים יישמר במסד הנתונים.\n'
-            'הקבצים המקוריים יישארו במקום.\n\n'
+        title: 'שמירת עותק עצמאי בתוכנה',
+        content: 'עותק של תוכן הספרים יישמר בתוך התוכנה, כך שהם יעבדו גם '
+            'אם הקבצים המקוריים יוזזו או יימחקו.\n'
+            'הקבצים המקוריים יישארו במקומם.\n\n'
+            'שים לב: אם תערוך קובץ בעתיד, יהיה עליך ללחוץ "סרוק מחדש" '
+            'כדי שהשינוי יתעדכן.\n\n'
             'האם להמשיך?',
         isDangerous: false,
       );
       if (confirmed != true || !mounted) return;
     }
-    bloc.add(ToggleAddToDatabase(folder, value));
+    bloc.add(ToggleAddToDatabase(folder, toDatabase));
   }
 
   @override
@@ -138,10 +203,18 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
     return BlocConsumer<CustomFoldersBloc, CustomFoldersState>(
       listenWhen: (prev, curr) =>
           (curr.message != null && curr.message != prev.message) ||
-          (curr.error != null && curr.error != prev.error),
+          (curr.error != null && curr.error != prev.error) ||
+          (prev.isSyncing && !curr.isSyncing),
       listener: (context, state) {
         if (state.message != null) UiSnack.show(state.message!);
         if (state.error != null) UiSnack.showError(state.error!);
+        if (!state.isSyncing) {
+          // סריקה/סנכרון הסתיימו — ייתכן שתוכן התיקיות בדיסק השתנה (נוספו
+          // או הוסרו קבצים). מאפסים את קאש סיווג סוגי הקבצים כדי שיחושב
+          // מחדש, אחרת ה-UI עלול להציג מצב אחסון או הסבר מיושן.
+          _folderKinds.clear();
+          _scanningFolders.clear();
+        }
       },
       builder: (context, state) {
         final folders = state.folders;
@@ -246,9 +319,17 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
-                  children: folders.map((folder) {
-                    return _buildFolderItem(folder, isSyncing);
-                  }).toList(),
+                  children: [
+                    _buildStorageLegend(),
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                    ...folders.map(
+                      (folder) => _buildFolderItem(folder, isSyncing),
+                    ),
+                  ],
                 ),
               ),
           ],
@@ -258,48 +339,159 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
   }
 
   Widget _buildFolderItem(CustomFolder folder, bool isSyncing) {
-    return ListTile(
-      dense: true,
-      leading: Icon(
-        FluentIcons.folder_24_filled,
-        color: Theme.of(context).colorScheme.primary,
-        size: 20,
-      ),
-      title: Text(folder.name, style: const TextStyle(fontSize: 14)),
-      subtitle: Text(
-        folder.path,
-        style: TextStyle(
-          fontSize: 11,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+    // מתחיל סיווג עצלן של הרכב הקבצים (פעם אחת לכל תיקייה).
+    _ensureFolderClassified(folder.path);
+    final kind = _folderKinds[folder.path];
+    final cs = Theme.of(context).colorScheme;
+
+    // קבצי PDF/Word נקראים תמיד מהקבצים — אין משמעות ל"עותק עצמאי".
+    final binaryOnly = kind == _FolderContentKind.binaryOnly;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Tooltip(
-            message: 'הכנס תוכן ל-DB',
-            child: isSyncing && folder.addToDatabase
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
+          Row(
+            children: [
+              Icon(
+                FluentIcons.folder_24_filled,
+                color: cs.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      folder.name,
+                      style: const TextStyle(fontSize: 14),
+                      textDirection: TextDirection.rtl,
+                    ),
+                    Text(
+                      folder.path,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              if (isSyncing && folder.addToDatabase)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Switch(
-                    value: folder.addToDatabase,
-                    onChanged: isSyncing
-                        ? null
-                        : (value) => _toggleAddToDatabase(folder, value),
                   ),
+                ),
+              IconButton(
+                icon: const Icon(FluentIcons.delete_24_regular, size: 18),
+                onPressed: isSyncing ? null : () => _removeFolder(folder),
+                tooltip: 'הסר תיקייה',
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(FluentIcons.delete_24_regular, size: 18),
-            onPressed: isSyncing ? null : () => _removeFolder(folder),
-            tooltip: 'הסר תיקייה',
+          const SizedBox(height: 8),
+          // בחירת מצב אחסון. כשהתיקייה מכילה רק PDF/Word אין בחירה (הם
+          // תמיד נקראים מהקבצים), ולכן מוצגת תווית במקום הפקד.
+          if (!binaryOnly)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Opacity(
+                opacity: isSyncing ? 0.5 : 1.0,
+                child: IgnorePointer(
+                  ignoring: isSyncing,
+                  child: AppSegmentedControl<bool>(
+                    currentValue: folder.addToDatabase,
+                    onChanged: (value) => _setStorageMode(folder, value),
+                    options: const [
+                      SegmentOption(
+                        value: false,
+                        label: 'קריאה מהקבצים',
+                        icon: FluentIcons.document_24_regular,
+                      ),
+                      SegmentOption(
+                        value: true,
+                        label: 'עותק עצמאי',
+                        icon: FluentIcons.database_24_regular,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  'קבצי PDF/Word — נקראים ישירות מהקבצים',
+                  textDirection: TextDirection.rtl,
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// מקרא המסביר את ההבדל בין מצבי האחסון. מוצג פעם אחת מעל רשימת
+  /// התיקיות, במקום הסבר/אזהרה חוזרים תחת כל תיקייה.
+  Widget _buildStorageLegend() {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _legendRow(
+            FluentIcons.document_24_regular,
+            'קריאה מהקבצים: הספרים נקראים ישירות מהקבצים שבדיסק. אל תזיז '
+            'אותם — אחרת לא ייפתחו. למחיקה: מחק את הקובץ מהדיסק וסרוק מחדש.',
+          ),
+          const SizedBox(height: 8),
+          _legendRow(
+            FluentIcons.database_24_regular,
+            'עותק עצמאי: התוכן נשמר בתוך התוכנה ועובד גם אם הקבצים יוסרו. '
+            'אחרי עריכת קובץ לחץ "סרוק מחדש" לעדכון; מחיקה רק דרך הספרייה.',
+          ),
+          const SizedBox(height: 8),
+          _legendRow(
+            FluentIcons.info_24_regular,
+            'קבצי PDF ו-Word נקראים תמיד ישירות מהקבצים '
+            '(לא נשמרים כעותק עצמאי).',
           ),
         ],
       ),
+    );
+  }
+
+  Widget _legendRow(IconData icon, String text) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(icon, size: 16, color: cs.primary),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            textDirection: TextDirection.rtl,
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+          ),
+        ),
+      ],
     );
   }
 }
