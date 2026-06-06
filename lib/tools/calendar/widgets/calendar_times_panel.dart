@@ -398,7 +398,6 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
                   tooltip: 'זמנים נוספים',
                   icon: FluentIcons.list_24_regular,
                   compact: true,
-                  emphasis: ToolbarActionButtonEmphasis.subtle,
                   onPressed: () => showZmanimSettingsDialog(context),
                 ),
                 _CityDropdown(
@@ -1034,7 +1033,6 @@ class _AlertControl extends StatelessWidget {
             onPressed: onPressed,
             selected: hasAlert,
             compact: true,
-            emphasis: ToolbarActionButtonEmphasis.subtle,
           )
         : AppPopupMenuButton<CalendarTimeAlertOption>(
             tooltip: tooltip,

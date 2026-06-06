@@ -15,6 +15,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  AppTopBarItem
@@ -67,6 +68,24 @@ class AppTopBar extends StatefulWidget {
   /// גובה הסרגל לפי מצב compact
   static double barHeight(bool isCompact) =>
       isCompact ? _kCompactHeight : _kTouchHeight;
+
+  /// סגנון טקסט אחיד לכותרת הסרגל העליון — ישמש בכל מסכי הקריאה.
+  static TextStyle titleStyle(BuildContext context) {
+    return TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      color: Theme.of(context).colorScheme.onSurface,
+    );
+  }
+
+  /// סגנון טקסט אחיד לכותרת משנה/מחבר בסרגל העליון.
+  static TextStyle subtitleStyle(BuildContext context) {
+    return TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w400,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+  }
 
   @override
   State<AppTopBar> createState() => _AppTopBarState();
@@ -177,9 +196,14 @@ class _AppTopBarState extends State<AppTopBar>
       BuildContext context, List<AppTopBarItem> items) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     final List<Widget> result = [];
-    for (final item in items) {
+    final double buttonSpacing = isCompact ? 4.0 : 8.0;
+    for (int i = 0; i < items.length; i++) {
+      final item = items[i];
       if (item.dividerBefore && result.isNotEmpty) {
         result.add(_buildDivider(context, isCompact));
+      }
+      if (result.isNotEmpty) {
+        result.add(SizedBox(width: buttonSpacing));
       }
       result.add(item.widget);
     }
@@ -187,14 +211,15 @@ class _AppTopBarState extends State<AppTopBar>
   }
 
   Widget _buildDivider(BuildContext context, bool isCompact) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
       child: SizedBox(
-        height: isCompact ? 18.0 : 24.0,
+        height: isCompact ? 20.0 : 24.0,
         child: VerticalDivider(
-          width: 9.0,
+          width: 1.0,
           thickness: 1.0,
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.32),
+          color: cs.outlineVariant.withValues(alpha: 0.5),
         ),
       ),
     );
@@ -211,7 +236,7 @@ class _AppTopBarState extends State<AppTopBar>
       builder: (context, settingsState) {
         final isCompact = settingsState.compactMenuMode;
         final cs = Theme.of(context).colorScheme;
-        final barColor = cs.surfaceContainerHigh;
+        final barColor = AppSurfaces.topBarBackground(context);
         final shadowColor = cs.shadow.withValues(alpha: 0.14);
         final barH = isCompact ? _kCompactHeight : _kTouchHeight;
         final hPad = isCompact ? 6.0 : 8.0;

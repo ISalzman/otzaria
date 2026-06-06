@@ -687,7 +687,7 @@ class _CombinedViewState extends State<CombinedView> {
         final preview = hasSelectedText ? previewForLabel(cleanedText) : '';
         return AppContextMenuEntry(
           label: 'חיפוש',
-          icon: FluentIcons.search_24_regular,
+          icon: FluentIcons.book_search_24_regular,
           enabled: hasSelectedText,
           children: hasSelectedText
               ? [

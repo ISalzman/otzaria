@@ -266,7 +266,6 @@ class _BookCardWidgetState extends State<BookCardWidget> {
                         ToolbarActionButton(
                           tooltip: 'הסר ספר',
                           icon: FluentIcons.delete_24_regular,
-                          emphasis: ToolbarActionButtonEmphasis.subtle,
                           onPressed: widget.onDelete!,
                         ),
                       ],

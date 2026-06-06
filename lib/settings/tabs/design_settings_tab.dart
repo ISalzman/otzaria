@@ -222,15 +222,17 @@ class DesignSettingsTab extends StatelessWidget {
                       ),
                       ColorPickerTile(
                         key: ValueKey(
-                            'color-picker-${state.isDarkMode ? 'dark' : 'light'}'),
-                        currentColor: state.isDarkMode
-                            ? state.darkSeedColor
-                            : state.seedColor,
-                        defaultColor: state.isDarkMode
-                            ? AppSeedColors.defaultDark
-                            : AppSeedColors.defaultLight,
+                            'color-picker-${Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light'}'),
+                        currentColor:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? state.darkSeedColor
+                                : state.seedColor,
+                        defaultColor:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? AppSeedColors.defaultDark
+                                : AppSeedColors.defaultLight,
                         onChanged: (color) {
-                          if (state.isDarkMode) {
+                          if (Theme.of(context).brightness == Brightness.dark) {
                             context
                                 .read<SettingsBloc>()
                                 .add(UpdateDarkSeedColor(color));
