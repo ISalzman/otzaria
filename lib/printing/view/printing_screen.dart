@@ -539,7 +539,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
         final pdfImage = await page.render(
           fullWidth: page.width * 2,
           fullHeight: page.height * 2,
-          backgroundColor: 0xFFFFFFFF,
+          backgroundColor: AppColors.pageWhite.toARGB32(),
         );
         if (pdfImage == null) continue;
         final uiImage = await pdfImage.createImage();
@@ -698,7 +698,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
         final pdfImage = await page.render(
           fullWidth: page.width * scale,
           fullHeight: page.height * scale,
-          backgroundColor: 0xFFFFFFFF,
+          backgroundColor: AppColors.pageWhite.toARGB32(),
         );
         if (pdfImage == null) continue;
         final uiImage = await pdfImage.createImage();
