@@ -33,6 +33,7 @@ import 'package:otzaria/library/view/library_browser.dart';
 import 'package:otzaria/tabs/reading_screen.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/pdf_book/view/pdf_book_screen.dart';
 import 'package:otzaria/tools/tools_screen.dart';
@@ -260,6 +261,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
   final IndexingRepository _indexingRepository =
       IndexingRepository(TantivyDataProvider.instance);
   bool _hasCheckedAutoIndex = false;
+  // מסך הפתיחה (סמל צף) מוצג עד שתוכן הטאב הפעיל נטען, ואז החלון הקטן/השקוף
+  // מתרחב לחלון המלא. ראה _scheduleSplashReveal / _revealNow.
+  bool _initialContentReady = false;
+  bool _hasScheduledSplashReveal = false;
+  Timer? _splashFailsafeTimer;
   bool _isShowingStartupManualReindexDialog = false;
   bool _hasRestoredFullscreen = false;
   bool _hasStartedFileSync = false;
@@ -479,6 +485,100 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     // NOTE: Background sync is now triggered by LibraryBloc listener
     // (see MultiBlocListener) to avoid DB lock contention during library loading.
+
+    // מתזמן את חשיפת החלון המלא (במקום ה-splash הקטן/השקוף) אחרי שהטאב הפעיל
+    // נטען. נדחה לפוסט-פריים כדי שהטאב הפעיל יספיק לשלוח את LoadContent שלו.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scheduleSplashReveal();
+    });
+
+    // רשת ביטחון: אם תוכן הספר לא ייטען (bloc תקוע) — לא נשאיר את המשתמש
+    // תקוע במסך הפתיחה. failsafe בלבד; מבוטל בזרימה תקינה וב-dispose.
+    _splashFailsafeTimer = Timer(const Duration(seconds: 8), _revealMainWindowOnce);
+  }
+
+  /// מתזמן את חשיפת החלון המלא, תוך מתן עדיפות לטעינת הספר הפעיל: אם נפתח ספר
+  /// טקסט שעדיין נטען — ממתינים שה-[TextBookBloc] שלו יגיע ל-[TextBookLoaded]/
+  /// [TextBookError] (או ייסגר) לפני שחושפים. בכל מקרה אחר (מסך שאינו קריאה /
+  /// PDF / ספר שכבר נטען) — חושפים מיד. אין timeout שרירותי בנתיב הזה.
+  void _scheduleSplashReveal() {
+    if (_hasScheduledSplashReveal || _initialContentReady) return;
+    if (!mounted) return;
+
+    final navigationState = context.read<NavigationBloc>().state;
+    final currentTab = context.read<TabsBloc>().state.currentTab;
+
+    // במסך קריאה הטאבים מאוכלסים אסינכרונית (TabsBloc.LoadTabs /
+    // WorkspaceBloc.ReplaceAllTabs), כך שב-post-frame הראשון currentTab עדיין
+    // null. לא חושפים עדיין — ה-listener של TabsBloc יקרא לנו שוב.
+    if (navigationState.currentScreen == Screen.reading && currentTab == null) {
+      return;
+    }
+
+    _hasScheduledSplashReveal = true;
+
+    final shouldWaitForBook = navigationState.currentScreen == Screen.reading &&
+        currentTab is TextBookTab &&
+        currentTab.bloc.state is! TextBookLoaded &&
+        currentTab.bloc.state is! TextBookError;
+
+    if (!shouldWaitForBook) {
+      _revealMainWindowOnce();
+      return;
+    }
+
+    final bloc = currentTab.bloc;
+    late final StreamSubscription<TextBookState> sub;
+    var done = false;
+    void finish() {
+      if (done) return;
+      done = true;
+      sub.cancel();
+      _revealMainWindowOnce();
+    }
+
+    sub = bloc.stream.listen(
+      (state) {
+        if (state is TextBookLoaded || state is TextBookError) {
+          finish();
+        }
+      },
+      onDone: finish,
+      onError: (_) => finish(),
+      cancelOnError: false,
+    );
+  }
+
+  /// חושף את תוכן החלון (מסיר את מסך הפתיחה) פעם אחת, אחרי שהטאב הפעיל נטען.
+  /// idempotent.
+  void _revealMainWindowOnce() {
+    if (_initialContentReady) return;
+    _splashFailsafeTimer?.cancel();
+    _splashFailsafeTimer = null;
+
+    // עכשיו, אחרי שהספר הפעיל נטען, מתחילים את בניית הקטלוג (LoadLibrary).
+    // הוא נדחה עד לכאן כדי שלא יתחרה בשאילתת תוכן הספר בעלייה (שיפור ביצועים).
+    if (!mounted) {
+      _initialContentReady = true;
+      return;
+    }
+
+    // נתיב קצה (failsafe): אם הגענו לכאן דרך הטיימר בעוד אנחנו במסך קריאה ללא
+    // טאב (שחזור הטאבים נתקע/נכשל >8 שניות), אסור לחשוף מסך עיון ריק. מנווטים
+    // למסך הספרייה — מסך שימושי. במסלול הרגיל currentTab כבר קיים, ולכן זה
+    // לא יקרה.
+    final navState = context.read<NavigationBloc>().state;
+    final hasActiveTab = context.read<TabsBloc>().state.currentTab != null;
+    if (navState.currentScreen == Screen.reading && !hasActiveTab) {
+      context
+          .read<NavigationBloc>()
+          .add(const NavigateToScreen(Screen.library));
+    }
+
+    // עכשיו, אחרי שהטאב הפעיל נטען, מתחילים את בניית הקטלוג (LoadLibrary) —
+    // נדחה עד לכאן כדי שלא יתחרה בשאילתת תוכן הטאב — וחושפים את התוכן.
+    context.read<LibraryBloc>().add(LoadLibrary());
+    setState(() => _initialContentReady = true);
   }
 
   @override
@@ -592,20 +692,23 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
   }
 
-  void _checkAndStartIndexing(BuildContext context) {
-    // Only check once, after settings are loaded
+  void _checkAndStartIndexing(
+    BuildContext context,
+    library_model.Library library,
+  ) {
+    // Only check once. מופעל מ-listener טעינת הספרייה כך שהוא צורך את ה-library
+    // שכבר נבנה (ולא מפעיל בנייה עצמאית נוספת שתתחרה בטעינת הספר הפעיל).
     if (_hasCheckedAutoIndex) return;
     _hasCheckedAutoIndex = true;
 
-    unawaited(_resolveStartupIndexing(context));
+    unawaited(_resolveStartupIndexing(context, library));
   }
 
-  Future<void> _resolveStartupIndexing(BuildContext context) async {
+  Future<void> _resolveStartupIndexing(
+    BuildContext context,
+    library_model.Library library,
+  ) async {
     final autoUpdateIndex = context.read<SettingsBloc>().state.autoUpdateIndex;
-    final library = await DataRepository.instance.library;
-    if (!mounted || !context.mounted) {
-      return;
-    }
 
     final requiresManualReindex =
         await _indexingRepository.requiresManualReindex(library);
@@ -894,6 +997,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     appWindowListener?.onFullscreenChanged = null;
     appWindowListener?.onWindowStateChanged = null;
     appWindowListener?.onWindowResizeOccurred = null;
+    _splashFailsafeTimer?.cancel();
     _externalActivationWatchSub?.cancel();
     _externalActivationChannelSub?.cancel();
     _externalActivationChannel.dispose();
@@ -1925,7 +2029,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
+    final Widget content = MultiBlocProvider(
       providers: [
         BlocProvider.value(value: _calendarCubit),
         BlocProvider.value(value: _tourCubit),
@@ -1971,6 +2075,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
             listener: (context, state) {
               _startupWorkGate.markLibraryLoaded();
               _tryStartDeferredStartupWork();
+              // החלטת האינדוקס צורכת את הקטלוג שזה עתה נטען — כך אין קריאה
+              // עצמאית ל-getLibrary שתתחרה בטעינת הספר הפעיל בעלייה.
+              if (state.library != null) {
+                _checkAndStartIndexing(context, state.library!);
+              }
               final navigationState = context.read<NavigationBloc>().state;
               if (navigationState.hasCheckedLibrary &&
                   !navigationState.isLibraryEmpty) {
@@ -2145,7 +2254,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
               }
 
               // --- internal app logic ---
-              _checkAndStartIndexing(context);
+              // הערה: החלטת האינדוקס בעלייה (_checkAndStartIndexing) הועברה
+              // ל-listener של טעינת הספרייה, כדי שתצרוך את הקטלוג הקיים ולא
+              // תפעיל בנייה עצמאית שתתחרה בטעינת הספר הפעיל.
               if (!previous.autoUpdateIndex && current.autoUpdateIndex) {
                 _startIndexing(context);
               }
@@ -2157,6 +2268,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 previous.currentTab != current.currentTab,
             listener: (context, state) {
               final currentTab = state.currentTab;
+              // הטאב הפעיל אוכלס (אסינכרונית בעלייה) — כעת אפשר לתזמן את חשיפת
+              // החלון המלא תוך מתן עדיפות לספר הפעיל. no-op אם כבר תוזמן/נחשף.
+              _scheduleSplashReveal();
               if (currentTab != null) {
                 int tabIndex = 0;
                 if (currentTab is TextBookTab) tabIndex = currentTab.index;
@@ -2687,6 +2801,23 @@ class MainWindowScreenState extends State<MainWindowScreen>
         ),
       ),
     );
+
+    // עוטפים את התוכן ב-Opacity: כל עוד הספר הפעיל לא נטען, התוכן נבנה ונטען
+    // ברקע אך אינו נראה (opacity 0), וחלון ה-splash הקטן/השקוף מציג רק את הסמל
+    // הצף. כשהתוכן מוכן — _revealMainWindowOnce מרחיב את החלון ומציג את ה-UI.
+    return Stack(
+      children: [
+        Opacity(
+          opacity: _initialContentReady ? 1.0 : 0.0,
+          child: IgnorePointer(
+            ignoring: !_initialContentReady,
+            child: content,
+          ),
+        ),
+        if (!_initialContentReady)
+          const Positioned.fill(child: _StartupSplashOverlay()),
+      ],
+    );
   }
 
   void _openIndexingSettings() {
@@ -3033,6 +3164,26 @@ class MainWindowScreenState extends State<MainWindowScreen>
         ignoreHistory: true,
       );
     }
+  }
+}
+
+/// מסך הפתיחה בזמן עליית התוכנה: סמל התוכנה ממורכז על רקע אטום, המכסה את
+/// תוכן החלון עד שהטאב הפעיל נטען. כך לא נראה מסך עיון ריק ללא טאבים.
+class _StartupSplashOverlay extends StatelessWidget {
+  const _StartupSplashOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: const Center(
+        child: Image(
+          image: AssetImage('assets/icon/iconnew.png'),
+          width: 128,
+          height: 128,
+        ),
+      ),
+    );
   }
 }
 

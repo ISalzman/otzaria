@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -24,7 +25,11 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   int _searchGeneration = 0;
 
   LibraryBloc() : super(LibraryState.initial()) {
-    on<LoadLibrary>(_onLoadLibrary);
+    // droppable: בעלייה נשלחים שני LoadLibrary סמוכים (reveal + LibraryBrowser.
+    // initState). droppable זורק את השני בזמן שהראשון מעובד; ה-guard ב-
+    // _onLoadLibrary זורק כפילויות שמגיעות אחרי שכבר נטען (למשל ניווט חוזר
+    // למסך הספרייה). כך הטעינה הראשונית + תחזוקת הרקע (prune) רצות פעם אחת.
+    on<LoadLibrary>(_onLoadLibrary, transformer: droppable());
     on<RefreshLibrary>(_onRefreshLibrary);
     on<UpdateLibraryPath>(_onUpdateLibraryPath);
     on<UpdateHebrewBooksPath>(_onUpdateHebrewBooksPath);
@@ -41,9 +46,19 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     LoadLibrary event,
     Emitter<LibraryState> emit,
   ) async {
+    // טעינה ראשונית בלבד: אם הספרייה כבר נטענה, מתעלמים מ-LoadLibrary כפול
+    // (reveal + LibraryBrowser.initState, או ניווט חוזר). רענון מפורש נעשה
+    // דרך RefreshLibrary.
+    if (state.library != null && !state.isLoading) {
+      return;
+    }
     emit(state.copyWith(isLoading: true));
     try {
-      DataRepository.instance.library = FileSystemData.instance.getLibrary();
+      // אין כאן `set library = getLibrary()`: בטעינה הראשונית אין ערך קודם
+      // לרענן, וקריאת ה-getter הממוטמן ממזגת את הבנייה עם זו ש-
+      // _dispatchInitialLibraryLoad (החלטת האינדוקס) כבר התחיל. דריסת ה-Future
+      // כאן הייתה גורמת לבניית הקטלוג (~7030 ספרים) פעמיים בעלייה. הרענון
+      // המאולץ נשאר נכון ב-RefreshLibrary/UpdateLibraryPath, שם הנתונים השתנו.
       DataRepository.instance.invalidateExternalBooksCache();
       Library library = await _repository.library;
 
