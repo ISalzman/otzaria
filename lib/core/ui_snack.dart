@@ -9,10 +9,6 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 /// מפתח גלובלי לניווט - חובה לחבר ל-MaterialApp
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-/// מפתח גלובלי ל-ScaffoldMessenger - נשמר לתאימות לאחור
-final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
-    GlobalKey<ScaffoldMessengerState>();
-
 // ─────────────────────────────────────────────────────────────────────────────
 // טוקנים פנימיים
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,7 +64,7 @@ class UiSnack {
         message: message,
         variant: _SnackVariant.error,
         icon: FluentIcons.error_circle_24_regular,
-        duration: duration ?? const Duration(seconds: 5),
+        duration: duration ?? const Duration(seconds: 3),
         enableHaptic: true,
       );
 
@@ -76,7 +72,7 @@ class UiSnack {
         message: message,
         variant: _SnackVariant.standard,
         icon: FluentIcons.checkmark_circle_24_regular,
-        duration: duration ?? const Duration(seconds: 4),
+        duration: duration ?? const Duration(seconds: 3),
         enableHaptic: true,
       );
 
@@ -111,15 +107,29 @@ class UiSnack {
         enableHaptic: false,
       );
 
-  /// הודעה צפה (תאימות לאחור)
-  static void showFloating(String message, {Duration? duration}) =>
-      show(message, duration: duration ?? const Duration(seconds: 4));
+  /// בדיקה - חיצים מסתובבים, נשאר עד שמסתירים
+  static void showChecking(String message) => _showOverlay(
+        message: message,
+        variant: _SnackVariant.standard,
+        duration: const Duration(days: 365), // לא נסגר אוטומטית
+        icon: FluentIcons.folder_sync_24_regular,
+        enableHaptic: false,
+        showCloseButton: true,
+      );
 
-  /// הודעה עם משך זמן מותאם (תאימות לאחור)
-  static void showWithDuration(String message, {Duration? duration}) =>
-      show(message, duration: duration ?? const Duration(seconds: 2));
+  /// הורדה - אייקון הורדה, נשאר עד שמסתירים
+  static void showDownloading(String message) => _showOverlay(
+        message: message,
+        variant: _SnackVariant.standard,
+        duration: const Duration(days: 365), // לא נסגר אוטומטית
+        icon: FluentIcons.arrow_download_24_regular,
+        enableHaptic: false,
+        showCloseButton: true,
+      );
 
-  // ── Internal ──────────────────────────────────────────────────────────────
+  /// הסתרת ההודעה הנוכחית
+  static void hide() => _removeCurrentOverlay();
+  // ── Internal ────────────────────────────────────────────────────────────────
 
   static void _showOverlay({
     required String message,
@@ -129,6 +139,7 @@ class UiSnack {
     String? actionLabel,
     VoidCallback? onAction,
     bool enableHaptic = false,
+    bool showCloseButton = false,
   }) {
     _removeCurrentOverlay();
 
@@ -189,6 +200,7 @@ class UiSnack {
     String? actionLabel,
     VoidCallback? onAction,
     bool enableHaptic = false,
+    bool showCloseButton = false,
   }) {
     if (enableHaptic) HapticFeedback.lightImpact();
 
@@ -200,6 +212,7 @@ class UiSnack {
         icon: icon,
         actionLabel: actionLabel,
         onAction: onAction,
+        showCloseButton: showCloseButton,
         onDismiss: _removeCurrentOverlay,
       ),
     );
@@ -219,7 +232,7 @@ class UiSnack {
     _currentOverlay = null;
   }
 
-  // ── קבועי טקסט ───────────────────────────────────────────────────────────
+  // ── קבועי טקסט ──────────────────────────────────────────────────────────────
   static const String textCopied = 'הטקסט הועתק ללוח';
   static const String formattedTextCopied = 'הטקסט המעוצב הועתק ללוח';
   static const String copyError = 'שגיאה בהעתקה';
@@ -244,12 +257,14 @@ class _SnackToast extends StatefulWidget {
   final IconData? icon;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final bool showCloseButton;
   final VoidCallback onDismiss;
 
   const _SnackToast({
     required this.message,
     required this.variant,
     required this.duration,
+    required this.showCloseButton,
     required this.onDismiss,
     this.icon,
     this.actionLabel,
@@ -331,7 +346,6 @@ class _SnackToastState extends State<_SnackToast>
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final c = _colors(cs);
-    final messageMaxLines = widget.variant == _SnackVariant.warning ? 4 : 2;
 
     // רקע שקוף-למחצה — מספיק אטום לקריאות, מספיק שקוף לאפקט עמוק
     final bgColor = c.bg.withValues(alpha: _ToastTokens.bgAlpha);
@@ -374,6 +388,7 @@ class _SnackToastState extends State<_SnackToast>
                           color: bgColor,
                           borderRadius:
                               BorderRadius.circular(_ToastTokens.radius),
+                          //  ללא border — רק צל עדין לעומק
                           boxShadow: [
                             BoxShadow(
                               color: cs.shadow
@@ -405,7 +420,7 @@ class _SnackToastState extends State<_SnackToast>
                                   height: 1.4,
                                 ),
                                 textDirection: TextDirection.rtl,
-                                maxLines: messageMaxLines,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -425,13 +440,24 @@ class _SnackToastState extends State<_SnackToast>
                                   ),
                                   minimumSize: Size.zero,
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: AppTokens.spaceSM,
-                                    vertical: 4,
-                                  ),
+                                      horizontal: AppTokens.spaceSM,
+                                      vertical: 4),
                                   tapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
                                 ),
                                 child: Text(widget.actionLabel!),
+                              ),
+                            ],
+                            if (widget.showCloseButton) ...[
+                              const SizedBox(width: AppTokens.spaceSM),
+                              IconButton(
+                                onPressed: _close,
+                                icon: Icon(FluentIcons.dismiss_24_regular,
+                                    color: c.fg, size: 18),
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                    minWidth: 32, minHeight: 32),
                               ),
                             ],
                           ],

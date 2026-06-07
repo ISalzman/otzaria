@@ -54,6 +54,7 @@ import 'package:otzaria/text_book/utils/inline_notes_utils.dart'
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/utils/text/html_link_handler.dart';
 
 class CombinedView extends StatefulWidget {
@@ -1521,7 +1522,7 @@ class _CombinedViewState extends State<CombinedView> {
       // כך שאין צבע רקע לכלל ה-tile.
       if (isContinuousParagraph) return null;
       if (isPermanentHighlight) {
-        return const Color(0xFFFFFF00).withValues(alpha: 0.5);
+        return AppColors.permanentHighlight;
       }
       if (isHighlighted) {
         return theme.colorScheme.secondaryContainer.withValues(alpha: 0.4);

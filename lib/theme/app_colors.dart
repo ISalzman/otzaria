@@ -41,4 +41,13 @@ class AppColors {
   // ── Dialogs ────────────────────────────────────────────────────────────
   /// צבע מחסום הדיאלוג (barrier) — חצי שקוף
   static const Color dialogBarrier = Color(0x22000000);
+
+  // ── Document / Print ─────────────────────────────────────────────────────
+  /// לבן מוחלט — רקע לרינדור דפי PDF, הדפסה וכל תצוגת "דף נייר"
+  /// משמש גם כ-int (pageWhite.toARGB32()) עבור פרמטרי backgroundColor ב-pdfrx
+  static const Color pageWhite = Colors.white;
+
+  // ── Highlights ───────────────────────────────────────────────────────────
+  /// צבע הדגשת "סימנייה קבועה" (?mark) — רקע צהוב שקוף 50% על השורה הממוקדת
+  static const Color permanentHighlight = Color(0x80FFFF00);
 }
