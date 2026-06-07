@@ -56,7 +56,9 @@ final GlobalKey enhancedSearchFieldKey = GlobalKey();
 
 class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
   final GlobalKey _textFieldKey = GlobalKey();
+  final GlobalKey _searchOptionsOverlayKey = GlobalKey();
   OverlayEntry? _searchOptionsOverlay;
+  double _searchOptionsOverlayHeight = 0;
   late final FocusNode _keyboardListenerFocusNode;
   late final FocusNode _textFieldKeyboardListenerFocusNode;
 
@@ -100,14 +102,12 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
 
   @override
   void deactivate() {
-    debugPrint('⏸️ EnhancedSearchField deactivating - clearing overlays');
     _hideSearchOptionsOverlay();
     super.deactivate();
   }
 
   @override
   void dispose() {
-    debugPrint('🗑️ EnhancedSearchField disposing');
     _hideSearchOptionsOverlay();
     _detachTabListeners(widget.tab);
     _keyboardListenerFocusNode.dispose();
@@ -161,9 +161,6 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
       // החזרת מיקום הסמן אחרי העדכון
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          debugPrint(
-            'DEBUG: Restoring cursor position in update: ${currentSelection.baseOffset}',
-          );
           widget.tab.queryController.selection = currentSelection;
         }
       });
@@ -198,7 +195,9 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
               textFieldGlobalPosition.dx,
               textFieldGlobalPosition.dy + textFieldBox.size.height,
               textFieldBox.size.width,
-              120.0, // גובה משוער מקסימלי לשתי שורות
+              _searchOptionsOverlayHeight == 0
+                  ? 120.0
+                  : _searchOptionsOverlayHeight,
             );
 
             if (!textFieldRect.contains(clickPosition) &&
@@ -220,6 +219,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                   curve: Curves.easeInOut,
                   alignment: Alignment.topCenter,
                   child: Container(
+                    key: _searchOptionsOverlayKey,
                     // height: 40.0, // 2. מסירים את הגובה הקבוע
                     decoration: BoxDecoration(
                       color: Theme.of(context).scaffoldBackgroundColor,
@@ -265,6 +265,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         widget.tab.queryController.selection = currentSelection;
+        _measureOverlayHeight();
       }
     });
 
@@ -272,6 +273,24 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // ה-overlay כעת מוכן לקבל לחיצות
     });
+  }
+
+  void _measureOverlayHeight() {
+    final overlayBox = _searchOptionsOverlayKey.currentContext
+        ?.findRenderObject() as RenderBox?;
+    // ייתכן ש-currentContext תקין אך ה-RenderBox עדיין לא עבר layout (למשל
+    // אם ה-overlay נסגר/offstage באותו פריים) — אז size אינו מדיד.
+    if (overlayBox == null || !overlayBox.hasSize) {
+      return;
+    }
+
+    final newHeight = overlayBox.size.height;
+    if ((_searchOptionsOverlayHeight - newHeight).abs() < 0.5) {
+      return;
+    }
+
+    _searchOptionsOverlayHeight = newHeight;
+    _searchOptionsOverlay?.markNeedsBuild();
   }
 
   // המילה הנוכחית (לפי מיקום הסמן)
@@ -312,8 +331,9 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
       return const Center(
         child: Text(
           'הקלד או הצב את הסמן על מילה כלשהיא, כדי לבחור אפשרויות חיפוש',
-          style: TextStyle(fontSize: 12, color: Colors.grey),
+          style: TextStyle(fontSize: 12),
           textAlign: TextAlign.center,
+          textDirection: TextDirection.rtl,
         ),
       );
     }
@@ -333,6 +353,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
   void _hideSearchOptionsOverlay() {
     _searchOptionsOverlay?.remove();
     _searchOptionsOverlay = null;
+    _searchOptionsOverlayHeight = 0;
   }
 
   void _notifyDropdownClosed() {
@@ -397,7 +418,6 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
       listeners: [
         BlocListener<NavigationBloc, NavigationState>(
           listener: (context, state) {
-            debugPrint('🔄 Navigation changed to: ${state.currentScreen}');
             // סגירת מגירת האפשרויות כשמשנים מסך
             if (_searchOptionsOverlay != null) {
               _hideSearchOptionsOverlay();
@@ -447,77 +467,82 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                         }
                       }
                     },
-                    child: RtlTextField(
-                      focusNode: widget.tab.searchFieldFocusNode,
-                      controller: widget.tab.queryController,
-                      onChanged: (text) {
-                        // עדכון המגירה כשהטקסט משתנה
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (_searchOptionsOverlay != null) {
-                            _updateSearchOptionsOverlay();
-                          }
-                        });
-                      },
-                      onSubmitted: (e) {
-                        _performSearch();
-                      },
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: colorScheme.surfaceContainerHigh,
-                        border: const OutlineInputBorder(),
-                        hintText: "חפש כאן...",
-                        labelText: "לחיפוש הקש אנטר או לחץ על סמל החיפוש",
-                        contentPadding: widget.showInlineSearchButton
-                            ? null
-                            : const EdgeInsets.only(
-                                left: 12,
-                                right: 48,
-                                top: 16,
-                                bottom: 16,
-                              ),
-                        prefixIcon: widget.showInlineSearchButton
-                            ? IconButton(
-                                onPressed: _performSearch,
-                                icon: const Icon(FluentIcons.search_24_regular),
-                              )
-                            : null,
-                        suffixIcon: widget.trailingAction != null
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  widget.trailingAction!,
-                                  IconButton(
-                                    icon: const Icon(
-                                        FluentIcons.dismiss_24_regular),
-                                    onPressed: () {
-                                      widget.tab.queryController.clear();
-                                      widget.tab.searchOptions.clear();
-                                      widget.tab.globalSearchOptions.clear();
-                                      context
-                                          .read<SearchBloc>()
-                                          .add(UpdateSearchQuery(''));
-                                      context
-                                          .read<SearchBloc>()
-                                          .add(UpdateFacetCounts({}));
-                                    },
-                                  ),
-                                ],
-                              )
-                            : IconButton(
-                                icon:
-                                    const Icon(FluentIcons.dismiss_24_regular),
-                                onPressed: () {
-                                  widget.tab.queryController.clear();
-                                  widget.tab.searchOptions.clear();
-                                  widget.tab.globalSearchOptions.clear();
-                                  context
-                                      .read<SearchBloc>()
-                                      .add(UpdateSearchQuery(''));
-                                  context
-                                      .read<SearchBloc>()
-                                      .add(UpdateFacetCounts({}));
-                                },
-                              ),
+                    child: Tooltip(
+                      message:
+                          'הקלד מילות חיפוש ולחץ Enter או על סמל החיפוש כדי לבצע חיפוש.',
+                      child: RtlTextField(
+                        focusNode: widget.tab.searchFieldFocusNode,
+                        controller: widget.tab.queryController,
+                        onChanged: (text) {
+                          // עדכון המגירה כשהטקסט משתנה
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (_searchOptionsOverlay != null) {
+                              _updateSearchOptionsOverlay();
+                            }
+                          });
+                        },
+                        onSubmitted: (e) {
+                          _performSearch();
+                        },
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: colorScheme.surfaceContainerHigh,
+                          border: const OutlineInputBorder(),
+                          hintText: 'הקלד מילות חיפוש',
+                          labelText: 'חיפוש',
+                          contentPadding: widget.showInlineSearchButton
+                              ? null
+                              : const EdgeInsets.only(
+                                  left: 12,
+                                  right: 48,
+                                  top: 16,
+                                  bottom: 16,
+                                ),
+                          prefixIcon: widget.showInlineSearchButton
+                              ? IconButton(
+                                  onPressed: _performSearch,
+                                  icon:
+                                      const Icon(FluentIcons.search_24_regular),
+                                )
+                              : null,
+                          suffixIcon: widget.trailingAction != null
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    widget.trailingAction!,
+                                    IconButton(
+                                      icon: const Icon(
+                                          FluentIcons.dismiss_24_regular),
+                                      onPressed: () {
+                                        widget.tab.queryController.clear();
+                                        widget.tab.searchOptions.clear();
+                                        widget.tab.globalSearchOptions.clear();
+                                        context
+                                            .read<SearchBloc>()
+                                            .add(UpdateSearchQuery(''));
+                                        context
+                                            .read<SearchBloc>()
+                                            .add(UpdateFacetCounts({}));
+                                      },
+                                    ),
+                                  ],
+                                )
+                              : IconButton(
+                                  icon: const Icon(
+                                      FluentIcons.dismiss_24_regular),
+                                  onPressed: () {
+                                    widget.tab.queryController.clear();
+                                    widget.tab.searchOptions.clear();
+                                    widget.tab.globalSearchOptions.clear();
+                                    context
+                                        .read<SearchBloc>()
+                                        .add(UpdateSearchQuery(''));
+                                    context
+                                        .read<SearchBloc>()
+                                        .add(UpdateFacetCounts({}));
+                                  },
+                                ),
+                        ),
                       ),
                     ),
                   ),

@@ -145,15 +145,24 @@ class ExternalCatalogRepository {
 
     final dbFile = File(databasePath);
     final tempFile = File('$databasePath.download');
+    final backupFile = File('$databasePath.bak');
     if (await tempFile.exists()) {
       await tempFile.delete();
     }
     await tempFile.writeAsBytes(dbBytes, flush: true);
 
+    // מעבירים את הקובץ הקיים לגיבוי לפני ההחלפה (במקום למחוק אותו), כדי שאם
+    // ההחלפה תיכשל באמצע — נוכל לשחזר ולא להשאיר את המשתמש ללא קטלוג כלל.
+    var backupCreated = false;
+    var replaced = false;
     try {
       if (await dbFile.exists()) {
+        if (await backupFile.exists()) {
+          await backupFile.delete();
+        }
         try {
-          await dbFile.delete();
+          await dbFile.rename(backupFile.path);
+          backupCreated = true;
         } on FileSystemException catch (e) {
           if (_isFileInUseError(e)) {
             throw ExternalCatalogDatabaseBusyException(databasePath, e);
@@ -164,7 +173,17 @@ class ExternalCatalogRepository {
 
       try {
         await tempFile.rename(databasePath);
+        replaced = true;
       } on FileSystemException catch (e) {
+        // ההחלפה נכשלה — משחזרים את הגיבוי כדי לא להשאיר את המשתמש ללא קטלוג.
+        if (backupCreated) {
+          try {
+            await backupFile.rename(databasePath);
+            backupCreated = false;
+          } catch (_) {
+            // השחזור נכשל — משאירים את הגיבוי על כנו לשחזור ידני (אל תמחק!).
+          }
+        }
         if (_isFileInUseError(e)) {
           throw ExternalCatalogDatabaseBusyException(databasePath, e);
         }
@@ -173,6 +192,11 @@ class ExternalCatalogRepository {
     } finally {
       if (await tempFile.exists()) {
         await tempFile.delete();
+      }
+      // מוחקים את הגיבוי רק אם ההחלפה הצליחה (אז הוא מיותר). אם ההחלפה
+      // נכשלה — הגיבוי הוא הקטלוג היחיד ששרד, ואסור למחוק אותו.
+      if (replaced && backupCreated && await backupFile.exists()) {
+        await backupFile.delete();
       }
     }
   }

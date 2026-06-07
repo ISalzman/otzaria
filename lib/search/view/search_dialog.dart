@@ -497,54 +497,57 @@ class _SearchDialogState extends State<SearchDialog> {
 
   Widget _buildNavButton(
     BuildContext context,
-    String title,
     IconData icon,
     SearchMode mode,
     bool isSelected,
   ) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          context.read<SearchBloc>().add(
-                !_usesStagedSubmit
-                    ? SetSearchMode(mode)
-                    : SetSearchModeWithoutSearch(mode),
-              );
-          _searchTab.searchFieldFocusNode.requestFocus();
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 72,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? Theme.of(context).colorScheme.secondaryContainer
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 24,
-                color: isSelected
-                    ? Theme.of(context).colorScheme.onSecondaryContainer
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
+    return Tooltip(
+      message: mode.tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            context.read<SearchBloc>().add(
+                  !_usesStagedSubmit
+                      ? SetSearchMode(mode)
+                      : SetSearchModeWithoutSearch(mode),
+                );
+            _searchTab.searchFieldFocusNode.requestFocus();
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 72,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? Theme.of(context).colorScheme.secondaryContainer
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 24,
                   color: isSelected
                       ? Theme.of(context).colorScheme.onSecondaryContainer
                       : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  mode.shortLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isSelected
+                        ? Theme.of(context).colorScheme.onSecondaryContainer
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                  textDirection: TextDirection.rtl,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -624,7 +627,6 @@ class _SearchDialogState extends State<SearchDialog> {
                               children: [
                                 _buildNavButton(
                                   context,
-                                  'מדויק',
                                   FluentIcons.text_quote_24_regular,
                                   SearchMode.exact,
                                   state.configuration.searchMode ==
@@ -633,7 +635,6 @@ class _SearchDialogState extends State<SearchDialog> {
                                 const SizedBox(height: 4),
                                 _buildNavButton(
                                   context,
-                                  'מתקדם',
                                   FluentIcons.search_info_24_regular,
                                   SearchMode.advanced,
                                   state.configuration.searchMode ==
@@ -642,7 +643,6 @@ class _SearchDialogState extends State<SearchDialog> {
                                 const SizedBox(height: 4),
                                 _buildNavButton(
                                   context,
-                                  'מקורב',
                                   FluentIcons
                                       .arrow_bidirectional_left_right_24_regular,
                                   SearchMode.fuzzy,
