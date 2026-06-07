@@ -327,7 +327,11 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                       color: Theme.of(context).colorScheme.outlineVariant,
                     ),
                     ...folders.map(
-                      (folder) => _buildFolderItem(folder, isSyncing),
+                      (folder) => _buildFolderItem(
+                        folder,
+                        isSyncing,
+                        state.activePath,
+                      ),
                     ),
                   ],
                 ),
@@ -338,7 +342,17 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
     );
   }
 
-  Widget _buildFolderItem(CustomFolder folder, bool isSyncing) {
+  Widget _buildFolderItem(
+      CustomFolder folder, bool isSyncing, String? activePath) {
+    // הספינר על תיקייה בודדת מוצג כשהפעולה נוגעת בה:
+    // • כשזו התיקייה הפעילה (הוספה / החלפת מצב) — תמיד, גם אם היא מוגדרת
+    //   לקריאה מהקבצים (תיקייה חדשה נוצרת עם addToDatabase=false אך עדיין
+    //   נסרקת).
+    // • כשהפעולה גלובלית (activePath == null, כגון סריקה מחדש או כתיבה דרך
+    //   התור המשותף) — רק על תיקיות שנשמרות כעותק עצמאי, שהן אלו שנכתבות.
+    final showFolderSpinner = isSyncing &&
+        (activePath == folder.path ||
+            (activePath == null && folder.addToDatabase));
     // מתחיל סיווג עצלן של הרכב הקבצים (פעם אחת לכל תיקייה).
     _ensureFolderClassified(folder.path);
     final kind = _folderKinds[folder.path];
@@ -382,7 +396,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                   ],
                 ),
               ),
-              if (isSyncing && folder.addToDatabase)
+              if (showFolderSpinner)
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
                   child: SizedBox(
