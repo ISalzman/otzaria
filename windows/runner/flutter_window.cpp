@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "splash_window.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project, bool headless)
     : project_(project), headless_(headless) {
@@ -154,16 +155,37 @@ bool FlutterWindow::OnCreate() {
         ArmForceExitWatchdog(timeout_ms);
         result->Success(flutter::EncodableValue(true));
       });
+
+  // Channel for closing the native floating-icon splash window (created in
+  // main.cpp before the engine started). Dart invokes "close" when it reveals
+  // the main window, so the splash icon disappears exactly as the main window
+  // appears with content.
+  splash_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), "otzaria/splash",
+          &flutter::StandardMethodCodec::GetInstance());
+  splash_channel_->SetMethodCallHandler(
+      [](const flutter::MethodCall<flutter::EncodableValue>& call,
+         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+             result) {
+        if (call.method_name() == "close") {
+          splash::Close();
+          result->Success();
+          return;
+        }
+        result->NotImplemented();
+      });
+
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  // NOTE: the main window is intentionally NOT shown here. It stays hidden
+  // until Dart reveals it (window_manager.show in presentMainWindow) once the
+  // active tab's content is ready — so it appears directly at its final
+  // size/position with content already painted, with no resize, no jump, and
+  // no blank gap. The native splash window (see main.cpp) provides the visible
+  // floating icon meanwhile. ForceRedraw drives the engine to render frames
+  // into the (hidden) window surface, so content is ready when Dart shows it.
   if (!headless_) {
-    flutter_controller_->engine()->SetNextFrameCallback([&]() {
-      this->Show();
-    });
-
-    // Flutter can complete the first frame before the "show window" callback is
-    // registered. The following call ensures a frame is pending to ensure the
-    // window is shown. It is a no-op if the first frame hasn't completed yet.
     flutter_controller_->ForceRedraw();
   }
   // In headless mode the window stays invisible — CLI commands are expected
@@ -173,6 +195,14 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  // NOTE: do NOT close the splash here. Win32Window::Create() calls Destroy()
+  // (→ OnDestroy()) at its very start to clear any prior state — even on the
+  // first creation, before any window exists — so OnDestroy fires spuriously
+  // during window.Create(), which would close the splash prematurely (long
+  // before the main window is revealed). The splash is closed via the
+  // "otzaria/splash" channel when Dart reveals the main window (or its 8s
+  // failsafe). On process exit the OS tears down the splash thread/window.
+  splash_channel_.reset();
   process_control_channel_.reset();
   if (flutter_controller_) {
     // Reset the controller properly - no need to call Shutdown explicitly

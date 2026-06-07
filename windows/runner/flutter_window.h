@@ -42,6 +42,10 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       process_control_channel_;
+  // ערוץ לסגירת חלון ה-splash הנייטיב (otzaria/splash) — Dart קורא "close"
+  // בעת חשיפת החלון הראשי.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      splash_channel_;
   std::atomic_bool force_exit_watchdog_armed_ = false;
 
   // Win32 Job Object that contains this process plus any child processes

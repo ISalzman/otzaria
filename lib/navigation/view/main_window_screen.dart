@@ -45,7 +45,9 @@ import 'package:otzaria/update/my_update_widget.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:otzaria/main.dart' show appWindowListener;
+import 'package:otzaria/main.dart'
+    show appWindowListener, prepareMainWindowReveal, presentMainWindow;
+import 'package:otzaria/core/splash_screen.dart' show SplashIcon;
 import 'package:otzaria/navigation/view/custom_title_bar.dart';
 import 'package:otzaria/migration/sync/background_sync_initializer.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
@@ -266,6 +268,14 @@ class MainWindowScreenState extends State<MainWindowScreen>
   // מסך הפתיחה (סמל צף) מוצג עד שתוכן הטאב הפעיל נטען, ואז החלון הקטן/השקוף
   // מתרחב לחלון המלא. ראה _scheduleSplashReveal / _revealNow.
   bool _initialContentReady = false;
+  // אוברליי הסמל הצף מוסר רק *אחרי* שהתוכן צויר בפועל — כך הסמל גלוי ברצף
+  // (בלי רגע ריק) וגם "מגשר" על זמן הציור הקר של ה-UI. נפרד מ-_initialContentReady
+  // (שמפעיל את ה-Opacity של התוכן). ראה _revealMainWindowOnce.
+  bool _splashOverlayVisible = true;
+  // משמש כשומר re-entry: החשיפה מתבצעת אסינכרונית (prepareMainWindowReveal עם
+  // await), כך ש-_initialContentReady נקבע מאוחר; הדגל הזה מונע כניסה כפולה
+  // בזמן ה-await (failsafe timer + stream listener).
+  bool _revealStarted = false;
   bool _hasScheduledSplashReveal = false;
   Timer? _splashFailsafeTimer;
   bool _isShowingStartupManualReindexDialog = false;
@@ -546,10 +556,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
     );
   }
 
-  /// חושף את תוכן החלון (מסיר את מסך הפתיחה) פעם אחת, אחרי שהטאב הפעיל נטען.
-  /// idempotent.
+  /// מרחיב את החלון לגודל המלא ואז חושף את התוכן. idempotent.
   void _revealMainWindowOnce() {
-    if (_initialContentReady) return;
+    if (_revealStarted) return;
+    _revealStarted = true;
     _splashFailsafeTimer?.cancel();
     _splashFailsafeTimer = null;
 
@@ -572,10 +582,30 @@ class MainWindowScreenState extends State<MainWindowScreen>
           .add(const NavigateToScreen(Screen.library));
     }
 
-    // עכשיו, אחרי שהטאב הפעיל נטען, מתחילים את בניית הקטלוג (LoadLibrary) —
-    // נדחה עד לכאן כדי שלא יתחרה בשאילתת תוכן הטאב — וחושפים את התוכן.
     context.read<LibraryBloc>().add(LoadLibrary());
-    setState(() => _initialContentReady = true);
+    // חשיפה:
+    //   1. prepareMainWindowReveal — מביא את החלון לגבולותיו הסופיים (ב-Windows
+    //      בעודו מוסתר).
+    //   2. חושפים את התוכן (Opacity 0→1) ומסירים את אוברליי ה-splash של Flutter
+    //      *באותו setState* — כך הפריים שמצויר נקי מהסמל הישן (אחרת, בעומס
+    //      האתחול, הסרה ב-setState נפרד מתעכבת והסמל הישן מהבהב במרכז החלון).
+    //   3. ממתינים שהפריים יצויר, ואז מציגים את החלון (presentMainWindow). ב-
+    //      Windows הסמל הנייטיב מתחיל fade-out בדיוק כאן (מעבר חלק).
+    unawaited(() async {
+      await prepareMainWindowReveal();
+      if (!mounted) {
+        _initialContentReady = true;
+        _splashOverlayVisible = false;
+        await presentMainWindow();
+        return;
+      }
+      setState(() {
+        _initialContentReady = true;
+        _splashOverlayVisible = false;
+      });
+      await WidgetsBinding.instance.endOfFrame;
+      await presentMainWindow();
+    }());
   }
 
   @override
@@ -2824,7 +2854,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
             child: content,
           ),
         ),
-        if (!_initialContentReady)
+        if (_splashOverlayVisible)
           const Positioned.fill(child: _StartupSplashOverlay()),
       ],
     );
@@ -3176,22 +3206,17 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 }
 
-/// מסך הפתיחה בזמן עליית התוכנה: סמל התוכנה ממורכז על רקע אטום, המכסה את
-/// תוכן החלון עד שהטאב הפעיל נטען. כך לא נראה מסך עיון ריק ללא טאבים.
+/// מסך הפתיחה בזמן עליית התוכנה: סמל בלבד על רקע **שקוף**, כך שבחלון ה-splash
+/// השקוף נראה רק הסמל הצף במרכז המסך (ללא קופסה). מוצג עד שתוכן הטאב הפעיל
+/// נטען, ואז החלון מתרחב לחלון המלא והתוכן נחשף.
 class _StartupSplashOverlay extends StatelessWidget {
   const _StartupSplashOverlay();
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      child: const Center(
-        child: Image(
-          image: AssetImage('assets/icon/iconnew.png'),
-          width: 128,
-          height: 128,
-        ),
-      ),
+    return const ColoredBox(
+      color: Color(0x00000000),
+      child: SplashIcon(),
     );
   }
 }

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "flutter_window.h"
+#include "splash_window.h"
 #include "utils.h"
 
 static const wchar_t* kSingleInstanceMutexName = L"OtzariaAppSingleInstance";
@@ -213,6 +214,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
+  // Show the native floating-icon splash as early as possible (it needs COM
+  // for WIC PNG decoding). It is an independent, top-most, click-through
+  // layered window centered on the primary monitor — decoupled from the main
+  // Flutter window, which stays hidden until its content is ready. This gives
+  // immediate visual feedback during heavy init without any window resize,
+  // jump, or blank gap. Dart closes it via the "otzaria/splash" channel when
+  // the main window is revealed (see FlutterWindow method-call handler).
+  // Skipped for CLI invocations (no UI).
+  if (!is_cli_invocation) {
+    splash::Show();
+  }
+
   flutter::DartProject project(L"data");
 
   std::vector<std::string> command_line_arguments =
@@ -222,7 +235,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   FlutterWindow window(project, /*headless=*/is_cli_invocation);
   Win32Window::Point origin(10, 10);
-  Win32Window::Size size(1280, 720);
+  // The main window is created hidden and is NOT shown on the first frame (see
+  // FlutterWindow::OnCreate). It stays hidden until Dart reveals it
+  // (window_manager.show in presentMainWindow) once the active tab's content is
+  // ready, so it appears directly at its final size/position with content — no
+  // resize, no jump, no blank gap. The native floating-icon splash
+  // (splash::Show above) is the only thing visible until then. Initial size is
+  // irrelevant (the window is never shown at this size).
+  Win32Window::Size size(240, 240);
   if (!window.Create(kMainWindowTitle, origin, size)) {
     if (mutex) CloseHandle(mutex);
     return EXIT_FAILURE;
