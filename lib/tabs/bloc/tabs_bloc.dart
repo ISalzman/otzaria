@@ -16,8 +16,19 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 
+class _ClosedTabEntry {
+  final OpenedTab tab;
+  final int originalIndex;
+
+  const _ClosedTabEntry({
+    required this.tab,
+    required this.originalIndex,
+  });
+}
+
 class TabsBloc extends Bloc<TabsEvent, TabsState> {
   final TabsRepository _repository;
+  final List<_ClosedTabEntry> _recentlyClosedTabs = <_ClosedTabEntry>[];
 
   void _disposeTabLater(OpenedTab tab) {
     unawaited(
@@ -45,6 +56,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     on<NavigateToPreviousTab>(_onNavigateToPreviousTab,
         transformer: sequential());
     on<CloseCurrentTab>(_onCloseCurrentTab);
+    on<RestoreLastClosedTab>(_onRestoreLastClosedTab,
+        transformer: sequential());
     on<SaveTabs>(_onSaveTabs, transformer: sequential());
     on<TogglePinTab>(_onTogglePinTab, transformer: sequential());
     on<EnableSideBySideMode>(_onEnableSideBySideMode,
@@ -548,8 +561,20 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     return tab.title;
   }
 
+  void _rememberClosedTab(OpenedTab tab, int originalIndex) {
+    _recentlyClosedTabs.add(
+      _ClosedTabEntry(
+        tab: OpenedTab.from(tab),
+        originalIndex: originalIndex,
+      ),
+    );
+  }
+
   Future<void> _onRemoveTab(RemoveTab event, Emitter<TabsState> emit) async {
     final removedTabIndex = state.tabs.indexOf(event.tab);
+    if (removedTabIndex == -1) return;
+
+    _rememberClosedTab(event.tab, removedTabIndex);
 
     final newTabs = List<OpenedTab>.from(state.tabs)..remove(event.tab);
 
@@ -626,11 +651,53 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     add(RemoveTab(state.tabs[state.currentTabIndex]));
   }
 
+  Future<void> _onRestoreLastClosedTab(
+      RestoreLastClosedTab event, Emitter<TabsState> emit) async {
+    if (_recentlyClosedTabs.isEmpty) return;
+
+    final closedEntry = _recentlyClosedTabs.removeLast();
+    final restoredTabs = List<OpenedTab>.from(state.tabs);
+    final restoreIndex =
+        closedEntry.originalIndex.clamp(0, restoredTabs.length);
+    restoredTabs.insert(restoreIndex, closedEntry.tab);
+
+    SideBySideMode? newSideBySideMode = state.sideBySideMode;
+    if (newSideBySideMode != null) {
+      var newLeftIndex = newSideBySideMode.leftTabIndex;
+      var newRightIndex = newSideBySideMode.rightTabIndex;
+
+      if (restoreIndex <= newLeftIndex) newLeftIndex++;
+      if (restoreIndex <= newRightIndex) newRightIndex++;
+
+      newSideBySideMode = newSideBySideMode.copyWith(
+        leftTabIndex: newLeftIndex,
+        rightTabIndex: newRightIndex,
+      );
+    }
+
+    emit(state.copyWith(
+      tabs: restoredTabs,
+      currentTabIndex: restoreIndex,
+      sideBySideMode: newSideBySideMode,
+    ));
+    await _repository.saveTabs(
+      restoredTabs,
+      restoreIndex,
+      newSideBySideMode,
+    );
+  }
+
   Future<void> _onCloseAllTabs(
       CloseAllTabs event, Emitter<TabsState> emit) async {
     // שמירת טאבים מוצמדים בלבד
     final pinnedTabs = state.tabs.where((tab) => tab.isPinned).toList();
     final tabsToDispose = state.tabs.where((tab) => !tab.isPinned).toList();
+    for (var i = 0; i < state.tabs.length; i++) {
+      final tab = state.tabs[i];
+      if (!tab.isPinned) {
+        _rememberClosedTab(tab, i);
+      }
+    }
 
     // אם יש טאבים מוצמדים, נשאיר אותם
     final newIndex = pinnedTabs.isNotEmpty ? 0 : 0;
@@ -650,6 +717,12 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   Future<void> _onCloseOtherTabs(
       CloseOtherTabs event, Emitter<TabsState> emit) async {
+    for (var i = 0; i < state.tabs.length; i++) {
+      final tab = state.tabs[i];
+      if (tab != event.keepTab) {
+        _rememberClosedTab(tab, i);
+      }
+    }
     final tabsToDispose =
         state.tabs.where((tab) => tab != event.keepTab).toList();
 

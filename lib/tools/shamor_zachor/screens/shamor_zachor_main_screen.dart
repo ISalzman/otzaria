@@ -323,7 +323,7 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
           bloc.state.shortcuts['key-shortcut-shamor-zachor-cycle-filter'] ??
           ShortcutValidator
               .defaultShortcuts['key-shortcut-shamor-zachor-cycle-filter'] ??
-          'ctrl+e',
+          'ctrl+s',
     );
     final searchShortcutSetting = context.select(
       (SettingsBloc bloc) =>
@@ -336,7 +336,7 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
     return CallbackShortcuts(
       bindings: {
         _activatorFromShortcut(cycleFilterShortcutSetting) ??
-            const SingleActivator(LogicalKeyboardKey.keyE, control: true): () {
+            const SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
           if (_isTextFieldFocused()) return;
           _cycleFilter();
         },

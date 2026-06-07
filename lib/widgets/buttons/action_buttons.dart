@@ -384,7 +384,7 @@ class ToolbarActionButton extends StatelessWidget {
               fontSize: fontSize,
               color: fg,
               fontWeight: selected ? FontWeight.bold : FontWeight.normal),
-          child: Text(label!),
+          child: Text(label!, textDirection: TextDirection.rtl),
         ),
       );
     } else {

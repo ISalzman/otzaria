@@ -98,6 +98,8 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
         shortcutSettings['key-shortcut-close-tab'] ?? 'ctrl+w';
     final closeAllTabsShortcut =
         shortcutSettings['key-shortcut-close-all-tabs'] ?? 'ctrl+shift+w';
+    final restoreClosedTabShortcut =
+        shortcutSettings['key-shortcut-restore-closed-tab'] ?? 'ctrl+shift+t';
     final readingScreenShortcut =
         shortcutSettings['key-shortcut-open-reading-screen'] ?? 'ctrl+r';
     final newSearchShortcut =
@@ -211,6 +213,11 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
         }
       }
       tabsBloc.add(CloseAllTabs());
+      return KeyEventResult.handled;
+    }
+
+    if (ShortcutHelper.matchesShortcut(event, restoreClosedTabShortcut)) {
+      context.read<TabsBloc>().add(const RestoreLastClosedTab());
       return KeyEventResult.handled;
     }
 

@@ -10,11 +10,12 @@ void main() {
           'key-shortcut-toggle-nav-pane',
           'key-shortcut-toggle-commentators-pane',
           'key-shortcut-open-commentators-tab',
+          'key-shortcut-restore-closed-tab',
         ]),
       );
     });
 
-    test('ברירות מחדל: Ctrl+Shift+L לניווט, Ctrl+Shift+C למפרשים', () {
+    test('ברירות מחדל: קיצורי החלוניות והשחזור מוגדרים כמצופה', () {
       expect(
         ShortcutValidator.defaultShortcuts['key-shortcut-toggle-nav-pane'],
         'ctrl+shift+l',
@@ -23,6 +24,25 @@ void main() {
         ShortcutValidator
             .defaultShortcuts['key-shortcut-toggle-commentators-pane'],
         'ctrl+shift+c',
+      );
+      expect(
+        ShortcutValidator.defaultShortcuts['key-shortcut-restore-closed-tab'],
+        'ctrl+shift+t',
+      );
+      expect(
+        ShortcutValidator
+            .defaultShortcuts['key-shortcut-calendar-toggle-times'],
+        'ctrl+t',
+      );
+      expect(
+        ShortcutValidator
+            .defaultShortcuts['key-shortcut-calendar-toggle-events'],
+        'ctrl+e',
+      );
+      expect(
+        ShortcutValidator
+            .defaultShortcuts['key-shortcut-shamor-zachor-cycle-filter'],
+        'ctrl+s',
       );
     });
 
@@ -48,21 +68,47 @@ void main() {
         ShortcutValidator.shortcutNames['key-shortcut-open-commentators-tab'],
         'פתח כרטיסיית מפרשים',
       );
+      expect(
+        ShortcutValidator.shortcutNames['key-shortcut-restore-closed-tab'],
+        'פתח כרטיסייה אחרונה שנסגרה',
+      );
     });
 
-    test('Ctrl+Shift+C ו-Ctrl+Shift+L אינם מתנגשים עם קיצורים אחרים', () {
+    test(
+        'Ctrl+Shift+C, Ctrl+Shift+L ו-Ctrl+Shift+T אינם מתנגשים עם קיצורים אחרים',
+        () {
       // עוברים על כל ברירות המחדל ומוודאים שלא יש כפילות עם הקיצורים החדשים
-      const newShortcuts = {'ctrl+shift+l', 'ctrl+shift+c'};
+      const newShortcuts = {'ctrl+shift+l', 'ctrl+shift+c', 'ctrl+shift+t'};
       final clashes = <String, List<String>>{};
       for (final entry in ShortcutValidator.defaultShortcuts.entries) {
         if (newShortcuts.contains(entry.value) &&
             entry.key != 'key-shortcut-toggle-nav-pane' &&
-            entry.key != 'key-shortcut-toggle-commentators-pane') {
+            entry.key != 'key-shortcut-toggle-commentators-pane' &&
+            entry.key != 'key-shortcut-restore-closed-tab') {
           clashes.putIfAbsent(entry.value, () => []).add(entry.key);
         }
       }
       expect(clashes, isEmpty,
           reason: 'נמצאו התנגשויות עם הקיצורים החדשים: $clashes');
+    });
+
+    test('ברירות המחדל אינן מכילות קיצורים כפולים', () {
+      final shortcutToKeys = <String, List<String>>{};
+
+      for (final entry in ShortcutValidator.defaultShortcuts.entries) {
+        if (entry.value.isEmpty) continue;
+        shortcutToKeys.putIfAbsent(entry.value, () => []).add(entry.key);
+      }
+
+      final duplicates = Map.fromEntries(
+        shortcutToKeys.entries.where((entry) => entry.value.length > 1),
+      );
+
+      expect(
+        duplicates,
+        isEmpty,
+        reason: 'נמצאו קיצורי ברירת מחדל כפולים: $duplicates',
+      );
     });
   });
 }

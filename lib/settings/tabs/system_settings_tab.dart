@@ -769,11 +769,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             },
           ),
         ),
-        SwitchListTile(
-          secondary: const Icon(FluentIcons.arrow_download_24_regular),
+        SwitchSettingsTile(
+          leading: const RtlIcon(FluentIcons.arrow_download_24_regular),
           title: const Text(
             'עדכוני תוכנה וספרים',
-            style: TextStyle(fontSize: 16),
+            style: kSettingsTitleStyle,
             textDirection: TextDirection.rtl,
           ),
           subtitle: Text(
@@ -782,10 +782,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 : state.softwareAndBookUpdatesEnabled
                     ? 'עדכוני תוכנה וספרים פעילים, אך דיווחי שגיאות ימשיכו לעבוד גם אם תכבו אותם'
                     : 'עדכוני תוכנה וספרים מושבתים, אך שאר שירותי הרשת נשארים פעילים',
-            style: const TextStyle(fontSize: 13),
+            style: kSettingsSubtitleStyle,
             textDirection: TextDirection.rtl,
           ),
           value: state.canUseSoftwareAndBookUpdates,
+          enabled: !state.isOfflineMode,
           onChanged: state.isOfflineMode
               ? null
               : (value) {
@@ -796,18 +797,18 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
         if (!(Platform.isAndroid || Platform.isIOS) &&
             state.canUseSoftwareAndBookUpdates) ...[
-          SwitchListTile(
-            secondary: const Icon(FluentIcons.arrow_sync_24_regular),
+          SwitchSettingsTile(
+            leading: const RtlIcon(FluentIcons.arrow_sync_24_regular),
             title: const Text(
               'סינכרון הספרייה באופן אוטומטי',
-              style: TextStyle(fontSize: 16),
+              style: kSettingsTitleStyle,
               textDirection: TextDirection.rtl,
             ),
             subtitle: Text(
               (Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true)
-                  ? 'מסד הנתונים של הספרייה יתעדכן אוטומטית'
-                  : 'סינכרון הספרייה מושבת',
-              style: const TextStyle(fontSize: 13),
+                  ? 'מסד הנתונים של הספרייה יתעדכן אוטומטית בטעינת הספרייה'
+                  : 'סינכרון הספרייה לא יופעל אוטומטית, אך עדיין אפשר להפעיל סינכרון ידני',
+              style: kSettingsSubtitleStyle,
               textDirection: TextDirection.rtl,
             ),
             value:
@@ -818,14 +819,18 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             },
           ),
           SwitchSettingsTile(
-            leading: const RtlIcon(FluentIcons.beaker_24_regular),
-            title:
-                const Text('עדכון לגרסאות מפתחים', style: kSettingsTitleStyle),
+            leading: const Icon(FluentIcons.beaker_24_regular),
+            title: const Text(
+              'עדכון לגרסאות מפתחים',
+              style: kSettingsTitleStyle,
+              textDirection: TextDirection.rtl,
+            ),
             subtitle: Text(
               Settings.getValue<bool>(SettingsRepository.keyDevChannel) ?? false
-                  ? 'קבלת עדכונים על גרסאות בדיקה — ייתכנו באגים'
-                  : 'קבלת עדכונים על גרסאות יציבות בלבד',
+                  ? 'בדיקת העדכונים הבאה תחפש גם גרסאות בדיקה — ייתכנו באגים'
+                  : 'בדיקת העדכונים הבאה תחפש גרסאות יציבות בלבד',
               style: kSettingsSubtitleStyle,
+              textDirection: TextDirection.rtl,
             ),
             value: Settings.getValue<bool>(SettingsRepository.keyDevChannel) ??
                 false,
@@ -867,18 +872,18 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             ),
           ],
         ),
-        SwitchListTile(
-          secondary: const Icon(FluentIcons.cloud_arrow_up_24_regular),
+        SwitchSettingsTile(
+          leading: const RtlIcon(FluentIcons.cloud_arrow_up_24_regular),
           title: const Text(
             'שמירת דיווחים אוטומטית כשאין חיבור',
-            style: TextStyle(fontSize: 16),
+            style: kSettingsTitleStyle,
             textDirection: TextDirection.rtl,
           ),
           subtitle: Text(
             queueWhenOffline
                 ? 'דיווחים שלא נשלחו יישמרו ויישלחו אוטומטית בהמשך'
                 : 'במצב אופליין לא יתבצע תור אוטומטי לדיווחים ישירים',
-            style: const TextStyle(fontSize: 13),
+            style: kSettingsSubtitleStyle,
             textDirection: TextDirection.rtl,
           ),
           value: queueWhenOffline,
@@ -905,8 +910,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               children: [
                 ListTile(
                   leading: const Icon(FluentIcons.task_list_ltr_24_regular),
-                  title: const Text('ניהול דיווחים שמורים',
-                      style: kSettingsTitleStyle),
+                  title: const Text(
+                    'ניהול דיווחים שמורים',
+                    style: kSettingsTitleStyle,
+                    textDirection: TextDirection.rtl,
+                  ),
                   subtitle: Text(
                     pendingCount == 0
                         ? 'אין כרגע דיווחים שמורים בתור'
@@ -1027,8 +1035,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 ),
                 ListTile(
                   leading: const Icon(FluentIcons.checkmark_circle_24_regular),
-                  title:
-                      const Text('דיווחים שנשלחו', style: kSettingsTitleStyle),
+                  title: const Text(
+                    'דיווחים שנשלחו',
+                    style: kSettingsTitleStyle,
+                    textDirection: TextDirection.rtl,
+                  ),
                   subtitle: Text(
                     sentReports.isEmpty
                         ? 'עדיין אין דיווחים שנשלחו דרך המערכת'
@@ -1209,20 +1220,37 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       children: [
         ListTile(
           leading: const Icon(FluentIcons.info_24_regular),
-          title: const Text('גרסת תוכנה', style: kSettingsTitleStyle),
-          subtitle:
-              Text(_appVersion ?? 'טוען...', style: kSettingsSubtitleStyle),
+          title: const Text(
+            'גרסת תוכנה',
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
+          subtitle: Text(
+            _appVersion ?? 'טוען...',
+            style: kSettingsSubtitleStyle,
+            textDirection:
+                _appVersion == null ? TextDirection.rtl : TextDirection.ltr,
+          ),
           trailing: TextButton.icon(
             icon: const Icon(FluentIcons.history_24_regular, size: 16),
-            label: const Text('יומן שינויים'),
+            label: const Text('יומן שינויים', textDirection: TextDirection.rtl),
             onPressed: () => _showChangelogDialog(context),
           ),
         ),
         ListTile(
           leading: const Icon(FluentIcons.library_24_regular),
-          title: const Text('גרסת ספרייה', style: kSettingsTitleStyle),
-          subtitle:
-              Text(_libraryVersion ?? 'טוען...', style: kSettingsSubtitleStyle),
+          title: const Text(
+            'גרסת ספרייה',
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
+          subtitle: Text(
+            _libraryVersion ?? 'טוען...',
+            style: kSettingsSubtitleStyle,
+            textDirection: _libraryVersion == null
+                ? TextDirection.rtl
+                : TextDirection.ltr,
+          ),
           // trailing: TextButton.icon(
           //   icon: const Icon(FluentIcons.history_24_regular, size: 16),
           //   label: const Text('יומן שינויים'),
@@ -1232,10 +1260,15 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ListTile(
           hoverColor: Colors.transparent,
           leading: const Icon(FluentIcons.book_24_regular),
-          title: const Text('מספר ספרים', style: kSettingsTitleStyle),
+          title: const Text(
+            'מספר ספרים',
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
           subtitle: Text(
             _bookCount != null ? '${_bookCount!} ספרים' : 'טוען...',
             style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.rtl,
           ),
           trailing: _bookCount == null
               ? null
@@ -1313,7 +1346,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               await Process.run('xdg-open', [dir.path]);
             }
           },
-          icon: Icons.check_circle_outline_rounded,
+          icon: FluentIcons.checkmark_circle_24_regular,
         );
       }
     } catch (e) {
@@ -1570,20 +1603,24 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: ElevatedButton.icon(
+                            child: RecommendedActionButton(
                               onPressed: _createBackup,
-                              icon: const Icon(
-                                  FluentIcons.arrow_upload_24_regular),
-                              label: const Text('צור גיבוי עכשיו'),
+                              iconWidget: const RtlIcon(
+                                FluentIcons.arrow_upload_24_regular,
+                              ),
+                              text: 'צור גיבוי עכשיו',
+                              textAlign: TextAlign.center,
                             ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: ElevatedButton.icon(
+                            child: NeutralActionButton(
                               onPressed: _restoreBackup,
-                              icon: const Icon(
-                                  FluentIcons.arrow_download_24_regular),
-                              label: const Text('שחזר מגיבוי'),
+                              iconWidget: const RtlIcon(
+                                FluentIcons.arrow_download_24_regular,
+                              ),
+                              text: 'שחזר מגיבוי',
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ],
@@ -1604,8 +1641,16 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 ? Theme.of(context).colorScheme.primary
                 : null,
           ),
-          title: const Text('מצב סייפר', style: kSettingsTitleStyle),
-          subtitle: const Text('נעילת הגדרות', style: kSettingsSubtitleStyle),
+          title: const Text(
+            'מצב סייפר',
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
+          subtitle: const Text(
+            'נעילת הגדרות',
+            style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
           trailing: Icon(
             _isCypherExpanded
                 ? FluentIcons.chevron_up_24_regular
@@ -1714,9 +1759,16 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       children: [
         ListTile(
           leading: const Icon(FluentIcons.arrow_reset_24_regular),
-          title: const Text('איפוס הגדרות', style: kSettingsTitleStyle),
-          subtitle: const Text('מחיקת כל ההגדרות וחזרה למצב ההתחלתי',
-              style: kSettingsSubtitleStyle),
+          title: const Text(
+            'איפוס הגדרות',
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
+          subtitle: const Text(
+            'מחיקת כל ההגדרות וחזרה למצב ההתחלתי',
+            style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
           trailing: NeutralActionButton(
             icon: FluentIcons.arrow_reset_24_regular,
             text: 'אפס הגדרות',
@@ -1766,7 +1818,10 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          title: const Text('יומן שינויים בתוכנה'),
+          title: const Text(
+            'יומן שינויים בתוכנה',
+            textDirection: TextDirection.rtl,
+          ),
           content: SizedBox(
             width: 600,
             height: 400,
@@ -1779,7 +1834,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('סגור')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('סגור', textDirection: TextDirection.rtl),
+            ),
           ],
         ),
       ),
@@ -1983,8 +2040,16 @@ class _BackupOptionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return SwitchSettingsTile(
       leading: Icon(icon),
-      title: Text(title, style: kSettingsTitleStyle),
-      subtitle: Text(subtitle, style: kSettingsSubtitleStyle),
+      title: Text(
+        title,
+        style: kSettingsTitleStyle,
+        textDirection: TextDirection.rtl,
+      ),
+      subtitle: Text(
+        subtitle,
+        style: kSettingsSubtitleStyle,
+        textDirection: TextDirection.rtl,
+      ),
       value: Settings.getValue<bool>(settingKey) ?? true,
       onChanged: (value) {
         Settings.setValue<bool>(settingKey, value);

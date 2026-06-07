@@ -203,6 +203,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           const Text(
             'מוריד ספרייה',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 32),
           SizedBox(
@@ -219,6 +220,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
                   state.message,
                   style: const TextStyle(fontSize: 14),
                   textAlign: TextAlign.center,
+                  textDirection: TextDirection.rtl,
                 ),
                 if (state.progress > 0) ...[
                   const SizedBox(height: 8),
@@ -251,6 +253,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           const Text(
             'מחלץ ספרייה',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 32),
           SizedBox(
@@ -267,6 +270,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
                   state.message,
                   style: const TextStyle(fontSize: 14),
                   textAlign: TextAlign.center,
+                  textDirection: TextDirection.rtl,
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -421,7 +425,10 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           const SizedBox(height: 24),
           const CircularProgressIndicator(),
           const SizedBox(height: 8),
-          const Text('בודק את התיקייה...'),
+          const Text(
+            'בודק את התיקייה...',
+            textDirection: TextDirection.rtl,
+          ),
         ],
       ],
     );
