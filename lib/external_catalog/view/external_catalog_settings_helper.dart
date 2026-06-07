@@ -133,7 +133,7 @@ class ExternalCatalogSettingsHelper {
             DataRepository.instance.invalidateExternalBooksCache)();
       }
     } catch (e) {
-      UiSnack.showError('שגיאה בסנכרון הקטלוגים: $e');
+      debugPrint('Auto-sync external catalogs failed: $e');
     } finally {
       _isAutoSyncInProgress = false;
     }

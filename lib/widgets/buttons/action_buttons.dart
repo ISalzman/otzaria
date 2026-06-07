@@ -91,6 +91,8 @@ class NeutralActionButton extends StatelessWidget {
   final VoidCallback onPressed;
   final bool isLoading;
   final IconData? icon;
+  final Widget? iconWidget;
+  final TextAlign textAlign;
 
   const NeutralActionButton({
     super.key,
@@ -98,11 +100,14 @@ class NeutralActionButton extends StatelessWidget {
     required this.onPressed,
     this.isLoading = false,
     this.icon,
+    this.iconWidget,
+    this.textAlign = TextAlign.start,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final leading = iconWidget ?? (icon != null ? Icon(icon) : null);
 
     if (isLoading) {
       return FilledButton.tonal(
@@ -113,11 +118,59 @@ class NeutralActionButton extends StatelessWidget {
               child: CircularProgressIndicator(
                   strokeWidth: 2, color: cs.onSecondaryContainer)));
     }
-    if (icon != null) {
+    if (leading != null) {
+      if (textAlign == TextAlign.center) {
+        return FilledButton.tonal(
+          onPressed: onPressed,
+          child: _CenteredButtonContent(
+            text: text,
+            leading: leading,
+          ),
+        );
+      }
       return FilledButton.tonalIcon(
-          onPressed: onPressed, icon: Icon(icon), label: Text(text));
+        onPressed: onPressed,
+        icon: leading,
+        label: Text(text, textAlign: textAlign),
+      );
     }
-    return FilledButton.tonal(onPressed: onPressed, child: Text(text));
+    return FilledButton.tonal(
+      onPressed: onPressed,
+      child: Text(text, textAlign: textAlign),
+    );
+  }
+}
+
+class _CenteredButtonContent extends StatelessWidget {
+  final String text;
+  final Widget leading;
+
+  const _CenteredButtonContent({
+    required this.text,
+    required this.leading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: _BalancedText(
+              text,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+        Positioned.fill(
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: leading,
+          ),
+        ),
+      ],
+    );
   }
 }
 

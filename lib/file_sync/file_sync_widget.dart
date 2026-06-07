@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_event.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_state.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 class SyncIconButton extends StatefulWidget {
   final double size;
@@ -54,6 +55,14 @@ class _SyncIconButtonState extends State<SyncIconButton>
     bloc.add(const StartSync());
   }
 
+  String _tooltipMessage(FileSyncState state) {
+    return switch (state.status) {
+      FileSyncStatus.syncing => 'עצור סנכרון',
+      FileSyncStatus.completed || FileSyncStatus.error => 'נקה הודעה',
+      FileSyncStatus.initial => 'התחל סנכרון',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<FileSyncBloc, FileSyncState>(
@@ -72,17 +81,17 @@ class _SyncIconButtonState extends State<SyncIconButton>
           case FileSyncStatus.error:
             _controller.reset();
             iconColor = colorScheme.error;
-            iconData = FluentIcons.arrow_sync_24_regular;
+            iconData = FluentIcons.dismiss_24_regular;
           case FileSyncStatus.completed:
             _controller.reset();
             iconColor = state.hasNewSync
                 ? colorScheme.primary
                 : widget.color ?? Theme.of(context).iconTheme.color!;
-            iconData = FluentIcons.checkmark_circle_24_regular;
+            iconData = FluentIcons.dismiss_24_regular;
           case FileSyncStatus.syncing:
             _controller.repeat();
             iconColor = widget.color ?? Theme.of(context).iconTheme.color!;
-            iconData = FluentIcons.arrow_sync_24_regular;
+            iconData = FluentIcons.stop_24_regular;
           case FileSyncStatus.initial:
             _controller.reset();
             iconColor = widget.color ?? Theme.of(context).iconTheme.color!;
@@ -90,7 +99,7 @@ class _SyncIconButtonState extends State<SyncIconButton>
         }
 
         return Tooltip(
-          message: state.message,
+          message: _tooltipMessage(state),
           textAlign: TextAlign.center,
           preferBelow: true,
           waitDuration: const Duration(milliseconds: 500),
@@ -98,7 +107,7 @@ class _SyncIconButtonState extends State<SyncIconButton>
             onPressed: () => _handlePress(context, state),
             icon: RotationTransition(
               turns: Tween(begin: 0.0, end: 1.0).animate(_controller),
-              child: Icon(
+              child: RtlIcon(
                 iconData,
                 color: iconColor,
                 size: widget.size,
