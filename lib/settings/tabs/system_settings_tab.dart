@@ -35,6 +35,7 @@ import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/dialogs/error_report_sender_email_dialog.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/settings/widgets/settings_action_tile.dart';
@@ -817,7 +818,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             },
           ),
           SwitchSettingsTile(
-            leading: const Icon(FluentIcons.bug_24_regular),
+            leading: const RtlIcon(FluentIcons.beaker_24_regular),
             title:
                 const Text('עדכון לגרסאות מפתחים', style: kSettingsTitleStyle),
             subtitle: Text(
