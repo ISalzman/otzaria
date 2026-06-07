@@ -118,29 +118,60 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
   }
 
   Widget _buildSearchField() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      height: 60, // Same height as the container on the right
-      alignment: Alignment.center, // Vertically centers the RtlTextField
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: RtlTextField(
-        controller: _filterQuery,
-        decoration: InputDecoration(
-          hintText: 'איתור ספר…',
-          prefixIcon: const Icon(FluentIcons.filter_24_regular),
-          suffixIcon: IconButton(
-            onPressed: _clearFilter,
-            icon: const Icon(FluentIcons.dismiss_24_regular),
-          ),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: UnderlineInputBorder(
-            borderSide: BorderSide(
-              color: Theme.of(context).colorScheme.primary,
-              width: 2,
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 52,
+            child: RtlTextField(
+              controller: _filterQuery,
+              decoration: InputDecoration(
+                hintText: 'איתור ספר…',
+                prefixIcon: const Icon(FluentIcons.filter_24_regular),
+                suffixIcon: IconButton(
+                  onPressed: _clearFilter,
+                  icon: const Icon(FluentIcons.dismiss_24_regular),
+                ),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(
+                    color: colorScheme.primary,
+                    width: 2,
+                  ),
+                ),
+              ),
+              onChanged: _onQueryChanged,
             ),
           ),
-        ),
-        onChanged: _onQueryChanged,
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  Platform.isMacOS
+                      ? 'לחיצה רגילה מחליפה קטגוריה. Cmd, לחיצה כפולה או לחיצה ארוכה מוסיפים לבחירה.'
+                      : 'לחיצה רגילה מחליפה קטגוריה. Ctrl, לחיצה כפולה או לחיצה ארוכה מוסיפים לבחירה.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  textDirection: TextDirection.rtl,
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () => _setFacet(context, '/'),
+                child: const Text(
+                  'הצג הכל',
+                  textDirection: TextDirection.rtl,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -259,7 +290,10 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(16.0),
-          child: Text('לא נמצאו ספרים'),
+          child: Text(
+            'לא נמצאו ספרים',
+            textDirection: TextDirection.rtl,
+          ),
         ),
       );
     }

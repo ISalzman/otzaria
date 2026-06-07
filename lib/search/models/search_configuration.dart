@@ -7,6 +7,23 @@ enum SearchMode {
   fuzzy, // חיפוש מקורב (slop/word-distance)
 }
 
+extension SearchModePresentation on SearchMode {
+  String get shortLabel => switch (this) {
+        SearchMode.advanced => 'מתקדם',
+        SearchMode.exact => 'מדויק',
+        SearchMode.fuzzy => 'מקורב',
+      };
+
+  String get tooltip => switch (this) {
+        SearchMode.advanced =>
+          'חיפוש מתקדם מאפשר קידומות, סיומות, מילים חילופיות ומרווחים בין מילים.',
+        SearchMode.exact =>
+          'חיפוש מדויק מחפש את המילים כפי שהוקלדו, בלי התאמות מקורבות.',
+        SearchMode.fuzzy =>
+          'חיפוש מקורב מרשה התאמות דומות ושיבושי כתיב קלים לפי מרחק החיפוש.',
+      };
+}
+
 /// מחלקה שמרכזת את כל הגדרות החיפוש במקום אחד
 /// כוללת הגדרות קיימות והגדרות עתידיות לרגקס
 class SearchConfiguration {

@@ -692,16 +692,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   /// הספר כבר נטען. `getCompanionBook` דורש את כל קטלוג הספרייה (~300ms CPU),
   /// ולכן הוא נדחה לכאן כדי לא לחנוק את שאילתת תוכן הספר בעלייה. עד שיתבצע,
   /// כפתור ה-PDF פשוט מוסתר (`_hasPdfBook == false`).
-  void _resolveCompanionPdf() {
+  Future<void> _resolveCompanionPdf() async {
     if (_hasResolvedCompanionPdf) return;
     _hasResolvedCompanionPdf = true;
-    DataRepository.instance.library.then((library) {
+    try {
+      final library = await DataRepository.instance.library;
       if (!mounted) return;
       setState(() {
         _pdfBook = library.getCompanionBook(widget.tab.book, PdfBook);
         _hasPdfBook = _pdfBook != null;
       });
-    });
+    } catch (e, stackTrace) {
+      debugPrint('שגיאה בפתרון PDF מלווה: $e\n$stackTrace');
+    }
   }
 
   Future<void> _loadPerBookSettings() async {
@@ -1059,7 +1062,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                             ),
                             ActionButtonData(
                               widget: IconButton(
-                                icon: const Icon(FluentIcons.book_search_24_regular),
+                                icon: const Icon(
+                                    FluentIcons.book_search_24_regular),
                                 tooltip: 'חיפוש',
                                 onPressed: null,
                               ),
@@ -1256,8 +1260,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ),
         ),
         if (state.showPageShapeView)
-          AppTopBarItem(
-              widget: _buildPageShapeSettingsButton(context, state)),
+          AppTopBarItem(widget: _buildPageShapeSettingsButton(context, state)),
       ],
       center: _buildTextBookCenter(context, state),
       trailingItems: [
@@ -1569,7 +1572,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           await _savePerBookSettingsDirectly(context, state, fontSize: newSize);
         },
       ),
-
     ];
   }
 

@@ -38,6 +38,49 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
   final Map<String, List<InlineSpan>> _snippetCache = {};
   bool _isAutoLoadInFlight = false;
 
+  Widget _buildInformativeEmptyState({
+    required IconData icon,
+    required String title,
+    required String message,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 52,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: colorScheme.onSurface,
+              ),
+              textDirection: TextDirection.rtl,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: TextStyle(
+                fontSize: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -157,7 +200,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
       return const Center(child: CircularProgressIndicator());
     }
     if (state.searchQuery.isEmpty) {
-      return const Center(child: Text("לא בוצע חיפוש"));
+      return _buildInformativeEmptyState(
+        icon: FluentIcons.search_24_regular,
+        title: 'לא בוצע חיפוש',
+        message: 'הקלד מילות חיפוש ולחץ על כפתור "חפש" כדי להתחיל.',
+      );
     }
     if (state.results.isEmpty && !state.isLoading) {
       // הבחנה בין חיפוש ריק לגיטימי לבין כשל בחיפוש: אם errorMessage קיים,
@@ -175,11 +222,12 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
           ),
         );
       }
-      return const Center(
-          child: Padding(
-        padding: EdgeInsets.all(8.0),
-        child: Text('אין תוצאות'),
-      ));
+      return _buildInformativeEmptyState(
+        icon: FluentIcons.document_search_24_regular,
+        title: 'אין תוצאות',
+        message:
+            'נסה להרחיב קטגוריות, לשנות מצב חיפוש או לעדכן את מילות החיפוש.',
+      );
     }
 
     // תמיד נשתמש ב-ListView גם לתוצאה אחת - כך היא תופיע למעלה
