@@ -23,7 +23,11 @@ class PluginSettingsScreen extends StatefulWidget {
 
 class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
   final _repo = PluginRegistryRepository();
+  static final RegExp _pathSeparatorRegExp = RegExp(r'[/\\]');
   Map<String, bool> _permissions = {};
+
+  static String _formatPathForDisplay(String path) =>
+      path.replaceAllMapped(_pathSeparatorRegExp, (m) => '${m[0]!}\u200E');
 
   @override
   void initState() {
@@ -64,7 +68,12 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
         insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 60),
         clipBehavior: Clip.antiAlias,
         child: Scaffold(
-          appBar: AppBar(title: Text('הגדרות תוסף: ${currentPlugin.name}')),
+          appBar: AppBar(
+            title: Text(
+              'הגדרות תוסף: ${currentPlugin.name}',
+              textDirection: TextDirection.rtl,
+            ),
+          ),
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -72,9 +81,14 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                 title: 'הגדרות כלליות',
                 children: [
                   SwitchListTile(
-                    title: const Text('מצב מופעל (Enabled)'),
-                    subtitle:
-                        const Text('כיבוי ימנע מהתוסף לרוץ לחלוטין באפליקציה'),
+                    title: const Text(
+                      'מצב מופעל (Enabled)',
+                      textDirection: TextDirection.rtl,
+                    ),
+                    subtitle: const Text(
+                      'כיבוי ימנע מהתוסף לרוץ לחלוטין באפליקציה',
+                      textDirection: TextDirection.rtl,
+                    ),
                     value: currentPlugin.enabled,
                     onChanged: (val) {
                       if (val) {
@@ -89,9 +103,14 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                     hoverColor: Colors.transparent,
                   ),
                   SwitchListTile(
-                    title: const Text('הצמדה לסרגל הניווט'),
+                    title: const Text(
+                      'הצמדה לסרגל הניווט',
+                      textDirection: TextDirection.rtl,
+                    ),
                     subtitle: const Text(
-                        'הצגת התוסף כפריט קבוע בסרגל הניווט הראשי, בין "כלים" ל"הגדרות"'),
+                      'הצגת התוסף כפריט קבוע בסרגל הניווט הראשי, בין "כלים" ל"הגדרות"',
+                      textDirection: TextDirection.rtl,
+                    ),
                     value: currentPlugin.pinnedToNavRail,
                     onChanged: currentPlugin.enabled
                         ? (val) {
@@ -167,11 +186,21 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
               if (currentPlugin.isDevelopment) ...[
                 SettingsCard(title: 'פיתוח', children: [
                   ListTile(
-                    title: const Text('נתיב תיקייה'),
-                    subtitle: Text(currentPlugin.resolvedRootPath),
+                    title: const Text(
+                      'נתיב תיקייה',
+                      textDirection: TextDirection.rtl,
+                    ),
+                    subtitle: Text(
+                      _formatPathForDisplay(currentPlugin.resolvedRootPath),
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.end,
+                    ),
                   ),
                   ListTile(
-                    title: const Text('רענן עכשיו'),
+                    title: const Text(
+                      'רענן עכשיו',
+                      textDirection: TextDirection.rtl,
+                    ),
                     trailing:
                         const Icon(FluentIcons.arrow_clockwise_24_regular),
                     onTap: () {
@@ -182,7 +211,10 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                     hoverColor: Colors.transparent,
                   ),
                   ListTile(
-                    title: const Text('פתח מחדש את הצפייה'),
+                    title: const Text(
+                      'פתח מחדש את הצפייה',
+                      textDirection: TextDirection.rtl,
+                    ),
                     trailing: const Icon(FluentIcons.window_new_24_regular),
                     onTap: () {
                       context.read<PluginSystemBloc>().add(

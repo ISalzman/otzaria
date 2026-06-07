@@ -85,9 +85,9 @@ void main() {
       await tester.pump();
 
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyE);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyS);
       await tester.pump();
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyE);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyS);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pumpAndSettle();
 
@@ -98,9 +98,9 @@ void main() {
       await tester.pump();
 
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyE);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyS);
       await tester.pump();
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyE);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyS);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pumpAndSettle();
 

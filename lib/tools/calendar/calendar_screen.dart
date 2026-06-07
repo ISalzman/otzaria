@@ -326,7 +326,7 @@ class CalendarWidgetState extends State<CalendarWidget> {
 
         registerShortcut(
           'key-shortcut-calendar-toggle-times',
-          'ctrl+e',
+          'ctrl+t',
           () {
             if (_isTextFieldFocused()) return;
             _toggleTimesPanel();
@@ -334,7 +334,7 @@ class CalendarWidgetState extends State<CalendarWidget> {
         );
         registerShortcut(
           'key-shortcut-calendar-toggle-events',
-          'ctrl+n',
+          'ctrl+e',
           () {
             if (_isTextFieldFocused()) return;
             _toggleEventsPanel();

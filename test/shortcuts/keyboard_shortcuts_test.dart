@@ -19,9 +19,12 @@ import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/tabs_repository.dart';
 import 'package:provider/provider.dart';
 import '../helpers/memory_settings_cache.dart';
 
@@ -54,6 +57,27 @@ class _StubNavigationBloc extends Bloc<NavigationEvent, NavigationState>
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeTabsRepository extends TabsRepository {
+  @override
+  List<OpenedTab> loadTabs() => const [];
+
+  @override
+  int loadCurrentTabIndex() => 0;
+
+  @override
+  Future<void> saveCurrentTabIndex(
+    List<OpenedTab> tabs,
+    int currentTabIndex,
+  ) async {}
+
+  @override
+  Future<void> saveTabs(
+    List<OpenedTab> tabs,
+    int currentTabIndex, [
+    SideBySideMode? sideBySideMode,
+  ]) async {}
 }
 
 void main() {
@@ -220,6 +244,95 @@ void main() {
       expect(tab.toggleCommentatorsPaneNotifier.value, 0);
       await sendCtrlShift(tester, LogicalKeyboardKey.keyC);
       expect(tab.toggleCommentatorsPaneNotifier.value, 1);
+    });
+  });
+
+  group('KeyboardShortcuts - Ctrl+Shift+T', () {
+    late MockSettingsBloc settingsBlocLocal;
+    late StreamController<SettingsState> settingsControllerLocal;
+
+    setUpAll(() async {
+      await Settings.init(cacheProvider: MemorySettingsCache());
+    });
+
+    setUp(() {
+      settingsBlocLocal = MockSettingsBloc();
+      settingsControllerLocal = StreamController<SettingsState>.broadcast();
+      whenListen(
+        settingsBlocLocal,
+        settingsControllerLocal.stream,
+        initialState: SettingsState.initial().copyWith(
+          shortcuts: const {
+            'key-shortcut-restore-closed-tab': 'ctrl+shift+t',
+          },
+        ),
+      );
+    });
+
+    tearDown(() async {
+      await settingsControllerLocal.close();
+    });
+
+    testWidgets('Ctrl+Shift+T משחזר את הטאב האחרון שנסגר', (tester) async {
+      final tabsBloc = TabsBloc(repository: _FakeTabsRepository());
+      final first = SearchingTab('חיפוש א', 'א');
+      final second = SearchingTab('חיפוש ב', 'ב');
+      final historyBloc = _StubHistoryBloc();
+      final navigationBloc = _StubNavigationBloc();
+
+      addTearDown(() async {
+        final openTabs = List<OpenedTab>.from(tabsBloc.state.tabs);
+        await tabsBloc.close();
+        for (final tab in openTabs) {
+          tab.dispose();
+        }
+        await historyBloc.close();
+        await navigationBloc.close();
+      });
+
+      tabsBloc.add(AddTab(first));
+      await tester.pump();
+      tabsBloc.add(AddTab(second));
+      await tester.pump();
+      tabsBloc.add(RemoveTab(second));
+      await tester.pump();
+
+      expect(tabsBloc.state.tabs, hasLength(1));
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<SettingsBloc>.value(value: settingsBlocLocal),
+            BlocProvider<TabsBloc>.value(value: tabsBloc),
+            BlocProvider<HistoryBloc>.value(value: historyBloc),
+            BlocProvider<NavigationBloc>.value(value: navigationBloc),
+            Provider<FocusRepository>.value(value: FocusRepository()),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: KeyboardShortcuts(
+                onFindRefRequested: () {},
+                child: const SizedBox(width: 100, height: 100),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyT);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyT);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+
+      expect(tabsBloc.state.tabs, hasLength(2));
+      expect(tabsBloc.state.currentTabIndex, 1);
+      expect(tabsBloc.state.tabs[1].title, 'חיפוש ב');
+
+      await tester.pump(const Duration(milliseconds: 400));
     });
   });
 }

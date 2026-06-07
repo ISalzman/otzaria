@@ -31,6 +31,7 @@ class SingleActionDialog extends StatefulWidget {
   final String? content;
   final Widget? customContent;
   final String confirmText;
+  final TextDirection? textDirection;
 
   const SingleActionDialog({
     super.key,
@@ -38,6 +39,7 @@ class SingleActionDialog extends StatefulWidget {
     this.content,
     this.customContent,
     this.confirmText = 'אישור',
+    this.textDirection,
   }) : assert(
           content != null || customContent != null,
           'content או customContent חייבים להיות מוגדרים',
@@ -57,14 +59,20 @@ class _SingleActionDialogState extends State<SingleActionDialog>
       onCancel: () => Navigator.of(context).pop(false),
       child: AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-        title: widget.title is String ? Text(widget.title) : widget.title,
-        content: widget.customContent ?? Text(widget.content!),
+        title: widget.title is String
+            ? Text(widget.title, textDirection: widget.textDirection)
+            : widget.title,
+        content: widget.customContent ??
+            Text(widget.content!, textDirection: widget.textDirection),
         actions: [
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(
                 backgroundColor: cs.primary, foregroundColor: cs.onPrimary),
-            child: Text(widget.confirmText),
+            child: Text(
+              widget.confirmText,
+              textDirection: widget.textDirection,
+            ),
           ),
         ],
       ),
@@ -82,6 +90,7 @@ class TwoActionsDialog extends StatefulWidget {
   final String cancelText;
   final String confirmText;
   final bool handleEnterKey;
+  final TextDirection? textDirection;
 
   const TwoActionsDialog({
     super.key,
@@ -91,6 +100,7 @@ class TwoActionsDialog extends StatefulWidget {
     this.cancelText = 'ביטול',
     this.confirmText = 'אישור',
     this.handleEnterKey = true,
+    this.textDirection,
   });
 
   @override
@@ -108,21 +118,30 @@ class _TwoActionsDialogState extends State<TwoActionsDialog>
       handleEnterKey: widget.handleEnterKey,
       child: AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-        title: widget.title is String ? Text(widget.title) : widget.title,
-        content: widget.customContent ?? Text(widget.content),
+        title: widget.title is String
+            ? Text(widget.title, textDirection: widget.textDirection)
+            : widget.title,
+        content: widget.customContent ??
+            Text(widget.content, textDirection: widget.textDirection),
         actions: [
           FilledButton.tonal(
             onPressed: () => Navigator.of(context).pop(false),
             style: FilledButton.styleFrom(
                 backgroundColor: cs.secondaryContainer,
                 foregroundColor: cs.onSecondaryContainer),
-            child: Text(widget.cancelText),
+            child: Text(
+              widget.cancelText,
+              textDirection: widget.textDirection,
+            ),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(
                 backgroundColor: cs.primary, foregroundColor: cs.onPrimary),
-            child: Text(widget.confirmText),
+            child: Text(
+              widget.confirmText,
+              textDirection: widget.textDirection,
+            ),
           ),
         ],
       ),
@@ -139,6 +158,7 @@ class WarningDialog extends StatefulWidget {
   final String? subtitle;
   final String cancelText;
   final String confirmText;
+  final TextDirection? textDirection;
 
   const WarningDialog({
     super.key,
@@ -147,6 +167,7 @@ class WarningDialog extends StatefulWidget {
     this.subtitle,
     this.cancelText = 'ביטול',
     this.confirmText = 'המשך',
+    this.textDirection,
   });
 
   @override
@@ -163,16 +184,21 @@ class _WarningDialogState extends State<WarningDialog>
       onCancel: () => Navigator.of(context).pop(false),
       child: AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-        title: widget.title is String ? Text(widget.title) : widget.title,
+        title: widget.title is String
+            ? Text(widget.title, textDirection: widget.textDirection)
+            : widget.title,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.content),
+            Text(widget.content, textDirection: widget.textDirection),
             if (widget.subtitle != null) ...[
               const SizedBox(height: 8),
-              Text(widget.subtitle!,
-                  style: TextStyle(color: cs.error, fontSize: 13)),
+              Text(
+                widget.subtitle!,
+                style: TextStyle(color: cs.error, fontSize: 13),
+                textDirection: widget.textDirection,
+              ),
             ],
           ],
         ),
@@ -181,12 +207,18 @@ class _WarningDialogState extends State<WarningDialog>
             onPressed: () => Navigator.of(context).pop(false),
             style: FilledButton.styleFrom(
                 backgroundColor: cs.primary, foregroundColor: cs.onPrimary),
-            child: Text(widget.cancelText),
+            child: Text(
+              widget.cancelText,
+              textDirection: widget.textDirection,
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: TextButton.styleFrom(foregroundColor: cs.error),
-            child: Text(widget.confirmText),
+            child: Text(
+              widget.confirmText,
+              textDirection: widget.textDirection,
+            ),
           ),
         ],
       ),
@@ -202,6 +234,7 @@ Future<bool?> showSingleActionDialog({
   String? content,
   Widget? customContent,
   String confirmText = 'אישור',
+  TextDirection? textDirection,
   bool barrierDismissible = true,
 }) =>
     showDialog<bool>(
@@ -211,7 +244,8 @@ Future<bool?> showSingleActionDialog({
           title: title,
           content: content,
           customContent: customContent,
-          confirmText: confirmText),
+          confirmText: confirmText,
+          textDirection: textDirection),
     );
 
 Future<bool?> showTwoActionsDialog({
@@ -221,6 +255,7 @@ Future<bool?> showTwoActionsDialog({
   Widget? customContent,
   String cancelText = 'ביטול',
   String confirmText = 'אישור',
+  TextDirection? textDirection,
   bool barrierDismissible = true,
   bool handleEnterKey = true,
 }) =>
@@ -233,7 +268,8 @@ Future<bool?> showTwoActionsDialog({
           customContent: customContent,
           cancelText: cancelText,
           confirmText: confirmText,
-          handleEnterKey: handleEnterKey),
+          handleEnterKey: handleEnterKey,
+          textDirection: textDirection),
     );
 
 Future<bool?> showWarningDialog({
@@ -243,6 +279,7 @@ Future<bool?> showWarningDialog({
   String? subtitle,
   String cancelText = 'ביטול',
   String confirmText = 'המשך',
+  TextDirection? textDirection,
   bool barrierDismissible = true,
 }) =>
     showDialog<bool>(
@@ -253,7 +290,8 @@ Future<bool?> showWarningDialog({
           content: content,
           subtitle: subtitle,
           cancelText: cancelText,
-          confirmText: confirmText),
+          confirmText: confirmText,
+          textDirection: textDirection),
     );
 
 Future<bool?> showDbCopyRequiredDialog({

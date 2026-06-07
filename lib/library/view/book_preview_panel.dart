@@ -316,7 +316,12 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                       return _buildSkeletonLoading();
                     }
                     if (state is TextBookError) {
-                      return Center(child: Text('שגיאה: ${state.message}'));
+                      return Center(
+                        child: Text(
+                          'שגיאה: ${state.message}',
+                          textDirection: TextDirection.rtl,
+                        ),
+                      );
                     }
                     if (state is TextBookLoaded) {
                       return CombinedView(

@@ -738,7 +738,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       chipBuilder: (context, item, isSelected) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
         child: Chip(
-          label: Text(item),
+          label: Text(item, textDirection: TextDirection.rtl),
           backgroundColor:
               isSelected ? Theme.of(context).colorScheme.secondary : null,
           labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -1288,6 +1288,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.secondary,
                   ),
+              textDirection: TextDirection.rtl,
             ),
           ),
         ),
@@ -1885,7 +1886,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('כל הספרים (${books.length})'),
+        title: Text(
+          'כל הספרים (${books.length})',
+          textDirection: TextDirection.rtl,
+        ),
         content: SizedBox(
           width: 600,
           height: 400,
@@ -1897,7 +1901,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('סגור'),
+            child: const Text('סגור', textDirection: TextDirection.rtl),
           ),
         ],
       ),
@@ -2126,6 +2130,7 @@ class _LoadingDotsTextState extends State<_LoadingDotsText>
         return Text(
           'טוען ספרייה${'.' * dots}${' ' * (3 - dots)}',
           style: Theme.of(context).textTheme.bodyMedium,
+          textDirection: TextDirection.rtl,
         );
       },
     );

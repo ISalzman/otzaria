@@ -539,6 +539,86 @@ void main() {
     });
   });
 
+  group('TabsBloc restore closed tab', () {
+    setUp(() async {
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+    });
+
+    test('משחזר את הטאב האחרון שנסגר לאינדקס המקורי ומעביר אליו פוקוס',
+        () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final first = _createTextTab('ספר א', categoryId: 1);
+      final second = _createTextTab('ספר ב', index: 14, categoryId: 2);
+      final third = _createTextTab('ספר ג', categoryId: 3);
+
+      bloc.add(AddTab(first));
+      bloc.add(AddTab(second));
+      bloc.add(AddTab(third));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 3);
+
+      bloc.add(RemoveTab(second));
+      await bloc.stream.firstWhere(
+        (s) => s.tabs.length == 2 && s.tabs.every((tab) => tab != second),
+      );
+
+      bloc.add(const RestoreLastClosedTab());
+      await bloc.stream.firstWhere(
+        (s) =>
+            s.tabs.length == 3 &&
+            s.currentTabIndex == 1 &&
+            s.tabs[1].title == 'ספר ב',
+      );
+
+      expect(bloc.state.tabs[1], isA<TextBookTab>());
+      expect((bloc.state.tabs[1] as TextBookTab).index, 14);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('שחזור סדרתי פותח קודם את האחרון שנסגר ואז את זה שלפניו', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final first = _createTextTab('ספר א', categoryId: 1);
+      final second = _createTextTab('ספר ב', categoryId: 2);
+      final third = _createTextTab('ספר ג', categoryId: 3);
+
+      bloc.add(AddTab(first));
+      bloc.add(AddTab(second));
+      bloc.add(AddTab(third));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 3);
+
+      bloc.add(RemoveTab(third));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+
+      bloc.add(RemoveTab(second));
+      await bloc.stream.firstWhere(
+        (s) => s.tabs.length == 1 && s.tabs.single.title == 'ספר א',
+      );
+
+      bloc.add(const RestoreLastClosedTab());
+      await bloc.stream.firstWhere(
+        (s) =>
+            s.tabs.length == 2 &&
+            s.currentTabIndex == 1 &&
+            s.tabs[1].title == 'ספר ב',
+      );
+
+      bloc.add(const RestoreLastClosedTab());
+      await bloc.stream.firstWhere(
+        (s) =>
+            s.tabs.length == 3 &&
+            s.currentTabIndex == 2 &&
+            s.tabs[2].title == 'ספר ג',
+      );
+
+      expect(
+        bloc.state.tabs.map((tab) => tab.title).toList(),
+        ['ספר א', 'ספר ב', 'ספר ג'],
+      );
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+  });
+
   group('OpenedTab.from for search tabs', () {
     setUp(() async {
       await Settings.init(cacheProvider: _MemoryCacheProvider());
