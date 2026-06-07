@@ -242,41 +242,42 @@ void main() {
   });
 
   group('copy-direct-link — buildDirectLinkSubmenuEntries', () {
-    // Property 1: מספר אפשרויות בתת-תפריט — Validates: Requirements 1.4, 1.5, 5.2
-    test('Property 1: 3 אפשרויות ללא טקסט מסומן', () {
+    // Property 1: מספר אפשרויות בתת-תפריט — הקישור לספר עבר לתפריט "אפשרויות
+    // נוספות" בסרגל העליון, ולכן כאן יש מקטע/הדגשת מקטע (+הדגשת טקסט אם סומן).
+    test('Property 1: 2 אפשרויות ללא טקסט מסומן', () {
       final entries = buildDirectLinkSubmenuEntries(
         bookId: 1,
         index: 0,
         selectedText: null,
       );
-      expect(entries.length, equals(3));
+      expect(entries.length, equals(2));
     });
 
-    test('Property 1: 3 אפשרויות עם טקסט ריק', () {
+    test('Property 1: 2 אפשרויות עם טקסט ריק', () {
       final entries = buildDirectLinkSubmenuEntries(
         bookId: 1,
         index: 0,
         selectedText: '',
       );
-      expect(entries.length, equals(3));
+      expect(entries.length, equals(2));
     });
 
-    test('Property 1: 3 אפשרויות עם טקסט רווחים בלבד', () {
+    test('Property 1: 2 אפשרויות עם טקסט רווחים בלבד', () {
       final entries = buildDirectLinkSubmenuEntries(
         bookId: 1,
         index: 0,
         selectedText: '   ',
       );
-      expect(entries.length, equals(3));
+      expect(entries.length, equals(2));
     });
 
-    test('Property 1: 4 אפשרויות עם טקסט מסומן לא-ריק', () {
+    test('Property 1: 3 אפשרויות עם טקסט מסומן לא-ריק', () {
       final entries = buildDirectLinkSubmenuEntries(
         bookId: 1,
         index: 0,
         selectedText: 'בראשית',
       );
-      expect(entries.length, equals(4));
+      expect(entries.length, equals(3));
     });
 
     test('כל הקישורים ברשימה מכילים את אותו index', () {
@@ -295,13 +296,13 @@ void main() {
       }
     });
 
-    test('הקישור הראשון הוא קישור לספר ללא index', () {
+    test('הקישור הראשון הוא קישור למקטע עם index', () {
       final entries = buildDirectLinkSubmenuEntries(
         bookId: 5,
         index: 10,
         selectedText: null,
       );
-      expect(entries.first.link, equals('otzaria://open/book/5'));
+      expect(entries.first.link, equals('otzaria://open/book/5?index=10'));
     });
   });
 }

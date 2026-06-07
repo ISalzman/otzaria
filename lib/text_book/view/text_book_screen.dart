@@ -1642,37 +1642,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       //     onPressed: () => _handleFullFileEditorPress(context, state),
       //   ),
 
-      // העתק קישור ישיר
+      // העתק קישור ישיר לספר זה (קישור למקטע/הדגשה זמין בתפריט הלחיצה הימנית)
       ActionButtonData(
         widget: const SizedBox.shrink(),
         icon: FluentIcons.link_24_regular,
         tooltip: state.book.id != null
-            ? 'העתק קישור ישיר'
+            ? 'העתק קישור ישיר לספר זה'
             : 'העתק קישור ישיר (לא זמין לספר זה)',
-        onPressed: null,
-        submenuItems: state.book.id != null
-            ? () {
-                final bookId = state.book.id!;
-                return [
-                  ActionButtonData(
-                    widget: const SizedBox.shrink(),
-                    icon: FluentIcons.link_24_regular,
-                    tooltip: 'העתק קישור ישיר לספר זה',
-                    onPressed: () => copyLinkToClipboard(buildBookLink(bookId)),
-                  ),
-                  ActionButtonData(
-                    widget: const SizedBox.shrink(),
-                    icon: FluentIcons.link_multiple_24_regular,
-                    tooltip: 'העתק קישור ישיר למקטע זה',
-                    onPressed: () {
-                      // קישור deep-link חייב להפנות לשורת מקור: ב-positions
-                      // הסט לא ממוין, וב-מצב רצף ה-index הוא segmentIndex.
-                      final index = _topmostVisibleSourceLine(state);
-                      copyLinkToClipboard(buildSectionLink(bookId, index));
-                    },
-                  ),
-                ];
-              }()
+        onPressed: state.book.id != null
+            ? () => copyLinkToClipboard(buildBookLink(state.book.id!))
             : null,
       ),
 
