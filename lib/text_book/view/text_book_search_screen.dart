@@ -688,10 +688,10 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                   color: Theme.of(context).colorScheme.onSurface,
                   height: 1.5,
                 ),
-                highlightStyle: const TextStyle(
+                highlightStyle: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
-                  color: Color(0xFFD32F2F),
+                  color: Theme.of(context).colorScheme.error,
                 ),
                 searchOptions: activeParameters.searchOptions,
                 alternativeWords: activeParameters.alternativeWords,
