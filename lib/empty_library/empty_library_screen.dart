@@ -7,7 +7,8 @@ import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 
 class EmptyLibraryScreen extends StatelessWidget {
   final Future<void> Function() onLibraryLoaded;
@@ -128,76 +129,59 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
 
   void _showDeleteZipDialog(
       BuildContext context, EmptyLibraryAskingDeleteZip state) {
-    showDialog(
+    showWarningDialog(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('מחיקת קובץ דחוס'),
-        content: const Text(
-          'האם למחוק את הקובץ הדחוס המקורי?\n\n'
-          'הקובץ הדחוס אינו נצרך עבור פעילות התוכנה והוא רק תופס מקום.\n'
-          'מומלץ למחוק אותו.',
-          textDirection: TextDirection.rtl,
+      title: 'מחיקת קובץ דחוס',
+      content:
+          'האם למחוק את הקובץ הדחוס המקורי?\n\nהקובץ הדחוס אינו נצרך עבור פעילות התוכנה והוא רק תופס מקום.',
+      subtitle: 'מומלץ למחוק אותו רק אם אינך צריך לשמור את קובץ המקור.',
+      cancelText: 'השאר את הקובץ',
+      confirmText: 'מחק את הקובץ',
+    ).then((shouldDelete) {
+      if (shouldDelete == null || !context.mounted) {
+        return;
+      }
+
+      BlocProvider.of<EmptyLibraryBloc>(context).add(
+        DeleteZipAnswered(
+          shouldDelete: shouldDelete,
+          zipPath: state.zipPath,
+          extractedPath: state.extractedPath,
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              BlocProvider.of<EmptyLibraryBloc>(context).add(
-                DeleteZipAnswered(
-                  shouldDelete: false,
-                  zipPath: state.zipPath,
-                  extractedPath: state.extractedPath,
-                ),
-              );
-            },
-            child: const Text('השאר את הקובץ'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              BlocProvider.of<EmptyLibraryBloc>(context).add(
-                DeleteZipAnswered(
-                  shouldDelete: true,
-                  zipPath: state.zipPath,
-                  extractedPath: state.extractedPath,
-                ),
-              );
-            },
-            child: const Text('מחק את הקובץ'),
-          ),
-        ],
-      ),
-    );
+      );
+    });
   }
 
   void _showMultipleZipFilesDialog(
       BuildContext context, List<String> zipFiles) {
-    showDialog(
+    showSingleActionDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('נמצאו מספר קבצים דחוסים'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('נמצאו הקבצים הדחוסים הבאים:'),
-            const SizedBox(height: 8),
-            ...zipFiles.map((file) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text('• $file'),
-                )),
-            const SizedBox(height: 16),
-            const Text(
-              'אנא השאר רק קובץ דחוס אחד בתיקייה ונסה שוב.',
-              style: TextStyle(fontWeight: FontWeight.bold),
+      title: 'נמצאו מספר קבצים דחוסים',
+      confirmText: 'הבנתי',
+      customContent: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'נמצאו הקבצים הדחוסים הבאים:',
+            textDirection: TextDirection.rtl,
+          ),
+          const SizedBox(height: 8),
+          ...zipFiles.map(
+            (file) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                '• $file',
+                textDirection: TextDirection.rtl,
+              ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('הבנתי'),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'אנא השאר רק קובץ דחוס אחד בתיקייה ונסה שוב.',
+            style: TextStyle(fontWeight: FontWeight.bold),
+            textDirection: TextDirection.rtl,
           ),
         ],
       ),
@@ -210,7 +194,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
+          RtlIcon(
             FluentIcons.arrow_download_24_regular,
             size: 64,
             color: Theme.of(context).colorScheme.primary,
@@ -258,7 +242,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
+          RtlIcon(
             FluentIcons.folder_zip_24_regular,
             size: 64,
             color: Theme.of(context).colorScheme.primary,
@@ -304,7 +288,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(
+        RtlIcon(
           FluentIcons.library_24_regular,
           size: 64,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -344,37 +328,62 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
               ),
             ),
           ),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 16,
-          runSpacing: 12,
+        Column(
           children: [
-            FilledButton.icon(
-              onPressed: state.isLoading ? null : () => _pickDirectory(context),
-              icon: const Icon(FluentIcons.folder_open_24_regular),
-              label: const Text('בחר תיקיית ספרייה'),
+            SizedBox(
+              width: double.infinity,
+              child: RecommendedActionButton(
+                text: 'בחר תיקיית ספרייה',
+                onPressed: () => _pickDirectory(context),
+                isLoading: state.isLoading,
+                iconWidget: const RtlIcon(FluentIcons.folder_open_24_regular),
+                textAlign: TextAlign.center,
+              ),
             ),
-            ElevatedButton.icon(
-              onPressed:
-                  state.isLoading ? null : () => _pickArchiveFile(context),
-              icon: const Icon(FluentIcons.folder_zip_24_regular),
-              label: const Text('חלץ מקובץ דחוס'),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: NeutralActionButton(
+                text: 'חלץ מקובץ דחוס',
+                onPressed: () => _pickArchiveFile(context),
+                isLoading: state.isLoading,
+                iconWidget: const RtlIcon(FluentIcons.folder_zip_24_regular),
+                textAlign: TextAlign.center,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 24),
-        OutlinedButton.icon(
-          onPressed: state.isLoading || state.downloadDisabledReason != null
+        Text(
+          'אם עדיין אין לך קובץ ספרייה, אפשר להוריד אותו עכשיו.',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+          textDirection: TextDirection.rtl,
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: state.isLoading || state.downloadDisabledReason != null
               ? null
               : () {
                   BlocProvider.of<EmptyLibraryBloc>(context)
                       .add(DownloadLibraryRequested());
                 },
-          icon: const Icon(FluentIcons.arrow_download_24_regular),
-          label: const Text(
-            'עוד לא הורדת את קובץ הספרייה? לחץ כאן כדי להוריד אותה כעת',
-            textAlign: TextAlign.center,
-            textDirection: TextDirection.rtl,
+          borderRadius: BorderRadius.circular(999),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Text(
+              'הורד ספרייה',
+              style: TextStyle(
+                color: state.isLoading || state.downloadDisabledReason != null
+                    ? Theme.of(context).colorScheme.onSurfaceVariant
+                    : Theme.of(context).colorScheme.primary,
+                decoration: TextDecoration.underline,
+              ),
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+            ),
           ),
         ),
         if (state.downloadDisabledReason != null) ...[
@@ -389,7 +398,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               textDirection: TextDirection.rtl,
               children: [
-                Icon(
+                RtlIcon(
                   FluentIcons.warning_24_regular,
                   color: Theme.of(context).colorScheme.onErrorContainer,
                   size: 20,
