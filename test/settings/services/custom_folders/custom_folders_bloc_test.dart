@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
@@ -51,6 +53,76 @@ void main() {
         libraryBloc.recordedEvents.whereType<RefreshLibrary>(),
         hasLength(1),
       );
+
+      await bloc.close();
+      await libraryBloc.close();
+    });
+
+    test(
+        'ToggleAddToDatabase מסמן activePath לתיקייה הנטענת בלבד '
+        'ומאפס בסיום', () async {
+      final folderA = _folder('C:/folder-a');
+      final folderB = _folder('C:/folder-b');
+      await _saveFolders([folderA, folderB]);
+
+      // משהים את הסנכרון כדי לבדוק את ה-state בזמן הטעינה.
+      final syncStarted = Completer<void>();
+      final releaseSync = Completer<void>();
+      final libraryBloc = _RecordingLibraryBloc();
+      final bloc = CustomFoldersBloc(
+        libraryBloc: libraryBloc,
+        syncFolders: (folders) async {
+          syncStarted.complete();
+          await releaseSync.future;
+          return const FileSyncResult();
+        },
+      )..add(const LoadCustomFolders());
+
+      await bloc.stream.firstWhere((state) => state.folders.isNotEmpty);
+
+      bloc.add(ToggleAddToDatabase(folderA, true));
+      await syncStarted.future;
+
+      // תוך כדי הסנכרון רק folderA מסומנת כפעילה.
+      expect(bloc.state.isSyncing, isTrue);
+      expect(bloc.state.activePath, folderA.path);
+
+      releaseSync.complete();
+      await bloc.stream.firstWhere((state) => !state.isSyncing);
+
+      // בסיום activePath מתאפס.
+      expect(bloc.state.activePath, isNull);
+
+      await bloc.close();
+      await libraryBloc.close();
+    });
+
+    test('RescanCustomFolders אינו מסמן activePath (פעולה גלובלית)', () async {
+      final folder = _folder('C:/folder');
+      await _saveFolders([folder]);
+
+      final syncStarted = Completer<void>();
+      final releaseSync = Completer<void>();
+      final libraryBloc = _RecordingLibraryBloc();
+      final bloc = CustomFoldersBloc(
+        libraryBloc: libraryBloc,
+        syncFolders: (folders) async {
+          syncStarted.complete();
+          await releaseSync.future;
+          return const FileSyncResult();
+        },
+      )..add(const LoadCustomFolders());
+
+      await bloc.stream.firstWhere((state) => state.folders.isNotEmpty);
+
+      bloc.add(const RescanCustomFolders());
+      await syncStarted.future;
+
+      expect(bloc.state.isSyncing, isTrue);
+      expect(bloc.state.activePath, isNull);
+
+      releaseSync.complete();
+      await bloc.stream.firstWhere((state) => !state.isSyncing);
 
       await bloc.close();
       await libraryBloc.close();

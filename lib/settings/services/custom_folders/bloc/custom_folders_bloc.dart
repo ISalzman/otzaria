@@ -61,6 +61,7 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     emit(state.copyWith(
       folders: newFolders,
       isSyncing: true,
+      activePath: event.path,
       message: null,
       error: null,
     ));
@@ -138,6 +139,7 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     emit(state.copyWith(
       folders: newFolders,
       isSyncing: true,
+      activePath: event.folder.path,
       message: null,
       error: null,
     ));
