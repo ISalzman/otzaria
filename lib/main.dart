@@ -27,7 +27,6 @@ import 'package:otzaria/history/history_repository.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
-import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/navigation_repository.dart';
@@ -863,18 +862,10 @@ class _AppBootstrapState extends State<AppBootstrap> {
             )..add(LoadSettings()),
           ),
           BlocProvider<LibraryBloc>(
-            create: (_) {
-              final bloc = LibraryBloc();
-              // LoadLibrary טוען ~1500ms מ-SQLite — חוסם את ה-UI thread גם
-              // בקטעים בין ה-awaits. דוחים בשני פריימים עוקבים כדי לאפשר
-              // ל-ReadingScreen להיבנות ולהיצבע לפני שהטעינה מתחילה.
-              // LibraryBrowser בכל מקרה לא נטען מיד (המשתמש ב-Reading) — הוא
-              // יקבל את ה-state ברגע שיגיע.
-              scheduleAfterTwoFrames(() {
-                bloc.add(LoadLibrary());
-              });
-              return bloc;
-            },
+            // ה-LoadLibrary אינו נשלח כאן יותר: בניית הקטלוג חוסמת את שאילתת
+            // תוכן הטאב הפעיל בעלייה. ההפעלה עברה ל-MainWindowScreen, שמעדיף
+            // את טעינת הטאב הפעיל ורק אז מתחיל את בניית הקטלוג.
+            create: (_) => LibraryBloc(),
           ),
           BlocProvider<CustomFoldersBloc>(
             create: (context) => CustomFoldersBloc(

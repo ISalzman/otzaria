@@ -150,6 +150,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       _selectedLineForNote; // שורת המקור של הטקסט המסומן, ליצירת הערה בקיצור מקשים
   Book? _pdfBook; // Companion PDF
   bool _hasPdfBook = false;
+  bool _hasResolvedCompanionPdf = false;
   bool _leftPaneAutoCloseQueuedByScroll = false;
 
   // Key עבור PageShapeScreen - שינוי המפתח יגרום לבנייה מחדש
@@ -539,14 +540,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     // טעינת הגדרות פר-ספר
     _loadPerBookSettings();
 
-    DataRepository.instance.library.then((library) {
-      if (mounted) {
-        setState(() {
-          _pdfBook = library.getCompanionBook(widget.tab.book, PdfBook);
-          _hasPdfBook = _pdfBook != null;
-        });
-      }
-    });
+    // איתור ה-PDF המלווה (getCompanionBook) דורש את כל קטלוג הספרייה
+    // (~300ms CPU על ה-main thread). קריאתו כאן ב-initState הייתה חונקת את
+    // שאילתת תוכן הספר ומעכבת את הצגתו ב-~600ms. הוא משפיע רק על נראות כפתור
+    // ה-PDF (_hasPdfBook), לא על התוכן — לכן נדחה ל-_resolveCompanionPdf
+    // שנקרא ברגע שהספר נטען (ראו ה-listener של ה-BlocConsumer).
 
     final pendingSidebarTab =
         Settings.getValue<int>('key-sidebar-tab-index-pending');
@@ -688,6 +686,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     } else if (tabController.index == searchTabIndex) {
       textSearchFocusNode.requestFocus();
     }
+  }
+
+  /// מאתר את ספר ה-PDF המלווה (לכפתור "פתח גרסת PDF") פעם אחת, אחרי שתוכן
+  /// הספר כבר נטען. `getCompanionBook` דורש את כל קטלוג הספרייה (~300ms CPU),
+  /// ולכן הוא נדחה לכאן כדי לא לחנוק את שאילתת תוכן הספר בעלייה. עד שיתבצע,
+  /// כפתור ה-PDF פשוט מוסתר (`_hasPdfBook == false`).
+  void _resolveCompanionPdf() {
+    if (_hasResolvedCompanionPdf) return;
+    _hasResolvedCompanionPdf = true;
+    DataRepository.instance.library.then((library) {
+      if (!mounted) return;
+      setState(() {
+        _pdfBook = library.getCompanionBook(widget.tab.book, PdfBook);
+        _hasPdfBook = _pdfBook != null;
+      });
+    });
   }
 
   Future<void> _loadPerBookSettings() async {
@@ -922,6 +936,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 // }
 
                 if (state is TextBookLoaded) {
+                  // איתור ה-PDF המלווה נדחה עד שהתוכן נטען, כדי שלא יחנוק את
+                  // שאילתת התוכן בעלייה (ראו _resolveCompanionPdf).
+                  _resolveCompanionPdf();
                   if (!state.showLeftPane) {
                     _leftPaneAutoCloseQueuedByScroll = false;
                   }
