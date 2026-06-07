@@ -48,11 +48,12 @@ import 'package:otzaria/utils/text/word_at_position.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
+import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/utils/text/html_link_handler.dart';
-import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 
 /// מחזירה האם אירוע המקלדת צריך להניע גלילה/ניווט שורה בצורת הדף.
 ///
@@ -1795,7 +1796,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final theme = Theme.of(context);
     final backgroundColor = () {
       if (isPermanentHighlight) {
-        return const Color(0xFFFFFF00).withAlpha((0.5 * 255).round());
+        return AppColors.permanentHighlight;
       }
       if (isHighlighted) {
         return theme.colorScheme.secondaryContainer

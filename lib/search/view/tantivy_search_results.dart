@@ -301,7 +301,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                     fontWeight: FontWeight.bold,
                     fontSize: settingsState.fontSize + 2,
                     fontFamily: settingsState.fontFamily,
-                    color: const Color(0xFFD32F2F),
+                    color: colorScheme.error,
                   ),
                   availableWidth: availableWidth,
                   searchOptions: effectiveOptions,

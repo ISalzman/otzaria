@@ -2115,7 +2115,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         final pdfImage = await page.render(
           fullWidth: page.width * renderScale,
           fullHeight: page.height * renderScale,
-          backgroundColor: 0xFFFFFFFF,
+          backgroundColor: AppColors.pageWhite.toARGB32(),
           flags: PdfPageRenderFlags.limitedImageCache,
           cancellationToken: cancellationToken,
         );
@@ -3149,7 +3149,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                   state.isLoading) {
                                 return const Positioned.fill(
                                   child: ColoredBox(
-                                    color: Color(0xFFFFFFFF),
+                                    color: AppColors.pageWhite,
                                     child: Center(
                                       child: CircularProgressIndicator(),
                                     ),
