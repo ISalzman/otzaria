@@ -155,7 +155,7 @@ function GetDefaultInstallDir(Param: String): String;
 begin
   Result := FindPreviousInstallDir();
   if Result = '' then
-    Result := ExpandConstant('{autopf}\אוצריא');
+    Result := ExpandConstant('{autopf}\Otzaria');
 end;
 
 function GetDataDir(Param: String): String;
