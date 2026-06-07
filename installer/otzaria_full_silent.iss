@@ -242,7 +242,7 @@ var
 begin
   Result := FindPreviousInstallDir(Dummy);
   if Result = '' then
-    Result := ExpandConstant('{autopf}\אוצריא');
+    Result := ExpandConstant('{autopf}\Otzaria');
 end;
 
 function GetDataDir(Param: String): String;
