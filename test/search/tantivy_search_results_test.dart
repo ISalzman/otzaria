@@ -28,6 +28,9 @@ class RecordingSearchBloc extends SearchBloc {
   final SearchState initialSearchState;
   final List<SearchEvent> recordedEvents = [];
 
+  /// פליטת state ישירות מהטסט (emit מוגן ולכן נחשף דרך מתודה ציבורית).
+  void emitState(SearchState state) => emit(state);
+
   @override
   void add(SearchEvent event) {
     recordedEvents.add(event);
@@ -147,6 +150,65 @@ void main() {
         searchBloc.recordedEvents.whereType<LoadMoreResults>().length,
         1,
       );
+    });
+
+    testWidgets('חיפוש חדש (שינוי קטגוריה) מאפס את הגלילה לראש הרשימה',
+        (tester) async {
+      await tester.pumpWidget(buildWidget());
+      await tester.pump();
+
+      await tester.drag(find.byType(ListView), const Offset(0, -2000));
+      await tester.pump();
+      final scrolledOffset =
+          tester.widget<ListView>(find.byType(ListView)).controller!.offset;
+      expect(scrolledOffset, greaterThan(0));
+
+      // חיפוש חדש: אותה שאילתה אך קטגוריה שונה → גלילה לראש
+      searchBloc.emitState(
+        searchBloc.state.copyWith(
+          configuration: searchBloc.state.configuration
+              .copyWith(currentFacets: const ['קטגוריה אחרת']),
+        ),
+      );
+      await tester.pump(); // listener
+      await tester.pump(); // addPostFrameCallback → jumpTo(0)
+
+      final resetOffset =
+          tester.widget<ListView>(find.byType(ListView)).controller!.offset;
+      expect(resetOffset, 0);
+    });
+
+    testWidgets('טעינת המשך (אותה חתימה) שומרת על מיקום הגלילה',
+        (tester) async {
+      await tester.pumpWidget(buildWidget());
+      await tester.pump();
+
+      await tester.drag(find.byType(ListView), const Offset(0, -2000));
+      await tester.pump();
+      final scrolledOffset =
+          tester.widget<ListView>(find.byType(ListView)).controller!.offset;
+      expect(scrolledOffset, greaterThan(0));
+
+      // טעינת המשך: אותה שאילתה+קטגוריה, תוצאות נוספות נדחפות לסוף
+      final moreResults = [
+        ...searchBloc.state.results,
+        SearchResult(
+          id: BigInt.from(999),
+          title: 'ספר נוסף',
+          reference: 'סימן נוסף',
+          text: 'טקסט נוסף',
+          segment: BigInt.from(999),
+          isPdf: false,
+          filePath: 'book_999.txt',
+        ),
+      ];
+      searchBloc.emitState(searchBloc.state.copyWith(results: moreResults));
+      await tester.pump();
+      await tester.pump();
+
+      final keptOffset =
+          tester.widget<ListView>(find.byType(ListView)).controller!.offset;
+      expect(keptOffset, scrolledOffset);
     });
 
     testWidgets('כפתור העתקה מוצג בכרטיסי תוצאות', (tester) async {
