@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -77,12 +78,33 @@ class App extends StatelessWidget {
               ? ThemeMode.system
               : (state.isDarkMode ? ThemeMode.dark : ThemeMode.light),
           builder: (context, child) {
-            if (!useVirtualWindowFrame || child == null) {
-              return child ?? const SizedBox.shrink();
+            Widget content = child ?? const SizedBox.shrink();
+
+            // קביעת צבע אייקוני פס הסטטוס לפי התמה הפעילה.
+            // האפליקציה אינה משתמשת ב-AppBar רגיל, ולכן systemOverlayStyle
+            // לא נקבע אוטומטית — מגדירים אותו כאן כדי שהשעה והאייקונים
+            // יישארו נראים תמיד (בעיקר באנדרואיד במצב edge-to-edge).
+            if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              final overlayStyle = SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness:
+                    isDark ? Brightness.light : Brightness.dark,
+                statusBarBrightness:
+                    isDark ? Brightness.dark : Brightness.light,
+              );
+              content = AnnotatedRegion<SystemUiOverlayStyle>(
+                value: overlayStyle,
+                child: content,
+              );
+            }
+
+            if (!useVirtualWindowFrame) {
+              return content;
             }
 
             return VirtualWindowFrame(
-              child: child,
+              child: content,
             );
           },
           home: MainWindowScreen(key: mainWindowScreenKey),
