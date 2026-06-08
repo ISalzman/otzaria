@@ -38,6 +38,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
   final Map<String, List<InlineSpan>> _snippetCache = {};
   bool _isAutoLoadInFlight = false;
 
+  /// חתימת החיפוש האחרון (שאילתה + קטגוריות) שעבורו כבר גללנו לראש הרשימה.
+  /// משמשת להבחנה בין חיפוש חדש (חתימה משתנה → גלילה לראש) לבין טעינת המשך
+  /// (אותה חתימה → שימור מיקום הגלילה).
+  String? _lastSearchSignature;
+
   Widget _buildInformativeEmptyState({
     required IconData icon,
     required String title,
@@ -85,7 +90,15 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
+    // אתחול החתימה מה-state הנוכחי כדי שהשינוי הראשון (למשל טעינת המשך בטאב
+    // חיפוש משוחזר) לא ייחשב בטעות ל"חיפוש חדש" ויאפס את הגלילה.
+    _lastSearchSignature = _searchSignature(context.read<SearchBloc>().state);
   }
+
+  /// חתימת חיפוש: שאילתה + קטגוריות. זהה בין chunks של אותו חיפוש ובטעינת
+  /// המשך, ומשתנה רק בחיפוש חדש (שינוי שאילתה או קטגוריה).
+  String _searchSignature(SearchState state) =>
+      '${state.searchQuery} ${state.currentFacets.join('')}';
 
   void _handleScroll() {
     if (!_scrollController.hasClients) {
@@ -171,10 +184,25 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         listenWhen: (previous, current) =>
             previous.isLoading != current.isLoading ||
             previous.results.length != current.results.length ||
-            previous.totalResults != current.totalResults,
+            previous.totalResults != current.totalResults ||
+            previous.searchQuery != current.searchQuery ||
+            previous.currentFacets.join('|') != current.currentFacets.join('|'),
         listener: (context, state) {
           if (!state.isLoading) {
             _isAutoLoadInFlight = false;
+          }
+
+          // חיפוש חדש (שינוי שאילתה או קטגוריה) — מאפס את הגלילה לראש הרשימה.
+          // טעינת המשך (LoadMore) שומרת על אותה חתימה ולכן לא נוגעת בגלילה,
+          // וכך גם chunks עוקבים של אותו חיפוש (החתימה זהה).
+          final signature = _searchSignature(state);
+          if (signature != _lastSearchSignature) {
+            _lastSearchSignature = signature;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _scrollController.hasClients) {
+                _scrollController.jumpTo(0);
+              }
+            });
           }
 
           WidgetsBinding.instance.addPostFrameCallback((_) {
