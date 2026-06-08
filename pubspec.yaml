@@ -82,7 +82,6 @@ dependencies:
   path: ^1.9.1
   http: ^1.6.0
   zstandard: ^1.5.0
-  zstandard_native: ^1.5.0
   ffi: ^2.2.0
   googleapis: ^16.0.0
   googleapis_auth: ^2.3.1
@@ -106,10 +105,7 @@ dependencies:
   flutter_markdown: ^0.7.7
   system_fonts: ^1.0.1
   flutter_quill: ^11.5.1
-  flutter_inappwebview:
-    git:
-      url: https://github.com/Y-PLONI/flutter_inappwebview
-      path: flutter_inappwebview
+  flutter_inappwebview: ^6.1.5
 
 dependency_overrides:
   #  it forces the version of the intl package to be 0.19.0 across all dependencies, even if some packages specify a different compatible version.
