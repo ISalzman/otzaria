@@ -132,9 +132,25 @@ class PluginBridgeHandler {
     } catch (e) {
       PluginSystemDatabase.instance
           .writeLog(plugin.pluginId, 'ERROR', 'RPC error $domain.$action: $e');
+      // ה-adapter מקדד את קוד השגיאה בתחילת הודעת ה-Exception בפורמט
+      // `error.<code>: <detail>` (למשל error.forbidden, error.invalid_params).
+      // ה-RPC חושף שדה `code` נפרד שתוספים מסתמכים עליו (ראה
+      // docs/plugin-sdk/API_REFERENCE.md), לכן מחלצים את הקוד ומחזירים אותו
+      // כ-code במקום לקבע את הכל ל-error.internal. הודעות ללא קידומת מוכרת
+      // נשארות error.internal.
+      final match = _codedErrorPattern.firstMatch(e.toString());
+      if (match != null) {
+        return _errorResp(match.group(1)!, match.group(2)!);
+      }
       return _errorResp("error.internal", e.toString());
     }
   }
+
+  /// תבנית לחילוץ קוד שגיאה מקודד מהודעת Exception של ה-adapter, בפורמט
+  /// `error.<code>: <detail>` (עם או בלי הקידומת `Exception: ` ש-[Object.toString]
+  /// מוסיף). שומר על אותה רשימת קודים שה-API מבטיח לתוספים.
+  static final RegExp _codedErrorPattern =
+      RegExp(r'^(?:Exception: )?(error\.[a-z_]+): (.*)$', dotAll: true);
 
   String? _getRequiredPermission(String domain, String action) {
     switch (domain) {
@@ -197,6 +213,12 @@ class PluginBridgeHandler {
         return 'notifications.system';
       case 'database':
         return 'database.read';
+      case 'fs':
+        // פעולות הקבצים (extractZip/deleteFile) אינן דורשות הרשאת manifest:
+        // הן מגודרות בכך שהנתיב חייב להיות בתוך תיקייה שהמשתמש בחר במפורש
+        // דרך ui.pickFolder (הדורשת ui.feedback). הסכמת המשתמש בדיאלוג היא
+        // גבול האבטחה, לא הצהרת הרשאה.
+        return null;
       default:
         return null;
     }

@@ -100,6 +100,53 @@ class PluginFileDownloadService {
     return PluginFileDownloadResult(outFile.path, p.basename(outFile.path));
   }
 
+  /// מורידה את הקובץ מ-[downloadUri] אל נתיב קובץ מלא [destPath].
+  ///
+  /// בשונה מ-[downloadToDownloads], היעד הוא קובץ ספציפי (ולא תיקיית
+  /// ההורדות), המאפשר לתוסף לשמור את הקובץ למבנה תיקיות שהמשתמש בחר.
+  /// תיקיית האב נוצרת במידת הצורך, וקובץ קיים באותו נתיב נדרס.
+  ///
+  /// **גבול אבטחה:** השירות אינו מאמת את [destPath] — האחריות לוודא שהוא
+  /// בתוך תיקייה שהמשתמש אישר מוטלת על הקורא (האדפטר). אכיפת ה-allowlist על
+  /// ה-URL ועל כל redirect זהה ל-[downloadToDownloads]: [isAllowed] נבדק על
+  /// ה-URL ההתחלתי ועל כל קפיצה, ו-[isRedirectAllowed] (אופציונלי) מתיר יעד
+  /// redirect שאינו ברשימה הגלובלית בהינתן ה-hop הקודם.
+  ///
+  /// מחזירה [PluginFileDownloadResult] עם הנתיב והשם שנשמרו. זורקת [Exception]
+  /// בקוד סטטוס שאינו 2xx, בקפיצה לא-מותרת, או בחריגה ממספר ה-redirects.
+  Future<PluginFileDownloadResult> downloadToPath(
+    Uri downloadUri,
+    String destPath, {
+    required Future<bool> Function(Uri) isAllowed,
+    bool Function(Uri previous, Uri target)? isRedirectAllowed,
+  }) async {
+    final response = await _fetchFollowingAllowedRedirects(
+      downloadUri,
+      isAllowed,
+      isRedirectAllowed,
+    );
+
+    final outFile = File(destPath);
+    await outFile.parent.create(recursive: true);
+
+    final sink = outFile.openWrite();
+    try {
+      await sink.addStream(response.stream);
+      await sink.flush();
+      await sink.close();
+    } catch (_) {
+      try {
+        await sink.close();
+      } catch (_) {}
+      if (await outFile.exists()) {
+        await outFile.delete();
+      }
+      rethrow;
+    }
+
+    return PluginFileDownloadResult(outFile.path, p.basename(outFile.path));
+  }
+
   /// מבצעת GET תוך מעקב ידני אחרי redirects, כשכל יעד נבדק מול [isAllowed]
   /// ועבור יעדי redirect גם מול [isRedirectAllowed] (בהינתן ה-hop הקודם).
   /// מחזירה את התשובה הסופית (2xx). מנקזת תשובות-ביניים כדי לשחרר sockets.
