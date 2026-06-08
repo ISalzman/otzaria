@@ -25,6 +25,7 @@ class PersonalNotesState extends Equatable {
   final int? newNoteLineNumber;
   final String? newNoteReferenceText;
   final String? newNoteSelectedText;
+  final int? newNoteSelectionColumn;
   final String? newNoteInitialContent;
   final PersonalNoteContentFormat? newNoteInitialFormat;
 
@@ -45,6 +46,7 @@ class PersonalNotesState extends Equatable {
     this.newNoteLineNumber,
     this.newNoteReferenceText,
     this.newNoteSelectedText,
+    this.newNoteSelectionColumn,
     this.newNoteInitialContent,
     this.newNoteInitialFormat,
   });
@@ -66,6 +68,7 @@ class PersonalNotesState extends Equatable {
         newNoteLineNumber = null,
         newNoteReferenceText = null,
         newNoteSelectedText = null,
+        newNoteSelectionColumn = null,
         newNoteInitialContent = null,
         newNoteInitialFormat = null;
 
@@ -86,6 +89,7 @@ class PersonalNotesState extends Equatable {
     int? newNoteLineNumber,
     String? newNoteReferenceText,
     String? newNoteSelectedText,
+    int? newNoteSelectionColumn,
     String? newNoteInitialContent,
     PersonalNoteContentFormat? newNoteInitialFormat,
     bool clearNewNoteData = false,
@@ -116,6 +120,9 @@ class PersonalNotesState extends Equatable {
       newNoteSelectedText: clearNewNoteData
           ? null
           : (newNoteSelectedText ?? this.newNoteSelectedText),
+      newNoteSelectionColumn: clearNewNoteData
+          ? null
+          : (newNoteSelectionColumn ?? this.newNoteSelectionColumn),
       newNoteInitialContent: clearNewNoteData
           ? null
           : (newNoteInitialContent ?? this.newNoteInitialContent),
@@ -143,6 +150,7 @@ class PersonalNotesState extends Equatable {
         newNoteLineNumber,
         newNoteReferenceText,
         newNoteSelectedText,
+        newNoteSelectionColumn,
         newNoteInitialContent,
         newNoteInitialFormat,
       ];

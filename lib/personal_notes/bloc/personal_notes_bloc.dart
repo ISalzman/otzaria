@@ -76,6 +76,7 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
         contentPlain: event.contentPlain,
         contentFormat: event.contentFormat,
         selectedText: event.selectedText,
+        selectionColumn: event.selectionColumn,
         categoryId: state.categoryId,
       );
       _emitNotes(event.bookId, notes, emit, clearCreatingState: true);
@@ -156,6 +157,7 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
         newNoteLineNumber: event.lineNumber,
         newNoteReferenceText: event.referenceText,
         newNoteSelectedText: event.selectedText,
+        newNoteSelectionColumn: event.selectionColumn,
         newNoteInitialContent: event.initialContent,
         newNoteInitialFormat: event.initialFormat,
       ),
