@@ -1,6 +1,6 @@
 # מדריך פיתוח תוספים לאוצריא
 
-גרסת SDK: **1.0**  
+גרסת SDK: **1.1**  
 תאריך עדכון אחרון: אפריל 2026
 
 ---
@@ -646,8 +646,9 @@ if (typeof Otzaria === 'undefined') {
           colorScheme: {
             primary: '#1565C0', onPrimary: '#fff',
             secondary: '#6750A4', onSecondary: '#fff',
+            secondaryContainer: '#E8DEF8', onSecondaryContainer: '#1D192B',
             surface: '#f8f9fa', onSurface: '#1a1a2e',
-            surfaceContainerHighest: '#e0e0e0',
+            surfaceContainerHigh: '#ece6f0', surfaceContainerHighest: '#e0e0e0',
             error: '#b00020', onError: '#fff', outline: '#cbd5e1',
           },
           typography: { fontFamily: 'Frank Ruhl Libre', fontSize: 18, lineHeight: 1.5,
