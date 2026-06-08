@@ -163,6 +163,12 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         return BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, settingsState) {
             final stackedTabs = _useStackedTabs(context, navState);
+            // במסך עיון ללא טאבים פתוחים אין תוכן קריאה אמיתי, ולכן המסגרת
+            // העליונה נצבעת כשאר מסכי הלוח (רקע לוח + גבול תחתון) במקום ברקע
+            // מסך העיון. בחיפוש תמיד קיים טאב, לכן נשאר בסגנון הקריאה.
+            final useReaderStyle = navState.currentScreen == Screen.search ||
+                (navState.currentScreen == Screen.reading &&
+                    context.select((TabsBloc bloc) => bloc.state.hasOpenTabs));
             final topBar = SizedBox(
               height: 40,
               child: Stack(
@@ -171,12 +177,10 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                   Container(
                     clipBehavior: Clip.none,
                     decoration: BoxDecoration(
-                      color: (navState.currentScreen == Screen.reading ||
-                              navState.currentScreen == Screen.search)
+                      color: useReaderStyle
                           ? AppSurfaces.readerBackground(context)
                           : AppSurfaces.solidPanelBackground(context),
-                      border: (navState.currentScreen == Screen.reading ||
-                              navState.currentScreen == Screen.search)
+                      border: useReaderStyle
                           ? null
                           : Border(
                               bottom: BorderSide(
@@ -198,8 +202,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                               Center(
                                 child: _buildActionButtons(context),
                               ),
-                              if (navState.currentScreen == Screen.reading ||
-                                  navState.currentScreen == Screen.search)
+                              if (useReaderStyle)
                                 Positioned(
                                   bottom: 0,
                                   left: 0,
