@@ -249,8 +249,11 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       return const _DfInfo(filesystem: null, freeBytes: -1);
     }
     try {
+      // -k (בלוקים של 1024B) נתמך גם ב-toybox של אנדרואיד וגם ב-coreutils.
+      // הדגל -B1 של GNU אינו קיים ב-toybox ומחזיר exit!=0, מה שהשבית בעבר
+      // את כל בדיקת המקום הפנוי באנדרואיד (freeBytes נשאר -1 תמיד).
       final result =
-          await Process.run('df', ['-B1', dirPath], runInShell: false);
+          await Process.run('df', ['-k', dirPath], runInShell: false);
       if (result.exitCode != 0) {
         return const _DfInfo(filesystem: null, freeBytes: -1);
       }
@@ -258,14 +261,15 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       if (lines.length < 2) {
         return const _DfInfo(filesystem: null, freeBytes: -1);
       }
-      // שורת הנתונים של df: Filesystem 1B-blocks Used Available Use% Mount
+      // שורת הנתונים של df -k: Filesystem 1K-blocks Used Available Use% Mount
       final parts = lines.last.trim().split(RegExp(r'\s+'));
       if (parts.length < 4) {
         return const _DfInfo(filesystem: null, freeBytes: -1);
       }
+      final availableKb = int.tryParse(parts[3]);
       return _DfInfo(
         filesystem: parts[0],
-        freeBytes: int.tryParse(parts[3]) ?? -1,
+        freeBytes: availableKb == null ? -1 : availableKb * 1024,
       );
     } catch (_) {
       return const _DfInfo(filesystem: null, freeBytes: -1);
@@ -1057,6 +1061,23 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   /// מעבד את הקובץ בנתחים של ~128 KB ישירות לדיסק.
   /// שימוש ב-RAM: כמה מאות KB בלבד (במקום ~8 GB).
   static void _decompressZstStreaming(String archivePath, String outputPath) {
+    try {
+      _decompressZstStreamingInner(archivePath, outputPath);
+    } catch (_) {
+      // בכשל (קובץ קטוע, דיסק מלא וכו') מוחקים את קובץ הפלט החלקי. אחרת
+      // הוא נשאר בתיקיית הספרייה, ובעלייה הבאה SqliteDataProvider מנסה
+      // לפתוח DB חתוך ונכשל ב"database disk image is malformed" — מה שחוסם
+      // את האפליקציה במקום להחזיר אותה למסך בחירת/הורדת הספרייה.
+      try {
+        final partial = File(outputPath);
+        if (partial.existsSync()) partial.deleteSync();
+      } catch (_) {}
+      rethrow;
+    }
+  }
+
+  static void _decompressZstStreamingInner(
+      String archivePath, String outputPath) {
     final dylib = _openZstandardLib();
     final bindings = ZstandardNativeBindings(dylib);
 
@@ -1105,10 +1126,22 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
           // 0 = frame הושלם, >0 = עדיין נתונים בממתנה, <0 = שגיאה
           int lastRet = 0;
+          // הגודל הלא-דחוס המוצהר ב-frame header (Frame_Content_Size).
+          // -1 (ZSTD_CONTENTSIZE_UNKNOWN) או -2 (ERROR) אם לא ניתן לקבוע.
+          int expectedSize = -1;
+          int totalWritten = 0;
+          var headerParsed = false;
 
           while (true) {
             final bytesRead = inputRaf.readIntoSync(inView);
             if (bytesRead == 0) break;
+
+            // קריאת Frame_Content_Size מתוך תחילת ה-frame (פעם אחת).
+            if (!headerParsed) {
+              expectedSize =
+                  bindings.ZSTD_getFrameContentSize(inNative.cast(), bytesRead);
+              headerParsed = true;
+            }
 
             inBuf.ref.src = inNative.cast();
             inBuf.ref.size = bytesRead;
@@ -1128,6 +1161,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
               if (outBuf.ref.pos > 0) {
                 outputRaf.writeFromSync(outNative.asTypedList(outBuf.ref.pos));
+                totalWritten += outBuf.ref.pos;
               }
             }
           }
@@ -1139,7 +1173,21 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
             );
           }
 
+          // flush מפורש כדי לאלץ כתיבה בפועל לדיסק. בלעדיו כתיבה דרך page
+          // cache עלולה "להצליח" ב-writeFromSync ולהיכשל בשקט מאוחר יותר על
+          // דיסק מלא (ENOSPC), ולהשאיר קובץ חתוך.
           outputRaf.flushSync();
+
+          // אימות שלמות: גודל הפלט חייב להיות זהה לגודל המוצהר ב-frame.
+          // תופס דיסק מלא (ENOSPC) שנבלע ב-page cache והשאיר קובץ חתוך —
+          // התסמין שהוביל ל"database disk image is malformed" בעת הטעינה.
+          // expectedSize < 0 = הגודל לא הוצהר ב-frame; אז אין מה לאמת.
+          if (expectedSize >= 0 && totalWritten != expectedSize) {
+            throw Exception(
+              'החילוץ לא הושלם: נכתבו $totalWritten מתוך $expectedSize bytes. '
+              'ככל הנראה אזל מקום האחסון.',
+            );
+          }
         } finally {
           inputRaf.closeSync();
           outputRaf.closeSync();
