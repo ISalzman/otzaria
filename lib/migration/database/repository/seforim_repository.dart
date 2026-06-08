@@ -73,7 +73,7 @@ class SeforimRepository {
     // (journal_mode/synchronous/page_size). Per-connection read tunables
     // (cache_size/temp_store/mmap_size) are safe and still applied.
     if (!_database.isReadOnly) {
-      await _trySetWal();
+      await _trySetTruncate();
       await _executeRawQuery('PRAGMA synchronous=NORMAL');
     }
     await _executeRawQuery('PRAGMA cache_size=100000');
@@ -178,9 +178,14 @@ class SeforimRepository {
   }
 
   /// WAL may fail when another process holds the DB lock — safe to skip.
-  Future<void> _trySetWal() async {
+  //Future<void> _trySetWal() async {
+  //  try {
+  //    await _executeRawQuery('PRAGMA journal_mode=WAL');
+  //  } catch (_) {}
+  //}
+  Future<void> _trySetTruncate() async {
     try {
-      await _executeRawQuery('PRAGMA journal_mode=WAL');
+      await _executeRawQuery('PRAGMA journal_mode=TRUNCATE');
     } catch (_) {}
   }
 
@@ -200,7 +205,7 @@ class SeforimRepository {
   Future<void> restoreNormalMode() async {
     _logger.info('Restoring normal performance mode');
     await executeRawQuery('PRAGMA synchronous=NORMAL');
-    await _trySetWal();
+    await _trySetTruncate();
     await executeRawQuery('PRAGMA locking_mode=NORMAL');
     await executeRawQuery('PRAGMA cache_size=100000');
     _logger.info('Normal performance mode restored');
