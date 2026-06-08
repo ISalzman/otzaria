@@ -149,19 +149,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  Platform.isMacOS
-                      ? 'לחיצה רגילה מחליפה קטגוריה. Cmd, לחיצה כפולה או לחיצה ארוכה מוסיפים לבחירה.'
-                      : 'לחיצה רגילה מחליפה קטגוריה. Ctrl, לחיצה כפולה או לחיצה ארוכה מוסיפים לבחירה.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  textDirection: TextDirection.rtl,
-                ),
-              ),
-              const SizedBox(width: 8),
+              const Spacer(),
               TextButton(
                 onPressed: () => _setFacet(context, '/'),
                 child: const Text(
