@@ -4,6 +4,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:collection/collection.dart';
@@ -494,7 +495,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     // רשת ביטחון: אם תוכן הספר לא ייטען (bloc תקוע) — לא נשאיר את המשתמש
     // תקוע במסך הפתיחה. failsafe בלבד; מבוטל בזרימה תקינה וב-dispose.
-    _splashFailsafeTimer = Timer(const Duration(seconds: 8), _revealMainWindowOnce);
+    _splashFailsafeTimer =
+        Timer(const Duration(seconds: 8), _revealMainWindowOnce);
   }
 
   /// מתזמן את חשיפת החלון המלא, תוך מתן עדיפות לטעינת הספר הפעיל: אם נפתח ספר
@@ -2493,7 +2495,21 @@ class MainWindowScreenState extends State<MainWindowScreen>
             }
             _scheduleTourOverlayInsert();
 
-            return SafeArea(
+            // ב-Android 15+ (targetSdk 35+) edge-to-edge נכפה: שורת הסטטוס
+            // והניווט שקופות תמיד, וה-SafeArea דוחף את התוכן מתחתן — כך שללא
+            // צביעה מפורשת מתגלה מאחוריהן רקע החלון הנייטיב (שחור ב-night
+            // theme). _EdgeToEdgeShell צובע כל אזור inset בצבע הסרגל הצמוד
+            // אליו וקובע את ניגודיות אייקוני המערכת. שורת הסטטוס נצבעת כצבע
+            // ה-CustomTitleBar (reader/panel לפי המסך — ראה custom_title_bar)
+            // ואזור הניווט התחתון כצבע ה-NavigationBar, כדי שלא ייווצר תפר.
+            final useReaderStyle = state.currentScreen == Screen.search ||
+                (state.currentScreen == Screen.reading &&
+                    context.select((TabsBloc bloc) => bloc.state.hasOpenTabs));
+            return _EdgeToEdgeShell(
+              topColor: useReaderStyle
+                  ? AppSurfaces.readerBackground(context)
+                  : AppSurfaces.solidPanelBackground(context),
+              bottomColor: AppSurfaces.panelBackground(context),
               child: KeyboardShortcuts(
                 onFindRefRequested: () => _handleFindRefOpen(context),
                 child: MyUpdatWidget(
@@ -3205,5 +3221,50 @@ class _KeepAlivePageState extends State<KeepAlivePage>
   Widget build(BuildContext context) {
     super.build(context);
     return widget.child;
+  }
+}
+
+/// עוטף את ה-UI הראשי לטיפול ב-edge-to-edge שנכפה ב-Android 15+ (targetSdk 35+):
+/// קובע את ניגודיות אייקוני המערכת לפי בהירות ערכת הנושא, וצובע את האזורים
+/// שמאחורי פסי המערכת (שורת הסטטוס למעלה, סרגל הניווט למטה/בצדדים) בצבע הסרגל
+/// הצמוד אליהם — [topColor] לשורת הסטטוס ו-[bottomColor] לשאר — כדי שלא ייחשף
+/// רקע החלון הנייטיב ולא ייווצר תפר ויזואלי עם הסרגלים שבתוך האפליקציה.
+class _EdgeToEdgeShell extends StatelessWidget {
+  const _EdgeToEdgeShell({
+    required this.topColor,
+    required this.bottomColor,
+    required this.child,
+  });
+
+  final Color topColor;
+  final Color bottomColor;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final iconBrightness = isDark ? Brightness.light : Brightness.dark;
+    final topInset = MediaQuery.paddingOf(context).top;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: iconBrightness,
+        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: iconBrightness,
+      ),
+      child: ColoredBox(
+        color: bottomColor,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // אזור שורת הסטטוס נצבע ידנית (SafeArea למטה מבטל את ה-top שלו) כדי
+            // שצבעו יוכל להתאים ל-CustomTitleBar שמתחתיו ולא ל-bottomColor.
+            SizedBox(height: topInset, child: ColoredBox(color: topColor)),
+            Expanded(child: SafeArea(top: false, child: child)),
+          ],
+        ),
+      ),
+    );
   }
 }
