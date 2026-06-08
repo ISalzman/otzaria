@@ -6,6 +6,8 @@ import 'package:crypto/crypto.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
+import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/indexing/services/indexing_isolate_service.dart';
@@ -121,6 +123,7 @@ class IndexingRepository {
     var didStartActualIndexing = false;
 
     try {
+      await _setDbReadBoost(true);
       if (shouldResetBeforeFullReindex(
         indexExistedBeforeInit: _tantivyDataProvider.indexExistedBeforeInit,
         booksDone: _tantivyDataProvider.booksDone,
@@ -257,6 +260,7 @@ class IndexingRepository {
         debugPrint('✅ אינדקס נשמר בהצלחה!');
       }
     } finally {
+      await _setDbReadBoost(false);
       _activeIsolateService = null;
       if (isolateService != null &&
           !identical(isolateService, _isolateService)) {
@@ -629,6 +633,7 @@ class IndexingRepository {
     var didStartActualIndexing = false;
 
     try {
+      await _setDbReadBoost(true);
       // לא קוראים ל-ensureIndexStateMatchesCatalogue כאן בכוונה:
       // indexBooks מוסיף ספרים חדשים לאינדקס קיים תקין.
       // ניהול חתימת הקטלוג ואיפוס מלא הם אחריות indexAllBooks שרץ בסטארטאפ.
@@ -706,6 +711,7 @@ class IndexingRepository {
         saveIndexedBooks();
       }
     } finally {
+      await _setDbReadBoost(false);
       _activeIsolateService = null;
       if (!identical(isolateService, _isolateService)) {
         await isolateService.dispose();
@@ -713,6 +719,30 @@ class IndexingRepository {
       _tantivyDataProvider.isIndexing.value = false;
     }
     return !cancelled;
+  }
+
+  /// מפעיל/מכבה בוסט זמני לחיבורי הקריאה של ה-DB לטובת הקריאות הרציפות
+  /// הכבדות בזמן אינדוקס (כל שורות כל ספר נקראות ברצף). מכסה גם את seforim.db
+  /// וגם את user_books.db — ספרי המשתמש נקראים מחיבור נפרד. user_books מבוסט
+  /// רק אם כבר פתוח (כדי לא ליצור DB ריק); בזרימת אינדוקס הוא נפתח ממילא בעת
+  /// טעינת הספרייה. כשלון אינו קריטי — האינדוקס ימשיך עם פרופיל הסרק החסכוני.
+  Future<void> _setDbReadBoost(bool enabled) async {
+    final repos = <SeforimRepository?>[
+      SqliteDataProvider.instance.repository,
+      UserBooksDatabaseHolder.instance.repositoryIfInitialized,
+    ];
+    for (final repo in repos) {
+      if (repo == null) continue;
+      try {
+        if (enabled) {
+          await repo.setReadBoostMode();
+        } else {
+          await repo.restoreReadCacheDefaults();
+        }
+      } catch (e) {
+        debugPrint('[Indexing] DB read-boost toggle failed: $e');
+      }
+    }
   }
 
   /// Cancels the ongoing indexing process.
