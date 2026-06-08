@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -670,6 +671,120 @@ void main() {
       expect(find.byType(ReorderableListView), findsNothing);
     });
   });
+
+  group('לחיצה כפולה: על טאב נבלעת, על האזור הריק עושה maximize', () {
+    // DragToMoveArea (window_manager) עושה maximize/restore ב-onDoubleTap דרך
+    // ה-MethodChannel 'window_manager' (isMaximized → maximize/unmaximize).
+    // תופסים את הקריאות כדי לוודא שלחיצה כפולה על טאב אינה מגיעה לשם.
+    // אוספים רק את פעולות שינוי-הגודל (maximize/unmaximize). את isMaximized
+    // מתעלמים: WindowCaption (כפתורי החלון) קורא לו בכל build לבחירת האייקון,
+    // והוא אינו מעיד על לחיצה כפולה.
+    late List<String> resizeCalls;
+
+    void installWindowChannelSpy(WidgetTester tester) {
+      resizeCalls = [];
+      const channel = MethodChannel('window_manager');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        (call) async {
+          if (call.method == 'maximize' || call.method == 'unmaximize') {
+            resizeCalls.add(call.method);
+          }
+          if (call.method == 'isMaximized') return false;
+          return null;
+        },
+      );
+      addTearDown(() => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null));
+    }
+
+    testWidgets('לחיצה כפולה על טאב אינה משנה את גודל החלון', (tester) async {
+      // שני טאבים, השני אינו הנבחר — כך לחיצה ראשונה משגרת SetCurrentTab
+      // ו-rebuild בין שתי הלחיצות, התרחיש שבו הבליעה נכשלה בעבר (ה-recognizer
+      // נהרס כשהוא ממוקם מתחת ל-GlobalKey של הטאב הנבחר).
+      final first = _makeTextTab('ספר א');
+      final second = _makeTextTab('ספר ב');
+      final tabsBloc = _SelectingTabsBloc(
+        TabsState(tabs: [first, second], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        first.dispose();
+        second.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      installWindowChannelSpy(tester);
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+
+      await _doubleTapAt(tester, tester.getCenter(find.text('ספר ב')));
+
+      expect(resizeCalls, isEmpty,
+          reason: 'לחיצה כפולה על טאב לא צריכה לשנות את גודל החלון');
+    });
+
+    testWidgets('לחיצה כפולה על האזור הריק שבשורת הטאבים עושה maximize',
+        (tester) async {
+      // טאב יחיד קצר ברוחב גדול → אזור ריק נרחב בשורת הטאבים, שבו ה-DragToMoveArea
+      // צריך לפעול כרגיל (maximize/restore).
+      final tab = _makeTextTab('ספר א');
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        tab.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      installWindowChannelSpy(tester);
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+
+      // נקודה ריקה: בקצה ה-ListView שרחוק מהטאב (עמיד לכיווניות LTR/RTL).
+      final listRect = tester.getRect(find.byType(ReorderableListView));
+      final tabRect = tester.getRect(find.text('ספר א'));
+      final emptyX = tabRect.center.dx < listRect.center.dx
+          ? listRect.right - 10
+          : listRect.left + 10;
+      await _doubleTapAt(tester, Offset(emptyX, listRect.center.dy));
+
+      expect(resizeCalls, contains('maximize'),
+          reason: 'לחיצה כפולה על אזור ריק צריכה לשנות את גודל החלון');
+    });
+  });
+}
+
+/// לחיצה כפולה במיקום נתון: שתי הקשות עם השהיה תקפה ל-double-tap, ואז המתנה
+/// להשלמת ה-onDoubleTap (שהוא async ב-DragToMoveArea).
+Future<void> _doubleTapAt(WidgetTester tester, Offset pos) async {
+  await tester.tapAt(pos);
+  await tester.pump(const Duration(milliseconds: 100));
+  await tester.tapAt(pos);
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pumpTitleBar(
@@ -763,6 +878,20 @@ class _TestTabsBloc extends Cubit<TabsState> implements TabsBloc {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// כמו [_TestTabsBloc], אך SetCurrentTab גם מעדכן את ה-state (emit) — כדי לדמות
+/// את ה-rebuild שמתרחש בבחירת טאב, התרחיש שבו בליעת הלחיצה הכפולה נכשלה בעבר.
+class _SelectingTabsBloc extends _TestTabsBloc {
+  _SelectingTabsBloc(super.initialState);
+
+  @override
+  void add(TabsEvent event) {
+    super.add(event);
+    if (event is SetCurrentTab) {
+      emit(TabsState(tabs: state.tabs, currentTabIndex: event.index));
+    }
+  }
 }
 
 class _TestNavigationBloc extends Cubit<NavigationState>
