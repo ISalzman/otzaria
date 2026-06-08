@@ -419,8 +419,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                               ),
                               const SizedBox(width: 8),
                               ToolbarActionButton(
-                                tooltip:
-                                    _showEditPanel ? 'סגור עריכה' : 'ערוך חיפוש',
+                                tooltip: _showEditPanel
+                                    ? 'סגור עריכה'
+                                    : 'ערוך חיפוש',
                                 icon: _showEditPanel
                                     ? FluentIcons.chevron_up_24_regular
                                     : FluentIcons.edit_24_regular,
@@ -494,7 +495,8 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                     duration: const Duration(milliseconds: 300),
                                     width: isOpen ? null : 0,
                                     child: isOpen
-                                        ? ResizableFacetFiltering(tab: widget.tab)
+                                        ? ResizableFacetFiltering(
+                                            tab: widget.tab)
                                         : const SizedBox.shrink(),
                                   );
                                 },
@@ -742,6 +744,23 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                   ),
                 ],
               ),
+            ),
+            // מספר תוצאות
+            Text(
+              '${state.results.length}/${state.totalResults} תוצאות',
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(width: 4),
+            // סדר מיון
+            OrderOfResults(
+              widget: TantivySearchResults(tab: widget.tab),
+              compact: true,
             ),
           ],
         ],
