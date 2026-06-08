@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_spinbox/flutter_spinbox.dart';
@@ -520,14 +521,61 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
 }
 
 class OrderOfResults extends StatelessWidget {
-  const OrderOfResults({super.key, required this.widget});
+  const OrderOfResults({super.key, required this.widget, this.compact = false});
 
   final TantivySearchResults widget;
+
+  /// במצב קומפקטי מוצג כפתור "לפי" שפותח תפריט נפתח במקום dropdown רגיל.
+  final bool compact;
+
+  static const _entries = [
+    AppMenuEntry(value: ResultsOrder.relevance, label: 'לפי רלוונטיות'),
+    AppMenuEntry(value: ResultsOrder.catalogue, label: 'לפי סדר קטלוגי'),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
+        if (compact) {
+          return AppPopupMenuButton<ResultsOrder>(
+            tooltip: 'סדר תוצאות',
+            initialValue: state.sortBy,
+            entries: _entries,
+            onSelected: (value) {
+              context.read<SearchBloc>().add(UpdateSortOrder(value));
+            },
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'לפי',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    textDirection: TextDirection.rtl,
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    FluentIcons.chevron_down_12_regular,
+                    size: 12,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
         return SizedBox(
           width: 183,
           child: Padding(
@@ -538,16 +586,7 @@ class OrderOfResults extends StatelessWidget {
                 labelText: 'מיון',
                 border: OutlineInputBorder(),
               ),
-              entries: const [
-                AppMenuEntry(
-                  value: ResultsOrder.relevance,
-                  label: 'לפי רלוונטיות',
-                ),
-                AppMenuEntry(
-                  value: ResultsOrder.catalogue,
-                  label: 'לפי סדר קטלוגי',
-                ),
-              ],
+              entries: _entries,
               onSelected: (value) {
                 if (value != null) {
                   context.read<SearchBloc>().add(UpdateSortOrder(value));
