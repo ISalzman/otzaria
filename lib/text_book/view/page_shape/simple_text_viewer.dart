@@ -37,7 +37,6 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
-import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
@@ -49,6 +48,7 @@ import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
+import 'package:otzaria/text_book/utils/note_inline_render.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
@@ -234,6 +234,7 @@ Future<void> saveCommentaryNoteToRepository({
   required int lineNumber,
   required PersonalNoteEditorResult result,
   String? selectedText,
+  int? selectionColumn,
   int? categoryId,
 }) {
   return repository.addNote(
@@ -243,6 +244,7 @@ Future<void> saveCommentaryNoteToRepository({
     contentPlain: result.contentPlain,
     contentFormat: result.contentFormat,
     selectedText: selectedText,
+    selectionColumn: selectionColumn,
     categoryId: categoryId,
   );
 }
@@ -1324,6 +1326,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         lineNumber: index + 1,
         referenceText: referenceText,
         selectedText: selectedText?.trim(),
+        selectionColumn: _selectionStartColumn,
       );
       return;
     }
@@ -1343,10 +1346,22 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           lineNumber: index + 1,
           referenceText: referenceText,
           selectedText: selectedText?.trim(),
+          selectionColumn: _selectionStartColumn,
           initialContent: draft?.content ?? '',
           initialFormat:
               draft?.contentFormat ?? PersonalNoteContentFormat.plain,
         ));
+  }
+
+  /// טיפול בלחיצה על סימון הערה אישית inline: מדגיש את השורה ופותח את החלונית.
+  void _onInlineNoteTap(int lineIndex) {
+    context.read<TextBookBloc>().add(UpdateSelectedIndex(lineIndex));
+    context.read<TextBookBloc>().add(HighlightLine(lineIndex));
+    if (widget.onOpenSidebarTab != null) {
+      widget.onOpenSidebarTab!(1);
+    } else {
+      context.read<TextBookBloc>().add(const ToggleLeftPane(true));
+    }
   }
 
   /// יצירת הערה על מפרש (בצורת הדף) — נשמרת תחת ספר המפרש עצמו.
@@ -1360,6 +1375,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     required int lineNumber,
     required String referenceText,
     String? selectedText,
+    int? selectionColumn,
   }) async {
     final categoryId = widget.reportBook?.categoryId;
 
@@ -1398,6 +1414,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         lineNumber: lineNumber,
         result: result,
         selectedText: selectedText,
+        selectionColumn: selectionColumn,
         categoryId: categoryId,
       );
       if (mounted) UiSnack.showSuccess('ההערה נשמרה בהצלחה');
@@ -1940,12 +1957,24 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                       : state.searchText)
                   : '';
 
+              // הזרקת סימוני הערות אישיות inline (רק בטקסט הראשי).
+              final bool hasInlineNotes =
+                  widget.isMainText && notesForLine.isNotEmpty;
+              final annotatedData = hasInlineNotes
+                  ? buildAnnotatedLineHtml(
+                      rawLine: data,
+                      notesForLine: notesForLine,
+                      lineIndex0: primaryLineIndex,
+                      underlineColor: Theme.of(context).colorScheme.primary,
+                    )
+                  : data;
+
               final textWidget = FutureBuilder<bool>(
                 future: removeNikudFuture,
                 initialData: state.removeNikud,
                 builder: (context, snapshot) {
                   return SmartTextWidget(
-                    text: data,
+                    text: annotatedData,
                     widgetKey: ValueKey('html_simple_text_$primaryLineIndex'),
                     settings: RenderSettings(
                       removeNikud: snapshot.data ?? state.removeNikud,
@@ -1974,60 +2003,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                       lineHeight: settingsState.lineHeight,
                     ),
                     onOpenBook: widget.openBookCallback,
+                    onNoteTap: hasInlineNotes
+                        ? (line) => _onInlineNoteTap(line)
+                        : null,
                   );
                 },
               );
 
-              if (!widget.isMainText || notesForLine.isEmpty) {
-                return textWidget;
-              }
-
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Tooltip(
-                    message:
-                        notesForLine.map((n) => n.contentPlain).join('\n\n'),
-                    child: GestureDetector(
-                      onTap: () {
-                        context
-                            .read<TextBookBloc>()
-                            .add(UpdateSelectedIndex(primaryLineIndex));
-                        context
-                            .read<TextBookBloc>()
-                            .add(HighlightLine(primaryLineIndex));
-                        if (widget.onOpenSidebarTab != null) {
-                          widget.onOpenSidebarTab!(1);
-                        } else {
-                          context
-                              .read<TextBookBloc>()
-                              .add(const ToggleLeftPane(true));
-                        }
-                      },
-                      onLongPress: () {
-                        showSingleActionDialog(
-                          context: context,
-                          title: notesForLine.length > 1
-                              ? 'הערות לשורה זו'
-                              : 'הערה לשורה זו',
-                          customContent:
-                              PersonalNotesListView(notes: notesForLine),
-                          confirmText: 'סגור',
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 6, right: 2),
-                        child: Icon(
-                          FluentIcons.note_24_filled,
-                          size: 12,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(child: textWidget),
-                ],
-              );
+              return textWidget;
             },
           ),
         ),

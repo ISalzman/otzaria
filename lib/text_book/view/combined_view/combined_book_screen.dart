@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
-import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -51,6 +50,7 @@ import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/text_book/utils/inline_notes_utils.dart'
     as inline_notes;
+import 'package:otzaria/text_book/utils/note_inline_render.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
@@ -83,7 +83,8 @@ class CombinedView extends StatefulWidget {
   final double textSize;
   final bool showCommentaryAsExpansionTiles;
   final TextBookTab tab;
-  final void Function(String? text, int? lineIndex)? onSelectedTextChanged;
+  final void Function(String? text, int? lineIndex, int? column)?
+      onSelectedTextChanged;
   final bool isPreviewMode;
   final VoidCallback? onOpenPersonalNotes;
   final VoidCallback? onOpenCommentatorsPane;
@@ -380,7 +381,7 @@ class _CombinedViewState extends State<CombinedView> {
       _selectionLineEnd = null;
       _selectionStartColumn = null;
     });
-    widget.onSelectedTextChanged?.call(null, null);
+    widget.onSelectedTextChanged?.call(null, null, null);
   }
 
   /// האם יש לשמר את הבחירה בלחיצה ימנית בנקודה [globalPosition] על השורה
@@ -1141,6 +1142,7 @@ class _CombinedViewState extends State<CombinedView> {
           lineNumber: currentIndex + 1,
           referenceText: referenceText,
           selectedText: selectedText?.trim(),
+          selectionColumn: _selectionStartColumn,
           initialContent: draft?.content ?? '',
           initialFormat:
               draft?.contentFormat ?? PersonalNoteContentFormat.plain,
@@ -1148,6 +1150,17 @@ class _CombinedViewState extends State<CombinedView> {
 
     // פתח את חלונית ההערות
     widget.onOpenPersonalNotes?.call();
+  }
+
+  /// טיפול בלחיצה על סימון הערה אישית inline: מדגיש את השורה ופותח את החלונית.
+  void _onInlineNoteTap(int lineIndex) {
+    _addTextBookEventIfOpen(UpdateSelectedIndex(lineIndex));
+    _addTextBookEventIfOpen(HighlightLine(lineIndex));
+    if (widget.onOpenPersonalNotes != null) {
+      widget.onOpenPersonalNotes!.call();
+    } else {
+      _addTextBookEventIfOpen(const ToggleLeftPane(true));
+    }
   }
 
   RenderSettings _selectionRenderSettings(
@@ -1291,7 +1304,8 @@ class _CombinedViewState extends State<CombinedView> {
                   _savedSelectedText.value = fixedPlain;
                   _savedSelectedIndex.value = foundIndex;
                   _currentSelectedIndex.value = foundIndex;
-                  widget.onSelectedTextChanged?.call(fixedPlain, foundIndex);
+                  widget.onSelectedTextChanged
+                      ?.call(fixedPlain, foundIndex, _selectionStartColumn);
 
                   // שליחת event לפלאגינים עם ה-index המדויק
                   final selectionText = fixedPlain?.trim() ?? '';
@@ -1361,7 +1375,7 @@ class _CombinedViewState extends State<CombinedView> {
                           _selectionLineStart = null;
                           _selectionLineEnd = null;
                           _selectionStartColumn = null;
-                          widget.onSelectedTextChanged?.call(null, null);
+                          widget.onSelectedTextChanged?.call(null, null, null);
                           return null;
                         },
                       ),
@@ -1568,7 +1582,7 @@ class _CombinedViewState extends State<CombinedView> {
                 _selectionLineStart = null;
                 _selectionLineEnd = null;
                 _selectionStartColumn = null;
-                widget.onSelectedTextChanged?.call(null, null);
+                widget.onSelectedTextChanged?.call(null, null, null);
               }
               // פשוט מעדכן את selectedIndex - זה יגרום לבנייה מחדש
               if (isSelected) {
@@ -1678,27 +1692,29 @@ class _CombinedViewState extends State<CombinedView> {
 
                         String data = widget.data[primaryLineIndex];
 
-                        // הוספת קישורים מבוססי תווים לפני כל עיבוד אחר
-                        // כי start/end מתייחסים לטקסט המקורי
-                        String dataWithLinks = data;
+                        // איסוף קישורי inline (start/end מתייחסים לטקסט המקורי)
+                        List<Link> linksForLine = const [];
                         if (settingsState.enableHtmlLinks) {
                           try {
-                            final linksForLine = state.links
+                            linksForLine = state.links
                                 .where((link) =>
                                     link.index1 == primaryLineIndex + 1 &&
                                     link.start != null &&
                                     link.end != null)
                                 .toList();
-
-                            if (linksForLine.isNotEmpty) {
-                              dataWithLinks =
-                                  addInlineLinksToText(data, linksForLine);
-                            }
                           } catch (e) {
-                            // אם יש שגיאה, פשוט נשתמש בטקסט המקורי
-                            dataWithLinks = data;
+                            linksForLine = const [];
                           }
                         }
+
+                        // הזרקת סימוני הערות אישיות (וקישורי inline) ל-HTML.
+                        final dataWithLinks = buildAnnotatedLineHtml(
+                          rawLine: data,
+                          notesForLine: notesForLine,
+                          lineIndex0: primaryLineIndex,
+                          underlineColor: Theme.of(context).colorScheme.primary,
+                          inlineLinks: linksForLine,
+                        );
 
                         // הדגשת טקסט ממוקד: highlightText מופעל רק בשורה permanentHighlightLine
                         final textWidget = SmartTextWidget(
@@ -1728,6 +1744,9 @@ class _CombinedViewState extends State<CombinedView> {
                             lineHeight: settingsState.lineHeight,
                           ),
                           onOpenBook: widget.openBookCallback,
+                          onNoteTap: notesForLine.isEmpty
+                              ? null
+                              : (line) => _onInlineNoteTap(line),
                         );
 
                         final constrainedText = textMaxWidth > 0
@@ -1740,61 +1759,10 @@ class _CombinedViewState extends State<CombinedView> {
                               )
                             : textWidget;
 
-                        if (notesForLine.isEmpty) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(width: 16),
-                              Expanded(child: constrainedText),
-                            ],
-                          );
-                        }
-
-                        final indicator = Tooltip(
-                          message: notesForLine
-                              .map((n) => n.contentPlain)
-                              .join('\n\n'),
-                          child: GestureDetector(
-                            onTap: () {
-                              _addTextBookEventIfOpen(
-                                UpdateSelectedIndex(primaryLineIndex),
-                              );
-                              _addTextBookEventIfOpen(
-                                  HighlightLine(primaryLineIndex));
-                              if (widget.onOpenPersonalNotes != null) {
-                                widget.onOpenPersonalNotes!.call();
-                              } else {
-                                _addTextBookEventIfOpen(
-                                  const ToggleLeftPane(true),
-                                );
-                              }
-                            },
-                            onLongPress: () {
-                              showSingleActionDialog(
-                                context: context,
-                                title: notesForLine.length > 1
-                                    ? 'הערות לשורה זו'
-                                    : 'הערה לשורה זו',
-                                customContent:
-                                    PersonalNotesListView(notes: notesForLine),
-                                confirmText: 'סגור',
-                              );
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: 6, right: 2),
-                              child: Icon(
-                                FluentIcons.note_24_filled,
-                                size: 12,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                        );
-
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            indicator,
+                            const SizedBox(width: 16),
                             Expanded(child: constrainedText),
                           ],
                         );
@@ -1878,7 +1846,7 @@ class _CombinedViewState extends State<CombinedView> {
         _selectionLineStart = null;
         _selectionLineEnd = null;
         _selectionStartColumn = null;
-        widget.onSelectedTextChanged?.call(null, null);
+        widget.onSelectedTextChanged?.call(null, null, null);
         if (isLineSelected) {
           _addTextBookEventIfOpen(const UpdateSelectedIndex(null));
         } else {

@@ -148,6 +148,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   String? _selectedTextForSearch;
   int?
       _selectedLineForNote; // שורת המקור של הטקסט המסומן, ליצירת הערה בקיצור מקשים
+  int?
+      _selectedColumnForNote; // עמודת הבחירה — לזיהוי המופע הנכון כשהטקסט חוזר בשורה
   Book? _pdfBook; // Companion PDF
   bool _hasPdfBook = false;
   bool _hasResolvedCompanionPdf = false;
@@ -843,9 +845,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
   }
 
-  void _onSelectedTextChanged(String? selectedText, int? lineIndex) {
+  void _onSelectedTextChanged(String? selectedText, int? lineIndex,
+      [int? column]) {
     _selectedTextForSearch = selectedText;
     _selectedLineForNote = lineIndex;
+    _selectedColumnForNote = column;
     if (selectedText == null || selectedText.trim().isEmpty) {
       return;
     }
@@ -1222,6 +1226,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                           _openPersonalNotesForCurrentView(state),
                       selectedTextForNote: _selectedTextForSearch,
                       selectedLineForNote: _selectedLineForNote,
+                      selectedColumnForNote: _selectedColumnForNote,
                     ),
                     child: Scaffold(
                       body: Column(
@@ -2694,6 +2699,7 @@ bool _handleGlobalKeyEvent(
   required VoidCallback openNotesForCurrentView,
   String? selectedTextForNote,
   int? selectedLineForNote,
+  int? selectedColumnForNote,
 }) {
   // קריאת קיצורים מההגדרות
   // [EDITING DISABLED]
@@ -2773,6 +2779,7 @@ bool _handleGlobalKeyEvent(
       openNotesForCurrentView: openNotesForCurrentView,
       selectedText: selectedTextForNote,
       selectedLineIndex: selectedLineForNote,
+      selectionColumn: selectedColumnForNote,
     );
     return true;
   }
@@ -2968,6 +2975,7 @@ Future<void> _addNoteFromKeyboard(
   required VoidCallback openNotesForCurrentView,
   String? selectedText,
   int? selectedLineIndex,
+  int? selectionColumn,
 }) async {
   // אם יש טקסט מסומן — מתנהגים בדיוק כמו תפריט הקליק-ימני: ההערה חלה על
   // השורה שממנה הודגש הטקסט, והטקסט המסומן עצמו משמש ככותרת ההערה.
@@ -3003,6 +3011,7 @@ Future<void> _addNoteFromKeyboard(
         lineNumber: currentIndex + 1,
         referenceText: referenceText,
         selectedText: hasSelection ? trimmedSelection : null,
+        selectionColumn: hasSelection ? selectionColumn : null,
         initialContent: draft?.content ?? '',
         initialFormat: draft?.contentFormat ?? PersonalNoteContentFormat.plain,
       ));

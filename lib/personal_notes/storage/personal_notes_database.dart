@@ -20,6 +20,11 @@ class PersonalNotesDatabase {
   static const _columnLineNumber = 'line_number';
 
   static const _columnDisplayTitle = 'display_title';
+  static const _columnAnchorText = 'anchor_text';
+  static const _columnAnchorPrefix = 'anchor_prefix';
+  static const _columnAnchorSuffix = 'anchor_suffix';
+  static const _columnAnchorStart = 'anchor_start';
+  static const _columnAnchorEnd = 'anchor_end';
   static const _columnLastKnownLine = 'last_known_line';
   static const _columnStatus = 'status';
   static const _columnContent = 'content';
@@ -48,6 +53,7 @@ class PersonalNotesDatabase {
     final db = sqlite3.open(dbPath);
     db.execute('PRAGMA journal_mode=WAL');
     _createSchema(db);
+    _migrateSchema(db);
     return db;
   }
 
@@ -59,6 +65,11 @@ class PersonalNotesDatabase {
         $_columnBookId TEXT NOT NULL,
         $_columnLineNumber INTEGER,
         $_columnDisplayTitle TEXT,
+        $_columnAnchorText TEXT,
+        $_columnAnchorPrefix TEXT,
+        $_columnAnchorSuffix TEXT,
+        $_columnAnchorStart INTEGER,
+        $_columnAnchorEnd INTEGER,
         $_columnLastKnownLine INTEGER,
         $_columnStatus TEXT NOT NULL,
         $_columnContent TEXT NOT NULL,
@@ -72,6 +83,29 @@ class PersonalNotesDatabase {
         'CREATE INDEX IF NOT EXISTS idx_book_id ON $_tableNotes($_columnBookId)');
     db.execute(
         'CREATE INDEX IF NOT EXISTS idx_book_line ON $_tableNotes($_columnBookId, $_columnLineNumber)');
+  }
+
+  /// מוסיף עמודות עוגן ל-DB קיים (התקנות ישנות) אם הן חסרות.
+  void _migrateSchema(Database db) {
+    final existing = db
+        .select('PRAGMA table_info($_tableNotes)')
+        .map((row) => row['name'] as String)
+        .toSet();
+
+    const anchorColumns = <String, String>{
+      'anchor_text': 'TEXT',
+      'anchor_prefix': 'TEXT',
+      'anchor_suffix': 'TEXT',
+      'anchor_start': 'INTEGER',
+      'anchor_end': 'INTEGER',
+    };
+
+    for (final entry in anchorColumns.entries) {
+      if (!existing.contains(entry.key)) {
+        db.execute(
+            'ALTER TABLE $_tableNotes ADD COLUMN ${entry.key} ${entry.value}');
+      }
+    }
   }
 
   /// Load all notes for a specific book
@@ -194,6 +228,11 @@ class PersonalNotesDatabase {
       _columnBookId: note.bookId,
       _columnLineNumber: note.lineNumber,
       _columnDisplayTitle: note.displayTitle,
+      _columnAnchorText: note.anchorText,
+      _columnAnchorPrefix: note.anchorPrefix,
+      _columnAnchorSuffix: note.anchorSuffix,
+      _columnAnchorStart: note.anchorStart,
+      _columnAnchorEnd: note.anchorEnd,
       _columnLastKnownLine: note.lastKnownLineNumber,
       _columnStatus: note.status.name,
       _columnContent: note.content,
@@ -211,6 +250,11 @@ class PersonalNotesDatabase {
       bookId: map[_columnBookId] as String,
       lineNumber: map[_columnLineNumber] as int?,
       displayTitle: map[_columnDisplayTitle] as String?,
+      anchorText: map[_columnAnchorText] as String?,
+      anchorPrefix: map[_columnAnchorPrefix] as String?,
+      anchorSuffix: map[_columnAnchorSuffix] as String?,
+      anchorStart: map[_columnAnchorStart] as int?,
+      anchorEnd: map[_columnAnchorEnd] as int?,
       lastKnownLineNumber: map[_columnLastKnownLine] as int?,
       status: PersonalNoteStatus.values.byName(map[_columnStatus] as String),
       content: map[_columnContent] as String,

@@ -33,6 +33,24 @@ class PersonalNote extends Equatable {
   /// Used for display and for matching when the book content changes.
   final String? displayTitle;
 
+  /// הטקסט המדויק שנבחר בעת יצירת ההערה (בלי ניקוד/טעמים).
+  /// `null` מציין הערה שהוגדרה על השורה כולה (לא נבחרו מילים ספציפיות),
+  /// ואז הסימון נפרס על כל השורה. כאשר קיים — הסימון נפרס רק על מילים אלו.
+  final String? anchorText;
+
+  /// הקשר מנורמל לפני הביטוי שנבחר — לזיהוי המופע הנכון כשהטקסט חוזר בשורה.
+  final String? anchorPrefix;
+
+  /// הקשר מנורמל אחרי הביטוי שנבחר — לזיהוי המופע הנכון כשהטקסט חוזר בשורה.
+  final String? anchorSuffix;
+
+  /// מיקום תווי (offset) של תחילת הביטוי בשורה הגולמית — רמז/fast-path.
+  /// מאומת מחדש בעת הרינדור; אם אינו תקף נעשה איתור מחדש לפי [anchorText].
+  final int? anchorStart;
+
+  /// מיקום תווי (offset) של סוף הביטוי בשורה הגולמית — רמז/fast-path.
+  final int? anchorEnd;
+
   /// If the note lost its anchor, we keep the previous line number for UI hints.
   final int? lastKnownLineNumber;
 
@@ -61,6 +79,11 @@ class PersonalNote extends Equatable {
     required this.bookId,
     required this.lineNumber,
     this.displayTitle,
+    this.anchorText,
+    this.anchorPrefix,
+    this.anchorSuffix,
+    this.anchorStart,
+    this.anchorEnd,
     required this.lastKnownLineNumber,
     required this.status,
     required this.content,
@@ -69,6 +92,9 @@ class PersonalNote extends Equatable {
     required this.createdAt,
     required this.updatedAt,
   });
+
+  /// `true` כאשר ההערה מעוגנת למילים ספציפיות בשורה (ולא לשורה כולה).
+  bool get isWordAnchored => anchorText != null && anchorText!.isNotEmpty;
 
   bool get hasLocation =>
       status == PersonalNoteStatus.located && lineNumber != null;
@@ -80,6 +106,12 @@ class PersonalNote extends Equatable {
     int? lineNumber,
     String? displayTitle,
     bool clearDisplayTitle = false,
+    String? anchorText,
+    String? anchorPrefix,
+    String? anchorSuffix,
+    int? anchorStart,
+    int? anchorEnd,
+    bool clearAnchor = false,
     int? lastKnownLineNumber,
     PersonalNoteStatus? status,
     String? content,
@@ -94,6 +126,11 @@ class PersonalNote extends Equatable {
       lineNumber: lineNumber ?? this.lineNumber,
       displayTitle:
           clearDisplayTitle ? null : (displayTitle ?? this.displayTitle),
+      anchorText: clearAnchor ? null : (anchorText ?? this.anchorText),
+      anchorPrefix: clearAnchor ? null : (anchorPrefix ?? this.anchorPrefix),
+      anchorSuffix: clearAnchor ? null : (anchorSuffix ?? this.anchorSuffix),
+      anchorStart: clearAnchor ? null : (anchorStart ?? this.anchorStart),
+      anchorEnd: clearAnchor ? null : (anchorEnd ?? this.anchorEnd),
       lastKnownLineNumber: lastKnownLineNumber ?? this.lastKnownLineNumber,
       status: status ?? this.status,
       content: content ?? this.content,
@@ -110,6 +147,11 @@ class PersonalNote extends Equatable {
         bookId,
         lineNumber,
         displayTitle,
+        anchorText,
+        anchorPrefix,
+        anchorSuffix,
+        anchorStart,
+        anchorEnd,
         lastKnownLineNumber,
         status,
         content,
