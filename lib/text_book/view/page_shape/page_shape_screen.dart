@@ -100,6 +100,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     'left': true,
     'right': true,
     'bottom': true,
+    'bottomRight': true,
   };
 
   @override
@@ -709,6 +710,13 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                 body: LoadingIndicator(),
               ),
               builder: (context, state) {
+                // נראות כל פאנל תחתון נשלטת בנפרד; האזור התחתון מוצג רק אם
+                // לפחות אחד מהם גלוי ובעל מפרש.
+                final showBottom = _columnVisibility['bottom'] == true &&
+                    _bottomCommentator != null;
+                final showBottomRight =
+                    _columnVisibility['bottomRight'] == true &&
+                        _bottomRightCommentator != null;
                 return Scaffold(
                   body: AdaptiveSidePane(
                     isOpen: _isLeftSidebarOpen,
@@ -975,8 +983,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                       ],
                                     ),
                                   ),
-                                  if (_bottomCommentator != null ||
-                                      _bottomRightCommentator != null) ...[
+                                  if (showBottom || showBottomRight) ...[
                                     _HorizontalDragHandle(
                                       leftWidth: _leftWidth,
                                       rightWidth: _rightWidth,
@@ -1003,12 +1010,10 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                       child: Column(
                                         children: [
                                           Expanded(
-                                            child: _bottomRightCommentator !=
-                                                    null
+                                            child: showBottomRight
                                                 ? Row(
                                                     children: [
-                                                      if (_bottomCommentator !=
-                                                          null) ...[
+                                                      if (showBottom) ...[
                                                         SizedBox(
                                                           width: 20,
                                                           child: Center(

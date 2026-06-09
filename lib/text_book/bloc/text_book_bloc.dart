@@ -1164,6 +1164,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       'left=${columnVisibility['left'] ?? true}',
       'right=${columnVisibility['right'] ?? true}',
       'bottom=${columnVisibility['bottom'] ?? true}',
+      'bottomRight=${columnVisibility['bottomRight'] ?? true}',
     ].join('|');
   }
 

@@ -297,6 +297,9 @@ class PageShapeSettingsManager {
           Settings.getValue<bool>('${_globalVisibilityPrefix}right') ?? true,
       'bottom':
           Settings.getValue<bool>('${_globalVisibilityPrefix}bottom') ?? true,
+      'bottomRight':
+          Settings.getValue<bool>('${_globalVisibilityPrefix}bottomRight') ??
+              true,
     };
   }
 
@@ -307,9 +310,14 @@ class PageShapeSettingsManager {
         Settings.getValue<bool>('${_bookVisibilityPrefix}right_$bookTitle');
     final bottom =
         Settings.getValue<bool>('${_bookVisibilityPrefix}bottom_$bookTitle');
+    final bottomRight = Settings.getValue<bool>(
+        '${_bookVisibilityPrefix}bottomRight_$bookTitle');
 
     // אם אף אחד לא הוגדר, החזר null
-    if (left == null && right == null && bottom == null) {
+    if (left == null &&
+        right == null &&
+        bottom == null &&
+        bottomRight == null) {
       return null;
     }
 
@@ -317,6 +325,7 @@ class PageShapeSettingsManager {
       'left': left ?? true,
       'right': right ?? true,
       'bottom': bottom ?? true,
+      'bottomRight': bottomRight ?? true,
     };
   }
 
@@ -333,6 +342,8 @@ class PageShapeSettingsManager {
           '${_globalVisibilityPrefix}right', visibility['right'] ?? true);
       await Settings.setValue<bool>(
           '${_globalVisibilityPrefix}bottom', visibility['bottom'] ?? true);
+      await Settings.setValue<bool>('${_globalVisibilityPrefix}bottomRight',
+          visibility['bottomRight'] ?? true);
     } else {
       await Settings.setValue<bool>('${_bookVisibilityPrefix}left_$bookTitle',
           visibility['left'] ?? true);
@@ -340,6 +351,9 @@ class PageShapeSettingsManager {
           visibility['right'] ?? true);
       await Settings.setValue<bool>('${_bookVisibilityPrefix}bottom_$bookTitle',
           visibility['bottom'] ?? true);
+      await Settings.setValue<bool>(
+          '${_bookVisibilityPrefix}bottomRight_$bookTitle',
+          visibility['bottomRight'] ?? true);
       await setUseBookSpecificSettings(bookTitle, true);
     }
   }
@@ -381,6 +395,8 @@ class PageShapeSettingsManager {
         '${_bookVisibilityPrefix}right_$bookTitle', null);
     await Settings.setValue<bool?>(
         '${_bookVisibilityPrefix}bottom_$bookTitle', null);
+    await Settings.setValue<bool?>(
+        '${_bookVisibilityPrefix}bottomRight_$bookTitle', null);
     await Settings.setValue<bool?>('$_bookViewModePrefix$bookTitle', null);
   }
 
