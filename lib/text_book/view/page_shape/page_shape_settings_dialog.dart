@@ -58,6 +58,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     'left': true,
     'right': true,
     'bottom': true,
+    'bottomRight': true,
   };
 
   // הגדרה חדשה: האם לשמור לספר הנוכחי בלבד (להגדרות תצוגה)
@@ -668,7 +669,9 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                 label: 'מפרש תחתון נוסף',
                 value: _bottomRightCommentator,
                 onChanged: (value) => _onCommentatorChanged(
-                    value, (v) => _bottomRightCommentator = v),
+                    value, (v) => _bottomRightCommentator = v,
+                    visibilityKey: 'bottomRight'),
+                visibilityKey: 'bottomRight',
               ),
               const SizedBox(height: 20),
               const Divider(),
