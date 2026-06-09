@@ -109,6 +109,11 @@ class AboutDevTab extends StatelessWidget {
 
   static const _developers = <Map<String, String>>[
     {'name': 'sivan22', 'url': 'https://github.com/Sivan22'},
+    {
+      'name': 'ר. נבון',
+      'url': 'https://github.com/rachelGrayover',
+      'description': 'השקעה עצומה במעבר ל-SQLite',
+    },
     {'name': 'Y.PL.', 'url': 'https://github.com/Y-PLONI'},
     {'name': 'palmoni', 'url': 'https://github.com/palmoni5'},
     {'name': 'YOSEFTT', 'url': 'https://github.com/YOSEFTT'},
@@ -121,11 +126,6 @@ class AboutDevTab extends StatelessWidget {
       'name': 'אליהו גמבש',
       'url': 'https://github.com/kdroidFilter',
       'description': 'המרת נתוני ספריא ל-SQLite',
-    },
-    {
-      'name': 'ר. נבון',
-      'url': 'https://github.com/rachelGrayover',
-      'description': 'השקעה עצומה במעבר ל-SQLite',
     },
     {
       'name': 'NHLOCAL',
@@ -918,20 +918,11 @@ class _ClosingQuote extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                InkWell(
-                  onTap: () async {
-                    final uri =
-                        Uri.parse('otzaria://open/book/28?index=2043&mark');
-                    if (await canLaunchUrl(uri)) await launchUrl(uri);
-                  },
-                  borderRadius: BorderRadius.circular(4),
-                  child: Text(
-                    '(תהילים קיב, ג)',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: colorScheme.primary),
-                  ),
+                Text(
+                  '(תהילים קיב, ג)',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 12, color: colorScheme.onSurfaceVariant),
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -965,20 +956,11 @@ class _ClosingQuote extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                InkWell(
-                  onTap: () async {
-                    final uri =
-                        Uri.parse('otzaria://open/book/116?index=1279&mark');
-                    if (await canLaunchUrl(uri)) await launchUrl(uri);
-                  },
-                  borderRadius: BorderRadius.circular(4),
-                  child: Text(
-                    '(כתובות נ.)',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: colorScheme.primary),
-                  ),
+                Text(
+                  '(כתובות נ.)',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 12, color: colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
