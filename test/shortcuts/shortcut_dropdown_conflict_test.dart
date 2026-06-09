@@ -7,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
@@ -37,6 +38,7 @@ Widget _buildTile({
   },
 }) {
   return MaterialApp(
+    navigatorKey: navigatorKey,
     home: Scaffold(
       body: BlocProvider<SettingsBloc>.value(
         value: bloc,
@@ -49,6 +51,11 @@ Widget _buildTile({
       ),
     ),
   );
+}
+
+Future<void> _drainUiSnack(WidgetTester tester) async {
+  await tester.pump(const Duration(seconds: 6));
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -98,6 +105,7 @@ void main() {
       await tester.pump();
 
       verifyNever(() => settingsBloc.add(any(that: isA<UpdateShortcut>())));
+      await _drainUiSnack(tester);
     });
 
     testWidgets('שומר קיצור שאינו בשימוש על ידי אף הגדרה', (tester) async {
@@ -120,7 +128,7 @@ void main() {
 
     testWidgets('מאפשר שיתוף קיצור בין הגדרות מקבוצה תואמת', (tester) async {
       // key-shortcut-add-note ו-key-shortcut-calendar-toggle-events תואמות
-      // שתיהן משתמשות ב-ctrl+n כברירת מחדל
+      // גם כשהקיצור משותף ידנית, אין להציג שגיאת כפילות
       await tester.pumpWidget(_buildTile(
         bloc: settingsBloc,
         settingKey: 'key-shortcut-add-note',
@@ -160,6 +168,7 @@ void main() {
       await tester.pump();
 
       verifyNever(() => settingsBloc.add(any(that: isA<UpdateShortcut>())));
+      await _drainUiSnack(tester);
     });
   });
 
@@ -219,6 +228,7 @@ void main() {
 
   group('ShortcutsSettingsTab - זרימת הוסף קיצור', () {
     Widget buildTab() => MaterialApp(
+          navigatorKey: navigatorKey,
           home: Scaffold(
             body: BlocProvider<SettingsBloc>.value(
               value: settingsBloc,
@@ -228,7 +238,10 @@ void main() {
         );
 
     // מסייע: מנווט עד ל-CustomShortcutDialog ומחזיר לאחר פתיחתו.
-    Future<void> openCustomDialog(WidgetTester tester) async {
+    Future<void> openCustomDialog(
+      WidgetTester tester, {
+      bool startRecording = true,
+    }) async {
       await tester.pumpWidget(buildTab());
       await tester.pumpAndSettle();
 
@@ -240,9 +253,11 @@ void main() {
       await tester.tap(find.text('פתח כרטיסיית מפרשים'));
       await tester.pumpAndSettle();
 
-      // מצב הקלטה
-      await tester.tap(find.text('התחל הקלטה'));
-      await tester.pump();
+      if (startRecording) {
+        // מצב הקלטה
+        await tester.tap(find.text('התחל הקלטה'));
+        await tester.pump();
+      }
     }
 
     testWidgets('מציג כפתור "הוסף קיצור" כשיש פעולה ללא קיצור', (tester) async {
@@ -250,6 +265,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('הוסף קיצור'), findsOneWidget);
+    });
+
+    testWidgets('מציג את קיצור שחזור הכרטיסייה שנסגרה ברשימת הקיצורים',
+        (tester) async {
+      await tester.pumpWidget(buildTab());
+      await tester.pumpAndSettle();
+
+      expect(find.text('פתח כרטיסייה אחרונה שנסגרה'), findsOneWidget);
     });
 
     testWidgets('אינו שומר קיצור מוקלט שכבר תפוס', (tester) async {
@@ -266,6 +289,20 @@ void main() {
       await tester.pumpAndSettle();
 
       verifyNever(() => settingsBloc.add(any(that: isA<UpdateShortcut>())));
+      await _drainUiSnack(tester);
+    });
+
+    testWidgets('לא סוגר את הדיאלוג כשמנסים לאשר בלי להקליט קיצור',
+        (tester) async {
+      await openCustomDialog(tester, startRecording: false);
+
+      await tester.tap(find.text('אישור'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('הגדרת קיצור מקשים מותאם אישית'), findsOneWidget);
+      expect(find.text('יש לבחור קיצור'), findsOneWidget);
+      verifyNever(() => settingsBloc.add(any(that: isA<UpdateShortcut>())));
+      await _drainUiSnack(tester);
     });
 
     testWidgets('שומר קיצור מוקלט שאינו בשימוש', (tester) async {

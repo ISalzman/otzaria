@@ -8,9 +8,12 @@ import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 /// adapter פיקטיבי: מיישם רק את execute (השאר דרך noSuchMethod), סופר קריאות
 /// ומחזיר ערך מוגדר מראש — כך אפשר לוודא אם execute נקרא בכלל ובאילו ארגומנטים.
 class _FakeAdapter implements PluginBridgeAdapter {
-  _FakeAdapter({this.result});
+  _FakeAdapter({this.result, this.errorToThrow});
 
   final dynamic result;
+
+  /// אם מוגדר — execute יזרוק את החריגה הזו במקום להחזיר [result].
+  final Object? errorToThrow;
   int executeCalls = 0;
   String? lastDomain;
   String? lastAction;
@@ -21,6 +24,7 @@ class _FakeAdapter implements PluginBridgeAdapter {
     executeCalls++;
     lastDomain = domain;
     lastAction = action;
+    if (errorToThrow != null) throw errorToThrow!;
     return result;
   }
 
@@ -245,6 +249,64 @@ void main() {
       expect(limiter.consumeCalls, 1,
           reason: 'תוסף לא-מורשה חייב לעבור דרך מגביל הקצב, לא לעקוף אותו');
       expect(adapter.executeCalls, 0);
+    });
+  });
+
+  // ה-adapter מקדד את קוד השגיאה בהודעת ה-Exception (error.<code>: detail).
+  // ה-RPC חייב לחשוף אותו כ-code כפי ש-API_REFERENCE.md מבטיח לתוספים — ולא
+  // לקבע הכל ל-error.internal. הטסטים האלה רצים על נתיב ה-RPC המלא (לא על
+  // adapter.execute ישירות) כי שם מתבצע המיפוי.
+  group('PluginBridgeHandler._handleRpc — מיפוי קודי שגיאה מ-adapter', () {
+    // fs.* אינו דורש הרשאת manifest, לכן הקריאה מגיעה ל-execute ללא חסימה.
+    List<dynamic> fsDeleteRequest() => [
+          {
+            'method': 'fs.deleteFile',
+            'payload': {'path': '/tmp/x'},
+          }
+        ];
+
+    PluginBridgeHandler buildHandler(_FakeAdapter adapter) {
+      return PluginBridgeHandler(
+        _buildInstalledPlugin(),
+        adapter: adapter,
+        registry: _StubRegistry(true),
+      );
+    }
+
+    test('Exception עם קידומת error.forbidden מוחזר עם code=error.forbidden',
+        () async {
+      final handler = buildHandler(_FakeAdapter(
+          errorToThrow: Exception(
+              'error.forbidden: path outside a user-selected folder')));
+
+      final resp = await handler.handleRpcForTesting(fsDeleteRequest()) as Map;
+
+      expect(resp['success'], isFalse);
+      expect(resp['error']['code'], 'error.forbidden');
+      expect(resp['error']['message'], 'path outside a user-selected folder');
+    });
+
+    test('קידומת error.invalid_params ו-error.not_found ממופות גם הן',
+        () async {
+      final invalid = await buildHandler(_FakeAdapter(
+              errorToThrow: Exception('error.invalid_params: path required')))
+          .handleRpcForTesting(fsDeleteRequest()) as Map;
+      expect(invalid['error']['code'], 'error.invalid_params');
+
+      final notFound = await buildHandler(_FakeAdapter(
+              errorToThrow:
+                  Exception('error.not_found: zip file does not exist')))
+          .handleRpcForTesting(fsDeleteRequest()) as Map;
+      expect(notFound['error']['code'], 'error.not_found');
+    });
+
+    test('Exception ללא קידומת מוכרת נשאר error.internal', () async {
+      final handler =
+          buildHandler(_FakeAdapter(errorToThrow: Exception('משהו נשבר')));
+
+      final resp = await handler.handleRpcForTesting(fsDeleteRequest()) as Map;
+
+      expect(resp['error']['code'], 'error.internal');
     });
   });
 }

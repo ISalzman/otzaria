@@ -189,6 +189,52 @@ void main() {
     expect(hit, isFalse);
   });
 
+  group('downloadToPath', () {
+    test('שומר את הקובץ בנתיב המלא ויוצר את תיקיית האב', () async {
+      final service = serviceReturning([1, 2, 3]);
+      final destPath = p.join(tempDir.path, 'nested', 'deep', 'books.zip');
+
+      final result = await service.downloadToPath(
+        Uri.parse(
+            'https://github.com/Owner/Repo/releases/latest/download/books.zip'),
+        destPath,
+        isAllowed: allowAll,
+      );
+
+      expect(result.path, destPath);
+      expect(result.filename, 'books.zip');
+      expect(await File(destPath).readAsBytes(), [1, 2, 3]);
+    });
+
+    test('דורס קובץ קיים באותו נתיב', () async {
+      final destPath = p.join(tempDir.path, 'books.zip');
+      await File(destPath).writeAsBytes([9, 9, 9]);
+      final service = serviceReturning([4, 5]);
+
+      await service.downloadToPath(
+        Uri.parse(
+            'https://github.com/Owner/Repo/releases/latest/download/books.zip'),
+        destPath,
+        isAllowed: allowAll,
+      );
+
+      expect(await File(destPath).readAsBytes(), [4, 5]);
+    });
+
+    test('זורק בקוד סטטוס שאינו 2xx', () async {
+      final service = serviceReturning([], status: 404);
+      await expectLater(
+        service.downloadToPath(
+          Uri.parse(
+              'https://github.com/Owner/Repo/releases/latest/download/a.zip'),
+          p.join(tempDir.path, 'a.zip'),
+          isAllowed: allowAll,
+        ),
+        throwsA(isA<Exception>()),
+      );
+    });
+  });
+
   test('dispose מסיר את ה-closer מ-HttpClientRegistry', () async {
     final service = serviceReturning([1]);
     final before = HttpClientRegistry.registeredCount;

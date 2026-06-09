@@ -109,6 +109,69 @@ void main() {
     expect(categories.where((c) => c.title == 'במקביל'), isNotEmpty);
   });
 
+  test(
+      'initialize() בזמן כתיבה חיצונית ממתינה לפתיחה-מחדש ולא מחזירה null '
+      '(תיקון ספר/מפרשים ריקים בעלייה)', () async {
+    // מדמים את זרימת הסנכרון ברקע: סוגרים את החיבור לכתיבה חיצונית, ובזמן
+    // שהוא סגור מפעילים קורא מקביל (כמו טעינת מפרשים ברקע). הקורא חייב
+    // להמתין לפתיחה-מחדש ולראות את החיבור פתוח — לא לקבל חיבור סגור.
+    await SqliteDataProvider.instance.closeForExternalWrite();
+    expect(SqliteDataProvider.instance.isInitialized, isFalse,
+        reason: 'בזמן כתיבה חיצונית החיבור סגור');
+
+    var readerDone = false;
+    final readerInitialized =
+        SqliteDataProvider.instance.initialize().then((_) => readerDone = true);
+
+    // מוודאים שהקורא באמת *נחסם* ולא חזר מוקדם: נותנים ל-event loop להתרוקן,
+    // ועדיין ה-future לא הושלם כל עוד הכתיבה החיצונית פעילה. בלי החסימה, רגרסיה
+    // של "מחזיר מוקדם וריק" הייתה משלימה כאן והבדיקה הייתה נכשלת.
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(readerDone, isFalse,
+        reason: 'הקורא חייב להמתין לפתיחה-מחדש, לא לחזור מוקדם');
+
+    // האיזולייט החיצוני "סיים" — פותחים מחדש.
+    await SqliteDataProvider.instance.reopenAfterExternalWrite();
+
+    await readerInitialized;
+    expect(SqliteDataProvider.instance.isInitialized, isTrue,
+        reason: 'הקורא המתין לפתיחה-מחדש במקום לקבל null');
+
+    final categories =
+        await SqliteDataProvider.instance.repository!.getRootCategories();
+    expect(categories.where((c) => c.title == 'שורש'), isNotEmpty);
+  });
+
+  test(
+      'כתיבות חיצוניות חופפות — reopen מקונן אינו נכנס ל-deadlock, '
+      'והקורא נפתח רק אחרי שהאחרון סיים', () async {
+    // שני close חיצוניים לפני שום reopen (כמו שני סנכרונים חופפים).
+    await SqliteDataProvider.instance.closeForExternalWrite();
+    await SqliteDataProvider.instance.closeForExternalWrite();
+    expect(SqliteDataProvider.instance.isInitialized, isFalse);
+
+    var readerDone = false;
+    final reader =
+        SqliteDataProvider.instance.initialize().then((_) => readerDone = true);
+
+    // reopen ראשון מוריד את המונה ל-1 בלבד — אסור שייתקע ואסור שיפתח עדיין.
+    await SqliteDataProvider.instance
+        .reopenAfterExternalWrite()
+        .timeout(const Duration(seconds: 5));
+    expect(SqliteDataProvider.instance.isInitialized, isFalse,
+        reason: 'עוד יש כתיבה חיצונית פעילה — לא פותחים מחדש');
+    expect(readerDone, isFalse,
+        reason: 'הקורא עדיין חסום — רק הכתיבה הראשונה מבין השתיים הסתיימה');
+
+    // reopen שני (האחרון) פותח מחדש ומשחרר את הקורא.
+    await SqliteDataProvider.instance
+        .reopenAfterExternalWrite()
+        .timeout(const Duration(seconds: 5));
+    await reader.timeout(const Duration(seconds: 5));
+
+    expect(SqliteDataProvider.instance.isInitialized, isTrue);
+  });
+
   test('write-sessions סדרתיים — שתי כתיבות מצטברות', () async {
     await SqliteDataProvider.instance.withWritableSession((rw) async {
       await rw.insertCategory(const migration_models.Category(title: 'א'));

@@ -113,6 +113,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
         lineNumber: draft.lineNumber!,
         referenceText: draft.referenceText,
         selectedText: currentState.newNoteSelectedText,
+        selectionColumn: currentState.newNoteSelectionColumn,
         initialContent: draft.content,
         initialFormat: draft.contentFormat,
       ),
@@ -128,6 +129,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
     final bloc = context.read<PersonalNotesBloc>();
     final lineNumber = bloc.state.newNoteLineNumber;
     final selectedText = bloc.state.newNoteSelectedText;
+    final selectionColumn = bloc.state.newNoteSelectionColumn;
 
     if (lineNumber == null) return;
 
@@ -138,6 +140,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
       contentPlain: result.contentPlain,
       contentFormat: result.contentFormat,
       selectedText: selectedText?.trim(),
+      selectionColumn: selectionColumn,
     ));
 
     UiSnack.showSuccess('ההערה נשמרה בהצלחה');
@@ -277,6 +280,9 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
             onDelete: () => _confirmDelete(context, note),
             onLinkTap: (url) => _handleNoteLinkTap(context, url),
             defaultExpanded: defaultExpanded,
+            expandToken: note.lineNumber == state.expandRequestLineNumber
+                ? state.expandRequestToken
+                : null,
             bookId: widget.bookId,
             categoryId: widget.categoryId,
             linkableNotes: [

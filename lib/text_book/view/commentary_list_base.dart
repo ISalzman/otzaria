@@ -29,6 +29,7 @@ import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/text_book/utils/inline_notes_utils.dart'
     as inline_notes;
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
+import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -1884,6 +1885,27 @@ class _CollapsibleCommentaryGroupState
                             ? widget.getItemSearchIndex(link)
                             : 0;
                         return AppContextMenuRegion(
+                          // לחיצה ימנית על הטקסט המסומן בפועל לא תשחרר את הבחירה
+                          // (התנהגות ברירת המחדל של SelectableRegion ב-Windows);
+                          // לחיצה על חלק לא-מסומן מבטלת כרגיל. אין כאן מעקב
+                          // פר-שורה — הבחירה מנוהלת ע"י SelectionArea יחיד — לכן
+                          // מחשבים את קטע הבחירה ישירות מול הפסקה שעליה לחצו.
+                          shouldPreserveSelectionOnSecondaryTap:
+                              (globalPosition) {
+                            final selected =
+                                widget.savedSelectedTextListenable.value;
+                            if (selected == null || selected.isEmpty) {
+                              return false;
+                            }
+                            final root = context.findRenderObject();
+                            if (root == null) return true; // סלחני
+                            return clickIsOnSelectionWithinArea(
+                                  root: root,
+                                  globalPosition: globalPosition,
+                                  selectedText: selected,
+                                ) ??
+                                true; // לא הוכרע — סלחני
+                          },
                           menuBuilder: (menuCtx, _) =>
                               ContextMenuUtils.buildCommentaryContextMenu(
                             context: menuCtx,

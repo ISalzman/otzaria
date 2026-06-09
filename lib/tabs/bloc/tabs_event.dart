@@ -75,6 +75,13 @@ class CloseCurrentTab extends TabsEvent {
   List<Object?> get props => [];
 }
 
+class RestoreLastClosedTab extends TabsEvent {
+  const RestoreLastClosedTab();
+
+  @override
+  List<Object?> get props => [];
+}
+
 class SetCurrentTab extends TabsEvent {
   final int index;
 

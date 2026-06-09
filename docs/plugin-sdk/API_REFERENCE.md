@@ -43,12 +43,16 @@ const { data } = await Otzaria.call('app.getTheme');
 //     onPrimary:               "#FFFFFF",  // טקסט/אייקון מעל primary
 //     secondary:               "#625B71",  // הדגשות משניות
 //     onSecondary:             "#FFFFFF",  // טקסט/אייקון מעל secondary
+//     secondaryContainer:      "#E8DEF8",  // רקע כפתור ניווט פעיל בסרגל הצד (pill)
+//     onSecondaryContainer:    "#1D192B",  // אייקון/טקסט מעל secondaryContainer
 //     surface:                 "#FFFBFE",  // רקע כרטיסים וחלוניות
 //     onSurface:               "#1C1B1F",  // טקסט ראשי
+//     surfaceContainerHigh:    "#ECE6F0",  // רקע הסרגל העליון (AppTopBar) במסכי הספרים
 //     surfaceContainerHighest: "#E6E0E9",  // פופאוברים, דיאלוגים
 //     error:                   "#B3261E",  // שגיאות
 //     onError:                 "#FFFFFF",  // טקסט מעל error
 //     outline:                 "#79747E",  // מסגרות ומפרידים
+//     ... (תפקידי הצבע העיקריים — ראה otzaria_plugin.d.ts → ColorScheme)
 //   },
 //   typography: {
 //     fontFamily:             "Frank Ruhl Libre",
@@ -241,6 +245,10 @@ if (res.success && res.data.ok) {
   redirect של גיטהאב ל-CDN מטופל אוטומטית בצד אוצריא.
 - `filename` אופציונלי; אם לא סופק, שם הקובץ נגזר מה-URL.
 - אם קיים כבר קובץ באותו שם, נוספת סיומת מספרית (` (1)`) כדי לא לדרוס.
+- `destPath` אופציונלי: נתיב קובץ מלא שאליו תישמר ההורדה במקום תיקיית
+  ההורדות. **הנתיב חייב להיות בתוך תיקייה שהמשתמש בחר דרך `ui.pickFolder`**
+  (ראו [`ui.pickFolder`](#uipickfolder)); אחרת מוחזרת `error.forbidden`.
+  כאשר `destPath` סופק, תיקיית האב נוצרת במידת הצורך וקובץ קיים נדרס.
 
 ```javascript
 const { data } = await Otzaria.call('network.download', {
@@ -248,11 +256,20 @@ const { data } = await Otzaria.call('network.download', {
   filename: 'books.zip' // אופציונלי
 });
 // { path: "C:\\Users\\...\\Downloads\\books.zip", filename: "books.zip" }
+
+// הורדה אל נתיב מלא בתוך תיקייה שהמשתמש בחר:
+const folder = await Otzaria.call('ui.pickFolder', { title: 'בחר תיקיית יעד' });
+if (folder.success && folder.data.path) {
+  await Otzaria.call('network.download', {
+    url: 'https://github.com/Owner/Repo/releases/latest/download/books.zip',
+    destPath: folder.data.path + '/books.zip'
+  });
+}
 ```
 
 שגיאות אפשריות: `error.permission_denied` (אין הרשאת network.access),
-`error.forbidden` (URL לא ברשימת ההיתר), `error.invalid_params`
-(URL חסר/לא תקין), `error.internal` (כשל הורדה).
+`error.forbidden` (URL לא ברשימת ההיתר, או `destPath` מחוץ לתיקייה מאושרת),
+`error.invalid_params` (URL חסר/לא תקין), `error.internal` (כשל הורדה).
 
 ---
 
@@ -501,6 +518,69 @@ const { data } = await Otzaria.call('ui.showWarning', {
 });
 // { confirmed: true } או { confirmed: false }
 ```
+
+### `ui.pickFolder`
+**הרשאה:** `ui.feedback`
+
+פתיחת דיאלוג מערכת לבחירת תיקייה. מחזירה את הנתיב שנבחר, או `{ path: null }`
+אם המשתמש ביטל.
+
+מעבר להחזרת הנתיב, בחירת התיקייה **מעניקה לתוסף הרשאת כתיבה/מחיקה בתוכה**:
+מכאן ואילך מותר לו להוריד אליה (`network.download` עם `destPath`), לחלץ
+אליה (`fs.extractZip`) ולמחוק קבצים בתוכה (`fs.deleteFile`). זהו גבול
+האבטחה לגישת התוסף לדיסק — היא נובעת מהסכמת המשתמש בדיאלוג, לא מהרשאת
+manifest. ההרשאה לתיקייה תקפה למשך ריצת התוסף.
+
+```javascript
+const res = await Otzaria.call('ui.pickFolder', {
+  title: 'בחר תיקיית יעד'  // אופציונלי
+});
+if (res.success && res.data.path) {
+  const folder = res.data.path;
+  // אפשר כעת להוריד/לחלץ/למחוק בתוך folder
+}
+```
+
+---
+
+## fs.* - פעולות קבצים
+
+> פעולות הקבצים מותרות אך ורק בתוך תיקייה שהמשתמש בחר דרך
+> [`ui.pickFolder`](#uipickfolder). נתיב מחוץ לתיקייה מאושרת מוחזר עם
+> `error.forbidden`. אין צורך בהרשאת manifest ייעודית — הסכמת המשתמש
+> בבחירת התיקייה היא גבול האבטחה.
+
+### `fs.extractZip`
+**הרשאה:** (אין — מגודר ע"י `ui.pickFolder`)
+
+חילוץ קובץ ZIP אל תיקיית יעד. גם `zipPath` וגם `destFolder` חייבים להיות
+בתוך תיקייה מאושרת. תיקיית היעד נוצרת אם אינה קיימת.
+
+```javascript
+await Otzaria.call('fs.extractZip', {
+  zipPath: folder + '/books.zip',
+  destFolder: folder + '/אוצריא'
+});
+// true
+```
+
+### `fs.deleteFile`
+**הרשאה:** (אין — מגודר ע"י `ui.pickFolder`)
+
+מחיקת קובץ. ה-`path` חייב להיות בתוך תיקייה מאושרת. הפעולה idempotent —
+אם הקובץ אינו קיים היא מצליחה בשקט. מחיקת תיקייה אינה נתמכת (מחזירה
+`error.invalid_params`).
+
+```javascript
+await Otzaria.call('fs.deleteFile', {
+  path: folder + '/books.zip'
+});
+// true
+```
+
+שגיאות אפשריות: `error.forbidden` (נתיב מחוץ לתיקייה מאושרת),
+`error.invalid_params` (פרמטר חסר / הנתיב הוא תיקייה),
+`error.not_found` (קובץ ה-ZIP לחילוץ אינו קיים), `error.internal`.
 
 ---
 

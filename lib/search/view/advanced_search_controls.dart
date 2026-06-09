@@ -202,6 +202,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     final perWordInputsEnabled = isWordSelected;
 
     if (!checkboxesEnabled && !widget.compactMode) {
+      final colorScheme = Theme.of(context).colorScheme;
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32.0),
@@ -210,16 +211,17 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
               Icon(
                 FluentIcons.cursor_click_24_regular,
                 size: 48,
-                color: Colors.grey.shade400,
+                color: colorScheme.onSurfaceVariant,
               ),
               const SizedBox(height: 16),
               Text(
                 'לחץ על מילה בשדה החיפוש כדי להגדיר אפשרויות מתקדמות',
                 style: TextStyle(
                   fontSize: 16,
-                  color: Colors.grey.shade600,
+                  color: colorScheme.onSurfaceVariant,
                 ),
                 textAlign: TextAlign.center,
+                textDirection: TextDirection.rtl,
               ),
             ],
           ),
@@ -483,7 +485,9 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     return Container(
       constraints: const BoxConstraints(maxHeight: 100),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: ListView.builder(
@@ -541,19 +545,12 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
   }
 
   Widget _buildCheckboxGrid(bool isEnabled, {required bool compactMode}) {
-    const List<String> options = [
-      'קידומות דקדוקיות',
-      'סיומות דקדוקיות',
-      'קידומות',
-      'סיומות',
-      'כתיב מלא/חסר',
-      'חלק ממילה',
-      SearchQueryBuilder.typoToleranceOptionKey,
-    ];
+    const options = SearchQueryBuilder.availableWordOptionKeys;
 
     final useGlobal = widget.tab.useGlobalSearchOptions.value;
 
     Widget buildCheckbox(String option) {
+      final colorScheme = Theme.of(context).colorScheme;
       bool isChecked = false;
       if (isEnabled) {
         if (useGlobal) {
@@ -591,30 +588,13 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                 mainAxisSize: MainAxisSize.min,
                 textDirection: TextDirection.rtl,
                 children: [
-                  Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: isEnabled && isChecked
-                            ? Theme.of(context).primaryColor
-                            : Colors.grey.shade600,
-                        width: 2,
-                      ),
-                      borderRadius: BorderRadius.circular(3),
-                      color: isEnabled && isChecked
-                          ? Theme.of(context)
-                              .primaryColor
-                              .withValues(alpha: 0.1)
-                          : Colors.transparent,
+                  IgnorePointer(
+                    child: Checkbox(
+                      value: isChecked,
+                      onChanged: isEnabled ? (_) {} : null,
+                      visualDensity: VisualDensity.compact,
+                      side: BorderSide(color: colorScheme.outline),
                     ),
-                    child: isEnabled && isChecked
-                        ? Icon(
-                            FluentIcons.checkmark_24_regular,
-                            size: 14,
-                            color: Theme.of(context).primaryColor,
-                          )
-                        : null,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -623,8 +603,8 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                     style: TextStyle(
                       fontSize: 14,
                       color: isEnabled
-                          ? Theme.of(context).textTheme.bodyMedium?.color
-                          : Colors.grey.shade500,
+                          ? colorScheme.onSurface
+                          : colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],

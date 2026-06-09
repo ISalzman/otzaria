@@ -612,7 +612,11 @@ class _ActionChip extends StatelessWidget {
     return TextButton.icon(
       onPressed: onPressed,
       icon: Icon(icon, color: fg),
-      label: Text(label, style: fg != null ? TextStyle(color: fg) : null),
+      label: Text(
+        label,
+        style: fg != null ? TextStyle(color: fg) : null,
+        textDirection: TextDirection.rtl,
+      ),
     );
   }
 }
@@ -646,7 +650,7 @@ class _PermissionMenu extends StatelessWidget {
           value: true,
           child: ListTile(
             leading: Icon(FluentIcons.checkmark_24_regular),
-            title: Text('הענק'),
+            title: Text('הענק', textDirection: TextDirection.rtl),
             dense: true,
           ),
         ),
@@ -654,7 +658,7 @@ class _PermissionMenu extends StatelessWidget {
           value: false,
           child: ListTile(
             leading: Icon(FluentIcons.dismiss_24_regular),
-            title: Text('בטל'),
+            title: Text('בטל', textDirection: TextDirection.rtl),
             dense: true,
           ),
         ),
@@ -666,7 +670,7 @@ class _PermissionMenu extends StatelessWidget {
           children: [
             Icon(icon, size: 20),
             const SizedBox(width: 4),
-            Text(label),
+            Text(label, textDirection: TextDirection.rtl),
             const SizedBox(width: 2),
             const Icon(FluentIcons.chevron_down_24_regular, size: 16),
           ],

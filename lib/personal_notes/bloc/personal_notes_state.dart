@@ -17,6 +17,11 @@ class PersonalNotesState extends Equatable {
   final bool showOnlyVisible;
   final List<int> visibleLineIndices;
 
+  // בקשת הרחבה של הערות לשורה מסוימת (לחיצה על סימון inline).
+  // הטוקן עולה בכל בקשה כדי לאפשר הרחבה חוזרת גם אחרי כיווץ ידני.
+  final int? expandRequestLineNumber;
+  final int expandRequestToken;
+
   // מצב יצירת הערה חדשה — מתויג ב-bookId נפרד כדי לקשר את הטיוטה
   // לספר שבו היא נוצרה, ללא תלות בספר שעבורו טעונות כעת ההערות
   // (state.bookId משקף את הספר האחרון שעבורו נטענו הערות, לא את הטיוטה).
@@ -25,6 +30,7 @@ class PersonalNotesState extends Equatable {
   final int? newNoteLineNumber;
   final String? newNoteReferenceText;
   final String? newNoteSelectedText;
+  final int? newNoteSelectionColumn;
   final String? newNoteInitialContent;
   final PersonalNoteContentFormat? newNoteInitialFormat;
 
@@ -40,11 +46,14 @@ class PersonalNotesState extends Equatable {
     this.searchQuery = '',
     this.showOnlyVisible = true,
     this.visibleLineIndices = const [],
+    this.expandRequestLineNumber,
+    this.expandRequestToken = 0,
     this.isCreatingNewNote = false,
     this.newNoteBookId,
     this.newNoteLineNumber,
     this.newNoteReferenceText,
     this.newNoteSelectedText,
+    this.newNoteSelectionColumn,
     this.newNoteInitialContent,
     this.newNoteInitialFormat,
   });
@@ -61,11 +70,14 @@ class PersonalNotesState extends Equatable {
         searchQuery = '',
         showOnlyVisible = true,
         visibleLineIndices = const [],
+        expandRequestLineNumber = null,
+        expandRequestToken = 0,
         isCreatingNewNote = false,
         newNoteBookId = null,
         newNoteLineNumber = null,
         newNoteReferenceText = null,
         newNoteSelectedText = null,
+        newNoteSelectionColumn = null,
         newNoteInitialContent = null,
         newNoteInitialFormat = null;
 
@@ -81,14 +93,18 @@ class PersonalNotesState extends Equatable {
     String? searchQuery,
     bool? showOnlyVisible,
     List<int>? visibleLineIndices,
+    int? expandRequestLineNumber,
+    int? expandRequestToken,
     bool? isCreatingNewNote,
     String? newNoteBookId,
     int? newNoteLineNumber,
     String? newNoteReferenceText,
     String? newNoteSelectedText,
+    int? newNoteSelectionColumn,
     String? newNoteInitialContent,
     PersonalNoteContentFormat? newNoteInitialFormat,
     bool clearNewNoteData = false,
+    bool clearExpandRequest = false,
   }) {
     return PersonalNotesState(
       isLoading: isLoading ?? this.isLoading,
@@ -102,6 +118,10 @@ class PersonalNotesState extends Equatable {
       searchQuery: searchQuery ?? this.searchQuery,
       showOnlyVisible: showOnlyVisible ?? this.showOnlyVisible,
       visibleLineIndices: visibleLineIndices ?? this.visibleLineIndices,
+      expandRequestLineNumber: clearExpandRequest
+          ? null
+          : (expandRequestLineNumber ?? this.expandRequestLineNumber),
+      expandRequestToken: expandRequestToken ?? this.expandRequestToken,
       isCreatingNewNote: clearNewNoteData
           ? false
           : (isCreatingNewNote ?? this.isCreatingNewNote),
@@ -116,6 +136,9 @@ class PersonalNotesState extends Equatable {
       newNoteSelectedText: clearNewNoteData
           ? null
           : (newNoteSelectedText ?? this.newNoteSelectedText),
+      newNoteSelectionColumn: clearNewNoteData
+          ? null
+          : (newNoteSelectionColumn ?? this.newNoteSelectionColumn),
       newNoteInitialContent: clearNewNoteData
           ? null
           : (newNoteInitialContent ?? this.newNoteInitialContent),
@@ -138,11 +161,14 @@ class PersonalNotesState extends Equatable {
         searchQuery,
         showOnlyVisible,
         visibleLineIndices,
+        expandRequestLineNumber,
+        expandRequestToken,
         isCreatingNewNote,
         newNoteBookId,
         newNoteLineNumber,
         newNoteReferenceText,
         newNoteSelectedText,
+        newNoteSelectionColumn,
         newNoteInitialContent,
         newNoteInitialFormat,
       ];

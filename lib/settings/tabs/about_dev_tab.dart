@@ -439,7 +439,11 @@ class AboutDevTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('מהדירים שההדירו $label', style: kSettingsSubtitleStyle),
+        Text(
+          'מהדירים שההדירו $label',
+          style: kSettingsSubtitleStyle,
+          textDirection: TextDirection.rtl,
+        ),
         const SizedBox(height: 8),
         _ContributorWrap(
           contributors: editors,
@@ -549,7 +553,11 @@ class _ContributorChip extends StatelessWidget {
         Text(name, style: nameStyle),
         if (description != null && description!.isNotEmpty) ...[
           const SizedBox(width: 4),
-          Text('(${description!})', style: kSettingsSubtitleStyle),
+          Text(
+            '(${description!})',
+            style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
         ],
       ],
     );
@@ -725,8 +733,16 @@ class _ActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       leading: Icon(icon),
-      title: Text(title, style: kSettingsTitleStyle),
-      subtitle: Text(subtitle, style: kSettingsSubtitleStyle),
+      title: Text(
+        title,
+        style: kSettingsTitleStyle,
+        textDirection: TextDirection.rtl,
+      ),
+      subtitle: Text(
+        subtitle,
+        style: kSettingsSubtitleStyle,
+        textDirection: TextDirection.rtl,
+      ),
       trailing: RecommendedActionButton(
         text: buttonLabel,
         icon: buttonIcon,

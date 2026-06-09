@@ -68,6 +68,7 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
+                  textDirection: TextDirection.rtl,
                 ),
                 IconButton(
                   icon: const Icon(FluentIcons.dismiss_24_regular),
@@ -84,7 +85,12 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                   }
 
                   if (state.error != null) {
-                    return Center(child: Text('שגיאה: ${state.error}'));
+                    return Center(
+                      child: Text(
+                        'שגיאה: ${state.error}',
+                        textDirection: TextDirection.rtl,
+                      ),
+                    );
                   }
 
                   return GridView.builder(
@@ -153,6 +159,7 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                   ),
+                  textDirection: TextDirection.rtl,
                 ),
               ],
             ),
@@ -257,6 +264,7 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
+                                    textDirection: TextDirection.rtl,
                                   ),
                                 ),
                                 IconButton(

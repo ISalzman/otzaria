@@ -111,13 +111,24 @@ class FileSystemData {
   Future<String?> findBookCategoryPath(String title, {int? categoryId}) async {
     await _providerManager.initialize();
 
-    // 1. Check cached FileSystemData map
+    // 1. כשיש categoryId — פתרון ישיר של נתיב הקטגוריה לספר הבודד. הקריאה
+    // מבצעת resolveBook ממוקד + בניית מפת קטגוריות בלבד (~50ms), במקום לבנות
+    // את מפת `titleToPath` של כל הספרייה (~7030 ספרים, ~950ms בעלייה קרה —
+    // מה שחנק את טעינת הספר הראשון דרך isTanachBook/supportsContinuousReadingMode).
+    // הערך זהה: `titleToPath` נבנית ממילא ע"י findCategoryPathForBook לכל ספר DB.
+    if (categoryId != null) {
+      final directPath = await _providerManager.databaseProvider
+          .findCategoryPathForBook(title, categoryId: categoryId);
+      if (directPath != null && directPath.isNotEmpty) return directPath;
+    }
+
+    // 2. Check cached FileSystemData map
     // Note: titleToPath might be stale if DB loaded later
     // so we re-check providers below if not found.
     final path = (await titleToPath)[title];
     if (path != null && path.isNotEmpty) return path;
 
-    // 2. Ask DatabaseProvider explicitly
+    // 3. Ask DatabaseProvider explicitly (covers categoryId == null too)
     final dbPath = await _providerManager.databaseProvider
         .findCategoryPathForBook(title, categoryId: categoryId);
     if (dbPath != null) return dbPath;

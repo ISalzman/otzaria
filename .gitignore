@@ -37,6 +37,8 @@ windows/*
 windows/runner/*
 !windows/runner/Runner.rc
 !windows/runner/resources/
+!windows/runner/splash_window.cpp
+!windows/runner/splash_window.h
 macos/*
 !macos/Runner/
 macos/Runner/*

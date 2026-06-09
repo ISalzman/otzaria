@@ -100,6 +100,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     'left': true,
     'right': true,
     'bottom': true,
+    'bottomRight': true,
   };
 
   @override
@@ -709,6 +710,13 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                 body: LoadingIndicator(),
               ),
               builder: (context, state) {
+                // נראות כל פאנל תחתון נשלטת בנפרד; האזור התחתון מוצג רק אם
+                // לפחות אחד מהם גלוי ובעל מפרש.
+                final showBottom = _columnVisibility['bottom'] == true &&
+                    _bottomCommentator != null;
+                final showBottomRight =
+                    _columnVisibility['bottomRight'] == true &&
+                        _bottomRightCommentator != null;
                 return Scaffold(
                   body: AdaptiveSidePane(
                     isOpen: _isLeftSidebarOpen,
@@ -975,8 +983,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                       ],
                                     ),
                                   ),
-                                  if (_bottomCommentator != null ||
-                                      _bottomRightCommentator != null) ...[
+                                  if (showBottom || showBottomRight) ...[
                                     _HorizontalDragHandle(
                                       leftWidth: _leftWidth,
                                       rightWidth: _rightWidth,
@@ -1003,12 +1010,10 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                       child: Column(
                                         children: [
                                           Expanded(
-                                            child: _bottomRightCommentator !=
-                                                    null
+                                            child: showBottomRight
                                                 ? Row(
                                                     children: [
-                                                      if (_bottomCommentator !=
-                                                          null) ...[
+                                                      if (showBottom) ...[
                                                         SizedBox(
                                                           width: 20,
                                                           child: Center(
@@ -1226,6 +1231,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       ItemPositionsListener.create();
   List<Link> _relevantLinks = [];
   int? _lastSyncedIndex; // האינדקס האחרון שסונכרן
+  int _initialSyncAttempts = 0; // ניסיונות סנכרון ראשוני עד שה-controller מחובר
   int? _clickedVisibleFirst; // visibleIndices.first בעת הלחיצה האחרונה
   List<Link>? _lastLinks; // לדידוב: מסנן מחדש רק כשהקישורים השתנו
   StreamSubscription<TextBookState>? _blocSubscription;
@@ -1324,13 +1330,26 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       ..addAll(previewLines);
   }
 
+  /// נקודת הייחוס לסנכרון — כשליש מגובה ה-viewport מלמעלה (לא במרכז ולא
+  /// בראש). אותו ערך משמש גם לבחירת שורת המקור וגם ליישור המפרש, כדי
+  /// ששניהם יהיו באותו מיקום אנכי.
+  static const double _syncAlignment = 1 / 3;
+
+  /// מחזיר את אינדקס השורה שבכשליש העליון של ה-viewport מתוך השורות
+  /// הגלויות. הסנכרון מכוון לנקודה זו ולא לשורה העליונה, כדי שהמפרש
+  /// יעקוב אחר מה שהמשתמש קורא בפועל. מניחים שהרשימה אינה ריקה.
+  int _referenceVisibleIndex(List<int> visibleIndices) {
+    final sorted = [...visibleIndices]..sort();
+    return sorted[(sorted.length * _syncAlignment).floor()];
+  }
+
   int _resolveCurrentMainIndex(TextBookLoaded state) {
     if (state.selectedIndex != null) {
       return state.selectedIndex!;
     }
 
     if (state.visibleIndices.isNotEmpty) {
-      return state.visibleIndices.first;
+      return _referenceVisibleIndex(state.visibleIndices);
     }
 
     return 0;
@@ -1346,12 +1365,13 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       state.content,
     );
 
-    final bestLink = CommentarySyncHelper.findBestLink(
+    // חייב להשתמש באותו חישוב כמו _syncWithMainText, אחרת ה-preview ייטען
+    // בחלון קטן סביב יעד אחר, והסנכרון השוטף לא יוכל לגלול ליעד כי הוא
+    // מחוץ לחלון שנטען.
+    return CommentarySyncHelper.getCommentaryTargetIndex(
       linksForCommentary: _relevantLinks,
       logicalMainIndex: logicalIndex,
     );
-
-    return CommentarySyncHelper.getCommentaryTargetIndex(bestLink);
   }
 
   Future<_LoadedCommentaryData?> _fetchFullCommentaryData(
@@ -1410,14 +1430,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       _lastSyncedIndex = null;
     });
 
-    final currentState = context.read<TextBookBloc>().state;
-    if (currentState is TextBookLoaded) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _syncWithMainText(currentState);
-        }
-      });
-    }
+    _scheduleInitialSync();
   }
 
   void _notifyCommentaryLoadFailed() {
@@ -1582,11 +1595,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
           });
           previewLoaded = true;
 
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              _syncWithMainText(currentState);
-            }
-          });
+          _scheduleInitialSync();
         }
       }
 
@@ -1622,6 +1631,41 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     }
   }
 
+  /// מתזמן סנכרון ראשוני של המפרש עם הטקסט הראשי.
+  ///
+  /// רשימת המפרש נבנית תמיד מאינדקס 0, ולכן הסנכרון הראשוני חייב להצליח
+  /// כדי להקפיץ אותה למיקום הנכון. אם ה-ScrollController עדיין לא מחובר
+  /// בפריים הראשון (מירוץ שכיח בפתיחת ספר באמצעו) — מנסים שוב עד שהוא
+  /// מחובר, כמו ב-_scheduleInitialScrollRestore של הטקסט הראשי. אחרת
+  /// המפרש היה נשאר תקוע בהתחלה.
+  void _scheduleInitialSync() {
+    _initialSyncAttempts = 0;
+    _runInitialSyncAttempt();
+  }
+
+  void _runInitialSyncAttempt() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      if (_scrollController.isAttached) {
+        final state = context.read<TextBookBloc>().state;
+        if (state is TextBookLoaded) {
+          _syncWithMainText(state);
+        }
+        return;
+      }
+
+      if (_initialSyncAttempts >= 10) {
+        return;
+      }
+      _initialSyncAttempts++;
+      Future.delayed(
+        const Duration(milliseconds: 50),
+        _runInitialSyncAttempt,
+      );
+    });
+  }
+
   /// סנכרון המפרש עם הטקסט הראשי
   void _syncWithMainText(TextBookLoaded state) {
     // אם אין תוכן או אין קישורים - אין מה לסנכרן
@@ -1644,13 +1688,15 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     } else if (state.visibleIndices.isNotEmpty) {
       final currentFirst = state.visibleIndices.first;
       // אם לא גללנו יותר מ-3 שורות מאז הלחיצה — לא לדרוס את מיקום הלחיצה
-      // (מתואם עם הסף של ה-BLoC לאיפוס selectedIndex)
+      // (מתואם עם הסף של ה-BLoC לאיפוס selectedIndex). זיהוי הגלילה נשאר
+      // לפי השורה העליונה, כדי להתאים לסף של ה-BLoC.
       if (_clickedVisibleFirst != null &&
           (currentFirst - _clickedVisibleFirst!).abs() <= 3) {
         return;
       }
       _clickedVisibleFirst = null; // גלילה משמעותית — מאפסים
-      currentMainIndex = currentFirst;
+      // אך היעד לסנכרון הוא מרכז המסך, לא השורה העליונה
+      currentMainIndex = _referenceVisibleIndex(state.visibleIndices);
     } else {
       return; // אין מידע על מיקום נוכחי
     }
@@ -1661,14 +1707,11 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       state.content,
     );
 
-    // מציאת הקישור הטוב ביותר
-    final bestLink = CommentarySyncHelper.findBestLink(
+    // חישוב האינדקס היעד במפרש — היצמדות לקישור הקודם הקרוב ביותר
+    final targetIndex = CommentarySyncHelper.getCommentaryTargetIndex(
       linksForCommentary: _relevantLinks,
       logicalMainIndex: logicalIndex,
     );
-
-    // חישוב האינדקס היעד במפרש
-    final targetIndex = CommentarySyncHelper.getCommentaryTargetIndex(bestLink);
 
     // אם אין קישור - לא מזיזים את המפרש
     if (targetIndex == null) {
@@ -1684,18 +1727,23 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     if (targetIndex >= 0 &&
         targetIndex < _content!.length &&
         _scrollController.isAttached) {
-      // בסנכרון ראשוני (אחרי טעינה) — קפיצה מיידית ללא אנימציה
-      // כדי למנוע בניית אלפי פריטים בזמן אנימציה (גורמת לתקיעה)
-      if (_lastSyncedIndex == null) {
+      // סנכרון מגלילה רציפה (או ראשוני) — קפיצה מיידית כדי שהמפרש יעקוב
+      // צמוד אחר הטקסט הראשי. אנימציה כאן הייתה יוצרת פיגור והתנגשות בין
+      // אנימציות עוקבות, וגם בונה אלפי פריטים בזמן אנימציה (תקיעה).
+      // רק לחיצה מפורשת על שורה מקבלת גלילה מונפשת.
+      // מציב את שורת היעד בכשליש העליון של חלון המפרש (_syncAlignment),
+      // מקביל לשורת המקור שנבחרה מאותה נקודה ב-viewport של הטקסט הראשי,
+      // ולא בראש החלון.
+      if (_lastSyncedIndex == null || state.selectedIndex == null) {
         _scrollController.jumpTo(
           index: targetIndex,
-          alignment: 0.0,
+          alignment: _syncAlignment,
         );
       } else {
         _scrollController.scrollTo(
           index: targetIndex,
           duration: const Duration(milliseconds: 300),
-          alignment: 0.0,
+          alignment: _syncAlignment,
         );
       }
       _lastSyncedIndex = targetIndex;
