@@ -95,6 +95,87 @@ bool? clickIsOnRenderedSelection({
   return false;
 }
 
+/// בודק אם נקודת הלחיצה [globalPosition] נופלת על הטקסט המסומן, עבור תצוגות
+/// שבהן הבחירה מנוהלת ע"י `SelectionArea` יחיד ואין מעקב פר-שורה (פאנל/כרטסיית
+/// מפרשים — בטקסט וב-PDF). בניגוד ל-[clickIsOnRenderedSelection] שמקבל קטע ו-edge
+/// ידועים מתוך מעקב פר-שורה, כאן הקטע הנבחר בתוך הפסקה מחושב ישירות מתוך כלל
+/// הטקסט הנבחר [selectedText] (השטוח שמחזיר Flutter), ע"י איתור החפיפה בינו לבין
+/// הטקסט המרונדר של הפסקה שעליה לחצו.
+///
+/// מחזיר:
+/// - `true`  — הלחיצה על הטקסט המסומן.
+/// - `false` — הלחיצה בתוך פסקה אך מחוץ לטקסט המסומן (או שאין בחירה).
+/// - `null`  — לא ניתן להכריע (לא נמצאה פסקה / לא ניתן למפות חד-משמעית). על
+///   המתקשר לחזור לברירת מחדל סלחנית (לא לבטל את הבחירה).
+bool? clickIsOnSelectionWithinArea({
+  required RenderObject root,
+  required Offset globalPosition,
+  required String selectedText,
+}) {
+  if (selectedText.isEmpty) return false;
+  final paragraph = _findParagraphContaining(root, globalPosition);
+  if (paragraph == null) return null;
+
+  final pText = paragraph.text.toPlainText(includeSemanticsLabels: false);
+  if (pText.isEmpty) return null;
+
+  final range = _selectedRangeWithin(pText, selectedText);
+  if (range == null) return null; // לא ניתן למפות — סלחני
+  final (selStart, selEnd) = range;
+  if (selStart >= selEnd) return null;
+
+  final boxes = paragraph.getBoxesForSelection(
+    TextSelection(baseOffset: selStart, extentOffset: selEnd),
+    boxHeightStyle: ui.BoxHeightStyle.includeLineSpacingMiddle,
+  );
+  if (boxes.isEmpty) return null;
+
+  final local = paragraph.globalToLocal(globalPosition);
+  for (final box in boxes) {
+    if (box.toRect().contains(local)) return true;
+  }
+  return false;
+}
+
+/// מחשב את טווח התווים המסומן בתוך טקסט הפסקה [pText], בהינתן כלל הטקסט הנבחר
+/// [selectedText] (שטוח, רציף בסדר הקריאה). מטפל בארבעה מצבים: הפסקה כולה נמצאת
+/// בתוך הבחירה, הבחירה כולה בתוך הפסקה, הבחירה מתחילה בפסקה (סיומת מסומנת), או
+/// מסתיימת בה (תחילית מסומנת). מחזיר `null` כשלא ניתן למפות חד-משמעית.
+(int, int)? _selectedRangeWithin(String pText, String selectedText) {
+  // הפסקה כולה בתוך הבחירה (פסקת ביניים/פסקה שלמה שנבחרה).
+  if (selectedText.contains(pText)) return (0, pText.length);
+
+  // הבחירה כולה בתוך הפסקה (בחירת קטע בודד). דורש מופע יחיד למניעת אי-בהירות.
+  final inside = pText.indexOf(selectedText);
+  if (inside >= 0) {
+    if (pText.indexOf(selectedText, inside + 1) >= 0) return null; // כפול
+    return (inside, inside + selectedText.length);
+  }
+
+  // הפסקה בקצה הבחירה: סיומת של pText פותחת את selectedText (הבחירה מתחילה כאן),
+  // או תחילית של pText סוגרת אותו (הבחירה מסתיימת כאן). בוחרים את החפיפה הארוכה.
+  final suffix = _overlapLen(pText, selectedText, suffixOfFirst: true);
+  final prefix = _overlapLen(pText, selectedText, suffixOfFirst: false);
+  if (suffix == 0 && prefix == 0) return null;
+  if (suffix >= prefix) return (pText.length - suffix, pText.length);
+  return (0, prefix);
+}
+
+/// אורך החפיפה המרבי בין [a] ל-[b]: כש-[suffixOfFirst]=`true` — הסיומת הארוכה
+/// ביותר של [a] שהיא תחילית של [b]; אחרת — התחילית הארוכה ביותר של [a] שהיא
+/// סיומת של [b]. מחזיר `0` כשאין חפיפה.
+int _overlapLen(String a, String b, {required bool suffixOfFirst}) {
+  final maxK = a.length < b.length ? a.length : b.length;
+  for (var k = maxK; k > 0; k--) {
+    if (suffixOfFirst) {
+      if (a.substring(a.length - k) == b.substring(0, k)) return k;
+    } else {
+      if (a.substring(0, k) == b.substring(b.length - k)) return k;
+    }
+  }
+  return 0;
+}
+
 /// מאתר את ה-RenderParagraph העמוק ביותר בתת-העץ של [root] שתיבתו מכילה את
 /// [globalPosition]. מחזיר `null` אם אין כזה.
 RenderParagraph? _findParagraphContaining(
