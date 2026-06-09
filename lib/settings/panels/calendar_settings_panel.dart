@@ -487,9 +487,17 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: kSettingsTitleStyle),
+                      Text(
+                        title,
+                        style: kSettingsTitleStyle,
+                        textDirection: TextDirection.rtl,
+                      ),
                       const SizedBox(height: 4),
-                      Text(subtitle, style: kSettingsSubtitleStyle),
+                      Text(
+                        subtitle,
+                        style: kSettingsSubtitleStyle,
+                        textDirection: TextDirection.rtl,
+                      ),
                     ],
                   ),
                 ),

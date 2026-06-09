@@ -380,7 +380,7 @@ class TextSettingsTab extends StatelessWidget {
                         ),
                       ],
                     ),
-        ),
+                  ),
 
                 divider,
 
@@ -505,6 +505,7 @@ class TextSettingsTab extends StatelessWidget {
         SwitchSettingsTile(
           leading: const Icon(FluentIcons.shield_keyhole_24_regular),
           title: RichText(
+            textDirection: TextDirection.rtl,
             text: TextSpan(
               style: kSettingsTitleStyle.copyWith(
                 color: Theme.of(context).colorScheme.onSurface,
@@ -519,6 +520,7 @@ class TextSettingsTab extends StatelessWidget {
                 ? 'השם הקדוש יוצג'
                 : 'השם הקדוש לא יוצג מפני קדושתו',
             style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.rtl,
           ),
           value: !state.replaceHolyNames,
           onChanged: (value) {
@@ -527,10 +529,16 @@ class TextSettingsTab extends StatelessWidget {
         ),
         SwitchSettingsTile(
           leading: const Icon(FluentIcons.text_more_24_regular),
-          title: const Text('הצגת טעמי המקרא', style: kSettingsTitleStyle),
+          title: const Text(
+            'הצגת טעמי המקרא',
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
           subtitle: Text(
-              state.showTeamim ? 'המקרא יוצג עם טעמים' : 'המקרא יוצג ללא טעמים',
-              style: kSettingsSubtitleStyle),
+            state.showTeamim ? 'המקרא יוצג עם טעמים' : 'המקרא יוצג ללא טעמים',
+            style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
           value: state.showTeamim,
           onChanged: (value) {
             context.read<SettingsBloc>().add(UpdateShowTeamim(value));
@@ -653,10 +661,16 @@ class TextSettingsTab extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('עיצוב כותרות',
-                                    style: kSettingsTitleStyle),
-                                Text(formatSubtitle,
-                                    style: kSettingsSubtitleStyle),
+                                const Text(
+                                  'עיצוב כותרות',
+                                  style: kSettingsTitleStyle,
+                                  textDirection: TextDirection.rtl,
+                                ),
+                                Text(
+                                  formatSubtitle,
+                                  style: kSettingsSubtitleStyle,
+                                  textDirection: TextDirection.rtl,
+                                ),
                               ],
                             ),
                           ),
@@ -679,8 +693,16 @@ class TextSettingsTab extends StatelessWidget {
 
               return ListTile(
                 leading: const Icon(FluentIcons.text_align_right_24_regular),
-                title: const Text('עיצוב כותרות', style: kSettingsTitleStyle),
-                subtitle: Text(formatSubtitle, style: kSettingsSubtitleStyle),
+                title: const Text(
+                  'עיצוב כותרות',
+                  style: kSettingsTitleStyle,
+                  textDirection: TextDirection.rtl,
+                ),
+                subtitle: Text(
+                  formatSubtitle,
+                  style: kSettingsSubtitleStyle,
+                  textDirection: TextDirection.rtl,
+                ),
                 trailing: SizedBox(
                   width: 220,
                   child: AppDropdownField<String>(
@@ -706,13 +728,18 @@ class TextSettingsTab extends StatelessWidget {
       children: [
         SwitchSettingsTile(
           leading: const Icon(FluentIcons.book_open_24_regular),
-          title: const Text('שמירת התאמות לכל ספר בנפרד',
-              style: kSettingsTitleStyle),
+          title: const Text(
+            'שמירת התאמות לכל ספר בנפרד',
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
           subtitle: Text(
-              state.enablePerBookSettings
-                  ? 'שינויים בסרגל הלחצנים יישמרו לכל ספר בנפרד'
-                  : 'כל הספרים ישתמשו בהגדרות הכלליות',
-              style: kSettingsSubtitleStyle),
+            state.enablePerBookSettings
+                ? 'שינויים בסרגל הלחצנים יישמרו לכל ספר בנפרד'
+                : 'כל הספרים ישתמשו בהגדרות הכלליות',
+            style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
           value: state.enablePerBookSettings,
           onChanged: (value) {
             context
@@ -724,15 +751,21 @@ class TextSettingsTab extends StatelessWidget {
           ListTile(
             hoverColor: Colors.transparent,
             leading: const Icon(FluentIcons.delete_24_regular),
-            title: const Text('איפוס הגדרות לפי ספר',
-                style: kSettingsTitleStyle),
-            subtitle: const Text('מחיקת כל ההתאמות שנשמרו לכל ספר בנפרד',
-                style: kSettingsSubtitleStyle),
-            trailing: NeutralActionButton(
-                onPressed: () => _resetPerBookSettings(context),
-                text: 'איפוס',
-              ),
+            title: const Text(
+              'איפוס הגדרות לפי ספר',
+              style: kSettingsTitleStyle,
+              textDirection: TextDirection.rtl,
             ),
+            subtitle: const Text(
+              'מחיקת כל ההתאמות שנשמרו לכל ספר בנפרד',
+              style: kSettingsSubtitleStyle,
+              textDirection: TextDirection.rtl,
+            ),
+            trailing: NeutralActionButton(
+              onPressed: () => _resetPerBookSettings(context),
+              text: 'איפוס',
+            ),
+          ),
       ],
     );
   }
@@ -802,10 +835,14 @@ class _FontSizeSliderState extends State<_FontSizeSlider> {
       children: [
         Row(
           children: [
-            Icon(widget.icon),
+            RtlIcon(widget.icon),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(widget.label, style: kSettingsTitleStyle),
+              child: Text(
+                widget.label,
+                style: kSettingsTitleStyle,
+                textDirection: TextDirection.rtl,
+              ),
             ),
             Text(
               widget.divisions != null
@@ -871,7 +908,11 @@ class _FontDropdown extends StatelessWidget {
         const SizedBox(width: 8),
         SizedBox(
           width: 100,
-          child: Text(label, style: kSettingsTitleStyle),
+          child: Text(
+            label,
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -945,12 +986,17 @@ class _TextWidthSliderState extends State<_TextWidthSlider> {
       children: [
         ListTile(
           leading: const Icon(FluentIcons.text_align_distributed_24_regular),
-          title: const Text('רוחב הטקסט', style: kSettingsTitleStyle),
+          title: const Text(
+            'רוחב הטקסט',
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
           subtitle: Text(
             currentLevel == 0
                 ? 'הטקסט ימלא את כל הרוחב הזמין'
                 : 'הטקסט יהיה צר יותר ומרוכז במסך',
             style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.rtl,
           ),
           trailing: Text(
             getLevelDescription(currentLevel),

@@ -144,10 +144,61 @@ class ExternalCatalogRepository {
     }
 
     final dbFile = File(databasePath);
-    if (await dbFile.exists()) {
-      await dbFile.delete();
+    final tempFile = File('$databasePath.download');
+    final backupFile = File('$databasePath.bak');
+    if (await tempFile.exists()) {
+      await tempFile.delete();
     }
-    await dbFile.writeAsBytes(dbBytes, flush: true);
+    await tempFile.writeAsBytes(dbBytes, flush: true);
+
+    // מעבירים את הקובץ הקיים לגיבוי לפני ההחלפה (במקום למחוק אותו), כדי שאם
+    // ההחלפה תיכשל באמצע — נוכל לשחזר ולא להשאיר את המשתמש ללא קטלוג כלל.
+    var backupCreated = false;
+    var replaced = false;
+    try {
+      if (await dbFile.exists()) {
+        if (await backupFile.exists()) {
+          await backupFile.delete();
+        }
+        try {
+          await dbFile.rename(backupFile.path);
+          backupCreated = true;
+        } on FileSystemException catch (e) {
+          if (_isFileInUseError(e)) {
+            throw ExternalCatalogDatabaseBusyException(databasePath, e);
+          }
+          rethrow;
+        }
+      }
+
+      try {
+        await tempFile.rename(databasePath);
+        replaced = true;
+      } on FileSystemException catch (e) {
+        // ההחלפה נכשלה — משחזרים את הגיבוי כדי לא להשאיר את המשתמש ללא קטלוג.
+        if (backupCreated) {
+          try {
+            await backupFile.rename(databasePath);
+            backupCreated = false;
+          } catch (_) {
+            // השחזור נכשל — משאירים את הגיבוי על כנו לשחזור ידני (אל תמחק!).
+          }
+        }
+        if (_isFileInUseError(e)) {
+          throw ExternalCatalogDatabaseBusyException(databasePath, e);
+        }
+        rethrow;
+      }
+    } finally {
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+      // מוחקים את הגיבוי רק אם ההחלפה הצליחה (אז הוא מיותר). אם ההחלפה
+      // נכשלה — הגיבוי הוא הקטלוג היחיד ששרד, ואסור למחוק אותו.
+      if (replaced && backupCreated && await backupFile.exists()) {
+        await backupFile.delete();
+      }
+    }
   }
 
   /// מספר המזהים המקסימלי לכל שאילתת `IN` — מתחת למגבלת המשתנים של SQLite.
@@ -361,6 +412,19 @@ class ExternalCatalogRepository {
     return int.tryParse(match.group(1)!);
   }
 
+  static bool _isFileInUseError(FileSystemException error) {
+    final message = error.message.toLowerCase();
+    final osMessage = error.osError?.message.toLowerCase() ?? '';
+    return message.contains('being used by another process') ||
+        message.contains('used by another process') ||
+        message.contains('process cannot access the file') ||
+        message.contains('access is denied') ||
+        osMessage.contains('being used by another process') ||
+        osMessage.contains('used by another process') ||
+        osMessage.contains('process cannot access the file') ||
+        osMessage.contains('access is denied');
+  }
+
   ExternalLibraryBook _mapOtzarBook(Map<String, Object?> row) {
     final bookId = (row['book_id'] as num).toInt();
     final authors = _decodeStringList(row['authors']);
@@ -474,4 +538,16 @@ class ExternalCatalogReleaseInfo {
   final String tagName;
   final ExternalCatalogReleaseAsset databaseAsset;
   final ExternalCatalogReleaseAsset? versionAsset;
+}
+
+class ExternalCatalogDatabaseBusyException implements Exception {
+  ExternalCatalogDatabaseBusyException(this.databasePath, [this.innerError]);
+
+  final String databasePath;
+  final Object? innerError;
+
+  @override
+  String toString() {
+    return 'קובץ הקטלוג נמצא בשימוש ולא ניתן לעדכן אותו כעת: $databasePath';
+  }
 }

@@ -269,6 +269,9 @@ List<String> resolvePageShapeDisplayedCommentators({
 
   if (columnVisibility['bottom'] != false) {
     addCommentator(resolvedBottom);
+  }
+
+  if (columnVisibility['bottomRight'] != false) {
     addCommentator(resolvedBottomRight);
   }
 

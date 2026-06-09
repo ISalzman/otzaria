@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
+import 'package:otzaria/personal_notes/utils/note_anchor_utils.dart';
 import 'package:otzaria/personal_notes/utils/note_collection_utils.dart';
 import 'package:otzaria/personal_notes/utils/note_text_utils.dart';
 
@@ -49,6 +50,7 @@ class PersonalNotesService {
     required String contentPlain,
     required PersonalNoteContentFormat contentFormat,
     String? selectedText,
+    int? selectionColumn,
   }) async {
     final lines = splitBookContentIntoLines(bookContent);
     // Handle empty book content - use line 1 as minimum
@@ -58,11 +60,35 @@ class PersonalNotesService {
     // Use selectedText if provided, otherwise extract display text from the line
     // Always remove nikud and te'amim from the display title
     final trimmedSelectedText = selectedText?.trim();
-    final displayTitle =
-        (trimmedSelectedText != null && trimmedSelectedText.isNotEmpty)
-            ? removeHebrewDiacritics(trimmedSelectedText)
-            : extractDisplayTextFromLines(lines, normalizedLineNumber,
-                excludeBookTitle: bookId);
+    final hasSelection =
+        trimmedSelectedText != null && trimmedSelectedText.isNotEmpty;
+    final displayTitle = hasSelection
+        ? removeHebrewDiacritics(trimmedSelectedText)
+        : extractDisplayTextFromLines(lines, normalizedLineNumber,
+            excludeBookTitle: bookId);
+
+    // עיגון לפי מילים: כשנבחר טקסט ספציפי, מחשבים offset והקשר בשורה הגולמית.
+    // ללא בחירה — ההערה נחשבת הערת-שורה-שלמה (anchorText = null).
+    String? anchorText;
+    String? anchorPrefix;
+    String? anchorSuffix;
+    int? anchorStart;
+    int? anchorEnd;
+    if (hasSelection) {
+      final rawLine = lines[normalizedLineNumber - 1];
+      final computed = computeAnchorForSelection(
+        rawLine: rawLine,
+        selectedText: trimmedSelectedText,
+        selectionColumnHint: selectionColumn,
+      );
+      if (computed != null) {
+        anchorText = normalizeAnchorText(trimmedSelectedText);
+        anchorPrefix = computed.prefix;
+        anchorSuffix = computed.suffix;
+        anchorStart = computed.start;
+        anchorEnd = computed.end;
+      }
+    }
 
     final now = DateTime.now();
     final newNote = PersonalNote(
@@ -70,6 +96,11 @@ class PersonalNotesService {
       bookId: bookId,
       lineNumber: normalizedLineNumber,
       displayTitle: displayTitle,
+      anchorText: anchorText,
+      anchorPrefix: anchorPrefix,
+      anchorSuffix: anchorSuffix,
+      anchorStart: anchorStart,
+      anchorEnd: anchorEnd,
       lastKnownLineNumber: null,
       status: PersonalNoteStatus.located,
       content: content.trimRight(),
@@ -143,6 +174,8 @@ class PersonalNotesService {
     final updatedNote = note.copyWith(
       lineNumber: normalizedLineNumber,
       displayTitle: newDisplayTitle,
+      // מיקום ידני מחדש הופך את ההערה להערת-שורה-שלמה (אין עוד מילים מעוגנות).
+      clearAnchor: true,
       lastKnownLineNumber: null,
       status: PersonalNoteStatus.located,
       updatedAt: now,

@@ -63,4 +63,74 @@ void main() {
     expect(find.text('שמור'), findsOneWidget);
     expect(find.text('ביטול'), findsOneWidget);
   });
+
+  PersonalNote buildNote() => PersonalNote(
+        id: 'note-expand',
+        bookId: 'ספר מבחן',
+        lineNumber: 7,
+        displayTitle: 'שורה 7',
+        lastKnownLineNumber: 7,
+        status: PersonalNoteStatus.located,
+        content: 'תוכן ההערה',
+        contentPlain: 'תוכן ההערה',
+        contentFormat: PersonalNoteContentFormat.plain,
+        createdAt: DateTime(2026, 1, 1),
+        updatedAt: DateTime(2026, 1, 1),
+      );
+
+  Widget wrap(NoteTile tile) => MaterialApp(home: Scaffold(body: tile));
+
+  testWidgets('NoteTile נשאר סגור כש-defaultExpanded=false ואין expandToken',
+      (tester) async {
+    await tester.pumpWidget(wrap(NoteTile(
+      note: buildNote(),
+      defaultExpanded: false,
+      bookId: 'ספר מבחן',
+      linkableNotes: const [],
+      onSave: (_) {},
+      onDelete: () {},
+      onLinkTap: (_) {},
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('תוכן ההערה'), findsNothing);
+  });
+
+  testWidgets('NoteTile נפתח בכפייה כש-expandToken מוגדר באתחול',
+      (tester) async {
+    await tester.pumpWidget(wrap(NoteTile(
+      note: buildNote(),
+      defaultExpanded: false,
+      expandToken: 1,
+      bookId: 'ספר מבחן',
+      linkableNotes: const [],
+      onSave: (_) {},
+      onDelete: () {},
+      onLinkTap: (_) {},
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('תוכן ההערה'), findsOneWidget);
+  });
+
+  testWidgets('NoteTile נפתח כש-expandToken משתנה לאחר בנייה', (tester) async {
+    NoteTile tile(int? token) => NoteTile(
+          note: buildNote(),
+          defaultExpanded: false,
+          expandToken: token,
+          bookId: 'ספר מבחן',
+          linkableNotes: const [],
+          onSave: (_) {},
+          onDelete: () {},
+          onLinkTap: (_) {},
+        );
+
+    await tester.pumpWidget(wrap(tile(null)));
+    await tester.pumpAndSettle();
+    expect(find.text('תוכן ההערה'), findsNothing);
+
+    await tester.pumpWidget(wrap(tile(1)));
+    await tester.pumpAndSettle();
+    expect(find.text('תוכן ההערה'), findsOneWidget);
+  });
 }

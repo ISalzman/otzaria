@@ -40,14 +40,36 @@ applyTheme(theme);
   colorScheme: {
     primary:                 "#...", // הצבע הראשי (כפתורים, הדגשות, גבולות נבחר)
     onPrimary:               "#...", // טקסט/אייקון מעל primary
+    primaryContainer:        "#...", // מיכל primary (רקע מודגש עדין)
+    onPrimaryContainer:      "#...", // טקסט/אייקון מעל primaryContainer
     secondary:               "#...", // הדגשות משניות
     onSecondary:             "#...", // טקסט/אייקון מעל secondary
+    secondaryContainer:      "#...", // רקע כפתור ניווט פעיל בסרגל הצד (ה-pill)
+    onSecondaryContainer:    "#...", // אייקון/טקסט מעל secondaryContainer
+    tertiary:                "#...", // הדגשות שלישוניות
+    onTertiary:              "#...", // טקסט/אייקון מעל tertiary
+    tertiaryContainer:       "#...", // מיכל tertiary
+    onTertiaryContainer:     "#...", // טקסט/אייקון מעל tertiaryContainer
     surface:                 "#...", // רקע כללי (כרטיסים, חלוניות)
     onSurface:               "#...", // טקסט/אייקון על surface
+    onSurfaceVariant:        "#...", // טקסט/אייקון משני על surface
+    surfaceContainerLowest:  "#...", // שכבת רקע הנמוכה ביותר
+    surfaceContainerLow:     "#...", // שכבת רקע נמוכה
+    surfaceContainer:        "#...", // שכבת רקע בסיסית
+    surfaceContainerHigh:    "#...", // רקע הסרגל העליון (AppTopBar) במסכי הספרים
     surfaceContainerHighest: "#...", // שכבת רקע הגבוהה ביותר (פופאובר, דיאלוג)
     error:                   "#...", // שגיאות
     onError:                 "#...", // טקסט/אייקון מעל error
+    errorContainer:          "#...", // מיכל שגיאה (רקע עדין)
+    onErrorContainer:        "#...", // טקסט/אייקון מעל errorContainer
     outline:                 "#...", // מסגרות ומפרידים
+    outlineVariant:          "#...", // מסגרות/מפרידים עדינים יותר
+    inverseSurface:          "#...", // רקע הפוך (snackbar, tooltip)
+    onInverseSurface:        "#...", // טקסט/אייקון מעל inverseSurface
+    inversePrimary:          "#...", // primary על רקע הפוך
+    shadow:                  "#...", // צבע צללית
+    scrim:                   "#...", // כיסוי חוצץ (modal scrim)
+    surfaceTint:             "#...", // גוון העלאה (elevation tint)
   },
   typography: {
     fontFamily:             "Frank Ruhl Libre", // גופן ראשי (טקסטים עבריים)
@@ -114,8 +136,13 @@ function applyTheme(theme) {
   root.style.setProperty('--color-on-primary',  cs.onPrimary);
   root.style.setProperty('--color-secondary',   cs.secondary);
   root.style.setProperty('--color-on-secondary', cs.onSecondary);
+  // כפתור ניווט פעיל בסרגל הצד (ה-pill)
+  root.style.setProperty('--color-secondary-container',    cs.secondaryContainer);
+  root.style.setProperty('--color-on-secondary-container', cs.onSecondaryContainer);
   root.style.setProperty('--color-surface',     cs.surface);
   root.style.setProperty('--color-on-surface',  cs.onSurface);
+  // רקע הסרגל העליון (AppTopBar) במסכי הספרים
+  root.style.setProperty('--color-surface-container-high',    cs.surfaceContainerHigh);
   root.style.setProperty('--color-surface-container-highest', cs.surfaceContainerHighest);
   root.style.setProperty('--color-error',    cs.error);
   root.style.setProperty('--color-on-error', cs.onError);
@@ -453,8 +480,11 @@ body {
       r.style.setProperty('--color-on-primary',  cs.onPrimary);
       r.style.setProperty('--color-secondary',   cs.secondary);
       r.style.setProperty('--color-on-secondary', cs.onSecondary);
+      r.style.setProperty('--color-secondary-container',    cs.secondaryContainer);
+      r.style.setProperty('--color-on-secondary-container', cs.onSecondaryContainer);
       r.style.setProperty('--color-surface',     cs.surface);
       r.style.setProperty('--color-on-surface',  cs.onSurface);
+      r.style.setProperty('--color-surface-container-high',    cs.surfaceContainerHigh);
       r.style.setProperty('--color-surface-container-highest', cs.surfaceContainerHighest);
       r.style.setProperty('--color-error',    cs.error);
       r.style.setProperty('--color-on-error', cs.onError);

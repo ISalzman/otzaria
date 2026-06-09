@@ -49,6 +49,10 @@ class CustomTitleBar extends StatefulWidget {
   State<CustomTitleBar> createState() => _CustomTitleBarState();
 }
 
+/// סמן ל-hit-test על שטח כל טאב, לזיהוי "לחיצה כפולה על טאב" באזור הטאבים
+/// (ראה [_CustomTitleBarState._hitTestTab]).
+const String _kTabHitMarker = 'custom-title-bar-tab';
+
 const double _kAppBarControlsWidth = 105.0;
 const double _kWindowCaptionButtonsWidth = 138.0;
 const double _kWindowCaptionButtonWidth = 46.0;
@@ -83,10 +87,41 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   // גודל/מבנה בלבד (גלילה מיידית, ללא אנימציה מיותרת).
   OpenedTab? _lastScrolledTab;
 
+  // נקבע ב-onDoubleTapDown (לפני onDoubleTap): האם הלחיצה הכפולה האחרונה באזור
+  // הטאבים הייתה על טאב בפועל. אם כן — מדלגים על maximize/restore.
+  bool _doubleTapOnTab = false;
+
   @override
   void dispose() {
     _tabsScrollController.dispose();
     super.dispose();
+  }
+
+  /// בודק אם הנקודה הגלובלית פוגעת בשטח של טאב (מסומן ב-[_kTabHitMarker]).
+  /// משמש כדי לדלג על maximize בלחיצה כפולה על טאב, בלי להסתמך על gesture arena.
+  bool _hitTestTab(BuildContext context, Offset globalPosition) {
+    final result = HitTestResult();
+    WidgetsBinding.instance
+        .hitTestInView(result, globalPosition, View.of(context).viewId);
+    for (final entry in result.path) {
+      final target = entry.target;
+      if (target is RenderMetaData && target.metaData == _kTabHitMarker) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// maximize/restore בלחיצה כפולה על האזור הריק שבשורת הטאבים (כמו DragToMoveArea).
+  /// אם הלחיצה הייתה על טאב (נקבע ב-onDoubleTapDown) — אין שינוי גודל.
+  Future<void> _onTabsAreaDoubleTap() async {
+    if (_doubleTapOnTab) return;
+    final isMaximized = await windowManager.isMaximized();
+    if (isMaximized) {
+      await windowManager.unmaximize();
+    } else {
+      await windowManager.maximize();
+    }
   }
 
   /// גולל את שורת הטאבים כך שהטאב הנבחר ייראה במלואו.
@@ -163,6 +198,12 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         return BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, settingsState) {
             final stackedTabs = _useStackedTabs(context, navState);
+            // במסך עיון ללא טאבים פתוחים אין תוכן קריאה אמיתי, ולכן המסגרת
+            // העליונה נצבעת כשאר מסכי הלוח (רקע לוח + גבול תחתון) במקום ברקע
+            // מסך העיון. בחיפוש תמיד קיים טאב, לכן נשאר בסגנון הקריאה.
+            final useReaderStyle = navState.currentScreen == Screen.search ||
+                (navState.currentScreen == Screen.reading &&
+                    context.select((TabsBloc bloc) => bloc.state.hasOpenTabs));
             final topBar = SizedBox(
               height: 40,
               child: Stack(
@@ -171,12 +212,10 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                   Container(
                     clipBehavior: Clip.none,
                     decoration: BoxDecoration(
-                      color: (navState.currentScreen == Screen.reading ||
-                              navState.currentScreen == Screen.search)
+                      color: useReaderStyle
                           ? AppSurfaces.readerBackground(context)
                           : AppSurfaces.solidPanelBackground(context),
-                      border: (navState.currentScreen == Screen.reading ||
-                              navState.currentScreen == Screen.search)
+                      border: useReaderStyle
                           ? null
                           : Border(
                               bottom: BorderSide(
@@ -198,8 +237,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                               Center(
                                 child: _buildActionButtons(context),
                               ),
-                              if (navState.currentScreen == Screen.reading ||
-                                  navState.currentScreen == Screen.search)
+                              if (useReaderStyle)
                                 Positioned(
                                   bottom: 0,
                                   left: 0,
@@ -481,12 +519,32 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         return ReorderableDragStartListener(
           key: ObjectKey(tab),
           index: index,
-          child: _buildTab(context, tab, state),
+          // סימון שטח הטאב ל-hit-test, כדי שה-double-tap-to-maximize שבמסגרת
+          // (ראה _buildScrollableTabsArea) ידלג עליו. בליעה דרך GestureDetector
+          // מקונן אינה אמינה מול ה-DoubleTapGestureRecognizer של ה-DragToMoveArea
+          // (שני הזיהויים מתקיימים במקביל), ולכן מזהים "לחיצה על טאב" בבדיקת
+          // hit-test מפורשת ב-onDoubleTapDown.
+          child: MetaData(
+            metaData: _kTabHitMarker,
+            behavior: HitTestBehavior.opaque,
+            child: _buildTab(context, tab, state),
+          ),
         );
       },
     );
 
-    return DragToMoveArea(
+    // מחליף את DragToMoveArea בגרסה ששולטת ב-onDoubleTap: גרירת חלון (onPanStart)
+    // ו-maximize/restore (onDoubleTap) פעילים על האזור הריק שבשורת הטאבים, אך
+    // לחיצה כפולה *על טאב* מדלגת על ה-maximize. הזיהוי הוא ע"י hit-test מפורש
+    // (onDoubleTapDown) ולא ע"י arena/בליעה — שאינם אמינים ל-double-tap מקונן.
+    // זהו ה-מקבילה לאופן שבו ReorderableDragStartListener בולע את הגרירה על טאב:
+    // אזור ריק → גרירה/maximize של החלון; טאב → לא.
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanStart: (_) => windowManager.startDragging(),
+      onDoubleTapDown: (details) =>
+          _doubleTapOnTab = _hitTestTab(context, details.globalPosition),
+      onDoubleTap: _onTabsAreaDoubleTap,
       child: KeyedSubtree(
         key: tourReadingTabsTargetKey,
         // חיצי גלילה מוצגים רק כשהטאבים גולשים מעבר לרוחב הזמין.

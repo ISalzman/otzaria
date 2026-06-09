@@ -12,6 +12,12 @@ final RegExp _footnoteBodyRegExp = RegExp(
   dotAll: true,
 );
 
+final RegExp _footnoteMarkerRegExp = RegExp(
+  r'<sup\b[^>]*\bfootnote-marker\b[^>]*>.*?</sup>',
+  caseSensitive: false,
+  dotAll: true,
+);
+
 const String _supCloseTag = '</sup>';
 
 /// מסיר את גוף ההערות (<i class="footnote">...</i>) משורה אחת.
@@ -19,6 +25,21 @@ const String _supCloseTag = '</sup>';
 String stripInlineNotes(String html) {
   if (!html.contains('footnote')) return html;
   return html.replaceAll(_footnoteBodyRegExp, '');
+}
+
+/// מסיר את ההערות inline במלואן — גם אות ההפניה
+/// (<sup class="footnote-marker">marker</sup>) וגם גוף ההערה
+/// (<i class="footnote">body</i>).
+///
+/// בניגוד ל-[stripInlineNotes] שמשאיר את ה-<sup> כעוגן ויזואלי בקורא,
+/// כאן מסירים גם אותו. נחוץ לטקסט שמיועד לחיפוש או לאינדוקס: שם תגי ה-HTML
+/// נמחקים, ולכן אות ההפניה וגוף ההערה היו נשארים כטקסט חשוף ומזהמים את
+/// תוצאות החיפוש.
+String stripInlineNotesForSearch(String html) {
+  if (!html.contains('footnote')) return html;
+  return html
+      .replaceAll(_footnoteMarkerRegExp, '')
+      .replaceAll(_footnoteBodyRegExp, '');
 }
 
 /// בודק אם הספר מכיל לפחות שורה אחת עם הערה inline.

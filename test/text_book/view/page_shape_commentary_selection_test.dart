@@ -140,5 +140,48 @@ void main() {
         'בעל הטורים על בראשית',
       ]);
     });
+
+    test('הסתרת מפרש תחתון נוסף אינה מסתירה את המפרש התחתון', () {
+      final displayed = resolvePageShapeDisplayedCommentators(
+        leftSelection: null,
+        rightSelection: null,
+        bottomSelection: 'אברבנאל על תורה',
+        bottomRightSelection: 'בעל הטורים על בראשית',
+        availableCommentators: const [
+          'אברבנאל על תורה',
+          'בעל הטורים על בראשית',
+        ],
+        columnVisibility: const {
+          'left': true,
+          'right': true,
+          'bottom': true,
+          'bottomRight': false,
+        },
+      );
+
+      // המפרש התחתון נשאר, התחתון הנוסף מוסתר
+      expect(displayed, ['אברבנאל על תורה']);
+    });
+
+    test('הסתרת המפרש התחתון אינה מסתירה את המפרש התחתון הנוסף', () {
+      final displayed = resolvePageShapeDisplayedCommentators(
+        leftSelection: null,
+        rightSelection: null,
+        bottomSelection: 'אברבנאל על תורה',
+        bottomRightSelection: 'בעל הטורים על בראשית',
+        availableCommentators: const [
+          'אברבנאל על תורה',
+          'בעל הטורים על בראשית',
+        ],
+        columnVisibility: const {
+          'left': true,
+          'right': true,
+          'bottom': false,
+          'bottomRight': true,
+        },
+      );
+
+      expect(displayed, ['בעל הטורים על בראשית']);
+    });
   });
 }

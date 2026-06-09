@@ -65,5 +65,7 @@ void main() {
       textField.decoration?.fillColor,
       theme.colorScheme.surfaceContainerHigh,
     );
+    expect(textField.decoration?.labelText, 'חיפוש');
+    expect(textField.decoration?.hintText, 'הקלד מילות חיפוש');
   });
 }

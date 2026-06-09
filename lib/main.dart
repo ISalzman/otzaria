@@ -20,6 +20,7 @@ import 'package:otzaria/app.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/repository/bookmark_repository.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_bloc.dart';
+import 'package:otzaria/find_ref/repository/find_ref_db_isolate.dart';
 import 'package:otzaria/find_ref/repository/find_ref_repository.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
@@ -27,7 +28,6 @@ import 'package:otzaria/history/history_repository.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
-import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/navigation_repository.dart';
@@ -424,33 +424,22 @@ Future<void> _runAppBootstrap() async {
     });
   }
 
-  // הגדרת window_manager (מהיר) לפני runApp – כך החלון יופיע עם ה-splash ברגע הראשון
+  // הגדרת window_manager לפני runApp.
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
-    await windowManager.setMinimumSize(WindowPersistence.minSize);
+    WindowPersistence.splashMode = true;
 
     _appWindowListener = AppWindowListener();
     windowManager.addListener(_appWindowListener!);
     await windowManager.setPreventClose(true);
 
-    // החלון יוצג כאשר Flutter מרנדר את הפריים הראשון (ה-splash),
-    // אך רק אחרי ש-Settings אותחל ו-restoreIfAny הסתיים
-    windowManager.waitUntilReadyToShow(
-      const WindowOptions(
-        skipTaskbar: false,
-        titleBarStyle: TitleBarStyle.hidden,
-        windowButtonVisibility: false,
-      ),
-      () async {
-        await _windowReadyCompleter.future;
-        await windowManager.show();
-        await windowManager.focus();
-        // Maximize must happen AFTER show() — calling it before show is
-        // unreliable on Windows because `show()` triggers SW_SHOWNORMAL which
-        // unmaximizes the window. See window_persistence.dart.
-        await WindowPersistence.applyPendingMaximize();
-      },
-    );
+    // בכל פלטפורמות הדסקטופ חלון ה-splash הוא נייטיב ועצמאי (סמל צף, ראה
+    // windows/runner/splash_window.cpp, linux/runner/splash_window.cc,
+    // macos/Runner/MainFlutterWindow.swift) ומוצג כבר ב-runner לפני שמנוע Flutter
+    // עולה. החלון הראשי נשאר *מוסתר* (ה-runner אינו מציג אותו בפריים הראשון) עד
+    // החשיפה (prepareMainWindowReveal/presentMainWindow), ואז נפתח ישר בגבולותיו
+    // הסופיים עם התוכן — ללא חלון מקדים, ללא קפיצה וללא פער. לכן אין כאן
+    // waitUntilReadyToShow.
   }
 
   runApp(
@@ -459,6 +448,98 @@ Future<void> _runAppBootstrap() async {
         child: const AppBootstrap(),
       ),
     ),
+  );
+}
+
+/// ערוץ לסגירת חלון ה-splash הנייטיב (ראה windows/linux/macos runner). נתמך בכל
+/// פלטפורמות הדסקטופ.
+const MethodChannel _splashChannel = MethodChannel('otzaria/splash');
+
+Future<void> _closeNativeSplash() async {
+  if (kIsWeb || !(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    return;
+  }
+  try {
+    await _splashChannel.invokeMethod<void>('close');
+  } catch (_) {
+    // לא קריטי — חלון ה-splash ייהרס ממילא עם התהליך.
+  }
+}
+
+/// שלב 1 בחשיפת החלון הראשי: מגדיר מסגרת/מינימום ומחיל את הגבולות הסופיים בעוד
+/// החלון הראשי עדיין **מוסתר** (ה-runner לא הציג אותו בכל פלטפורמות הדסקטופ).
+/// המנוע מצייר את התוכן לתוך משטח החלון המוסתר, והחלון יוצג ב-[presentMainWindow]
+/// רק אחרי שהתוכן צויר — כך הוא "מופיע" בבת אחת בגודלו המלא עם תוכן, ללא
+/// שינוי-גודל גלוי וללא פער. חלון ה-splash הנייטיב הצף מספק משוב עד אז.
+///
+/// נקרא מ-MainWindowScreen ברגע שתוכן הטאב הפעיל נטען.
+Future<void> prepareMainWindowReveal() async {
+  if (kIsWeb || !(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    return;
+  }
+  try {
+    await windowManager.setMinimumSize(WindowPersistence.minSize);
+    await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+    // מחילים את הגבולות הסופיים בעוד החלון מוסתר — שינוי-הגודל אינו נראה.
+    await WindowPersistence.applyRestoredBounds();
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError(
+        'Prepare main window reveal', error, stackTrace);
+  }
+}
+
+/// שלב 2 בחשיפת החלון הראשי: מציג את החלון המוסתר (שכבר בגבולותיו הסופיים, עם
+/// התוכן שצויר), ממקסם אם נדרש, וסוגר את ה-splash הנייטיב באותו רגע — כך החלון
+/// מופיע בבת אחת עם תוכן והסמל הצף מתפוגג, ללא קפיצה וללא פער. נקרא אחרי שהתוכן
+/// נחשף ונצבע.
+Future<void> presentMainWindow() async {
+  if (kIsWeb || !(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    return;
+  }
+  try {
+    await windowManager.show();
+    await windowManager.focus();
+    // maximize חייב לקרות *אחרי* show (show מבצע restore לגודל הקודם).
+    await WindowPersistence.applyPendingMaximize();
+    // סוגרים את חלון ה-splash הנייטיב — בדיוק כשהחלון הראשי מופיע עם תוכן.
+    await _closeNativeSplash();
+    // מכאן והלאה מותר לשמור את גודל החלון.
+    WindowPersistence.splashMode = false;
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError('Present main window', error, stackTrace);
+  }
+}
+
+/// בונה את ה-[FindRefRepository] כשהוא מחווט לשירות ה-isolate
+/// ([FindRefDbIsolate]) עבור כל שאילתות `seforim.db` הכבדות (TOC/AltToc/
+/// מפרשים/דור). כך שאילתות אלו רצות על isolate נפרד ואינן מקפיאות את ההקלדה
+/// בדיאלוג "איתור מקורות".
+///
+/// שאר ה-hooks (חיפוש ספרים בקאש בזיכרון, נתיב קטגוריה, outline של PDF,
+/// וספרי משתמש) נשארים `null` ומשתמשים ב-singletons על ה-main isolate —
+/// הם עתירי-CPU/קאש ולא הם שגרמו לקיפאון.
+FindRefRepository _buildFindRefRepository() {
+  return FindRefRepository(
+    dataRepository: DataRepository.instance,
+    getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async =>
+        (await FindRefDbIsolate.instance())
+            .getTocEntries(bookId, bookTitle, queryTokens: queryTokens),
+    getAltTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async =>
+        (await FindRefDbIsolate.instance())
+            .getAltTocEntries(bookId, bookTitle, queryTokens: queryTokens),
+    getAllAltTocFlatEntries: () async =>
+        (await FindRefDbIsolate.instance()).getAllAltTocFlat(),
+    fetchCommentatorRows: (ref) async =>
+        (await FindRefDbIsolate.instance()).getCommentatorRows(
+      bookId: ref.bookId,
+      bookTitle: ref.title,
+      sourceLineId: ref.sourceLineId,
+      startLineIndex: ref.segment.toInt(),
+      level: ref.tocLevel,
+      isAltToc: ref.isAltToc,
+    ),
+    getBookEra: (bookTitle) async =>
+        (await FindRefDbIsolate.instance()).getBookEra(bookTitle),
   );
 }
 
@@ -863,18 +944,11 @@ class _AppBootstrapState extends State<AppBootstrap> {
             )..add(LoadSettings()),
           ),
           BlocProvider<LibraryBloc>(
-            create: (_) {
-              final bloc = LibraryBloc();
-              // LoadLibrary טוען ~1500ms מ-SQLite — חוסם את ה-UI thread גם
-              // בקטעים בין ה-awaits. דוחים בשני פריימים עוקבים כדי לאפשר
-              // ל-ReadingScreen להיבנות ולהיצבע לפני שהטעינה מתחילה.
-              // LibraryBrowser בכל מקרה לא נטען מיד (המשתמש ב-Reading) — הוא
-              // יקבל את ה-state ברגע שיגיע.
-              scheduleAfterTwoFrames(() {
-                bloc.add(LoadLibrary());
-              });
-              return bloc;
-            },
+            // ה-LoadLibrary אינו נשלח כאן יותר: בניית הקטלוג (~300ms CPU על
+            // ה-main thread) הייתה חונקת את שאילתת תוכן הספר הפעיל ומעכבת את
+            // הופעתו. ההפעלה עברה ל-MainWindowScreen._revealMainWindowOnce,
+            // שמעדיף את טעינת הספר הפעיל ורק אז מתחיל את בניית הקטלוג.
+            create: (_) => LibraryBloc(),
           ),
           BlocProvider<CustomFoldersBloc>(
             create: (context) => CustomFoldersBloc(
@@ -900,8 +974,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
           ),
           BlocProvider<FindRefBloc>(
             create: (_) => FindRefBloc(
-              findRefRepository:
-                  FindRefRepository(dataRepository: DataRepository.instance),
+              findRefRepository: _buildFindRefRepository(),
             ),
           ),
           BlocProvider<PersonalNotesBloc>(

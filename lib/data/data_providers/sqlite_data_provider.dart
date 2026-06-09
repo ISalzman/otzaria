@@ -52,13 +52,24 @@ class SqliteDataProvider {
 
     // אם יש write-session פעיל, החיבור ה-RO סגור בכוונה. אסור לפתוח אותו
     // מחדש כאן במקביל לחיבור ה-RW (היה גורם ל"database locked"). ממתינים
-    // לסיום שרשרת הכתיבה — היא פותחת מחדש את ה-RO בעצמה. קוראים בזמן הזה
-    // מקבלים null זמנית (כמו בזרימת dispose-בזמן-סנכרון הקיימת).
+    // לסיום שרשרת הכתיבה *וגם* ל-gate של כתיבה חיצונית — שניהם פותחים מחדש
+    // את ה-RO בעצמם. כך קוראים שמגיעים בחלון הזה (למשל טעינת מפרשים/קישורים
+    // ברקע בעלייה) ממתינים לפתיחה-מחדש ומצליחים, במקום לקבל null ולהציג ריק.
     if (_activeWriteSessions > 0) {
+      final gate = _externalWriteGate;
       try {
         await _writeChain;
       } catch (_) {}
-      return;
+      if (gate != null) {
+        try {
+          await gate.future;
+        } catch (_) {}
+      }
+      // אם החיבור נפתח מחדש — סיימנו. אם session חדש כבר פעיל — מוותרים זמנית
+      // (הקורא יקבל null הפעם, נדיר). אחרת נופלים לאתחול הרגיל למטה.
+      if (_isInitialized || _activeWriteSessions > 0) {
+        return;
+      }
     }
 
     // If initialization already started, await the same future
@@ -139,6 +150,12 @@ class SqliteDataProvider {
   /// לא יפתח אותו מחדש (כדי לא להתנגש עם חיבור ה-RW). יורד רק לאחר שה-session
   /// פתח מחדש את ה-RO.
   int _activeWriteSessions = 0;
+
+  /// gate לכתיבה חיצונית (isolate סנכרון/generator) — נוצר ב-
+  /// [closeForExternalWrite] ומושלם ב-[reopenAfterExternalWrite]. קוראים
+  /// מקבילים ממתינים עליו ב-[initialize] במקום לקבל null, כדי שספרים/מפרשים
+  /// לא ייטענו ריקים כשקריאת רקע מתנגשת עם חלון הסנכרון בעלייה.
+  Completer<void>? _externalWriteGate;
 
   /// מנרמל את מצב היומן של [dbPath] ל-DELETE (best-effort) כדי שניתן יהיה
   /// לפתוח אותו read-only.
@@ -254,6 +271,9 @@ class SqliteDataProvider {
   /// של קוראים מקבילים לא יפתח חיבור RO מתנגש בזמן שהאיזולייט כותב.
   /// יש לקרוא ל-[reopenAfterExternalWrite] לאחר שהאיזולייט סיים.
   Future<void> closeForExternalWrite() async {
+    // נוצר *לפני* הגדלת המונה, כך שקורא מקביל שיראה _activeWriteSessions > 0
+    // תמיד יראה גם gate להמתין עליו.
+    _externalWriteGate ??= Completer<void>();
     _activeWriteSessions++;
     await dispose();
   }
@@ -263,7 +283,24 @@ class SqliteDataProvider {
     if (_activeWriteSessions > 0) {
       _activeWriteSessions--;
     }
-    await initialize();
+    // אם עדיין יש כתיבה חיצונית פעילה (close-ים חופפים), אסור לפתוח מחדש
+    // עכשיו — חיבור ה-RW האחר עדיין כותב. נפתח רק כשהאחרון מסיים.
+    if (_activeWriteSessions > 0) {
+      return;
+    }
+    try {
+      // המונה כבר 0, ולכן initialize() לא ייכנס לבלוק ההמתנה ל-gate (אין
+      // deadlock), ומנגנון _initializationFuture מונע פתיחה כפולה מול קורא מקביל.
+      await initialize();
+    } finally {
+      // משחררים את הקוראים הממתינים. ה-finally מבטיח שחרור גם אם הפתיחה-מחדש
+      // נכשלה (אחרת היו נתקעים לנצח).
+      final gate = _externalWriteGate;
+      _externalWriteGate = null;
+      if (gate != null && !gate.isCompleted) {
+        gate.complete();
+      }
+    }
   }
 
   /// Checks if a book exists in the database

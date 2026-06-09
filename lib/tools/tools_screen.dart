@@ -436,7 +436,10 @@ class ToolsScreenState extends State<ToolsScreen>
         label: 'הערות אישיות',
         icon: FluentIcons.note_24_regular,
         iconFilled: FluentIcons.note_24_filled,
-        order: 40,
+        // order 25 ממקם את "הערות אישיות" צמוד ל"שמור וזכור" (20) — שניהם
+        // בקבוצת "תורה שלמדתי". אחרת notes חוצה את קבוצת "דקדוקי סופרים"
+        // (measurements=30 ... gematria=50) ומפצל את הכותרת שלה לשתיים.
+        order: 25,
         pageBuilder: () => const PersonalNotesManagerScreen(),
       ),
       BuiltInToolDescriptor(

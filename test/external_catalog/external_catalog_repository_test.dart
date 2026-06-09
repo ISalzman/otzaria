@@ -142,6 +142,68 @@ void main() {
       expect(await repository.getCurrentDatabaseVersion(), 4);
     });
 
+    test('updateDatabaseIfNeeded זורק שגיאה ידידותית כשה-DB נעול ב-Windows',
+        () async {
+      if (!Platform.isWindows) {
+        return;
+      }
+
+      await _createCatalogDatabase(
+        repository.databasePath,
+        version: 4,
+      );
+
+      final remoteDbPath = path.join(tempDir.path, 'remote_catalog_busy.db');
+      await _createCatalogDatabase(
+        remoteDbPath,
+        version: 5,
+      );
+      final remoteDbBytes = await File(remoteDbPath).readAsBytes();
+
+      repository = ExternalCatalogRepository(
+        httpClient: MockClient((request) async {
+          final url = request.url.toString();
+          if (url == ExternalCatalogRepository.releaseApiUrl) {
+            return http.Response(
+              jsonEncode({
+                'tag_name': 'db-v5',
+                'assets': [
+                  {
+                    'name': DatabaseConstants.externalCatalogDatabaseFileName,
+                    'browser_download_url':
+                        'https://example.com/catalog_busy.db',
+                  },
+                  {
+                    'name': DatabaseConstants.externalCatalogVersionFileName,
+                    'browser_download_url': 'https://example.com/version.txt',
+                  },
+                ],
+              }),
+              200,
+            );
+          }
+          if (url == 'https://example.com/version.txt') {
+            return http.Response('5\n', 200);
+          }
+          if (url == 'https://example.com/catalog_busy.db') {
+            return http.Response.bytes(remoteDbBytes, 200);
+          }
+          return http.Response('Not found', 404);
+        }),
+      );
+
+      final lock = File(repository.databasePath).openSync(mode: FileMode.read);
+      addTearDown(() async {
+        await lock.close();
+      });
+
+      await expectLater(
+        repository.updateDatabaseIfNeeded(),
+        throwsA(isA<ExternalCatalogDatabaseBusyException>()),
+      );
+      expect(await repository.getCurrentDatabaseVersion(), 4);
+    });
+
     test('getOtzarBooks ו-getHebrewBooks מחזירים ספרים מה-DB החיצוני',
         () async {
       final db = sqlite3.open(repository.databasePath);

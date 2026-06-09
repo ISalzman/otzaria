@@ -25,6 +25,9 @@ class AddPersonalNote extends PersonalNotesEvent {
   final PersonalNoteContentFormat contentFormat;
   final String? selectedText;
 
+  /// עמודת ההתחלה המשוערת של הבחירה (לזיהוי המופע הנכון כשהטקסט חוזר בשורה).
+  final int? selectionColumn;
+
   const AddPersonalNote({
     required this.bookId,
     required this.lineNumber,
@@ -32,11 +35,19 @@ class AddPersonalNote extends PersonalNotesEvent {
     required this.contentPlain,
     required this.contentFormat,
     this.selectedText,
+    this.selectionColumn,
   });
 
   @override
-  List<Object?> get props =>
-      [bookId, lineNumber, content, contentPlain, contentFormat, selectedText];
+  List<Object?> get props => [
+        bookId,
+        lineNumber,
+        content,
+        contentPlain,
+        contentFormat,
+        selectedText,
+        selectionColumn,
+      ];
 }
 
 class UpdatePersonalNote extends PersonalNotesEvent {
@@ -87,11 +98,23 @@ class RepositionPersonalNote extends PersonalNotesEvent {
   List<Object?> get props => [bookId, noteId, lineNumber];
 }
 
+/// בקשה להרחיב (לפתוח) את ההערות המשויכות לשורה [lineNumber] (1-based),
+/// גם אם ההגדרה היא "סגור כברירת מחדל". נשלח בלחיצה על סימון הערה inline.
+class RequestExpandNotesForLine extends PersonalNotesEvent {
+  final int lineNumber;
+
+  const RequestExpandNotesForLine(this.lineNumber);
+
+  @override
+  List<Object?> get props => [lineNumber];
+}
+
 class StartCreatingPersonalNote extends PersonalNotesEvent {
   final String bookId;
   final int lineNumber;
   final String? referenceText;
   final String? selectedText;
+  final int? selectionColumn;
   final String? initialContent;
   final PersonalNoteContentFormat? initialFormat;
 
@@ -100,6 +123,7 @@ class StartCreatingPersonalNote extends PersonalNotesEvent {
     required this.lineNumber,
     this.referenceText,
     this.selectedText,
+    this.selectionColumn,
     this.initialContent,
     this.initialFormat,
   });
@@ -110,6 +134,7 @@ class StartCreatingPersonalNote extends PersonalNotesEvent {
         lineNumber,
         referenceText,
         selectedText,
+        selectionColumn,
         initialContent,
         initialFormat,
       ];

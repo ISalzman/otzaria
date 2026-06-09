@@ -30,9 +30,16 @@ class CommentarySyncHelper {
     return logicalIndex;
   }
 
-  /// מציאת הקישור הטוב ביותר למפרש
-  /// מחזיר null אם אין קישורים כלל
-  static Link? findBestLink({
+  /// מחשב את אינדקס היעד במפרש עבור שורת מקור נתונה.
+  ///
+  /// היעד נקבע לפי הקישור הקודם הקרוב ביותר (before) — המפרש נצמד אליו עד
+  /// שהשורה הנראית מגיעה לקישור הבא. אם אין קישור קודם, נצמדים לקישור הבא
+  /// הראשון.
+  ///
+  /// [linksForCommentary] - הקישורים של המפרש (לא חייבים להיות ממוינים)
+  /// [logicalMainIndex] - אינדקס השורה הלוגי במקור (0-based)
+  /// מחזיר אינדקס 0-based במפרש, או null אם אין קישורים כלל.
+  static int? getCommentaryTargetIndex({
     required List<Link> linksForCommentary,
     required int logicalMainIndex,
   }) {
@@ -42,56 +49,25 @@ class CommentarySyncHelper {
 
     final mainLineNumber = logicalMainIndex + 1; // המרה ל-1-based
 
-    // ניסיון למצוא קישור מדויק
-    try {
-      return linksForCommentary.firstWhere(
-        (link) => link.index1 == mainLineNumber,
-      );
-    } catch (e) {
-      // אין קישור מדויק - מחפשים את הקרוב ביותר
-    }
-
-    // חיפוש L_before (הקישור הקודם הכי קרוב)
-    Link? lBefore;
-    int minDistanceBefore = double.maxFinite.toInt();
-
+    // מציאת הקישור הקודם הקרוב ביותר (before) והבא הקרוב ביותר (after)
+    Link? before;
+    Link? after;
     for (final link in linksForCommentary) {
-      if (link.index1 < mainLineNumber) {
-        final distance = mainLineNumber - link.index1;
-        if (distance < minDistanceBefore) {
-          minDistanceBefore = distance;
-          lBefore = link;
+      if (link.index1 <= mainLineNumber) {
+        if (before == null || link.index1 > before.index1) {
+          before = link;
+        }
+      } else {
+        if (after == null || link.index1 < after.index1) {
+          after = link;
         }
       }
     }
 
-    // אם יש קישור קודם - תמיד מעדיפים אותו
-    if (lBefore != null) {
-      return lBefore;
+    // תמיד מעדיפים את הקישור הקודם הקרוב; אם אין — את הקישור הבא הראשון
+    if (before != null) {
+      return before.index2 - 1; // המרה ל-0-based
     }
-
-    // אין קישור קודם - מחפשים L_after (הקישור הבא הכי קרוב)
-    Link? lAfter;
-    int minDistanceAfter = double.maxFinite.toInt();
-
-    for (final link in linksForCommentary) {
-      if (link.index1 > mainLineNumber) {
-        final distance = link.index1 - mainLineNumber;
-        if (distance < minDistanceAfter) {
-          minDistanceAfter = distance;
-          lAfter = link;
-        }
-      }
-    }
-
-    return lAfter; // יכול להיות null אם אין גם קישור הבא
-  }
-
-  /// חישוב האינדקס היעד במפרש
-  static int? getCommentaryTargetIndex(Link? link) {
-    if (link == null) {
-      return null;
-    }
-    return link.index2 - 1; // המרה ל-0-based
+    return after == null ? null : after.index2 - 1;
   }
 }
