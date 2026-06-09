@@ -238,6 +238,7 @@ flutter build windows
 
 תוכנה זו נוצרה והוקדשה על ידי:
 [sivan22](https://github.com/Sivan22),
+[ר. נבון (השקעה עצומה במעבר ל-SQLite)](https://github.com/rachelGrayover),
 [Y.PL.](https://github.com/Y-PLONI),
 [palmoni](https://github.com/palmoni5),
 [YOSEFTT](https://github.com/YOSEFTT),
@@ -246,7 +247,6 @@ flutter build windows
 [userbot](https://github.com/userbot000),
 [mosh-dvd](https://github.com/mosh-dvd),
 [asz](https://github.com/DeveShlomo),
-[ר. נבון (השקעה עצומה במעבר ל-SQLite)](https://github.com/rachelGrayover),
 [NHLOCAL (פיתוח "שמור וזכור")](https://github.com/NHLOCAL/Shamor-Zachor).
 
 תודה מיוחדת ל-**[אליהו גמבש](https://github.com/kdroidFilter)** על העבודה העצומה בהמרת נתוני ספריא ל-SQLite.
