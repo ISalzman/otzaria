@@ -109,17 +109,24 @@ class AboutDevTab extends StatelessWidget {
 
   static const _developers = <Map<String, String>>[
     {'name': 'sivan22', 'url': 'https://github.com/Sivan22'},
+    {'name': 'Y.PL.', 'url': 'https://github.com/Y-PLONI'},
+    {'name': 'palmoni', 'url': 'https://github.com/palmoni5'},
+    {'name': 'YOSEFTT', 'url': 'https://github.com/YOSEFTT'},
+    {'name': 'zevisvei', 'url': 'https://github.com/zevisvei'},
+    {'name': 'evel-avalim', 'url': 'https://github.com/evel-avalim'},
+    {'name': 'userbot', 'url': 'https://github.com/userbot000'},
+    {'name': 'asz', 'url': 'https://github.com/DeveShlomo'},
+    {'name': 'mosh-dvd', 'url': 'https://github.com/mosh-dvd'},
+    {
+      'name': 'אליהו גמבש',
+      'url': 'https://github.com/kdroidFilter',
+      'description': 'המרת נתוני ספריא ל-SQLite',
+    },
     {
       'name': 'ר. נבון',
       'url': 'https://github.com/rachelGrayover',
       'description': 'השקעה עצומה במעבר ל-SQLite',
     },
-    {'name': 'Y.PL.', 'url': 'https://github.com/Y-PLONI'},
-    {'name': 'YOSEFTT', 'url': 'https://github.com/YOSEFTT'},
-    {'name': 'zevisvei', 'url': 'https://github.com/zevisvei'},
-    {'name': 'evel-avalim', 'url': 'https://github.com/evel-avalim'},
-    {'name': 'userbot', 'url': 'https://github.com/userbot000'},
-    {'name': 'mosh-dvd', 'url': 'https://github.com/mosh-dvd'},
     {
       'name': 'NHLOCAL',
       'url': 'https://github.com/NHLOCAL/Shamor-Zachor',
@@ -911,11 +918,20 @@ class _ClosingQuote extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '(תהילים קיב, ג)',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 12, color: colorScheme.onSurfaceVariant),
+                InkWell(
+                  onTap: () async {
+                    final uri =
+                        Uri.parse('otzaria://open/book/28?index=2043&mark');
+                    if (await canLaunchUrl(uri)) await launchUrl(uri);
+                  },
+                  borderRadius: BorderRadius.circular(4),
+                  child: Text(
+                    '(תהילים קיב, ג)',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.primary),
+                  ),
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -949,11 +965,20 @@ class _ClosingQuote extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '(כתובות נ.)',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 12, color: colorScheme.onSurfaceVariant),
+                InkWell(
+                  onTap: () async {
+                    final uri =
+                        Uri.parse('otzaria://open/book/116?index=1279&mark');
+                    if (await canLaunchUrl(uri)) await launchUrl(uri);
+                  },
+                  borderRadius: BorderRadius.circular(4),
+                  child: Text(
+                    '(כתובות נ.)',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.primary),
+                  ),
                 ),
               ],
             ),
