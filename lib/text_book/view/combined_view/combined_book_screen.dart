@@ -1156,6 +1156,10 @@ class _CombinedViewState extends State<CombinedView> {
   void _onInlineNoteTap(int lineIndex) {
     _addTextBookEventIfOpen(UpdateSelectedIndex(lineIndex));
     _addTextBookEventIfOpen(HighlightLine(lineIndex));
+    // פותחים את ההערה עצמה בחלונית, גם אם מוגדר "סגור כברירת מחדל".
+    context
+        .read<PersonalNotesBloc>()
+        .add(RequestExpandNotesForLine(lineIndex + 1));
     if (widget.onOpenPersonalNotes != null) {
       widget.onOpenPersonalNotes!.call();
     } else {
