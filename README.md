@@ -118,7 +118,9 @@
    - דורש ש-Visual C++ Redistributable יהיה מותקן מראש
    - עבור משתמשים שיודעים שכבר יש להם את התלויות הנדרשות
 
-הורידו את הגרסה האחרונה ל-Windows מ-[releases](https://github.com/otzaria/otzaria/releases). 
+הורידו את הגרסה האחרונה ל-Windows מ-[releases](https://github.com/otzaria/otzaria/releases).
+
+* לחלופין, ניתן להתקין את האפליקציה דרך [חנות Microsoft](https://apps.microsoft.com/detail/9nm0qmkc10nn).
 
 **הערה:** הספרייה כלולה בקובץ ה-.exe.
 במקרה שאתם זקוקים רק לאפליקציה עצמה לצורך שדרוג, הורידו את גרסת ה-ZIP ל-Windows מ-releases.
@@ -234,11 +236,20 @@ flutter build windows
 <!-- ACKNOWLEDGMENTS -->
 ## תודות
 
-תוכנה זו נוצרה והוקדשה על ידי: [sivan22](https://github.com/Sivan22), [ר. נבון (השקעה עצומה במעבר ל-SQLite)](https://github.com/rachelGrayover), [Y.PL.](https://github.com/Y-PLONI), [YOSEFTT](https://github.com/YOSEFTT), [zevisvei](https://github.com/zevisvei), [evel-avalim](https://github.com/evel-avalim), [userbot](https://github.com/userbot000), [mosh-dvd](https://github.com/mosh-dvd), [NHLOCAL (פיתוח "שמור וזכור")](https://github.com/NHLOCAL/Shamor-Zachor).
-
+תוכנה זו נוצרה והוקדשה על ידי:
+[sivan22](https://github.com/Sivan22),
+[Y.PL.](https://github.com/Y-PLONI),
+[palmoni](https://github.com/palmoni5),
+[YOSEFTT](https://github.com/YOSEFTT),
+[zevisvei](https://github.com/zevisvei),
+[evel-avalim](https://github.com/evel-avalim),
+[userbot](https://github.com/userbot000),
+[mosh-dvd](https://github.com/mosh-dvd),
+[asz](https://github.com/DeveShlomo),
+[ר. נבון (השקעה עצומה במעבר ל-SQLite)](https://github.com/rachelGrayover),
+[NHLOCAL (פיתוח "שמור וזכור")](https://github.com/NHLOCAL/Shamor-Zachor).
 
 תודה מיוחדת ל-**[אליהו גמבש](https://github.com/kdroidFilter)** על העבודה העצומה בהמרת נתוני ספריא ל-SQLite.
-
 
 הפרויקט התאפשר בזכות הפרויקט המדהים של ספריא.
 <br>
@@ -255,8 +266,7 @@ flutter build windows
 <a href="https://pninim.org/" title="פנינים" target="_blank"><img src="images/pninim.png" alt="פנינים" width="200" height="80"/></a>
 <a href="https://www.nli.org.il/" title="הספרייה הלאומית" target="_blank"><img src="images/national_library_il.png" alt="הספרייה הלאומית" width="80" height="80"/></a>
 <a href="https://fjms.genizah.org/" title="פרויקט פרידברג" target="_blank"><img src="images/friedberg_logo.png" alt="פרויקט פרידברג" width="200" height="80"/></a>
-
-<!--a href="https://github.com/projectbenyehuda/public_domain_dump" title="פרוייקט בן יהודה" target="_blank"><img src="images/Project Ben-Yehuda logo.jpg" alt="פרוייקט בן יהודה" width="80" height="80"/></a -->
+<!-- <a href="https://github.com/projectbenyehuda/public_domain_dump" title="פרוייקט בן יהודה" target="_blank"><img src="images/Project Ben-Yehuda logo.jpg" alt="פרוייקט בן יהודה" width="80" height="80"/></a> -->
 
 מציג ה-PDF מופעל באמצעות [pdfrx](https://pub.dev/packages/pdfrx).
 
