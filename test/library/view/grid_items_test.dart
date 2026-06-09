@@ -257,4 +257,44 @@ void main() {
     expect(find.byIcon(FluentIcons.folder_24_regular), findsOneWidget);
     expect(find.byIcon(FluentIcons.folder_24_filled), findsNothing);
   });
+
+  group('externalCatalogLogoAsset', () {
+    test('ספר היברובוקס מקומי (PdfBook עם hb:) מקבל לוגו היברובוקס', () {
+      final book = PdfBook(
+        title: 'ספר',
+        path: r'C:\hb\Hebrewbooks_org_123.pdf',
+        externalLibraryId: 'hb:123',
+      );
+      expect(externalCatalogLogoAsset(book), 'assets/logos/hebrew_books.png');
+    });
+
+    test('ספר PDF מקומי רגיל ללא מקור חיצוני אינו מקבל לוגו', () {
+      // הנתיב מכיל "otzaria" (תיקיית התוכנה) ואסור שיגרום לזיהוי שגוי.
+      final book = PdfBook(
+        title: 'ספר',
+        path: r'C:\Users\x\AppData\Roaming\otzaria\books\ספר.pdf',
+      );
+      expect(externalCatalogLogoAsset(book), isNull);
+    });
+
+    test('ספר היברובוקס חיצוני מקבל לוגו לפי הקישור', () {
+      final book = ExternalLibraryBook(
+        title: 'ספר',
+        id: 5,
+        author: '',
+        link: 'https://hebrewbooks.org/5',
+      );
+      expect(externalCatalogLogoAsset(book), 'assets/logos/hebrew_books.png');
+    });
+
+    test('ספר אוצר החכמה חיצוני מקבל לוגו אוצר', () {
+      final book = ExternalLibraryBook(
+        title: 'ספר',
+        id: 7,
+        author: '',
+        link: 'https://tablet.otzar.org/book/book.php?book=7',
+      );
+      expect(externalCatalogLogoAsset(book), 'assets/logos/otzar.ico');
+    });
+  });
 }

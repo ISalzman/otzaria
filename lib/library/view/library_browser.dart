@@ -1595,13 +1595,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         borderRadius: BorderRadius.circular(AppTokens.radiusSM),
       ),
       child: Center(
-        child: Icon(
-          book is PdfBook
-              ? FluentIcons.document_pdf_24_regular
-              : FluentIcons.document_text_24_regular,
-          color: cs.onSecondaryContainer,
-          size: iconSize,
-        ),
+        child: _buildListRowIconChild(book, cs, iconSize),
       ),
     );
 
@@ -1616,6 +1610,27 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       onTap: onTap,
       onDoubleTap: onDoubleTap,
       focusNode: focusNode,
+    );
+  }
+
+  /// תוכן אייקון שורת הספר: לוגו הקטלוג החיצוני אם הספר הגיע ממנו (גם כשהוא
+  /// ספר היברובוקס מקומי שהומר ל-PdfBook), אחרת אייקון לפי סוג הספר.
+  Widget _buildListRowIconChild(Book book, ColorScheme cs, double iconSize) {
+    final logoAsset = externalCatalogLogoAsset(book);
+    if (logoAsset != null) {
+      return Image.asset(
+        logoAsset,
+        width: iconSize,
+        height: iconSize,
+        fit: BoxFit.contain,
+      );
+    }
+    return Icon(
+      book is PdfBook
+          ? FluentIcons.document_pdf_24_regular
+          : FluentIcons.document_text_24_regular,
+      color: cs.onSecondaryContainer,
+      size: iconSize,
     );
   }
 
