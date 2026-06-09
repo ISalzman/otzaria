@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:path/path.dart' as p;
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -43,6 +45,7 @@ import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
+import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
 
 // ===================================================================
@@ -84,7 +87,7 @@ const _settingsBlocklist = {
 };
 
 // ===================================================================
-// Helper: build full colorScheme + typography from Flutter theme
+// Helper: build the main colorScheme roles + typography from Flutter theme
 // ===================================================================
 Map<String, dynamic> buildThemePayload(BuildContext context) {
   final theme = Theme.of(context);
@@ -112,14 +115,36 @@ Map<String, dynamic> buildThemePayload(BuildContext context) {
     'colorScheme': {
       'primary': hex(cs.primary),
       'onPrimary': hex(cs.onPrimary),
+      'primaryContainer': hex(cs.primaryContainer),
+      'onPrimaryContainer': hex(cs.onPrimaryContainer),
       'secondary': hex(cs.secondary),
       'onSecondary': hex(cs.onSecondary),
+      'secondaryContainer': hex(cs.secondaryContainer),
+      'onSecondaryContainer': hex(cs.onSecondaryContainer),
+      'tertiary': hex(cs.tertiary),
+      'onTertiary': hex(cs.onTertiary),
+      'tertiaryContainer': hex(cs.tertiaryContainer),
+      'onTertiaryContainer': hex(cs.onTertiaryContainer),
       'surface': hex(cs.surface),
       'onSurface': hex(cs.onSurface),
+      'onSurfaceVariant': hex(cs.onSurfaceVariant),
+      'surfaceContainerLowest': hex(cs.surfaceContainerLowest),
+      'surfaceContainerLow': hex(cs.surfaceContainerLow),
+      'surfaceContainer': hex(cs.surfaceContainer),
+      'surfaceContainerHigh': hex(cs.surfaceContainerHigh),
       'surfaceContainerHighest': hex(cs.surfaceContainerHighest),
       'error': hex(cs.error),
       'onError': hex(cs.onError),
+      'errorContainer': hex(cs.errorContainer),
+      'onErrorContainer': hex(cs.onErrorContainer),
       'outline': hex(cs.outline),
+      'outlineVariant': hex(cs.outlineVariant),
+      'inverseSurface': hex(cs.inverseSurface),
+      'onInverseSurface': hex(cs.onInverseSurface),
+      'inversePrimary': hex(cs.inversePrimary),
+      'shadow': hex(cs.shadow),
+      'scrim': hex(cs.scrim),
+      'surfaceTint': hex(cs.surfaceTint),
     },
     'typography': {
       'fontFamily': fontFamily,
@@ -197,6 +222,11 @@ class PluginBridgeDependencies {
   }) showWarningDialog;
   final void Function(String downloadUrl)? requestPluginInstall;
 
+  /// פותח דיאלוג בחירת תיקייה ומחזיר את הנתיב שנבחר, או `null` אם המשתמש
+  /// ביטל. אופציונלי — אם לא סופק, האדפטר משתמש ב-[FilePicker.getDirectoryPath].
+  /// קיים בעיקר כדי לאפשר הזרקה בבדיקות (בחירת תיקייה אמיתית אינה זמינה בהן).
+  final Future<String?> Function({String? title})? pickFolder;
+
   const PluginBridgeDependencies({
     required this.historyBloc,
     required this.tabsBloc,
@@ -210,6 +240,7 @@ class PluginBridgeDependencies {
     required this.showConfirmDialog,
     required this.showWarningDialog,
     this.requestPluginInstall,
+    this.pickFolder,
   });
 }
 
@@ -230,17 +261,35 @@ class PluginBridgeAdapter {
     NotificationService? notificationService,
     PluginDatabaseService? databaseService,
     PluginNetworkFetchService? networkFetchService,
+    PluginFileDownloadService? fileDownloadService,
+    PluginFsService? fsService,
   })  : _dependencies = dependencies,
         _pluginRepo = pluginRepository ?? PluginRegistryRepository(),
         _notificationService = notificationService ?? NotificationService(),
         _databaseService = databaseService ?? PluginDatabaseService(),
-        _networkFetchService = networkFetchService;
+        _networkFetchService = networkFetchService,
+        _fileDownloadService = fileDownloadService,
+        _pluginFsService = fsService;
 
   // שירות הורדת קבצים — מופע יחיד לכל adapter, נוצר עם השימוש הראשון
   // ומשוחרר ב-dispose (אחרת כל הורדה תדליף client ורישום ב-registry).
   PluginFileDownloadService? _fileDownloadService;
   PluginFileDownloadService get _downloadService =>
       _fileDownloadService ??= PluginFileDownloadService();
+
+  // שירות פעולות קבצים (fs.extractZip/deleteFile) — מופע יחיד לכל adapter,
+  // נוצר עם השימוש הראשון. אינו מחזיק משאבים ולכן אינו דורש שחרור ב-dispose.
+  PluginFsService? _pluginFsService;
+  PluginFsService get _fsService => _pluginFsService ??= PluginFsService();
+
+  /// תיקיות שהמשתמש בחר במפורש דרך `ui.pickFolder` עבור התוסף בריצה זו.
+  ///
+  /// **גבול האבטחה לכתיבה/מחיקה בדיסק:** פעולות `fs.extractZip`,
+  /// `fs.deleteFile` ו-`network.download` עם `destPath` מותרות אך ורק על
+  /// נתיבים בתוך אחת מהתיקיות הללו. כך גישת התוסף לדיסק נובעת מהסכמה מפורשת
+  /// של המשתמש בדיאלוג בחירת התיקייה — ולא מהרשאת manifest. הקבוצה מאופסת עם
+  /// `dispose` (טעינה/השבתה מחדש של התוסף).
+  final Set<String> _grantedFolders = <String>{};
 
   // שירות בקשות HTTP (network.fetch) — מופע יחיד לכל adapter; ניתן להזרקה
   // לבדיקות, נוצר עם השימוש הראשון אם לא הוזרק, ומשוחרר ב-dispose.
@@ -337,6 +386,8 @@ class PluginBridgeAdapter {
         return _handleDatabase(action, args);
       case 'network':
         return await _handleNetwork(action, args);
+      case 'fs':
+        return await _handleFs(action, args);
       case 'plugin':
         return await _handlePlugin(action, args);
       default:
@@ -837,8 +888,112 @@ class PluginBridgeAdapter {
           subtitle: args['subtitle'] as String? ?? '',
         );
         return {'confirmed': result};
+      case 'pickFolder':
+        // פותח דיאלוג בחירת תיקייה. הנתיב שנבחר נרשם כתיקייה מאושרת לתוסף —
+        // מכאן ואילך מותר לו לכתוב/למחוק בתוכה (download.destPath, fs.*).
+        // ביטול מחזיר {path: null}, והתוסף בודק זאת (data.path).
+        final picker = _dependencies.pickFolder ?? _defaultPickFolder;
+        final path = await picker(title: args['title'] as String?);
+        if (path == null || path.isEmpty) {
+          return {'path': null};
+        }
+        _grantedFolders.add(p.normalize(p.absolute(path)));
+        return {'path': path};
       default:
         throw Exception("Unknown action in ui: $action");
+    }
+  }
+
+  /// בורר התיקיות המוגדר כברירת מחדל — דיאלוג המערכת דרך [FilePicker].
+  Future<String?> _defaultPickFolder({String? title}) =>
+      FilePicker.getDirectoryPath(
+        lockParentWindow: true,
+        dialogTitle: title,
+      );
+
+  /// בודקת אם [targetPath] נמצא בתוך תיקייה שהמשתמש אישר דרך `ui.pickFolder`.
+  ///
+  /// זהו גבול האבטחה לכל פעולות הכתיבה/מחיקה לדיסק של התוסף. הבדיקה מתבצעת על
+  /// הנתיב הקנוני (אחרי פתרון symlinks) של **שני** הצדדים — היעד והתיקייה
+  /// המאושרת — כדי לנטרל גם `..` (path-traversal) וגם symlink שמצביע מתוך
+  /// תיקייה מאושרת אל מחוץ לה. בלי פתרון ה-symlink בדיקת [p.isWithin] על המחרוזת
+  /// בלבד הייתה מאשרת כתיבה/מחיקה מחוץ לתיקייה דרך קישור סימבולי.
+  bool _isPathInGrantedFolder(String targetPath) {
+    final canonicalTarget = _canonicalizePath(targetPath);
+    if (canonicalTarget == null) return false;
+    for (final root in _grantedFolders) {
+      final canonicalRoot = _canonicalizePath(root);
+      if (canonicalRoot == null) continue;
+      if (p.equals(canonicalTarget, canonicalRoot) ||
+          p.isWithin(canonicalRoot, canonicalTarget)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// מחזירה את הנתיב הקנוני של [path] (מוחלט, מנורמל ועם symlinks פתורים),
+  /// או `null` אם לא ניתן לפתור אותו.
+  ///
+  /// אם [path] עצמו אינו קיים (למשל יעד כתיבה חדש ב-`download`/`extractZip`),
+  /// פותרת בצורה קנונית את האב הקיים הקרוב ביותר ומצרפת אליו את הסיומת שטרם
+  /// נוצרה — כך גם נתיב חדש שעובר דרך symlink מאותר לפי יעדו האמיתי.
+  static String? _canonicalizePath(String path) {
+    var existing = p.normalize(p.absolute(path));
+    final pending = <String>[];
+    while (
+        FileSystemEntity.typeSync(existing) == FileSystemEntityType.notFound) {
+      final parent = p.dirname(existing);
+      if (parent == existing) return null; // הגענו לשורש ושום דבר לא קיים
+      pending.insert(0, p.basename(existing));
+      existing = parent;
+    }
+    try {
+      final isDir =
+          FileSystemEntity.typeSync(existing) == FileSystemEntityType.directory;
+      final canonical = isDir
+          ? Directory(existing).resolveSymbolicLinksSync()
+          : File(existing).resolveSymbolicLinksSync();
+      return pending.isEmpty
+          ? canonical
+          : p.normalize(p.joinAll([canonical, ...pending]));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // fs.*
+  // ----------------------------------------------------------------
+  Future<dynamic> _handleFs(String action, Map<String, dynamic> args) async {
+    switch (action) {
+      case 'extractZip':
+        final zipPath = args['zipPath'] as String?;
+        final destFolder = args['destFolder'] as String?;
+        if (zipPath == null || destFolder == null) {
+          throw Exception(
+              'error.invalid_params: zipPath and destFolder required');
+        }
+        if (!_isPathInGrantedFolder(zipPath) ||
+            !_isPathInGrantedFolder(destFolder)) {
+          throw Exception(
+              'error.forbidden: path outside a user-selected folder');
+        }
+        await _fsService.extractZip(zipPath, destFolder);
+        return true;
+      case 'deleteFile':
+        final path = args['path'] as String?;
+        if (path == null) {
+          throw Exception('error.invalid_params: path required');
+        }
+        if (!_isPathInGrantedFolder(path)) {
+          throw Exception(
+              'error.forbidden: path outside a user-selected folder');
+        }
+        await _fsService.deleteFile(path);
+        return true;
+      default:
+        throw Exception('Unknown action in fs: $action');
     }
   }
 
@@ -1668,6 +1823,25 @@ class PluginBridgeAdapter {
         if (!allowed) {
           throw Exception(
               'error.forbidden: URL not in plugin network allowlist');
+        }
+
+        // destPath אופציונלי: הורדה אל נתיב קובץ מלא שבחר התוסף, במקום
+        // תיקיית ההורדות. הנתיב חייב להיות בתוך תיקייה שהמשתמש אישר דרך
+        // ui.pickFolder — אותו גבול אבטחה של פעולות ה-fs.
+        final destPath = args['destPath'] as String?;
+        if (destPath != null && destPath.isNotEmpty) {
+          if (!_isPathInGrantedFolder(destPath)) {
+            throw Exception(
+                'error.forbidden: destPath outside a user-selected folder');
+          }
+          final result = await _downloadService.downloadToPath(
+            uri,
+            destPath,
+            isAllowed: (candidate) => PluginNetworkAccessResolver.instance
+                .isUriAllowedForPlugin(candidate, plugin.manifest),
+            isRedirectAllowed: isGithubReleaseRedirectAllowed,
+          );
+          return {'path': result.path, 'filename': result.filename};
         }
 
         final filename = args['filename'] as String?;

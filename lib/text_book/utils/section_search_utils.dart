@@ -3,6 +3,7 @@ import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/text_book/models/search_results.dart';
+import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as notes;
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 
 const int _maxSearchResults = 1000;
@@ -243,8 +244,8 @@ class SectionSearchWorkerRuntime {
               _updateAddress(address, line);
             }
 
-            final cleanLine =
-                utils.removeVolwels(utils.stripHtmlIfNeeded(line));
+            final cleanLine = utils.removeVolwels(
+                utils.stripHtmlIfNeeded(notes.stripInlineNotesForSearch(line)));
             if (_containsWholeWord(cleanLine, query)) {
               results.add({
                 'index': i,

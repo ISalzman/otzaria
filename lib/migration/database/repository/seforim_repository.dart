@@ -76,9 +76,12 @@ class SeforimRepository {
       await _trySetWal();
       await _executeRawQuery('PRAGMA synchronous=NORMAL');
     }
-    await _executeRawQuery('PRAGMA cache_size=100000');
+    // cache_size שלילי = קילובייטים (חיובי = עמודים!). חיבור הקריאה נשאר פתוח
+    // לכל אורך הריצה, ולכן מטמון ה-heap שלו תורם ישירות לצריכת ה-RAM במצב סרק.
+    // 50MB מספיק; ה-OS file cache וה-mmap מכסים את רוב הקריאות ממילא.
+    await _executeRawQuery('PRAGMA cache_size=-50000'); // 50MB
     await _executeRawQuery('PRAGMA temp_store=MEMORY');
-    await _executeRawQuery('PRAGMA mmap_size=268435456');
+    await _executeRawQuery('PRAGMA mmap_size=67108864'); // 64MB
     if (!_database.isReadOnly) {
       await _executeRawQuery('PRAGMA page_size=4096');
     }
@@ -190,10 +193,25 @@ class SeforimRepository {
     await executeRawQuery('PRAGMA synchronous=OFF');
     await executeRawQuery('PRAGMA journal_mode=MEMORY'); // Faster than OFF
     await executeRawQuery('PRAGMA locking_mode=EXCLUSIVE');
-    await executeRawQuery('PRAGMA cache_size=200000'); // 200MB cache
+    await executeRawQuery('PRAGMA cache_size=-200000'); // 200MB (שלילי=ק"ב)
     await executeRawQuery('PRAGMA temp_store=MEMORY');
     await executeRawQuery('PRAGMA mmap_size=536870912'); // 512MB memory-mapped
     _logger.info('Maximum performance mode enabled');
+  }
+
+  /// מעלה זמנית את מטמון הקריאה וה-mmap לטובת קריאות רציפות כבדות
+  /// (אינדוקס החיפוש קורא את כל שורות כל ספר ברצף). בטוח גם על חיבור read-only —
+  /// נוגע רק ב-cache_size/mmap_size, לא ב-journal/synchronous. יש לקרוא ל-
+  /// [restoreReadCacheDefaults] בסיום כדי לחזור לפרופיל הסרק החסכוני.
+  Future<void> setReadBoostMode() async {
+    await _executeRawQuery('PRAGMA cache_size=-200000'); // 200MB (שלילי=ק"ב)
+    await _executeRawQuery('PRAGMA mmap_size=536870912'); // 512MB
+  }
+
+  /// מחזיר את חיבור הקריאה לפרופיל הסרק החסכוני (תואם ל-[_initialize]).
+  Future<void> restoreReadCacheDefaults() async {
+    await _executeRawQuery('PRAGMA cache_size=-50000'); // 50MB (שלילי=ק"ב)
+    await _executeRawQuery('PRAGMA mmap_size=67108864'); // 64MB
   }
 
   /// Restores normal performance mode after bulk operations
@@ -202,7 +220,7 @@ class SeforimRepository {
     await executeRawQuery('PRAGMA synchronous=NORMAL');
     await _trySetWal();
     await executeRawQuery('PRAGMA locking_mode=NORMAL');
-    await executeRawQuery('PRAGMA cache_size=100000');
+    await executeRawQuery('PRAGMA cache_size=-50000'); // 50MB (שלילי=ק"ב)
     _logger.info('Normal performance mode restored');
   }
 

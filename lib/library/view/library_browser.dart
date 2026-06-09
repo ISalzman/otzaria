@@ -738,7 +738,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       chipBuilder: (context, item, isSelected) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
         child: Chip(
-          label: Text(item),
+          label: Text(item, textDirection: TextDirection.rtl),
           backgroundColor:
               isSelected ? Theme.of(context).colorScheme.secondary : null,
           labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -1288,6 +1288,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.secondary,
                   ),
+              textDirection: TextDirection.rtl,
             ),
           ),
         ),
@@ -1594,13 +1595,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         borderRadius: BorderRadius.circular(AppTokens.radiusSM),
       ),
       child: Center(
-        child: Icon(
-          book is PdfBook
-              ? FluentIcons.document_pdf_24_regular
-              : FluentIcons.document_text_24_regular,
-          color: cs.onSecondaryContainer,
-          size: iconSize,
-        ),
+        child: _buildListRowIconChild(book, cs, iconSize),
       ),
     );
 
@@ -1615,6 +1610,27 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       onTap: onTap,
       onDoubleTap: onDoubleTap,
       focusNode: focusNode,
+    );
+  }
+
+  /// תוכן אייקון שורת הספר: לוגו הקטלוג החיצוני אם הספר הגיע ממנו (גם כשהוא
+  /// ספר היברובוקס מקומי שהומר ל-PdfBook), אחרת אייקון לפי סוג הספר.
+  Widget _buildListRowIconChild(Book book, ColorScheme cs, double iconSize) {
+    final logoAsset = externalCatalogLogoAsset(book);
+    if (logoAsset != null) {
+      return Image.asset(
+        logoAsset,
+        width: iconSize,
+        height: iconSize,
+        fit: BoxFit.contain,
+      );
+    }
+    return Icon(
+      book is PdfBook
+          ? FluentIcons.document_pdf_24_regular
+          : FluentIcons.document_text_24_regular,
+      color: cs.onSecondaryContainer,
+      size: iconSize,
     );
   }
 
@@ -1885,7 +1901,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('כל הספרים (${books.length})'),
+        title: Text(
+          'כל הספרים (${books.length})',
+          textDirection: TextDirection.rtl,
+        ),
         content: SizedBox(
           width: 600,
           height: 400,
@@ -1897,7 +1916,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('סגור'),
+            child: const Text('סגור', textDirection: TextDirection.rtl),
           ),
         ],
       ),
@@ -2126,6 +2145,7 @@ class _LoadingDotsTextState extends State<_LoadingDotsText>
         return Text(
           'טוען ספרייה${'.' * dots}${' ' * (3 - dots)}',
           style: Theme.of(context).textTheme.bodyMedium,
+          textDirection: TextDirection.rtl,
         );
       },
     );

@@ -75,12 +75,12 @@ void main() {
       final tarExtractions = <String>[];
 
       final bloc = EmptyLibraryBloc(
-        extractCompressedDatabase: (archivePath, outputPath) async {
+        extractCompressedDatabase: (archivePath, outputPath, onProgress) async {
           compressedExtractions.add(
               '${path.basename(archivePath)}→${path.basename(outputPath)}');
           await File(outputPath).writeAsBytes(const [1, 2, 3]);
         },
-        extractTarArchive: (archivePath, outputDir) async {
+        extractTarArchive: (archivePath, outputDir, onProgress) async {
           tarExtractions
               .add('${path.basename(archivePath)}→${path.basename(outputDir)}');
         },
@@ -133,11 +133,11 @@ void main() {
       final tarExtractions = <String>[];
 
       final bloc = EmptyLibraryBloc(
-        extractCompressedDatabase: (archivePath, outputPath) async {
+        extractCompressedDatabase: (archivePath, outputPath, onProgress) async {
           compressedExtractions.add(path.basename(archivePath));
           await File(outputPath).writeAsBytes(const [1, 2, 3]);
         },
-        extractTarArchive: (archivePath, outputDir) async {
+        extractTarArchive: (archivePath, outputDir, onProgress) async {
           tarExtractions.add(path.basename(archivePath));
         },
       );
@@ -222,7 +222,7 @@ void main() {
       final bloc = EmptyLibraryBloc(
         httpClient: client,
         defaultLibraryPathOverride: tempDir.path,
-        extractCompressedDatabase: (archivePath, outputPath) async {
+        extractCompressedDatabase: (archivePath, outputPath, onProgress) async {
           // הקובץ הזמני חייב להיות בתיקיית temp של המערכת
           expect(archivePath, startsWith(Directory.systemTemp.path));
           // יכול להיות גם seforim.db.zst וגם otzar-HB_catalog.db.zst
@@ -241,7 +241,7 @@ void main() {
             fail('Unexpected archive: $archivePath');
           }
         },
-        extractTarArchive: (archivePath, outputDir) async {
+        extractTarArchive: (archivePath, outputDir, onProgress) async {
           expect(archivePath, startsWith(Directory.systemTemp.path));
           expect(path.basename(archivePath), 'otzaria_talmud_bavli.tar.zst');
           expect(await File(archivePath).readAsBytes(), talmudBytes);
@@ -276,6 +276,106 @@ void main() {
             .existsSync(),
         isFalse,
       );
+    });
+
+    test('פס ההתקדמות מאוחד על פני שלושת הקבצים — רק הכותרת מתחלפת', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'otzaria-combined-progress-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+      await Settings.setValue<String>(SettingsRepository.keyLibraryPath, '');
+      await Settings.setValue<String>(
+          SettingsRepository.keyLibraryFolderName, '');
+
+      // גדלים שונים בכוונה, כדי לוודא ששלושתם נספרים יחד.
+      final seforimBytes = utf8.encode('A' * 100);
+      final talmudBytes = utf8.encode('B' * 200);
+      final catalogBytes = utf8.encode('C' * 700);
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/releases/latest')) {
+          return http.Response(
+            jsonEncode({
+              'assets': [
+                {
+                  'name': 'seforim.db.zst',
+                  'browser_download_url':
+                      'https://example.com/releases/seforim.db.zst',
+                },
+              ],
+            }),
+            200,
+            headers: const {'content-type': 'application/json'},
+          );
+        }
+        if (request.url.toString() ==
+            'https://example.com/releases/seforim.db.zst') {
+          return http.Response.bytes(seforimBytes, 200);
+        }
+        if (request.url.host == 'github.com' &&
+            request.url.path.endsWith('talmud_bavli_latest.tar.zst')) {
+          return http.Response.bytes(talmudBytes, 200);
+        }
+        if (request.url.host == 'github.com' &&
+            request.url.path.endsWith('otzar-HB_catalog.db.zst')) {
+          return http.Response.bytes(catalogBytes, 200);
+        }
+        return http.Response('not found', 404);
+      });
+
+      final bloc = EmptyLibraryBloc(
+        httpClient: client,
+        defaultLibraryPathOverride: tempDir.path,
+        extractCompressedDatabase: (archivePath, outputPath, onProgress) async {
+          await File(outputPath).writeAsBytes(const [1], flush: true);
+        },
+        extractTarArchive: (archivePath, outputDir, onProgress) async {},
+      );
+      addTearDown(bloc.close);
+
+      final downloading = <EmptyLibraryDownloading>[];
+      final sub = bloc.stream.listen((state) {
+        if (state is EmptyLibraryDownloading) downloading.add(state);
+      });
+      addTearDown(sub.cancel);
+
+      final done =
+          bloc.stream.where((s) => s is EmptyLibraryDirectorySelected).first;
+      bloc.add(DownloadLibraryRequested());
+      await done.timeout(const Duration(seconds: 5));
+
+      // כל שלוש הכותרות הופיעו (רק הכותרת מתחלפת בין הקבצים).
+      final titles =
+          downloading.map((s) => s.message.split('\n').first).toSet();
+      expect(
+          titles,
+          containsAll(<String>[
+            'מוריד את ספריית אוצריא',
+            'מוריד את התלמוד הבבלי',
+            'מוריד את הקטלוגים',
+          ]));
+
+      // הפס מאוחד: בזמן הצגת הכותרת של הקובץ הראשון הוא לא מגיע ל-100%
+      // (סימן שהוא מתייחס לסכום שלושת הקבצים ולא לקובץ בודד).
+      final seforimStates = downloading
+          .where((s) => s.message.startsWith('מוריד את ספריית אוצריא'));
+      expect(seforimStates, isNotEmpty);
+      expect(
+        seforimStates.map((s) => s.progress).reduce((a, b) => a > b ? a : b),
+        lessThan(0.5),
+      );
+
+      // ההתקדמות לא יורדת לאורך כל ההורדה, ומגיעה ל-100% בסוף.
+      final progresses = downloading.map((s) => s.progress).toList();
+      for (var i = 1; i < progresses.length; i++) {
+        expect(progresses[i], greaterThanOrEqualTo(progresses[i - 1]));
+      }
+      expect(progresses.last, closeTo(1.0, 1e-9));
     });
   });
 }

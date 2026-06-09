@@ -23,8 +23,21 @@ class SearchQueryBuilder {
   SearchQueryBuilder._();
 
   static const String typoToleranceOptionKey = 'שגיאות כתיב';
+  static const List<String> availableWordOptionKeys = [
+    'קידומות דקדוקיות',
+    'סיומות דקדוקיות',
+    'קידומות',
+    'סיומות',
+    'כתיב מלא/חסר',
+    'חלק ממילה',
+    typoToleranceOptionKey,
+  ];
 
   static String buildWordKey(String word, int index) => '${word}_$index';
+
+  static Map<String, bool> disabledWordOptionsTemplate() => {
+        for (final option in availableWordOptionKeys) option: false,
+      };
 
   /// רגקס לחילוץ מילות חיפוש:
   /// - `"` תמיד מפריד (גרשיים — מפצל `ז"ל` לשני טוקנים).

@@ -35,6 +35,7 @@ class PersonalNotesRepository {
     required String contentPlain,
     required PersonalNoteContentFormat contentFormat,
     String? selectedText,
+    int? selectionColumn,
     int? categoryId,
   }) async {
     final bookContent = await _loadBookContent(bookId, categoryId: categoryId);
@@ -46,6 +47,7 @@ class PersonalNotesRepository {
       contentPlain: contentPlain,
       contentFormat: contentFormat,
       selectedText: selectedText,
+      selectionColumn: selectionColumn,
     );
   }
 

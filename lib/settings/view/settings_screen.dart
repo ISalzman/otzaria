@@ -357,7 +357,11 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                                                 _tabsData[idx].icon,
                                                 color: colorScheme.primary,
                                               ),
-                                              title: Text(_tabsData[idx].label),
+                                              title: Text(
+                                                _tabsData[idx].label,
+                                                textDirection:
+                                                    TextDirection.rtl,
+                                              ),
                                               trailing: const RtlIcon(
                                                 FluentIcons
                                                     .chevron_left_24_regular,

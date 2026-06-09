@@ -5,7 +5,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
@@ -24,6 +23,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/widgets/misc/app_context_menu.dart';
+import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../../test_helpers/memory_cache_provider.dart';
@@ -35,7 +35,7 @@ void main() {
     await Settings.init(cacheProvider: MemoryCacheProvider());
   });
 
-  testWidgets('לחיצה על אינדיקטור הערה פותחת את טאב ההערות הפנימי',
+  testWidgets('סימון הערה inline מוזרק לטקסט ולחיצתו פותחת את טאב ההערות',
       (tester) async {
     final textBookBloc = _TestTextBookBloc(_loadedState());
     final personalNotesBloc = _TestPersonalNotesBloc(
@@ -74,7 +74,15 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(FluentIcons.note_24_filled));
+
+    // הסימון מוזרק כקישור inline בטקסט הראשי (otzaria://note?line=0).
+    final mainText = tester
+        .widgetList<SmartTextWidget>(find.byType(SmartTextWidget))
+        .firstWhere((w) => w.onNoteTap != null);
+    expect(mainText.text.contains('otzaria://note?line=0'), isTrue);
+
+    // לחיצה על הסימון (דרך ה-callback) פותחת את טאב ההערות הפנימי.
+    mainText.onNoteTap!(0);
     await tester.pumpAndSettle();
 
     expect(openedTab, 1);
@@ -256,6 +264,7 @@ void main() {
         contentFormat: PersonalNoteContentFormat.quillDelta,
       ),
       selectedText: 'טקסט נבחר',
+      selectionColumn: 12,
       categoryId: 7,
     );
 
@@ -265,6 +274,8 @@ void main() {
     expect(repo.capturedLineNumber, 2);
     expect(repo.capturedContentPlain, 'תוכן ההערה');
     expect(repo.capturedCategoryId, 7);
+    expect(repo.capturedSelectionColumn, 12,
+        reason: 'רמז עמודת הבחירה מועבר לזיהוי המופע הנכון בטקסט חוזר');
   });
 
   test('שומר בחירה אחרונה רק כאשר הטקסט הנבחר אינו ריק', () {
@@ -1109,6 +1120,7 @@ class _RecordingNotesRepository extends PersonalNotesRepository {
   int? capturedLineNumber;
   String? capturedContentPlain;
   int? capturedCategoryId;
+  int? capturedSelectionColumn;
   int addNoteCallCount = 0;
 
   @override
@@ -1119,6 +1131,7 @@ class _RecordingNotesRepository extends PersonalNotesRepository {
     required String contentPlain,
     required PersonalNoteContentFormat contentFormat,
     String? selectedText,
+    int? selectionColumn,
     int? categoryId,
   }) async {
     addNoteCallCount++;
@@ -1126,6 +1139,7 @@ class _RecordingNotesRepository extends PersonalNotesRepository {
     capturedLineNumber = lineNumber;
     capturedContentPlain = contentPlain;
     capturedCategoryId = categoryId;
+    capturedSelectionColumn = selectionColumn;
     return const [];
   }
 }
