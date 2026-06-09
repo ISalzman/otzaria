@@ -6,6 +6,12 @@ import 'package:otzaria/shortcuts/shortcut_helper.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  // כברירת מחדל קובעים פלטפורמה שאינה Mac, כך שהקבוצות הבודקות סמנטיקת Control
+  // לא תלויות בפלטפורמת הריצה (ב-macOS `ctrl` מתורגם ל-Meta). הקבוצה הייעודית
+  // ל-macOS שלהלן עושה override ל-true ב-setUp שלה.
+  setUp(() => ShortcutHelper.isMacForTesting = false);
+  tearDown(() => ShortcutHelper.isMacForTesting = null);
+
   group('ShortcutHelper.matchesShortcut', () {
     test('מזהה meta רק כש-meta לחוץ', () {
       final event = KeyDownEvent(
@@ -193,8 +199,8 @@ void main() {
     });
 
     test('activatorFromShortcut: ctrl+f ממופה ל-meta:true ב-Mac', () {
-      final activator = ShortcutHelper.activatorFromShortcut('ctrl+f')!
-          as SingleActivator;
+      final activator =
+          ShortcutHelper.activatorFromShortcut('ctrl+f')! as SingleActivator;
       expect(activator.meta, isTrue);
       expect(activator.control, isFalse);
       expect(activator.trigger, LogicalKeyboardKey.keyF);
@@ -215,8 +221,8 @@ void main() {
     });
 
     test('activatorFromShortcut: ctrl+f ממופה ל-control:true', () {
-      final activator = ShortcutHelper.activatorFromShortcut('ctrl+f')!
-          as SingleActivator;
+      final activator =
+          ShortcutHelper.activatorFromShortcut('ctrl+f')! as SingleActivator;
       expect(activator.control, isTrue);
       expect(activator.meta, isFalse);
     });
