@@ -267,6 +267,77 @@ void main() {
       expect(find.text('הדף/פרק הבא'), findsOneWidget);
     });
   });
+
+  group('שמירת פוקוס מקלדת', () {
+    testWidgets(
+        'מסך הספר לא חוטף פוקוס משדה קלט בדיאלוג כשה-viewport משתנה (מקלדת וירטואלית)',
+        (tester) async {
+      // רגרסיה: באנדרואיד/מסך מגע, כשספר פתוח בעיון ופותחים את דיאלוג
+      // החיפוש, פתיחת המקלדת משנה את ה-viewport וגורמת rebuild של מסך
+      // הספר שמתחת לדיאלוג. ה-postFrameCallback של המסך היה קורא
+      // requestFocus וחוטף את הפוקוס משדה החיפוש — והמקלדת נסגרה מיד.
+      final book = TextBook(title: 'ספר בדיקה');
+      final bloc = _TestTextBookBloc(_loadedState(book));
+      final tab = TextBookTab(
+        book: book,
+        index: 0,
+        blocOverride: bloc,
+      );
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+      final dialogFieldFocusNode = FocusNode(debugLabel: 'DialogSearchField');
+
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        dialogFieldFocusNode.dispose();
+        await bloc.close();
+        await tabsBloc.close();
+        await settingsBloc.close();
+        tab.dispose();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 900));
+      await _pumpTextBookScreen(
+        tester,
+        tab: tab,
+        textBookBloc: bloc,
+        tabsBloc: tabsBloc,
+        settingsBloc: settingsBloc,
+        focusRepository: focusRepository,
+        shamorZachorDataProvider: shamorZachorDataProvider,
+        shamorZachorProgressProvider: shamorZachorProgressProvider,
+        bookmarkBloc: bookmarkBloc,
+        personalNotesBloc: personalNotesBloc,
+        tourCubit: tourCubit,
+        isInCombinedView: false,
+      );
+
+      // פתיחת דיאלוג עם שדה טקסט ממוקד מעל מסך הספר (כמו דיאלוג החיפוש)
+      final screenContext = tester.element(find.byType(TextBookViewerBloc));
+      showDialog<void>(
+        context: screenContext,
+        builder: (_) => Dialog(
+          child: TextField(focusNode: dialogFieldFocusNode, autofocus: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(dialogFieldFocusNode.hasFocus, isTrue,
+          reason: 'שדה הדיאלוג אמור לקבל פוקוס בפתיחה');
+
+      // הקטנת גובה ה-viewport — מדמה פתיחת מקלדת וירטואלית שמכווצת את
+      // המסך וגורמת rebuild של מסך הספר שברקע.
+      tester.view.physicalSize = const Size(1200, 500);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(dialogFieldFocusNode.hasFocus, isTrue,
+          reason: 'מסך הספר שמתחת לדיאלוג אסור שיחטוף את הפוקוס '
+              'משדה הקלט — חטיפה כזו סוגרת את המקלדת מיד');
+    });
+  });
 }
 
 Future<void> _pumpTextBookScreen(
