@@ -98,6 +98,92 @@ void main() {
     expect(find.text('כתובת-אב'), findsNothing);
   });
 
+  testWidgets(
+      'didUpdateWidget מונע חיפוש כפול בהד הקלדה אך מריץ על שינוי חיצוני',
+      (tester) async {
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+    final focusNode = FocusNode();
+
+    addTearDown(textBookBloc.close);
+    addTearDown(settingsBloc.close);
+    addTearDown(focusNode.dispose);
+    addTearDown(resetSectionSearchWorkerForTesting);
+
+    int runnerCalls = 0;
+    final List<String> queriesSeen = [];
+    Future<List<TextSearchResult>> simpleSearchRunner(
+      List<String> content,
+      String query,
+    ) async {
+      runnerCalls++;
+      queriesSeen.add(query);
+      if (query.isEmpty) return const [];
+      return [
+        TextSearchResult(
+          snippet: 'תוצאה עבור $query',
+          index: 0,
+          query: query,
+          address: 'כתובת-$query',
+        ),
+      ];
+    }
+
+    String queryProp = '';
+    late StateSetter outerSetState;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              outerSetState = setState;
+              return Scaffold(
+                body: TextBookSearchView(
+                  data: 'אב אברהם',
+                  scrollControler: ItemScrollController(),
+                  focusNode: focusNode,
+                  closeLeftPaneCallback: () {},
+                  initialQuery: queryProp,
+                  simpleSearchRunner: simpleSearchRunner,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    // הקלדה אמיתית → onSearchTextChanged מריץ חיפוש פעם אחת.
+    // ההמתנה ארוכה מ-debounce שדה החיפוש (200ms).
+    await tester.enterText(find.byType(TextField), 'אב');
+    await tester.pump(const Duration(milliseconds: 250));
+    final callsAfterTyping = runnerCalls;
+    expect(callsAfterTyping, greaterThan(0));
+
+    // ההורה בונה מחדש עם initialQuery == controller.text — הד ה-roundtrip של
+    // ההקלדה דרך ה-bloc. שינוי שכבר משוקף ב-controller אסור שיריץ חיפוש נוסף.
+    outerSetState(() => queryProp = 'אב');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(runnerCalls, callsAfterTyping,
+        reason: 'הד הקלדה (controller מסונכרן) לא אמור להריץ חיפוש כפול');
+
+    // שינוי חיצוני אמיתי: ה-query שונה מתוכן ה-controller → חיפוש כן רץ.
+    outerSetState(() => queryProp = 'אברהם');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(runnerCalls, callsAfterTyping + 1,
+        reason: 'שינוי query חיצוני אמור להריץ חיפוש פעם אחת בלבד');
+    expect(queriesSeen.last, 'אברהם');
+  });
+
   testWidgets('חיפוש ישן לא דורס תוצאות של חיפוש חדש יותר', (tester) async {
     final textBookBloc = _TestTextBookBloc(_loadedState());
     final settingsBloc = _TestSettingsBloc(SettingsState.initial());
