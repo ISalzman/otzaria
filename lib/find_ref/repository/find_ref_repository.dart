@@ -5,10 +5,20 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/find_ref/repository/alt_toc_flat_entry.dart';
 import 'package:otzaria/find_ref/repository/db_commentator_entry.dart';
 import 'package:otzaria/find_ref/repository/db_reference_result.dart';
+import 'package:otzaria/find_ref/repository/find_ref_db_isolate.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
+
+/// רשומת ספר אישי מתומצתת (user_books.db) כפי שמשמשת את חיפוש הספרים האישיים.
+typedef _UserBookRecord = ({
+  int id,
+  String title,
+  String? filePath,
+  String fileType,
+  double orderIndex,
+});
 
 class FindRefRepository {
   /// שמור לצורך תאימות לאחור עם call-sites קיימים.
@@ -109,6 +119,12 @@ class FindRefRepository {
   /// השדה נשמר ברמת ה-instance של [FindRefRepository] (singleton באפליקציה).
   List<AltTocFlatEntry>? _altTocFlatCache;
 
+  /// קאש בזיכרון של רשימת הספרים האישיים (user_books.db). נטענת פעם אחת
+  /// בחיפוש הראשון עם `includePersonalBooks`, ומשרתת חיפושים הבאים בלי
+  /// שאילתת DB לכל הקלדה. מתאפסת ב-[clearCaches] (רענון/החלפת ספרייה או
+  /// מוטציה של ספרים אישיים, ששניהם עוברים דרך מסלולי ה-refresh).
+  List<_UserBookRecord>? _userBooksCache;
+
   FindRefRepository({
     this.dataRepository,
     this.warmUpReferenceBooksCache,
@@ -139,6 +155,9 @@ class FindRefRepository {
     for (final repo in _liveInstances) {
       repo.clearCaches();
     }
+    // ה-isolate של איתור מקורות מחזיק חיבור RO וקאש TOC משלו — מאפסים אותם
+    // כדי שלא ידלפו נתונים מספרייה ישנה אחרי רענון/החלפה. fire-and-forget.
+    FindRefDbIsolate.resetIfRunning();
   }
 
   /// בדיקות בלבד: מבטל את ההרשמה של ה-instance מ-[_liveInstances]. שימושי
@@ -157,6 +176,35 @@ class FindRefRepository {
   void clearCaches() {
     _commentatorsCache.clear();
     _altTocFlatCache = null;
+    _userBooksCache = null;
+  }
+
+  /// מחזיר את רשימת הספרים האישיים מהקאש, וטוען אותה פעם אחת אם עוד לא נטענה.
+  /// הטעינה היא דרך ה-injection [getAllUserBooks] (בדיקות) או ישירות מ-
+  /// `user_books.db`. הקאש חוסך שאילתת DB סינכרונית בכל הקלדה כשהסוויץ'
+  /// "כלול ספרים אישיים" דלוק.
+  Future<List<_UserBookRecord>> _loadUserBooks() async {
+    final cached = _userBooksCache;
+    if (cached != null) return cached;
+
+    final List<_UserBookRecord> list;
+    if (getAllUserBooks != null) {
+      list = await getAllUserBooks!();
+    } else {
+      final userRepo = await UserBooksDatabaseHolder.instance.repository;
+      final raw = await userRepo.database.bookDao.getAllLocalBooks();
+      list = raw
+          .map((b) => (
+                id: b.id,
+                title: b.title,
+                filePath: b.filePath,
+                fileType: b.fileType ?? 'txt',
+                orderIndex: b.order,
+              ))
+          .toList();
+    }
+    _userBooksCache = list;
+    return list;
   }
 
   /// מחזיר את הקאש הגלובלי של AltToc; טוען אותו פעם אחת בקריאה הראשונה
@@ -632,7 +680,8 @@ class FindRefRepository {
 
           results.add(DbReferenceResult(
             title: entry.bookTitle,
-            reference: _qualifyAltTocReference(entry.bookTitle, entry.reference),
+            reference:
+                _qualifyAltTocReference(entry.bookTitle, entry.reference),
             segment: entry.segment,
             orderIndex: entry.bookOrderIndex,
             tocLevel: entry.level,
@@ -703,32 +752,10 @@ class FindRefRepository {
   ) async {
     final out = <DbReferenceResult>[];
     try {
-      // Resolve user books list (injection or live DB)
-      final List<
-          ({
-            int id,
-            String title,
-            String? filePath,
-            String fileType,
-            double orderIndex
-          })> allBooks;
+      // רשימת הספרים האישיים נטענת מקאש בזיכרון (ראה [_loadUserBooks]) — כך
+      // אין שאילתת DB לכל הקלדה, רק בחיפוש הראשון אחרי רענון.
+      final allBooks = await _loadUserBooks();
       SeforimRepository? userRepo;
-
-      if (getAllUserBooks != null) {
-        allBooks = await getAllUserBooks!();
-      } else {
-        userRepo = await UserBooksDatabaseHolder.instance.repository;
-        final raw = await userRepo.database.bookDao.getAllLocalBooks();
-        allBooks = raw
-            .map((b) => (
-                  id: b.id,
-                  title: b.title,
-                  filePath: b.filePath,
-                  fileType: b.fileType ?? 'txt',
-                  orderIndex: b.order,
-                ))
-            .toList();
-      }
 
       if (allBooks.isEmpty) return out;
 
