@@ -240,11 +240,62 @@ List<int> _filterBookSearchEntries({
     );
   });
 
+  // Levenshtein edit distance between two strings
+  int editDistance(String a, String b) {
+    if (a == b) return 0;
+    if (a.isEmpty) return b.length;
+    if (b.isEmpty) return a.length;
+    final aChars = a.runes.toList();
+    final bChars = b.runes.toList();
+    final row = List<int>.generate(bChars.length + 1, (i) => i);
+    for (int i = 0; i < aChars.length; i++) {
+      int prev = i + 1;
+      for (int j = 0; j < bChars.length; j++) {
+        final val = aChars[i] == bChars[j]
+            ? row[j]
+            : 1 + [prev, row[j], row[j + 1]].reduce((a, b) => a < b ? a : b);
+        row[j] = prev;
+        prev = val;
+      }
+      row[bChars.length] = prev;
+    }
+    return row[bChars.length];
+  }
+
+  // Allowed edit distance by query word length:
+  // 1-4  chars → 0 (exact)
+  // 4-8  chars → 1 typo
+  // 8-12 chars → 2 typos
+  // 12-16 chars → 3 typos
+  // 16+  chars → 4 typos
+  int maxAllowedEdits(int len) {
+    if (len <= 4) return 0;
+    if (len <= 8) return 1;
+    if (len <= 12) return 2;
+    if (len <= 16) return 3;
+    return 4;
+  }
+
+  bool wordMatchesFuzzy(String queryWord, String text) {
+    if (text.contains(queryWord)) return true;
+    if (queryWord.length < 3) return false;
+
+    final allowed = maxAllowedEdits(queryWord.length);
+    final textWords = text.split(RegExp(r'\s+'));
+    for (final textWord in textWords) {
+      if (textWord.isEmpty) continue;
+      // Only compare words of similar length to avoid false positives
+      if ((textWord.length - queryWord.length).abs() > allowed + 1) continue;
+      if (editDistance(queryWord, textWord) <= allowed) return true;
+    }
+    return false;
+  }
+
   final filtered = preparedEntries.where((entry) {
     final matchesQuery = queryWords.every(
       (word) =>
-          entry.normalizedTitle.contains(word) ||
-          entry.normalizedAuthor.contains(word),
+          wordMatchesFuzzy(word, entry.normalizedTitle) ||
+          wordMatchesFuzzy(word, entry.normalizedAuthor),
     );
     final matchesTopics =
         topics.isEmpty || topics.every((topic) => entry.topics.contains(topic));
@@ -257,7 +308,10 @@ List<int> _filterBookSearchEntries({
       for (final entry in filtered)
         _ScoredBookSearchEntry(
           index: entry.index,
-          score: ratio(normalizedQuery, entry.normalizedTitle),
+          // Boost exact matches significantly in scoring
+          score: entry.normalizedTitle.contains(normalizedQuery)
+              ? 100
+              : ratio(normalizedQuery, entry.normalizedTitle),
         ),
     ]..sort((a, b) => b.score.compareTo(a.score));
 
