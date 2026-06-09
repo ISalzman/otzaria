@@ -1242,8 +1242,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       ),
     ]);
 
+    // העתק קישור ישיר — מוצג בטקסט ראשי (לפי book_id של state.book)
+    // ובמפרשים (לפי book_id של widget.reportBook)
     if (widget.isMainText) {
-      // העתק קישור ישיר — מוצג רק בטקסט ראשי ואם יש book_id
       if (state.book.id != null) {
         entries.add(const AppContextMenuEntry.divider());
         entries.add(AppContextMenuEntry(
@@ -1282,6 +1283,22 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             },
           ));
         }
+      }
+    } else {
+      // העתק קישור ישיר למפרש — id מועדף, fallback ל-categoryId
+      final commentaryBookId =
+          widget.reportBook?.id ?? widget.reportBook?.categoryId;
+      if (commentaryBookId != null) {
+        entries.add(const AppContextMenuEntry.divider());
+        entries.add(AppContextMenuEntry(
+          label: 'העתק קישור ישיר',
+          icon: FluentIcons.link_24_regular,
+          childrenBuilder: () => buildDirectLinkContextMenuEntries(
+            bookId: commentaryBookId,
+            index: index,
+            selectedText: capturedText,
+          ),
+        ));
       }
     }
 
