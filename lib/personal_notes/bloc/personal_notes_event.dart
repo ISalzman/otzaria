@@ -98,6 +98,17 @@ class RepositionPersonalNote extends PersonalNotesEvent {
   List<Object?> get props => [bookId, noteId, lineNumber];
 }
 
+/// בקשה להרחיב (לפתוח) את ההערות המשויכות לשורה [lineNumber] (1-based),
+/// גם אם ההגדרה היא "סגור כברירת מחדל". נשלח בלחיצה על סימון הערה inline.
+class RequestExpandNotesForLine extends PersonalNotesEvent {
+  final int lineNumber;
+
+  const RequestExpandNotesForLine(this.lineNumber);
+
+  @override
+  List<Object?> get props => [lineNumber];
+}
+
 class StartCreatingPersonalNote extends PersonalNotesEvent {
   final String bookId;
   final int lineNumber;

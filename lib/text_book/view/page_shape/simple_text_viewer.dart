@@ -1357,6 +1357,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   void _onInlineNoteTap(int lineIndex) {
     context.read<TextBookBloc>().add(UpdateSelectedIndex(lineIndex));
     context.read<TextBookBloc>().add(HighlightLine(lineIndex));
+    // פותחים את ההערה עצמה בחלונית, גם אם מוגדר "סגור כברירת מחדל".
+    context
+        .read<PersonalNotesBloc>()
+        .add(RequestExpandNotesForLine(lineIndex + 1));
     if (widget.onOpenSidebarTab != null) {
       widget.onOpenSidebarTab!(1);
     } else {

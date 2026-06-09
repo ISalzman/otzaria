@@ -280,6 +280,9 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
             onDelete: () => _confirmDelete(context, note),
             onLinkTap: (url) => _handleNoteLinkTap(context, url),
             defaultExpanded: defaultExpanded,
+            expandToken: note.lineNumber == state.expandRequestLineNumber
+                ? state.expandRequestToken
+                : null,
             bookId: widget.bookId,
             categoryId: widget.categoryId,
             linkableNotes: [

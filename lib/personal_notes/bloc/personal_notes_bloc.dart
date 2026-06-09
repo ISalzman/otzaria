@@ -16,6 +16,7 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
     on<UpdatePersonalNote>(_onUpdateNote);
     on<DeletePersonalNote>(_onDeleteNote);
     on<RepositionPersonalNote>(_onRepositionNote);
+    on<RequestExpandNotesForLine>(_onRequestExpandNotesForLine);
     on<StartCreatingPersonalNote>(_onStartCreatingNote);
     on<CancelCreatingPersonalNote>(_onCancelCreatingNote);
     on<UpdateSearchQuery>(_onUpdateSearchQuery);
@@ -42,6 +43,8 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
         // איפוס החיפוש כשטוענים ספר חדש
         searchQuery: '',
         visibleLineIndices: [],
+        // איפוס בקשת פתיחת הערה, כדי שלא תיפתח אוטומטית הערה באותה שורה בספר החדש
+        clearExpandRequest: true,
       ),
     );
 
@@ -144,6 +147,18 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
     } catch (e) {
       emit(state.copyWith(isLoading: false, errorMessage: e.toString()));
     }
+  }
+
+  void _onRequestExpandNotesForLine(
+    RequestExpandNotesForLine event,
+    Emitter<PersonalNotesState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        expandRequestLineNumber: event.lineNumber,
+        expandRequestToken: state.expandRequestToken + 1,
+      ),
+    );
   }
 
   void _onStartCreatingNote(
