@@ -17,6 +17,9 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/widgets/misc/thin_divider.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
 
 // Constants
 const double _kMinQueryLength = 2;
@@ -129,10 +132,10 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
               controller: _filterQuery,
               decoration: InputDecoration(
                 hintText: 'איתור ספר…',
-                prefixIcon: const Icon(FluentIcons.filter_24_regular),
+                prefixIcon: const RtlIcon(FluentIcons.filter_24_regular),
                 suffixIcon: IconButton(
                   onPressed: _clearFilter,
-                  icon: const Icon(FluentIcons.dismiss_24_regular),
+                  icon: const RtlIcon(FluentIcons.dismiss_24_regular),
                 ),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
@@ -150,12 +153,9 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
           Row(
             children: [
               const Spacer(),
-              TextButton(
+              NeutralActionButton(
+                text: 'הצג הכל',
                 onPressed: () => _setFacet(context, '/'),
-                child: const Text(
-                  'הצג הכל',
-                  textDirection: TextDirection.rtl,
-                ),
               ),
             ],
           ),
@@ -202,10 +202,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
         ),
         decoration: BoxDecoration(
           color: isSelected
-              ? Theme.of(context)
-                  .colorScheme
-                  .primaryContainer
-                  .withValues(alpha: 0.3)
+              ? AppSurfaces.selectedItem(Theme.of(context).colorScheme)
               : null,
           border: Border(
             bottom: BorderSide(
@@ -216,7 +213,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
         ),
         child: Row(
           children: [
-            Icon(
+            RtlIcon(
               FluentIcons.book_24_regular,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               size: 18,
@@ -237,6 +234,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                     style: textStyle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                    textDirection: TextDirection.rtl,
                   );
 
                   if (textPainter.didExceedMaxLines) {
@@ -340,10 +338,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
             ),
             decoration: BoxDecoration(
               color: isSelected
-                  ? Theme.of(context)
-                      .colorScheme
-                      .primaryContainer
-                      .withValues(alpha: 0.3)
+                  ? AppSurfaces.selectedItem(Theme.of(context).colorScheme)
                   : null,
               border: Border(
                 bottom: BorderSide(
@@ -354,7 +349,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
             ),
             child: Row(
               children: [
-                Icon(
+                RtlIcon(
                   isExpanded
                       ? FluentIcons.folder_open_24_regular
                       : FluentIcons.folder_24_regular,
@@ -384,6 +379,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                         style: textStyle,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
+                        textDirection: TextDirection.rtl,
                       );
 
                       if (textPainter.didExceedMaxLines) {
@@ -416,7 +412,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                   borderRadius: BorderRadius.circular(4),
                   child: Padding(
                     padding: const EdgeInsets.all(4.0),
-                    child: Icon(
+                    child: RtlIcon(
                       isExpanded
                           ? FluentIcons.chevron_up_24_regular
                           : FluentIcons.chevron_down_24_regular,

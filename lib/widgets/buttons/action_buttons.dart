@@ -10,6 +10,7 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 // ── RecommendedActionButton ───────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ class RecommendedActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final leading = iconWidget ?? (icon != null ? Icon(icon) : null);
+    final leading = iconWidget ?? (icon != null ? RtlIcon(icon!) : null);
 
     if (isLoading) {
       return FilledButton(
@@ -107,7 +108,7 @@ class NeutralActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final leading = iconWidget ?? (icon != null ? Icon(icon) : null);
+    final leading = iconWidget ?? (icon != null ? RtlIcon(icon!) : null);
 
     if (isLoading) {
       return FilledButton.tonal(
@@ -271,7 +272,7 @@ class SecondaryIconButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: IconButton(
-        icon: Icon(icon, size: 20),
+        icon: RtlIcon(icon, size: 20),
         onPressed: onPressed,
         style: IconButton.styleFrom(
           backgroundColor: cs.secondaryContainer,
@@ -303,7 +304,7 @@ class PrimaryIconButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: IconButton(
-        icon: Icon(icon, size: 20),
+        icon: RtlIcon(icon, size: 20),
         onPressed: onPressed,
         style: IconButton.styleFrom(
           backgroundColor: cs.primary,
@@ -363,7 +364,7 @@ class ToolbarActionButton extends StatelessWidget {
             data: IconThemeData(color: fg, size: iconSize),
             child: iconWidget!,
           )
-        : Icon(icon, size: iconSize, color: fg);
+        : RtlIcon(icon, size: iconSize, color: fg);
 
     Widget button;
     if (label != null) {

@@ -1,4 +1,6 @@
 import 'dart:io';
+// קידומת ל-Link של dart:io כי models/links.dart מגדיר Link משלו שמסתיר אותו.
+import 'dart:io' as io show Link;
 
 import 'package:archive/archive_io.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1150,6 +1152,37 @@ void main() {
             .having((e) => e.toString(), 'message', contains('forbidden'))),
       );
       expect(hit, isFalse);
+    });
+
+    test('fs.deleteFile חסום דרך symlink שמצביע מחוץ לתיקייה מאושרת', () async {
+      final granted = Directory(p.join(tempDir.path, 'granted'))..createSync();
+      final outside = Directory(p.join(tempDir.path, 'outside'))..createSync();
+      final secret = File(p.join(outside.path, 'secret.txt'))
+        ..writeAsStringSync('סוד');
+
+      // קישור סימבולי בתוך התיקייה המאושרת שמצביע אל תיקייה חיצונית.
+      // ב-Windows ללא Developer Mode/הרשאת admin יצירת symlink נכשלת — דלג.
+      final io.Link link;
+      try {
+        link = io.Link(p.join(granted.path, 'escape'))
+          ..createSync(outside.path);
+      } catch (_) {
+        markTestSkipped('יצירת symlink אינה נתמכת בסביבה זו');
+        return;
+      }
+
+      final adapter = buildAdapter(pickFolder: ({title}) async => granted.path);
+      await adapter.execute('ui', 'pickFolder', {});
+
+      // נתיב שעובר דרך ה-symlink "נראה" בתוך התיקייה המאושרת מבחינת מחרוזת,
+      // אבל מצביע בפועל מחוצה לה — ולכן חייב להיחסם.
+      await expectLater(
+        adapter.execute(
+            'fs', 'deleteFile', {'path': p.join(link.path, 'secret.txt')}),
+        throwsA(isA<Exception>()
+            .having((e) => e.toString(), 'message', contains('forbidden'))),
+      );
+      expect(secret.existsSync(), isTrue); // הקובץ החיצוני לא נמחק
     });
   });
 }

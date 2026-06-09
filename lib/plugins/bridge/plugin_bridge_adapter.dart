@@ -913,17 +913,53 @@ class PluginBridgeAdapter {
 
   /// בודקת אם [targetPath] נמצא בתוך תיקייה שהמשתמש אישר דרך `ui.pickFolder`.
   ///
-  /// זהו גבול האבטחה לכל פעולות הכתיבה/מחיקה לדיסק של התוסף. הנרמול דרך
-  /// [p.normalize]/[p.absolute] ובדיקת [p.isWithin] מנטרלים ניסיונות
-  /// path-traversal (`..`) לחריגה מהתיקייה המאושרת.
+  /// זהו גבול האבטחה לכל פעולות הכתיבה/מחיקה לדיסק של התוסף. הבדיקה מתבצעת על
+  /// הנתיב הקנוני (אחרי פתרון symlinks) של **שני** הצדדים — היעד והתיקייה
+  /// המאושרת — כדי לנטרל גם `..` (path-traversal) וגם symlink שמצביע מתוך
+  /// תיקייה מאושרת אל מחוץ לה. בלי פתרון ה-symlink בדיקת [p.isWithin] על המחרוזת
+  /// בלבד הייתה מאשרת כתיבה/מחיקה מחוץ לתיקייה דרך קישור סימבולי.
   bool _isPathInGrantedFolder(String targetPath) {
-    final normalized = p.normalize(p.absolute(targetPath));
+    final canonicalTarget = _canonicalizePath(targetPath);
+    if (canonicalTarget == null) return false;
     for (final root in _grantedFolders) {
-      if (p.equals(normalized, root) || p.isWithin(root, normalized)) {
+      final canonicalRoot = _canonicalizePath(root);
+      if (canonicalRoot == null) continue;
+      if (p.equals(canonicalTarget, canonicalRoot) ||
+          p.isWithin(canonicalRoot, canonicalTarget)) {
         return true;
       }
     }
     return false;
+  }
+
+  /// מחזירה את הנתיב הקנוני של [path] (מוחלט, מנורמל ועם symlinks פתורים),
+  /// או `null` אם לא ניתן לפתור אותו.
+  ///
+  /// אם [path] עצמו אינו קיים (למשל יעד כתיבה חדש ב-`download`/`extractZip`),
+  /// פותרת בצורה קנונית את האב הקיים הקרוב ביותר ומצרפת אליו את הסיומת שטרם
+  /// נוצרה — כך גם נתיב חדש שעובר דרך symlink מאותר לפי יעדו האמיתי.
+  static String? _canonicalizePath(String path) {
+    var existing = p.normalize(p.absolute(path));
+    final pending = <String>[];
+    while (
+        FileSystemEntity.typeSync(existing) == FileSystemEntityType.notFound) {
+      final parent = p.dirname(existing);
+      if (parent == existing) return null; // הגענו לשורש ושום דבר לא קיים
+      pending.insert(0, p.basename(existing));
+      existing = parent;
+    }
+    try {
+      final isDir =
+          FileSystemEntity.typeSync(existing) == FileSystemEntityType.directory;
+      final canonical = isDir
+          ? Directory(existing).resolveSymbolicLinksSync()
+          : File(existing).resolveSymbolicLinksSync();
+      return pending.isEmpty
+          ? canonical
+          : p.normalize(p.joinAll([canonical, ...pending]));
+    } catch (_) {
+      return null;
+    }
   }
 
   // ----------------------------------------------------------------

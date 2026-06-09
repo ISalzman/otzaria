@@ -18,6 +18,7 @@ import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -82,6 +83,11 @@ class _FakeTabsRepository extends TabsRepository {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  // הטסטים שולחים Control פיזי. ב-macOS `ctrl` מתורגם ל-Meta, ולכן בלי קיבוע
+  // זה הקיצורים (Ctrl+Shift+L/C/T) לא היו מזוהים והטסטים נכשלים על Mac/CI.
+  setUp(() => ShortcutHelper.isMacForTesting = false);
+  tearDown(() => ShortcutHelper.isMacForTesting = null);
 
   group('KeyboardShortcuts', () {
     late MockSettingsBloc settingsBloc;
