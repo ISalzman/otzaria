@@ -8,6 +8,7 @@ import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -1085,6 +1086,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           fontSize: widget.fontSize,
           openBookCallback: widget.openBookCallback,
           buildContextMenu: _buildCommentaryContextMenuEntries,
+          getSavedSelectedText: () => _savedSelectedText,
           isExpanded: isExpanded,
           onExpansionChanged: (expanded) {
             setState(() {
@@ -1225,6 +1227,21 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           children: [
             if (isExpanded)
               AppContextMenuRegion(
+                // לחיצה ימנית על הטקסט המסומן בפועל לא תשחרר את הבחירה (התנהגות
+                // ברירת המחדל של SelectableRegion ב-Windows); לחיצה על חלק
+                // לא-מסומן מבטלת כרגיל. הבחירה מנוהלת ע"י SelectionArea יחיד.
+                shouldPreserveSelectionOnSecondaryTap: (globalPosition) {
+                  final selected = _savedSelectedText;
+                  if (selected == null || selected.isEmpty) return false;
+                  final root = context.findRenderObject();
+                  if (root == null) return true; // סלחני
+                  return clickIsOnSelectionWithinArea(
+                        root: root,
+                        globalPosition: globalPosition,
+                        selectedText: selected,
+                      ) ??
+                      true; // לא הוכרע — סלחני
+                },
                 menuBuilder: (menuCtx, _) =>
                     _buildCommentaryContextMenuEntries(menuCtx, link),
                 child: GestureDetector(
@@ -1487,6 +1504,9 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   final double fontSize;
   final Function(OpenedTab) openBookCallback;
   final List<AppContextMenuEntry> Function(BuildContext, Link) buildContextMenu;
+  // מחזיר את הטקסט הנבחר הנוכחי (מנוהל ע"י ה-SelectionArea היחיד של הפאנל),
+  // לבדיקה אם לחיצה ימנית נופלת על הבחירה ולכן יש לשמרה.
+  final String? Function() getSavedSelectedText;
   final bool isExpanded;
   final Function(bool) onExpansionChanged;
   final String searchQuery;
@@ -1504,6 +1524,7 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     required this.fontSize,
     required this.openBookCallback,
     required this.buildContextMenu,
+    required this.getSavedSelectedText,
     required this.isExpanded,
     required this.onExpansionChanged,
     required this.searchQuery,
@@ -1596,6 +1617,22 @@ class _CollapsibleCommentaryGroupState
                   ),
                   const SizedBox(height: 4),
                   AppContextMenuRegion(
+                    // לחיצה ימנית על הטקסט המסומן בפועל לא תשחרר את הבחירה
+                    // (התנהגות ברירת המחדל של SelectableRegion ב-Windows); לחיצה
+                    // על חלק לא-מסומן מבטלת כרגיל. הבחירה מנוהלת ע"י SelectionArea
+                    // יחיד, לכן מחשבים את קטע הבחירה ישירות מול הפסקה שעליה לחצו.
+                    shouldPreserveSelectionOnSecondaryTap: (globalPosition) {
+                      final selected = widget.getSavedSelectedText();
+                      if (selected == null || selected.isEmpty) return false;
+                      final root = context.findRenderObject();
+                      if (root == null) return true; // סלחני
+                      return clickIsOnSelectionWithinArea(
+                            root: root,
+                            globalPosition: globalPosition,
+                            selectedText: selected,
+                          ) ??
+                          true; // לא הוכרע — סלחני
+                    },
                     menuBuilder: (menuCtx, _) =>
                         widget.buildContextMenu(menuCtx, link),
                     child: PdfCommentaryContent(

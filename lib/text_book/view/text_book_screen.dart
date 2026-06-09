@@ -148,8 +148,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   String? _selectedTextForSearch;
   int?
       _selectedLineForNote; // שורת המקור של הטקסט המסומן, ליצירת הערה בקיצור מקשים
+  int?
+      _selectedColumnForNote; // עמודת הבחירה — לזיהוי המופע הנכון כשהטקסט חוזר בשורה
   Book? _pdfBook; // Companion PDF
   bool _hasPdfBook = false;
+  bool _hasResolvedCompanionPdf = false;
   bool _leftPaneAutoCloseQueuedByScroll = false;
 
   // Key עבור PageShapeScreen - שינוי המפתח יגרום לבנייה מחדש
@@ -539,14 +542,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     // טעינת הגדרות פר-ספר
     _loadPerBookSettings();
 
-    DataRepository.instance.library.then((library) {
-      if (mounted) {
-        setState(() {
-          _pdfBook = library.getCompanionBook(widget.tab.book, PdfBook);
-          _hasPdfBook = _pdfBook != null;
-        });
-      }
-    });
+    // איתור ה-PDF המלווה (getCompanionBook) דורש את כל קטלוג הספרייה
+    // (~300ms CPU על ה-main thread). קריאתו כאן ב-initState הייתה חונקת את
+    // שאילתת תוכן הספר ומעכבת את הצגתו ב-~600ms. הוא משפיע רק על נראות כפתור
+    // ה-PDF (_hasPdfBook), לא על התוכן — לכן נדחה ל-_resolveCompanionPdf
+    // שנקרא ברגע שהספר נטען (ראו ה-listener של ה-BlocConsumer).
 
     final pendingSidebarTab =
         Settings.getValue<int>('key-sidebar-tab-index-pending');
@@ -690,6 +690,25 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
   }
 
+  /// מאתר את ספר ה-PDF המלווה (לכפתור "פתח גרסת PDF") פעם אחת, אחרי שתוכן
+  /// הספר כבר נטען. `getCompanionBook` דורש את כל קטלוג הספרייה (~300ms CPU),
+  /// ולכן הוא נדחה לכאן כדי לא לחנוק את שאילתת תוכן הספר בעלייה. עד שיתבצע,
+  /// כפתור ה-PDF פשוט מוסתר (`_hasPdfBook == false`).
+  Future<void> _resolveCompanionPdf() async {
+    if (_hasResolvedCompanionPdf) return;
+    _hasResolvedCompanionPdf = true;
+    try {
+      final library = await DataRepository.instance.library;
+      if (!mounted) return;
+      setState(() {
+        _pdfBook = library.getCompanionBook(widget.tab.book, PdfBook);
+        _hasPdfBook = _pdfBook != null;
+      });
+    } catch (e, stackTrace) {
+      debugPrint('שגיאה בפתרון PDF מלווה: $e\n$stackTrace');
+    }
+  }
+
   Future<void> _loadPerBookSettings() async {
     final settingsBloc = context.read<SettingsBloc>();
 
@@ -826,9 +845,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
   }
 
-  void _onSelectedTextChanged(String? selectedText, int? lineIndex) {
+  void _onSelectedTextChanged(String? selectedText, int? lineIndex,
+      [int? column]) {
     _selectedTextForSearch = selectedText;
     _selectedLineForNote = lineIndex;
+    _selectedColumnForNote = column;
     if (selectedText == null || selectedText.trim().isEmpty) {
       return;
     }
@@ -922,6 +943,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 // }
 
                 if (state is TextBookLoaded) {
+                  // איתור ה-PDF המלווה נדחה עד שהתוכן נטען, כדי שלא יחנוק את
+                  // שאילתת התוכן בעלייה (ראו _resolveCompanionPdf).
+                  _resolveCompanionPdf();
                   if (!state.showLeftPane) {
                     _leftPaneAutoCloseQueuedByScroll = false;
                   }
@@ -1042,7 +1066,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                             ),
                             ActionButtonData(
                               widget: IconButton(
-                                icon: const Icon(FluentIcons.book_search_24_regular),
+                                icon: const Icon(
+                                    FluentIcons.book_search_24_regular),
                                 tooltip: 'חיפוש',
                                 onPressed: null,
                               ),
@@ -1201,6 +1226,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                           _openPersonalNotesForCurrentView(state),
                       selectedTextForNote: _selectedTextForSearch,
                       selectedLineForNote: _selectedLineForNote,
+                      selectedColumnForNote: _selectedColumnForNote,
                     ),
                     child: Scaffold(
                       body: Column(
@@ -1239,8 +1265,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ),
         ),
         if (state.showPageShapeView)
-          AppTopBarItem(
-              widget: _buildPageShapeSettingsButton(context, state)),
+          AppTopBarItem(widget: _buildPageShapeSettingsButton(context, state)),
       ],
       center: _buildTextBookCenter(context, state),
       trailingItems: [
@@ -1552,7 +1577,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           await _savePerBookSettingsDirectly(context, state, fontSize: newSize);
         },
       ),
-
     ];
   }
 
@@ -1642,37 +1666,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       //     onPressed: () => _handleFullFileEditorPress(context, state),
       //   ),
 
-      // העתק קישור ישיר
+      // העתק קישור ישיר לספר זה (קישור למקטע/הדגשה זמין בתפריט הלחיצה הימנית)
       ActionButtonData(
         widget: const SizedBox.shrink(),
         icon: FluentIcons.link_24_regular,
         tooltip: state.book.id != null
-            ? 'העתק קישור ישיר'
+            ? 'העתק קישור ישיר לספר זה'
             : 'העתק קישור ישיר (לא זמין לספר זה)',
-        onPressed: null,
-        submenuItems: state.book.id != null
-            ? () {
-                final bookId = state.book.id!;
-                return [
-                  ActionButtonData(
-                    widget: const SizedBox.shrink(),
-                    icon: FluentIcons.link_24_regular,
-                    tooltip: 'העתק קישור ישיר לספר זה',
-                    onPressed: () => copyLinkToClipboard(buildBookLink(bookId)),
-                  ),
-                  ActionButtonData(
-                    widget: const SizedBox.shrink(),
-                    icon: FluentIcons.link_multiple_24_regular,
-                    tooltip: 'העתק קישור ישיר למקטע זה',
-                    onPressed: () {
-                      // קישור deep-link חייב להפנות לשורת מקור: ב-positions
-                      // הסט לא ממוין, וב-מצב רצף ה-index הוא segmentIndex.
-                      final index = _topmostVisibleSourceLine(state);
-                      copyLinkToClipboard(buildSectionLink(bookId, index));
-                    },
-                  ),
-                ];
-              }()
+        onPressed: state.book.id != null
+            ? () => copyLinkToClipboard(buildBookLink(state.book.id!))
             : null,
       ),
 
@@ -2697,6 +2699,7 @@ bool _handleGlobalKeyEvent(
   required VoidCallback openNotesForCurrentView,
   String? selectedTextForNote,
   int? selectedLineForNote,
+  int? selectedColumnForNote,
 }) {
   // קריאת קיצורים מההגדרות
   // [EDITING DISABLED]
@@ -2776,6 +2779,7 @@ bool _handleGlobalKeyEvent(
       openNotesForCurrentView: openNotesForCurrentView,
       selectedText: selectedTextForNote,
       selectedLineIndex: selectedLineForNote,
+      selectionColumn: selectedColumnForNote,
     );
     return true;
   }
@@ -2971,6 +2975,7 @@ Future<void> _addNoteFromKeyboard(
   required VoidCallback openNotesForCurrentView,
   String? selectedText,
   int? selectedLineIndex,
+  int? selectionColumn,
 }) async {
   // אם יש טקסט מסומן — מתנהגים בדיוק כמו תפריט הקליק-ימני: ההערה חלה על
   // השורה שממנה הודגש הטקסט, והטקסט המסומן עצמו משמש ככותרת ההערה.
@@ -3006,6 +3011,7 @@ Future<void> _addNoteFromKeyboard(
         lineNumber: currentIndex + 1,
         referenceText: referenceText,
         selectedText: hasSelection ? trimmedSelection : null,
+        selectionColumn: hasSelection ? selectionColumn : null,
         initialContent: draft?.content ?? '',
         initialFormat: draft?.contentFormat ?? PersonalNoteContentFormat.plain,
       ));

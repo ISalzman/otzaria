@@ -34,6 +34,11 @@ class UserBooksDatabaseHolder {
     });
   }
 
+  /// מחזיר את ה-repository רק אם כבר אותחל, אחרת null — בלי לכפות פתיחה
+  /// (שהייתה יוצרת user_books.db ריק כשאין ספרי משתמש). משמש למשל לכוונון
+  /// PRAGMA זמני בזמן אינדוקס, רק על חיבור שכבר פתוח.
+  SeforimRepository? get repositoryIfInitialized => _repository;
+
   /// נתיב ה-DB. שימושי בזרימות isolate שצריכות לפתוח את הקובץ ישירות.
   static Future<String> resolveDbPath() => AppPaths.resolveUserBooksDbPath();
 

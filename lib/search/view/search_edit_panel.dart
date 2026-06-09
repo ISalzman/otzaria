@@ -90,25 +90,28 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
   }
 
   Widget _buildSearchModeToggle(SearchState state) {
-    final modes = [
-      ('מתקדם', SearchMode.advanced),
-      ('מדויק', SearchMode.exact),
-      ('מקורב', SearchMode.fuzzy),
+    const modes = [
+      SearchMode.advanced,
+      SearchMode.exact,
+      SearchMode.fuzzy,
     ];
 
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        for (final (label, mode) in modes)
-          ChoiceChip(
-            label: Text(label, textDirection: TextDirection.rtl),
-            selected: state.configuration.searchMode == mode,
-            onSelected: (selected) {
-              if (selected) {
-                widget.tab.searchBloc.add(SetSearchMode(mode));
-              }
-            },
+        for (final mode in modes)
+          Tooltip(
+            message: mode.tooltip,
+            child: ChoiceChip(
+              label: Text(mode.shortLabel, textDirection: TextDirection.rtl),
+              selected: state.configuration.searchMode == mode,
+              onSelected: (selected) {
+                if (selected) {
+                  widget.tab.searchBloc.add(SetSearchMode(mode));
+                }
+              },
+            ),
           ),
       ],
     );
@@ -126,13 +129,16 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'מרווח כללי בין מילים:',
-          style: TextStyle(
-            fontSize: 14,
-            color: onSurface.withValues(alpha: 0.7),
+        SizedBox(
+          width: 260,
+          child: Text(
+            'מרווח כללי בין מילים: מספר המילים המרבי שמותר בין מילות החיפוש.',
+            style: TextStyle(
+              fontSize: 14,
+              color: onSurface.withValues(alpha: 0.7),
+            ),
+            textDirection: TextDirection.rtl,
           ),
-          textDirection: TextDirection.rtl,
         ),
         const SizedBox(width: 8),
         SizedBox(
@@ -141,6 +147,7 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
             controller: _distanceController,
             decoration: const InputDecoration(
               hintText: '0-30',
+              helperText: '0 = צמוד, ערך גבוה יותר מרחיב את ההתאמה',
               border: OutlineInputBorder(),
               contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               isDense: true,

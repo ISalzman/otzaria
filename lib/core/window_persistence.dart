@@ -21,7 +21,23 @@ class WindowPersistence {
   static bool _isRestoring = false;
   static bool _pendingMaximize = false;
 
+  /// גבולות החלון השמורים, נקראים ב-[restoreIfAny] אך מוחלים רק ב-
+  /// [applyRestoredBounds] — אחרי שלב ה-splash הקטן. null = אין גבולות שמורים
+  /// (הפעלה ראשונה) → יוחל גודל ברירת מחדל.
+  static Rect? _restoredBounds;
+
+  /// בזמן מסך הפתיחה החלון קטן/שקוף; אסור לשמור את גודלו (אחרת ההפעלה הבאה
+  /// "תשחזר" חלון זעיר). כשהדגל דלוק, [scheduleSave]/[saveNow] הם no-op.
+  /// זהו גם המנגנון שמונע שמירת גודל ה-splash מלכתחילה — ולכן אין צורך ב-clamp
+  /// "שפיות" בשחזור (שפגע בחלונות קטנים חוקיים כמו 500x420).
+  static bool _splashMode = false;
+  static set splashMode(bool value) => _splashMode = value;
+
   static bool get isRestoring => _isRestoring;
+
+  /// האם החלון הראשי אמור להיפתח ממוקסם (לפי המצב השמור). נקרא אחרי
+  /// [restoreIfAny] כדי להחליט אם למקסם כבר את חלון ה-splash השקוף.
+  static bool get willMaximize => _pendingMaximize;
 
   static Future<void> restoreIfAny() async {
     if (_restored) return;
@@ -49,15 +65,36 @@ class WindowPersistence {
       final clampedWidth = width < minSize.width ? minSize.width : width;
       final clampedHeight = height < minSize.height ? minSize.height : height;
 
-      // Set bounds before show so Windows records this as the "restore size".
-      // Without this, unmaximize would revert to the runner's default dimensions
-      // instead of the user's last chosen windowed size.
-      await windowManager.setBounds(
-        Rect.fromLTWH(left, top, clampedWidth, clampedHeight),
-      );
+      // לא מחילים את הגבולות עכשיו: בשלב זה החלון מציג את ה-splash הקטן
+      // והשקוף. הגבולות נשמרים ומוחלים ב-[applyRestoredBounds] בעת חשיפת
+      // החלון המלא (revealMainWindow), אחרי שתוכן הטאב הפעיל נטען.
+      _restoredBounds = Rect.fromLTWH(left, top, clampedWidth, clampedHeight);
     } catch (_) {
       // window manager may fail on first launch;
       // silently continue with default window dimensions.
+    } finally {
+      _isRestoring = false;
+    }
+  }
+
+  /// מחילה את גבולות החלון השמורים (או גודל ברירת מחדל ממורכז בהפעלה ראשונה).
+  /// נקראת בעת חשיפת החלון המלא, אחרי שלב ה-splash הקטן.
+  static Future<void> applyRestoredBounds() async {
+    _isRestoring = true;
+    try {
+      final bounds = _restoredBounds;
+      if (bounds != null) {
+        // הגבולות כבר עברו clamp ל-minSize (420x400) ב-restoreIfAny, וגודל
+        // ה-splash לעולם לא נשמר (splashMode) — לכן מכבדים כל גודל חוקי שנשמר,
+        // כולל חלונות קטנים שהמשתמש בחר במכוון.
+        await windowManager.setBounds(bounds);
+      } else {
+        // אין גבולות שמורים (הפעלה ראשונה) — גודל ברירת מחדל ממורכז.
+        await windowManager.setSize(const Size(1280, 720));
+        await windowManager.center();
+      }
+    } catch (_) {
+      // Ignore; window stays at its current bounds.
     } finally {
       _isRestoring = false;
     }
@@ -80,6 +117,8 @@ class WindowPersistence {
   }
 
   static void scheduleSave() {
+    // אין לשמור את גודל חלון ה-splash הקטן.
+    if (_splashMode) return;
     _debounce?.cancel();
     _debounce = Timer(_debounceDuration, () {
       // Fire-and-forget; any failure here shouldn't crash the app.
@@ -88,6 +127,7 @@ class WindowPersistence {
   }
 
   static Future<void> saveNow() async {
+    if (_splashMode) return;
     _debounce?.cancel();
     _debounce = null;
 

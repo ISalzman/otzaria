@@ -38,11 +38,67 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
   final Map<String, List<InlineSpan>> _snippetCache = {};
   bool _isAutoLoadInFlight = false;
 
+  /// חתימת החיפוש האחרון (שאילתה + קטגוריות) שעבורו כבר גללנו לראש הרשימה.
+  /// משמשת להבחנה בין חיפוש חדש (חתימה משתנה → גלילה לראש) לבין טעינת המשך
+  /// (אותה חתימה → שימור מיקום הגלילה).
+  String? _lastSearchSignature;
+
+  Widget _buildInformativeEmptyState({
+    required IconData icon,
+    required String title,
+    required String message,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 52,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: colorScheme.onSurface,
+              ),
+              textDirection: TextDirection.rtl,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: TextStyle(
+                fontSize: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
+    // אתחול החתימה מה-state הנוכחי כדי שהשינוי הראשון (למשל טעינת המשך בטאב
+    // חיפוש משוחזר) לא ייחשב בטעות ל"חיפוש חדש" ויאפס את הגלילה.
+    _lastSearchSignature = _searchSignature(context.read<SearchBloc>().state);
   }
+
+  /// חתימת חיפוש: שאילתה + קטגוריות. זהה בין chunks של אותו חיפוש ובטעינת
+  /// המשך, ומשתנה רק בחיפוש חדש (שינוי שאילתה או קטגוריה).
+  String _searchSignature(SearchState state) =>
+      '${state.searchQuery} ${state.currentFacets.join('')}';
 
   void _handleScroll() {
     if (!_scrollController.hasClients) {
@@ -128,10 +184,25 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         listenWhen: (previous, current) =>
             previous.isLoading != current.isLoading ||
             previous.results.length != current.results.length ||
-            previous.totalResults != current.totalResults,
+            previous.totalResults != current.totalResults ||
+            previous.searchQuery != current.searchQuery ||
+            previous.currentFacets.join('|') != current.currentFacets.join('|'),
         listener: (context, state) {
           if (!state.isLoading) {
             _isAutoLoadInFlight = false;
+          }
+
+          // חיפוש חדש (שינוי שאילתה או קטגוריה) — מאפס את הגלילה לראש הרשימה.
+          // טעינת המשך (LoadMore) שומרת על אותה חתימה ולכן לא נוגעת בגלילה,
+          // וכך גם chunks עוקבים של אותו חיפוש (החתימה זהה).
+          final signature = _searchSignature(state);
+          if (signature != _lastSearchSignature) {
+            _lastSearchSignature = signature;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _scrollController.hasClients) {
+                _scrollController.jumpTo(0);
+              }
+            });
           }
 
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -157,7 +228,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
       return const Center(child: CircularProgressIndicator());
     }
     if (state.searchQuery.isEmpty) {
-      return const Center(child: Text("לא בוצע חיפוש"));
+      return _buildInformativeEmptyState(
+        icon: FluentIcons.search_24_regular,
+        title: 'לא בוצע חיפוש',
+        message: 'הקלד מילות חיפוש ולחץ על כפתור "חפש" כדי להתחיל.',
+      );
     }
     if (state.results.isEmpty && !state.isLoading) {
       // הבחנה בין חיפוש ריק לגיטימי לבין כשל בחיפוש: אם errorMessage קיים,
@@ -175,11 +250,12 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
           ),
         );
       }
-      return const Center(
-          child: Padding(
-        padding: EdgeInsets.all(8.0),
-        child: Text('אין תוצאות'),
-      ));
+      return _buildInformativeEmptyState(
+        icon: FluentIcons.document_search_24_regular,
+        title: 'אין תוצאות',
+        message:
+            'נסה להרחיב קטגוריות, לשנות מצב חיפוש או לעדכן את מילות החיפוש.',
+      );
     }
 
     // תמיד נשתמש ב-ListView גם לתוצאה אחת - כך היא תופיע למעלה

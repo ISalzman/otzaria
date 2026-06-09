@@ -86,6 +86,25 @@ void main() {
       expect(repository.updateCalls, 0);
       expect(invalidateCalls, 0);
     });
+
+    test('swallows auto sync failures without invalidating cache', () async {
+      final repository = _FakeExternalCatalogRepository(throwOnUpdate: true);
+      var invalidateCalls = 0;
+
+      await ExternalCatalogSettingsHelper.maybeAutoSyncCatalogs(
+        SettingsState.initial().copyWith(
+          showExternalBooks: true,
+          autoSyncCatalogs: true,
+        ),
+        repository: repository,
+        invalidateExternalBooksCache: () {
+          invalidateCalls++;
+        },
+      );
+
+      expect(repository.updateCalls, 1);
+      expect(invalidateCalls, 0);
+    });
   });
 }
 
@@ -93,10 +112,12 @@ class _FakeExternalCatalogRepository extends ExternalCatalogRepository {
   _FakeExternalCatalogRepository({
     this.databaseExistsResult = true,
     this.updateResult = false,
+    this.throwOnUpdate = false,
   });
 
   final bool databaseExistsResult;
   final bool updateResult;
+  final bool throwOnUpdate;
   int updateCalls = 0;
 
   @override
@@ -105,6 +126,9 @@ class _FakeExternalCatalogRepository extends ExternalCatalogRepository {
   @override
   Future<bool> updateDatabaseIfNeeded() async {
     updateCalls++;
+    if (throwOnUpdate) {
+      throw Exception('sync failed');
+    }
     return updateResult;
   }
 }

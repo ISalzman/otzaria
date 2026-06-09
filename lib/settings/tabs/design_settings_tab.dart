@@ -13,6 +13,7 @@ import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 enum _SidebarMode { pinned, openOnBook, closed }
@@ -155,23 +156,29 @@ class DesignSettingsTab extends StatelessWidget {
                     child: SettingsCard(
                       title: 'תצוגה',
                       children: [
-                        ListTile(
-                          leading: Icon(state.isFullscreen
-                              ? FluentIcons.full_screen_minimize_24_regular
-                              : FluentIcons.full_screen_maximize_24_regular),
-                          title:
-                              const Text('מסך מלא', style: kSettingsTitleStyle),
-                          subtitle: const Text('החלף מצב מסך מלא',
-                              style: kSettingsSubtitleStyle),
-                          trailing: Switch(
-                            value: state.isFullscreen,
-                            onChanged: (value) async {
-                              context
-                                  .read<SettingsBloc>()
-                                  .add(UpdateIsFullscreen(value));
-                              await windowManager.setFullScreen(value);
-                            },
+                        SwitchSettingsTile(
+                          leading: RtlIcon(
+                            state.isFullscreen
+                                ? FluentIcons.full_screen_minimize_24_regular
+                                : FluentIcons.full_screen_maximize_24_regular,
                           ),
+                          title: const Text(
+                            'מסך מלא',
+                            style: kSettingsTitleStyle,
+                            textDirection: TextDirection.rtl,
+                          ),
+                          subtitle: const Text(
+                            'החלף מצב מסך מלא',
+                            style: kSettingsSubtitleStyle,
+                            textDirection: TextDirection.rtl,
+                          ),
+                          value: state.isFullscreen,
+                          onChanged: (value) async {
+                            context
+                                .read<SettingsBloc>()
+                                .add(UpdateIsFullscreen(value));
+                            await windowManager.setFullScreen(value);
+                          },
                         ),
                       ],
                     ),

@@ -24,6 +24,10 @@ class SmartTextWidget extends StatelessWidget {
   /// callback לפתיחת ספר/טאב
   final Function(OpenedTab)? onOpenBook;
 
+  /// callback ללחיצה על סימון הערה אישית inline.
+  /// מקבל את אינדקס השורה (0-based) שעליה ההערה.
+  final void Function(int lineIndex)? onNoteTap;
+
   /// מפתח ייחודי לווידג'ט (לאופטימיזציה)
   final Key? widgetKey;
 
@@ -35,6 +39,7 @@ class SmartTextWidget extends StatelessWidget {
     required this.text,
     required this.settings,
     this.onOpenBook,
+    this.onNoteTap,
     this.widgetKey,
     this.renderMode = RenderMode.column,
   });
@@ -104,8 +109,18 @@ class SmartTextWidget extends StatelessWidget {
         }
         return null;
       },
-      onTapUrl: onOpenBook != null
+      onTapUrl: (onOpenBook != null || onNoteTap != null)
           ? (url) async {
+              // סימון הערה אישית inline — נטפל לפני שאר הקישורים.
+              if (url.startsWith('otzaria://note')) {
+                final lineIndex =
+                    int.tryParse(Uri.parse(url).queryParameters['line'] ?? '');
+                if (lineIndex != null) {
+                  onNoteTap?.call(lineIndex);
+                }
+                return true;
+              }
+              if (onOpenBook == null) return false;
               return await HtmlLinkHandler.handleLink(
                 context,
                 url,

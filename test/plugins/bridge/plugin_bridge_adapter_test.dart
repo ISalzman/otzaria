@@ -1,8 +1,14 @@
+import 'dart:io';
+// קידומת ל-Link של dart:io כי models/links.dart מגדיר Link משלו שמסתיר אותו.
+import 'dart:io' as io show Link;
+
+import 'package:archive/archive_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:kosher_dart/kosher_dart.dart';
+import 'package:path/path.dart' as p;
 import 'package:mockito/mockito.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
@@ -19,6 +25,8 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
+import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -974,6 +982,207 @@ void main() {
         )),
       );
       expect(hit, isFalse);
+    });
+  });
+
+  group('PluginBridgeAdapter fs + pickFolder + download.destPath', () {
+    late Directory tempDir;
+    late _StubPluginRegistryRepository registry;
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('adapter_fs_test_');
+      registry = _StubPluginRegistryRepository()..permissionGrant = true;
+    });
+
+    tearDown(() async {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    const downloadUrl =
+        'https://github.com/Otzarya-Org/Otzarya-Library/releases/latest/download/books.zip';
+
+    PluginBridgeAdapter buildAdapter({
+      required Future<String?> Function({String? title}) pickFolder,
+      PluginFileDownloadService? fileDownloadService,
+    }) {
+      return PluginBridgeAdapter(
+        _buildInstalledPlugin(
+          permissions: const ['ui.feedback', 'network.access'],
+          networkEnabled: true,
+          networkAllowlist: const [
+            'https://github.com/Otzarya-Org/Otzarya-Library'
+          ],
+        ),
+        dependencies: PluginBridgeDependencies(
+          historyBloc: _MockHistoryBloc(),
+          tabsBloc: _StubTabsBloc(),
+          navigationBloc: _MockNavigationBloc(),
+          calendarCubit: _StubCalendarCubit(
+            _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+          ),
+          workspaceBloc: _MockWorkspaceBloc(),
+          searchRepository: _MockSearchRepository(),
+          personalNotesRepository: _MockPersonalNotesRepository(),
+          bookOpenCoordinator: _MockBookOpenCoordinator(),
+          themePayloadBuilder: () => <String, dynamic>{},
+          showConfirmDialog: ({required title, required content}) async => true,
+          showWarningDialog: ({
+            required title,
+            required content,
+            required subtitle,
+          }) async =>
+              true,
+          pickFolder: pickFolder,
+        ),
+        pluginRepository: registry,
+        fileDownloadService: fileDownloadService,
+        fsService: PluginFsService(),
+      );
+    }
+
+    String buildZip(String dir, String name) {
+      final src = File(p.join(dir, 'hello.txt'))..writeAsStringSync('שלום');
+      final zipPath = p.join(dir, name);
+      final encoder = ZipFileEncoder()..create(zipPath);
+      encoder.addFileSync(src, 'hello.txt');
+      encoder.closeSync();
+      return zipPath;
+    }
+
+    test('ui.pickFolder מחזיר נתיב ומעניק הרשאת כתיבה/מחיקה בתוכו', () async {
+      final adapter = buildAdapter(pickFolder: ({title}) async => tempDir.path);
+
+      final res =
+          await adapter.execute('ui', 'pickFolder', {'title': 'בחר'}) as Map;
+      expect(res['path'], tempDir.path);
+
+      final file = File(p.join(tempDir.path, 'x.zip'))..writeAsBytesSync([1]);
+      final del =
+          await adapter.execute('fs', 'deleteFile', {'path': file.path});
+      expect(del, isTrue);
+      expect(file.existsSync(), isFalse);
+    });
+
+    test('ביטול ui.pickFolder מחזיר {path:null} ואינו מעניק הרשאה', () async {
+      final adapter = buildAdapter(pickFolder: ({title}) async => null);
+
+      final res = await adapter.execute('ui', 'pickFolder', {}) as Map;
+      expect(res['path'], isNull);
+
+      final file = File(p.join(tempDir.path, 'y.zip'))..writeAsBytesSync([1]);
+      await expectLater(
+        adapter.execute('fs', 'deleteFile', {'path': file.path}),
+        throwsA(isA<Exception>()
+            .having((e) => e.toString(), 'message', contains('forbidden'))),
+      );
+      // הקובץ לא נמחק — הפעולה נחסמה.
+      expect(file.existsSync(), isTrue);
+    });
+
+    test('fs.extractZip מחלץ בתוך תיקייה מאושרת', () async {
+      final adapter = buildAdapter(pickFolder: ({title}) async => tempDir.path);
+      await adapter.execute('ui', 'pickFolder', {});
+
+      final zipPath = buildZip(tempDir.path, 'a.zip');
+      final dest = p.join(tempDir.path, 'out');
+      final ok = await adapter.execute(
+          'fs', 'extractZip', {'zipPath': zipPath, 'destFolder': dest});
+
+      expect(ok, isTrue);
+      expect(File(p.join(dest, 'hello.txt')).existsSync(), isTrue);
+    });
+
+    test('fs.extractZip חוסם יעד מחוץ לתיקייה מאושרת', () async {
+      final granted = Directory(p.join(tempDir.path, 'granted'))..createSync();
+      final adapter = buildAdapter(pickFolder: ({title}) async => granted.path);
+      await adapter.execute('ui', 'pickFolder', {});
+
+      final zipPath = buildZip(granted.path, 'a.zip');
+      await expectLater(
+        adapter.execute('fs', 'extractZip', {
+          'zipPath': zipPath,
+          'destFolder': p.join(tempDir.path, 'evil'),
+        }),
+        throwsA(isA<Exception>()
+            .having((e) => e.toString(), 'message', contains('forbidden'))),
+      );
+    });
+
+    test('network.download עם destPath שומר בתוך תיקייה מאושרת', () async {
+      final client =
+          MockClient((req) async => http.Response.bytes([7, 8, 9], 200));
+      final adapter = buildAdapter(
+        pickFolder: ({title}) async => tempDir.path,
+        fileDownloadService: PluginFileDownloadService(client: client),
+      );
+      await adapter.execute('ui', 'pickFolder', {});
+
+      final destPath = p.join(tempDir.path, 'books.zip');
+      final res = await adapter.execute('network', 'download', {
+        'url': downloadUrl,
+        'destPath': destPath,
+      }) as Map;
+
+      expect(res['path'], destPath);
+      expect(File(destPath).readAsBytesSync(), [7, 8, 9]);
+    });
+
+    test('network.download עם destPath מחוץ לתיקייה מאושרת נחסם ואינו מוריד',
+        () async {
+      var hit = false;
+      final client = MockClient((req) async {
+        hit = true;
+        return http.Response.bytes([0], 200);
+      });
+      final granted = Directory(p.join(tempDir.path, 'granted'))..createSync();
+      final adapter = buildAdapter(
+        pickFolder: ({title}) async => granted.path,
+        fileDownloadService: PluginFileDownloadService(client: client),
+      );
+      await adapter.execute('ui', 'pickFolder', {});
+
+      await expectLater(
+        adapter.execute('network', 'download', {
+          'url': downloadUrl,
+          'destPath': p.join(tempDir.path, 'evil', 'books.zip'),
+        }),
+        throwsA(isA<Exception>()
+            .having((e) => e.toString(), 'message', contains('forbidden'))),
+      );
+      expect(hit, isFalse);
+    });
+
+    test('fs.deleteFile חסום דרך symlink שמצביע מחוץ לתיקייה מאושרת', () async {
+      final granted = Directory(p.join(tempDir.path, 'granted'))..createSync();
+      final outside = Directory(p.join(tempDir.path, 'outside'))..createSync();
+      final secret = File(p.join(outside.path, 'secret.txt'))
+        ..writeAsStringSync('סוד');
+
+      // קישור סימבולי בתוך התיקייה המאושרת שמצביע אל תיקייה חיצונית.
+      // ב-Windows ללא Developer Mode/הרשאת admin יצירת symlink נכשלת — דלג.
+      final io.Link link;
+      try {
+        link = io.Link(p.join(granted.path, 'escape'))
+          ..createSync(outside.path);
+      } catch (_) {
+        markTestSkipped('יצירת symlink אינה נתמכת בסביבה זו');
+        return;
+      }
+
+      final adapter = buildAdapter(pickFolder: ({title}) async => granted.path);
+      await adapter.execute('ui', 'pickFolder', {});
+
+      // נתיב שעובר דרך ה-symlink "נראה" בתוך התיקייה המאושרת מבחינת מחרוזת,
+      // אבל מצביע בפועל מחוצה לה — ולכן חייב להיחסם.
+      await expectLater(
+        adapter.execute(
+            'fs', 'deleteFile', {'path': p.join(link.path, 'secret.txt')}),
+        throwsA(isA<Exception>()
+            .having((e) => e.toString(), 'message', contains('forbidden'))),
+      );
+      expect(secret.existsSync(), isTrue); // הקובץ החיצוני לא נמחק
     });
   });
 }

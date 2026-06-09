@@ -64,7 +64,11 @@ class AppSegmentedControl<T> extends StatelessWidget {
             value: o.value,
             label: FittedBox(
               fit: BoxFit.scaleDown,
-              child: Text(o.label, style: AppTextStyles.settingTitle),
+              child: Text(
+                o.label,
+                style: AppTextStyles.settingTitle,
+                textDirection: TextDirection.rtl,
+              ),
             ),
             icon: hasIcons
                 ? (o.icon != null
@@ -221,6 +225,7 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
                               style: AppTextStyles.settingSubtitle.copyWith(
                                 color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                               ),
+                              textDirection: TextDirection.rtl,
                             ),
                           ],
                         ],
@@ -239,7 +244,11 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
           leading: widget.icon != null ? Icon(widget.icon) : null,
           title: _titleWidget(),
           subtitle: widget.subtitle != null
-              ? Text(widget.subtitle!, style: AppTextStyles.settingSubtitle)
+              ? Text(
+                  widget.subtitle!,
+                  style: AppTextStyles.settingSubtitle,
+                  textDirection: TextDirection.rtl,
+                )
               : null,
           trailing: button,
         );
@@ -249,7 +258,11 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
 
   Widget _titleWidget() {
     if (widget.title is! String) return widget.title as Widget;
-    return Text(widget.title as String, style: AppTextStyles.settingTitle);
+    return Text(
+      widget.title as String,
+      style: AppTextStyles.settingTitle,
+      textDirection: TextDirection.rtl,
+    );
   }
 
   Widget _buildButton(double totalW) {

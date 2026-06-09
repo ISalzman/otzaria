@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 
 class SearchOptionsDropdown extends StatefulWidget {
   final Function(bool)? onToggle;
@@ -75,14 +76,8 @@ class SearchOptionsRow extends StatefulWidget {
 
 class _SearchOptionsRowState extends State<SearchOptionsRow> {
   // רשימת האפשרויות הזמינות
-  static const List<String> _availableOptions = [
-    'קידומות',
-    'סיומות',
-    'קידומות דקדוקיות',
-    'סיומות דקדוקיות',
-    'כתיב מלא/חסר',
-    'חלק ממילה',
-  ];
+  static const List<String> _availableOptions =
+      SearchQueryBuilder.availableWordOptionKeys;
 
   Map<String, bool> _getCurrentWordOptions() {
     final currentWord = widget.currentWord;
@@ -93,21 +88,21 @@ class _SearchOptionsRowState extends State<SearchOptionsRow> {
         currentWord.isEmpty ||
         wordIndex == null ||
         wordOptions == null) {
-      return Map.fromIterable(_availableOptions, value: (_) => false);
+      return SearchQueryBuilder.disabledWordOptionsTemplate();
     }
 
     final key = '${currentWord}_$wordIndex';
 
     // אם אין אפשרויות למילה הזו, ניצור אותן
     if (!wordOptions.containsKey(key)) {
-      wordOptions[key] =
-          Map.fromIterable(_availableOptions, value: (_) => false);
+      wordOptions[key] = SearchQueryBuilder.disabledWordOptionsTemplate();
     }
 
     return wordOptions[key]!;
   }
 
   Widget _buildCheckbox(String option) {
+    final colorScheme = Theme.of(context).colorScheme;
     final currentOptions = _getCurrentWordOptions();
 
     return Material(
@@ -128,7 +123,7 @@ class _SearchOptionsRowState extends State<SearchOptionsRow> {
               // וודא שהמפתח קיים
               if (!wordOptions.containsKey(key)) {
                 wordOptions[key] =
-                    Map.fromIterable(_availableOptions, value: (_) => false);
+                    SearchQueryBuilder.disabledWordOptionsTemplate();
               }
 
               // עדכן את האפשרות
@@ -148,28 +143,13 @@ class _SearchOptionsRowState extends State<SearchOptionsRow> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: currentOptions[option]!
-                        ? Theme.of(context).primaryColor
-                        : Colors.grey.shade600,
-                    width: 2,
-                  ),
-                  borderRadius: BorderRadius.circular(3),
-                  color: currentOptions[option]!
-                      ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-                      : Colors.transparent,
+              IgnorePointer(
+                child: Checkbox(
+                  value: currentOptions[option]!,
+                  onChanged: (_) {},
+                  visualDensity: VisualDensity.compact,
+                  side: BorderSide(color: colorScheme.outline),
                 ),
-                child: currentOptions[option]!
-                    ? Icon(
-                        FluentIcons.checkmark_24_regular,
-                        size: 14,
-                        color: Theme.of(context).primaryColor,
-                      )
-                    : null,
               ),
               const SizedBox(width: 6),
               Align(
@@ -178,10 +158,11 @@ class _SearchOptionsRowState extends State<SearchOptionsRow> {
                   option,
                   style: TextStyle(
                     fontSize: 13,
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
+                    color: colorScheme.onSurface,
                     height: 1.0, // מבטיח שהטקסט לא יהיה גבוה מדי
                   ),
                   textAlign: TextAlign.center,
+                  textDirection: TextDirection.rtl,
                 ),
               ),
             ],
@@ -204,7 +185,7 @@ class _SearchOptionsRowState extends State<SearchOptionsRow> {
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.15), // צל מעודן יותר
@@ -213,9 +194,15 @@ class _SearchOptionsRowState extends State<SearchOptionsRow> {
               ),
             ],
             border: Border(
-              left: BorderSide(color: Colors.grey.shade300),
-              right: BorderSide(color: Colors.grey.shade300),
-              bottom: BorderSide(color: Colors.grey.shade300),
+              left: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+              right: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+              bottom: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
             ),
           ),
           child: Padding(

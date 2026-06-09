@@ -140,7 +140,10 @@ class PluginSidePanel extends StatelessWidget {
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
-                    child: Text('שגיאה: ${state.message}'),
+                    child: Text(
+                      'שגיאה: ${state.message}',
+                      textDirection: TextDirection.rtl,
+                    ),
                   ),
                 );
               }

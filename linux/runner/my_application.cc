@@ -5,23 +5,48 @@
 #include <gdk/gdkx.h>
 #endif
 
+#include <cstring>
+
 #include "flutter/generated_plugin_registrant.h"
+#include "splash_window.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  FlMethodChannel* splash_channel;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
-// Called when first Flutter frame received.
-static void first_frame_cb(MyApplication* self, FlView* view) {
-  gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+// Method-call handler for the "otzaria/splash" channel: Dart invokes "close"
+// when it reveals the main window, so the native splash fades out.
+static void splash_method_call_cb(FlMethodChannel* channel, FlMethodCall* call,
+                                  gpointer user_data) {
+  const gchar* method = fl_method_call_get_name(call);
+  g_autoptr(FlMethodResponse) response = nullptr;
+  if (strcmp(method, "close") == 0) {
+    splash_window_close();
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else {
+    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  }
+  g_autoptr(GError) error = nullptr;
+  fl_method_call_respond(call, response, &error);
 }
+
+// NOTE: the main window is intentionally NOT shown on the first frame — it
+// stays hidden until Dart reveals it (window_manager.show in presentMainWindow)
+// once the active tab's content is ready, so it appears directly at its final
+// size/position with content. The native splash window (see splash_window.cc)
+// provides the visible floating icon until then.
 
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+
+  // הצגת ה-splash הנייטיב מוקדם ככל האפשר (לפני יצירת ה-FlView הכבד) למשוב מיידי.
+  splash_window_show();
+
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
@@ -67,13 +92,21 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
 
-  // Show the window when Flutter renders.
-  // Requires the view to be realized so we can start rendering.
-  g_signal_connect_swapped(view, "first-frame", G_CALLBACK(first_frame_cb),
-                           self);
+  // Realize the view so the engine starts rendering into the (still hidden)
+  // window surface. The window itself is shown only at reveal (Dart calls
+  // window_manager.show), so it appears directly at its final size with content.
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+
+  // ערוץ "otzaria/splash" לסגירת ה-splash הנייטיב בעת חשיפת החלון הראשי.
+  FlEngine* engine = fl_view_get_engine(view);
+  FlBinaryMessenger* messenger = fl_engine_get_binary_messenger(engine);
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  self->splash_channel = fl_method_channel_new(
+      messenger, "otzaria/splash", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(
+      self->splash_channel, splash_method_call_cb, self, nullptr);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
@@ -121,6 +154,7 @@ static void my_application_shutdown(GApplication* application) {
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+  g_clear_object(&self->splash_channel);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }
 

@@ -3,6 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'dart:math';
 import 'package:otzaria/core/ui_snack.dart';
@@ -20,6 +21,59 @@ import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 //  • Focus מוגדר במפורש: CategoryGridItem + BookGridItem תומכים ב-Focus.
 //  • overflow: ellipsis + tooltip במרווח מספיק.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// מחזיר את נתיב הלוגו של הקטלוג החיצוני שממנו מגיע הספר, או null אם זהו
+/// ספר מקומי רגיל ללא מקור חיצוני.
+///
+/// ספר היברובוקס שהורד מקומית מומר ל-[PdfBook] (ראה
+/// `FileSystemData.mapHebrewBooksToLocal`) אך שומר את [Book.externalLibraryId]
+/// (למשל `hb:123`). לכן הזיהוי מסתמך על המזהה החיצוני האמין — ולא על נתיב
+/// הקובץ, שעלול להכיל את המחרוזת `otzaria` ולגרום לזיהוי שגוי של כל ספר מקומי.
+String? externalCatalogLogoAsset(Book book) {
+  final id = book.externalLibraryId;
+  final link = book is ExternalLibraryBook ? book.link.toString() : null;
+  if ((id == null || id.isEmpty) && (link == null || link.isEmpty)) {
+    return null;
+  }
+  switch (ExternalCatalogMapper.catalogFromLinkOrId(
+    externalLibraryId: id,
+    link: link,
+  )) {
+    case ExternalCatalogType.otzar:
+      return 'assets/logos/otzar.ico';
+    case ExternalCatalogType.hebrew:
+      return 'assets/logos/hebrew_books.png';
+    case null:
+      return null;
+  }
+}
+
+/// בונה את תוכן אייקון הספר: לוגו הקטלוג החיצוני אם קיים, אחרת אייקון לפי סוג הקובץ.
+Widget _buildBookIconChild(Book book, ColorScheme cs, double iconSize) {
+  final logoAsset = externalCatalogLogoAsset(book);
+  if (logoAsset != null) {
+    return Image.asset(
+      logoAsset,
+      width: iconSize,
+      height: iconSize,
+      fit: BoxFit.contain,
+    );
+  }
+  if (book is PdfBook || book.fileType == 'pdf') {
+    return Icon(
+      FluentIcons.document_pdf_24_regular,
+      color: cs.onSecondaryContainer,
+      size: iconSize,
+    );
+  }
+  return Icon(
+    book.fileType == 'docx'
+        ? FluentIcons.document_one_page_24_regular
+        : FluentIcons.document_text_24_regular,
+    color: cs.onSecondaryContainer,
+    size: iconSize,
+  );
+}
 
 bool _textOverflows({
   required BuildContext context,
@@ -400,31 +454,7 @@ class _BookGridMediaColumn extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Center(
-        child: (book is PdfBook || book.fileType == 'pdf')
-            ? Icon(
-                FluentIcons.document_pdf_24_regular,
-                color: cs.onSecondaryContainer,
-                size: iconSize,
-              )
-            : book is ExternalLibraryBook
-                ? Image.asset(
-                    (book as ExternalLibraryBook)
-                            .link
-                            .toString()
-                            .contains('tablet.otzar.org')
-                        ? 'assets/logos/otzar.ico'
-                        : 'assets/logos/hebrew_books.png',
-                    width: iconSize,
-                    height: iconSize,
-                    fit: BoxFit.contain,
-                  )
-                : Icon(
-                    book.fileType == 'docx'
-                        ? FluentIcons.document_one_page_24_regular
-                        : FluentIcons.document_text_24_regular,
-                    color: cs.onSecondaryContainer,
-                    size: iconSize,
-                  ),
+        child: _buildBookIconChild(book, cs, iconSize),
       ),
     );
 

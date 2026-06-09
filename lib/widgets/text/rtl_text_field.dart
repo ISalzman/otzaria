@@ -388,7 +388,11 @@ class _RtlTextFieldState extends State<RtlTextField> {
         children: [
           Icon(icon, size: 18, color: Theme.of(context).colorScheme.onSurface),
           const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontSize: 14)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 14),
+            textDirection: TextDirection.rtl,
+          ),
         ],
       ),
     );

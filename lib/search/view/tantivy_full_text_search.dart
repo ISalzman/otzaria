@@ -28,6 +28,30 @@ class TantivyFullTextSearch extends StatefulWidget {
   State<TantivyFullTextSearch> createState() => _TantivyFullTextSearchState();
 }
 
+/// קובע אם להציג את באנר סינון הקטגוריות.
+///
+/// מחזיר `true` כשהחיפוש מוגבל לקטגוריות מסוימות — כלומר כשבטווח החיפוש
+/// ([searchScopeFacets]) או בסינון הנוכחי ([currentFacets]) קיימת קטגוריה
+/// שאינה השורש. הפאסט `'/'` (שורש = כל הספרייה) מנורמל החוצה, כך ש-`['/']`
+/// ו-`[]` נחשבים זהים (שניהם ללא סינון) ולא מציגים באנר מיותר.
+@visibleForTesting
+bool shouldShowFacetFilterBanner({
+  required String searchQuery,
+  required List<String> searchScopeFacets,
+  required List<String> currentFacets,
+}) {
+  if (searchQuery.isEmpty) {
+    return false;
+  }
+
+  final normalizedScope = searchScopeFacets.toSet()
+    ..removeWhere((facet) => facet == '/');
+  final normalizedCurrent = currentFacets.toSet()
+    ..removeWhere((facet) => facet == '/');
+
+  return normalizedScope.isNotEmpty || normalizedCurrent.isNotEmpty;
+}
+
 class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     with AutomaticKeepAliveClientMixin {
   @override
@@ -68,9 +92,12 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     }
   }
 
-  bool _shouldShowFacetFilterBanner(SearchState state) {
-    return state.hasScopedFacetFilter && state.searchQuery.isNotEmpty;
-  }
+  bool _shouldShowFacetFilterBanner(SearchState state) =>
+      shouldShowFacetFilterBanner(
+        searchQuery: state.searchQuery,
+        searchScopeFacets: state.searchScopeFacets,
+        currentFacets: state.currentFacets,
+      );
 
   Widget _buildNoCategoriesSelectedMessage(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -128,6 +155,104 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
       alternativeWords: normalizedParameters.alternativeWords,
       searchOptions: normalizedParameters.searchOptions,
     ));
+  }
+
+  void _resetFacetFiltering() {
+    final searchMode = widget.tab.searchBloc.state.configuration.searchMode;
+    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
+      searchMode,
+      customSpacing: widget.tab.spacingValues,
+      alternativeWords: widget.tab.alternativeWords,
+      searchOptions: widget.tab.effectiveSearchOptions(
+        query: widget.tab.searchBloc.state.searchQuery,
+      ),
+    );
+    widget.tab.searchBloc.add(
+      SetFacet(
+        '/',
+        customSpacing: normalizedParameters.customSpacing,
+        alternativeWords: normalizedParameters.alternativeWords,
+        searchOptions: normalizedParameters.searchOptions,
+      ),
+    );
+  }
+
+  Widget _buildInitialSearchState(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              FluentIcons.search_24_regular,
+              size: 64,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'לא בוצע חיפוש',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: colorScheme.onSurface,
+              ),
+              textDirection: TextDirection.rtl,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'הקלד מילות חיפוש ולחץ על כפתור "חפש" כדי להתחיל.',
+              style: TextStyle(
+                fontSize: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoResultsState(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              FluentIcons.document_search_24_regular,
+              size: 56,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'אין תוצאות',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: colorScheme.onSurface,
+              ),
+              textDirection: TextDirection.rtl,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'נסה להרחיב קטגוריות, לשנות מצב חיפוש או לעדכן את מילות החיפוש.',
+              style: TextStyle(
+                fontSize: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -274,34 +399,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                     if (showBlockingLoader)
                       const Center(child: CircularProgressIndicator())
                     else if (state.searchQuery.isEmpty)
-                      Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              FluentIcons.search_24_regular,
-                              size: 64,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              "לא בוצע חיפוש",
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              "לחץ על 'חיפוש חדש' כדי להתחיל",
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
+                      _buildInitialSearchState(context)
                     else if (state.hasNoSelectedFacets)
                       _buildNoCategoriesSelectedMessage(context)
                     else if (state.results.isEmpty)
@@ -319,12 +417,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                 ),
                               ),
                             )
-                          : const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Text('אין תוצאות'),
-                              ),
-                            )
+                          : _buildNoResultsState(context)
                     else
                       Container(
                         clipBehavior: Clip.hardEdge,
@@ -511,35 +604,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                       );
                                     }
                                     if (state.searchQuery.isEmpty) {
-                                      return Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              FluentIcons.search_24_regular,
-                                              size: 64,
-                                              color: Colors.grey.shade400,
-                                            ),
-                                            const SizedBox(height: 16),
-                                            Text(
-                                              'לא בוצע חיפוש',
-                                              style: TextStyle(
-                                                fontSize: 18,
-                                                color: Colors.grey.shade600,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              "לחץ על כפתור 'חיפוש' בתפריט כדי להתחיל",
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                color: Colors.grey.shade500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
+                                      return _buildInitialSearchState(context);
                                     }
                                     if (state.hasNoSelectedFacets) {
                                       return _buildNoCategoriesSelectedMessage(
@@ -562,12 +627,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                           ),
                                         );
                                       }
-                                      return const Center(
-                                        child: Padding(
-                                          padding: EdgeInsets.all(8.0),
-                                          child: Text('אין תוצאות'),
-                                        ),
-                                      );
+                                      return _buildNoResultsState(context);
                                     }
                                     return Container(
                                       clipBehavior: Clip.hardEdge,
@@ -597,13 +657,23 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   /// באנר שמראה באילו קטגוריות מתבצע החיפוש
   Widget _buildFacetFilterBanner(BuildContext context, SearchState state) {
     final cs = Theme.of(context).colorScheme;
-    // חילוץ שמות הקטגוריות מטווח החיפוש המקורי
-    final facetNames = state.searchScopeFacets.map((facet) {
+    final isTemporaryFacetFilter = state.currentFacets.toSet().length !=
+            state.searchScopeFacets.toSet().length ||
+        state.currentFacets
+            .toSet()
+            .difference(state.searchScopeFacets.toSet())
+            .isNotEmpty;
+    final activeFacets =
+        isTemporaryFacetFilter ? state.currentFacets : state.searchScopeFacets;
+    final facetNames = activeFacets.map((facet) {
       // facet בפורמט "/תנ"ך" או "/תנ"ך/ראשונים" - ניקח את החלק האחרון
       final parts = facet.split('/').where((p) => p.isNotEmpty).toList();
       return parts.isNotEmpty ? parts.last : facet;
     }).toList();
     final tooltipMessage = 'חיפוש בקטגוריות: ${facetNames.join(', ')}';
+    final bannerTitle = isTemporaryFacetFilter
+        ? 'התוצאות מסוננות כעת לקטגוריות שנבחרו בעץ'
+        : 'החיפוש הוגבל לקטגוריות מסוימות';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
@@ -617,7 +687,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
           ),
           const SizedBox(width: 8),
           Text(
-            'החיפוש הוגבל לקטגוריות מסוימות',
+            bannerTitle,
             style: TextStyle(
               fontSize: 13,
               color: cs.primary,
@@ -668,8 +738,12 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               size: 16,
               color: cs.primary,
             ),
-            tooltip: 'חפש בכל הקטגוריות',
-            onPressed: _resetSearchScope,
+            tooltip: isTemporaryFacetFilter
+                ? 'בטל את הסינון הזמני'
+                : 'חפש בכל הקטגוריות',
+            onPressed: isTemporaryFacetFilter
+                ? _resetFacetFiltering
+                : _resetSearchScope,
             constraints: const BoxConstraints(),
             padding: const EdgeInsets.all(4),
           ),

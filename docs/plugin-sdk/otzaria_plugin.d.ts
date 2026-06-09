@@ -1,6 +1,6 @@
 /**
  * Otzaria Plugin SDK — TypeScript Definitions
- * Version: 1.0.0
+ * Version: 1.1.0
  *
  * Provides full type-safety when writing Otzaria plugins in TypeScript.
  *
@@ -54,6 +54,7 @@ export interface OtzariaResponse<T = unknown> {
 }
 
 export interface ColorScheme {
+  // ── שדות יסוד (SDK 1.0.0) — תמיד מוחזרים ──────────────────────────────
   primary: string;
   onPrimary: string;
   secondary: string;
@@ -64,6 +65,35 @@ export interface ColorScheme {
   error: string;
   onError: string;
   outline: string;
+
+  // ── תפקידי צבע נוספים (נוספו ב-SDK 1.1.0) ─────────────────────────────
+  // אופציונליים כדי לשמור תאימות לאחור: תוסף שרץ על גרסת אוצריא ישנה (1.0)
+  // לא יקבל אותם. כשהם קיימים — מוחזרים יחד עם שדות היסוד מ-`app.getTheme`.
+  primaryContainer?: string;
+  onPrimaryContainer?: string;
+  /** רקע כפתור ניווט פעיל בסרגל הצד (ה-pill) */
+  secondaryContainer?: string;
+  /** אייקון/טקסט מעל secondaryContainer */
+  onSecondaryContainer?: string;
+  tertiary?: string;
+  onTertiary?: string;
+  tertiaryContainer?: string;
+  onTertiaryContainer?: string;
+  onSurfaceVariant?: string;
+  surfaceContainerLowest?: string;
+  surfaceContainerLow?: string;
+  surfaceContainer?: string;
+  /** רקע הסרגל העליון (AppTopBar) במסכי הספרים */
+  surfaceContainerHigh?: string;
+  errorContainer?: string;
+  onErrorContainer?: string;
+  outlineVariant?: string;
+  inverseSurface?: string;
+  onInverseSurface?: string;
+  inversePrimary?: string;
+  shadow?: string;
+  scrim?: string;
+  surfaceTint?: string;
 }
 
 export interface Typography {

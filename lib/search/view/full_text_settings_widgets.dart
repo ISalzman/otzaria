@@ -137,37 +137,42 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
 
         return SizedBox(
           width: 140,
-          child: Focus(
-            focusNode: _focusNode,
-            child: SpinBox(
-              enabled: isEnabled,
-              decoration: InputDecoration(
-                labelText: hasCustomSpacing
-                    ? 'מרווח בין מילים (מושבת)'
-                    : 'מרווח בין מילים',
-                labelStyle: TextStyle(
-                  color: hasCustomSpacing
-                      ? Theme.of(context).colorScheme.onSurfaceVariant
-                      : null,
+          child: Tooltip(
+            message:
+                'קובע כמה מילים יכולות להופיע בין מילות החיפוש. כאשר מוגדרים מרווחים ידניים בין מילים, השדה הזה מושבת.',
+            child: Focus(
+              focusNode: _focusNode,
+              child: SpinBox(
+                enabled: isEnabled,
+                decoration: InputDecoration(
+                  labelText: hasCustomSpacing
+                      ? 'מרווח בין מילים (מושבת)'
+                      : 'מרווח בין מילים',
+                  helperText: '0 = צמוד, ערך גבוה יותר מרחיב את ההתאמה',
+                  labelStyle: TextStyle(
+                    color: hasCustomSpacing
+                        ? Theme.of(context).colorScheme.onSurfaceVariant
+                        : null,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 16.0,
+                  ),
                 ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 16.0,
-                ),
+                min: 0,
+                max: 30,
+                value: state.distance.toDouble(),
+                onChanged: isEnabled
+                    ? (value) => context.read<SearchBloc>().add(
+                          widget.triggerSearch
+                              ? UpdateDistance(value.toInt())
+                              : UpdateDistanceWithoutSearch(value.toInt()),
+                        )
+                    : null,
               ),
-              min: 0,
-              max: 30,
-              value: state.distance.toDouble(),
-              onChanged: isEnabled
-                  ? (value) => context.read<SearchBloc>().add(
-                        widget.triggerSearch
-                            ? UpdateDistance(value.toInt())
-                            : UpdateDistanceWithoutSearch(value.toInt()),
-                      )
-                  : null,
             ),
           ),
         );
@@ -335,10 +340,10 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
       spans.add(
         TextSpan(
           text: word,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16, // גופן גדול יותר למילים
             fontWeight: FontWeight.bold,
-            color: Colors.black,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
       );
@@ -364,10 +369,10 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
           spans.add(
             TextSpan(
               text: altWord,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16, // גופן גדול יותר למילים
                 fontWeight: FontWeight.bold,
-                color: Colors.black,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           );
@@ -401,12 +406,12 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
 
           // הוספת + עם המספר כתת-כתב
           spans.add(
-            const TextSpan(
+            TextSpan(
               text: '+',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: Colors.black,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           );
@@ -427,12 +432,12 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
         } else {
           // + רגיל ללא מרווח
           spans.add(
-            const TextSpan(
+            TextSpan(
               text: ' + ',
               style: TextStyle(
                 fontSize: 16, // גופן גדול יותר ל-+
                 fontWeight: FontWeight.bold,
-                color: Colors.black,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           );
@@ -456,13 +461,6 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
     });
   }
 
-  String _getDisplayText(String originalQuery) {
-    // כרגע נציג את הטקסט המקורי
-    // בעתיד נוסיף לוגיקה להצגת החלופות
-    // למשל: "מאימתי או מתי ו קורין או קוראין"
-    return originalQuery;
-  }
-
   Widget _buildFormattedText(String text, BuildContext context) {
     if (text.trim().isEmpty) return const SizedBox.shrink();
 
@@ -478,7 +476,7 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
         // נציג את הטקסט מה-state של החיפוש (לא מה-controller שמשתנה)
-        final displayText = _getDisplayText(state.searchQuery);
+        final displayText = state.searchQuery;
 
         if (displayText.isEmpty) {
           return const SizedBox.shrink();

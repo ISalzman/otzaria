@@ -32,8 +32,10 @@ String? buildTextMarkLink(int bookId, int index, String text) {
   return 'otzaria://open/book/$bookId?index=${index < 0 ? 0 : index}&m=$encoded';
 }
 
-/// בניית רשימת פריטי תת-תפריט "העתק קישור ישיר".
-/// מחזיר 3 פריטים ללא טקסט מסומן, 4 פריטים עם טקסט מסומן לא-ריק.
+/// בניית רשימת פריטי תת-תפריט "העתק קישור ישיר" עבור תפריט הלחיצה הימנית.
+/// הקישור לספר עצמו מוצג בתפריט "אפשרויות נוספות" שבסרגל העליון, ולכן אינו
+/// כלול כאן כדי למנוע כפילות.
+/// מחזיר 2 פריטים ללא טקסט מסומן, 3 פריטים עם טקסט מסומן לא-ריק.
 /// כל פריט מכיל label ו-link (link יכול להיות null אם הבנייה נכשלה).
 List<({String label, String? link})> buildDirectLinkSubmenuEntries({
   required int bookId,
@@ -41,7 +43,6 @@ List<({String label, String? link})> buildDirectLinkSubmenuEntries({
   required String? selectedText,
 }) {
   final entries = <({String label, String? link})>[
-    (label: 'העתק קישור ישיר לספר זה', link: buildBookLink(bookId)),
     (label: 'העתק קישור למקטע זה', link: buildSectionLink(bookId, index)),
     (
       label: 'העתק קישור עם הדגשת המקטע',

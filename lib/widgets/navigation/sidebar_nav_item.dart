@@ -118,7 +118,10 @@ class SidebarNavItem extends StatelessWidget {
                           ? cs.onSecondaryContainer
                           : cs.onSurfaceVariant,
                     ),
-                    child: Text(label),
+                    child: Text(
+                      label,
+                      textDirection: TextDirection.rtl,
+                    ),
                   ),
                 ),
               ],

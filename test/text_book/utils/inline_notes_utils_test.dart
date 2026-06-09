@@ -38,6 +38,42 @@ void main() {
     });
   });
 
+  group('stripInlineNotesForSearch', () {
+    test('מסיר גם את אות ההפניה (<sup>) וגם את גוף ההערה', () {
+      const input =
+          'גוף הטקסט<sup class="footnote-marker">א</sup><i class="footnote">תוכן ההערה</i>. המשך';
+      final result = stripInlineNotesForSearch(input);
+      expect(result, contains('גוף הטקסט'));
+      expect(result, contains('. המשך'));
+      expect(result, isNot(contains('<sup')));
+      expect(result, isNot(contains('<i')));
+      // האות א של ה-marker וגם תוכן ההערה הוסרו לגמרי
+      expect(result, isNot(contains('תוכן ההערה')));
+      expect(result, 'גוף הטקסט. המשך');
+    });
+
+    test('מטפל במספר הערות באותה שורה', () {
+      const input =
+          'א<sup class="footnote-marker">1</sup><i class="footnote">ראשונה</i>, '
+          'ב<sup class="footnote-marker">2</sup><i class="footnote">שנייה</i>.';
+      final result = stripInlineNotesForSearch(input);
+      expect(result, isNot(contains('<sup')));
+      expect(result, isNot(contains('ראשונה')));
+      expect(result, isNot(contains('שנייה')));
+      expect(result, 'א, ב.');
+    });
+
+    test('משאיר שורות ללא הערות ללא שינוי', () {
+      const input = 'שורה פשוטה ללא הערה';
+      expect(stripInlineNotesForSearch(input), input);
+    });
+
+    test('לא נוגע ב-<sup> שאינו footnote-marker', () {
+      const input = 'טקסט עם <sup>מעריך</sup> רגיל';
+      expect(stripInlineNotesForSearch(input), input);
+    });
+  });
+
   group('hasInlineNotes', () {
     test('מחזיר true כשיש לפחות שורה אחת עם <i class="footnote">', () {
       final content = [

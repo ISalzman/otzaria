@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 
 /// דיאלוג לקליטת קיצור מקשים מותאם אישית
 class CustomShortcutDialog extends StatefulWidget {
@@ -44,6 +47,16 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
     });
   }
 
+  void _confirmShortcut() {
+    if (_pressedKeys.isEmpty) {
+      UiSnack.showError('יש לבחור קיצור');
+      return;
+    }
+
+    final shortcut = ShortcutHelper.formatKeysToShortcut(_pressedKeys);
+    Navigator.pop(context, shortcut);
+  }
+
   @override
   Widget build(BuildContext context) {
     return KeyboardListener(
@@ -53,10 +66,8 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
         if (!_isRecording) {
           // אם לא מקליטים, אפשר אנטר לאישור
           if (event is KeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.enter &&
-              _pressedKeys.isNotEmpty) {
-            final shortcut = ShortcutHelper.formatKeysToShortcut(_pressedKeys);
-            Navigator.pop(context, shortcut);
+              event.logicalKey == LogicalKeyboardKey.enter) {
+            _confirmShortcut();
           }
           return;
         }
@@ -72,9 +83,11 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
         }
       },
       child: AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
         title: const Text(
           'הגדרת קיצור מקשים מותאם אישית',
           textAlign: TextAlign.right,
+          textDirection: TextDirection.rtl,
         ),
         content: SizedBox(
           width: 400,
@@ -83,9 +96,10 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'לחץ על "התחל הקלטה" ואז לחץ על צירוף המקשים הרצוי',
+                'התחל הקלטה ובחר קיצור',
                 textAlign: TextAlign.right,
                 style: TextStyle(fontSize: 14),
+                textDirection: TextDirection.rtl,
               ),
               const SizedBox(height: 20),
               Container(
@@ -102,8 +116,10 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
                 ),
                 child: Column(
                   children: [
-                    Icon(
-                      _isRecording ? Icons.keyboard : Icons.keyboard_outlined,
+                    RtlIcon(
+                      _isRecording
+                          ? FluentIcons.keyboard_24_filled
+                          : FluentIcons.keyboard_24_regular,
                       size: 48,
                       color: _isRecording
                           ? Theme.of(context).colorScheme.primary
@@ -113,6 +129,7 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
                     Text(
                       _displayText,
                       textAlign: TextAlign.center,
+                      textDirection: TextDirection.rtl,
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -124,23 +141,31 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
                   ],
                 ),
               ),
+              if (!_isRecording && _pressedKeys.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'Enter או אישור',
+                  textAlign: TextAlign.right,
+                  textDirection: TextDirection.rtl,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               if (_isRecording)
-                ElevatedButton.icon(
+                NeutralActionButton(
                   onPressed: () {
                     setState(() {
                       _isRecording = false;
                     });
                   },
-                  icon: const Icon(FluentIcons.stop_24_regular),
-                  label: const Text('עצור הקלטה'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                    foregroundColor: Theme.of(context).colorScheme.onError,
-                  ),
+                  icon: FluentIcons.stop_24_regular,
+                  text: 'עצור הקלטה',
                 )
               else
-                ElevatedButton.icon(
+                RecommendedActionButton(
                   onPressed: () {
                     setState(() {
                       _pressedKeys.clear();
@@ -148,26 +173,20 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
                       _displayText = 'לחץ על המקשים...';
                     });
                   },
-                  icon: const Icon(FluentIcons.record_24_regular),
-                  label: const Text('התחל הקלטה'),
+                  icon: FluentIcons.record_24_regular,
+                  text: 'התחל הקלטה',
                 ),
             ],
           ),
         ),
         actions: [
-          TextButton(
+          NeutralActionButton(
+            text: 'ביטול',
             onPressed: () => Navigator.pop(context),
-            child: const Text('ביטול'),
           ),
-          TextButton(
-            onPressed: _pressedKeys.isEmpty
-                ? null
-                : () {
-                    final shortcut =
-                        ShortcutHelper.formatKeysToShortcut(_pressedKeys);
-                    Navigator.pop(context, shortcut);
-                  },
-            child: const Text('אישור'),
+          RecommendedActionButton(
+            text: 'אישור',
+            onPressed: _confirmShortcut,
           ),
         ],
       ),

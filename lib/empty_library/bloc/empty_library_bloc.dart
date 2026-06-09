@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
-import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:bloc/bloc.dart';
 import 'package:ffi/ffi.dart';
 import 'package:zstandard_native/zstandard_native_bindings.dart';
@@ -16,18 +16,20 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/utils/download_eta_estimator.dart';
 import 'package:otzaria/utils/file/zip_extractor_service.dart';
 import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:zstandard/zstandard.dart';
 
 class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   EmptyLibraryBloc({
     http.Client? httpClient,
-    Future<void> Function(String archivePath, String outputPath)?
+    Future<void> Function(String archivePath, String outputPath,
+            void Function(double progress)? onProgress)?
         extractCompressedDatabase,
-    Future<void> Function(String archivePath, String outputDir)?
+    Future<void> Function(String archivePath, String outputDir,
+            void Function(double progress)? onProgress)?
         extractTarArchive,
     String? defaultLibraryPathOverride,
   })  : _httpClient = httpClient ?? http.Client(),
@@ -49,10 +51,24 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   }
 
   final http.Client _httpClient;
-  final Future<void> Function(String archivePath, String outputPath)
-      _extractCompressedDatabase;
-  final Future<void> Function(String archivePath, String outputDir)
-      _extractTarArchive;
+  final Future<void> Function(String archivePath, String outputPath,
+      void Function(double progress)? onProgress) _extractCompressedDatabase;
+  final Future<void> Function(String archivePath, String outputDir,
+      void Function(double progress)? onProgress) _extractTarArchive;
+
+  /// בונה callback שמ-emit-ת התקדמות חילוץ למסך.
+  /// הקריאות מגיעות מתוך ה-isolet בזמן ה-await על פעולת החילוץ — עדיין
+  /// בתוך מטפל האירוע — ולכן ה-emit חוקי.
+  void Function(double) _extractProgress(
+    Emitter<EmptyLibraryState> emit,
+    String selectedPath,
+    String message,
+  ) =>
+      (progress) => emit(EmptyLibraryExtracting(
+            selectedPath: selectedPath,
+            progress: progress,
+            message: message,
+          ));
   // סיבת השבתת כפתור ההורדה — נשמרת כ-instance field כדי להישמר בין state transitions
   String? _downloadDisabledReason = 'בודק מקום פנוי...';
   final String? _defaultLibraryPathOverride;
@@ -281,11 +297,22 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       (await _getDfInfo(dirPath)).freeBytes;
 
   /// בודק אם יש מספיק מקום פנוי להורדה ולחילוץ הספרייה.
+  ///
+  /// [downloadSize] - גודל הקבצים הדחוסים בבייטים. כשידוע (אחרי קריאת
+  /// ה-Content-Length של שלושת הקבצים) מועבר הסכום **האמיתי**; אחרת משמש
+  /// אומדן (1.5GB) לבדיקת הסף הראשונית שמשביתה את כפתור ההורדה.
+  ///
   /// מחזיר הודעת שגיאה אם אין מספיק מקום, או null אם הכל תקין.
   /// מטפל גם בתרחיש שבו temp ותיקיית הספרייה חולקים אותו volume.
-  Future<String?> _checkSpaceForDownload() async {
+  Future<String?> _checkSpaceForDownload({int? downloadSize}) async {
     if (!Platform.isAndroid) return null;
-    const int kDownloadSize = 1610612736; // 1.5 GB
+    // אומדן fallback לסכום הדחוס של שלושת הקבצים, בשימוש רק כש-downloadSize
+    // לא ידוע (בדיקת הסף הראשונית, או כש-HEAD לא החזיר Content-Length).
+    // נכון להיום הסכום האמיתי ~1.45GB (seforim ~1.01GB + תלמוד ~0.44GB +
+    // קטלוג ~0.005GB). אם ה-DB יגדל בעתיד מעבר ל-1.5GB, יש להגדיל את
+    // הקבוע בהתאם — אחרת בדיקת הסף הראשונית עלולה לעבור בטעות במכשירים עם
+    // מעט מקום (הבדיקה האמיתית מול grandTotal עדיין תתפוס זאת בהמשך).
+    final int kDownloadSize = downloadSize ?? 1610612736; // אומדן 1.5 GB
     const int kExtractSize = 6979321856; // 6.5 GB
 
     final tempPath = Directory.systemTemp.path;
@@ -296,33 +323,30 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     final tempInfo = await _getDfInfo(tempPath);
     final extractInfo = await _getDfInfo(checkPath);
 
+    String gb(int bytes) => (bytes / 1024 / 1024 / 1024).toStringAsFixed(1);
+
     final sameVolume = tempInfo.filesystem != null &&
         extractInfo.filesystem != null &&
         tempInfo.filesystem == extractInfo.filesystem;
 
     if (sameVolume) {
-      // שני הנתיבים על אותו volume: צריך מקום לשניהם יחד (1.5 + 6.5 = 8 GB)
+      // שני הנתיבים על אותו volume: צריך מקום לשניהם יחד.
       final free = tempInfo.freeBytes;
       if (free > 0 && free < kDownloadSize + kExtractSize) {
-        final freeGb = (free / 1024 / 1024 / 1024).toStringAsFixed(1);
         return 'אין מספיק מקום פנוי להורדה ולחילוץ הספרייה.\n'
-            'נדרש: לפחות 8 GB, פנוי: $freeGb GB.\n'
+            'נדרש: לפחות ${gb(kDownloadSize + kExtractSize)} GB, פנוי: ${gb(free)} GB.\n'
             'יש לפנות מקום ולנסות שוב.';
       }
     } else {
       // volumes נפרדים: בדיקה לכל אחד בנפרד
       if (tempInfo.freeBytes > 0 && tempInfo.freeBytes < kDownloadSize) {
-        final freeGb =
-            (tempInfo.freeBytes / 1024 / 1024 / 1024).toStringAsFixed(1);
-        return 'אין מספיק מקום פנוי להורדת הקובץ הדחוס.\n'
-            'נדרש: לפחות 1.5 GB, פנוי: $freeGb GB.\n'
+        return 'אין מספיק מקום פנוי להורדת הקבצים הדחוסים.\n'
+            'נדרש: לפחות ${gb(kDownloadSize)} GB, פנוי: ${gb(tempInfo.freeBytes)} GB.\n'
             'יש לפנות מקום ולנסות שוב.';
       }
       if (extractInfo.freeBytes > 0 && extractInfo.freeBytes < kExtractSize) {
-        final freeGb =
-            (extractInfo.freeBytes / 1024 / 1024 / 1024).toStringAsFixed(1);
         return 'אין מספיק מקום פנוי לחילוץ הספרייה.\n'
-            'נדרש: לפחות 6.5 GB, פנוי: $freeGb GB.\n'
+            'נדרש: לפחות ${gb(kExtractSize)} GB, פנוי: ${gb(extractInfo.freeBytes)} GB.\n'
             'יש לפנות מקום ולנסות שוב.';
       }
     }
@@ -453,7 +477,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         message: 'מחלץ קובץ DB דחוס...',
       ));
 
-      await _extractCompressedDatabase(zstFilePath, outputPath);
+      await _extractCompressedDatabase(zstFilePath, outputPath,
+          _extractProgress(emit, zstFilePath, 'מחלץ קובץ DB דחוס...'));
 
       // אם הקובץ שנבחר הוא ה-DB הראשי, חפש את 2 הקבצים האחרים של חבילת FULL
       // (קטלוג ו-תלמוד בבלי) באותה תיקייה וחלץ גם אותם. זה חוסך למשתמש
@@ -501,6 +526,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         await _extractCompressedDatabase(
           catalogArchive.path,
           path.join(dir, DatabaseConstants.externalCatalogDatabaseFileName),
+          _extractProgress(
+              emit, catalogArchive.path, 'מחלץ קטלוג אוצר החכמה...'),
         );
       } catch (e) {
         debugPrint('Failed to extract bundled catalog archive: $e');
@@ -518,7 +545,11 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           progress: 0.0,
           message: 'מחלץ ספרי תלמוד בבלי...',
         ));
-        await _extractTarArchive(talmudArchive.path, dir);
+        await _extractTarArchive(
+            talmudArchive.path,
+            dir,
+            _extractProgress(
+                emit, talmudArchive.path, 'מחלץ ספרי תלמוד בבלי...'));
       } catch (e) {
         debugPrint('Failed to extract bundled Talmud Bavli archive: $e');
       }
@@ -616,102 +647,64 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   Future<void> _onDownloadLibraryRequested(
       DownloadLibraryRequested event, Emitter<EmptyLibraryState> emit) async {
     try {
-      // בדיקת מקום פנוי (safety net — מכסה מצב שהדיסק התמלא אחרי טעינת המסך)
-      final spaceError = await _checkSpaceForDownload();
-      if (spaceError != null) {
-        _downloadDisabledReason = spaceError;
-        emit(_error(errorMessage: spaceError));
-        return;
-      }
-
       final libraryPath =
           _defaultLibraryPathOverride ?? await AppPaths.getDefaultLibraryPath();
       final latestAsset = await _fetchLatestDatabaseAsset();
 
-      // קובץ temp קבוע — נשמר בין ניסיונות לצורך resume
-      final tempArchivePath = path.join(
-        Directory.systemTemp.path,
-        'otzaria_${latestAsset.assetName}',
-      );
-      final tempArchive = File(tempArchivePath);
+      // שלושת הקבצים מורדים יחד ואז מחולצים יחד. פס ההתקדמות בשני השלבים
+      // מתייחס לסכום שלושתם; רק כותרת המשנה משתנה לפי הקובץ הנוכחי.
+      final assets = <_DownloadAsset>[
+        _DownloadAsset(
+          url: latestAsset.downloadUrl,
+          tempFileName: 'otzaria_${latestAsset.assetName}',
+          downloadTitle: 'מוריד את ספריית אוצריא',
+          extractTitle: 'מחלץ את ספריית אוצריא',
+          isTar: false,
+          outputFileName: DatabaseConstants.databaseFileName,
+          isMainDb: true,
+        ),
+        _DownloadAsset(
+          url:
+              'https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst',
+          tempFileName: 'otzaria_talmud_bavli.tar.zst',
+          downloadTitle: 'מוריד את התלמוד הבבלי',
+          extractTitle: 'מחלץ את התלמוד הבבלי',
+          isTar: true,
+        ),
+        _DownloadAsset(
+          url:
+              'https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst',
+          tempFileName: 'otzaria_otzar-HB_catalog.db.zst',
+          downloadTitle: 'מוריד את הקטלוגים',
+          extractTitle: 'מחלץ את הקטלוגים',
+          isTar: false,
+          outputFileName: DatabaseConstants.externalCatalogDatabaseFileName,
+        ),
+      ];
 
-      // בדיקת כמה כבר הורדנו (resume)
-      var alreadyDownloaded =
-          await tempArchive.exists() ? await tempArchive.length() : 0;
-
-      emit(EmptyLibraryDownloading(
+      emit(const EmptyLibraryDownloading(
         progress: 0.0,
-        message: alreadyDownloaded > 0
-            ? 'ממשיך הורדה מ-${(alreadyDownloaded / 1024 / 1024).toStringAsFixed(1)} MB...'
-            : 'מתחבר לשרת...',
+        message: 'מתחבר לשרת...',
       ));
 
-      // פותרים redirect ידנית כדי לשמור על Range header
-      // (package:http מאבד headers בעת redirect)
-      final resolvedUrl = await _resolveRedirect(latestAsset.downloadUrl);
-
-      final request = http.Request('GET', Uri.parse(resolvedUrl));
-      if (alreadyDownloaded > 0) {
-        request.headers['Range'] = 'bytes=$alreadyDownloaded-';
+      // פתרון redirect-ים מראש (package:http מאבד את ה-Range בעת redirect) +
+      // קריאת גודל כל קובץ דחוס, לחישוב פס התקדמות וזמן משוער מאוחדים.
+      for (final asset in assets) {
+        final resolved = await _resolveRedirectWithSize(asset.url);
+        asset.resolvedUrl = resolved.url;
+        asset.compressedSize = resolved.size;
       }
-      final response = await _httpClient.send(request);
+      final grandTotal =
+          assets.fold<int>(0, (sum, a) => sum + a.compressedSize);
 
-      // 200 = הורדה מלאה מחדש, 206 = המשך (partial content)
-      if (response.statusCode == 200) {
-        // השרת לא תומך ב-Range — מתחילים מחדש
-        alreadyDownloaded = 0;
-        await tempArchive.delete().catchError((_) => tempArchive);
-      } else if (response.statusCode != 206) {
-        emit(EmptyLibraryError(
-          errorMessage: 'שגיאה בהורדה: ${response.statusCode}',
-        ));
+      // בדיקת מקום פנוי מול הסכום הדחוס האמיתי של שלושת הקבצים (במקום
+      // אומדן קבוע). גם safety net למצב שהדיסק התמלא אחרי טעינת המסך.
+      final spaceError = await _checkSpaceForDownload(
+          downloadSize: grandTotal > 0 ? grandTotal : null);
+      if (spaceError != null) {
+        _downloadDisabledReason = spaceError;
+        emit(_error(errorMessage: spaceError));
         return;
-      }
-
-      // וידוא שה-resume אכן עבד לפי Content-Range header
-      // אם השרת החזיר 206 אבל מ-0, נתאים את alreadyDownloaded
-      if (response.statusCode == 206) {
-        final contentRange = response.headers['content-range'];
-        if (contentRange != null) {
-          // פורמט: "bytes START-END/TOTAL"
-          final match = RegExp(r'bytes (\d+)-').firstMatch(contentRange);
-          if (match != null) {
-            final serverStart = int.tryParse(match.group(1)!) ?? 0;
-            if (serverStart == 0 && alreadyDownloaded > 0) {
-              // השרת התחיל מ-0 למרות הבקשה — מחיקת הקובץ החלקי
-              alreadyDownloaded = 0;
-              await tempArchive.delete().catchError((_) => tempArchive);
-            }
-          }
-        }
-      }
-
-      final contentLength = response.contentLength ?? 0;
-      final totalLength =
-          contentLength > 0 ? contentLength + alreadyDownloaded : 0;
-      var downloadedBytes = alreadyDownloaded;
-
-      final sink = tempArchive.openWrite(
-        mode: alreadyDownloaded > 0 ? FileMode.append : FileMode.write,
-      );
-
-      try {
-        await for (var chunk in response.stream) {
-          sink.add(chunk);
-          downloadedBytes += chunk.length;
-
-          if (totalLength > 0) {
-            final progress = downloadedBytes / totalLength;
-            final mb = (downloadedBytes / 1024 / 1024).toStringAsFixed(1);
-            final totalMb = (totalLength / 1024 / 1024).toStringAsFixed(1);
-            emit(EmptyLibraryDownloading(
-              progress: progress,
-              message: 'מוריד... $mb MB מתוך $totalMb MB',
-            ));
-          }
-        }
-      } finally {
-        await sink.close();
       }
 
       // יצירת תיקיית הספרייה אם לא קיימת
@@ -720,41 +713,35 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         await libraryDir.create(recursive: true);
       }
 
-      final outputPath = path.join(
-        libraryPath,
-        DatabaseConstants.databaseFileName,
-      );
-
-      emit(EmptyLibraryExtracting(
-        selectedPath: tempArchivePath,
-        progress: 0.0,
-        message: 'מחלץ קובץ DB דחוס...',
-      ));
-
-      // SqliteDataProvider פותח את seforim.db ב-WAL mode בעלייה אם הקובץ
-      // קיים — גם אם הוא חלקי/פגום משריד הורדה קודמת. הסגירה כאן משחררת
-      // את ה-handle כדי שהסטרימינג יוכל לדרוס את הקובץ. מחיקת shm/wal
-      // מונעת מ-SQLite לקרוא WAL ישן ולבלבל את ה-DB החדש.
-      await SqliteDataProvider.instance.dispose();
-      for (final suffix in const ['', '-shm', '-wal', '-journal']) {
-        final f = File('$outputPath$suffix');
-        if (await f.exists()) {
-          try {
-            await f.delete();
-          } catch (_) {
-            // הסטרימינג יטפל בשארית — אם המחיקה כשלה גם כאן, השגיאה
-            // האמיתית תעלה משם עם הודעה ברורה יותר.
-          }
-        }
+      // שלב 1 — הורדת שלושת הקבצים יחד (פס וזמן משוער מאוחדים)
+      final etaEstimator = DownloadEtaEstimator();
+      var downloadedBase = 0;
+      for (final asset in assets) {
+        await _downloadAsset(
+          asset: asset,
+          cumulativeBase: downloadedBase,
+          grandTotal: grandTotal,
+          estimator: etaEstimator,
+          emit: emit,
+        );
+        downloadedBase += asset.compressedSize;
       }
 
-      await _extractCompressedDatabase(tempArchivePath, outputPath);
+      // שלב 2 — חילוץ שלושת הקבצים יחד (פס מאוחד, משוקלל לפי הגודל הדחוס)
+      var extractBase = 0;
+      for (final asset in assets) {
+        await _extractAsset(
+          asset: asset,
+          weightBase: extractBase,
+          totalWeight: grandTotal,
+          outputDir: libraryPath,
+          emit: emit,
+        );
+        extractBase += asset.compressedSize;
+      }
 
-      // מחיקת קובץ ה-temp לאחר חילוץ מוצלח
-      await tempArchive.delete().catchError((_) => tempArchive);
-
-      emit(EmptyLibraryExtracting(
-        selectedPath: tempArchivePath,
+      emit(const EmptyLibraryExtracting(
+        selectedPath: '',
         progress: 1.0,
         message: 'החילוץ הושלם',
       ));
@@ -764,32 +751,9 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       // ניקוי override Android — ה-DB החדש נמצא ישירות בספרייה
       await Settings.setValue(SettingsRepository.keyDbEffectivePath, '');
 
-      // הורדת תלמוד בבלי
-      await _downloadAndExtractAsset(
-        url:
-            'https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst',
-        tempFileName: 'otzaria_talmud_bavli.tar.zst',
-        statusMessage: 'מוריד תלמוד בבלי...',
-        outputDir: libraryPath,
-        isTar: true,
-        emit: emit,
-      );
-
-      // הורדת קטלוגים
-      await _downloadAndExtractAsset(
-        url:
-            'https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst',
-        tempFileName: 'otzaria_otzar-HB_catalog.db.zst',
-        statusMessage: 'מוריד קטלוגים...',
-        outputDir: libraryPath,
-        outputFileName: DatabaseConstants.externalCatalogDatabaseFileName,
-        isTar: false,
-        emit: emit,
-      );
-
       emit(EmptyLibraryDirectorySelected(selectedPath: libraryPath));
     } catch (e) {
-      // קובץ ה-temp נשמר בכוונה — ישמש ל-resume בניסיון הבא
+      // קבצי ה-temp נשמרים בכוונה — ישמשו ל-resume בניסיון הבא
       emit(EmptyLibraryError(
         errorMessage:
             'שגיאה בהורדה: $e\nניתן ללחוץ שוב כדי להמשיך מהנקודה שנעצרה.',
@@ -816,39 +780,60 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     }
   }
 
-  /// עוזר כללי: מוריד קובץ (עם resume), מחלץ אותו ומוחק את ה-temp.
-  /// [isTar] = true → מחלץ tar.zst לתיקייה [outputDir]
-  /// [isTar] = false → מחלץ .zst לקובץ [outputDir]/[outputFileName]
-  Future<void> _downloadAndExtractAsset({
-    required String url,
-    required String tempFileName,
-    required String statusMessage,
-    required String outputDir,
-    required bool isTar,
+  /// מוריד קובץ דחוס יחיד (עם resume) ומדווח התקדמות מאוחדת על פני כל
+  /// הקבצים: [cumulativeBase] = סכום הגדלים הדחוסים של הקבצים שכבר הורדו
+  /// במלואם, [grandTotal] = סך הגדלים הדחוסים של כל הקבצים.
+  Future<void> _downloadAsset({
+    required _DownloadAsset asset,
+    required int cumulativeBase,
+    required int grandTotal,
+    required DownloadEtaEstimator estimator,
     required Emitter<EmptyLibraryState> emit,
-    String? outputFileName,
   }) async {
-    final tempPath = path.join(Directory.systemTemp.path, tempFileName);
+    final tempPath = path.join(Directory.systemTemp.path, asset.tempFileName);
     final tempFile = File(tempPath);
 
     var alreadyDownloaded =
         await tempFile.exists() ? await tempFile.length() : 0;
 
-    emit(EmptyLibraryDownloading(
-      progress: alreadyDownloaded > 0 ? 0.0 : 0.0,
-      message: alreadyDownloaded > 0
-          ? '$statusMessage (ממשיך מ-${(alreadyDownloaded / 1024 / 1024).toStringAsFixed(1)} MB)'
-          : statusMessage,
-    ));
+    // הקובץ כבר הורד במלואו משריד ניסיון קודם — מדלגים על ההורדה.
+    if (asset.compressedSize > 0 && alreadyDownloaded >= asset.compressedSize) {
+      return;
+    }
 
-    final resolvedUrl = await _resolveRedirect(url);
-    final request = http.Request('GET', Uri.parse(resolvedUrl));
+    // מדווח התקדמות מאוחדת לפי הבייטים שהורדו עד כה בקובץ הנוכחי.
+    void emitProgress(int downloadedBytes) {
+      if (grandTotal <= 0) {
+        emit(EmptyLibraryDownloading(
+            progress: 0.0, message: asset.downloadTitle));
+        return;
+      }
+      final cumulative = cumulativeBase + downloadedBytes;
+      final mb = (cumulative / 1024 / 1024).toStringAsFixed(1);
+      final totalMb = (grandTotal / 1024 / 1024).toStringAsFixed(1);
+      final eta = estimator.update(
+        downloadedBytes: cumulative,
+        totalBytes: grandTotal,
+        now: DateTime.now(),
+      );
+      final etaLine = eta != null ? '\n${formatRemainingTimeHebrew(eta)}' : '';
+      emit(EmptyLibraryDownloading(
+        progress: (cumulative / grandTotal).clamp(0.0, 1.0),
+        message: '${asset.downloadTitle}\n$mb MB מתוך $totalMb MB$etaLine',
+      ));
+    }
+
+    final request = http.Request('GET', Uri.parse(asset.resolvedUrl!));
     if (alreadyDownloaded > 0) {
       request.headers['Range'] = 'bytes=$alreadyDownloaded-';
     }
     final response = await _httpClient.send(request);
 
-    if (response.statusCode == 200) {
+    if (response.statusCode == 416) {
+      // Range Not Satisfiable — הקובץ כבר שלם.
+      return;
+    } else if (response.statusCode == 200) {
+      // השרת לא תומך ב-Range — מתחילים מחדש.
       alreadyDownloaded = 0;
       await tempFile.delete().catchError((_) => tempFile);
     } else if (response.statusCode == 206) {
@@ -858,24 +843,23 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         if (match != null) {
           final serverStart = int.tryParse(match.group(1)!) ?? 0;
           if (serverStart == 0 && alreadyDownloaded > 0) {
-            // השרת התחיל מ-0 למרות הבקשה — מחיקת הקובץ החלקי
+            // השרת התחיל מ-0 למרות הבקשה — מחיקת הקובץ החלקי.
             alreadyDownloaded = 0;
             await tempFile.delete().catchError((_) => tempFile);
           } else {
-            // וידוא שה-offset תואם למה שהשרת אישר
+            // וידוא שה-offset תואם למה שהשרת אישר.
             alreadyDownloaded = serverStart;
           }
         }
       }
     } else {
-      // שגיאת HTTP — זורקים כדי שהמשתמש יידע
-      throw Exception('שגיאה בהורדת $statusMessage: ${response.statusCode}');
+      // שגיאת HTTP — זורקים כדי שהמשתמש יידע.
+      throw Exception(
+          'שגיאה בהורדת ${asset.downloadTitle}: ${response.statusCode}');
     }
 
-    final contentLength = response.contentLength ?? 0;
-    final totalLength =
-        contentLength > 0 ? contentLength + alreadyDownloaded : 0;
     var downloadedBytes = alreadyDownloaded;
+    emitProgress(downloadedBytes);
 
     final sink = tempFile.openWrite(
       mode: alreadyDownloaded > 0 ? FileMode.append : FileMode.write,
@@ -884,69 +868,97 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       await for (final chunk in response.stream) {
         sink.add(chunk);
         downloadedBytes += chunk.length;
-        if (totalLength > 0) {
-          final mb = (downloadedBytes / 1024 / 1024).toStringAsFixed(1);
-          final totalMb = (totalLength / 1024 / 1024).toStringAsFixed(1);
-          emit(EmptyLibraryDownloading(
-            progress: downloadedBytes / totalLength,
-            message: '$statusMessage $mb MB / $totalMb MB',
-          ));
-        }
+        emitProgress(downloadedBytes);
       }
     } finally {
       await sink.close();
     }
+  }
 
-    emit(EmptyLibraryExtracting(
-      selectedPath: tempPath,
-      progress: 0.0,
-      message: 'מחלץ...',
-    ));
+  /// מחלץ קובץ דחוס יחיד ומדווח התקדמות מאוחדת, משוקללת לפי הגודל הדחוס
+  /// ([weightBase] = סכום הגדלים של הקבצים שכבר חולצו, [totalWeight] = סך
+  /// הכול). החילוץ מדווח לפי בייטים דחוסים שנקראו, ולכן שקלול לפי הגודל
+  /// הדחוס נותן פס התקדמות לינארי ומדויק על פני שלושת הקבצים.
+  Future<void> _extractAsset({
+    required _DownloadAsset asset,
+    required int weightBase,
+    required int totalWeight,
+    required String outputDir,
+    required Emitter<EmptyLibraryState> emit,
+  }) async {
+    final tempPath = path.join(Directory.systemTemp.path, asset.tempFileName);
 
-    if (isTar) {
-      await _extractTarArchive(tempPath, outputDir);
+    void report(double assetProgress) {
+      final combined = totalWeight > 0
+          ? ((weightBase + asset.compressedSize * assetProgress) / totalWeight)
+              .clamp(0.0, 1.0)
+          : assetProgress;
+      emit(EmptyLibraryExtracting(
+        selectedPath: tempPath,
+        progress: combined,
+        message: asset.extractTitle,
+      ));
+    }
+
+    report(0.0);
+
+    if (asset.isTar) {
+      await _extractTarArchive(tempPath, outputDir, report);
     } else {
-      final outPath = path.join(outputDir, outputFileName!);
-      await _extractCompressedDatabase(tempPath, outPath);
-    }
+      final outputPath = path.join(outputDir, asset.outputFileName!);
 
-    await tempFile.delete().catchError((_) => tempFile);
-  }
-
-  /// מחלץ קובץ tar.zst לתיקיית היעד.
-  /// רץ ב-isolate נפרד כדי למנוע חסימת UI וכדי שהזיכרון ישוחרר בסיום.
-  static Future<void> _extractTarZst(
-      String archivePath, String outputDir) async {
-    await compute(_extractTarZstIsolate, [archivePath, outputDir]);
-  }
-
-  static Future<void> _extractTarZstIsolate(List<String> args) async {
-    final archivePath = args[0];
-    final outputDir = args[1];
-
-    final compressedBytes = await File(archivePath).readAsBytes();
-    final tarBytes = await Zstandard().decompress(compressedBytes);
-    if (tarBytes == null) {
-      throw Exception('חילוץ ZST נכשל: $archivePath');
-    }
-
-    final archive = TarDecoder().decodeBytes(tarBytes);
-    for (final file in archive.files) {
-      final filePath = path.join(outputDir, file.name);
-      if (file.isFile) {
-        final outFile = File(filePath);
-        await outFile.parent.create(recursive: true);
-        await outFile.writeAsBytes(file.content as List<int>);
-      } else {
-        await Directory(filePath).create(recursive: true);
+      if (asset.isMainDb) {
+        // SqliteDataProvider פותח את seforim.db ב-WAL בעלייה אם הקובץ קיים —
+        // גם אם הוא חלקי/פגום משריד הורדה קודמת. הסגירה משחררת את ה-handle
+        // לדריסה, ומחיקת shm/wal מונעת מ-SQLite לקרוא WAL ישן ולבלבל את
+        // ה-DB החדש.
+        await SqliteDataProvider.instance.dispose();
+        for (final suffix in const ['', '-shm', '-wal', '-journal']) {
+          final f = File('$outputPath$suffix');
+          if (await f.exists()) {
+            try {
+              await f.delete();
+            } catch (_) {
+              // הסטרימינג יטפל בשארית — אם המחיקה כשלה גם כאן, השגיאה
+              // האמיתית תעלה משם עם הודעה ברורה יותר.
+            }
+          }
+        }
       }
+
+      await _extractCompressedDatabase(tempPath, outputPath, report);
+    }
+
+    // מחיקת קובץ ה-temp לאחר חילוץ מוצלח.
+    await File(tempPath).delete().catchError((_) => File(tempPath));
+  }
+
+  /// מחלץ קובץ tar.zst לתיקיית היעד בזרימה נמוכת-זיכרון:
+  /// 1. חילוץ ה-zst לקובץ tar זמני דרך ZSTD streaming (ב-isolet, עם דיווח
+  ///    התקדמות). מחליף את `Zstandard().decompress` שטען את כל ה-tar ל-RAM
+  ///    וגרם ללחץ זיכרון/קפיאות על מכשירים חלשים.
+  /// 2. חילוץ ה-tar מהדיסק עם `extractFileToDisk` שקורא בזרימה מהקובץ.
+  static Future<void> _extractTarZst(String archivePath, String outputDir,
+      void Function(double progress)? onProgress) async {
+    final tarPath = '$archivePath.tar';
+    await _runWithProgress(
+      onProgress,
+      (port) => _decompressZstInIsolate(archivePath, tarPath, port),
+    );
+    try {
+      await extractFileToDisk(tarPath, outputDir);
+    } finally {
+      await File(tarPath).delete().catchError((_) => File(tarPath));
     }
   }
 
-  /// עוקב אחרי redirects ידנית כדי לקבל את ה-URL הסופי.
-  /// נדרש כי package:http מאבד את ה-Range header בעת redirect.
-  Future<String> _resolveRedirect(String url) async {
+  /// עוקב אחרי redirects ידנית ומחזיר את ה-URL הסופי ואת גודל הקובץ
+  /// (Content-Length). נדרש כי package:http מאבד את ה-Range header בעת
+  /// redirect; הגודל משמש לחישוב פס התקדמות וזמן משוער מאוחדים.
+  /// מחזיר size=0 אם השרת לא סיפק Content-Length.
+  Future<({String url, int size})> _resolveRedirectWithSize(String url) async {
     var current = Uri.parse(url);
+    var size = 0;
     for (var i = 0; i < 5; i++) {
       final request = http.Request('HEAD', current)..followRedirects = false;
       final response = await _httpClient.send(request);
@@ -956,10 +968,11 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         // תמיכה ב-Location יחסי
         current = current.resolve(location);
       } else {
+        size = response.contentLength ?? 0;
         break;
       }
     }
-    return current.toString();
+    return (url: current.toString(), size: size);
   }
 
   Future<DatabaseReleaseAsset> _fetchLatestDatabaseAsset() async {
@@ -1021,6 +1034,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   static Future<void> _extractZstWithSystemProcess(
     String archivePath,
     String outputPath,
+    void Function(double progress)? onProgress,
   ) async {
     // חילוץ streaming על כל הפלטפורמות. ה-DB הדחוס של הספרייה הוא
     // 1.5 GB דחוס ו-6.5 GB פרוס; טעינה לזיכרון RAM ב-`Zstandard().decompress`
@@ -1028,9 +1042,47 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     // (FAST_FAIL 0xc0000409 בעת ההרצה של שלב "הורדת ספרייה"). שימוש ב-
     // ZSTD_decompressStream דרך FFI מעבד נתחים של ~128 KB ולא חורג מ-
     // כמה מאות KB של RAM. רץ ב-isolate נפרד כדי לא לחסום את ה-UI.
-    await Isolate.run(
-      () => _decompressZstStreaming(archivePath, outputPath),
+    await _runWithProgress(
+      onProgress,
+      (port) => _decompressZstInIsolate(archivePath, outputPath, port),
     );
+  }
+
+  /// מריץ את חילוץ ה-ZST streaming ב-isolet נפרד.
+  ///
+  /// מבודד בפונקציה עצמאית כדי שה-closure שנשלח ל-[Isolate.run] ילכוד
+  /// **רק** ערכים שליחים (מחרוזות + [SendPort]). אם ה-closure היה נוצר
+  /// באותו scope של ה-`ReceivePort`/ה-`onProgress`, Dart היה מנסה לשלוח
+  /// גם אותם — והם בלתי-שליחים (object is unsendable).
+  static Future<void> _decompressZstInIsolate(
+    String archivePath,
+    String outputPath,
+    SendPort progressPort,
+  ) {
+    return Isolate.run(
+      () => _decompressZstStreaming(archivePath, outputPath, progressPort),
+    );
+  }
+
+  /// מאזין לעדכוני התקדמות מ-isolet ומעביר אותם ל-UI.
+  ///
+  /// [runInIsolate] נקראת **מקומית** (לא נשלחת ל-isolet); היא עצמה אחראית
+  /// להפעיל את [Isolate.run]. ה-isolet שולח ערכי `double` (0.0–1.0) דרך
+  /// ה-[SendPort]; [Isolate.run] מטפל בהשלמה ובהפצת שגיאות.
+  static Future<void> _runWithProgress(
+    void Function(double progress)? onProgress,
+    Future<void> Function(SendPort progressPort) runInIsolate,
+  ) async {
+    final progressPort = ReceivePort();
+    final sub = progressPort.listen((message) {
+      if (message is double) onProgress?.call(message);
+    });
+    try {
+      await runInIsolate(progressPort.sendPort);
+    } finally {
+      await sub.cancel();
+      progressPort.close();
+    }
   }
 
   /// מחזיר את ה-DynamicLibrary של zstandard לפלטפורמה הנוכחית.
@@ -1060,9 +1112,10 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   /// חילוץ ZST streaming דרך ZSTD FFI — רץ ב-isolate נפרד.
   /// מעבד את הקובץ בנתחים של ~128 KB ישירות לדיסק.
   /// שימוש ב-RAM: כמה מאות KB בלבד (במקום ~8 GB).
-  static void _decompressZstStreaming(String archivePath, String outputPath) {
+  static void _decompressZstStreaming(String archivePath, String outputPath,
+      [SendPort? progressPort]) {
     try {
-      _decompressZstStreamingInner(archivePath, outputPath);
+      _decompressZstStreamingInner(archivePath, outputPath, progressPort);
     } catch (_) {
       // בכשל (קובץ קטוע, דיסק מלא וכו') מוחקים את קובץ הפלט החלקי. אחרת
       // הוא נשאר בתיקיית הספרייה, ובעלייה הבאה SqliteDataProvider מנסה
@@ -1077,7 +1130,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   }
 
   static void _decompressZstStreamingInner(
-      String archivePath, String outputPath) {
+      String archivePath, String outputPath,
+      [SendPort? progressPort]) {
     final dylib = _openZstandardLib();
     final bindings = ZstandardNativeBindings(dylib);
 
@@ -1121,6 +1175,12 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         if (outFile.existsSync()) outFile.deleteSync();
         final outputRaf = outFile.openSync(mode: FileMode.writeOnly);
 
+        // גודל הקובץ הדחוס משמש בסיס לחישוב התקדמות. ZSTD קורא את הקלט
+        // באופן ליניארי, ולכן "בייטים שנקראו / סך הבייטים" הוא קירוב טוב.
+        final totalBytes = inputRaf.lengthSync();
+        var totalRead = 0;
+        var lastReported = 0.0;
+
         try {
           final inView = inNative.asTypedList(inBufSize);
 
@@ -1135,6 +1195,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           while (true) {
             final bytesRead = inputRaf.readIntoSync(inView);
             if (bytesRead == 0) break;
+            totalRead += bytesRead;
 
             // קריאת Frame_Content_Size מתוך תחילת ה-frame (פעם אחת).
             if (!headerParsed) {
@@ -1162,6 +1223,15 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
               if (outBuf.ref.pos > 0) {
                 outputRaf.writeFromSync(outNative.asTypedList(outBuf.ref.pos));
                 totalWritten += outBuf.ref.pos;
+              }
+            }
+
+            // דיווח התקדמות — רק כשהשתנתה ב-1% לפחות, כדי לא להציף את ה-UI
+            if (progressPort != null && totalBytes > 0) {
+              final progress = totalRead / totalBytes;
+              if (progress - lastReported >= 0.01) {
+                lastReported = progress;
+                progressPort.send(progress);
               }
             }
           }
@@ -1216,6 +1286,48 @@ class _DfInfo {
   const _DfInfo({required this.filesystem, required this.freeBytes});
   final String? filesystem;
   final int freeBytes;
+}
+
+/// מתאר קובץ דחוס יחיד בחבילת ההורדה הראשונית (ספרייה / תלמוד / קטלוגים).
+/// שלושת הקבצים מורדים יחד ואז מחולצים יחד, עם פס התקדמות מאוחד.
+class _DownloadAsset {
+  _DownloadAsset({
+    required this.url,
+    required this.tempFileName,
+    required this.downloadTitle,
+    required this.extractTitle,
+    required this.isTar,
+    this.outputFileName,
+    this.isMainDb = false,
+  });
+
+  /// כתובת ההורדה (לפני פתרון redirect).
+  final String url;
+
+  /// שם קובץ ה-temp הקבוע (נשמר בין ניסיונות לצורך resume).
+  final String tempFileName;
+
+  /// כותרת המשנה המוצגת בזמן ההורדה.
+  final String downloadTitle;
+
+  /// כותרת המשנה המוצגת בזמן החילוץ.
+  final String extractTitle;
+
+  /// `true` → tar.zst שמחולץ לתיקיית היעד. `false` → .zst לקובץ יחיד.
+  final bool isTar;
+
+  /// שם קובץ היעד לחילוץ (נדרש כש-[isTar] = false).
+  final String? outputFileName;
+
+  /// האם זהו seforim.db הראשי — דורש סגירת SqliteDataProvider ומחיקת
+  /// קבצי WAL/SHM ישנים לפני החילוץ.
+  final bool isMainDb;
+
+  /// ה-URL הסופי לאחר פתרון redirect (נקבע בזמן ריצה).
+  String? resolvedUrl;
+
+  /// גודל הקובץ הדחוס בבייטים (נקבע בזמן ריצה מ-Content-Length).
+  int compressedSize = 0;
 }
 
 /// מייצג asset של DB דחוס מתוך GitHub Release.

@@ -7,14 +7,14 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('buildDirectLinkContextMenuEntries', () {
-    test('ללא טקסט מסומן — 3 פריטים פעילים', () {
+    test('ללא טקסט מסומן — 2 פריטים פעילים', () {
       final entries = buildDirectLinkContextMenuEntries(
         bookId: 42,
         index: 7,
         selectedText: null,
       );
 
-      expect(entries.length, 3, reason: 'ספר/מקטע/הדגשת מקטע');
+      expect(entries.length, 2, reason: 'מקטע/הדגשת מקטע');
       for (final e in entries) {
         expect(e.enabled, isTrue);
         expect(e.onTap, isNotNull);
@@ -23,25 +23,25 @@ void main() {
       }
     });
 
-    test('טקסט מסומן ריק/רווחים — עדיין 3 פריטים', () {
+    test('טקסט מסומן ריק/רווחים — עדיין 2 פריטים', () {
       for (final empty in ['', '   ', '\t\n']) {
         final entries = buildDirectLinkContextMenuEntries(
           bookId: 1,
           index: 0,
           selectedText: empty,
         );
-        expect(entries.length, 3, reason: 'selectedText="$empty"');
+        expect(entries.length, 2, reason: 'selectedText="$empty"');
       }
     });
 
-    test('טקסט מסומן לא ריק — 4 פריטים והאחרון להדגשת טקסט', () {
+    test('טקסט מסומן לא ריק — 3 פריטים והאחרון להדגשת טקסט', () {
       final entries = buildDirectLinkContextMenuEntries(
         bookId: 1,
         index: 0,
         selectedText: 'בראשית',
       );
 
-      expect(entries.length, 4);
+      expect(entries.length, 3);
       expect(entries.last.label, contains('הדגשת הטקסט'));
       expect(entries.last.enabled, isTrue);
       expect(entries.last.onTap, isNotNull);
@@ -54,10 +54,9 @@ void main() {
         selectedText: 'טקסט',
       );
 
-      expect(entries[0].label, contains('לספר זה'));
-      expect(entries[1].label, contains('למקטע'));
-      expect(entries[2].label, contains('הדגשת המקטע'));
-      expect(entries[3].label, contains('הדגשת הטקסט'));
+      expect(entries[0].label, contains('למקטע'));
+      expect(entries[1].label, contains('הדגשת המקטע'));
+      expect(entries[2].label, contains('הדגשת הטקסט'));
     });
 
     test('הקשה על פריט מעתיקה את הקישור הנכון ללוח', () async {
@@ -77,18 +76,13 @@ void main() {
           selectedText: null,
         );
 
-        // פריט 0 — קישור לספר
+        // פריט 0 — קישור למקטע
         entries[0].onTap!();
-        await Future<void>.delayed(Duration.zero);
-        expect(capturedText, 'otzaria://open/book/42');
-
-        // פריט 1 — קישור למקטע
-        entries[1].onTap!();
         await Future<void>.delayed(Duration.zero);
         expect(capturedText, 'otzaria://open/book/42?index=7');
 
-        // פריט 2 — קישור עם הדגשת מקטע
-        entries[2].onTap!();
+        // פריט 1 — קישור עם הדגשת מקטע
+        entries[1].onTap!();
         await Future<void>.delayed(Duration.zero);
         expect(capturedText, 'otzaria://open/book/42?index=7&mark');
       } finally {

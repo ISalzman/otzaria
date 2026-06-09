@@ -166,4 +166,115 @@ void main() {
     expect(result, isNull,
         reason: 'כשהקטע לא נמצא בפסקה — לא ניתן להכריע, והמתקשר יחזור לסלחני');
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // clickIsOnSelectionWithinArea — וריאנט פאנל/כרטסיית מפרשים (SelectionArea
+  // יחיד, ללא מעקב פר-שורה): מחשב את קטע הבחירה ישירות מתוך הטקסט הנבחר השטוח.
+  // ───────────────────────────────────────────────────────────────────────
+
+  testWidgets('within-area: פסקה שכולה בתוך הבחירה — לחיצה במרכז על הבחירה',
+      (tester) async {
+    final paragraph = await pumpRichText(tester);
+
+    // הטקסט הנבחר מכיל את כל הפסקה (פסקת ביניים בבחירה רב-פסקתית).
+    final result = clickIsOnSelectionWithinArea(
+      root: paragraph,
+      globalPosition: tester.getCenter(find.byType(RichText)),
+      selectedText: 'xx AAAA BBBB yy',
+    );
+
+    expect(result, isTrue);
+  });
+
+  testWidgets('within-area: בחירת קטע בודד — על הקטע true, מחוצה לו false',
+      (tester) async {
+    final paragraph = await pumpRichText(tester);
+    final topLeft = tester.getTopLeft(find.byType(RichText));
+    final size = tester.getSize(find.byType(RichText));
+    final centerY = topLeft.dy + size.height / 2;
+
+    final onSelection = clickIsOnSelectionWithinArea(
+      root: paragraph,
+      globalPosition: Offset(topLeft.dx + size.width * 0.1, centerY),
+      selectedText: 'AAAA',
+    );
+    expect(onSelection, isTrue, reason: 'לחיצה על "AAAA" המסומן');
+
+    final offSelection = clickIsOnSelectionWithinArea(
+      root: paragraph,
+      globalPosition: Offset(topLeft.dx + size.width * 0.9, centerY),
+      selectedText: 'AAAA',
+    );
+    expect(offSelection, isFalse, reason: 'לחיצה על "BBBB" הלא-מסומן');
+  });
+
+  testWidgets('within-area: הבחירה מתחילה בפסקה (סיומת) — סיומת מסומנת',
+      (tester) async {
+    final paragraph = await pumpRichText(tester);
+    final topLeft = tester.getTopLeft(find.byType(RichText));
+    final size = tester.getSize(find.byType(RichText));
+    final centerY = topLeft.dy + size.height / 2;
+
+    // הבחירה מתחילה ב-"BBBB" בפסקה זו וממשיכה לפסקה הבאה ("CCCC").
+    final onSuffix = clickIsOnSelectionWithinArea(
+      root: paragraph,
+      globalPosition: Offset(topLeft.dx + size.width * 0.9, centerY),
+      selectedText: 'BBBB CCCC',
+    );
+    expect(onSuffix, isTrue, reason: 'הסיומת "BBBB" מסומנת');
+
+    final offPrefix = clickIsOnSelectionWithinArea(
+      root: paragraph,
+      globalPosition: Offset(topLeft.dx + size.width * 0.1, centerY),
+      selectedText: 'BBBB CCCC',
+    );
+    expect(offPrefix, isFalse, reason: '"AAAA" שלפני תחילת הבחירה לא מסומן');
+  });
+
+  testWidgets('within-area: הבחירה מסתיימת בפסקה (תחילית) — תחילית מסומנת',
+      (tester) async {
+    final paragraph = await pumpRichText(tester);
+    final topLeft = tester.getTopLeft(find.byType(RichText));
+    final size = tester.getSize(find.byType(RichText));
+    final centerY = topLeft.dy + size.height / 2;
+
+    // הבחירה מסתיימת ב-"AAAA" בפסקה זו (התחילה בפסקה קודמת — "ZZZZ").
+    final onPrefix = clickIsOnSelectionWithinArea(
+      root: paragraph,
+      globalPosition: Offset(topLeft.dx + size.width * 0.1, centerY),
+      selectedText: 'ZZZZ AAAA',
+    );
+    expect(onPrefix, isTrue, reason: 'התחילית "AAAA" מסומנת');
+
+    final offSuffix = clickIsOnSelectionWithinArea(
+      root: paragraph,
+      globalPosition: Offset(topLeft.dx + size.width * 0.9, centerY),
+      selectedText: 'ZZZZ AAAA',
+    );
+    expect(offSuffix, isFalse, reason: '"BBBB" שאחרי סוף הבחירה לא מסומן');
+  });
+
+  testWidgets('within-area: לחיצה מחוץ לכל פסקה מחזירה null', (tester) async {
+    final paragraph = await pumpRichText(tester);
+
+    final result = clickIsOnSelectionWithinArea(
+      root: paragraph,
+      globalPosition: const Offset(5, 5),
+      selectedText: 'AAAA BBBB',
+    );
+
+    expect(result, isNull);
+  });
+
+  testWidgets('within-area: טקסט נבחר ריק מחזיר false', (tester) async {
+    final paragraph = await pumpRichText(tester);
+
+    final result = clickIsOnSelectionWithinArea(
+      root: paragraph,
+      globalPosition: tester.getCenter(find.byType(RichText)),
+      selectedText: '',
+    );
+
+    expect(result, isFalse);
+  });
 }

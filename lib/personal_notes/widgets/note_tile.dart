@@ -21,6 +21,10 @@ class NoteTile extends StatefulWidget {
   final Color? backgroundColor;
   final Widget? subtitle;
 
+  /// טוקן בקשת הרחבה. כשמשתנה לערך לא-null (לחיצה על סימון inline של שורה זו)
+  /// ההערה נפתחת גם אם [defaultExpanded] הוא false.
+  final int? expandToken;
+
   const NoteTile({
     super.key,
     required this.note,
@@ -35,6 +39,7 @@ class NoteTile extends StatefulWidget {
     this.extraAction,
     this.backgroundColor,
     this.subtitle,
+    this.expandToken,
   });
 
   @override
@@ -51,13 +56,20 @@ class _NoteTileState extends State<NoteTile> {
   @override
   void initState() {
     super.initState();
-    _isExpanded = widget.defaultExpanded;
+    // נפתח לפי ברירת המחדל, או בכפייה אם הגענו דרך לחיצה על סימון inline.
+    _isExpanded = widget.defaultExpanded || widget.expandToken != null;
     _restoreDraftIfExists();
   }
 
   @override
   void didUpdateWidget(covariant NoteTile oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // בקשת הרחבה חדשה (לחיצה על סימון inline) — פותחים את ההערה.
+    if (widget.expandToken != null &&
+        widget.expandToken != oldWidget.expandToken &&
+        !_isExpanded) {
+      setState(() => _isExpanded = true);
+    }
     if (oldWidget.note.id != widget.note.id ||
         oldWidget.bookId != widget.bookId ||
         oldWidget.note.updatedAt != widget.note.updatedAt) {

@@ -19,6 +19,7 @@ import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
+import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 
 @visibleForTesting
 RenderSettings buildSelectedLinkRenderSettings({
@@ -506,6 +507,22 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
         }
       },
       child: AppContextMenuRegion(
+        // לחיצה ימנית על הטקסט המסומן בפועל לא תשחרר את הבחירה (התנהגות ברירת
+        // המחדל של SelectableRegion ב-Windows); לחיצה על חלק לא-מסומן מבטלת
+        // כרגיל. הבחירה מנוהלת ע"י SelectionArea פר-קישור, לכן מחשבים את קטע
+        // הבחירה ישירות מול הפסקה שעליה לחצו.
+        shouldPreserveSelectionOnSecondaryTap: (globalPosition) {
+          final selected = _savedSelectedText;
+          if (selected == null || selected.isEmpty) return false;
+          final root = context.findRenderObject();
+          if (root == null) return true; // סלחני
+          return clickIsOnSelectionWithinArea(
+                root: root,
+                globalPosition: globalPosition,
+                selectedText: selected,
+              ) ??
+              true; // לא הוכרע — סלחני
+        },
         menuBuilder: (menuCtx, _) =>
             ContextMenuUtils.buildCommentaryContextMenu(
           context: menuCtx,

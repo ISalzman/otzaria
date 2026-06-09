@@ -4,6 +4,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:collection/collection.dart';
@@ -33,16 +34,20 @@ import 'package:otzaria/library/view/library_browser.dart';
 import 'package:otzaria/tabs/reading_screen.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/pdf_book/view/pdf_book_screen.dart';
 import 'package:otzaria/tools/tools_screen.dart';
 import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'dart:async';
 import 'package:otzaria/update/my_update_widget.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:otzaria/main.dart' show appWindowListener;
+import 'package:otzaria/main.dart'
+    show appWindowListener, prepareMainWindowReveal, presentMainWindow;
+import 'package:otzaria/core/splash_screen.dart' show SplashIcon;
 import 'package:otzaria/navigation/view/custom_title_bar.dart';
 import 'package:otzaria/migration/sync/background_sync_initializer.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
@@ -260,6 +265,19 @@ class MainWindowScreenState extends State<MainWindowScreen>
   final IndexingRepository _indexingRepository =
       IndexingRepository(TantivyDataProvider.instance);
   bool _hasCheckedAutoIndex = false;
+  // מסך הפתיחה (סמל צף) מוצג עד שתוכן הטאב הפעיל נטען, ואז החלון הקטן/השקוף
+  // מתרחב לחלון המלא. ראה _scheduleSplashReveal / _revealNow.
+  bool _initialContentReady = false;
+  // אוברליי הסמל הצף מוסר רק *אחרי* שהתוכן צויר בפועל — כך הסמל גלוי ברצף
+  // (בלי רגע ריק) וגם "מגשר" על זמן הציור הקר של ה-UI. נפרד מ-_initialContentReady
+  // (שמפעיל את ה-Opacity של התוכן). ראה _revealMainWindowOnce.
+  bool _splashOverlayVisible = true;
+  // משמש כשומר re-entry: החשיפה מתבצעת אסינכרונית (prepareMainWindowReveal עם
+  // await), כך ש-_initialContentReady נקבע מאוחר; הדגל הזה מונע כניסה כפולה
+  // בזמן ה-await (failsafe timer + stream listener).
+  bool _revealStarted = false;
+  bool _hasScheduledSplashReveal = false;
+  Timer? _splashFailsafeTimer;
   bool _isShowingStartupManualReindexDialog = false;
   bool _hasRestoredFullscreen = false;
   bool _hasStartedFileSync = false;
@@ -290,7 +308,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       iconFilled: FluentIcons.library_24_filled,
       label: 'ספרייה',
       shortcutKey: 'key-shortcut-open-library-browser',
-      shortcutDefault: 'ctrl+l',
     ),
     (
       screen: Screen.find,
@@ -298,7 +315,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       iconFilled: FluentIcons.book_search_24_filled,
       label: 'איתור',
       shortcutKey: 'key-shortcut-open-find-ref',
-      shortcutDefault: 'ctrl+o',
     ),
     (
       screen: Screen.reading,
@@ -306,7 +322,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       iconFilled: FluentIcons.book_open_24_filled,
       label: 'עיון',
       shortcutKey: 'key-shortcut-open-reading-screen',
-      shortcutDefault: 'ctrl+r',
     ),
     (
       screen: Screen.search,
@@ -314,7 +329,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       iconFilled: FluentIcons.search_24_filled,
       label: 'חיפוש',
       shortcutKey: 'key-shortcut-open-new-search',
-      shortcutDefault: 'ctrl+q',
     ),
     (
       screen: Screen.more,
@@ -322,7 +336,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       iconFilled: FluentIcons.apps_24_filled,
       label: 'כלים',
       shortcutKey: 'key-shortcut-open-more',
-      shortcutDefault: 'ctrl+m',
     ),
     (
       screen: Screen.settings,
@@ -330,7 +343,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       iconFilled: FluentIcons.settings_24_filled,
       label: 'הגדרות',
       shortcutKey: 'key-shortcut-open-settings',
-      shortcutDefault: 'ctrl+comma',
     ),
   ];
 
@@ -479,6 +491,121 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     // NOTE: Background sync is now triggered by LibraryBloc listener
     // (see MultiBlocListener) to avoid DB lock contention during library loading.
+
+    // מתזמן את חשיפת החלון המלא (במקום ה-splash הקטן/השקוף) אחרי שהטאב הפעיל
+    // נטען. נדחה לפוסט-פריים כדי שהטאב הפעיל יספיק לשלוח את LoadContent שלו.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scheduleSplashReveal();
+    });
+
+    // רשת ביטחון: אם תוכן הספר לא ייטען (bloc תקוע) — לא נשאיר את המשתמש
+    // תקוע במסך הפתיחה. failsafe בלבד; מבוטל בזרימה תקינה וב-dispose.
+    _splashFailsafeTimer =
+        Timer(const Duration(seconds: 8), _revealMainWindowOnce);
+  }
+
+  /// מתזמן את חשיפת החלון המלא, תוך מתן עדיפות לטעינת הספר הפעיל: אם נפתח ספר
+  /// טקסט שעדיין נטען — ממתינים שה-[TextBookBloc] שלו יגיע ל-[TextBookLoaded]/
+  /// [TextBookError] (או ייסגר) לפני שחושפים. בכל מקרה אחר (מסך שאינו קריאה /
+  /// PDF / ספר שכבר נטען) — חושפים מיד. אין timeout שרירותי בנתיב הזה.
+  void _scheduleSplashReveal() {
+    if (_hasScheduledSplashReveal || _initialContentReady) return;
+    if (!mounted) return;
+
+    final navigationState = context.read<NavigationBloc>().state;
+    final currentTab = context.read<TabsBloc>().state.currentTab;
+
+    // במסך קריאה הטאבים מאוכלסים אסינכרונית (TabsBloc.LoadTabs /
+    // WorkspaceBloc.ReplaceAllTabs), כך שב-post-frame הראשון currentTab עדיין
+    // null. לא חושפים עדיין — ה-listener של TabsBloc יקרא לנו שוב.
+    if (navigationState.currentScreen == Screen.reading && currentTab == null) {
+      return;
+    }
+
+    _hasScheduledSplashReveal = true;
+
+    final shouldWaitForBook = navigationState.currentScreen == Screen.reading &&
+        currentTab is TextBookTab &&
+        currentTab.bloc.state is! TextBookLoaded &&
+        currentTab.bloc.state is! TextBookError;
+
+    if (!shouldWaitForBook) {
+      _revealMainWindowOnce();
+      return;
+    }
+
+    final bloc = currentTab.bloc;
+    late final StreamSubscription<TextBookState> sub;
+    var done = false;
+    void finish() {
+      if (done) return;
+      done = true;
+      sub.cancel();
+      _revealMainWindowOnce();
+    }
+
+    sub = bloc.stream.listen(
+      (state) {
+        if (state is TextBookLoaded || state is TextBookError) {
+          finish();
+        }
+      },
+      onDone: finish,
+      onError: (_) => finish(),
+      cancelOnError: false,
+    );
+  }
+
+  /// מרחיב את החלון לגודל המלא ואז חושף את התוכן. idempotent.
+  void _revealMainWindowOnce() {
+    if (_revealStarted) return;
+    _revealStarted = true;
+    _splashFailsafeTimer?.cancel();
+    _splashFailsafeTimer = null;
+
+    // עכשיו, אחרי שהספר הפעיל נטען, מתחילים את בניית הקטלוג (LoadLibrary).
+    // הוא נדחה עד לכאן כדי שלא יתחרה בשאילתת תוכן הספר בעלייה (שיפור ביצועים).
+    if (!mounted) {
+      _initialContentReady = true;
+      return;
+    }
+
+    // נתיב קצה (failsafe): אם הגענו לכאן דרך הטיימר בעוד אנחנו במסך קריאה ללא
+    // טאב (שחזור הטאבים נתקע/נכשל >8 שניות), אסור לחשוף מסך עיון ריק. מנווטים
+    // למסך הספרייה — מסך שימושי. במסלול הרגיל currentTab כבר קיים, ולכן זה
+    // לא יקרה.
+    final navState = context.read<NavigationBloc>().state;
+    final hasActiveTab = context.read<TabsBloc>().state.currentTab != null;
+    if (navState.currentScreen == Screen.reading && !hasActiveTab) {
+      context
+          .read<NavigationBloc>()
+          .add(const NavigateToScreen(Screen.library));
+    }
+
+    context.read<LibraryBloc>().add(LoadLibrary());
+    // חשיפה:
+    //   1. prepareMainWindowReveal — מביא את החלון לגבולותיו הסופיים (ב-Windows
+    //      בעודו מוסתר).
+    //   2. חושפים את התוכן (Opacity 0→1) ומסירים את אוברליי ה-splash של Flutter
+    //      *באותו setState* — כך הפריים שמצויר נקי מהסמל הישן (אחרת, בעומס
+    //      האתחול, הסרה ב-setState נפרד מתעכבת והסמל הישן מהבהב במרכז החלון).
+    //   3. ממתינים שהפריים יצויר, ואז מציגים את החלון (presentMainWindow). ב-
+    //      Windows הסמל הנייטיב מתחיל fade-out בדיוק כאן (מעבר חלק).
+    unawaited(() async {
+      await prepareMainWindowReveal();
+      if (!mounted) {
+        _initialContentReady = true;
+        _splashOverlayVisible = false;
+        await presentMainWindow();
+        return;
+      }
+      setState(() {
+        _initialContentReady = true;
+        _splashOverlayVisible = false;
+      });
+      await WidgetsBinding.instance.endOfFrame;
+      await presentMainWindow();
+    }());
   }
 
   @override
@@ -592,20 +719,23 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
   }
 
-  void _checkAndStartIndexing(BuildContext context) {
-    // Only check once, after settings are loaded
+  void _checkAndStartIndexing(
+    BuildContext context,
+    library_model.Library library,
+  ) {
+    // Only check once. מופעל מ-listener טעינת הספרייה כך שהוא צורך את ה-library
+    // שכבר נבנה (ולא מפעיל בנייה עצמאית נוספת שתתחרה בטעינת הספר הפעיל).
     if (_hasCheckedAutoIndex) return;
     _hasCheckedAutoIndex = true;
 
-    unawaited(_resolveStartupIndexing(context));
+    unawaited(_resolveStartupIndexing(context, library));
   }
 
-  Future<void> _resolveStartupIndexing(BuildContext context) async {
+  Future<void> _resolveStartupIndexing(
+    BuildContext context,
+    library_model.Library library,
+  ) async {
     final autoUpdateIndex = context.read<SettingsBloc>().state.autoUpdateIndex;
-    final library = await DataRepository.instance.library;
-    if (!mounted || !context.mounted) {
-      return;
-    }
 
     final requiresManualReindex =
         await _indexingRepository.requiresManualReindex(library);
@@ -894,6 +1024,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     appWindowListener?.onFullscreenChanged = null;
     appWindowListener?.onWindowStateChanged = null;
     appWindowListener?.onWindowResizeOccurred = null;
+    _splashFailsafeTimer?.cancel();
     _externalActivationWatchSub?.cancel();
     _externalActivationChannelSub?.cancel();
     _externalActivationChannel.dispose();
@@ -981,8 +1112,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
         tooltip: '',
         icon: Tooltip(
           preferBelow: false,
-          message: (Settings.getValue<String>(item.shortcutKey) ??
-                  item.shortcutDefault)
+          message: (ShortcutValidator.getShortcutValue(item.shortcutKey) ?? '')
               .toUpperCase(),
           child: Icon(item.icon),
         ),
@@ -1925,7 +2055,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
+    final Widget content = MultiBlocProvider(
       providers: [
         BlocProvider.value(value: _calendarCubit),
         BlocProvider.value(value: _tourCubit),
@@ -1971,6 +2101,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
             listener: (context, state) {
               _startupWorkGate.markLibraryLoaded();
               _tryStartDeferredStartupWork();
+              // החלטת האינדוקס צורכת את הקטלוג שזה עתה נטען — כך אין קריאה
+              // עצמאית ל-getLibrary שתתחרה בטעינת הספר הפעיל בעלייה.
+              if (state.library != null) {
+                _checkAndStartIndexing(context, state.library!);
+              }
               final navigationState = context.read<NavigationBloc>().state;
               if (navigationState.hasCheckedLibrary &&
                   !navigationState.isLibraryEmpty) {
@@ -2145,7 +2280,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
               }
 
               // --- internal app logic ---
-              _checkAndStartIndexing(context);
+              // הערה: החלטת האינדוקס בעלייה (_checkAndStartIndexing) הועברה
+              // ל-listener של טעינת הספרייה, כדי שתצרוך את הקטלוג הקיים ולא
+              // תפעיל בנייה עצמאית שתתחרה בטעינת הספר הפעיל.
               if (!previous.autoUpdateIndex && current.autoUpdateIndex) {
                 _startIndexing(context);
               }
@@ -2157,6 +2294,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 previous.currentTab != current.currentTab,
             listener: (context, state) {
               final currentTab = state.currentTab;
+              // הטאב הפעיל אוכלס (אסינכרונית בעלייה) — כעת אפשר לתזמן את חשיפת
+              // החלון המלא תוך מתן עדיפות לספר הפעיל. no-op אם כבר תוזמן/נחשף.
+              _scheduleSplashReveal();
               if (currentTab != null) {
                 int tabIndex = 0;
                 if (currentTab is TextBookTab) tabIndex = currentTab.index;
@@ -2379,7 +2519,21 @@ class MainWindowScreenState extends State<MainWindowScreen>
             }
             _scheduleTourOverlayInsert();
 
-            return SafeArea(
+            // ב-Android 15+ (targetSdk 35+) edge-to-edge נכפה: שורת הסטטוס
+            // והניווט שקופות תמיד, וה-SafeArea דוחף את התוכן מתחתן — כך שללא
+            // צביעה מפורשת מתגלה מאחוריהן רקע החלון הנייטיב (שחור ב-night
+            // theme). _EdgeToEdgeShell צובע כל אזור inset בצבע הסרגל הצמוד
+            // אליו וקובע את ניגודיות אייקוני המערכת. שורת הסטטוס נצבעת כצבע
+            // ה-CustomTitleBar (reader/panel לפי המסך — ראה custom_title_bar)
+            // ואזור הניווט התחתון כצבע ה-NavigationBar, כדי שלא ייווצר תפר.
+            final useReaderStyle = state.currentScreen == Screen.search ||
+                (state.currentScreen == Screen.reading &&
+                    context.select((TabsBloc bloc) => bloc.state.hasOpenTabs));
+            return _EdgeToEdgeShell(
+              topColor: useReaderStyle
+                  ? AppSurfaces.readerBackground(context)
+                  : AppSurfaces.solidPanelBackground(context),
+              bottomColor: AppSurfaces.panelBackground(context),
               child: KeyboardShortcuts(
                 onFindRefRequested: () => _handleFindRefOpen(context),
                 child: MyUpdatWidget(
@@ -2687,6 +2841,23 @@ class MainWindowScreenState extends State<MainWindowScreen>
         ),
       ),
     );
+
+    // עוטפים את התוכן ב-Opacity: כל עוד הספר הפעיל לא נטען, התוכן נבנה ונטען
+    // ברקע אך אינו נראה (opacity 0), וחלון ה-splash הקטן/השקוף מציג רק את הסמל
+    // הצף. כשהתוכן מוכן — _revealMainWindowOnce מרחיב את החלון ומציג את ה-UI.
+    return Stack(
+      children: [
+        Opacity(
+          opacity: _initialContentReady ? 1.0 : 0.0,
+          child: IgnorePointer(
+            ignoring: !_initialContentReady,
+            child: content,
+          ),
+        ),
+        if (_splashOverlayVisible)
+          const Positioned.fill(child: _StartupSplashOverlay()),
+      ],
+    );
   }
 
   void _openIndexingSettings() {
@@ -2929,9 +3100,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final item = _navData[index];
     final isSelected =
         selectedOverride ?? (_getActiveNavigationIndex(currentScreen) == index);
-    final tooltip =
-        (Settings.getValue<String>(item.shortcutKey) ?? item.shortcutDefault)
-            .toUpperCase();
+    final tooltip = (ShortcutValidator.getShortcutValue(item.shortcutKey) ?? '')
+        .toUpperCase();
 
     final step = _tourCubit.state.currentStep;
     final isTourHighlighted = _isTourNavigationItemHighlighted(
@@ -3036,6 +3206,21 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 }
 
+/// מסך הפתיחה בזמן עליית התוכנה: סמל בלבד על רקע **שקוף**, כך שבחלון ה-splash
+/// השקוף נראה רק הסמל הצף במרכז המסך (ללא קופסה). מוצג עד שתוכן הטאב הפעיל
+/// נטען, ואז החלון מתרחב לחלון המלא והתוכן נחשף.
+class _StartupSplashOverlay extends StatelessWidget {
+  const _StartupSplashOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Color(0x00000000),
+      child: SplashIcon(),
+    );
+  }
+}
+
 class KeepAlivePage extends StatefulWidget {
   final Widget child;
 
@@ -3054,5 +3239,50 @@ class _KeepAlivePageState extends State<KeepAlivePage>
   Widget build(BuildContext context) {
     super.build(context);
     return widget.child;
+  }
+}
+
+/// עוטף את ה-UI הראשי לטיפול ב-edge-to-edge שנכפה ב-Android 15+ (targetSdk 35+):
+/// קובע את ניגודיות אייקוני המערכת לפי בהירות ערכת הנושא, וצובע את האזורים
+/// שמאחורי פסי המערכת (שורת הסטטוס למעלה, סרגל הניווט למטה/בצדדים) בצבע הסרגל
+/// הצמוד אליהם — [topColor] לשורת הסטטוס ו-[bottomColor] לשאר — כדי שלא ייחשף
+/// רקע החלון הנייטיב ולא ייווצר תפר ויזואלי עם הסרגלים שבתוך האפליקציה.
+class _EdgeToEdgeShell extends StatelessWidget {
+  const _EdgeToEdgeShell({
+    required this.topColor,
+    required this.bottomColor,
+    required this.child,
+  });
+
+  final Color topColor;
+  final Color bottomColor;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final iconBrightness = isDark ? Brightness.light : Brightness.dark;
+    final topInset = MediaQuery.paddingOf(context).top;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: iconBrightness,
+        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: iconBrightness,
+      ),
+      child: ColoredBox(
+        color: bottomColor,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // אזור שורת הסטטוס נצבע ידנית (SafeArea למטה מבטל את ה-top שלו) כדי
+            // שצבעו יוכל להתאים ל-CustomTitleBar שמתחתיו ולא ל-bottomColor.
+            SizedBox(height: topInset, child: ColoredBox(color: topColor)),
+            Expanded(child: SafeArea(top: false, child: child)),
+          ],
+        ),
+      ),
+    );
   }
 }
