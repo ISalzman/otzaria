@@ -802,8 +802,7 @@ void main() {
   // ─── שאריות-ריקות → רק הספר עצמו ────────────────────────────────────────────
 
   group('FindRef — remainingTokens ריק מחזיר רק את הספר', () {
-    test(
-        'שאילתה רב-מילים שתואמת לכותרת לחלוטין מחזירה רק את הספר (ללא TOC)',
+    test('שאילתה רב-מילים שתואמת לכותרת לחלוטין מחזירה רק את הספר (ללא TOC)',
         () async {
       // התנהגות סימטרית למסלול של מילה אחת: כשהמשתמש הקליד רק את כותרת
       // הספר ושום דבר נוסף — לא נשלפים ערכי TOC, רק הספר עצמו.
@@ -1524,14 +1523,12 @@ void main() {
       expect(
         refs.any((r) => r.contains('סימן')),
         isFalse,
-        reason:
-            'ערכי L3 שמרחיבים את ה-parent (סימן א/ב/ג) מודחקים — ה-L2 כבר '
+        reason: 'ערכי L3 שמרחיבים את ה-parent (סימן א/ב/ג) מודחקים — ה-L2 כבר '
             'עונה על השאילתה',
       );
     });
 
-    test(
-        'global AltToc fallback: ילדי L1 של entry L0 ש-matches — מודחקים',
+    test('global AltToc fallback: ילדי L1 של entry L0 ש-matches — מודחקים',
         () async {
       // התרחיש המדויק מהמשתמש: שאילתה "בבא קמא" → bookHits מחזיר רק את
       // התלמוד "בבא קמא" (שכל הטוקנים נצרכים בכותרת → ערך הספר בלבד, ללא
@@ -1613,8 +1610,7 @@ void main() {
       );
     });
 
-    test(
-        'L3 entries לא מודחקים כשהשאילתה דורשת אותם (L2 parent לא matches)',
+    test('L3 entries לא מודחקים כשהשאילתה דורשת אותם (L2 parent לא matches)',
         () async {
       // אם המשתמש כתב "בבא קמא סימן ב", רק L3 הספציפי מתאים — אסור להדחיק
       // אותו (אין L2 parent שתואם את כל הטוקנים).
@@ -2802,8 +2798,7 @@ void main() {
       expect(personal.first.segment, equals(0));
     });
 
-    test('שאילתת שתי מילים ו-remainingTokens ריק — רק כותרת הספר',
-        () async {
+    test('שאילתת שתי מילים ו-remainingTokens ריק — רק כותרת הספר', () async {
       // סימטרי למסלול הראשי ולמסלול של מילה אחת: שאילתה שכל הטוקנים בה
       // נצרכים ע"י כותרת הספר מחזירה רק את הספר עצמו.
       final repo = buildPersonalRepo(userToc: [
@@ -2878,6 +2873,52 @@ void main() {
       );
       final results = await repo.findRefs('ספר', includePersonalBooks: true);
       expect(results.where((r) => r.bookPath == 'ספרים אישיים'), isEmpty);
+    });
+
+    test('רשימת הספרים האישיים נטענת פעם אחת ונשמרת בקאש', () async {
+      var loadCount = 0;
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (_, {limit = 50}) => const [],
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getAllUserBooks: () async {
+          loadCount++;
+          return [personalBook];
+        },
+        getUserBookTocEntries: (_, __, {queryTokens}) async => const [],
+      );
+
+      await repo.findRefs('ספר', includePersonalBooks: true);
+      await repo.findRefs('ספר פרטי', includePersonalBooks: true);
+      await repo.findRefs('ספר', includePersonalBooks: true);
+
+      expect(loadCount, equals(1),
+          reason: 'getAllUserBooks חייב להיקרא פעם אחת בלבד הודות לקאש');
+    });
+
+    test('clearCaches מאלץ טעינה מחדש של הספרים האישיים', () async {
+      var loadCount = 0;
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (_, {limit = 50}) => const [],
+        getTocEntriesForReference: (_, __, {queryTokens}) async => const [],
+        getAllUserBooks: () async {
+          loadCount++;
+          return [personalBook];
+        },
+        getUserBookTocEntries: (_, __, {queryTokens}) async => const [],
+      );
+
+      await repo.findRefs('ספר', includePersonalBooks: true);
+      repo.clearCaches();
+      await repo.findRefs('ספר', includePersonalBooks: true);
+
+      expect(loadCount, equals(2),
+          reason: 'אחרי clearCaches הרשימה חייבת להיטען מחדש מה-DB');
     });
   });
 }
