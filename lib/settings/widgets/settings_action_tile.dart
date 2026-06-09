@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 /// שורת הגדרה עם אייקון, כותרת, תת-כותרת וכפתורי פעולה.
 ///
@@ -74,7 +75,7 @@ class SettingsActionTile extends StatelessWidget {
         if (!isNarrow) {
           return ListTile(
             hoverColor: Colors.transparent,
-            leading: Icon(icon),
+            leading: RtlIcon(icon),
             title: title,
             subtitle: subtitle,
             trailing: actionsRow,
@@ -91,7 +92,7 @@ class SettingsActionTile extends StatelessWidget {
                 children: [
                   Padding(
                     padding: const EdgeInsets.only(top: 2, left: 16),
-                    child: Icon(icon),
+                    child: RtlIcon(icon),
                   ),
                   Expanded(
                     child: Column(

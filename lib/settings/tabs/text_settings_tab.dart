@@ -498,43 +498,22 @@ class TextSettingsTab extends StatelessWidget {
             }
           },
         ),
-        SwitchSettingsTile(
-          leading: const Icon(FluentIcons.shield_keyhole_24_regular),
-          title: RichText(
-            textDirection: TextDirection.rtl,
-            text: TextSpan(
-              style: kSettingsTitleStyle.copyWith(
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-              children: const [
-                TextSpan(text: 'הצגת שם הקודש'),
-              ],
-            ),
-          ),
-          subtitle: Text(
-            !state.replaceHolyNames
-                ? 'השם הקדוש יוצג'
-                : 'השם הקדוש לא יוצג מפני קדושתו',
-            style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
+        SwitchSettingsTile.text(
+          icon: FluentIcons.shield_keyhole_24_regular,
+          title: 'הצגת שם הקודש',
+          subtitle: !state.replaceHolyNames
+              ? 'השם הקדוש יוצג'
+              : 'השם הקדוש לא יוצג מפני קדושתו',
           value: !state.replaceHolyNames,
           onChanged: (value) {
             context.read<SettingsBloc>().add(UpdateReplaceHolyNames(!value));
           },
         ),
-        SwitchSettingsTile(
-          leading: const Icon(FluentIcons.text_more_24_regular),
-          title: const Text(
-            'הצגת טעמי המקרא',
-            style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
-          subtitle: Text(
-            state.showTeamim ? 'המקרא יוצג עם טעמים' : 'המקרא יוצג ללא טעמים',
-            style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
+        SwitchSettingsTile.text(
+          icon: FluentIcons.text_more_24_regular,
+          title: 'הצגת טעמי המקרא',
+          subtitle:
+              state.showTeamim ? 'המקרא יוצג עם טעמים' : 'המקרא יוצג ללא טעמים',
           value: state.showTeamim,
           onChanged: (value) {
             context.read<SettingsBloc>().add(UpdateShowTeamim(value));
@@ -651,20 +630,12 @@ class TextSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'הגדרות לפי ספר',
       children: [
-        SwitchSettingsTile(
-          leading: const Icon(FluentIcons.book_open_24_regular),
-          title: const Text(
-            'שמירת התאמות לכל ספר בנפרד',
-            style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
-          subtitle: Text(
-            state.enablePerBookSettings
-                ? 'שינויים בסרגל הלחצנים יישמרו לכל ספר בנפרד'
-                : 'כל הספרים ישתמשו בהגדרות הכלליות',
-            style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
+        SwitchSettingsTile.text(
+          icon: FluentIcons.book_open_24_regular,
+          title: 'שמירת התאמות לכל ספר בנפרד',
+          subtitle: state.enablePerBookSettings
+              ? 'שינויים בסרגל הלחצנים יישמרו לכל ספר בנפרד'
+              : 'כל הספרים ישתמשו בהגדרות הכלליות',
           value: state.enablePerBookSettings,
           onChanged: (value) {
             context
@@ -673,23 +644,16 @@ class TextSettingsTab extends StatelessWidget {
           },
         ),
         if (state.enablePerBookSettings)
-          ListTile(
-            hoverColor: Colors.transparent,
-            leading: const Icon(FluentIcons.delete_24_regular),
-            title: const Text(
-              'איפוס הגדרות לפי ספר',
-              style: kSettingsTitleStyle,
-              textDirection: TextDirection.rtl,
-            ),
-            subtitle: const Text(
-              'מחיקת כל ההתאמות שנשמרו לכל ספר בנפרד',
-              style: kSettingsSubtitleStyle,
-              textDirection: TextDirection.rtl,
-            ),
-            trailing: NeutralActionButton(
-              onPressed: () => _resetPerBookSettings(context),
-              text: 'איפוס',
-            ),
+          SettingsActionTile.text(
+            icon: FluentIcons.delete_24_regular,
+            title: 'איפוס הגדרות לפי ספר',
+            subtitle: 'מחיקת כל ההתאמות שנשמרו לכל ספר בנפרד',
+            actions: [
+              NeutralActionButton(
+                onPressed: () => _resetPerBookSettings(context),
+                text: 'איפוס',
+              ),
+            ],
           ),
       ],
     );
