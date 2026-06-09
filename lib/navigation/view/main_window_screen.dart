@@ -39,6 +39,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/pdf_book/view/pdf_book_screen.dart';
 import 'package:otzaria/tools/tools_screen.dart';
 import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'dart:async';
 import 'package:otzaria/update/my_update_widget.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
@@ -297,7 +298,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       iconFilled: FluentIcons.library_24_filled,
       label: 'ספרייה',
       shortcutKey: 'key-shortcut-open-library-browser',
-      shortcutDefault: 'ctrl+l',
     ),
     (
       screen: Screen.find,
@@ -305,7 +305,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       iconFilled: FluentIcons.book_search_24_filled,
       label: 'איתור',
       shortcutKey: 'key-shortcut-open-find-ref',
-      shortcutDefault: 'ctrl+o',
     ),
     (
       screen: Screen.reading,
@@ -313,7 +312,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       iconFilled: FluentIcons.book_open_24_filled,
       label: 'עיון',
       shortcutKey: 'key-shortcut-open-reading-screen',
-      shortcutDefault: 'ctrl+r',
     ),
     (
       screen: Screen.search,
@@ -321,7 +319,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       iconFilled: FluentIcons.search_24_filled,
       label: 'חיפוש',
       shortcutKey: 'key-shortcut-open-new-search',
-      shortcutDefault: 'ctrl+q',
     ),
     (
       screen: Screen.more,
@@ -329,7 +326,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       iconFilled: FluentIcons.apps_24_filled,
       label: 'כלים',
       shortcutKey: 'key-shortcut-open-more',
-      shortcutDefault: 'ctrl+m',
     ),
     (
       screen: Screen.settings,
@@ -337,7 +333,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       iconFilled: FluentIcons.settings_24_filled,
       label: 'הגדרות',
       shortcutKey: 'key-shortcut-open-settings',
-      shortcutDefault: 'ctrl+comma',
     ),
   ];
 
@@ -1087,8 +1082,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
         tooltip: '',
         icon: Tooltip(
           preferBelow: false,
-          message: (Settings.getValue<String>(item.shortcutKey) ??
-                  item.shortcutDefault)
+          message: (ShortcutValidator.getShortcutValue(item.shortcutKey) ?? '')
               .toUpperCase(),
           child: Icon(item.icon),
         ),
@@ -3076,9 +3070,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final item = _navData[index];
     final isSelected =
         selectedOverride ?? (_getActiveNavigationIndex(currentScreen) == index);
-    final tooltip =
-        (Settings.getValue<String>(item.shortcutKey) ?? item.shortcutDefault)
-            .toUpperCase();
+    final tooltip = (ShortcutValidator.getShortcutValue(item.shortcutKey) ?? '')
+        .toUpperCase();
 
     final step = _tourCubit.state.currentStep;
     final isTourHighlighted = _isTourNavigationItemHighlighted(

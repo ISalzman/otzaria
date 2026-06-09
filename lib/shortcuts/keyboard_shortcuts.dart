@@ -21,6 +21,7 @@ import 'package:otzaria/history/view/history_screen.dart';
 import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
@@ -89,37 +90,30 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       }
     }
 
-    // קריאת ערכי הקיצורים מההגדרות
-    final libraryShortcut =
-        shortcutSettings['key-shortcut-open-library-browser'] ?? 'ctrl+l';
-    final findRefShortcut =
-        shortcutSettings['key-shortcut-open-find-ref'] ?? 'ctrl+o';
-    final closeTabShortcut =
-        shortcutSettings['key-shortcut-close-tab'] ?? 'ctrl+w';
-    final closeAllTabsShortcut =
-        shortcutSettings['key-shortcut-close-all-tabs'] ?? 'ctrl+shift+w';
+    // קריאת ערכי הקיצורים מההגדרות. ברירת המחדל נלקחת מהמקור הקנוני היחיד
+    // (`ShortcutValidator.defaultShortcuts`) ולא משוכפלת כאן.
+    String shortcutOf(String key) =>
+        shortcutSettings[key] ?? ShortcutValidator.defaultShortcuts[key] ?? '';
+
+    final libraryShortcut = shortcutOf('key-shortcut-open-library-browser');
+    final findRefShortcut = shortcutOf('key-shortcut-open-find-ref');
+    final closeTabShortcut = shortcutOf('key-shortcut-close-tab');
+    final closeAllTabsShortcut = shortcutOf('key-shortcut-close-all-tabs');
     final restoreClosedTabShortcut =
-        shortcutSettings['key-shortcut-restore-closed-tab'] ?? 'ctrl+shift+t';
+        shortcutOf('key-shortcut-restore-closed-tab');
     final readingScreenShortcut =
-        shortcutSettings['key-shortcut-open-reading-screen'] ?? 'ctrl+r';
-    final newSearchShortcut =
-        shortcutSettings['key-shortcut-open-new-search'] ?? 'ctrl+shift+f';
-    final settingsShortcut =
-        shortcutSettings['key-shortcut-open-settings'] ?? 'ctrl+comma';
-    final moreShortcut = shortcutSettings['key-shortcut-open-more'] ?? 'ctrl+m';
-    final bookmarksShortcut =
-        shortcutSettings['key-shortcut-open-bookmarks'] ?? 'ctrl+shift+b';
-    final historyShortcut =
-        shortcutSettings['key-shortcut-open-history'] ?? 'ctrl+h';
-    final workspaceShortcut =
-        shortcutSettings['key-shortcut-switch-workspace'] ?? 'ctrl+k';
-    final toggleNavPaneShortcut =
-        shortcutSettings['key-shortcut-toggle-nav-pane'] ?? 'ctrl+shift+l';
+        shortcutOf('key-shortcut-open-reading-screen');
+    final newSearchShortcut = shortcutOf('key-shortcut-open-new-search');
+    final settingsShortcut = shortcutOf('key-shortcut-open-settings');
+    final moreShortcut = shortcutOf('key-shortcut-open-more');
+    final bookmarksShortcut = shortcutOf('key-shortcut-open-bookmarks');
+    final historyShortcut = shortcutOf('key-shortcut-open-history');
+    final workspaceShortcut = shortcutOf('key-shortcut-switch-workspace');
+    final toggleNavPaneShortcut = shortcutOf('key-shortcut-toggle-nav-pane');
     final toggleCommentatorsPaneShortcut =
-        shortcutSettings['key-shortcut-toggle-commentators-pane'] ??
-            'ctrl+shift+c';
+        shortcutOf('key-shortcut-toggle-commentators-pane');
     final openCommentatorsTabShortcut =
-        shortcutSettings['key-shortcut-open-commentators-tab'] ?? '';
+        shortcutOf('key-shortcut-open-commentators-tab');
 
     // פתח/סגור חלונית ניווט. אם הטאב הפעיל אינו ספר — מחזירים `ignored`
     // כדי לא לבלוע את הקיצור (כך מנוע ה-shortcut יכול להמשיך הלאה במקום
