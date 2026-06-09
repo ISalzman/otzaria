@@ -240,26 +240,42 @@ List<int> _filterBookSearchEntries({
     );
   });
 
-  // Levenshtein edit distance between two strings
+  // Damerau-Levenshtein edit distance (supports transposition of adjacent chars)
+  // e.g. אבועלפיה → אבולעפיה counts as 1 edit, not 2
   int editDistance(String a, String b) {
     if (a == b) return 0;
     if (a.isEmpty) return b.length;
     if (b.isEmpty) return a.length;
     final aChars = a.runes.toList();
     final bChars = b.runes.toList();
-    final row = List<int>.generate(bChars.length + 1, (i) => i);
-    for (int i = 0; i < aChars.length; i++) {
-      int prev = i + 1;
-      for (int j = 0; j < bChars.length; j++) {
-        final val = aChars[i] == bChars[j]
-            ? row[j]
-            : 1 + [prev, row[j], row[j + 1]].reduce((a, b) => a < b ? a : b);
-        row[j] = prev;
-        prev = val;
-      }
-      row[bChars.length] = prev;
+    final la = aChars.length;
+    final lb = bChars.length;
+    // d[i][j] = distance between a[0..i-1] and b[0..j-1]
+    final d = List.generate(
+        la + 1, (i) => List<int>.generate(lb + 1, (j) => j == 0 ? i : 0));
+    for (int j = 0; j <= lb; j++) {
+      d[0][j] = j;
     }
-    return row[bChars.length];
+    for (int i = 1; i <= la; i++) {
+      for (int j = 1; j <= lb; j++) {
+        final cost = aChars[i - 1] == bChars[j - 1] ? 0 : 1;
+        d[i][j] = [
+          d[i - 1][j] + 1, // deletion
+          d[i][j - 1] + 1, // insertion
+          d[i - 1][j - 1] + cost, // substitution
+        ].reduce((a, b) => a < b ? a : b);
+        // transposition of two adjacent characters
+        if (i > 1 &&
+            j > 1 &&
+            aChars[i - 1] == bChars[j - 2] &&
+            aChars[i - 2] == bChars[j - 1]) {
+          d[i][j] = d[i][j] < d[i - 2][j - 2] + cost
+              ? d[i][j]
+              : d[i - 2][j - 2] + cost;
+        }
+      }
+    }
+    return d[la][lb];
   }
 
   // Allowed edit distance by query word length:
