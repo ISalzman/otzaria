@@ -1204,6 +1204,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                       return;
                     }
 
+                    // ה-callback הזה נרשם בכל build — כולל כשפתיחת מקלדת
+                    // וירטואלית משנה את ה-viewport וגורמת rebuild. אסור לחטוף
+                    // פוקוס כשהמשתמש נמצא בדיאלוג מעל המסך (חיפוש/איתור) או
+                    // בשדה קלט כלשהו — חטיפה כזו סוגרת את המקלדת מיד אחרי
+                    // שנפתחה (ראה תקדים דומה ב-resolveLeftPaneSearchFocus).
+                    if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
+                      return;
+                    }
+                    if (isTextInputFocusNode(
+                        FocusManager.instance.primaryFocus)) {
+                      return;
+                    }
+
                     if (!_bookContentFocusNode.hasFocus &&
                         !textSearchFocusNode.hasFocus &&
                         !navigationSearchFocusNode.hasFocus &&
