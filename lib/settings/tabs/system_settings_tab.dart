@@ -35,7 +35,6 @@ import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/dialogs/error_report_sender_email_dialog.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -768,22 +767,14 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             },
           ),
         ),
-        SwitchSettingsTile(
-          leading: const RtlIcon(FluentIcons.arrow_download_24_regular),
-          title: const Text(
-            'עדכוני תוכנה וספרים',
-            style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
-          subtitle: Text(
-            state.isOfflineMode
-                ? 'מושבת במצב מנותק'
-                : state.softwareAndBookUpdatesEnabled
-                    ? 'עדכוני תוכנה וספרים פעילים, אך דיווחי שגיאות ימשיכו לעבוד גם אם תכבו אותם'
-                    : 'עדכוני תוכנה וספרים מושבתים, אך שאר שירותי הרשת נשארים פעילים',
-            style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
+        SwitchSettingsTile.text(
+          icon: FluentIcons.arrow_download_24_regular,
+          title: 'עדכוני תוכנה וספרים',
+          subtitle: state.isOfflineMode
+              ? 'מושבת במצב מנותק'
+              : state.softwareAndBookUpdatesEnabled
+                  ? 'עדכוני תוכנה וספרים פעילים, אך דיווחי שגיאות ימשיכו לעבוד גם אם תכבו אותם'
+                  : 'עדכוני תוכנה וספרים מושבתים, אך שאר שירותי הרשת נשארים פעילים',
           value: state.canUseSoftwareAndBookUpdates,
           enabled: !state.isOfflineMode,
           onChanged: state.isOfflineMode
@@ -796,20 +787,13 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
         if (!(Platform.isAndroid || Platform.isIOS) &&
             state.canUseSoftwareAndBookUpdates) ...[
-          SwitchSettingsTile(
-            leading: const RtlIcon(FluentIcons.arrow_sync_24_regular),
-            title: const Text(
-              'סינכרון הספרייה באופן אוטומטי',
-              style: kSettingsTitleStyle,
-              textDirection: TextDirection.rtl,
-            ),
-            subtitle: Text(
-              (Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true)
-                  ? 'מסד הנתונים של הספרייה יתעדכן אוטומטית בטעינת הספרייה'
-                  : 'סינכרון הספרייה לא יופעל אוטומטית, אך עדיין אפשר להפעיל סינכרון ידני',
-              style: kSettingsSubtitleStyle,
-              textDirection: TextDirection.rtl,
-            ),
+          SwitchSettingsTile.text(
+            icon: FluentIcons.arrow_sync_24_regular,
+            title: 'סינכרון הספרייה באופן אוטומטי',
+            subtitle:
+                (Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true)
+                    ? 'מסד הנתונים של הספרייה יתעדכן אוטומטית בטעינת הספרייה'
+                    : 'סינכרון הספרייה לא יופעל אוטומטית, אך עדיין אפשר להפעיל סינכרון ידני',
             value:
                 Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true,
             onChanged: (value) {
@@ -817,20 +801,13 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               setState(() {});
             },
           ),
-          SwitchSettingsTile(
-            leading: const Icon(FluentIcons.beaker_24_regular),
-            title: const Text(
-              'עדכון לגרסאות מפתחים',
-              style: kSettingsTitleStyle,
-              textDirection: TextDirection.rtl,
-            ),
-            subtitle: Text(
-              Settings.getValue<bool>(SettingsRepository.keyDevChannel) ?? false
-                  ? 'בדיקת העדכונים הבאה תחפש גם גרסאות בדיקה — ייתכנו באגים'
-                  : 'בדיקת העדכונים הבאה תחפש גרסאות יציבות בלבד',
-              style: kSettingsSubtitleStyle,
-              textDirection: TextDirection.rtl,
-            ),
+          SwitchSettingsTile.text(
+            icon: FluentIcons.bug_24_regular,
+            title: 'עדכון לגרסאות מפתחים',
+            subtitle:
+                Settings.getValue<bool>(SettingsRepository.keyDevChannel) ?? false
+                    ? 'בדיקת העדכונים הבאה תחפש גם גרסאות בדיקה — ייתכנו באגים'
+                    : 'בדיקת העדכונים הבאה תחפש גרסאות יציבות בלבד',
             value: Settings.getValue<bool>(SettingsRepository.keyDevChannel) ??
                 false,
             onChanged: (value) {
@@ -871,20 +848,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             ),
           ],
         ),
-        SwitchSettingsTile(
-          leading: const RtlIcon(FluentIcons.cloud_arrow_up_24_regular),
-          title: const Text(
-            'שמירת דיווחים אוטומטית כשאין חיבור',
-            style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
-          subtitle: Text(
-            queueWhenOffline
-                ? 'דיווחים שלא נשלחו יישמרו ויישלחו אוטומטית בהמשך'
-                : 'במצב אופליין לא יתבצע תור אוטומטי לדיווחים ישירים',
-            style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
+        SwitchSettingsTile.text(
+          icon: FluentIcons.cloud_arrow_up_24_regular,
+          title: 'שמירת דיווחים אוטומטית כשאין חיבור',
+          subtitle: queueWhenOffline
+              ? 'דיווחים שלא נשלחו יישמרו ויישלחו אוטומטית בהמשך'
+              : 'במצב אופליין לא יתבצע תור אוטומטי לדיווחים ישירים',
           value: queueWhenOffline,
           onChanged: (value) async {
             await reportService.setQueueWhenOfflineEnabled(value);
@@ -2033,18 +2002,10 @@ class _BackupOptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchSettingsTile(
-      leading: Icon(icon),
-      title: Text(
-        title,
-        style: kSettingsTitleStyle,
-        textDirection: TextDirection.rtl,
-      ),
-      subtitle: Text(
-        subtitle,
-        style: kSettingsSubtitleStyle,
-        textDirection: TextDirection.rtl,
-      ),
+    return SwitchSettingsTile.text(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
       value: Settings.getValue<bool>(settingKey) ?? true,
       onChanged: (value) {
         Settings.setValue<bool>(settingKey, value);
