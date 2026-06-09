@@ -281,7 +281,7 @@ List<int> _filterBookSearchEntries({
     if (queryWord.length < 3) return false;
 
     final allowed = maxAllowedEdits(queryWord.length);
-    final textWords = text.split(RegExp(r'\s+'));
+    final textWords = text.split(' ');
     for (final textWord in textWords) {
       if (textWord.isEmpty) continue;
       // Only compare words of similar length to avoid false positives

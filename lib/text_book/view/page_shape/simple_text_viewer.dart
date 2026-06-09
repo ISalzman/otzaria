@@ -1285,9 +1285,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         }
       }
     } else {
-      // העתק קישור ישיר למפרש — id מועדף, fallback ל-categoryId
-      final commentaryBookId =
-          widget.reportBook?.id ?? widget.reportBook?.categoryId;
+      // העתק קישור ישיר למפרש — רק אם יש id תקף (categoryId אינו bookId)
+      final commentaryBookId = widget.reportBook?.id;
       if (commentaryBookId != null) {
         entries.add(const AppContextMenuEntry.divider());
         entries.add(AppContextMenuEntry(
