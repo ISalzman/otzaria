@@ -112,24 +112,27 @@ class AppCard extends StatelessWidget {
 
     Widget wrapChild(Widget w) {
       if (padding != null) w = Padding(padding: padding!, child: w);
-      if (selected) w = _withSelected(context, w);
       return w;
     }
+
+    Widget content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < children!.length; i++) ...[
+          wrapChild(children![i]),
+          if (i < children!.length - 1)
+            Container(height: sectionSpacing, color: dividerColor),
+        ],
+      ],
+    );
+
+    if (selected) content = _withSelected(context, content);
 
     return Material(
       color: AppSurfaces.card(context),
       borderRadius: resolvedRadius,
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (int i = 0; i < children!.length; i++) ...[
-            wrapChild(children![i]),
-            if (i < children!.length - 1)
-              Container(height: sectionSpacing, color: dividerColor),
-          ],
-        ],
-      ),
+      child: content,
     );
   }
 
