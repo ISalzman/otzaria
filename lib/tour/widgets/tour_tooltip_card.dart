@@ -90,7 +90,6 @@ class TourTooltipCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         title,
-                        textDirection: TextDirection.rtl,
                         style: textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: colorScheme.onSecondaryContainer,
@@ -102,7 +101,6 @@ class TourTooltipCard extends StatelessWidget {
                 const SizedBox(height: 14),
                 Text(
                   body,
-                  textDirection: TextDirection.rtl,
                   style: textTheme.bodyLarge?.copyWith(
                     height: 1.45,
                     color: colorScheme.onSecondaryContainer,
@@ -117,7 +115,6 @@ class TourTooltipCard extends StatelessWidget {
                   ),
                 const SizedBox(height: 18),
                 Row(
-                  textDirection: TextDirection.rtl,
                   children: [
                     if (!isLastStep)
                       NeutralActionButton(
@@ -156,7 +153,6 @@ class TourTooltipCard extends StatelessWidget {
                       icon: isLastStep
                           ? FluentIcons.checkmark_24_regular
                           : FluentIcons.arrow_left_24_regular,
-
                       text: isLastStep
                           ? 'סגור'
                           : isRestartEntry
@@ -200,11 +196,9 @@ class _TourNextButton extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        textDirection: TextDirection.rtl,
         children: [
           Text(
             text,
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(width: 8),
           RtlIcon(icon),

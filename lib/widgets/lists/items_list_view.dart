@@ -122,7 +122,6 @@ class _ItemsListViewState extends State<ItemsListView> {
     final subtitleWidget = Text(
       text,
       style: const TextStyle(fontSize: 16),
-      textDirection: TextDirection.rtl,
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
     );
@@ -195,7 +194,6 @@ class _ItemsListViewState extends State<ItemsListView> {
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
-                    textDirection: TextDirection.rtl,
                   ),
                   if (subtitle != null)
                     _buildInlineSubtitle(context, subtitle, subtitleTooltip),
@@ -253,7 +251,6 @@ class _ItemsListViewState extends State<ItemsListView> {
                 padding: const EdgeInsets.only(top: 16, bottom: 8),
                 child: Text(
                   title,
-                  textDirection: TextDirection.rtl,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary,
@@ -299,7 +296,6 @@ class _ItemsListViewState extends State<ItemsListView> {
       return Center(
         child: Text(
           widget.emptyText,
-          textDirection: TextDirection.rtl,
         ),
       );
     }
@@ -339,7 +335,6 @@ class _ItemsListViewState extends State<ItemsListView> {
               ? Center(
                   child: Text(
                     widget.notFoundText,
-                    textDirection: TextDirection.rtl,
                   ),
                 )
               : widget.groupKeyBuilder != null

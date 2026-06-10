@@ -62,8 +62,7 @@ class LibrarySettingsTab extends StatefulWidget {
     SettingsSearchEntry(
       id: 'library.custom_folders.merge_into_library',
       title: 'מיזוג ספרים אישיים לעץ הספרייה',
-      subtitle:
-          'תת-התיקיות של התיקייה הנבחרת ימוזגו לקטגוריות הראשיות לפי שם',
+      subtitle: 'תת-התיקיות של התיקייה הנבחרת ימוזגו לקטגוריות הראשיות לפי שם',
       tab: SettingsTab.library,
       cardId: 'library.custom_folders',
       keywords: [
@@ -366,9 +365,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                                 // ה-RefreshLibrary מופעל ב-listener למעלה,
                                 // אחרי שהערך החדש נשמר ב-`Settings`. אחרת
                                 // הספרייה היתה נבנית עם הערך הישן.
-                                context
-                                    .read<SettingsBloc>()
-                                    .add(UpdateMergeUserBooksIntoLibrary(value));
+                                context.read<SettingsBloc>().add(
+                                    UpdateMergeUserBooksIntoLibrary(value));
                               },
                             ),
                           ],
@@ -443,7 +441,6 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
               title: const Text(
                 'אינדקס חיפוש',
                 style: kSettingsTitleStyle,
-                textDirection: TextDirection.rtl,
               ),
               subtitle: Text(
                 subtitleText,

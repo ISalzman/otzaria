@@ -120,7 +120,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                 color: colorScheme.onSurface,
                 fontWeight: FontWeight.w600,
               ),
-              textDirection: TextDirection.rtl,
             ),
             const SizedBox(height: 8),
             Text(
@@ -129,7 +128,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                 fontSize: 14,
                 color: colorScheme.onSurfaceVariant,
               ),
-              textDirection: TextDirection.rtl,
               textAlign: TextAlign.center,
             ),
           ],
@@ -198,7 +196,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                 fontWeight: FontWeight.w600,
                 color: colorScheme.onSurface,
               ),
-              textDirection: TextDirection.rtl,
             ),
             const SizedBox(height: 8),
             Text(
@@ -207,7 +204,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                 fontSize: 14,
                 color: colorScheme.onSurfaceVariant,
               ),
-              textDirection: TextDirection.rtl,
               textAlign: TextAlign.center,
             ),
           ],
@@ -237,7 +233,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                 fontWeight: FontWeight.w600,
                 color: colorScheme.onSurface,
               ),
-              textDirection: TextDirection.rtl,
             ),
             const SizedBox(height: 8),
             Text(
@@ -246,7 +241,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                 fontSize: 14,
                 color: colorScheme.onSurfaceVariant,
               ),
-              textDirection: TextDirection.rtl,
               textAlign: TextAlign.center,
             ),
           ],
@@ -410,7 +404,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                 padding: const EdgeInsets.all(8.0),
                                 child: Text(
                                   state.errorMessage!,
-                                  textDirection: TextDirection.rtl,
                                   style: TextStyle(
                                     color: Theme.of(context).colorScheme.error,
                                   ),
@@ -617,7 +610,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                             padding: const EdgeInsets.all(8.0),
                                             child: Text(
                                               state.errorMessage!,
-                                              textDirection: TextDirection.rtl,
                                               style: TextStyle(
                                                 color: Theme.of(context)
                                                     .colorScheme
@@ -693,7 +685,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               color: cs.primary,
               fontWeight: FontWeight.w500,
             ),
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(width: 6),
           Tooltip(

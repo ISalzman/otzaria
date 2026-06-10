@@ -333,7 +333,6 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
           'הקלד או הצב את הסמן על מילה כלשהיא, כדי לבחור אפשרויות חיפוש',
           style: TextStyle(fontSize: 12),
           textAlign: TextAlign.center,
-          textDirection: TextDirection.rtl,
         ),
       );
     }

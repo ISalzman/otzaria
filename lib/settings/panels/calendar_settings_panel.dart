@@ -453,7 +453,6 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
       },
     );
   }
-
 }
 
 String _calendarDayTransitionSubtitle(CalendarDayTransition transition) {
@@ -551,7 +550,7 @@ class _CalendarMultiSelectionDialogState<T>
 
     return AlertDialog(
       backgroundColor: cs.surfaceContainerHigh,
-      title: Text(widget.title, textDirection: TextDirection.rtl),
+      title: Text(widget.title),
       content: SizedBox(
         width: double.maxFinite,
         height: 400,
@@ -569,14 +568,12 @@ class _CalendarMultiSelectionDialogState<T>
                       child: Text(
                         widget.emptyMessage ?? 'לא נמצאו פריטים',
                         style: TextStyle(color: cs.onSurfaceVariant),
-                        textDirection: TextDirection.rtl,
                       ),
                     )
                   : filteredItems.isEmpty
                       ? const Center(
                           child: Text(
                             'לא נמצאו תוצאות',
-                            textDirection: TextDirection.rtl,
                           ),
                         )
                       : ListView.builder(
@@ -589,12 +586,10 @@ class _CalendarMultiSelectionDialogState<T>
                             return CheckboxListTile(
                               title: Text(
                                 item.label,
-                                textDirection: TextDirection.rtl,
                               ),
                               subtitle: item.subtitle != null
                                   ? Text(
                                       item.subtitle!,
-                                      textDirection: TextDirection.rtl,
                                     )
                                   : null,
                               value: isSelected,

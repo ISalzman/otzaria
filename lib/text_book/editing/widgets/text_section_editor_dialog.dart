@@ -645,7 +645,6 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
                         focusNode: _editorFocusNode,
                         maxLines: null,
                         expands: true,
-                        textDirection: TextDirection.rtl,
                         textAlign: TextAlign.right,
                         textAlignVertical: TextAlignVertical.top,
                         style: TextStyle(
@@ -737,7 +736,6 @@ class _SearchDialogState extends State<_SearchDialog> {
           const Text(
             'החיפוש מתחיל מהסמן הנוכחי וממשיך מהתחלה אם לא נמצא',
             style: TextStyle(fontSize: 12),
-            textDirection: TextDirection.rtl,
           ),
         ],
       ),

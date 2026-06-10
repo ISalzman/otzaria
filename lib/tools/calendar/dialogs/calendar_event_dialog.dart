@@ -162,12 +162,10 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
                       Text(
                         'תאריך לועזי: ${_displayedGregorianDate.day}/${_displayedGregorianDate.month}/${_displayedGregorianDate.year}',
                         style: const TextStyle(fontWeight: FontWeight.bold),
-                        textDirection: TextDirection.rtl,
                       ),
                       Text(
                         'תאריך עברי: ${formatHebrewDay(_displayedJewishDate.getJewishDayOfMonth())} ${getHebrewMonthNameFor(_displayedJewishDate)} ${formatHebrewYear(_displayedJewishDate.getJewishYear())}',
                         style: const TextStyle(fontWeight: FontWeight.bold),
-                        textDirection: TextDirection.rtl,
                       ),
                     ],
                   ),
@@ -180,7 +178,6 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
                     _selectedTime != null
                         ? 'שעה: ${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}'
                         : 'לא נבחרה שעה',
-                    textDirection: TextDirection.rtl,
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,

@@ -82,7 +82,7 @@ bool _textOverflows({
   required TextStyle style,
   required int maxLines,
   required double maxWidth,
-  required TextDirection textDirection,
+  TextDirection textDirection = TextDirection.rtl,
   required TextAlign textAlign,
 }) {
   final textPainter = TextPainter(
@@ -199,7 +199,6 @@ class LibraryItemTitle extends StatelessWidget {
       text: text,
       maxLines: maxLines,
       textAlign: TextAlign.right,
-      textDirection: TextDirection.rtl,
       style: theme.textTheme.titleMedium?.copyWith(
         fontWeight: isFolder ? FontWeight.w700 : FontWeight.w600,
         color:
@@ -224,7 +223,6 @@ class HeaderItem extends StatelessWidget {
       padding: const EdgeInsets.all(16.0),
       child: Text(
         category.title,
-        textDirection: TextDirection.rtl,
         style: theme.textTheme.titleMedium?.copyWith(
           color: theme.colorScheme.secondary,
         ),
@@ -262,7 +260,6 @@ class CategoryGridItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           // שומר על סדר אייקונים משמאל וטקסט מימין בתוך ממשק RTL.
-          textDirection: TextDirection.rtl,
           children: [
             Expanded(
               child: Column(
@@ -279,7 +276,6 @@ class CategoryGridItem extends StatelessWidget {
                       text: category.shortDescription,
                       maxLines: 2,
                       textAlign: TextAlign.right,
-                      textDirection: TextDirection.rtl,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: cs.onSecondaryContainer,
                       ),
@@ -355,7 +351,6 @@ class BookGridItem extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Row(
-            textDirection: TextDirection.rtl,
             children: [
               Expanded(
                 child: _BookGridTextColumn(
@@ -498,7 +493,6 @@ class _BookGridTextColumn extends StatelessWidget {
               style: titleStyle,
               maxLines: 2,
               maxWidth: constraints.maxWidth,
-              textDirection: TextDirection.rtl,
               textAlign: TextAlign.right,
             );
 
@@ -521,7 +515,6 @@ class _BookGridTextColumn extends StatelessWidget {
               text: book.title,
               maxLines: 2,
               textAlign: TextAlign.right,
-              textDirection: TextDirection.rtl,
               style: titleStyle,
             ),
             if (hasAuthor) ...[
@@ -530,7 +523,6 @@ class _BookGridTextColumn extends StatelessWidget {
                 text: book.author!,
                 maxLines: authorMaxLines,
                 textAlign: TextAlign.right,
-                textDirection: TextDirection.rtl,
                 style: authorStyle,
               ),
             ],
@@ -540,7 +532,6 @@ class _BookGridTextColumn extends StatelessWidget {
                 text: book.topics,
                 maxLines: topicsMaxLines,
                 textAlign: TextAlign.right,
-                textDirection: TextDirection.rtl,
                 style: topicsStyle,
               ),
             ],

@@ -60,7 +60,6 @@ class SettingsCardHeader extends StatelessWidget {
               ? Text(
                   title as String,
                   style: titleStyle,
-                  textDirection: TextDirection.rtl,
                 )
               : DefaultTextStyle(
                   style: titleStyle ?? const TextStyle(),
@@ -73,7 +72,6 @@ class SettingsCardHeader extends StatelessWidget {
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
-              textDirection: TextDirection.rtl,
             ),
           ],
         ],

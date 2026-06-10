@@ -225,7 +225,6 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
                     widget.referenceText!,
                     style: referenceStyle,
                     textAlign: TextAlign.right,
-                    textDirection: TextDirection.rtl,
                   ),
                 ),
               ),

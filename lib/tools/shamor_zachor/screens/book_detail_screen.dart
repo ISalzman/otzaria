@@ -300,7 +300,6 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                   child: Text(
                     widget.bookName,
                     style: theme.textTheme.titleLarge,
-                    textDirection: TextDirection.rtl,
                   ),
                 ),
               ),

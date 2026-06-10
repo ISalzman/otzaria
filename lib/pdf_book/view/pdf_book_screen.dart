@@ -177,7 +177,6 @@ AppContextMenuEntry buildPdfLinksContextMenuEntry({
                 snapshot.data ?? link.fallbackDisplayReference,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                textDirection: TextDirection.rtl,
               ),
             ),
             onTap: () => onOpenLink(link),
@@ -3193,7 +3192,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                               children: [
                                 Text(
                                   state.message,
-                                  textDirection: TextDirection.rtl,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color:
@@ -4216,7 +4214,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   child: Icon(icon, color: isSelected ? primaryColor : null),
                 ),
                 const SizedBox(width: 12),
-                Text(text, style: style, textDirection: TextDirection.rtl),
+                Text(text, style: style),
                 if (isSelected) ...[
                   const Spacer(),
                   Icon(FluentIcons.checkmark_24_regular,

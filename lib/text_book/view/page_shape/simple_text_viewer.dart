@@ -1114,7 +1114,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 snapshot.data ?? link.fallbackDisplayReference,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                textDirection: TextDirection.rtl,
               ),
             ),
             onTap: () => widget.openBookCallback(

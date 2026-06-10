@@ -297,7 +297,6 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                       Expanded(
                         child: Text(
                           _customFoldersReloadNotice,
-                          textDirection: TextDirection.rtl,
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: Theme.of(context)
@@ -382,7 +381,6 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                     Text(
                       folder.name,
                       style: const TextStyle(fontSize: 14),
-                      textDirection: TextDirection.rtl,
                     ),
                     Text(
                       folder.path,
@@ -448,7 +446,6 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Text(
                   'קבצי PDF/Word — נקראים ישירות מהקבצים',
-                  textDirection: TextDirection.rtl,
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                 ),
               ),
@@ -501,7 +498,6 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
         Expanded(
           child: Text(
             text,
-            textDirection: TextDirection.rtl,
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
         ),

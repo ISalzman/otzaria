@@ -44,7 +44,6 @@ class LiveTipCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      textDirection: TextDirection.rtl,
                       style: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -60,7 +59,6 @@ class LiveTipCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 description,
-                textDirection: TextDirection.rtl,
                 style: textTheme.bodyMedium,
               ),
               const SizedBox(height: 14),

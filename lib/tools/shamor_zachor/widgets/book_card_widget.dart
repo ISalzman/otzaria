@@ -222,7 +222,6 @@ class _BookCardWidgetState extends State<BookCardWidget> {
                                 ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            textDirection: TextDirection.rtl,
                           ),
                           const SizedBox(height: 8),
                           Wrap(
@@ -533,7 +532,6 @@ class _BookMetaChip extends StatelessWidget {
           Flexible(
             child: Text(
               text,
-              textDirection: TextDirection.rtl,
               style: TextStyle(
                 fontSize: 11,
                 color: foregroundColor,

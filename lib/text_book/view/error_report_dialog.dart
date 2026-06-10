@@ -128,12 +128,10 @@ class _ReportDetailRow extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium,
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 3),
           SelectableText(
             displayValue,
-            textDirection: TextDirection.rtl,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],
@@ -1033,7 +1031,6 @@ class _TabbedReportDialogState extends State<TabbedReportDialog>
               child: Text(
                 'דיווח על טעות בספר',
                 style: Theme.of(context).textTheme.headlineSmall,
-                textDirection: TextDirection.rtl,
               ),
             ),
             TabBar(
@@ -1222,7 +1219,6 @@ class _RegularReportTabState extends State<RegularReportTab> {
                             Settings.getValue('key-font-family') ?? 'candara',
                       ),
                       textAlign: TextAlign.right,
-                      textDirection: TextDirection.rtl,
                     ),
                   ),
                 ),

@@ -244,8 +244,8 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
     // שימוש ב-TextPainter למדידת הרוחב האמיתי
     final textPainter = TextPainter(
       text: TextSpan(children: spans),
-      textDirection: TextDirection.rtl,
       maxLines: 1,
+      textDirection: TextDirection.rtl,
     );
 
     textPainter.layout(maxWidth: double.infinity);
@@ -561,7 +561,6 @@ class OrderOfResults extends StatelessWidget {
                       fontSize: 14,
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
-                    textDirection: TextDirection.rtl,
                   ),
                   const SizedBox(width: 4),
                   Icon(

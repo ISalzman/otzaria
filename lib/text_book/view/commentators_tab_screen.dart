@@ -487,7 +487,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     'מפרשים על ${widget.tab.sourceTab.book.title}',
                     style: const TextStyle(fontSize: 16),
                     overflow: TextOverflow.ellipsis,
-                    textDirection: TextDirection.rtl,
                   ),
                   actions: [
                     ResponsiveActionBar(
@@ -1063,7 +1062,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               style: AppTopBar.titleStyle(context),
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
-              textDirection: TextDirection.rtl,
             ),
           ),
           const SizedBox(width: gap),
@@ -1117,26 +1115,29 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                         icon: Icon(FluentIcons.navigation_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('ניווט',
-                            style: TextStyle(fontSize: 11),
-                            textDirection: TextDirection.rtl),
+                        child: Text(
+                          'ניווט',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                       Tab(
                         icon: Icon(FluentIcons.apps_list_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('מפרשים',
-                            style: TextStyle(fontSize: 11),
-                            textDirection: TextDirection.rtl),
+                        child: Text(
+                          'מפרשים',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                       Tab(
                         icon:
                             Icon(FluentIcons.book_search_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('חיפוש',
-                            style: TextStyle(fontSize: 11),
-                            textDirection: TextDirection.rtl),
+                        child: Text(
+                          'חיפוש',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                     ],
                     labelColor: colorScheme.primary,
@@ -1193,7 +1194,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           child: Text(
             'טוען מפרשים...',
             style: Theme.of(context).textTheme.bodySmall,
-            textDirection: TextDirection.rtl,
           ),
         ),
       );
@@ -1283,7 +1283,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         child: Text(
           'טוען תוצאות...',
           style: Theme.of(context).textTheme.bodySmall,
-          textDirection: TextDirection.rtl,
         ),
       );
     }
@@ -1326,7 +1325,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     textAlign: TextAlign.right,
-                    textDirection: TextDirection.rtl,
                   ),
                 ),
               ],
@@ -1366,7 +1364,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                   padding: const EdgeInsets.all(10),
                   child: Text.rich(
                     TextSpan(children: highlightedSpans),
-                    textDirection: TextDirection.rtl,
                   ),
                 ),
               ),
@@ -1386,7 +1383,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   }) {
     if (chapters.isEmpty) {
       return const Center(
-        child: Text('אין תוכן עניינים', textDirection: TextDirection.rtl),
+        child: Text('אין תוכן עניינים'),
       );
     }
     final colorScheme = Theme.of(context).colorScheme;
@@ -1489,7 +1486,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                         maxLines: 2,
-                                        textDirection: TextDirection.rtl,
                                       ),
                                     ),
                                   ],
@@ -1764,7 +1760,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 2,
-                textDirection: TextDirection.rtl,
               ),
             ),
           ],

@@ -312,18 +312,15 @@ Future<bool?> showDbCopyRequiredDialog({
         children: [
           Text(
             'לא ניתן לגשת ישירות לקובץ seforim.db (גודל: $sizeText) מכיוון שהוא נמצא באחסון חיצוני ב-Android.',
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 12),
           const Text(
             'לחץ על כפתור למטה, נווט לאותה תיקייה ובחר את הקובץ seforim.db — האפליקציה תעתיק אותו לאחסון הפנימי.',
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 6),
           const Text(
             '(אפשרות "נסה מחק מקור" — ניסיון למחוק לאחר העתקה. עשויה שלא להצליח בכל גרסאות Android.)',
             style: TextStyle(fontSize: 12),
-            textDirection: TextDirection.rtl,
           ),
         ],
       ),

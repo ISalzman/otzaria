@@ -68,7 +68,6 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
-                  textDirection: TextDirection.rtl,
                 ),
                 IconButton(
                   icon: const Icon(FluentIcons.dismiss_24_regular),
@@ -88,7 +87,6 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                     return Center(
                       child: Text(
                         'שגיאה: ${state.error}',
-                        textDirection: TextDirection.rtl,
                       ),
                     );
                   }
@@ -159,7 +157,6 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                   ),
-                  textDirection: TextDirection.rtl,
                 ),
               ],
             ),
@@ -264,7 +261,6 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    textDirection: TextDirection.rtl,
                                   ),
                                 ),
                                 IconButton(

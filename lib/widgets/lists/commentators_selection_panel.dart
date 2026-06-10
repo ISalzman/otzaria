@@ -265,7 +265,6 @@ class _CommentatorsSelectionPanelState
           const Center(
             child: Text(
               'אין מפרשים',
-              textDirection: TextDirection.rtl,
             ),
           );
     }
@@ -309,7 +308,6 @@ class _CommentatorsSelectionPanelState
             child: Chip(
               label: Text(
                 item,
-                textDirection: TextDirection.rtl,
               ),
               backgroundColor:
                   isSelected ? Theme.of(context).colorScheme.secondary : null,
@@ -354,7 +352,6 @@ class _CommentatorsSelectionPanelState
                 CheckboxListTile(
                   title: const Text(
                     'הצג את כל המפרשים',
-                    textDirection: TextDirection.rtl,
                   ),
                   value: _commentatorsList
                       .where((e) =>
@@ -373,7 +370,6 @@ class _CommentatorsSelectionPanelState
                       return CheckboxListTile(
                         title: const Text(
                           'הצג את כל התורה שבכתב',
-                          textDirection: TextDirection.rtl,
                         ),
                         value: _torahShebichtav
                             .every(widget.selectedCommentators.contains),
@@ -385,7 +381,6 @@ class _CommentatorsSelectionPanelState
                       return CheckboxListTile(
                         title: const Text(
                           'הצג את כל חז"ל',
-                          textDirection: TextDirection.rtl,
                         ),
                         value:
                             _chazal.every(widget.selectedCommentators.contains),
@@ -397,7 +392,6 @@ class _CommentatorsSelectionPanelState
                       return CheckboxListTile(
                         title: const Text(
                           'הצג את כל הראשונים',
-                          textDirection: TextDirection.rtl,
                         ),
                         value: _rishonim
                             .every(widget.selectedCommentators.contains),
@@ -409,7 +403,6 @@ class _CommentatorsSelectionPanelState
                       return CheckboxListTile(
                         title: const Text(
                           'הצג את כל האחרונים',
-                          textDirection: TextDirection.rtl,
                         ),
                         value: _acharonim
                             .every(widget.selectedCommentators.contains),
@@ -421,7 +414,6 @@ class _CommentatorsSelectionPanelState
                       return CheckboxListTile(
                         title: const Text(
                           'הצג את כל מחברי זמננו',
-                          textDirection: TextDirection.rtl,
                         ),
                         value:
                             _modern.every(widget.selectedCommentators.contains),
@@ -433,7 +425,6 @@ class _CommentatorsSelectionPanelState
                       return CheckboxListTile(
                         title: const Text(
                           'הצג את כל שאר המפרשים',
-                          textDirection: TextDirection.rtl,
                         ),
                         value: _ungrouped
                             .every(widget.selectedCommentators.contains),
@@ -456,7 +447,6 @@ class _CommentatorsSelectionPanelState
                                   const EdgeInsets.symmetric(horizontal: 8.0),
                               child: Text(
                                 _titleTextForToken(item),
-                                textDirection: TextDirection.rtl,
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
@@ -476,7 +466,6 @@ class _CommentatorsSelectionPanelState
                     return CheckboxListTile(
                       title: Text(
                         item,
-                        textDirection: TextDirection.rtl,
                       ),
                       value: widget.selectedCommentators.contains(item),
                       onChanged: (checked) =>

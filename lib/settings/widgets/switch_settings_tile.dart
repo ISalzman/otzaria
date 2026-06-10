@@ -102,19 +102,18 @@ class SwitchSettingsTile extends StatefulWidget {
     this.enabled = true,
   })  : assert(icon == null || leading == null),
         leading = leading ?? (icon != null ? RtlIcon(icon) : null),
-        title = Text(
-          title,
-          style: AppTextStyles.settingTitle,
-          textDirection: TextDirection.rtl,
-        ),
+        title = Text(title, style: AppTextStyles.settingTitle),
         subtitle = subtitle == null
             ? null
             : Text(
                 subtitle,
                 style: AppTextStyles.settingSubtitle,
-                textDirection: subtitleDirection,
-                textAlign:
-                    subtitleDirection == TextDirection.ltr ? TextAlign.end : null,
+                textDirection: subtitleDirection == TextDirection.ltr
+                    ? TextDirection.ltr
+                    : null,
+                textAlign: subtitleDirection == TextDirection.ltr
+                    ? TextAlign.end
+                    : null,
               );
 
   @override

@@ -97,7 +97,6 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
           appBar: AppBar(
             title: Text(
               isUpdate ? 'אישור עדכון תוסף' : 'אישור התקנת תוסף',
-              textDirection: TextDirection.rtl,
             ),
             leading: IconButton(
               icon: const Icon(FluentIcons.dismiss_24_regular),
@@ -120,11 +119,9 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                       leading: const Icon(FluentIcons.person_24_regular),
                       title: const Text(
                         'מחבר',
-                        textDirection: TextDirection.rtl,
                       ),
                       subtitle: Text(
                         widget.manifest.author,
-                        textDirection: TextDirection.rtl,
                       ),
                       hoverColor: Colors.transparent,
                     ),
@@ -134,11 +131,9 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                           const Icon(FluentIcons.arrow_circle_up_24_regular),
                       title: const Text(
                         'עדכון גרסה',
-                        textDirection: TextDirection.rtl,
                       ),
                       subtitle: Text(
                         '${widget.previousVersion}  →  ${widget.manifest.version}',
-                        textDirection: TextDirection.rtl,
                       ),
                       hoverColor: Colors.transparent,
                     )
@@ -147,11 +142,9 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                       leading: const Icon(FluentIcons.tag_24_regular),
                       title: const Text(
                         'גרסה',
-                        textDirection: TextDirection.rtl,
                       ),
                       subtitle: Text(
                         widget.manifest.version,
-                        textDirection: TextDirection.rtl,
                       ),
                       hoverColor: Colors.transparent,
                     ),
@@ -182,12 +175,10 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                       ),
                       title: const Text(
                         'אפשר לתוסף להופיע לפני הכלים המובנים',
-                        textDirection: TextDirection.rtl,
                       ),
                       subtitle: const Text(
                         'אם תכבה את האפשרות, התוסף עדיין יותקן כרגיל, אבל '
                         'יופיע רק אחרי הכלים המובנים גם אם המניפסט שלו ביקש אחרת.',
-                        textDirection: TextDirection.rtl,
                       ),
                       value: _allowOrderBeforeBuiltInsGranted,
                       onChanged: (value) {
@@ -214,11 +205,9 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                       ),
                       title: const Text(
                         'אין הרשאות מיוחדות נדרשות',
-                        textDirection: TextDirection.rtl,
                       ),
                       subtitle: const Text(
                         'תוסף זה אינו מבקש גישה למשאבים רגישים',
-                        textDirection: TextDirection.rtl,
                       ),
                       hoverColor: Colors.transparent,
                     ),
@@ -248,7 +237,6 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                       secondary: Icon(iconData, color: iconColor),
                       title: Text(
                         info.label,
-                        textDirection: TextDirection.rtl,
                         style: TextStyle(
                           fontWeight: FontWeight.w500,
                           color: isSensitive ? colorScheme.tertiary : null,
@@ -256,7 +244,6 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                       ),
                       subtitle: Text(
                         info.description,
-                        textDirection: TextDirection.rtl,
                       ),
                       value: isGranted,
                       onChanged: (val) {
@@ -283,7 +270,6 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                       Expanded(
                         child: Text(
                           'ניתן לשנות הרשאות בכל עת מהגדרות התוסף',
-                          textDirection: TextDirection.rtl,
                           style: TextStyle(
                             fontSize: 12,
                             color: colorScheme.onSurfaceVariant,
@@ -358,7 +344,6 @@ class _RunOnStartupBanner extends StatelessWidget {
               children: [
                 Text(
                   'התוסף מבקש לפעול ברקע עם עליית האפליקציה',
-                  textDirection: TextDirection.rtl,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -372,7 +357,6 @@ class _RunOnStartupBanner extends StatelessWidget {
                   'הדבר עלול להכביד על זמן העלייה ועל צריכת המשאבים של האפליקציה. '
                   'ברירת המחדל היא שההרשאה כבויה — הענק אותה רק לתוספים '
                   'שאתה סומך עליהם.',
-                  textDirection: TextDirection.rtl,
                   style: TextStyle(
                     fontSize: 13,
                     color: colorScheme.onTertiaryContainer,

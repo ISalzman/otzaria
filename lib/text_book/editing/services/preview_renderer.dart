@@ -33,7 +33,6 @@ class PreviewRenderer {
                 color: cs.onSurfaceVariant,
                 fontStyle: FontStyle.italic,
               ),
-              textDirection: TextDirection.rtl,
             ),
           );
         }
@@ -63,7 +62,6 @@ class PreviewRenderer {
             child: Text(
               'שגיאה בתצוגה מקדימה: ${e.toString()}',
               style: textStyle.copyWith(color: cs.error),
-              textDirection: TextDirection.rtl,
             ),
           );
         }

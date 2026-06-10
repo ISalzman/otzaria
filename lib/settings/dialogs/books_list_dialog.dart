@@ -215,14 +215,12 @@ class _BookListRow extends StatelessWidget {
         children: [
           Text(
             row.title,
-            textDirection: TextDirection.rtl,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           if (detailsLine.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
               detailsLine,
-              textDirection: TextDirection.rtl,
               style: subtitleStyle,
             ),
           ],

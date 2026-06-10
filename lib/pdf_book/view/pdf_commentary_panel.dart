@@ -1190,7 +1190,6 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
               fontWeight: FontWeight.bold,
               fontFamily: settingsState.commentatorsFontFamily,
             ),
-            textDirection: TextDirection.rtl,
           ),
           subtitle: FutureBuilder<String>(
             future: link.displayReference,
@@ -1206,7 +1205,6 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                       .onSurface
                       .withValues(alpha: 0.5),
                 ),
-                textDirection: TextDirection.rtl,
               );
             },
           ),
@@ -1611,7 +1609,6 @@ class _CollapsibleCommentaryGroupState
                               .onSurface
                               .withValues(alpha: 0.5),
                         ),
-                        textDirection: TextDirection.rtl,
                       );
                     },
                   ),

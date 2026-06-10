@@ -744,7 +744,6 @@ class _ZmanCard extends StatelessWidget {
     // של הקטע. כל קטע תופס את כל רוחב חצי הכרטיס, ובו הכותרת/הזמן ומקש
     // ההתראה מוצבים זה לצד זה.
     return Row(
-      textDirection: TextDirection.rtl,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Expanded(
@@ -886,7 +885,6 @@ class _ZmanCard extends StatelessWidget {
                           child: Text(
                             timeData.subtitle,
                             textAlign: TextAlign.center,
-                            textDirection: TextDirection.rtl,
                             style:
                                 Theme.of(context).textTheme.bodySmall?.copyWith(
                                       fontSize: 11,
@@ -1053,7 +1051,6 @@ class _AlertControl extends StatelessWidget {
                   label: option.name,
                   trailing: Text(
                     option.time,
-                    textDirection: TextDirection.rtl,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
@@ -1070,7 +1067,6 @@ class _AlertControl extends StatelessWidget {
           opacity: minutesBefore != null ? 1.0 : 0.0,
           child: Text(
             minutesBefore != null ? _formatAlertMinutes(minutesBefore) : '',
-            textDirection: TextDirection.rtl,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: foregroundColor,
                   fontSize: 11,
@@ -1090,7 +1086,7 @@ bool _textOverflows({
   required TextStyle style,
   required int maxLines,
   required double maxWidth,
-  required TextDirection textDirection,
+  TextDirection textDirection = TextDirection.rtl,
   required TextAlign textAlign,
 }) {
   final textPainter = TextPainter(
@@ -1130,7 +1126,6 @@ class _OverflowAwareTooltipText extends StatelessWidget {
               style: resolvedStyle,
               maxLines: maxLines,
               maxWidth: constraints.maxWidth,
-              textDirection: TextDirection.rtl,
               textAlign: TextAlign.right,
             );
 
@@ -1138,7 +1133,6 @@ class _OverflowAwareTooltipText extends StatelessWidget {
           text,
           maxLines: maxLines,
           overflow: TextOverflow.ellipsis,
-          textDirection: TextDirection.rtl,
           textAlign: TextAlign.center,
           style: resolvedStyle,
         );
@@ -1201,7 +1195,6 @@ class _CompositeLabelValue extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               title,
-              textDirection: TextDirection.rtl,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: textColor,
@@ -1216,7 +1209,6 @@ class _CompositeLabelValue extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              textDirection: TextDirection.rtl,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: textColor,
@@ -1261,7 +1253,6 @@ class _MoladCard extends StatelessWidget {
             width: double.infinity,
             child: Text(
               'מולד ${info.monthName} — ${_moladReasonLabel(info.reason)}',
-              textDirection: TextDirection.rtl,
               textAlign: TextAlign.center,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w600,
@@ -1273,7 +1264,6 @@ class _MoladCard extends StatelessWidget {
           // קטע 1: המולד הממוצע (הנוסח שמכריזים).
           Text(
             'מולד כפי שנהוג להכריז',
-            textDirection: TextDirection.rtl,
             style: theme.textTheme.bodySmall?.copyWith(
               color: scheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
@@ -1282,7 +1272,6 @@ class _MoladCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             info.announcementText,
-            textDirection: TextDirection.rtl,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: scheme.onSurface,
               fontWeight: FontWeight.w600,
@@ -1293,7 +1282,6 @@ class _MoladCard extends StatelessWidget {
           // קטע 2: המולד הנראה (אסטרונומי, זמן מקומי בעיר).
           Text(
             'מולד הנראה — ${info.cityName}',
-            textDirection: TextDirection.rtl,
             style: theme.textTheme.bodySmall?.copyWith(
               color: scheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
@@ -1303,7 +1291,6 @@ class _MoladCard extends StatelessWidget {
           Text(
             '${info.visibleDayName} ${info.visibleHebrewDate} '
             'בשעה ${info.visibleTimeFormatted}',
-            textDirection: TextDirection.rtl,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: scheme.onSurface,
               fontWeight: FontWeight.w600,

@@ -222,7 +222,6 @@ class _CalendarTopBarState extends State<CalendarTopBar>
       child: RichText(
         overflow: TextOverflow.visible,
         maxLines: 1,
-        textDirection: TextDirection.rtl,
         text: TextSpan(
           style: baseStyle,
           children: [
@@ -565,7 +564,6 @@ class _CalendarTopBarState extends State<CalendarTopBar>
               const SizedBox(width: 6),
               Text(
                 isSyncing ? 'מסנכרן' : (hasError ? 'שגיאת סנכרון' : 'Google'),
-                textDirection: TextDirection.rtl,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: foregroundColor,
                       fontWeight: FontWeight.w700,

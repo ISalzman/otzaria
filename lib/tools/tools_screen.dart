@@ -832,7 +832,7 @@ class ToolsScreenState extends State<ToolsScreen>
         backgroundColor: bgColor,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: const Text('כלים', textDirection: TextDirection.rtl),
+        title: const Text('כלים'),
         actions: [
           IconButton(
             icon: const Icon(FluentIcons.puzzle_piece_24_regular),
@@ -901,7 +901,6 @@ class ToolsScreenState extends State<ToolsScreen>
           elevation: 0,
           title: Text(
             _descriptors.isEmpty ? '' : _descriptors[safeIndex].label,
-            textDirection: TextDirection.rtl,
           ),
           leading: Tooltip(
             message: 'חזור (Esc)',

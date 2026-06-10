@@ -68,7 +68,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                 fontWeight: FontWeight.w600,
                 color: colorScheme.onSurface,
               ),
-              textDirection: TextDirection.rtl,
             ),
             const SizedBox(height: 8),
             Text(
@@ -77,7 +76,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                 fontSize: 14,
                 color: colorScheme.onSurfaceVariant,
               ),
-              textDirection: TextDirection.rtl,
               textAlign: TextAlign.center,
             ),
           ],
@@ -244,7 +242,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             padding: const EdgeInsets.all(8.0),
             child: Text(
               state.errorMessage!,
-              textDirection: TextDirection.rtl,
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
@@ -543,7 +540,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                           .onSurfaceVariant,
                                     ),
                                     textAlign: TextAlign.right,
-                                    textDirection: TextDirection.rtl,
                                     softWrap: true,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,

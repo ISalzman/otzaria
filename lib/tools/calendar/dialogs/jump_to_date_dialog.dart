@@ -84,7 +84,6 @@ class _JumpToDatePanelState extends State<JumpToDatePanel> {
         const Divider(),
         const Text(
           'בחר תאריך בלוח השנה:',
-          textDirection: TextDirection.rtl,
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 10),

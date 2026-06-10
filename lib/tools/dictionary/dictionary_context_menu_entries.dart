@@ -159,7 +159,6 @@ Widget _buildAcronymDialogContent(String meaning) {
       child: SingleChildScrollView(
         child: Text(
           meaning,
-          textDirection: TextDirection.rtl,
         ),
       ),
     ),

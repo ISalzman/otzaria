@@ -38,7 +38,6 @@ class ReusableItemsDialog extends StatelessWidget {
                     child: Text(
                       title,
                       textAlign: TextAlign.center,
-                      textDirection: TextDirection.rtl,
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,

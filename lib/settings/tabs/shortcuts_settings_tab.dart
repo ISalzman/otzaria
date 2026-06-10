@@ -679,7 +679,6 @@ class _PickActionDialog extends StatelessWidget {
       backgroundColor: cs.surfaceContainerHigh,
       title: const Text(
         'בחר פעולה להוספת קיצור',
-        textDirection: TextDirection.rtl,
       ),
       content: SizedBox(
         width: 420,
@@ -691,7 +690,7 @@ class _PickActionDialog extends StatelessWidget {
             final key = actionKeys[i];
             final name = ShortcutValidator.shortcutNames[key] ?? key;
             return ListTile(
-              title: Text(name, textDirection: TextDirection.rtl),
+              title: Text(name),
               trailing: const Icon(FluentIcons.chevron_right_24_regular),
               onTap: () => Navigator.of(context).pop(key),
             );

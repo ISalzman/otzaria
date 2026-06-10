@@ -244,7 +244,6 @@ class DayExtras extends StatelessWidget {
         '• ${e.title}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        textDirection: TextDirection.rtl,
         style: TextStyle(
           fontSize: compact ? 9 : 10,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -259,7 +258,6 @@ class DayExtras extends StatelessWidget {
         info,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        textDirection: TextDirection.rtl,
         style: TextStyle(
           fontSize: compact ? 9 : 10,
           color: Theme.of(context).colorScheme.primary,
