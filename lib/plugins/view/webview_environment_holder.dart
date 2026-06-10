@@ -77,13 +77,16 @@ class WebViewEnvironmentHolder {
       final dataRoot = await AppPaths.getDataRootPath();
       final webviewDataFolder = p.join(dataRoot, 'webview2');
       await Directory(webviewDataFolder).create(recursive: true);
+      // הערה: אין להוסיף כאן --disable-smooth-scrolling או ארגומנטים אחרים
+      // שמשנים התנהגות גלילה. גלילת טאצ'פד מוזרקת ב-fork של
+      // flutter_inappwebview_windows כזרם אירועי wheel (מיידי, עם צבירת
+      // תת-פיקסלים, gain ואינרציה) — והאנימציה של Chromium בברירת המחדל היא
+      // שמאחה את הזרם לתנועה רציפה: נמדד שעם הדגל 23-26% מהפריימים תקועים,
+      // ובלעדיו 0%. מסלול מגע סינתטי נבחן ונפסל — סף תחילת-מחווה של ~34px
+      // ב-WebView2 הורג מיקרו-גלילות. מדידות:
+      // integration_test/webview_scroll_smoothness_probe_test.dart.
       _environment = await WebViewEnvironment.create(
-        settings: WebViewEnvironmentSettings(
-          userDataFolder: webviewDataFolder,
-          // אירועי הטאצ'פד מוזרקים כ-wheel; smooth scrolling גורם לאיחור
-          // ולחפיפת אנימציות, לכן מכבים אותו בסביבת התוספים.
-          additionalBrowserArguments: '--disable-smooth-scrolling',
-        ),
+        settings: WebViewEnvironmentSettings(userDataFolder: webviewDataFolder),
       );
     } finally {
       // בהצלחה: _environment מוגדר, ה-guard בכניסה ל-initialize יחזיר
