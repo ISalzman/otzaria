@@ -68,9 +68,9 @@ Future<int?> pdfToTextPage(PdfBook pdfBook, List<PdfOutlineNode> outline,
 /// Builds the synchronized anchor map from PDF outline and text Table of Contents.
 Future<PageMap> _buildPageMap(
     PdfBook pdf, List<PdfOutlineNode> outline, TextBook text) async {
-  final anchorsPdf = _collectPdfAnchors(outline);
+  final anchorsPdf = collectPdfAnchors(outline);
   final toc = await text.tableOfContents;
-  final anchorsText = _collectTextAnchors(toc);
+  final anchorsText = collectTextAnchors(toc);
 
   final map = buildPageMapFromAnchors(anchorsPdf, anchorsText);
 
@@ -97,7 +97,10 @@ Future<PageMap> _buildPageMap(
   return map;
 }
 
-List<({int page, String ref})> _collectPdfAnchors(List<PdfOutlineNode> nodes,
+/// אוסף עוגנים (עמוד + נתיב מנורמל) מתוך ה-outline של ה-PDF, רקורסיבית.
+///
+/// צמתים ללא יעד (dest) או עם מספר עמוד לא חוקי מדולגים יחד עם תתי-העץ שלהם.
+List<({int page, String ref})> collectPdfAnchors(List<PdfOutlineNode> nodes,
     [String prefix = '']) {
   final List<({int page, String ref})> anchors = [];
   for (final node in nodes) {
@@ -106,20 +109,21 @@ List<({int page, String ref})> _collectPdfAnchors(List<PdfOutlineNode> nodes,
       final currentPath =
           prefix.isEmpty ? node.title.trim() : '$prefix/${node.title.trim()}';
       anchors.add((page: page, ref: normalizeRef(currentPath)));
-      anchors.addAll(_collectPdfAnchors(node.children, currentPath));
+      anchors.addAll(collectPdfAnchors(node.children, currentPath));
     }
   }
   return anchors;
 }
 
-List<({int index, String ref})> _collectTextAnchors(List<TocEntry> entries,
+/// אוסף עוגנים (אינדקס שורה + נתיב מנורמל) מתוכן העניינים של ספר טקסט, רקורסיבית.
+List<({int index, String ref})> collectTextAnchors(List<TocEntry> entries,
     [String prefix = '']) {
   final List<({int index, String ref})> anchors = [];
   for (final entry in entries) {
     final currentPath =
         prefix.isEmpty ? entry.text.trim() : '$prefix/${entry.text.trim()}';
     anchors.add((index: entry.index, ref: normalizeRef(currentPath)));
-    anchors.addAll(_collectTextAnchors(entry.children, currentPath));
+    anchors.addAll(collectTextAnchors(entry.children, currentPath));
   }
   return anchors;
 }
