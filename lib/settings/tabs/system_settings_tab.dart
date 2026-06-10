@@ -735,7 +735,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         KeyedSubtree(
           key: _networkModeTileKey,
           child: SegmentedSettingsTile<bool>(
-            icon: FluentIcons.globe_24_regular,
+            icon: Icon(FluentIcons.globe_24_regular),
             title: 'סינכרון ומצב רשת',
             subtitle: state.isOfflineMode
                 ? 'התוכנה מנותקת לגמרי מהרשת'
@@ -1473,7 +1473,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               ? Column(
                   children: [
                     SegmentedSettingsTile<_BackupMode>(
-                      icon: FluentIcons.options_24_regular,
+                      icon: Icon(FluentIcons.options_24_regular),
                       title: 'מצב גיבוי',
                       options: const [
                         SegmentOption<_BackupMode>(

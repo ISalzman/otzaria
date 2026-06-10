@@ -29,7 +29,9 @@ double _groupWidth(List<SegmentOption<dynamic>> options) {
 class SegmentedSettingsTile<T> extends StatefulWidget {
   final dynamic title;
   final String? subtitle;
-  final IconData? icon;
+
+  /// ווידג'ט האייקון — [Icon] או [RtlIcon] לפי בחירת הקורא.
+  final Widget? icon;
   final List<SegmentOption<T>> options;
   final T currentValue;
   final ValueChanged<T> onChanged;
@@ -110,7 +112,7 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
         }
 
         return ListTile(
-          leading: widget.icon != null ? Icon(widget.icon) : null,
+          leading: widget.icon,
           title: widget.title is String
               ? Text(widget.title as String, style: AppTextStyles.settingTitle)
               : widget.title as Widget,
@@ -129,8 +131,8 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
       onKeyEvent: (_, ev) {
         if (ev is! KeyDownEvent) return KeyEventResult.ignored;
         if (ev.logicalKey == LogicalKeyboardKey.arrowRight) {
-          setState(
-              () => _focusedIndex = (_focusedIndex + 1) % widget.options.length);
+          setState(() =>
+              _focusedIndex = (_focusedIndex + 1) % widget.options.length);
           return KeyEventResult.handled;
         }
         if (ev.logicalKey == LogicalKeyboardKey.arrowLeft) {

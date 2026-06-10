@@ -24,7 +24,8 @@ import 'settings_tile_helpers.dart';
 /// )
 /// ```
 class DropdownSettingsTile<T> extends StatelessWidget {
-  final IconData icon;
+  /// ווידג'ט האייקון — [Icon] או [RtlIcon] לפי בחירת הקורא.
+  final Widget? icon;
   final String title;
   final String subtitle;
   final T? value;
@@ -53,8 +54,7 @@ class DropdownSettingsTile<T> extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isCompact =
-              constraints.maxWidth < LayoutBreakpoints.compact;
+          final isCompact = constraints.maxWidth < LayoutBreakpoints.compact;
           final fieldWidth = isCompact
               ? constraints.maxWidth
               : constraints.maxWidth.clamp(minFieldWidth, maxFieldWidth);

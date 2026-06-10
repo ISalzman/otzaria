@@ -463,7 +463,7 @@ class TextSettingsTab extends StatelessWidget {
       title: 'כתרי אותיות',
       children: [
         SegmentedSettingsTile<String>(
-          icon: FluentIcons.text_font_info_24_regular,
+          icon: Icon(FluentIcons.text_font_info_24_regular),
           title: 'הצגת הניקוד',
           subtitle: nikudSubtitle,
           options: const [
@@ -569,7 +569,7 @@ class TextSettingsTab extends StatelessWidget {
       title: 'העתקת כותרות ופרקים',
       children: [
         SegmentedSettingsTile<String>(
-          icon: FluentIcons.copy_24_regular,
+          icon: Icon(FluentIcons.copy_24_regular),
           title: 'העתקת הכותרת',
           subtitle: copySubtitle,
           options: const [
@@ -584,7 +584,7 @@ class TextSettingsTab extends StatelessWidget {
         ),
         if (state.copyWithHeaders != 'none')
           DropdownSettingsTile<String>(
-            icon: FluentIcons.text_align_right_24_regular,
+            icon: Icon(FluentIcons.text_align_right_24_regular),
             title: 'עיצוב כותרות',
             subtitle: formatSubtitle,
             value: state.copyHeaderFormat,

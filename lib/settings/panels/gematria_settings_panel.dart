@@ -139,7 +139,7 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
             title: 'חיפוש גימטריה',
             children: [
               DropdownSettingsTile<int>(
-                icon: FluentIcons.number_row_24_regular,
+                icon: Icon(FluentIcons.number_row_24_regular),
                 title: 'מספר תוצאות מקסימלי',
                 subtitle: 'כמות התוצאות המקסימלית להצגה',
                 value: maxResults,
@@ -184,8 +184,9 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
               SwitchSettingsTile.text(
                 icon: FluentIcons.book_24_regular,
                 title: 'חיפוש בתורה בלבד',
-                subtitle:
-                    torahOnly ? 'חיפוש רק בחמישה חומשי תורה' : 'חיפוש בכל הספרים',
+                subtitle: torahOnly
+                    ? 'חיפוש רק בחמישה חומשי תורה'
+                    : 'חיפוש בכל הספרים',
                 value: torahOnly,
                 onChanged: (value) {
                   setState(() => torahOnly = value);

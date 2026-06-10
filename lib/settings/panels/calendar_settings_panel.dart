@@ -153,7 +153,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                 children: [
                   // סוג לוח
                   SegmentedSettingsTile<CalendarType>(
-                    icon: FluentIcons.calendar_24_regular,
+                    icon: Icon(FluentIcons.calendar_24_regular),
                     title: 'סוג לוח שנה',
                     subtitle: state.calendarType == CalendarType.hebrew
                         ? 'יוצג לוח השנה היהודי בלבד'
@@ -173,7 +173,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                     },
                   ),
                   DropdownSettingsTile<CalendarDayTransition>(
-                    icon: FluentIcons.weather_sunny_low_24_regular,
+                    icon: Icon(FluentIcons.weather_sunny_low_24_regular),
                     title: 'מעבר יום',
                     subtitle:
                         _calendarDayTransitionSubtitle(state.dayTransition),
@@ -206,7 +206,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                   ),
                   // עיר
                   DropdownSettingsTile<String>(
-                    icon: FluentIcons.location_24_regular,
+                    icon: Icon(FluentIcons.location_24_regular),
                     title: 'עיר נבחרת',
                     subtitle: 'בחירת עיר לחישובי זמני היום והלוח',
                     value: state.selectedCity,
@@ -257,7 +257,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                     },
                   ),
                   DropdownSettingsTile<int>(
-                    icon: FluentIcons.alert_snooze_24_regular,
+                    icon: Icon(FluentIcons.alert_snooze_24_regular),
                     title: 'זמן תזכורת לפני האירוע',
                     subtitle: 'כמה זמן לפני תחילת האירוע תופיע התראה',
                     value: state.calendarNotificationTime,

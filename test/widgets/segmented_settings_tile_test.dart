@@ -21,7 +21,7 @@ void main() {
             child: Scaffold(
               body: StatefulBuilder(
                 builder: (context, setState) => SegmentedSettingsTile<String>(
-                  icon: FluentIcons.panel_left_24_regular,
+                  icon: Icon(FluentIcons.panel_left_24_regular),
                   title: 'הצגת חלונית ניווט בכותרות ופרקים',
                   subtitle: 'בדיקת יציבות פריסה',
                   options: const [
@@ -61,7 +61,7 @@ void main() {
             child: Scaffold(
               body: StatefulBuilder(
                 builder: (context, setState) => SegmentedSettingsTile<String>(
-                  icon: FluentIcons.panel_left_24_regular,
+                  icon: Icon(FluentIcons.panel_left_24_regular),
                   title: 'כותרת',
                   subtitle: 'תיאור',
                   options: const [
