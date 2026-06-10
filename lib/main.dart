@@ -59,6 +59,7 @@ import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/error_log_file.dart';
 import 'package:otzaria/core/external_activation_queue.dart';
+import 'package:otzaria/core/portable_paths.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
@@ -585,6 +586,11 @@ Future<void> _initializeProcessSingletons() async {
   }
 
   await initHive();
+  // מצב נייד: אם תיקיית הנתונים זזה (אות כונן אחרת / מיקום אחר), הנתיבים
+  // האבסולוטיים השמורים משוכתבים לפני שכל קוד אחר צורך אותם. חייב לרוץ
+  // אחרי Settings.init ואחרי initHive (ה-boxes פתוחים), ולפני
+  // SqliteDataProvider ו-FileSystemData שקוראים את נתיב הספרייה.
+  await PortablePaths.migrateIfMoved();
   await createDirs();
   await loadCerts();
 
