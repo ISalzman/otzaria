@@ -60,6 +60,10 @@ const int _kLinksTabIndex = 0;
 class PageShapeScreen extends StatefulWidget {
   final Function(OpenedTab) openBookCallback;
   final ValueNotifier<int?>? sidebarTabNotifier;
+
+  /// בקשה לפתיחת דיאלוג הגדרות צורת הדף (מכפתור גלגל השיניים בסרגל העליון).
+  /// המסך פותח את הדיאלוג בעצמו כדי שהשינויים יוחלו עליו בעדכון חי.
+  final ValueNotifier<int>? openSettingsNotifier;
   final ValueChanged<String?>? onOpenSearch;
   final ScrollOffsetController? scrollOffsetController;
   final TextBookTab? tab;
@@ -68,6 +72,7 @@ class PageShapeScreen extends StatefulWidget {
     super.key,
     required this.openBookCallback,
     this.sidebarTabNotifier,
+    this.openSettingsNotifier,
     this.onOpenSearch,
     this.scrollOffsetController,
     this.tab,
@@ -609,10 +614,17 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     });
   }
 
+  /// בקשה מכפתור גלגל השיניים בסרגל העליון לפתוח את דיאלוג ההגדרות
+  void _handleOpenSettingsRequest() {
+    if (!mounted) return;
+    _openCommentatorSelector('settings');
+  }
+
   @override
   void initState() {
     super.initState();
     widget.sidebarTabNotifier?.addListener(_handleSidebarTabRequest);
+    widget.openSettingsNotifier?.addListener(_handleOpenSettingsRequest);
     widget.tab?.toggleCommentatorsPaneNotifier
         .addListener(_onToggleCommentatorsPaneRequest);
   }
@@ -623,6 +635,11 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     if (oldWidget.sidebarTabNotifier != widget.sidebarTabNotifier) {
       oldWidget.sidebarTabNotifier?.removeListener(_handleSidebarTabRequest);
       widget.sidebarTabNotifier?.addListener(_handleSidebarTabRequest);
+    }
+    if (oldWidget.openSettingsNotifier != widget.openSettingsNotifier) {
+      oldWidget.openSettingsNotifier
+          ?.removeListener(_handleOpenSettingsRequest);
+      widget.openSettingsNotifier?.addListener(_handleOpenSettingsRequest);
     }
     if (oldWidget.tab != widget.tab) {
       oldWidget.tab?.toggleCommentatorsPaneNotifier
@@ -635,6 +652,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   @override
   void dispose() {
     widget.sidebarTabNotifier?.removeListener(_handleSidebarTabRequest);
+    widget.openSettingsNotifier?.removeListener(_handleOpenSettingsRequest);
     widget.tab?.toggleCommentatorsPaneNotifier
         .removeListener(_onToggleCommentatorsPaneRequest);
     _selectionSyncController.dispose();
@@ -665,10 +683,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         currentRight: _rightCommentator,
         currentBottom: _bottomCommentator,
         currentBottomRight: _bottomRightCommentator,
+        // עדכון חי: כל שינוי בדיאלוג נטען מיד למסך שמאחוריו
+        onSettingsChanged: () => _loadConfiguration(),
       ),
     );
 
-    // אם היו שינויים, טען מחדש את ההגדרות
+    // טעינה מחדש גם בסגירה - נדרש לאיפוס מפרשים (שמדלג על העדכון החי)
     if (result == true) {
       _loadConfiguration();
     }
@@ -1212,7 +1232,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 class _CommentaryPane extends StatefulWidget {
   final String commentatorName;
   final Function(OpenedTab) openBookCallback;
-  final bool isBottom; // האם זה מפרש תחתון
+  final bool isBottom; // האם זה מפרש תחתון (גופן ייעודי מדיאלוג ההגדרות)
   final VoidCallback? onLoadFailed;
   final SelectionSyncController? selectionSyncController;
 
@@ -1832,7 +1852,8 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       builder: (context, state) {
         return BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, settingsState) {
-            // מפרשים תחתונים משתמשים בגופן מההגדרות, עליונים בגופן הרגיל
+            // רק המפרשים התחתונים משתמשים בגופן שנבחר בדיאלוג צורת הדף;
+            // המפרשים הצדדיים נשארים עם גופן המפרשים הגלובלי מההגדרות.
             final bottomFont =
                 Settings.getValue<String>('page_shape_bottom_font') ??
                     AppFonts.defaultFont;

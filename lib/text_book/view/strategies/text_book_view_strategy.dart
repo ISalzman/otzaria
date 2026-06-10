@@ -15,6 +15,9 @@ class TextBookViewConfig {
   final Key? pageShapeKey;
   final GlobalKey? pageShapePrintBoundaryKey;
   final ValueNotifier<int?>? pageShapeSidebarTabNotifier;
+
+  /// בקשה לפתיחת דיאלוג הגדרות צורת הדף מתוך PageShapeScreen (עדכון חי)
+  final ValueNotifier<int>? pageShapeOpenSettingsNotifier;
   final ValueChanged<String?>? openSearch;
   final ValueChanged<int>? onSidebarTabChanged;
 
@@ -29,6 +32,7 @@ class TextBookViewConfig {
     this.pageShapeKey,
     this.pageShapePrintBoundaryKey,
     this.pageShapeSidebarTabNotifier,
+    this.pageShapeOpenSettingsNotifier,
     this.openSearch,
     this.onSidebarTabChanged,
   });

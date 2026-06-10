@@ -24,6 +24,10 @@ class PageShapeSettingsDialog extends StatefulWidget {
   final String? currentBottom;
   final String? currentBottomRight;
 
+  /// נקרא אחרי כל שמירת שינוי, כדי שהמסך שמתחת לדיאלוג יתעדכן מיידית
+  /// (עדכון חי) בלי להמתין לסגירת הדיאלוג.
+  final VoidCallback? onSettingsChanged;
+
   const PageShapeSettingsDialog({
     super.key,
     required this.availableCommentators,
@@ -33,6 +37,7 @@ class PageShapeSettingsDialog extends StatefulWidget {
     this.currentRight,
     this.currentBottom,
     this.currentBottomRight,
+    this.onSettingsChanged,
   });
 
   @override
@@ -232,7 +237,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       );
     }
 
-    // שמירת הגופן של המפרשים התחתונים (תמיד גלובלי)
+    // שמירת הגופן של המפרשים התחתונים בלבד (תמיד גלובלי)
     await Settings.setValue<String>(
         'page_shape_bottom_font', _bottomFontFamily);
 
@@ -249,6 +254,9 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       _columnVisibility,
       saveAsGlobal: !_saveForCurrentBookOnly,
     );
+
+    // עדכון חי: מודיעים למסך שמתחת לדיאלוג לטעון מחדש את ההגדרות
+    widget.onSettingsChanged?.call();
   }
 
   void _onCommentatorChanged(String? value, void Function(String?) setter,
@@ -271,7 +279,9 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       _bottomFontFamily = value;
       _hasChanges = true;
     });
-    _saveSettings();
+    // גופן מערכת (שאינו מוטמע באפליקציה) חייב להיטען לפני השמירה,
+    // אחרת העדכון החי יציג fallback במקום הגופן שנבחר.
+    AppFonts.ensureFontLoaded(value).then((_) => _saveSettings());
   }
 
   void _onRightCommentatorModeChanged(String? value) {
@@ -294,7 +304,8 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       _commentaryFontSize = value;
       _hasChanges = true;
     });
-    PageShapeSettingsManager.saveCommentaryFontSize(value);
+    PageShapeSettingsManager.saveCommentaryFontSize(value)
+        .then((_) => widget.onSettingsChanged?.call());
   }
 
   void _toggleColumnVisibility(String column, bool visible) {
@@ -320,6 +331,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       _highlightRelatedCommentators = highlight;
       _columnVisibility = visibility;
     });
+    widget.onSettingsChanged?.call();
   }
 
   @override
@@ -343,83 +355,89 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                       .withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          _saveForCurrentBookOnly
-                              ? FluentIcons.book_24_regular
-                              : FluentIcons.globe_24_regular,
-                          size: 20,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
+                // Material שקוף: ListTile מצייר רקע ו-ink על ה-Material הקרוב,
+                // ובלעדיו ה-DecoratedBox של ה-Container מסתיר אותם (אזהרת דיבוג)
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
                             _saveForCurrentBookOnly
-                                ? 'הגדרות תצוגה לספר הנוכחי בלבד'
-                                : 'הגדרות תצוגה גלובליות',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.primary,
+                                ? FluentIcons.book_24_regular
+                                : FluentIcons.globe_24_regular,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _saveForCurrentBookOnly
+                                  ? 'הגדרות תצוגה לספר הנוכחי בלבד'
+                                  : 'הגדרות תצוגה גלובליות',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
                             ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        title: Text(
+                          _saveForCurrentBookOnly
+                              ? 'שמירה לספר הנוכחי בלבד'
+                              : 'שמירה גלובלית (לכל הספרים)',
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    SwitchListTile(
-                      title: Text(
-                        _saveForCurrentBookOnly
-                            ? 'שמירה לספר הנוכחי בלבד'
-                            : 'שמירה גלובלית (לכל הספרים)',
-                      ),
-                      subtitle: Text(
-                        _saveForCurrentBookOnly
-                            ? 'הדגשה והצגת טורים יחולו רק על "${widget.bookTitle}"'
-                            : 'הדגשה והצגת טורים יחולו על כל הספרים',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      value: _saveForCurrentBookOnly,
-                      onChanged: (value) async {
-                        if (!value && _saveForCurrentBookOnly) {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('חזרה להגדרות גלובליות'),
-                              content: const Text(
-                                'האם לאפס את הגדרות התצוגה הספציפיות לספר זה ולחזור להגדרות הגלובליות?',
+                        subtitle: Text(
+                          _saveForCurrentBookOnly
+                              ? 'הדגשה והצגת טורים יחולו רק על "${widget.bookTitle}"'
+                              : 'הדגשה והצגת טורים יחולו על כל הספרים',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        value: _saveForCurrentBookOnly,
+                        onChanged: (value) async {
+                          if (!value && _saveForCurrentBookOnly) {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('חזרה להגדרות גלובליות'),
+                                content: const Text(
+                                  'האם לאפס את הגדרות התצוגה הספציפיות לספר זה ולחזור להגדרות הגלובליות?',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('ביטול'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    child: const Text('אפס'),
+                                  ),
+                                ],
                               ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context, false),
-                                  child: const Text('ביטול'),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text('אפס'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirm == true) {
-                            await _resetDisplaySettingsToGlobal();
+                            );
+                            if (confirm == true) {
+                              await _resetDisplaySettingsToGlobal();
+                            }
+                          } else {
+                            setState(() {
+                              _saveForCurrentBookOnly = value;
+                              _hasChanges = true;
+                            });
+                            await _saveSettings();
                           }
-                        } else {
-                          setState(() {
-                            _saveForCurrentBookOnly = value;
-                            _hasChanges = true;
-                          });
-                          await _saveSettings();
-                        }
-                      },
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                    ),
-                  ],
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
@@ -717,7 +735,14 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                             min: 10,
                             max: 30,
                             divisions: 20,
-                            onChanged: _onFontSizeChanged,
+                            // בזמן גרירה מעדכנים רק את התצוגה בדיאלוג;
+                            // שמירה ועדכון חי של המסך - רק בשחרור הסליידר,
+                            // כדי לא להציף את המסך בטעינות על כל תזוזה.
+                            onChanged: (value) => setState(() {
+                              _commentaryFontSize = value;
+                              _hasChanges = true;
+                            }),
+                            onChangeEnd: _onFontSizeChanged,
                           ),
                         ),
                       ],
