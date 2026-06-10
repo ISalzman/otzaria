@@ -3169,13 +3169,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   padding: readerContentPadding,
                   child: _buildPageTurnOverlay(context),
                 ),
-                PdfScrollbar(
-                  controller: widget.tab.pdfViewerController,
-                  orientation: ScrollbarOrientation.right,
-                  trackThickness: _verticalScrollbarGutter,
-                  thumbMinSize: 50.0,
-                  scrollBoundsBuilder: _currentVerticalScrollbarBounds,
-                  freezeThumb: _pageTurnTransition != null,
+                ValueListenableBuilder<List<PdfOutlineNode>?>(
+                  valueListenable: widget.tab.outline,
+                  builder: (context, outline, _) => PdfScrollbar(
+                    controller: widget.tab.pdfViewerController,
+                    orientation: ScrollbarOrientation.right,
+                    trackThickness: _verticalScrollbarGutter,
+                    thumbMinSize: 50.0,
+                    scrollBoundsBuilder: _currentVerticalScrollbarBounds,
+                    freezeThumb: _pageTurnTransition != null,
+                    outline: outline,
+                    bookTitle: widget.tab.book.title,
+                  ),
                 ),
                 Positioned(
                   left: 0,

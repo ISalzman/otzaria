@@ -88,6 +88,58 @@ void main() {
     expect(openedTab, 1);
   });
 
+  testWidgets('ריחוף על הסרגל בצורת הדף מציג תווית יעד מתוך labelForIndex',
+      (tester) async {
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      PersonalNotesState(
+        isLoading: false,
+        bookId: 'ספר בדיקה',
+        locatedNotes: const [],
+        missingNotes: const [],
+        errorMessage: null,
+        filteredLocatedNotes: const [],
+        filteredMissingNotes: const [],
+      ),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    // תוכן ארוך כדי שהסרגל הפנימי יוצג (יש מה לגלול).
+    final content = List<String>.generate(200, (i) => 'שורה $i');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: SimpleTextViewer(
+              content: content,
+              fontSize: 18,
+              openBookCallback: (_) {},
+              isMainText: true,
+              labelForIndex: (index) => 'יעד $index',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // הסרגל יושב בקצה (LTR בבדיקה) ברוחב 12; מרחפים פנימה אליו.
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: const Offset(400, 300));
+    addTearDown(() => gesture.removePointer());
+    await tester.pump();
+    await gesture.moveTo(const Offset(6, 300));
+    await tester.pump();
+
+    expect(find.textContaining('יעד'), findsOneWidget);
+  });
+
   testWidgets(
       'הוספת הערה ממפרש פותחת דיאלוג עצמאי ולא עוברת דרך הסיידבר של הספר הראשי',
       (tester) async {

@@ -30,6 +30,7 @@ import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/utils/text/global_search_helper.dart';
+import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/utils/text/text_with_inline_links.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
@@ -1407,6 +1408,23 @@ class _CombinedViewState extends State<CombinedView> {
                           itemCount: state.readingSegments.isNotEmpty
                               ? state.readingSegments.length
                               : widget.data.length,
+                          labelForIndex: state.tableOfContents.isEmpty
+                              ? null
+                              : (index) {
+                                  // במצב קריאה רציף האינדקס הוא אינדקס
+                                  // סגמנט; ממירים לשורת המקור כדי שמיפוי
+                                  // ה-TOC (שמבוסס על מספרי שורות) יהיה נכון.
+                                  final segments = state.readingSegments;
+                                  final lineIndex = segments.isNotEmpty
+                                      ? (index >= 0 && index < segments.length
+                                          ? segments[index].startLineIndex
+                                          : index)
+                                      : index;
+                                  final ref = refFromTocList(
+                                      lineIndex, state.tableOfContents);
+                                  return addBookTitleToRef(
+                                      ref, state.book.title);
+                                },
                           child: ProgressiveScroll(
                             focusNode: _focusNode,
                             maxSpeed: 10000.0,

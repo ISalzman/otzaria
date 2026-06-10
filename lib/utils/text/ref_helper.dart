@@ -3,7 +3,14 @@ import 'package:pdfrx/pdfrx.dart';
 
 Future<String> refFromIndex(
     int index, Future<List<TocEntry>> tableOfContents) async {
-  List<TocEntry> toc = await tableOfContents;
+  return refFromTocList(index, await tableOfContents);
+}
+
+/// הגרסה הסינכרונית של [refFromIndex]: מחשבת את הכתובת ההיררכית עבור שורה
+/// [index] מתוך רשימת תוכן עניינים שכבר נטענה לזיכרון. נחוצה למקומות שצריכים
+/// חישוב מיידי בלי `await` (למשל תווית יעד ברחיפה מעל פס הגלילה), והחישוב
+/// עצמו הוא רקורסיה זולה על העץ עם עצירה מוקדמת.
+String refFromTocList(int index, List<TocEntry> toc) {
   List<String> texts = [];
 
   void searchToc(List<TocEntry> entries, int index) {
@@ -163,6 +170,17 @@ Future<String> refFromPageNumber(
   List<PdfOutlineNode>? outline, [
   String? bookTitle,
 ]) async {
+  return referenceFromPageNumber(pageNumber, outline, bookTitle);
+}
+
+/// הגרסה הסינכרונית של [refFromPageNumber]: מחשבת את הכתובת ההיררכית עבור
+/// עמוד [pageNumber] מתוך ה-outline שכבר טעון לזיכרון. נחוצה לחישוב מיידי
+/// בלי `await` (תווית יעד ברחיפה מעל פס הגלילה של ה-PDF).
+String referenceFromPageNumber(
+  int pageNumber,
+  List<PdfOutlineNode>? outline, [
+  String? bookTitle,
+]) {
   if (outline == null) return "";
 
   List<String> texts = [];
