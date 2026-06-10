@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -101,8 +100,6 @@ class _PluginTabPageState extends State<PluginTabPage> {
   Future<_WebViewPrereqStatus>? _prereqFuture;
 
   InAppWebViewController? webViewController;
-  Offset _pendingTrackpadDelta = Offset.zero;
-  bool _trackpadFrameScheduled = false;
   late String localHtmlPath;
   late final PluginBridgeHandler _bridge;
   late final PluginBridgeAdapter _adapter;
@@ -611,25 +608,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
       },
     );
 
-    if (!Platform.isWindows) return webView;
-
-    return Listener(
-      onPointerPanZoomUpdate: (event) {
-        final ctrl = webViewController;
-        if (ctrl == null) return;
-        _pendingTrackpadDelta += event.panDelta;
-        if (_trackpadFrameScheduled) return;
-        _trackpadFrameScheduled = true;
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          _trackpadFrameScheduled = false;
-          if (!mounted) return;
-          final delta = _pendingTrackpadDelta;
-          _pendingTrackpadDelta = Offset.zero;
-          ctrl.evaluateJavascript(source: buildTrackpadScrollJs(delta));
-        });
-      },
-      child: webView,
-    );
+    return webView;
   }
 
   static bool get _needsWebViewPrerequisites {
@@ -655,11 +634,3 @@ class _PluginTabPageState extends State<PluginTabPage> {
     return _WebViewPrereqStatus.ready;
   }
 }
-
-/// בונה פקודת JavaScript לגלילת WebView בתגובה ל-PointerPanZoomUpdate.
-///
-/// [panDelta] — כמות הגלילה בפיקסלים (תנועת האצבעות בלוח המגע).
-/// ערך חיובי ב-dy גורם לגלילה למטה; חיובי ב-dx — גלילה ימינה.
-@visibleForTesting
-String buildTrackpadScrollJs(Offset panDelta) =>
-    'window.scrollBy(${panDelta.dx.toStringAsFixed(2)},${panDelta.dy.toStringAsFixed(2)});';

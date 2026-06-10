@@ -78,7 +78,12 @@ class WebViewEnvironmentHolder {
       final webviewDataFolder = p.join(dataRoot, 'webview2');
       await Directory(webviewDataFolder).create(recursive: true);
       _environment = await WebViewEnvironment.create(
-        settings: WebViewEnvironmentSettings(userDataFolder: webviewDataFolder),
+        settings: WebViewEnvironmentSettings(
+          userDataFolder: webviewDataFolder,
+          // אירועי הטאצ'פד מוזרקים כ-wheel; smooth scrolling גורם לאיחור
+          // ולחפיפת אנימציות, לכן מכבים אותו בסביבת התוספים.
+          additionalBrowserArguments: '--disable-smooth-scrolling',
+        ),
       );
     } finally {
       // בהצלחה: _environment מוגדר, ה-guard בכניסה ל-initialize יחזיר
