@@ -69,7 +69,7 @@ class SqliteDataProvider {
       var polls = 0;
       for (; _activeWriteSessions > 0 && !_isInitialized; polls++) {
         if (polls >= _maxExternalWriteWaitPolls) {
-          // אבחון זמני: חרגנו מתקרת ההמתנה וה-session עדיין פעיל — חשד לדליפת
+          // אנומליה: חרגנו מתקרת ההמתנה וה-session עדיין פעיל — חשד לדליפת
           // write-session (close בלי reopen תואם). הקורא לא נתקע (חוזר למטה),
           // אבל קריאות ימשיכו לקבל ריק עד restart. אם השורה הזו מופיעה בלוג —
           // יש לאתר את ה-close שלא קיבל reopen.
