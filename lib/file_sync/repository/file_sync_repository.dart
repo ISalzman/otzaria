@@ -10,8 +10,19 @@ import 'package:sqlite3/sqlite3.dart' as sqlite3;
 import 'package:zstandard/zstandard.dart';
 
 class FileSyncRepository {
+  /// תקרת זמן לקריאות מטא-דאטה ל-GitHub API (רשימת רליסים).
+  ///
+  /// בלי תקרה, `http.Client` ממתין ללא הגבלה — ברשתות מסוננות שמחזיקות
+  /// חיבורים פתוחים (סינון בצד שרת) הבדיקה בעליית האפליקציה נתקעת לדקות.
+  static const Duration defaultApiTimeout = Duration(seconds: 15);
+
+  /// תקרת זמן להורדת קובץ DIFF בודד.
+  static const Duration defaultDownloadTimeout = Duration(minutes: 5);
+
   final String githubOwner;
   final String repositoryName;
+  final Duration apiTimeout;
+  final Duration downloadTimeout;
   bool isSyncing = false;
   int _currentProgress = 0;
   int _totalFiles = 0;
@@ -25,6 +36,8 @@ class FileSyncRepository {
     http.Client? httpClient,
     Zstandard? zstandard,
     Future<Uint8List> Function(Uint8List compressedBytes)? decompressDiff,
+    this.apiTimeout = defaultApiTimeout,
+    this.downloadTimeout = defaultDownloadTimeout,
   })  : _httpClient = httpClient ?? http.Client(),
         _zstandard = zstandard ?? Zstandard(),
         _decompressDiff = decompressDiff {
@@ -155,7 +168,7 @@ class FileSyncRepository {
         'Accept': 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
       },
-    );
+    ).timeout(apiTimeout);
 
     if (response.statusCode != 200) {
       throw Exception('שגיאה בקבלת רשימת רליסים: ${response.statusCode}');
@@ -256,7 +269,7 @@ class FileSyncRepository {
     final response = await _httpClient.get(
       Uri.parse(asset.downloadUrl),
       headers: const {'Accept': 'application/octet-stream'},
-    );
+    ).timeout(downloadTimeout);
 
     if (response.statusCode != 200) {
       throw Exception(
