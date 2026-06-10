@@ -155,98 +155,94 @@ class _BookDetailScreenState extends State<BookDetailScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: ErrorBoundary(
-        child:
-            Consumer2<ShamorZachorDataProvider, ShamorZachorProgressProvider>(
-          builder: (context, dataProvider, progressProvider, child) {
-            final cs = Theme.of(context).colorScheme;
+    return ErrorBoundary(
+      child: Consumer2<ShamorZachorDataProvider, ShamorZachorProgressProvider>(
+        builder: (context, dataProvider, progressProvider, child) {
+          final cs = Theme.of(context).colorScheme;
 
-            if (dataProvider.isLoading || progressProvider.isLoading) {
-              return const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text('טוען פרטי ספר...'),
-                  ],
-                ),
-              );
-            }
+          if (dataProvider.isLoading || progressProvider.isLoading) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('טוען פרטי ספר...'),
+                ],
+              ),
+            );
+          }
 
-            if (dataProvider.error != null) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      FluentIcons.error_circle_24_regular,
-                      size: 64,
-                      color: cs.error,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      dataProvider.error!.userFriendlyMessage,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                    if (dataProvider.error!.suggestedAction != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        dataProvider.error!.suggestedAction!,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    if (dataProvider.error!.isRecoverable)
-                      RecommendedActionButton(
-                        text: 'נסה שוב',
-                        onPressed: () => dataProvider.retry(),
-                      ),
-                  ],
-                ),
-              );
-            }
-
-            final bookDetails = widget.bookDetails ??
-                dataProvider.getBookDetails(
-                  widget.topLevelCategoryKey,
-                  widget.bookName,
-                );
-
-            if (bookDetails == null) {
-              _logger.warning(
-                  'BookDetails not found for ${widget.bookName} in category ${widget.topLevelCategoryKey}');
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      FluentIcons.book_24_regular,
-                      size: 64,
-                      color: cs.onSurfaceVariant,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'פרטי הספר "${widget.bookName}" לא נמצאו',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
+          if (dataProvider.error != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    FluentIcons.error_circle_24_regular,
+                    size: 64,
+                    color: cs.error,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    dataProvider.error!.userFriendlyMessage,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  if (dataProvider.error!.suggestedAction != null) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'קטגוריה: ${widget.topLevelCategoryKey}',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      dataProvider.error!.suggestedAction!,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
-                ),
-              );
-            }
+                  const SizedBox(height: 16),
+                  if (dataProvider.error!.isRecoverable)
+                    RecommendedActionButton(
+                      text: 'נסה שוב',
+                      onPressed: () => dataProvider.retry(),
+                    ),
+                ],
+              ),
+            );
+          }
 
-            return _buildBookContent(context, bookDetails, progressProvider);
-          },
-        ),
+          final bookDetails = widget.bookDetails ??
+              dataProvider.getBookDetails(
+                widget.topLevelCategoryKey,
+                widget.bookName,
+              );
+
+          if (bookDetails == null) {
+            _logger.warning(
+                'BookDetails not found for ${widget.bookName} in category ${widget.topLevelCategoryKey}');
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    FluentIcons.book_24_regular,
+                    size: 64,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'פרטי הספר "${widget.bookName}" לא נמצאו',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'קטגוריה: ${widget.topLevelCategoryKey}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return _buildBookContent(context, bookDetails, progressProvider);
+        },
       ),
     );
   }
@@ -644,43 +640,150 @@ class _BookDetailScreenState extends State<BookDetailScreen>
               : theme.colorScheme.primaryContainer.withValues(alpha: 0.15);
 
       // מציגים leaf בפורמט של שורה רגילה (כמו ב-flat), עם RTL
-      return Directionality(
-        textDirection: TextDirection.rtl,
-        child: Container(
-          color: rowBackgroundColor,
-          padding: EdgeInsets.fromLTRB(_gridHPad, 2, _rightInset, 2),
+      return Container(
+        color: rowBackgroundColor,
+        padding: EdgeInsets.fromLTRB(_gridHPad, 2, _rightInset, 2),
+        child: Row(
+          children: [
+            Expanded(
+              flex: _titleFlex,
+              child: Text(
+                learnable.displayLabel ?? learnable.partName,
+                style: _headingStyle.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+              ),
+            ),
+            Expanded(
+              flex: _gridFlex,
+              child: Row(
+                children: _columnData.map((col) {
+                  final columnName = col['id']!;
+                  return Expanded(
+                    child: Tooltip(
+                      message: col['label']!,
+                      child: Checkbox(
+                        visualDensity: VisualDensity.compact,
+                        value: pageProgress.getProperty(columnName),
+                        onChanged: (val) => _updateProgress(
+                          progressProvider,
+                          learnable.absoluteIndex,
+                          columnName,
+                          val ?? false,
+                          bookDetails,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Parent
+    return Theme(
+      data: theme.copyWith(
+        // צמצום מרווחי ה-ListTile של ה-ExpansionTile
+        listTileTheme: const ListTileThemeData(
+          dense: true,
+          minVerticalPadding: 0,
+          horizontalTitleGap: 0,
+          minLeadingWidth: 0,
+          contentPadding: EdgeInsets.zero,
+        ),
+        // צמצום tap-target של Checkbox
+        checkboxTheme: const CheckboxThemeData(
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity(horizontal: -4, vertical: -4),
+        ),
+        dividerColor: Colors.transparent,
+      ),
+      child: ExpansionTile(
+        key: ValueKey(section.id),
+        initiallyExpanded: isExpanded,
+        onExpansionChanged: (expanded) {
+          setState(() => _expandedSections[section.id] = expanded);
+        },
+        tilePadding: const EdgeInsetsDirectional.only(
+          end: _gridHPad + _titleGutter,
+        ),
+        childrenPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.trailing,
+        title: Container(
+          padding: const EdgeInsets.only(
+              left: _gridHPad, right: _gridHPad, top: 1, bottom: 1),
           child: Row(
             children: [
+              // קודם כותרת, כמו ב־Header
               Expanded(
                 flex: _titleFlex,
-                child: Text(
-                  learnable.displayLabel ?? learnable.partName,
-                  textAlign: TextAlign.right,
-                  style: _headingStyle.copyWith(
-                    color: theme.colorScheme.onSurface,
+                child: Padding(
+                  // הזחה ביחס ל־RTL מהימין פנימה - רק לכותרת!
+                  padding:
+                      EdgeInsetsDirectional.only(start: _levelIndent * level),
+                  child: Text(
+                    section.title,
+                    style: _headingStyle.copyWith(
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: false,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  softWrap: false,
                 ),
               ),
               Expanded(
                 flex: _gridFlex,
                 child: Row(
                   children: _columnData.map((col) {
-                    final columnName = col['id']!;
+                    final columnId = col['id']!;
+
+                    // אם אין bookId, נחזיר checkbox ריק
+                    if (widget.bookId == null) {
+                      return Expanded(
+                        child: SizedBox(
+                          height: 24,
+                          child: Center(
+                            child: Checkbox(
+                              value: false,
+                              tristate: true,
+                              onChanged: null, // disabled
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    final state = progressProvider.getSectionColumnStateById(
+                      widget.bookId!,
+                      bookDetails,
+                      section.id,
+                      columnId,
+                    );
                     return Expanded(
-                      child: Tooltip(
-                        message: col['label']!,
-                        child: Checkbox(
-                          visualDensity: VisualDensity.compact,
-                          value: pageProgress.getProperty(columnName),
-                          onChanged: (val) => _updateProgress(
-                            progressProvider,
-                            learnable.absoluteIndex,
-                            columnName,
-                            val ?? false,
-                            bookDetails,
+                      child: SizedBox(
+                        height: 24,
+                        child: Center(
+                          child: Checkbox(
+                            value: state,
+                            tristate: true,
+                            onChanged: (value) async {
+                              if (widget.bookId != null) {
+                                await progressProvider.toggleSectionColumnById(
+                                  widget.bookId!,
+                                  bookDetails,
+                                  section.id,
+                                  columnId,
+                                  value == true,
+                                );
+                              }
+                            },
                           ),
                         ),
                       ),
@@ -691,135 +794,16 @@ class _BookDetailScreenState extends State<BookDetailScreen>
             ],
           ),
         ),
-      );
-    }
-
-    // Parent
-    return Directionality(
-      textDirection: TextDirection.ltr,
-      child: Theme(
-        data: theme.copyWith(
-          // צמצום מרווחי ה-ListTile של ה-ExpansionTile
-          listTileTheme: const ListTileThemeData(
-            dense: true,
-            minVerticalPadding: 0,
-            horizontalTitleGap: 0,
-            minLeadingWidth: 0,
-            contentPadding: EdgeInsets.zero,
-          ),
-          // צמצום tap-target של Checkbox
-          checkboxTheme: const CheckboxThemeData(
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: VisualDensity(horizontal: -4, vertical: -4),
-          ),
-          dividerColor: Colors.transparent,
-        ),
-        child: ExpansionTile(
-          key: ValueKey(section.id),
-          initiallyExpanded: isExpanded,
-          onExpansionChanged: (expanded) {
-            setState(() => _expandedSections[section.id] = expanded);
-          },
-          tilePadding: const EdgeInsetsDirectional.only(
-            end: _gridHPad + _titleGutter,
-          ),
-          childrenPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.trailing,
-          title: Directionality(
-            textDirection: TextDirection.rtl, // תוכן RTL
-            child: Container(
-              padding: const EdgeInsets.only(
-                  left: _gridHPad, right: _gridHPad, top: 1, bottom: 1),
-              child: Row(
-                children: [
-                  // קודם כותרת, כמו ב־Header
-                  Expanded(
-                    flex: _titleFlex,
-                    child: Padding(
-                      // הזחה ביחס ל־RTL מהימין פנימה - רק לכותרת!
-                      padding: EdgeInsetsDirectional.only(
-                          start: _levelIndent * level),
-                      child: Text(
-                        section.title,
-                        style: _headingStyle.copyWith(
-                          color: theme.colorScheme.onSurface,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        softWrap: false,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: _gridFlex,
-                    child: Row(
-                      children: _columnData.map((col) {
-                        final columnId = col['id']!;
-
-                        // אם אין bookId, נחזיר checkbox ריק
-                        if (widget.bookId == null) {
-                          return Expanded(
-                            child: SizedBox(
-                              height: 24,
-                              child: Center(
-                                child: Checkbox(
-                                  value: false,
-                                  tristate: true,
-                                  onChanged: null, // disabled
-                                ),
-                              ),
-                            ),
-                          );
-                        }
-
-                        final state =
-                            progressProvider.getSectionColumnStateById(
-                          widget.bookId!,
-                          bookDetails,
-                          section.id,
-                          columnId,
-                        );
-                        return Expanded(
-                          child: SizedBox(
-                            height: 24,
-                            child: Center(
-                              child: Checkbox(
-                                value: state,
-                                tristate: true,
-                                onChanged: (value) async {
-                                  if (widget.bookId != null) {
-                                    await progressProvider
-                                        .toggleSectionColumnById(
-                                      widget.bookId!,
-                                      bookDetails,
-                                      section.id,
-                                      columnId,
-                                      value == true,
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // אין Padding חיצוני; ההזחה מבוקרת רק בכותרת ובעמודת ה־V
-          children: section.children
-              .map((child) => _buildSectionExpansionTile(
-                    context,
-                    child,
-                    level + 1,
-                    bookDetails,
-                    progressProvider,
-                  ))
-              .toList(),
-        ),
+        // אין Padding חיצוני; ההזחה מבוקרת רק בכותרת ובעמודת ה־V
+        children: section.children
+            .map((child) => _buildSectionExpansionTile(
+                  context,
+                  child,
+                  level + 1,
+                  bookDetails,
+                  progressProvider,
+                ))
+            .toList(),
       ),
     );
   }

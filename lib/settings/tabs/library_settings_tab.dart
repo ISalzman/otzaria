@@ -416,7 +416,6 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             final isActive = indexingState is IndexingInProgress && total > 0;
             final isCheckingManualReindex = _requiresManualReindex == null;
             String subtitleText;
-            TextDirection subtitleDirection = TextDirection.rtl;
             final libraryPath =
                 Settings.getValue<String>(SettingsRepository.keyLibraryPath);
             final library = libraryState.library;
@@ -445,7 +444,6 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
               subtitle: Text(
                 subtitleText,
                 style: kSettingsSubtitleStyle,
-                textDirection: subtitleDirection,
               ),
               trailing: isActive
                   ? NeutralActionButton(

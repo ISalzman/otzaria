@@ -43,129 +43,126 @@ class TourTooltipCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Material(
-        color: colorScheme.secondaryContainer,
-        elevation: 18,
-        shape: RoundedRectangleBorder(
-          borderRadius: isDialog
-              ? BorderRadius.circular(22)
-              : const BorderRadius.only(
-                  topLeft: Radius.circular(22),
-                  topRight: Radius.circular(22),
-                  bottomLeft: Radius.circular(8),
-                  bottomRight: Radius.circular(22),
-                ),
-          side: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.85),
-          ),
+    return Material(
+      color: colorScheme.secondaryContainer,
+      elevation: 18,
+      shape: RoundedRectangleBorder(
+        borderRadius: isDialog
+            ? BorderRadius.circular(22)
+            : const BorderRadius.only(
+                topLeft: Radius.circular(22),
+                topRight: Radius.circular(22),
+                bottomLeft: Radius.circular(8),
+                bottomRight: Radius.circular(22),
+              ),
+        side: BorderSide(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.85),
         ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 430, minWidth: 300),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: colorScheme.surface.withValues(alpha: 0.28),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        isLastStep
-                            ? FluentIcons.checkmark_circle_24_regular
-                            : FluentIcons.sparkle_24_regular,
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 430, minWidth: 300),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface.withValues(alpha: 0.28),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      isLastStep
+                          ? FluentIcons.checkmark_circle_24_regular
+                          : FluentIcons.sparkle_24_regular,
+                      color: colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
                         color: colorScheme.onSecondaryContainer,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.onSecondaryContainer,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                body,
+                style: textTheme.bodyLarge?.copyWith(
+                  height: 1.45,
+                  color: colorScheme.onSecondaryContainer,
+                ),
+              ),
+              const SizedBox(height: 18),
+              if (currentIndex >= 0)
+                TourProgressDots(
+                  currentIndex: currentIndex,
+                  total: totalSteps,
+                  onDotTap: onDotTap,
+                ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  if (!isLastStep)
+                    NeutralActionButton(
+                      icon: FluentIcons.dismiss_24_regular,
+                      text: isRestartEntry
+                          ? 'ביטול'
+                          : isWelcomeStep
+                              ? 'דלג — אגלה לבד'
+                              : 'דלג על הסיור',
+                      onPressed: onSkip,
+                    )
+                  else
+                    const SizedBox.shrink(),
+                  const Spacer(),
+                  if (!isLastStep && !isWelcomeStep && !isRestartEntry) ...[
+                    Tooltip(
+                      message: isAutoPlaying
+                          ? 'עצור הצגה אוטומטית'
+                          : 'הצגה אוטומטית — מעבר אוטומטי בין השלבים כל 4 שניות',
+                      child: FilledButton.tonal(
+                        onPressed: onToggleAutoPlay,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(44, 44),
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: Icon(
+                          isAutoPlaying
+                              ? FluentIcons.pause_circle_24_regular
+                              : FluentIcons.play_circle_24_regular,
                         ),
                       ),
                     ),
+                    const SizedBox(width: 8),
                   ],
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  body,
-                  style: textTheme.bodyLarge?.copyWith(
-                    height: 1.45,
-                    color: colorScheme.onSecondaryContainer,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                if (currentIndex >= 0)
-                  TourProgressDots(
-                    currentIndex: currentIndex,
-                    total: totalSteps,
-                    onDotTap: onDotTap,
-                  ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    if (!isLastStep)
-                      NeutralActionButton(
-                        icon: FluentIcons.dismiss_24_regular,
-                        text: isRestartEntry
-                            ? 'ביטול'
+                  _TourNextButton(
+                    icon: isLastStep
+                        ? FluentIcons.checkmark_24_regular
+                        : FluentIcons.arrow_left_24_regular,
+                    text: isLastStep
+                        ? 'סגור'
+                        : isRestartEntry
+                            ? 'אני מוכן'
                             : isWelcomeStep
-                                ? 'דלג — אגלה לבד'
-                                : 'דלג על הסיור',
-                        onPressed: onSkip,
-                      )
-                    else
-                      const SizedBox.shrink(),
-                    const Spacer(),
-                    if (!isLastStep && !isWelcomeStep && !isRestartEntry) ...[
-                      Tooltip(
-                        message: isAutoPlaying
-                            ? 'עצור הצגה אוטומטית'
-                            : 'הצגה אוטומטית — מעבר אוטומטי בין השלבים כל 4 שניות',
-                        child: FilledButton.tonal(
-                          onPressed: onToggleAutoPlay,
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size(44, 44),
-                            padding: EdgeInsets.zero,
-                          ),
-                          child: Icon(
-                            isAutoPlaying
-                                ? FluentIcons.pause_circle_24_regular
-                                : FluentIcons.play_circle_24_regular,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    _TourNextButton(
-                      icon: isLastStep
-                          ? FluentIcons.checkmark_24_regular
-                          : FluentIcons.arrow_left_24_regular,
-                      text: isLastStep
-                          ? 'סגור'
-                          : isRestartEntry
-                              ? 'אני מוכן'
-                              : isWelcomeStep
-                                  ? 'בוא נתחיל'
-                                  : 'הבא',
-                      onPressed: onNext,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                                ? 'בוא נתחיל'
+                                : 'הבא',
+                    onPressed: onNext,
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

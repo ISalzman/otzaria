@@ -894,80 +894,77 @@ class _ClosingQuote extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Directionality(
-        textDirection: TextDirection.rtl,
-        child: Card(
-          elevation: 0,
-          color: colorScheme.surfaceContainerHigh,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: Column(
-              children: [
-                Icon(FluentIcons.book_open_24_regular,
-                    size: 32, color: colorScheme.primary),
-                const SizedBox(height: 12),
-                Text(
-                  'וְצִדְקָתוֹ עֹמֶדֶת לָעַד',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
-                    height: 1.6,
-                  ),
+      child: Card(
+        elevation: 0,
+        color: colorScheme.surfaceContainerHigh,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: Column(
+            children: [
+              Icon(FluentIcons.book_open_24_regular,
+                  size: 32, color: colorScheme.primary),
+              const SizedBox(height: 12),
+              Text(
+                'וְצִדְקָתוֹ עֹמֶדֶת לָעַד',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.primary,
+                  height: 1.6,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '(תהילים קיב, ג)',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 12, color: colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '(תהילים קיב, ג)',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 12, color: colorScheme.onSurfaceVariant),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                        child: Divider(
+                            color: colorScheme.outlineVariant
+                                .withValues(alpha: 0.6))),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Icon(FluentIcons.sparkle_24_regular,
+                          size: 14,
+                          color: colorScheme.primary.withValues(alpha: 0.6)),
+                    ),
+                    Expanded(
+                        child: Divider(
+                            color: colorScheme.outlineVariant
+                                .withValues(alpha: 0.6))),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                          child: Divider(
-                              color: colorScheme.outlineVariant
-                                  .withValues(alpha: 0.6))),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Icon(FluentIcons.sparkle_24_regular,
-                            size: 14,
-                            color: colorScheme.primary.withValues(alpha: 0.6)),
-                      ),
-                      Expanded(
-                          child: Divider(
-                              color: colorScheme.outlineVariant
-                                  .withValues(alpha: 0.6))),
-                    ],
-                  ),
+              ),
+              Text(
+                'זֶה הַכּוֹתֵב סְפָרִים וּמַשְׁאִילָן לַאֲחֵרִים',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.onSurface,
+                  height: 1.6,
                 ),
-                Text(
-                  'זֶה הַכּוֹתֵב סְפָרִים וּמַשְׁאִילָן לַאֲחֵרִים',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface,
-                    height: 1.6,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '(כתובות נ.)',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 12, color: colorScheme.onSurfaceVariant),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '(כתובות נ.)',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 12, color: colorScheme.onSurfaceVariant),
+              ),
+            ],
           ),
         ),
       ),

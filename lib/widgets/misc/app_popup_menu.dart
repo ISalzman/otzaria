@@ -696,17 +696,14 @@ Widget buildAppMenuRowContent(
         Icon(icon, size: metrics.iconSize, color: foregroundColor),
         const SizedBox(width: 8),
       ],
-      Directionality(
-        textDirection: TextDirection.rtl,
-        child: DefaultTextStyle.merge(
-          style: labelTextStyle,
-          child: labelMaxWidth == null
-              ? labelChild
-              : ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: labelMaxWidth),
-                  child: labelChild,
-                ),
-        ),
+      DefaultTextStyle.merge(
+        style: labelTextStyle,
+        child: labelMaxWidth == null
+            ? labelChild
+            : ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: labelMaxWidth),
+                child: labelChild,
+              ),
       ),
       if (isSelected) ...[
         const Spacer(),

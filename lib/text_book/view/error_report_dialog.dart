@@ -74,34 +74,30 @@ class _DirectReportDetails extends StatelessWidget {
     return SizedBox(
       width: 560,
       child: SingleChildScrollView(
-        child: Directionality(
-          textDirection: TextDirection.rtl,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _ReportDetailRow(label: 'ספר', value: report.bookTitle),
-              _ReportDetailRow(label: 'מיקום', value: report.currentRef),
-              _ReportDetailRow(
-                label: 'שורה',
-                value: report.lineNumber.toString(),
-              ),
-              _ReportDetailRow(label: 'כתובת זיהוי', value: report.senderEmail),
-              _ReportDetailRow(label: 'טקסט שנבחר', value: report.selectedText),
-              _ReportDetailRow(
-                  label: 'פירוט הטעות', value: report.errorDetails),
-              _ReportDetailRow(label: 'הקשר', value: report.contextText),
-              _ReportDetailRow(label: 'נתיב קובץ', value: report.filePath),
-              _ReportDetailRow(
-                label: 'תיקיית מקור',
-                value: report.sourceFolder,
-              ),
-              _ReportDetailRow(
-                label: 'גרסת ספרייה',
-                value: report.libraryVersion,
-              ),
-            ],
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _ReportDetailRow(label: 'ספר', value: report.bookTitle),
+            _ReportDetailRow(label: 'מיקום', value: report.currentRef),
+            _ReportDetailRow(
+              label: 'שורה',
+              value: report.lineNumber.toString(),
+            ),
+            _ReportDetailRow(label: 'כתובת זיהוי', value: report.senderEmail),
+            _ReportDetailRow(label: 'טקסט שנבחר', value: report.selectedText),
+            _ReportDetailRow(label: 'פירוט הטעות', value: report.errorDetails),
+            _ReportDetailRow(label: 'הקשר', value: report.contextText),
+            _ReportDetailRow(label: 'נתיב קובץ', value: report.filePath),
+            _ReportDetailRow(
+              label: 'תיקיית מקור',
+              value: report.sourceFolder,
+            ),
+            _ReportDetailRow(
+              label: 'גרסת ספרייה',
+              value: report.libraryVersion,
+            ),
+          ],
         ),
       ),
     );

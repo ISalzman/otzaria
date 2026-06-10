@@ -655,7 +655,6 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
                         decoration: const InputDecoration(
                           border: InputBorder.none,
                           hintText: 'התחל לכתוב כאן...',
-                          hintTextDirection: TextDirection.rtl,
                         ),
                       ),
                     ),
