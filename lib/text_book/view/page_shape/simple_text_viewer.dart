@@ -21,6 +21,7 @@ import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
@@ -269,6 +270,11 @@ class SimpleTextViewer extends StatefulWidget {
   final TextBook? reportBook;
   final SelectionSyncController? selectionSyncController;
 
+  /// מחזירה את כתובת היעד עבור אינדקס פריט בסרגל הגלילה. כשהיא מסופקת,
+  /// ריחוף/גרירה על הסרגל הפנימי מציגים תווית צפה עם הכתובת. כשהיא null
+  /// אין תווית. רלוונטי רק כש-[useInternalScroll] = true.
+  final String Function(int index)? labelForIndex;
+
   /// repository לשמירת הערות מפרשים. ניתן להזרקה בבדיקות; בייצור נוצר ברירת מחדל.
   final PersonalNotesRepository? notesRepository;
   const SimpleTextViewer({
@@ -289,6 +295,7 @@ class SimpleTextViewer extends StatefulWidget {
     this.onOpenSearch,
     this.reportBook,
     this.selectionSyncController,
+    this.labelForIndex,
     this.notesRepository,
   });
 
@@ -1747,21 +1754,27 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                                 : KeyEventResult.ignored;
                           },
                           child: widget.useInternalScroll
-                              ? ScrollablePositionedList.builder(
-                                  itemScrollController: _scrollController,
+                              ? ScrollablePositionedListScrollbar(
+                                  scrollController: _scrollController,
                                   itemPositionsListener: _positionsListener,
                                   itemCount: itemCount,
-                                  padding: const EdgeInsets.all(4),
-                                  itemBuilder: (context, index) => _buildLine(
-                                    index,
-                                    state,
-                                    context,
-                                    noteMap,
-                                    segments.isNotEmpty &&
-                                            index < segments.length
-                                        ? segments[index]
-                                        : null,
-                                    continuous,
+                                  labelForIndex: widget.labelForIndex,
+                                  child: ScrollablePositionedList.builder(
+                                    itemScrollController: _scrollController,
+                                    itemPositionsListener: _positionsListener,
+                                    itemCount: itemCount,
+                                    padding: const EdgeInsets.all(4),
+                                    itemBuilder: (context, index) => _buildLine(
+                                      index,
+                                      state,
+                                      context,
+                                      noteMap,
+                                      segments.isNotEmpty &&
+                                              index < segments.length
+                                          ? segments[index]
+                                          : null,
+                                      continuous,
+                                    ),
                                   ),
                                 )
                               : ListView.builder(

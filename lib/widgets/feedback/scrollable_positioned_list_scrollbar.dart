@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:otzaria/widgets/feedback/scrollbar_target_label.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class ScrollablePositionedListScrollbar extends StatefulWidget {
@@ -9,12 +10,20 @@ class ScrollablePositionedListScrollbar extends StatefulWidget {
   final int itemCount;
   final Widget child;
 
+  /// מחזירה את כתובת היעד עבור אינדקס פריט נתון (אותו אינדקס שאליו הסרגל
+  /// קופץ). כשהיא מסופקת, ריחוף/גרירה על הסרגל מציגים תווית צפה עם הכתובת
+  /// שמוחזרת; כשהיא null התווית מושבתת והסרגל מתנהג כמקודם. הקריאה מתבצעת
+  /// רק כשהאינדקס שמתחת לסמן משתנה, ולכן מותר שתבצע חישוב קל (כמו מיפוי
+  /// אינדקס→תוכן עניינים).
+  final String Function(int index)? labelForIndex;
+
   const ScrollablePositionedListScrollbar({
     super.key,
     required this.scrollController,
     required this.itemPositionsListener,
     required this.itemCount,
     required this.child,
+    this.labelForIndex,
   });
 
   @override
@@ -41,6 +50,14 @@ class _ScrollablePositionedListScrollbarState
   // להחלקת הקפיצות במיקום
   int _lastFirstIndex = 0;
 
+  // תווית היעד הצפה (כתובת המקום שאליו נקפוץ בלחיצה). מבודדת מעץ הסרגל דרך
+  // Overlay כדי שלא תגרום ל-rebuild של הרשימה. _labelIndex/_labelText
+  // ממזערים חישוב: refFromTocList רץ רק כשהאינדקס שמתחתיו העכבר משתנה.
+  final ScrollbarTargetLabelController _labelController =
+      ScrollbarTargetLabelController();
+  int? _labelIndex;
+  String? _labelText;
+
   @override
   void initState() {
     super.initState();
@@ -63,7 +80,51 @@ class _ScrollablePositionedListScrollbarState
   void dispose() {
     widget.itemPositionsListener.itemPositions
         .removeListener(_updateScrollPosition);
+    _labelController.dispose();
     super.dispose();
+  }
+
+  /// האם להציג בכלל את תווית היעד (סופקה פונקציית מיפוי).
+  bool get _labelEnabled => widget.labelForIndex != null;
+
+  /// בעברית הסרגל יושב בקצה ימין של אזור הקריאה, ולכן התווית נפתחת שמאלה
+  /// (לתוך התוכן); ב-LTR להפך.
+  ScrollbarLabelSide get _labelSide =>
+      Directionality.of(context) == TextDirection.rtl
+          ? ScrollbarLabelSide.left
+          : ScrollbarLabelSide.right;
+
+  /// מציג/מעדכן את תווית היעד עבור [index]. מחשב את הכתובת רק כשהאינדקס
+  /// השתנה, ותמיד מעדכן את מיקום העוגן ([globalPosition]) כדי שהתווית תעקוב
+  /// אחרי הסמן בצורה חלקה.
+  void _showLabelForIndex(int index, Offset globalPosition) {
+    if (!_labelEnabled) return;
+    if (index != _labelIndex) {
+      _labelIndex = index;
+      _labelText = widget.labelForIndex!(index);
+    }
+    _labelController.show(
+      context,
+      anchor: globalPosition,
+      text: _labelText ?? '',
+      side: _labelSide,
+    );
+  }
+
+  void _hideLabel() {
+    _labelIndex = null;
+    _labelText = null;
+    _labelController.hide();
+  }
+
+  /// ממפה מיקום אנכי על המסילה לאינדקס היעד — בדיוק כמו חישוב הקפיצה
+  /// ב-[_jumpToTrackPosition], כדי שהתווית תציג את היעד האמיתי של לחיצה.
+  int _indexFromTrackDy(double localDy, double trackHeight) {
+    if (trackHeight <= 0) return 0;
+    final clickPosition = localDy / trackHeight;
+    final thumbPos =
+        (clickPosition - (_thumbHeight / 2)).clamp(0.0, 1.0 - _thumbHeight);
+    return _indexFromThumbPosition(thumbPos);
   }
 
   void _updateScrollPosition() {
@@ -170,7 +231,8 @@ class _ScrollablePositionedListScrollbarState
   /// ומבצע קפיצה של הרשימה ליעד המתאים. משותף ללחיצה (`onTapDown`) ולתחילת
   /// גרירה על המסילה (`onVerticalDragStart`), כדי שלחיצה שזוהתה כגרירה (כל
   /// מיקרו-תזוזה הופכת tap ל-drag) עדיין תקפוץ ליעד ולא רק תזוז מעט.
-  void _jumpToTrackPosition(double localDy, double trackHeight) {
+  void _jumpToTrackPosition(double localDy, double trackHeight,
+      [Offset? globalPosition]) {
     if (trackHeight <= 0) return;
     final clickPosition = localDy / trackHeight;
     final newThumbPos =
@@ -181,9 +243,13 @@ class _ScrollablePositionedListScrollbarState
     final int targetIndex = _indexFromThumbPosition(_thumbPosition);
     _lastFirstIndex = targetIndex;
     widget.scrollController.jumpTo(index: targetIndex);
+    if (globalPosition != null) {
+      _showLabelForIndex(targetIndex, globalPosition);
+    }
   }
 
-  void _onDragUpdate(double delta, double trackHeight) {
+  void _onDragUpdate(double delta, double trackHeight,
+      [Offset? globalPosition]) {
     setState(() {
       _isDragging = true;
       _thumbPosition += delta;
@@ -197,12 +263,18 @@ class _ScrollablePositionedListScrollbarState
       widget.scrollController.jumpTo(index: targetIndex);
       _lastFirstIndex = targetIndex;
     }
+
+    if (globalPosition != null) {
+      _showLabelForIndex(targetIndex, globalPosition);
+    }
   }
 
   void _onDragEnd() {
     setState(() {
       _isDragging = false;
     });
+    // התווית מוסתרת בתום הגרירה; ריחוף נוסף יחזיר אותה דרך ה-MouseRegion.
+    _hideLabel();
     // עדכון סופי ליתר ביטחון
     _updateScrollPosition();
   }
@@ -221,60 +293,79 @@ class _ScrollablePositionedListScrollbarState
                 final thumbPixelTop = trackHeight * _thumbPosition;
                 final colorScheme = Theme.of(context).colorScheme;
 
-                return GestureDetector(
-                  // opaque: מבטיח שהגרירה והלחיצה יתקבלו בכל שטח ה-track,
-                  // לא רק מעל ה-thumb עצמו — ללא צורך ברקע צבעוני.
-                  behavior: HitTestBehavior.opaque,
-                  // down ולא start: מבטיח ש-onVerticalDragStart מקבל את נקודת
-                  // המגע המקורית, כך שההבחנה בין גרירת אגודל לגרירת מסילה
-                  // והקפיצה אליה מדויקות.
-                  dragStartBehavior: DragStartBehavior.down,
-                  onVerticalDragStart: (details) {
-                    final dy = details.localPosition.dy;
-                    setState(() {
-                      _isDragging = true;
-                    });
-                    // גרירה שמתחילה מחוץ לאגודל (על המסילה) — קפיצה מיידית
-                    // ליעד הנלחץ. כך גם לחיצה שזוהתה כגרירה זעירה מגיעה ליעד
-                    // במקום רק להזיז את האגודל מעט. גרירת האגודל עצמו נשארת
-                    // יחסית (onVerticalDragUpdate) כמקודם.
-                    if (_isOutsideThumb(dy, trackHeight)) {
-                      _jumpToTrackPosition(dy, trackHeight);
-                    }
+                return MouseRegion(
+                  // ריחוף סתמי מעל המסילה — תצוגה מקדימה של יעד הקפיצה. מחושב
+                  // רק כשהעכבר זז, וה-show מחשב כתובת רק כשהאינדקס משתנה.
+                  onHover: _labelEnabled
+                      ? (event) {
+                          final index = _indexFromTrackDy(
+                              event.localPosition.dy, trackHeight);
+                          _showLabelForIndex(index, event.position);
+                        }
+                      : null,
+                  onExit: (_) {
+                    // בזמן גרירה העכבר עלול לצאת מרוחב המסילה — אסור להסתיר אז.
+                    if (_isDragging) return;
+                    _hideLabel();
                   },
-                  onVerticalDragUpdate: (details) {
-                    _onDragUpdate(details.delta.dy / trackHeight, trackHeight);
-                  },
-                  onVerticalDragEnd: (_) => _onDragEnd(),
-                  // קפיצה רק כשהלחיצה על המסילה. לחיצה על האגודל עצמו נורית גם
-                  // כשהמחווה הופכת מיד לגרירה — קפיצה כאן הייתה ממקמת אותו מחדש
-                  // סביב הסמן ומקפיצה את הרשימה לפני שהגרירה התחילה.
-                  onTapDown: (details) {
-                    final dy = details.localPosition.dy;
-                    if (_isOutsideThumb(dy, trackHeight)) {
-                      _jumpToTrackPosition(dy, trackHeight);
-                    }
-                  },
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // ה"אגודל" (Thumb) עצמו
-                      Positioned(
-                        top: thumbPixelTop,
-                        left: 2, // רווח קטן מהקצה
-                        right: 2,
-                        height: thumbPixelHeight,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: _isDragging
-                                ? colorScheme.primary.withValues(alpha: 0.8)
-                                : colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.4),
-                            borderRadius: BorderRadius.circular(4),
+                  child: GestureDetector(
+                    // opaque: מבטיח שהגרירה והלחיצה יתקבלו בכל שטח ה-track,
+                    // לא רק מעל ה-thumb עצמו — ללא צורך ברקע צבעוני.
+                    behavior: HitTestBehavior.opaque,
+                    // down ולא start: מבטיח ש-onVerticalDragStart מקבל את נקודת
+                    // המגע המקורית, כך שההבחנה בין גרירת אגודל לגרירת מסילה
+                    // והקפיצה אליה מדויקות.
+                    dragStartBehavior: DragStartBehavior.down,
+                    onVerticalDragStart: (details) {
+                      final dy = details.localPosition.dy;
+                      setState(() {
+                        _isDragging = true;
+                      });
+                      // גרירה שמתחילה מחוץ לאגודל (על המסילה) — קפיצה מיידית
+                      // ליעד הנלחץ. כך גם לחיצה שזוהתה כגרירה זעירה מגיעה ליעד
+                      // במקום רק להזיז את האגודל מעט. גרירת האגודל עצמו נשארת
+                      // יחסית (onVerticalDragUpdate) כמקודם.
+                      if (_isOutsideThumb(dy, trackHeight)) {
+                        _jumpToTrackPosition(
+                            dy, trackHeight, details.globalPosition);
+                      }
+                    },
+                    onVerticalDragUpdate: (details) {
+                      _onDragUpdate(details.delta.dy / trackHeight, trackHeight,
+                          details.globalPosition);
+                    },
+                    onVerticalDragEnd: (_) => _onDragEnd(),
+                    // קפיצה רק כשהלחיצה על המסילה. לחיצה על האגודל עצמו נורית גם
+                    // כשהמחווה הופכת מיד לגרירה — קפיצה כאן הייתה ממקמת אותו מחדש
+                    // סביב הסמן ומקפיצה את הרשימה לפני שהגרירה התחילה.
+                    onTapDown: (details) {
+                      final dy = details.localPosition.dy;
+                      if (_isOutsideThumb(dy, trackHeight)) {
+                        _jumpToTrackPosition(
+                            dy, trackHeight, details.globalPosition);
+                      }
+                    },
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // ה"אגודל" (Thumb) עצמו
+                        Positioned(
+                          top: thumbPixelTop,
+                          left: 2, // רווח קטן מהקצה
+                          right: 2,
+                          height: thumbPixelHeight,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: _isDragging
+                                  ? colorScheme.primary.withValues(alpha: 0.8)
+                                  : colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               },

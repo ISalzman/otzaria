@@ -195,6 +195,21 @@ void main() {
 
       expect(await refFromIndex(0, Future.value(toc)), '');
     });
+
+    test('refFromTocList (סינכרוני) מחזיר זהה ל-refFromIndex', () async {
+      final toc = [
+        _entry('מחנה אפרים חלק ב', 1216, 1, children: [
+          _entry('הלכות ערב', 1460, 2, children: [
+            _entry('סימן ב', 1468, 3),
+          ]),
+        ]),
+      ];
+
+      expect(
+        refFromTocList(1468, toc),
+        await refFromIndex(1468, Future.value(toc)),
+      );
+    });
   });
 
   group('formatDisplayReference', () {

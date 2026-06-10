@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:otzaria/utils/text/ref_helper.dart';
+import 'package:otzaria/widgets/feedback/scrollbar_target_label.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 typedef PdfScrollBoundsBuilder = Rect? Function(PdfViewerController controller);
@@ -16,6 +18,14 @@ class PdfScrollbar extends StatefulWidget {
   final PdfScrollBoundsBuilder? scrollBoundsBuilder;
   final bool freezeThumb;
 
+  /// תוכן העניינים (outline) של המסמך. כשהוא מסופק (ולא ריק), ריחוף/גרירה
+  /// על הסרגל מציגים תווית צפה עם כותרת המקום שאליו תתבצע הקפיצה. כשהוא
+  /// null התווית מושבתת והסרגל מתנהג כמקודם.
+  final List<PdfOutlineNode>? outline;
+
+  /// שם הספר — מועבר ל-[referenceFromPageNumber] כדי שלא יישכפל בתוך הכתובת.
+  final String? bookTitle;
+
   const PdfScrollbar({
     super.key,
     required this.controller,
@@ -26,6 +36,8 @@ class PdfScrollbar extends StatefulWidget {
     this.thumbMinSize = 40.0,
     this.scrollBoundsBuilder,
     this.freezeThumb = false,
+    this.outline,
+    this.bookTitle,
   });
 
   @override
@@ -42,6 +54,74 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
   /// מיקום המחוון בזמן גרירה פעילה. כשהוא לא null, המחוון נצמד לאצבע
   /// במקום להיגזר מ-`controller.visibleRect`, כך שהוא חלק ולא ממתין לרינדור.
   double? _activeDragThumbTop;
+
+  // תווית היעד הצפה (כותרת העמוד שאליו נקפוץ). מבודדת דרך Overlay כדי שלא
+  // תגרום ל-rebuild של ה-PDF. _labelPage/_labelText ממזערים חישוב: הכתובת
+  // מחושבת רק כשמספר עמוד היעד משתנה.
+  final ScrollbarTargetLabelController _labelController =
+      ScrollbarTargetLabelController();
+  bool _isDraggingThumb = false;
+  int? _labelPage;
+  String? _labelText;
+
+  @override
+  void dispose() {
+    _labelController.dispose();
+    super.dispose();
+  }
+
+  bool get _labelEnabled =>
+      widget.outline != null && widget.outline!.isNotEmpty;
+
+  /// כשהסרגל בקצה ימין התווית נפתחת שמאלה (לתוך התוכן), ולהפך.
+  ScrollbarLabelSide get _labelSide =>
+      widget.orientation == ScrollbarOrientation.left
+          ? ScrollbarLabelSide.right
+          : ScrollbarLabelSide.left;
+
+  /// ממפה מיקום אנכי מבוקש של ראש המחוון לעמוד היעד — אותו עמוד שאליו
+  /// [jumpToThumbTop] (במרכז ה-viewport) היה מנווט.
+  int _pageForThumbTop(
+    double desiredThumbTop,
+    Rect bounds,
+    double scrollableExtent,
+    double visibleHeight,
+    double maxThumbTop,
+  ) {
+    final normalizedTop = maxThumbTop <= 0
+        ? 0.0
+        : desiredThumbTop.clamp(0.0, maxThumbTop) / maxThumbTop;
+    final targetTop = bounds.top + normalizedTop * scrollableExtent;
+    final centerY = targetTop + visibleHeight / 2;
+    final layouts = widget.controller.layout.pageLayouts;
+    for (var i = 0; i < layouts.length; i++) {
+      if (centerY < layouts[i].bottom) return i + 1;
+    }
+    return layouts.isEmpty ? 1 : layouts.length;
+  }
+
+  /// מציג/מעדכן את תווית היעד עבור [pageNumber]. הכתובת מחושבת רק כשהעמוד
+  /// משתנה; מיקום העוגן ([globalPosition]) מתעדכן תמיד למעקב חלק.
+  void _showLabelForPage(int pageNumber, Offset globalPosition) {
+    if (!_labelEnabled) return;
+    if (pageNumber != _labelPage) {
+      _labelPage = pageNumber;
+      _labelText =
+          referenceFromPageNumber(pageNumber, widget.outline, widget.bookTitle);
+    }
+    _labelController.show(
+      context,
+      anchor: globalPosition,
+      text: _labelText ?? '',
+      side: _labelSide,
+    );
+  }
+
+  void _hideLabel() {
+    _labelPage = null;
+    _labelText = null;
+    _labelController.hide();
+  }
 
   /// מספר העמוד בתוך המחוון. FittedBox מבטיח שורה אחת תמיד — מספרים
   /// תלת/ארבע-ספרתיים (100+, ש"ס) מתכווצים במקום להישבר לשתי שורות.
@@ -225,8 +305,19 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                   );
                 }
 
+                // עוטף את חישוב עמוד היעד עבור מיקום אנכי על המסילה ומציג את
+                // התווית. משותף לריחוף ולגרירה.
+                void updateLabelForThumbTop(
+                    double desiredThumbTop, Offset globalPosition) {
+                  if (!_labelEnabled) return;
+                  final page = _pageForThumbTop(desiredThumbTop, bounds,
+                      scrollableExtent, visibleHeight, maxThumbTop);
+                  _showLabelForPage(page, globalPosition);
+                }
+
                 void startThumbDrag(DragStartDetails details) {
                   if (widget.freezeThumb) return;
+                  _isDraggingThumb = true;
                   _dragPointerOffsetWithinThumb = details.localPosition.dy;
                   // נצמד מיד לאצבע מהמיקום הנוכחי של המחוון.
                   setState(() => _activeDragThumbTop = thumbTop);
@@ -247,61 +338,82 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                   setState(() => _activeDragThumbTop =
                       desiredThumbTop.clamp(0.0, maxThumbTop).toDouble());
                   jumpToThumbTop(desiredThumbTop, animate: false);
+                  updateLabelForThumbTop(
+                      desiredThumbTop, details.globalPosition);
                 }
 
                 void endThumbDrag() {
+                  _isDraggingThumb = false;
                   _dragPointerOffsetWithinThumb = null;
+                  _hideLabel();
                   if (_activeDragThumbTop != null) {
                     setState(() => _activeDragThumbTop = null);
                   }
                 }
 
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTapDown: (details) {
-                    final tapY = details.localPosition.dy;
-                    final isTapOnThumb =
-                        tapY >= thumbTop && tapY <= thumbTop + thumbHeight;
-                    if (isTapOnThumb) return;
-                    jumpToThumbTop(details.localPosition.dy - thumbHeight / 2);
+                return MouseRegion(
+                  // ריחוף סתמי על המסילה — תצוגה מקדימה של עמוד היעד.
+                  onHover: _labelEnabled
+                      ? (event) {
+                          final desiredThumbTop =
+                              event.localPosition.dy - thumbHeight / 2;
+                          updateLabelForThumbTop(
+                              desiredThumbTop, event.position);
+                        }
+                      : null,
+                  onExit: (_) {
+                    // בזמן גרירה העכבר עלול לצאת מרוחב המסילה — אסור להסתיר אז.
+                    if (_isDraggingThumb) return;
+                    _hideLabel();
                   },
-                  child: Stack(
-                    children: [
-                      Container(
-                        key: _trackKey,
-                        width: widget.trackThickness,
-                        decoration: BoxDecoration(
-                          color: resolvedTrackColor,
-                          borderRadius:
-                              BorderRadius.circular(widget.trackThickness / 2),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: (details) {
+                      final tapY = details.localPosition.dy;
+                      final isTapOnThumb =
+                          tapY >= thumbTop && tapY <= thumbTop + thumbHeight;
+                      if (isTapOnThumb) return;
+                      jumpToThumbTop(
+                          details.localPosition.dy - thumbHeight / 2);
+                    },
+                    child: Stack(
+                      children: [
+                        Container(
+                          key: _trackKey,
+                          width: widget.trackThickness,
+                          decoration: BoxDecoration(
+                            color: resolvedTrackColor,
+                            borderRadius: BorderRadius.circular(
+                                widget.trackThickness / 2),
+                          ),
                         ),
-                      ),
-                      Positioned(
-                        top: thumbTop,
-                        left: 0,
-                        right: 0,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onVerticalDragStart: startThumbDrag,
-                          onVerticalDragUpdate: updateThumbDrag,
-                          onVerticalDragEnd: (_) => endThumbDrag(),
-                          onVerticalDragCancel: endThumbDrag,
-                          child: Container(
-                            width: widget.trackThickness,
-                            height: thumbHeight,
-                            decoration: BoxDecoration(
-                              color: resolvedThumbColor,
-                              borderRadius: BorderRadius.circular(
-                                  widget.trackThickness / 2),
-                            ),
-                            child: Center(
-                              child: _buildPageNumberText(
-                                  displayedPageNumber, colorScheme),
+                        Positioned(
+                          top: thumbTop,
+                          left: 0,
+                          right: 0,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onVerticalDragStart: startThumbDrag,
+                            onVerticalDragUpdate: updateThumbDrag,
+                            onVerticalDragEnd: (_) => endThumbDrag(),
+                            onVerticalDragCancel: endThumbDrag,
+                            child: Container(
+                              width: widget.trackThickness,
+                              height: thumbHeight,
+                              decoration: BoxDecoration(
+                                color: resolvedThumbColor,
+                                borderRadius: BorderRadius.circular(
+                                    widget.trackThickness / 2),
+                              ),
+                              child: Center(
+                                child: _buildPageNumberText(
+                                    displayedPageNumber, colorScheme),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               },

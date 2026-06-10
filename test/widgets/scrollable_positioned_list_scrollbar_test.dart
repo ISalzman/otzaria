@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
@@ -377,6 +378,87 @@ void main() {
         .value = const [
       ItemPosition(index: 1, itemLeadingEdge: 0, itemTrailingEdge: 0.5),
     ];
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ריחוף על המסילה מציג תווית יעד ומסתיר אותה ביציאה',
+      (tester) async {
+    final listener = ItemPositionsListener.create();
+    final controller = ItemScrollController();
+    final requestedIndices = <int>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 100,
+            labelForIndex: (index) {
+              requestedIndices.add(index);
+              return 'יעד $index';
+            },
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    // 2 מתוך 100 גלויים → יש מה לגלול והסרגל מוצג.
+    (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+        const [
+      ItemPosition(index: 0, itemLeadingEdge: 0, itemTrailingEdge: 0.02),
+      ItemPosition(index: 1, itemLeadingEdge: 0.02, itemTrailingEdge: 0.04),
+    ];
+    await tester.pump();
+
+    // הסרגל בקצה שמאל (LTR בבדיקה) ברוחב 12; מתחילים מחוץ לסרגל ומרחפים
+    // פנימה כדי שייווצר אירוע hover אמיתי על ה-MouseRegion.
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: const Offset(400, 300));
+    addTearDown(() => gesture.removePointer());
+    await tester.pump();
+    await gesture.moveTo(const Offset(6, 300));
+    await tester.pump();
+
+    expect(requestedIndices, isNotEmpty, reason: 'ריחוף צריך לבקש כתובת יעד');
+    expect(find.textContaining('יעד'), findsOneWidget);
+
+    // יציאה מהמסילה מסתירה את התווית.
+    await gesture.moveTo(const Offset(400, 300));
+    await tester.pump();
+    expect(find.textContaining('יעד'), findsNothing);
+  });
+
+  testWidgets('בלי labelForIndex אין תווית ואין קריסה בריחוף', (tester) async {
+    final listener = ItemPositionsListener.create();
+    final controller = ItemScrollController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 100,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+        const [
+      ItemPosition(index: 0, itemLeadingEdge: 0, itemTrailingEdge: 0.02),
+      ItemPosition(index: 1, itemLeadingEdge: 0.02, itemTrailingEdge: 0.04),
+    ];
+    await tester.pump();
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: const Offset(6, 300));
+    addTearDown(() => gesture.removePointer());
+    await tester.pump();
 
     expect(tester.takeException(), isNull);
   });

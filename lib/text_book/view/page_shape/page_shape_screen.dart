@@ -26,6 +26,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -564,6 +565,19 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     });
   }
 
+  /// כתובת היעד לתווית הריחוף על סרגל הטקסט הראשי. ממיר אינדקס סגמנט
+  /// (במצב קריאה רציף) לשורת המקור כדי שמיפוי ה-TOC יהיה נכון.
+  String _mainTextLabelForIndex(int index, TextBookLoaded state) {
+    final segments = state.readingSegments;
+    final lineIndex = segments.isNotEmpty
+        ? (index >= 0 && index < segments.length
+            ? segments[index].startLineIndex
+            : index)
+        : index;
+    final ref = refFromTocList(lineIndex, state.tableOfContents);
+    return addBookTitleToRef(ref, state.book.title);
+  }
+
   void _toggleLeftSidebar() {
     setState(() {
       _isLeftSidebarOpen = !_isLeftSidebarOpen;
@@ -877,6 +891,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                             positionsListener:
                                                 state.positionsListener,
                                             isMainText: true,
+                                            labelForIndex:
+                                                state.tableOfContents.isEmpty
+                                                    ? null
+                                                    : (index) =>
+                                                        _mainTextLabelForIndex(
+                                                            index, state),
                                             onOpenSidebarTab:
                                                 _openLeftSidebarTab,
                                             onOpenSearch: widget.onOpenSearch,
@@ -1225,6 +1245,10 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
   List<String>? _content;
   TextBook? _reportBook;
+  // תוכן העניינים של ספר המפרש — לתווית היעד בריחוף על סרגל הגלילה. null
+  // עד שנטען; אינדקסי התוכן של המפרש מתיישרים עם מספרי השורות שלו, ולכן
+  // המיפוי ישיר (refFromTocList) בלי המרת סגמנטים.
+  List<TocEntry>? _commentaryToc;
   bool _isLoading = true;
   final ItemScrollController _scrollController = ItemScrollController();
   final ItemPositionsListener _positionsListener =
@@ -1473,9 +1497,38 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     }
   }
 
+  /// טוען את תוכן העניינים של ספר המפרש (אם קיים) ושומר אותו לתווית היעד.
+  /// כישלון אינו קריטי — פשוט לא תוצג תווית.
+  Future<void> _loadCommentaryToc(TextBook book) async {
+    final requested = widget.commentatorName;
+    try {
+      final toc = await LibraryProviderManager.instance.getBookToc(
+        book.title,
+        categoryId: book.categoryId,
+        fileType: book.fileType,
+      );
+      if (!mounted || widget.commentatorName != requested) return;
+      setState(() => _commentaryToc = toc ?? const <TocEntry>[]);
+    } catch (_) {
+      // ללא תווית — לא מפילים את טעינת המפרש בגלל זה.
+    }
+  }
+
+  /// כתובת היעד לתווית הריחוף על סרגל המפרש. אינדקס התוכן של המפרש מתיישר
+  /// עם מספרי השורות שלו, ולכן המיפוי ישיר.
+  String _commentaryLabelForIndex(int index) {
+    final toc = _commentaryToc;
+    if (toc == null) return '';
+    final ref = refFromTocList(index, toc);
+    return addBookTitleToRef(ref, widget.commentatorName);
+  }
+
   Future<void> _loadCommentary() async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _commentaryToc = null;
+    });
     _lastLinks = null;
 
     try {
@@ -1550,6 +1603,9 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
           book = TextBook(title: widget.commentatorName);
         }
       }
+
+      // טעינת תוכן העניינים של המפרש ברקע — עבור תווית היעד בריחוף על הסרגל.
+      unawaited(_loadCommentaryToc(book));
 
       // טעינת הטקסט ישירות מה-provider המתאים
       final useDatabaseSource = bookLocation != null &&
@@ -1795,6 +1851,8 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
               positionsListener: _positionsListener,
               isMainText: false,
               bookTitle: widget.commentatorName, // לפתיחה בטאב נפרד
+              labelForIndex:
+                  _commentaryToc == null ? null : _commentaryLabelForIndex,
               reportBook: _reportBook,
               highlightedIndices: _highlightedIndices, // הדגשות מקומיות
               onCommentatorChanged: _reloadCommentary, // callback לרענון
