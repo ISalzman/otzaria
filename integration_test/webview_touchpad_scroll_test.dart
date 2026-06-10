@@ -115,21 +115,19 @@ void main() {
       expect(
         afterPan,
         greaterThan(0),
-        reason: 'דלתות טאצ\'פד תת-פיקסליות חייבות לגלול את הדף '
-            '(לפני התיקון הן נמחקו לאפס בצד הנייטיבי)',
+        reason: 'גרירת טאצ\'פד תת-פיקסלית חייבת לגלול את הדף',
       );
-      // כיול: תנועת אצבע של 120px אמורה לגלול בסדר גודל דומה.
-      // 120 יחידות wheel הן בערך notch אחד ב-Chromium.
+      // מעקב: תנועת אצבע של 120px אמורה לגלול בערך 120 × gain (1.5) = 180px.
       await Future<void>.delayed(const Duration(seconds: 1));
       final dragDistance = await _scrollY(controller);
       // ignore: avoid_print
-      print('TOUCHPAD-CALIBRATION: finger=120px page=${dragDistance}px '
-          'ratio=${(dragDistance / 120).toStringAsFixed(2)}');
-      expect(dragDistance, greaterThan(60));
-      expect(dragDistance, lessThan(240));
+      print('TOUCHPAD-TRACKING: finger=120px page=${dragDistance}px '
+          'ratio=${(dragDistance / 120).toStringAsFixed(2)} (gain=1.5)');
+      expect(dragDistance, greaterThan(150));
+      expect(dragDistance, lessThan(220));
 
-      // מחווה מהירה אמורה להמשיך לגלול אחרי panZoomEnd.
-      // זה בודק את האינרציה הסינתטית ב-fork.
+      // מחווה מהירה אמורה להמשיך לגלול אחרי panZoomEnd —
+      // האינרציה הסינתטית של ה-fork.
       final beforeFling = await _scrollY(controller);
       await tester.sendEventToBinding(
         trackpad.panZoomStart(center, timeStamp: const Duration(seconds: 10)),
