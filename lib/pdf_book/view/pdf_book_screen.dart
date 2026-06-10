@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
+import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -169,16 +170,8 @@ AppContextMenuEntry buildPdfLinksContextMenuEntry({
         ),
         const AppContextMenuEntry.divider(),
       ],
-      ...relevantLinks.map((link) => AppContextMenuEntry(
-            label: link.fallbackDisplayReference,
-            labelWidget: FutureBuilder<String>(
-              future: link.displayReference,
-              builder: (context, snapshot) => Text(
-                snapshot.data ?? link.fallbackDisplayReference,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+      ...relevantLinks.map((link) => buildLinkContextMenuEntry(
+            link: link,
             onTap: () => onOpenLink(link),
           )),
     ];

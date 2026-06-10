@@ -38,6 +38,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
+import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
@@ -1113,16 +1114,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
               link.start == null &&
               link.end == null)
           .toList());
-      items.addAll(sortedLinks.map((link) => AppContextMenuEntry(
-            label: link.fallbackDisplayReference,
-            labelWidget: FutureBuilder<String>(
-              future: link.displayReference,
-              builder: (context, snapshot) => Text(
-                snapshot.data ?? link.fallbackDisplayReference,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+      items.addAll(sortedLinks.map((link) => buildLinkContextMenuEntry(
+            link: link,
             onTap: () => widget.openBookCallback(
               TextBookTab(
                 book: TextBook(title: utils.getTitleFromPath(link.path2)),
