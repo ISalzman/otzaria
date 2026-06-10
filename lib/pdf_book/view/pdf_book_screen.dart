@@ -676,7 +676,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         : PdfLayoutMode.regularView;
 
     if (enablePerBookSettings && widget.tab.savedLayoutMode == null) {
-      final settings = await PdfBookPerBookSettings.load(widget.tab.book.title);
+      final settings = await _loadPerBookSettings();
       if (settings?.layoutMode != null) {
         layoutMode = settings!.layoutMode!;
       }
@@ -691,8 +691,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   ({int startLine, int endLine})? _getCurrentPdfLinesRange() {
     final currentLine = widget.tab.currentTextLineNumber;
     if (currentLine == null) {
-      debugPrint(
-          '🔍 [PDF-DEBUG] _getCurrentPdfLinesRange: currentTextLineNumber=null → returning null');
       return null;
     }
 
@@ -720,8 +718,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     int pageNumber, {
     String? resolvedTitle,
   }) async {
-    debugPrint(
-        '📖 [PDF-DEBUG] _resolveTextLineNumberForPage: page=$pageNumber resolvedTitle="$resolvedTitle"');
     final outline = widget.tab.outline.value ?? const <PdfOutlineNode>[];
     final range = _spreadPageRangeFor(pageNumber);
     if (outline.isNotEmpty) {
@@ -731,33 +727,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         if (!mounted) return (start: textIndex + 1, end: null);
         final nextIndex = await pdfToTextPage(
             widget.tab.book, outline, range.endPageExclusive, context);
-        debugPrint(
-            '📖 [PDF-DEBUG] pdfToTextPage → raw=$textIndex → start=${textIndex + 1}, end=${nextIndex ?? "null (last page)"}');
         return (start: textIndex + 1, end: nextIndex);
       }
-      debugPrint('📖 [PDF-DEBUG] pdfToTextPage → null (no match)');
-    } else {
-      debugPrint('📖 [PDF-DEBUG] outline empty, skipping pdfToTextPage');
     }
 
     final title = resolvedTitle ??
         await refFromPageNumber(
             range.startPage, outline, widget.tab.book.title);
-    debugPrint('📖 [PDF-DEBUG] title for page ${range.startPage} = "$title"');
     if (widget.tab.pdfHeadings != null && title.isNotEmpty) {
       final lineNumber = widget.tab.pdfHeadings!.getLineNumberForHeading(title);
-      debugPrint(
-          '📖 [PDF-DEBUG] getLineNumberForHeading("$title") → $lineNumber');
       if (lineNumber != null) {
         return (start: lineNumber, end: null);
       }
-    } else {
-      debugPrint(
-          '📖 [PDF-DEBUG] pdfHeadings=${widget.tab.pdfHeadings == null ? "null" : "loaded"}, title empty=${title.isEmpty}');
     }
 
-    debugPrint(
-        '📖 [PDF-DEBUG] fallback: returning pageNumber=${range.startPage} as lineNumber');
     return (start: range.startPage, end: null);
   }
 
@@ -1301,8 +1284,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         bool shouldFitToWidth =
             layoutMode != PdfLayoutMode.bookView && !hasSavedZoom;
         if (enablePerBookSettings) {
-          final settings =
-              await PdfBookPerBookSettings.load(widget.tab.book.title);
+          final settings = await _loadPerBookSettings();
           shouldFitToWidth = shouldFitToWidth && settings?.zoom == null;
 
           // טעינת המפרשים הפעילים
@@ -2499,11 +2481,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     await settings.save(widget.tab.book.title);
   }
 
+  /// קאש של הגדרות לפי-ספר לאורך חיי המסך. נטען פעם אחת ומשותף לכל
+  /// מוקדי הפתיחה (מצב תצוגה, מפרשים פעילים, zoom) כדי למנוע 3 קריאות
+  /// קובץ כפולות בכל פתיחת PDF.
+  Future<PdfBookPerBookSettings?>? _perBookSettingsFuture;
+
+  Future<PdfBookPerBookSettings?> _loadPerBookSettings() {
+    return _perBookSettingsFuture ??=
+        PdfBookPerBookSettings.load(widget.tab.book.title);
+  }
+
   Future<void> _loadActiveCommentators() async {
     final settingsBloc = context.read<SettingsBloc>();
     if (!settingsBloc.state.enablePerBookSettings) return;
 
-    final settings = await PdfBookPerBookSettings.load(widget.tab.book.title);
+    final settings = await _loadPerBookSettings();
     if (settings?.activeCommentators != null && mounted) {
       widget.tab.activeCommentators.clear();
       widget.tab.activeCommentators.addAll(settings!.activeCommentators!);
@@ -2705,8 +2697,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final bookTitle = widget.tab.book.title;
     final categoryId = widget.tab.book.categoryId;
     final filePath = widget.tab.book.filePath;
-    debugPrint(
-        '📚 [PDF-DEBUG] _loadPdfHeadingsAndLinks START: title="$bookTitle" categoryId=$categoryId filePath="$filePath"');
 
     try {
       // טעינת headings מה-DB
@@ -2718,40 +2708,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       );
       if (headings != null) {
         widget.tab.pdfHeadings = headings;
-        debugPrint(
-            '📚 [PDF-DEBUG] pdfHeadings loaded: ${headings.headingsMap.length} entries. First 3: ${headings.headingsMap.entries.take(3).map((e) => "${e.key}→${e.value}").join(", ")}');
-      } else {
-        debugPrint('📚 [PDF-DEBUG] pdfHeadings NOT FOUND for "$bookTitle"');
       }
 
       // טעינת links
       final library = await DataRepository.instance.library;
-      final allBooks = library.getAllBooks();
-      debugPrint(
-          '📚 [PDF-DEBUG] Library loaded: ${allBooks.length} total books');
 
-      TextBook? textBook =
-          library.findBookByTitle(bookTitle, TextBook) as TextBook?;
-      debugPrint(
-          '📚 [PDF-DEBUG] findBookByTitle("$bookTitle", TextBook) → ${textBook == null ? "NOT FOUND" : "FOUND: ${textBook.runtimeType}, categoryId=${textBook.categoryId}"}');
-
-      if (textBook == null) {
-        // ניסיון חיפוש גמיש
-        textBook =
-            library.findBookByTitleFlexible(bookTitle, TextBook) as TextBook?;
-        debugPrint(
-            '📚 [PDF-DEBUG] findBookByTitleFlexible → ${textBook == null ? "NOT FOUND" : "FOUND: ${textBook.title}"}');
-        // הצג ספרים בשם דומה לעזרת דיבוג
-        final similar = allBooks
-            .where((b) =>
-                b.runtimeType == TextBook &&
-                b.title.contains(bookTitle.substring(
-                    0, bookTitle.length > 5 ? 5 : bookTitle.length)))
-            .take(5)
-            .map((b) => '"${b.title}" (cat=${b.categoryId})')
-            .toList();
-        debugPrint('📚 [PDF-DEBUG] Similar TextBooks: $similar');
-      }
+      // ניסיון חיפוש מדויק, ואם נכשל — חיפוש גמיש
+      final TextBook? textBook = (library.findBookByTitle(bookTitle, TextBook)
+              as TextBook?) ??
+          (library.findBookByTitleFlexible(bookTitle, TextBook) as TextBook?);
 
       if (textBook != null) {
         final loadedLinks = await textBook.links
@@ -2768,12 +2733,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 l.connectionType.toUpperCase() == 'TARGUM')
             .length;
         _bookHasCommentaryLinks = commentaryCount > 0;
-        debugPrint(
-            '📚 [PDF-DEBUG] Links loaded: ${loadedLinks.length} total, $commentaryCount commentary/targum');
-        if (loadedLinks.isNotEmpty) {
-          debugPrint(
-              '📚 [PDF-DEBUG] Links index1 range: ${loadedLinks.first.index1}–${loadedLinks.last.index1}');
-        }
         await _loadCommentatorGroups();
       }
 
