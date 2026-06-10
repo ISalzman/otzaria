@@ -25,16 +25,14 @@ class SettingsActionTile extends StatelessWidget {
     required this.icon,
     required String title,
     required String subtitle,
-    TextDirection subtitleDirection = TextDirection.rtl,
+    bool subtitleLtr = false,
     required this.actions,
   })  : title = Text(title, style: AppTextStyles.settingTitle),
         subtitle = Text(
           subtitle,
           style: AppTextStyles.settingSubtitle,
-          textDirection:
-              subtitleDirection == TextDirection.ltr ? TextDirection.ltr : null,
-          textAlign:
-              subtitleDirection == TextDirection.ltr ? TextAlign.end : null,
+          textDirection: subtitleLtr ? TextDirection.ltr : null,
+          textAlign: subtitleLtr ? TextAlign.end : null,
         );
 
   /// קונסטרקטור ייעודי לנתיבי קבצים.
