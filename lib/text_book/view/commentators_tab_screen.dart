@@ -855,7 +855,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         AppTopBarItem(
           widget: ToolbarActionButton(
             tooltip: 'חיפוש',
-            icon: FluentIcons.book_search_24_regular,
+            icon: FluentIcons.search_24_regular,
             compact: context.read<SettingsBloc>().state.compactMenuMode,
             onPressed: _openSearchPane,
           ),
@@ -1130,8 +1130,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                         ),
                       ),
                       Tab(
-                        icon:
-                            Icon(FluentIcons.book_search_24_regular, size: 16),
+                        icon: Icon(FluentIcons.search_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
                         child: Text(

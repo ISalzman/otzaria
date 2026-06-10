@@ -987,7 +987,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return [
       AppContextMenuEntry(
         label: 'חיפוש',
-        icon: FluentIcons.book_search_24_regular,
+        icon: FluentIcons.search_24_regular,
         onTap: _ensureSearchTabIsActive,
       ),
       AppContextMenuEntry(
@@ -3001,7 +3001,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                         ? pdfBookSearchTourTargetKey
                         : null,
                     tooltip: 'חיפוש',
-                    icon: FluentIcons.book_search_24_regular,
+                    icon: FluentIcons.search_24_regular,
                     compact: context.read<SettingsBloc>().state.compactMenuMode,
                     onPressed: _ensureSearchTabIsActive,
                   ),
@@ -3305,8 +3305,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 label: 'ניווט'
               ),
               (
-                icon: FluentIcons.book_search_24_regular,
-                iconFilled: FluentIcons.book_search_24_filled,
+                icon: FluentIcons.search_24_regular,
+                iconFilled: FluentIcons.search_24_filled,
                 label: 'חיפוש'
               ),
               (

@@ -758,7 +758,7 @@ class _CombinedViewState extends State<CombinedView> {
                       selectedText: cleanedText,
                       suffix: 'בספר זה',
                     ),
-                    icon: FluentIcons.book_search_24_regular,
+                    icon: FluentIcons.search_24_regular,
                     onTap: () =>
                         widget.openLeftPaneTab(1, searchText: cleanedText),
                   ),
