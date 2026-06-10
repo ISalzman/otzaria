@@ -1757,29 +1757,26 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     if (!context.mounted) return;
     showDialog(
       context: context,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: const Text(
-            'יומן שינויים בתוכנה',
-          ),
-          content: SizedBox(
-            width: 600,
-            height: 400,
-            child: Markdown(
-              data: changelog,
-              onTapLink: (text, href, title) {
-                if (href != null) launchUrl(Uri.parse(href));
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('סגור'),
-            ),
-          ],
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'יומן שינויים בתוכנה',
         ),
+        content: SizedBox(
+          width: 600,
+          height: 400,
+          child: Markdown(
+            data: changelog,
+            onTapLink: (text, href, title) {
+              if (href != null) launchUrl(Uri.parse(href));
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('סגור'),
+          ),
+        ],
       ),
     );
   }
@@ -1899,63 +1896,60 @@ class _PendingReportEditFieldsState extends State<_PendingReportEditFields> {
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          RtlTextField(
-            controller: _selectedTextController,
-            keyboardType: TextInputType.multiline,
-            textInputAction: TextInputAction.newline,
-            minLines: 1,
-            maxLines: 5,
-            onChanged: (_) => _notifyChanged(),
-            decoration: const InputDecoration(
-              labelText: 'הטקסט שנבחר',
-              isDense: true,
-              contentPadding: EdgeInsets.only(
-                top: 12,
-                bottom: 12,
-              ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        RtlTextField(
+          controller: _selectedTextController,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          minLines: 1,
+          maxLines: 5,
+          onChanged: (_) => _notifyChanged(),
+          decoration: const InputDecoration(
+            labelText: 'הטקסט שנבחר',
+            isDense: true,
+            contentPadding: EdgeInsets.only(
+              top: 12,
+              bottom: 12,
             ),
           ),
-          const SizedBox(height: 12),
-          RtlTextField(
-            controller: _detailsController,
-            keyboardType: TextInputType.multiline,
-            textInputAction: TextInputAction.newline,
-            minLines: 1,
-            maxLines: 6,
-            onChanged: (_) => _notifyChanged(),
-            decoration: const InputDecoration(
-              labelText: 'פירוט הטעות',
-              isDense: true,
-              contentPadding: EdgeInsets.only(
-                top: 12,
-                bottom: 12,
-              ),
+        ),
+        const SizedBox(height: 12),
+        RtlTextField(
+          controller: _detailsController,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          minLines: 1,
+          maxLines: 6,
+          onChanged: (_) => _notifyChanged(),
+          decoration: const InputDecoration(
+            labelText: 'פירוט הטעות',
+            isDense: true,
+            contentPadding: EdgeInsets.only(
+              top: 12,
+              bottom: 12,
             ),
           ),
-          const SizedBox(height: 12),
-          RtlTextField(
-            controller: _contextController,
-            keyboardType: TextInputType.multiline,
-            textInputAction: TextInputAction.newline,
-            minLines: 1,
-            maxLines: 6,
-            onChanged: (_) => _notifyChanged(),
-            decoration: const InputDecoration(
-              labelText: 'הקשר',
-              isDense: true,
-              contentPadding: EdgeInsets.only(
-                top: 12,
-                bottom: 12,
-              ),
+        ),
+        const SizedBox(height: 12),
+        RtlTextField(
+          controller: _contextController,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          minLines: 1,
+          maxLines: 6,
+          onChanged: (_) => _notifyChanged(),
+          decoration: const InputDecoration(
+            labelText: 'הקשר',
+            isDense: true,
+            contentPadding: EdgeInsets.only(
+              top: 12,
+              bottom: 12,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -287,245 +287,237 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
     final isSearching = _searchQuery.trim().isNotEmpty;
 
     return ProtectedSettingsWrapper(
-      child: Directionality(
-        textDirection: TextDirection.rtl,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isMobile = constraints.maxWidth < LayoutBreakpoints.compact;
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < LayoutBreakpoints.compact;
 
-            // ── מצב מובייל ────────────────────────────────────────────────
-            if (isMobile) {
-              if (_showMobileMenu) {
-                final showResults = _searchQuery.trim().isNotEmpty;
-                return KeyboardNavigator(
-                  currentTabIndex: _selectedIndex,
-                  totalTabs: _tabsData.length,
-                  onTabChange: (i) => setState(() => _selectedIndex = i),
-                  onBack: showResults ? _handleMobileBack : null,
-                  child: Scaffold(
+          // ── מצב מובייל ────────────────────────────────────────────────
+          if (isMobile) {
+            if (_showMobileMenu) {
+              final showResults = _searchQuery.trim().isNotEmpty;
+              return KeyboardNavigator(
+                currentTabIndex: _selectedIndex,
+                totalTabs: _tabsData.length,
+                onTabChange: (i) => setState(() => _selectedIndex = i),
+                onBack: showResults ? _handleMobileBack : null,
+                child: Scaffold(
+                  backgroundColor: bgColor,
+                  appBar: AppBar(
                     backgroundColor: bgColor,
-                    appBar: AppBar(
-                      backgroundColor: bgColor,
-                      elevation: 0,
-                      title: Text(showResults ? 'תוצאות חיפוש' : 'הגדרות'),
-                      leading: showResults
-                          ? Tooltip(
-                              message: 'חזור (Esc)',
-                              child: IconButton(
-                                icon: const RtlIcon(
-                                    FluentIcons.arrow_right_24_regular),
-                                onPressed: _handleMobileBack,
-                              ),
-                            )
-                          : null,
-                    ),
-                    body: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                          child: SettingsSearchField(
-                            controller: _searchController,
-                            focusNode: _searchFocusNode,
-                            onChanged: _onSearchChanged,
-                          ),
-                        ),
-                        Expanded(
-                          child: showResults
-                              ? SettingsSearchResultsView(
-                                  query: _searchQuery,
-                                  results: _searchResults,
-                                  onResultTap: _onSearchResultTap,
-                                )
-                              : ListView(
-                                  padding: const EdgeInsets.all(12),
-                                  children: [
-                                    for (final group in _mobileGroups) ...[
-                                      SettingsCard(
-                                        title: group.label,
-                                        children: [
-                                          for (final idx in group.indices)
-                                            ListTile(
-                                              key: tourSettingsTabTargetKeys[
-                                                  idx],
-                                              leading: Icon(
-                                                _tabsData[idx].icon,
-                                                color: colorScheme.primary,
-                                              ),
-                                              title: Text(
-                                                _tabsData[idx].label,
-                                                textDirection:
-                                                    TextDirection.rtl,
-                                              ),
-                                              trailing: const RtlIcon(
-                                                FluentIcons
-                                                    .chevron_left_24_regular,
-                                              ),
-                                              onTap: () {
-                                                setState(() {
-                                                  _selectedIndex = idx;
-                                                  _showMobileMenu = false;
-                                                });
-                                              },
-                                            ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                    ],
-                                  ],
-                                ),
-                        ),
-                      ],
-                    ),
+                    elevation: 0,
+                    title: Text(showResults ? 'תוצאות חיפוש' : 'הגדרות'),
+                    leading: showResults
+                        ? Tooltip(
+                            message: 'חזור (Esc)',
+                            child: IconButton(
+                              icon: const RtlIcon(
+                                  FluentIcons.arrow_right_24_regular),
+                              onPressed: _handleMobileBack,
+                            ),
+                          )
+                        : null,
                   ),
-                );
-              } else {
-                final showResults = _searchQuery.trim().isNotEmpty;
-                return KeyboardNavigator(
-                  currentTabIndex: _selectedIndex,
-                  totalTabs: _tabsData.length,
-                  onTabChange: _changeTab,
-                  onBack: _handleMobileBack,
-                  child: Scaffold(
-                    backgroundColor: bgColor,
-                    appBar: AppBar(
-                      backgroundColor: bgColor,
-                      elevation: 0,
-                      title: Text(isSearching
-                          ? 'תוצאות חיפוש'
-                          : _tabsData[_selectedIndex].label),
-                      leading: Tooltip(
-                        message: 'חזור (Esc)',
-                        child: IconButton(
-                          icon:
-                              const RtlIcon(FluentIcons.arrow_right_24_regular),
-                          onPressed: _handleMobileBack,
-                        ),
-                      ),
-                    ),
-                    body: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                          child: SettingsSearchField(
-                            controller: _searchController,
-                            focusNode: _searchFocusNode,
-                            onChanged: _onSearchChanged,
-                          ),
-                        ),
-                        Expanded(
-                          child: showResults
-                              ? SettingsSearchResultsView(
-                                  query: _searchQuery,
-                                  results: _searchResults,
-                                  onResultTap: _onSearchResultTap,
-                                )
-                              : _tabsData[_selectedIndex].pageBuilder(),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-            }
-
-            // ── מצב דסקטופ: KeyboardNavigator + sidebar + תוכן ──────────
-            return KeyboardNavigator(
-              currentTabIndex: _selectedIndex,
-              totalTabs: _tabsData.length,
-              onTabChange: _changeTab,
-              onBack: null,
-              child: Scaffold(
-                backgroundColor: bgColor,
-                body: Listener(
-                  // [תיקון גלילה] גלגל עכבר מכל מקום (כולל sidebar) גולל את התוכן
-                  onPointerSignal: (event) {
-                    if (event is PointerScrollEvent &&
-                        _contentScrollController.hasClients) {
-                      final newOffset = _contentScrollController.offset +
-                          event.scrollDelta.dy;
-                      _contentScrollController.jumpTo(
-                        newOffset.clamp(
-                          0.0,
-                          _contentScrollController.position.maxScrollExtent,
-                        ),
-                      );
-                    }
-                  },
-                  child: Row(
+                  body: Column(
                     children: [
-                      // ── Sidebar ──────────────────────────────────────
-                      SizedBox(
-                        width: 210,
-                        child: Container(
-                          color: bgColor,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 28),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                    right: 12, left: 12, bottom: 20),
-                                child: Text(
-                                  'הגדרות',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineSmall
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                              Expanded(
-                                child: ListView.builder(
-                                  itemCount: _tabsData.length,
-                                  itemBuilder: (context, index) =>
-                                      SidebarNavItem(
-                                    key: tourSettingsTabTargetKeys[index],
-                                    icon: _tabsData[index].icon,
-                                    iconFilled: _tabsData[index].iconFilled,
-                                    label: _tabsData[index].label,
-                                    isSelected:
-                                        !isSearching && _selectedIndex == index,
-                                    onTap: () => _changeTab(index),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                        child: SettingsSearchField(
+                          controller: _searchController,
+                          focusNode: _searchFocusNode,
+                          onChanged: _onSearchChanged,
                         ),
                       ),
-
-                      // ── אזור תוכן ────────────────────────────────────
                       Expanded(
-                        child: _SettingsContentPane(
-                          key: ValueKey(_selectedIndex),
-                          label: isSearching
-                              ? 'תוצאות חיפוש'
-                              : _tabsData[_selectedIndex].label,
-                          bgColor: bgColor,
-                          focusNode: _contentFocusNode,
-                          scrollController: _contentScrollController,
-                          headerExtra: SettingsSearchField(
-                            controller: _searchController,
-                            focusNode: _searchFocusNode,
-                            onChanged: _onSearchChanged,
-                          ),
-                          overrideContent: _searchQuery.trim().isEmpty
-                              ? null
-                              : SettingsSearchResultsView(
-                                  query: _searchQuery,
-                                  results: _searchResults,
-                                  onResultTap: _onSearchResultTap,
-                                ),
-                          child: _tabsData[_selectedIndex].pageBuilder(),
-                        ),
+                        child: showResults
+                            ? SettingsSearchResultsView(
+                                query: _searchQuery,
+                                results: _searchResults,
+                                onResultTap: _onSearchResultTap,
+                              )
+                            : ListView(
+                                padding: const EdgeInsets.all(12),
+                                children: [
+                                  for (final group in _mobileGroups) ...[
+                                    SettingsCard(
+                                      title: group.label,
+                                      children: [
+                                        for (final idx in group.indices)
+                                          ListTile(
+                                            key: tourSettingsTabTargetKeys[idx],
+                                            leading: Icon(
+                                              _tabsData[idx].icon,
+                                              color: colorScheme.primary,
+                                            ),
+                                            title: Text(
+                                              _tabsData[idx].label,
+                                            ),
+                                            trailing: const RtlIcon(
+                                              FluentIcons
+                                                  .chevron_left_24_regular,
+                                            ),
+                                            onTap: () {
+                                              setState(() {
+                                                _selectedIndex = idx;
+                                                _showMobileMenu = false;
+                                              });
+                                            },
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                  ],
+                                ],
+                              ),
                       ),
                     ],
                   ),
                 ),
+              );
+            } else {
+              final showResults = _searchQuery.trim().isNotEmpty;
+              return KeyboardNavigator(
+                currentTabIndex: _selectedIndex,
+                totalTabs: _tabsData.length,
+                onTabChange: _changeTab,
+                onBack: _handleMobileBack,
+                child: Scaffold(
+                  backgroundColor: bgColor,
+                  appBar: AppBar(
+                    backgroundColor: bgColor,
+                    elevation: 0,
+                    title: Text(isSearching
+                        ? 'תוצאות חיפוש'
+                        : _tabsData[_selectedIndex].label),
+                    leading: Tooltip(
+                      message: 'חזור (Esc)',
+                      child: IconButton(
+                        icon: const RtlIcon(FluentIcons.arrow_right_24_regular),
+                        onPressed: _handleMobileBack,
+                      ),
+                    ),
+                  ),
+                  body: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                        child: SettingsSearchField(
+                          controller: _searchController,
+                          focusNode: _searchFocusNode,
+                          onChanged: _onSearchChanged,
+                        ),
+                      ),
+                      Expanded(
+                        child: showResults
+                            ? SettingsSearchResultsView(
+                                query: _searchQuery,
+                                results: _searchResults,
+                                onResultTap: _onSearchResultTap,
+                              )
+                            : _tabsData[_selectedIndex].pageBuilder(),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+          }
+
+          // ── מצב דסקטופ: KeyboardNavigator + sidebar + תוכן ──────────
+          return KeyboardNavigator(
+            currentTabIndex: _selectedIndex,
+            totalTabs: _tabsData.length,
+            onTabChange: _changeTab,
+            onBack: null,
+            child: Scaffold(
+              backgroundColor: bgColor,
+              body: Listener(
+                // [תיקון גלילה] גלגל עכבר מכל מקום (כולל sidebar) גולל את התוכן
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent &&
+                      _contentScrollController.hasClients) {
+                    final newOffset =
+                        _contentScrollController.offset + event.scrollDelta.dy;
+                    _contentScrollController.jumpTo(
+                      newOffset.clamp(
+                        0.0,
+                        _contentScrollController.position.maxScrollExtent,
+                      ),
+                    );
+                  }
+                },
+                child: Row(
+                  children: [
+                    // ── Sidebar ──────────────────────────────────────
+                    SizedBox(
+                      width: 210,
+                      child: Container(
+                        color: bgColor,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 28),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                  right: 12, left: 12, bottom: 20),
+                              child: Text(
+                                'הגדרות',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            Expanded(
+                              child: ListView.builder(
+                                itemCount: _tabsData.length,
+                                itemBuilder: (context, index) => SidebarNavItem(
+                                  key: tourSettingsTabTargetKeys[index],
+                                  icon: _tabsData[index].icon,
+                                  iconFilled: _tabsData[index].iconFilled,
+                                  label: _tabsData[index].label,
+                                  isSelected:
+                                      !isSearching && _selectedIndex == index,
+                                  onTap: () => _changeTab(index),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // ── אזור תוכן ────────────────────────────────────
+                    Expanded(
+                      child: _SettingsContentPane(
+                        key: ValueKey(_selectedIndex),
+                        label: isSearching
+                            ? 'תוצאות חיפוש'
+                            : _tabsData[_selectedIndex].label,
+                        bgColor: bgColor,
+                        focusNode: _contentFocusNode,
+                        scrollController: _contentScrollController,
+                        headerExtra: SettingsSearchField(
+                          controller: _searchController,
+                          focusNode: _searchFocusNode,
+                          onChanged: _onSearchChanged,
+                        ),
+                        overrideContent: _searchQuery.trim().isEmpty
+                            ? null
+                            : SettingsSearchResultsView(
+                                query: _searchQuery,
+                                results: _searchResults,
+                                onResultTap: _onSearchResultTap,
+                              ),
+                        child: _tabsData[_selectedIndex].pageBuilder(),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }

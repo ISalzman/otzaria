@@ -54,78 +54,75 @@ class _MeaningView extends StatelessWidget {
     final textTheme = theme.textTheme;
     final colorScheme = theme.colorScheme;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: compact ? 22 : 26,
-            height: compact ? 22 : 26,
-            alignment: Alignment.center,
-            margin: const EdgeInsetsDirectional.only(top: 2, end: 10),
-            decoration: BoxDecoration(
-              color: colorScheme.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              '${index + 1}',
-              style: textTheme.labelMedium?.copyWith(
-                color: colorScheme.primary,
-                fontWeight: FontWeight.w700,
-              ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: compact ? 22 : 26,
+          height: compact ? 22 : 26,
+          alignment: Alignment.center,
+          margin: const EdgeInsetsDirectional.only(top: 2, end: 10),
+          decoration: BoxDecoration(
+            color: colorScheme.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            '${index + 1}',
+            style: textTheme.labelMedium?.copyWith(
+              color: colorScheme.primary,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (meaning.expression != null) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: compact ? 10 : 12,
-                      vertical: compact ? 6 : 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest
-                          .withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      meaning.expression!,
-                      style: textTheme.bodyMedium?.copyWith(
-                        fontStyle: FontStyle.italic,
-                        color: colorScheme.onSurfaceVariant,
-                        height: 1.35,
-                      ),
-                    ),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (meaning.expression != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 10 : 12,
+                    vertical: compact ? 6 : 8,
                   ),
-                  SizedBox(height: compact ? 6 : 8),
-                ],
-                if (meaning.mainText.isNotEmpty)
-                  Text(
-                    meaning.mainText,
-                    style: textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    meaning.expression!,
+                    style: textTheme.bodyMedium?.copyWith(
+                      fontStyle: FontStyle.italic,
+                      color: colorScheme.onSurfaceVariant,
                       height: 1.35,
                     ),
                   ),
-                if (meaning.expansion != null) ...[
-                  SizedBox(height: compact ? 2 : 4),
-                  Text(
-                    meaning.expansion!,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.25,
-                    ),
-                  ),
-                ],
+                ),
+                SizedBox(height: compact ? 6 : 8),
               ],
-            ),
+              if (meaning.mainText.isNotEmpty)
+                Text(
+                  meaning.mainText,
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+              if (meaning.expansion != null) ...[
+                SizedBox(height: compact ? 2 : 4),
+                Text(
+                  meaning.expansion!,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.25,
+                  ),
+                ),
+              ],
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

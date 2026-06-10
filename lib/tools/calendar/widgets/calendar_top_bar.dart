@@ -408,35 +408,32 @@ class _CalendarTopBarState extends State<CalendarTopBar>
                 shadowColor: cs.shadow,
                 borderRadius: BorderRadius.circular(28),
                 color: cs.surfaceContainerHigh,
-                child: Directionality(
-                  textDirection: TextDirection.rtl,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text(
-                            'מעבר לתאריך',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          'מעבר לתאריך',
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
-                        JumpToDatePanel(
-                          selectedDate: _pendingJumpDate,
-                          currentDate: widget.state.selectedGregorianDate,
-                          onDateChanged: (date) {
-                            setState(() {
-                              _pendingJumpDate = date;
-                              _jumpDateController.text = _formatInputDate(date);
-                            });
-                          },
-                          onCancel: widget.onCloseJumpToDateSearch,
-                          onConfirm: _submitJumpDateSearch,
-                        ),
-                      ],
-                    ),
+                      ),
+                      JumpToDatePanel(
+                        selectedDate: _pendingJumpDate,
+                        currentDate: widget.state.selectedGregorianDate,
+                        onDateChanged: (date) {
+                          setState(() {
+                            _pendingJumpDate = date;
+                            _jumpDateController.text = _formatInputDate(date);
+                          });
+                        },
+                        onCancel: widget.onCloseJumpToDateSearch,
+                        onConfirm: _submitJumpDateSearch,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -689,27 +686,24 @@ class _CalendarTopBarState extends State<CalendarTopBar>
                   context,
                   width: dateAreaWidth + (dateNavGap * 2) + 64,
                 )
-              : Directionality(
-                  textDirection: TextDirection.rtl,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      todayBtn,
-                      const SizedBox(width: 4),
-                      jumpBtn,
-                      const SizedBox(width: 4),
-                      prevBtn,
-                      SizedBox(width: dateNavGap),
-                      ConstrainedBox(
-                        constraints: BoxConstraints(minWidth: dateAreaWidth),
-                        child: IntrinsicWidth(
-                          child: Center(child: _buildDateText(context)),
-                        ),
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    todayBtn,
+                    const SizedBox(width: 4),
+                    jumpBtn,
+                    const SizedBox(width: 4),
+                    prevBtn,
+                    SizedBox(width: dateNavGap),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: dateAreaWidth),
+                      child: IntrinsicWidth(
+                        child: Center(child: _buildDateText(context)),
                       ),
-                      SizedBox(width: dateNavGap),
-                      nextBtn,
-                    ],
-                  ),
+                    ),
+                    SizedBox(width: dateNavGap),
+                    nextBtn,
+                  ],
                 );
 
           return LayoutBuilder(

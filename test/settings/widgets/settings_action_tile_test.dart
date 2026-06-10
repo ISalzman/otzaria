@@ -168,14 +168,6 @@ void main() {
       expect(subtitleText.data, contains('\u200E'));
     });
 
-    testWidgets('placeholder מוצג ב-RTL', (tester) async {
-      await tester.pumpWidget(buildPath());
-      final texts = tester.widgetList<Text>(find.byType(Text));
-      final placeholder =
-          texts.firstWhere((t) => t.data == 'בחר מיקום');
-      expect(placeholder.textDirection, TextDirection.rtl);
-    });
-
     testWidgets('נתיב מוצג ב-LTR', (tester) async {
       await tester.pumpWidget(buildPath(path: r'C:\Users\test'));
       final texts = tester.widgetList<Text>(find.byType(Text));
