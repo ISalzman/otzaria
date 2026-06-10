@@ -56,17 +56,37 @@ class SqliteDataProvider {
     // את ה-RO בעצמם. כך קוראים שמגיעים בחלון הזה (למשל טעינת מפרשים/קישורים
     // ברקע בעלייה) ממתינים לפתיחה-מחדש ומצליחים, במקום לקבל null ולהציג ריק.
     if (_activeWriteSessions > 0) {
-      final gate = _externalWriteGate;
       try {
         await _writeChain;
       } catch (_) {}
-      if (gate != null) {
+      // ממתינים לפתיחה-מחדש של ה-RO ע"י ה-session — אך בפעימות עם תקרת זמן,
+      // לא בהמתנה אינסופית. ההמתנה הישנה (await gate.future ללא תקרה) קפאה
+      // לנצח אם reopen התעכב/התפספס (כתיבות חופפות בעלייה, איזולייט שקרס),
+      // והקורא נתקע על מסך עיון/תצוגה מקדימה ריקים עד restart. עכשיו: אם
+      // הפתיחה-מחדש קורית — gate.future מסתיים והלולאה יוצאת מיד (גם אחרי
+      // כמה שניות); אם היא משתהה מעבר לתקרה — מפסיקים את ההמתנה ומחזירים
+      // null פעם אחת (הקורא הבא יצליח) במקום להיתקע.
+      var polls = 0;
+      for (; _activeWriteSessions > 0 && !_isInitialized; polls++) {
+        if (polls >= _maxExternalWriteWaitPolls) {
+          // אבחון זמני: חרגנו מתקרת ההמתנה וה-session עדיין פעיל — חשד לדליפת
+          // write-session (close בלי reopen תואם). הקורא לא נתקע (חוזר למטה),
+          // אבל קריאות ימשיכו לקבל ריק עד restart. אם השורה הזו מופיעה בלוג —
+          // יש לאתר את ה-close שלא קיבל reopen.
+          debugPrint('⚠️ [SqliteDataProvider] initialize() חרג מתקרת ההמתנה '
+              'ל-gate ($_activeWriteSessions write-sessions פעילים, '
+              '_externalWriteGate=${_externalWriteGate == null ? "null" : "ממתין"}). '
+              'חשד לדליפת write-session — קריאות יקבלו ריק עד פתיחה-מחדש.');
+          break;
+        }
+        final gate = _externalWriteGate;
+        if (gate == null) break;
         try {
-          await gate.future;
+          await gate.future.timeout(_externalWriteWaitPollInterval);
         } catch (_) {}
       }
-      // אם החיבור נפתח מחדש — סיימנו. אם session חדש כבר פעיל — מוותרים זמנית
-      // (הקורא יקבל null הפעם, נדיר). אחרת נופלים לאתחול הרגיל למטה.
+      // אם החיבור נפתח מחדש — סיימנו. אם עדיין יש session פעיל (חפיפה או
+      // השתהות מעבר לתקרה) — מוותרים זמנית. אחרת נופלים לאתחול הרגיל למטה.
       if (_isInitialized || _activeWriteSessions > 0) {
         return;
       }
@@ -156,6 +176,27 @@ class SqliteDataProvider {
   /// מקבילים ממתינים עליו ב-[initialize] במקום לקבל null, כדי שספרים/מפרשים
   /// לא ייטענו ריקים כשקריאת רקע מתנגשת עם חלון הסנכרון בעלייה.
   Completer<void>? _externalWriteGate;
+
+  /// אורך פעימת המתנה בודדת ל-gate ב-[initialize]. ההמתנה מתעוררת מיד כש-
+  /// reopen משלים את ה-gate; התקרה כאן רק מבטיחה שקורא לא ייתקע לנצח אם
+  /// reopen מתעכב/מתפספס. ניתן לעקיפה בטסטים דרך [debugSetExternalWriteWait].
+  Duration _externalWriteWaitPollInterval = const Duration(seconds: 2);
+
+  /// מספר פעימות מרבי להמתנה ל-gate. מכפלת [_externalWriteWaitPollInterval]
+  /// נותנת את תקרת ההמתנה הכוללת (כיום ~30ש') — מספיק ארוך לסנכרון לגיטימי
+  /// בעלייה, ועדיין חוסם קיפאון לצמיתות בדליפת session.
+  int _maxExternalWriteWaitPolls = 15;
+
+  /// עקיפת פרמטרי ההמתנה ל-gate בטסטים בלבד, כדי לבדוק את חסימת הקיפאון
+  /// בלי להמתין את התקרה המלאה (~30ש').
+  @visibleForTesting
+  void debugSetExternalWriteWait({
+    Duration? pollInterval,
+    int? maxPolls,
+  }) {
+    if (pollInterval != null) _externalWriteWaitPollInterval = pollInterval;
+    if (maxPolls != null) _maxExternalWriteWaitPolls = maxPolls;
+  }
 
   /// מנרמל את מצב היומן של [dbPath] ל-DELETE (best-effort) כדי שניתן יהיה
   /// לפתוח אותו read-only.
