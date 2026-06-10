@@ -258,9 +258,8 @@ class _EmailFieldWithAutocompleteState
                   // onTapDown מופעל לפני שהפוקוס מתחלף — מונע סגירת האוברליי
                   onTapDown: (_) => _applySuggestion(domain),
                   child: Container(
-                    color: isSelected
-                        ? theme.colorScheme.primaryContainer
-                        : null,
+                    color:
+                        isSelected ? theme.colorScheme.primaryContainer : null,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 10,
@@ -292,7 +291,6 @@ class _EmailFieldWithAutocompleteState
       children: [
         Text(
           widget.subtitle,
-          textDirection: TextDirection.rtl,
         ),
         const SizedBox(height: 12),
         CompositedTransformTarget(

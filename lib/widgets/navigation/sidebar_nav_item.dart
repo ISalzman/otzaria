@@ -120,7 +120,6 @@ class SidebarNavItem extends StatelessWidget {
                     ),
                     child: Text(
                       label,
-                      textDirection: TextDirection.rtl,
                     ),
                   ),
                 ),
@@ -236,7 +235,6 @@ class TopNavItem extends StatelessWidget {
                           opacity: 0,
                           child: Text(
                             label,
-                            textDirection: TextDirection.rtl,
                             textAlign: TextAlign.center,
                             maxLines: 1,
                             style: reservedTextStyle,
@@ -250,7 +248,6 @@ class TopNavItem extends StatelessWidget {
                           style: animatedTextStyle,
                           child: Text(
                             label,
-                            textDirection: TextDirection.rtl,
                             textAlign: TextAlign.center,
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,

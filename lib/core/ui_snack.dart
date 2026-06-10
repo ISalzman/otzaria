@@ -419,7 +419,6 @@ class _SnackToastState extends State<_SnackToast>
                                   fontWeight: FontWeight.w400,
                                   height: 1.4,
                                 ),
-                                textDirection: TextDirection.rtl,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),

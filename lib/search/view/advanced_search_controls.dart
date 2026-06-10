@@ -221,7 +221,6 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                   color: colorScheme.onSurfaceVariant,
                 ),
                 textAlign: TextAlign.center,
-                textDirection: TextDirection.rtl,
               ),
             ],
           ),
@@ -308,7 +307,6 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                     ? colorScheme.primary
                     : colorScheme.onSurfaceVariant,
               ),
-              textDirection: TextDirection.rtl,
             ),
             const SizedBox(width: 4),
             Transform.scale(
@@ -586,7 +584,6 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                   const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                textDirection: TextDirection.rtl,
                 children: [
                   IgnorePointer(
                     child: Checkbox(
@@ -599,7 +596,6 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                   const SizedBox(width: 8),
                   Text(
                     option,
-                    textDirection: TextDirection.rtl,
                     style: TextStyle(
                       fontSize: 14,
                       color: isEnabled

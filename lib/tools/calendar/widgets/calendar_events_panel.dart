@@ -222,7 +222,6 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
                                 event.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                textDirection: TextDirection.rtl,
                                 style: Theme.of(context)
                                     .textTheme
                                     .titleMedium
@@ -278,7 +277,6 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
                           truncateDescription(event.description),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          textDirection: TextDirection.rtl,
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: scheme.onSurfaceVariant,
@@ -404,7 +402,6 @@ class _EventMetaChip extends StatelessWidget {
                   text,
                   maxLines: maxLines,
                   overflow: TextOverflow.ellipsis,
-                  textDirection: TextDirection.rtl,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: foregroundColor,
                         fontWeight: FontWeight.w600,

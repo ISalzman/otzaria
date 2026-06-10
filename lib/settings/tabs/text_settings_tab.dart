@@ -730,7 +730,6 @@ class _FontSizeSliderState extends State<_FontSizeSlider> {
               child: Text(
                 widget.label,
                 style: kSettingsTitleStyle,
-                textDirection: TextDirection.rtl,
               ),
             ),
             Text(
@@ -800,7 +799,6 @@ class _FontDropdown extends StatelessWidget {
           child: Text(
             label,
             style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
           ),
         ),
         const SizedBox(width: 12),
@@ -878,14 +876,12 @@ class _TextWidthSliderState extends State<_TextWidthSlider> {
           title: const Text(
             'רוחב הטקסט',
             style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           subtitle: Text(
             currentLevel == 0
                 ? 'הטקסט ימלא את כל הרוחב הזמין'
                 : 'הטקסט יהיה צר יותר ומרוכז במסך',
             style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           trailing: Text(
             getLevelDescription(currentLevel),

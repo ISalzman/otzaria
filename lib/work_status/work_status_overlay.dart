@@ -164,7 +164,6 @@ class _PrimaryItemRow extends StatelessWidget {
             children: [
               Text(
                 item.title,
-                textDirection: TextDirection.rtl,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: colorScheme.onSurface,
                       fontWeight: FontWeight.w700,
@@ -173,7 +172,6 @@ class _PrimaryItemRow extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 item.message,
-                textDirection: TextDirection.rtl,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                       height: 1.25,
@@ -183,7 +181,6 @@ class _PrimaryItemRow extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   item.detail!,
-                  textDirection: TextDirection.rtl,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         color: colorScheme.primary,
                         fontWeight: FontWeight.w600,
@@ -225,7 +222,6 @@ class _SecondaryItemRow extends StatelessWidget {
           Flexible(
             child: Text(
               '${item.title}: ${item.message}',
-              textDirection: TextDirection.rtl,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),

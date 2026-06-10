@@ -563,7 +563,6 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
       return const Center(
         child: Text(
           'לא נמצאו תוצאות',
-          textDirection: TextDirection.rtl,
         ),
       );
     }

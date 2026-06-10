@@ -871,7 +871,6 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
               ),
               child: Text(
                 formatPageShapeCommentatorSelection(value),
-                textDirection: TextDirection.rtl,
                 style: TextStyle(
                   fontSize: 13,
                   color: value == null
@@ -903,7 +902,6 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
         children: [
           Text(
             selectionLabel,
-            textDirection: TextDirection.rtl,
             style: TextStyle(
               fontSize: 13,
               color: _rightCommentators.isEmpty
@@ -914,7 +912,6 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
           const SizedBox(height: 4),
           Text(
             'הבחירה המפורטת נעשית מתוך החלונית עצמה.',
-            textDirection: TextDirection.rtl,
             style: TextStyle(
               fontSize: 12,
               color: Theme.of(context)
@@ -1128,7 +1125,6 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       child: Text(
                         group.title,
-                        textDirection: TextDirection.rtl,
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -1156,7 +1152,6 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
       return const Center(
         child: Text(
           'לא נמצאו מפרשים',
-          textDirection: TextDirection.rtl,
         ),
       );
     }
@@ -1178,11 +1173,9 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
     return ListTile(
       title: const Text(
         pageShapeMultipleCommentatorsModeLabel,
-        textDirection: TextDirection.rtl,
       ),
       subtitle: const Text(
         'הבחירה המפורטת תיעשה מתוך חלונית המפרשים',
-        textDirection: TextDirection.rtl,
       ),
       selected: isSelected,
       trailing:
@@ -1200,11 +1193,9 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
     return ListTile(
       title: const Text(
         pageShapeRemainingCommentatorsLabel,
-        textDirection: TextDirection.rtl,
       ),
       subtitle: const Text(
         'כל המפרשים שלא שובצו בחלוניות האחרות',
-        textDirection: TextDirection.rtl,
       ),
       selected: isSelected,
       trailing:
@@ -1220,7 +1211,6 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
     return ListTile(
       title: Text(
         commentator,
-        textDirection: TextDirection.rtl,
       ),
       selected: isSelected,
       trailing:

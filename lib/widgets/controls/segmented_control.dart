@@ -58,7 +58,6 @@ class AppSegmentedControl<T> extends StatelessWidget {
               child: Text(
                 o.label,
                 style: AppTextStyles.settingTitle,
-                textDirection: TextDirection.rtl,
               ),
             ),
             icon: hasIcons

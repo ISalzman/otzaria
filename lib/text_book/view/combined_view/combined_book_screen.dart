@@ -719,7 +719,6 @@ class _CombinedViewState extends State<CombinedView> {
                     snapshot.data ?? link.fallbackDisplayReference,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    textDirection: TextDirection.rtl,
                   ),
                 ),
                 onTap: () => widget.openBookCallback(

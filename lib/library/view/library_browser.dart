@@ -738,7 +738,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       chipBuilder: (context, item, isSelected) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
         child: Chip(
-          label: Text(item, textDirection: TextDirection.rtl),
+          label: Text(item),
           backgroundColor:
               isSelected ? Theme.of(context).colorScheme.secondary : null,
           labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -1290,7 +1290,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.secondary,
                   ),
-              textDirection: TextDirection.rtl,
             ),
           ),
         ),
@@ -1354,7 +1353,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           bottom: verticalPadding,
         ),
         child: Row(
-          textDirection: TextDirection.rtl,
           children: [
             Container(
               width: iconBoxSize,
@@ -1378,7 +1376,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               child: LibraryOverflowTooltipText(
                 text: category.title,
                 maxLines: 1,
-                textDirection: TextDirection.rtl,
                 textAlign: TextAlign.right,
                 style: titleStyle,
               ),
@@ -1487,7 +1484,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             bottom: verticalPadding,
           ),
           child: Row(
-            textDirection: TextDirection.rtl,
             children: [
               leadingWidget,
               SizedBox(width: isSearch ? 8 : 9),
@@ -1498,7 +1494,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                     LibraryOverflowTooltipText(
                       text: title,
                       maxLines: 1,
-                      textDirection: TextDirection.rtl,
                       textAlign: TextAlign.right,
                       style: titleStyle,
                     ),
@@ -1506,7 +1501,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                       LibraryOverflowTooltipText(
                         text: subtitle,
                         maxLines: 1,
-                        textDirection: TextDirection.rtl,
                         textAlign: TextAlign.right,
                         style: subtitleStyle,
                       ),
@@ -1859,7 +1853,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       builder: (ctx) => AlertDialog(
         title: Text(
           'כל הספרים (${books.length})',
-          textDirection: TextDirection.rtl,
         ),
         content: SizedBox(
           width: 600,
@@ -1872,7 +1865,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('סגור', textDirection: TextDirection.rtl),
+            child: const Text('סגור'),
           ),
         ],
       ),
@@ -2050,7 +2043,6 @@ class _SearchingIndicator extends StatelessWidget {
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
-          textDirection: TextDirection.rtl,
         ),
       ],
     );
@@ -2101,7 +2093,6 @@ class _LoadingDotsTextState extends State<_LoadingDotsText>
         return Text(
           'טוען ספרייה${'.' * dots}${' ' * (3 - dots)}',
           style: Theme.of(context).textTheme.bodyMedium,
-          textDirection: TextDirection.rtl,
         );
       },
     );

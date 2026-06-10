@@ -31,7 +31,8 @@ class SettingsActionTile extends StatelessWidget {
         subtitle = Text(
           subtitle,
           style: AppTextStyles.settingSubtitle,
-          textDirection: subtitleDirection,
+          textDirection:
+              subtitleDirection == TextDirection.ltr ? TextDirection.ltr : null,
           textAlign:
               subtitleDirection == TextDirection.ltr ? TextAlign.end : null,
         );
@@ -49,9 +50,8 @@ class SettingsActionTile extends StatelessWidget {
         subtitle = Text(
           (path != null && path.isNotEmpty) ? _formatPath(path) : placeholder,
           style: AppTextStyles.settingSubtitle,
-          textDirection: (path != null && path.isNotEmpty)
-              ? TextDirection.ltr
-              : TextDirection.rtl,
+          textDirection:
+              (path != null && path.isNotEmpty) ? TextDirection.ltr : null,
           textAlign: (path != null && path.isNotEmpty) ? TextAlign.end : null,
         );
 

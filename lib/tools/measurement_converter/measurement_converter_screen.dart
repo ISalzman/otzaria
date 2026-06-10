@@ -521,7 +521,6 @@ class _MeasurementConverterScreenState
                                   child: Text(
                                     hasResult ? _resultController.text : '—',
                                     textAlign: TextAlign.start,
-                                    textDirection: TextDirection.rtl,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(

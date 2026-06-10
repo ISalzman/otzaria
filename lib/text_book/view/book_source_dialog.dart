@@ -110,7 +110,6 @@ Future<void> showBookSourceDialog(
               children: [
                 const Text(
                   'מושבת זמנית',
-                  textDirection: TextDirection.rtl,
                   style: TextStyle(fontSize: 14),
                 ),
 
@@ -219,7 +218,6 @@ class _TashmaCopyrightNoticeState extends State<_TashmaCopyrightNotice> {
           ),
         ],
       ),
-      textDirection: TextDirection.rtl,
     );
   }
 }

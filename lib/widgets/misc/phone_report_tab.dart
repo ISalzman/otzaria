@@ -103,7 +103,6 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).colorScheme.onPrimaryContainer,
                   ),
-              textDirection: TextDirection.rtl,
             ),
             const SizedBox(height: 8),
             Text(
@@ -112,7 +111,6 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onPrimaryContainer,
                   ),
-              textDirection: TextDirection.rtl,
             ),
           ],
         ),
@@ -129,7 +127,6 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
-          textDirection: TextDirection.rtl,
         ),
         const SizedBox(height: 8),
         Container(
@@ -149,7 +146,6 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
                 fontFamily: Settings.getValue('key-font-family') ?? 'candara',
               ),
               textAlign: TextAlign.right,
-              textDirection: TextDirection.rtl,
             ),
           ),
         ),
@@ -168,7 +164,6 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
-          textDirection: TextDirection.rtl,
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -250,7 +245,6 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
                           fontWeight: FontWeight.bold,
                           color: Theme.of(context).colorScheme.onErrorContainer,
                         ),
-                    textDirection: TextDirection.rtl,
                   ),
                 ),
               ],
@@ -276,7 +270,6 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
                                         .colorScheme
                                         .onErrorContainer,
                                   ),
-                          textDirection: TextDirection.rtl,
                         ),
                       ),
                     ],
@@ -303,7 +296,6 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
                                   .colorScheme
                                   .onErrorContainer,
                             ),
-                        textDirection: TextDirection.rtl,
                       ),
                     ),
                     const SizedBox(width: 8),

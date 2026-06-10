@@ -153,7 +153,6 @@ class _PersonalNoteContentViewState extends State<PersonalNoteContentView> {
           _previewPlain,
           style: widget.textStyle,
           textAlign: widget.textAlign,
-          textDirection: TextDirection.rtl,
         ),
         if (_links.isNotEmpty) ...[
           const SizedBox(height: 8),

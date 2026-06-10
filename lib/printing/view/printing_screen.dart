@@ -2687,7 +2687,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
       child: Text(
         'התצוגה המקדימה מוגבלת ל-$shown עמודים. ההדפסה/הייצוא יכללו את כל הטווח.',
         textAlign: TextAlign.center,
-        textDirection: TextDirection.rtl,
         style: TextStyle(
           color: colorScheme.onSurfaceVariant,
           fontSize: 12,
@@ -2741,7 +2740,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
           children: List.generate(rows, (row) {
             return Expanded(
               child: Row(
-                textDirection: TextDirection.rtl,
                 children: List.generate(cols, (col) {
                   final idx = row * cols + col;
                   if (idx >= chunk.length) {
@@ -2959,7 +2957,6 @@ class _PrintingAppBar extends StatelessWidget {
 
         final titleWidget = Text(
           title,
-          textDirection: TextDirection.rtl,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.titleMedium,
         );

@@ -182,7 +182,6 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
           child: Center(
             child: Text(
               widget.title!,
-              textDirection: TextDirection.rtl,
               style: Theme.of(context)
                   .textTheme
                   .headlineMedium

@@ -36,15 +36,14 @@ class ColorPickerTile extends StatelessWidget {
     return ListTile(
       hoverColor: Colors.transparent,
       leading: const Icon(FluentIcons.color_24_regular),
-      title: const Text('צבע בסיס', textDirection: TextDirection.rtl),
+      title: const Text('צבע בסיס'),
       subtitle: Text(
         _colorName,
-        textDirection: TextDirection.rtl,
         style: AppTextStyles.settingSubtitle,
       ),
       trailing: FilledButton(
         onPressed: () => _showPicker(context),
-        child: const Text('שינוי צבע', textDirection: TextDirection.rtl),
+        child: const Text('שינוי צבע'),
       ),
     );
   }
@@ -93,9 +92,8 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
         children: [
           // שורת כותרת — RTL: צבע נבחר בשמאל, כותרת בימין
           Row(
-            textDirection: TextDirection.rtl,
             children: [
-              const Text('בחר צבע בסיס', textDirection: TextDirection.rtl),
+              const Text('בחר צבע בסיס'),
               const Spacer(),
               Container(
                 width: 22,
@@ -108,7 +106,6 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
               const SizedBox(width: AppTokens.spaceSM),
               Text(
                 _selectedName,
-                textDirection: TextDirection.rtl,
                 style: TextStyle(
                   fontSize: AppTokens.fontMD,
                   color: cs.onSurfaceVariant,
@@ -120,11 +117,9 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
           const SizedBox(height: AppTokens.spaceMD),
           // כפתור ברירת מחדל — מתחת לכותרת, טקסט בימין וכפתור בסוף השורה
           Row(
-            textDirection: TextDirection.rtl,
             children: [
               const Text(
                 'בחר בצבע ברירת מחדל',
-                textDirection: TextDirection.rtl,
                 style: TextStyle(
                   fontSize: AppTokens.fontMD,
                   fontWeight: FontWeight.normal,
@@ -134,7 +129,7 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
               OutlinedButton.icon(
                 onPressed: () => _select(widget.defaultColor),
                 icon: const Icon(FluentIcons.arrow_reset_24_regular, size: 16),
-                label: const Text('איפוס', textDirection: TextDirection.rtl),
+                label: const Text('איפוס'),
               ),
             ],
           ),

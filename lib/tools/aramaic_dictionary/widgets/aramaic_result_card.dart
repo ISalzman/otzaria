@@ -123,7 +123,6 @@ class _DictionaryValue extends StatelessWidget {
       value,
       style: textStyle,
       textAlign: TextAlign.right,
-      textDirection: TextDirection.rtl,
     );
   }
 }

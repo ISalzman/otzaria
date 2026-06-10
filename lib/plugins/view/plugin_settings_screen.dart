@@ -71,7 +71,6 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
           appBar: AppBar(
             title: Text(
               'הגדרות תוסף: ${currentPlugin.name}',
-              textDirection: TextDirection.rtl,
             ),
           ),
           body: ListView(
@@ -83,11 +82,9 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                   SwitchListTile(
                     title: const Text(
                       'מצב מופעל (Enabled)',
-                      textDirection: TextDirection.rtl,
                     ),
                     subtitle: const Text(
                       'כיבוי ימנע מהתוסף לרוץ לחלוטין באפליקציה',
-                      textDirection: TextDirection.rtl,
                     ),
                     value: currentPlugin.enabled,
                     onChanged: (val) {
@@ -105,11 +102,9 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                   SwitchListTile(
                     title: const Text(
                       'הצמדה לסרגל הניווט',
-                      textDirection: TextDirection.rtl,
                     ),
                     subtitle: const Text(
                       'הצגת התוסף כפריט קבוע בסרגל הניווט הראשי, בין "כלים" ל"הגדרות"',
-                      textDirection: TextDirection.rtl,
                     ),
                     value: currentPlugin.pinnedToNavRail,
                     onChanged: currentPlugin.enabled
@@ -154,7 +149,6 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                       secondary: Icon(iconData, color: iconColor),
                       title: Text(
                         info.label,
-                        textDirection: TextDirection.rtl,
                         style: TextStyle(
                           fontWeight: FontWeight.w500,
                           color: isSensitive ? colorScheme.tertiary : null,
@@ -162,7 +156,6 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                       ),
                       subtitle: Text(
                         info.description,
-                        textDirection: TextDirection.rtl,
                       ),
                       value: isGranted,
                       onChanged: (val) async {
@@ -188,7 +181,6 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                   ListTile(
                     title: const Text(
                       'נתיב תיקייה',
-                      textDirection: TextDirection.rtl,
                     ),
                     subtitle: Text(
                       _formatPathForDisplay(currentPlugin.resolvedRootPath),
@@ -199,7 +191,6 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                   ListTile(
                     title: const Text(
                       'רענן עכשיו',
-                      textDirection: TextDirection.rtl,
                     ),
                     trailing:
                         const Icon(FluentIcons.arrow_clockwise_24_regular),
@@ -213,7 +204,6 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                   ListTile(
                     title: const Text(
                       'פתח מחדש את הצפייה',
-                      textDirection: TextDirection.rtl,
                     ),
                     trailing: const Icon(FluentIcons.window_new_24_regular),
                     onTap: () {

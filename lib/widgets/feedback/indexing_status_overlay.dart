@@ -136,7 +136,6 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
                                   children: [
                                     Text(
                                       'התוכנה בתהליך אינדוקס',
-                                      textDirection: TextDirection.rtl,
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleMedium
@@ -148,7 +147,6 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
                                     const SizedBox(height: 6),
                                     Text(
                                       'תיתכן איטיות בפעילות התוכנה',
-                                      textDirection: TextDirection.rtl,
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodyMedium
@@ -160,7 +158,6 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
                                     const SizedBox(height: 8),
                                     Text(
                                       'התקדמות: $countLabel',
-                                      textDirection: TextDirection.rtl,
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleSmall

@@ -73,7 +73,6 @@ class _SelectionDialogState<T> extends State<SelectionDialog<T>>
         backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
         title: Text(
           widget.title,
-          textDirection: TextDirection.rtl,
         ),
         content: SizedBox(
           width: 300,
@@ -102,7 +101,6 @@ class _SelectionDialogState<T> extends State<SelectionDialog<T>>
                           return ListTile(
                             title: Text(
                               item.label,
-                              textDirection: TextDirection.rtl,
                             ),
                             selected: isSelected,
                             trailing: isSelected

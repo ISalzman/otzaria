@@ -790,10 +790,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           SwitchSettingsTile.text(
             icon: FluentIcons.arrow_sync_24_regular,
             title: 'סינכרון הספרייה באופן אוטומטי',
-            subtitle:
-                (Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true)
-                    ? 'מסד הנתונים של הספרייה יתעדכן אוטומטית בטעינת הספרייה'
-                    : 'סינכרון הספרייה לא יופעל אוטומטית, אך עדיין אפשר להפעיל סינכרון ידני',
+            subtitle: (Settings.getValue<bool>(
+                        SettingsRepository.keyAutoSync) ??
+                    true)
+                ? 'מסד הנתונים של הספרייה יתעדכן אוטומטית בטעינת הספרייה'
+                : 'סינכרון הספרייה לא יופעל אוטומטית, אך עדיין אפשר להפעיל סינכרון ידני',
             value:
                 Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true,
             onChanged: (value) {
@@ -805,7 +806,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             icon: FluentIcons.bug_24_regular,
             title: 'עדכון לגרסאות מפתחים',
             subtitle:
-                Settings.getValue<bool>(SettingsRepository.keyDevChannel) ?? false
+                Settings.getValue<bool>(SettingsRepository.keyDevChannel) ??
+                        false
                     ? 'בדיקת העדכונים הבאה תחפש גם גרסאות בדיקה — ייתכנו באגים'
                     : 'בדיקת העדכונים הבאה תחפש גרסאות יציבות בלבד',
             value: Settings.getValue<bool>(SettingsRepository.keyDevChannel) ??
@@ -881,14 +883,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   title: const Text(
                     'ניהול דיווחים שמורים',
                     style: kSettingsTitleStyle,
-                    textDirection: TextDirection.rtl,
                   ),
                   subtitle: Text(
                     pendingCount == 0
                         ? 'אין כרגע דיווחים שמורים בתור'
                         : 'יש כרגע $pendingCount דיווחים שמורים בתור',
                     style: kSettingsSubtitleStyle,
-                    textDirection: TextDirection.rtl,
                   ),
                   trailing: Icon(
                     _isPendingReportsExpanded
@@ -986,7 +986,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                                 child: Text(
                                   'במצב מנותק אי אפשר לשלוח כעת, אך ניתן להוריד סקריפט לשליחה ממחשב מחובר.',
                                   style: kSettingsSubtitleStyle,
-                                  textDirection: TextDirection.rtl,
                                 ),
                               ),
                             if (pendingReports.isNotEmpty)
@@ -1006,14 +1005,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   title: const Text(
                     'דיווחים שנשלחו',
                     style: kSettingsTitleStyle,
-                    textDirection: TextDirection.rtl,
                   ),
                   subtitle: Text(
                     sentReports.isEmpty
                         ? 'עדיין אין דיווחים שנשלחו דרך המערכת'
                         : 'נשמרו ${sentReports.length} דיווחים שנשלחו',
                     style: kSettingsSubtitleStyle,
-                    textDirection: TextDirection.rtl,
                   ),
                   trailing: Icon(
                     _isSentReportsExpanded
@@ -1082,12 +1079,10 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           title: Text(
             report.bookTitle,
             style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           subtitle: Text(
             '${report.currentRef} · ${report.errorDetails.isEmpty ? 'ללא פירוט' : report.errorDetails}',
             style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1132,12 +1127,10 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           title: Text(
             report.bookTitle,
             style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           subtitle: Text(
             '${report.currentRef} · ${report.errorDetails.isEmpty ? 'ללא פירוט' : report.errorDetails}',
             style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1191,17 +1184,15 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           title: const Text(
             'גרסת תוכנה',
             style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           subtitle: Text(
             _appVersion ?? 'טוען...',
             style: kSettingsSubtitleStyle,
-            textDirection:
-                _appVersion == null ? TextDirection.rtl : TextDirection.ltr,
+            textDirection: _appVersion == null ? null : TextDirection.ltr,
           ),
           trailing: TextButton.icon(
             icon: const Icon(FluentIcons.history_24_regular, size: 16),
-            label: const Text('יומן שינויים', textDirection: TextDirection.rtl),
+            label: const Text('יומן שינויים'),
             onPressed: () => _showChangelogDialog(context),
           ),
         ),
@@ -1210,13 +1201,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           title: const Text(
             'גרסת ספרייה',
             style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           subtitle: Text(
             _libraryVersion ?? 'טוען...',
             style: kSettingsSubtitleStyle,
-            textDirection:
-                _libraryVersion == null ? TextDirection.rtl : TextDirection.ltr,
+            textDirection: _libraryVersion == null ? null : TextDirection.ltr,
           ),
           // trailing: TextButton.icon(
           //   icon: const Icon(FluentIcons.history_24_regular, size: 16),
@@ -1230,12 +1219,10 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           title: const Text(
             'מספר ספרים',
             style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           subtitle: Text(
             _bookCount != null ? '${_bookCount!} ספרים' : 'טוען...',
             style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           trailing: _bookCount == null
               ? null
@@ -1606,12 +1593,10 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           title: const Text(
             'מצב סייפר',
             style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           subtitle: const Text(
             'נעילת הגדרות',
             style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           trailing: Icon(
             _isCypherExpanded
@@ -1635,11 +1620,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                             : FluentIcons.lock_open_24_regular,
                       ),
                       title: const Text('הפעל מצב סייפר',
-                          textDirection: TextDirection.rtl,
                           style: kSettingsTitleStyle),
                       subtitle: Text(
                         hasPassword ? 'סיסמה הוגדרה' : 'יש להגדיר סיסמה תחילה',
-                        textDirection: TextDirection.rtl,
                         style: TextStyle(
                           fontSize: 13,
                           color: hasPassword
@@ -1661,7 +1644,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                       leading: const Icon(FluentIcons.key_24_regular),
                       title: const Text(
                         'סיסמה',
-                        textDirection: TextDirection.rtl,
                         style: kSettingsTitleStyle,
                       ),
                       trailing: RecommendedActionButton(
@@ -1689,12 +1671,10 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           title: const Text(
             'הפעל סיור מחדש',
             style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           subtitle: const Text(
             'הסיור יוצג מההתחלה וידריך אותך במסכי האפליקציה.',
             style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           trailing: RecommendedActionButton(
             icon: FluentIcons.play_24_regular,
@@ -1726,12 +1706,10 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           title: const Text(
             'איפוס הגדרות',
             style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           subtitle: const Text(
             'מחיקת כל ההגדרות וחזרה למצב ההתחלתי',
             style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           trailing: NeutralActionButton(
             icon: FluentIcons.arrow_reset_24_regular,
@@ -1784,7 +1762,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         child: AlertDialog(
           title: const Text(
             'יומן שינויים בתוכנה',
-            textDirection: TextDirection.rtl,
           ),
           content: SizedBox(
             width: 600,
@@ -1799,7 +1776,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('סגור', textDirection: TextDirection.rtl),
+              child: const Text('סגור'),
             ),
           ],
         ),

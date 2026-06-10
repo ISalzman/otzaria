@@ -65,7 +65,7 @@ class _InputDialogState extends State<InputDialog> with DialogNavigationMixin {
       onCancel: () => Navigator.of(context).pop(),
       textFieldFocusNode: _textFieldFocusNode,
       child: AlertDialog(
-        title: Text(widget.title, textDirection: TextDirection.rtl),
+        title: Text(widget.title),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -76,7 +76,6 @@ class _InputDialogState extends State<InputDialog> with DialogNavigationMixin {
                 child: Text(
                   widget.subtitle!,
                   style: Theme.of(context).textTheme.bodySmall,
-                  textDirection: TextDirection.rtl,
                 ),
               ),
             RtlTextField(
@@ -132,7 +131,7 @@ class _InputDialogState extends State<InputDialog> with DialogNavigationMixin {
           backgroundColor: showHover ? color!.withValues(alpha: 0.9) : color,
           foregroundColor: foregroundColor,
         ),
-        child: Text(text, textDirection: TextDirection.rtl),
+        child: Text(text),
       );
     } else {
       return FilledButton.tonal(
@@ -143,7 +142,7 @@ class _InputDialogState extends State<InputDialog> with DialogNavigationMixin {
               : cs.secondaryContainer,
           foregroundColor: cs.onSecondaryContainer,
         ),
-        child: Text(text, textDirection: TextDirection.rtl),
+        child: Text(text),
       );
     }
   }

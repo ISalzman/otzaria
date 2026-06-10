@@ -32,8 +32,8 @@ class _ConfirmationDialogState extends State<ConfirmationDialog>
       onConfirm: () => Navigator.of(context).pop(true),
       onCancel: () => Navigator.of(context).pop(false),
       child: AlertDialog(
-        title: Text(widget.title, textDirection: TextDirection.rtl),
-        content: Text(widget.content, textDirection: TextDirection.rtl),
+        title: Text(widget.title),
+        content: Text(widget.content),
         actions: [
           _buildButton(
             text: widget.cancelText,
@@ -81,7 +81,6 @@ class _ConfirmationDialogState extends State<ConfirmationDialog>
           style: TextStyle(
             fontWeight: isFocused ? FontWeight.bold : FontWeight.normal,
           ),
-          textDirection: TextDirection.rtl,
         ),
       );
     }
@@ -99,7 +98,6 @@ class _ConfirmationDialogState extends State<ConfirmationDialog>
         style: TextStyle(
           fontWeight: isFocused ? FontWeight.bold : FontWeight.normal,
         ),
-        textDirection: TextDirection.rtl,
       ),
     );
   }

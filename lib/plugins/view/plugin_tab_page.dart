@@ -326,7 +326,6 @@ class _PluginTabPageState extends State<PluginTabPage> {
             return Center(
               child: Text(
                 'שגיאה באתחול סביבת הדפדפן: ${snapshot.error}',
-                textDirection: TextDirection.rtl,
               ),
             );
           }

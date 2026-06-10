@@ -771,7 +771,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
               style: AppTopBar.titleStyle(context),
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
-              textDirection: TextDirection.rtl,
+              maxLines: 1,
             ),
           ),
           const SizedBox(width: gap),
@@ -819,26 +819,29 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                         icon: Icon(FluentIcons.navigation_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('ניווט',
-                            style: TextStyle(fontSize: 11),
-                            textDirection: TextDirection.rtl),
+                        child: Text(
+                          'ניווט',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                       Tab(
                         icon: Icon(FluentIcons.apps_list_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('מפרשים',
-                            style: TextStyle(fontSize: 11),
-                            textDirection: TextDirection.rtl),
+                        child: Text(
+                          'מפרשים',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                       Tab(
                         icon:
                             Icon(FluentIcons.book_search_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('חיפוש',
-                            style: TextStyle(fontSize: 11),
-                            textDirection: TextDirection.rtl),
+                        child: Text(
+                          'חיפוש',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                     ],
                     labelColor: colorScheme.primary,
@@ -889,7 +892,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
           child: Text(
             'טוען מפרשים...',
             style: Theme.of(context).textTheme.bodySmall,
-            textDirection: TextDirection.rtl,
           ),
         ),
       );
@@ -923,7 +925,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     final headings = _sortedHeadings;
     if (headings == null || headings.isEmpty) {
       return const Center(
-        child: Text('אין ניווט', textDirection: TextDirection.rtl),
+        child: Text('אין ניווט'),
       );
     }
 
@@ -1081,7 +1083,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 2,
-                textDirection: TextDirection.rtl,
               ),
             ),
             if (hasChildren)
@@ -1143,7 +1144,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 2,
-                textDirection: TextDirection.rtl,
               ),
             ),
           ],

@@ -56,7 +56,6 @@ class AcronymResultCard extends StatelessWidget {
                 color: cs.onSurface,
               ),
               textAlign: TextAlign.right,
-              textDirection: TextDirection.rtl,
             ),
           ),
           Padding(
@@ -79,7 +78,6 @@ class AcronymResultCard extends StatelessWidget {
                       color: cs.onSurface,
                     ),
                     textAlign: TextAlign.right,
-                    textDirection: TextDirection.rtl,
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -93,7 +91,6 @@ class AcronymResultCard extends StatelessWidget {
                           height: 1.4,
                         ),
                         textAlign: TextAlign.right,
-                        textDirection: TextDirection.rtl,
                       );
                     }).toList(),
                   ),

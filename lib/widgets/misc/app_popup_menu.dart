@@ -224,13 +224,11 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
         icon: widget.icon ?? const Icon(FluentIcons.more_vertical_24_regular),
         label: Text(
           widget.tooltip!,
-          textDirection: TextDirection.rtl,
         ),
       );
     } else if (widget.iconData != null) {
       // מצב Toolbar: ToolbarActionButton עם אייקון מסוגנן
-      final isCompact =
-          context.read<SettingsBloc>().state.compactMenuMode;
+      final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
       trigger = Opacity(
         opacity: widget.enabled ? 1.0 : 0.38,
         child: IgnorePointer(
@@ -688,7 +686,6 @@ Widget buildAppMenuRowContent(
         label,
         overflow: TextOverflow.ellipsis,
         softWrap: false,
-        textDirection: TextDirection.rtl,
       );
 
   final row = Row(

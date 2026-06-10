@@ -1019,7 +1019,6 @@ class _PersonalNotesManagerScreenState
                     color: cs.onSecondaryContainer,
                     fontWeight: FontWeight.w600,
                   ),
-              textDirection: TextDirection.rtl,
             ),
           ),
           IconButton(
@@ -1056,7 +1055,6 @@ class _PersonalNotesManagerScreenState
                       ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  textDirection: TextDirection.rtl,
                 ),
               ),
             ],
@@ -1319,7 +1317,6 @@ class _InfoChip extends StatelessWidget {
                 text,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                textDirection: TextDirection.rtl,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: foregroundColor,
                       fontWeight: FontWeight.w600,

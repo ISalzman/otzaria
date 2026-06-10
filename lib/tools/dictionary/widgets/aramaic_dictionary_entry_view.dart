@@ -70,7 +70,6 @@ class _MeaningView extends StatelessWidget {
             ),
             child: Text(
               '${index + 1}',
-              textDirection: TextDirection.rtl,
               style: textTheme.labelMedium?.copyWith(
                 color: colorScheme.primary,
                 fontWeight: FontWeight.w700,
@@ -95,7 +94,6 @@ class _MeaningView extends StatelessWidget {
                     ),
                     child: Text(
                       meaning.expression!,
-                      textDirection: TextDirection.rtl,
                       style: textTheme.bodyMedium?.copyWith(
                         fontStyle: FontStyle.italic,
                         color: colorScheme.onSurfaceVariant,
@@ -108,7 +106,6 @@ class _MeaningView extends StatelessWidget {
                 if (meaning.mainText.isNotEmpty)
                   Text(
                     meaning.mainText,
-                    textDirection: TextDirection.rtl,
                     style: textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                       height: 1.35,
@@ -118,7 +115,6 @@ class _MeaningView extends StatelessWidget {
                   SizedBox(height: compact ? 2 : 4),
                   Text(
                     meaning.expansion!,
-                    textDirection: TextDirection.rtl,
                     style: textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                       height: 1.25,

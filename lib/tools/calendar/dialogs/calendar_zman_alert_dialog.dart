@@ -58,13 +58,11 @@ class _ZmanAlertDialogState extends State<ZmanAlertDialog> {
         children: [
           Text(
             'כמה זמן לפני זמן ${widget.zmanName} ברצונך לקבל התראה?',
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 8),
           Text(
             'הזמן: ${widget.timeLabel}',
             style: Theme.of(context).textTheme.bodySmall,
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 12),
           Row(

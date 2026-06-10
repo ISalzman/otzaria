@@ -24,19 +24,17 @@ Widget buildSearchMenuLabel({
 }) {
   return Row(
     mainAxisSize: MainAxisSize.min,
-    textDirection: TextDirection.rtl,
     children: [
-      const Text("חפש '", textDirection: TextDirection.rtl),
+      const Text("חפש '"),
       Flexible(
         child: Text(
           selectedText,
           overflow: TextOverflow.ellipsis,
           softWrap: false,
           maxLines: 1,
-          textDirection: TextDirection.rtl,
         ),
       ),
-      Text("' $suffix", textDirection: TextDirection.rtl),
+      Text("' $suffix"),
     ],
   );
 }

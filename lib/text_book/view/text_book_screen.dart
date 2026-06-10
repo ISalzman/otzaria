@@ -1384,8 +1384,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         final authorStyle = AppTopBar.subtitleStyle(context);
         final textPainter = TextPainter(
           text: TextSpan(text: displayText, style: titleStyle),
+          textDirection: Directionality.of(context),
           maxLines: 1,
-          textDirection: TextDirection.rtl,
         )..layout(minWidth: 0, maxWidth: constraints.maxWidth);
 
         final titleWidget = SelectionArea(

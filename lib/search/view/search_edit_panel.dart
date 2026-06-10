@@ -104,7 +104,7 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
           Tooltip(
             message: mode.tooltip,
             child: ChoiceChip(
-              label: Text(mode.shortLabel, textDirection: TextDirection.rtl),
+              label: Text(mode.shortLabel),
               selected: state.configuration.searchMode == mode,
               onSelected: (selected) {
                 if (selected) {
@@ -137,7 +137,6 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
               fontSize: 14,
               color: onSurface.withValues(alpha: 0.7),
             ),
-            textDirection: TextDirection.rtl,
           ),
         ),
         const SizedBox(width: 8),
@@ -193,7 +192,6 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
               fontSize: 14,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 12),
           categoryTree,
@@ -287,7 +285,6 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
                         fontWeight: FontWeight.bold,
                         color: colorScheme.onSurface,
                       ),
-                      textDirection: TextDirection.rtl,
                     ),
                     _buildSearchModeToggle(state),
                     if (widget.tab.spacingValues.isEmpty && !state.fuzzy)
