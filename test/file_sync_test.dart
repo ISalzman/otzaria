@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -231,6 +232,25 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }
+    });
+
+    test('fetchAvailableDiffAssets נכשל ב-TimeoutException כשהשרת לא עונה',
+        () async {
+      // רגרסיה: בלי timeout, רשת מסוננת שמחזיקה את החיבור פתוח תקעה את
+      // בדיקת העדכונים בעליית האפליקציה ללא הגבלת זמן (issue #343).
+      final repository = FileSyncRepository(
+        githubOwner: 'Otzaria',
+        repositoryName: 'SeforimLibrary',
+        apiTimeout: const Duration(milliseconds: 50),
+        httpClient: MockClient(
+          (request) => Completer<http.Response>().future,
+        ),
+      );
+
+      await expectLater(
+        repository.fetchAvailableDiffAssets(),
+        throwsA(isA<TimeoutException>()),
+      );
     });
 
     test('checkForUpdates returns the contiguous diff chain', () async {

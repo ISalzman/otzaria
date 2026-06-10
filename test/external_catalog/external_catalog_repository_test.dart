@@ -142,6 +142,121 @@ void main() {
       expect(await repository.getCurrentDatabaseVersion(), 4);
     });
 
+    test(
+        'updateDatabaseIfNeeded מחתים גרסה כשה-DB שהורד חסר אותה, '
+        'ולא מוריד שוב בקריאה הבאה', () async {
+      // רגרסיה: DB שהורד בלי מפתח version ב-db_meta השאיר את הגרסה
+      // המקומית null, מה שגרם להורדה מחדש של הקטלוג בכל עליית אפליקציה.
+      await _createCatalogDatabase(
+        repository.databasePath,
+        version: 3,
+      );
+
+      // DB "מרוחק" בלי טבלת db_meta בכלל.
+      final remoteDbPath = path.join(tempDir.path, 'remote_no_version.db');
+      final remoteDb = sqlite3.open(remoteDbPath);
+      remoteDb.execute('CREATE TABLE hebrew_books (id_book INTEGER)');
+      remoteDb.close();
+      final remoteDbBytes = await File(remoteDbPath).readAsBytes();
+
+      var dbDownloadCount = 0;
+      repository = ExternalCatalogRepository(
+        httpClient: MockClient((request) async {
+          final url = request.url.toString();
+          if (url == ExternalCatalogRepository.releaseApiUrl) {
+            return http.Response(
+              jsonEncode({
+                'tag_name': 'db-v4',
+                'assets': [
+                  {
+                    'name': DatabaseConstants.externalCatalogDatabaseFileName,
+                    'browser_download_url': 'https://example.com/catalog.db',
+                  },
+                  {
+                    'name': DatabaseConstants.externalCatalogVersionFileName,
+                    'browser_download_url': 'https://example.com/version.txt',
+                  },
+                ],
+              }),
+              200,
+            );
+          }
+          if (url == 'https://example.com/version.txt') {
+            return http.Response('4\n', 200);
+          }
+          if (url == 'https://example.com/catalog.db') {
+            dbDownloadCount++;
+            return http.Response.bytes(remoteDbBytes, 200);
+          }
+          return http.Response('Not found', 404);
+        }),
+      );
+
+      expect(await repository.updateDatabaseIfNeeded(), isTrue);
+      expect(dbDownloadCount, 1);
+      expect(await repository.getCurrentDatabaseVersion(), 4);
+
+      // קריאה שנייה — הגרסה המקומית כבר עדכנית, אסור להוריד שוב.
+      expect(await repository.updateDatabaseIfNeeded(), isFalse);
+      expect(dbDownloadCount, 1);
+    });
+
+    test(
+        'downloadLatestDatabase מחתים גרסה בהורדה ראשונית כשה-DB שהורד '
+        'חסר אותה', () async {
+      // רגרסיה: ההורדה הראשונית (בלי DB מקומי קודם) לא החתימה גרסה, כך
+      // ש-DB בלי db_meta.version נשאר עם גרסה null והסנכרון האוטומטי הוריד
+      // אותו שוב בעלייה הבאה.
+      final remoteDbPath = path.join(tempDir.path, 'remote_initial.db');
+      final remoteDb = sqlite3.open(remoteDbPath);
+      remoteDb.execute('CREATE TABLE hebrew_books (id_book INTEGER)');
+      remoteDb.close();
+      final remoteDbBytes = await File(remoteDbPath).readAsBytes();
+
+      var dbDownloadCount = 0;
+      repository = ExternalCatalogRepository(
+        httpClient: MockClient((request) async {
+          final url = request.url.toString();
+          if (url == ExternalCatalogRepository.releaseApiUrl) {
+            return http.Response(
+              jsonEncode({
+                'tag_name': 'db-v4',
+                'assets': [
+                  {
+                    'name': DatabaseConstants.externalCatalogDatabaseFileName,
+                    'browser_download_url': 'https://example.com/catalog.db',
+                  },
+                  {
+                    'name': DatabaseConstants.externalCatalogVersionFileName,
+                    'browser_download_url': 'https://example.com/version.txt',
+                  },
+                ],
+              }),
+              200,
+            );
+          }
+          if (url == 'https://example.com/version.txt') {
+            return http.Response('4\n', 200);
+          }
+          if (url == 'https://example.com/catalog.db') {
+            dbDownloadCount++;
+            return http.Response.bytes(remoteDbBytes, 200);
+          }
+          return http.Response('Not found', 404);
+        }),
+      );
+
+      expect(await repository.databaseExists(), isFalse);
+      await repository.downloadLatestDatabase();
+
+      expect(dbDownloadCount, 1);
+      expect(await repository.getCurrentDatabaseVersion(), 4);
+
+      // הסנכרון האוטומטי בעלייה הבאה — הגרסה כבר מוחתמת, אסור להוריד שוב.
+      expect(await repository.updateDatabaseIfNeeded(), isFalse);
+      expect(dbDownloadCount, 1);
+    });
+
     test('updateDatabaseIfNeeded זורק שגיאה ידידותית כשה-DB נעול ב-Windows',
         () async {
       if (!Platform.isWindows) {
