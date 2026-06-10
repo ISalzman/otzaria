@@ -96,7 +96,7 @@ class SwitchSettingsTile extends StatefulWidget {
     Widget? leading,
     required String title,
     String? subtitle,
-    TextDirection subtitleDirection = TextDirection.rtl,
+    bool subtitleLtr = false,
     required this.value,
     required this.onChanged,
     this.enabled = true,
@@ -108,12 +108,8 @@ class SwitchSettingsTile extends StatefulWidget {
             : Text(
                 subtitle,
                 style: AppTextStyles.settingSubtitle,
-                textDirection: subtitleDirection == TextDirection.ltr
-                    ? TextDirection.ltr
-                    : null,
-                textAlign: subtitleDirection == TextDirection.ltr
-                    ? TextAlign.end
-                    : null,
+                textDirection: subtitleLtr ? TextDirection.ltr : null,
+                textAlign: subtitleLtr ? TextAlign.end : null,
               );
 
   @override
