@@ -62,6 +62,12 @@ class AppContextMenuEntry {
   /// טרי בכל קריאה.
   final Stream<Object?>? childrenRefreshStream;
 
+  /// בונה תוכן לחלונית תצוגה מקדימה צפה שנפתחת ברפרוף על הפריט.
+  ///
+  /// החלונית מוצגת לצד הפריט לאחר השהיה קצרה, ונעלמת כשהסמן עוזב גם את
+  /// הפריט וגם את החלונית עצמה. רלוונטי לפריטי עלה בלבד (ללא תת-תפריט).
+  final WidgetBuilder? hoverPreviewBuilder;
+
   const AppContextMenuEntry({
     required this.label,
     this.key,
@@ -76,6 +82,7 @@ class AppContextMenuEntry {
     this.children,
     this.childrenBuilder,
     this.childrenRefreshStream,
+    this.hoverPreviewBuilder,
   }) : isDivider = false;
 
   const AppContextMenuEntry.divider()
@@ -92,7 +99,8 @@ class AppContextMenuEntry {
         trailing = null,
         children = null,
         childrenBuilder = null,
-        childrenRefreshStream = null;
+        childrenRefreshStream = null,
+        hoverPreviewBuilder = null;
 }
 
 bool hasEnabledAppContextMenuEntries(List<AppContextMenuEntry> entries) {

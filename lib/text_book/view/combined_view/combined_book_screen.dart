@@ -9,6 +9,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
+import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -712,16 +713,8 @@ class _CombinedViewState extends State<CombinedView> {
             ),
             const AppContextMenuEntry.divider(),
           ],
-          ...paragraphLinks.map((link) => AppContextMenuEntry(
-                label: link.fallbackDisplayReference,
-                labelWidget: FutureBuilder<String>(
-                  future: link.displayReference,
-                  builder: (context, snapshot) => Text(
-                    snapshot.data ?? link.fallbackDisplayReference,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+          ...paragraphLinks.map((link) => buildLinkContextMenuEntry(
+                link: link,
                 onTap: () => widget.openBookCallback(
                   TextBookTab(
                     book: TextBook(title: utils.getTitleFromPath(link.path2)),
