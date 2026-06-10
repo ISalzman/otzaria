@@ -102,16 +102,20 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
         // Guard: a Stop or new Start may have fired while we waited in queue.
         if (!isCurrent()) return;
 
-        await SqliteDataProvider.instance.closeForExternalWrite();
-
-        _syncService = LibraryDiffSyncWorkerService();
-        final dbPath = repository.getDbPath();
-
         var appliedCount = 0;
         var cancelled = false;
         String? failedMessage;
 
+        // ה-close *בתוך* ה-try: כל יציאה (גם אם בניית ה-service או getDbPath
+        // נכשלים) חייבת לעבור דרך ה-finally שמבצע reopen. close מחוץ ל-try היה
+        // מדליף write-session אם משהו ביניהם נכשל — ואז כל קריאה עתידית ל-DB
+        // הייתה מחזירה ריק עד restart.
         try {
+          await SqliteDataProvider.instance.closeForExternalWrite();
+
+          _syncService = LibraryDiffSyncWorkerService();
+          final dbPath = repository.getDbPath();
+
           await for (final update in _syncService!.start(
             dbPath: dbPath,
             assets: chain,
