@@ -731,34 +731,32 @@ class _PrintingScreenState extends State<PrintingScreen> {
         pw.Page(
           pageFormat: sheetFormat,
           margin: pw.EdgeInsets.zero,
+          textDirection: pw.TextDirection.rtl,
           build: (context) {
-            return pw.Directionality(
-              textDirection: pw.TextDirection.rtl,
-              child: pw.Column(
-                children: List.generate(rows, (row) {
-                  return pw.SizedBox(
-                    height: cellHeight,
-                    child: pw.Row(
-                      children: List.generate(cols, (col) {
-                        final indexInChunk = row * cols + col;
-                        if (indexInChunk >= chunk.length) {
-                          return pw.Expanded(child: pw.SizedBox());
-                        }
-                        final image = pw.MemoryImage(chunk[indexInChunk]);
-                        return pw.Expanded(
-                          child: pw.Align(
-                            alignment: pw.Alignment.centerRight,
-                            child: pw.Image(
-                              image,
-                              fit: pw.BoxFit.contain,
-                            ),
+            return pw.Column(
+              children: List.generate(rows, (row) {
+                return pw.SizedBox(
+                  height: cellHeight,
+                  child: pw.Row(
+                    children: List.generate(cols, (col) {
+                      final indexInChunk = row * cols + col;
+                      if (indexInChunk >= chunk.length) {
+                        return pw.Expanded(child: pw.SizedBox());
+                      }
+                      final image = pw.MemoryImage(chunk[indexInChunk]);
+                      return pw.Expanded(
+                        child: pw.Align(
+                          alignment: pw.Alignment.centerRight,
+                          child: pw.Image(
+                            image,
+                            fit: pw.BoxFit.contain,
                           ),
-                        );
-                      }),
-                    ),
-                  );
-                }),
-              ),
+                        ),
+                      );
+                    }),
+                  ),
+                );
+              }),
             );
           },
         ),
