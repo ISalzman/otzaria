@@ -4,8 +4,11 @@ import 'package:otzaria/theme/theme_exports.dart';
 /// בלוק אייקון + כותרת + תת-כותרת — תבנית חוזרת בשורות הגדרה רספונסיביות.
 ///
 /// משמש ב-[DropdownSettingsTile] וב-[SegmentedSettingsTile] בלייאוט הצר.
+///
+/// [icon] יכול להיות [Icon] רגיל או [RtlIcon] — הקורא מחליט.
 class SettingsTileInfo extends StatelessWidget {
-  final IconData? icon;
+  /// ווידג'ט האייקון — [Icon] או [RtlIcon] לפי בחירת הקורא.
+  final Widget? icon;
 
   /// [String] או [Widget].
   final dynamic title;
@@ -24,7 +27,7 @@ class SettingsTileInfo extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (icon != null) ...[
-          Icon(icon),
+          icon!,
           const SizedBox(width: 12),
         ],
         Expanded(

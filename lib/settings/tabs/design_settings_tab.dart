@@ -183,7 +183,7 @@ class DesignSettingsTab extends StatelessWidget {
                     title: 'ערכת נושא',
                     children: [
                       SegmentedSettingsTile<_ThemeMode>(
-                        icon: FluentIcons.weather_sunny_24_regular,
+                        icon: Icon(FluentIcons.weather_sunny_24_regular),
                         title: 'מצב ערכת נושא',
                         subtitle: state.followSystemTheme
                             ? 'התוכנה תתאים את המראה באופן אוטומטי להגדרות מערכת ההפעלה'
@@ -312,7 +312,7 @@ class DesignSettingsTab extends StatelessWidget {
                             : state.defaultSidebarOpen
                                 ? 'החלונית תוצג בפתיחת ספר ותיסגר בעת גלילה'
                                 : 'החלונית לא תוצג אוטומטית עם פתיחת הספר',
-                        icon: FluentIcons.panel_left_24_regular,
+                        icon: Icon(FluentIcons.panel_left_24_regular),
                         options: const [
                           SegmentOption(
                               value: _SidebarMode.pinned, label: 'הצגה'),
