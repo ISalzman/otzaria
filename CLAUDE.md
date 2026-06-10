@@ -608,7 +608,13 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Focus restore | `test/focus_restore_test.dart` |
 | Calendar widget | `test/calendar_widget_focus_test.dart` |
 | Models (books, links) | `test/models/books_test.dart`, `…links_test.dart`, `…phone_report_data_test.dart` |
-| Utils (page converter, TOC parser) | `test/utils/page_converter_test.dart`, `…toc_parser_test.dart` |
+| Utils (page map builder, TOC parser) | `test/utils/page_map_builder_test.dart`, `…toc_parser_test.dart` |
+| Utils (link processing) | `test/text_book/utils/link_processing_test.dart` |
+| Hebrew morphology (search) | `test/search/hebrew_morphology_test.dart` |
+| Hebrew text utils (migration) | `test/migration/hebrew_text_utils_test.dart` |
+| Text book searcher (in-book search) | `test/text_book/models/text_book_searcher_test.dart` |
+| Note text utils | `test/personal_notes/note_text_utils_test.dart` |
+| Shortcut validator | `test/shortcuts/shortcut_validator_test.dart` |
 | Core (activation queue/channel, error log) | `test/core/` |
 | Error logging | `test/main_error_logging_test.dart`, `test/services/direct_error_report_service_test.dart` |
 
