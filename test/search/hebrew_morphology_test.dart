@@ -130,6 +130,19 @@ void main() {
       expect(HebrewMorphology.extractRoot('ספרים'), 'ספר');
     });
 
+    test('מסיר קידומת ומשאיר את שאר המילה', () {
+      expect(HebrewMorphology.extractRoot('הספרים'), 'ספר');
+      expect(HebrewMorphology.extractRoot('והספרים'), 'ספר');
+    });
+
+    test('מסיר קידומת וסיומת יחד', () {
+      expect(HebrewMorphology.extractRoot('ותורתו'), 'תורת');
+    });
+
+    test('מילה ללא קידומת וסיומת מוחזרת כמו שהיא', () {
+      expect(HebrewMorphology.extractRoot('דג'), 'דג');
+    });
+
     test('מילה ריקה מוחזרת כמו שהיא', () {
       expect(HebrewMorphology.extractRoot(''), '');
     });
