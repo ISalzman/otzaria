@@ -80,8 +80,9 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
           : ScrollbarLabelSide.left;
 
   /// ממפה מיקום אנכי מבוקש של ראש המחוון לעמוד היעד — אותו עמוד שאליו
-  /// [jumpToThumbTop] (במרכז ה-viewport) היה מנווט.
-  int _pageForThumbTop(
+  /// [jumpToThumbTop] (במרכז ה-viewport) היה מנווט. מחזיר null אם ה-layout
+  /// עדיין לא חובר (controller.layout זורק לפני חיבור — race condition ב-pdfrx).
+  int? _pageForThumbTop(
     double desiredThumbTop,
     Rect bounds,
     double scrollableExtent,
@@ -93,11 +94,17 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
         : desiredThumbTop.clamp(0.0, maxThumbTop) / maxThumbTop;
     final targetTop = bounds.top + normalizedTop * scrollableExtent;
     final centerY = targetTop + visibleHeight / 2;
-    final layouts = widget.controller.layout.pageLayouts;
+    final List<Rect> layouts;
+    try {
+      layouts = widget.controller.layout.pageLayouts;
+    } catch (_) {
+      return null;
+    }
+    if (layouts.isEmpty) return null;
     for (var i = 0; i < layouts.length; i++) {
       if (centerY < layouts[i].bottom) return i + 1;
     }
-    return layouts.isEmpty ? 1 : layouts.length;
+    return layouts.length;
   }
 
   /// מציג/מעדכן את תווית היעד עבור [pageNumber]. הכתובת מחושבת רק כשהעמוד
@@ -312,6 +319,7 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                   if (!_labelEnabled) return;
                   final page = _pageForThumbTop(desiredThumbTop, bounds,
                       scrollableExtent, visibleHeight, maxThumbTop);
+                  if (page == null) return;
                   _showLabelForPage(page, globalPosition);
                 }
 

@@ -100,8 +100,11 @@ class ScrollbarTargetLabelController {
       child: label,
     );
 
-    final top = _anchor.dy
-        .clamp(24.0, (screen.height - 24.0).clamp(24.0, screen.height));
+    // במסך נמוך מ-48px (טסטים / מזעור קיצוני) הגבול התחתון היה גדול מהעליון
+    // ו-clamp היה זורק; במקרה כזה פשוט תוחמים לטווח המסך.
+    final top = screen.height > 48.0
+        ? _anchor.dy.clamp(24.0, screen.height - 24.0)
+        : _anchor.dy.clamp(0.0, screen.height);
 
     if (_side == ScrollbarLabelSide.left) {
       return Positioned(
