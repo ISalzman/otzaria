@@ -485,8 +485,9 @@ Future<void> prepareMainWindowReveal() async {
   try {
     await windowManager.setMinimumSize(WindowPersistence.minSize);
     await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-    // מחילים את הגבולות הסופיים בעוד החלון מוסתר — שינוי-הגודל אינו נראה.
-    await WindowPersistence.applyRestoredBounds();
+    // הגבולות הסופיים כבר הוחלו מוקדם (ב-_initializeProcessSingletons, בעוד
+    // החלון מוסתר) כדי ששינוי ה-DPI יתייצב לפני החשיפה. כאן רק מסיימים את
+    // הגדרת המסגרת לפני שהחלון יוצג.
   } catch (error, stackTrace) {
     _logNonFatalInitializationError(
         'Prepare main window reveal', error, stackTrace);
@@ -564,6 +565,14 @@ Future<void> _initializeProcessSingletons() async {
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       await WindowPersistence.restoreIfAny();
+      // מחילים את הגבולות הסופיים כאן — מוקדם, בזמן שה-splash הנייטיב מוצג
+      // והחלון הראשי עדיין מוסתר — ולא ברגע החשיפה. החלון נוצר ב-(10,10) על
+      // המסך הראשי; אם הגבולות השמורים נמצאים על מסך עם DPI שונה, ה-setBounds
+      // משגר WM_DPICHANGED. בכך שמחילים אותו כאן (ולא frame אחד לפני show),
+      // המנוע מספיק לעבד את שינוי ה-DPI ולצייר מחדש ב-devicePixelRatio הנכון
+      // הרבה לפני שהחלון נחשף — מונע מצב שבו כל הממשק מופיע "מוגדל" כי הוצג
+      // לפני שה-DPR התעדכן.
+      await WindowPersistence.applyRestoredBounds();
     }
   } finally {
     if (!_windowReadyCompleter.isCompleted) {

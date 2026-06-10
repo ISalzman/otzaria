@@ -21,8 +21,9 @@ class WindowPersistence {
   static bool _isRestoring = false;
   static bool _pendingMaximize = false;
 
-  /// גבולות החלון השמורים, נקראים ב-[restoreIfAny] אך מוחלים רק ב-
-  /// [applyRestoredBounds] — אחרי שלב ה-splash הקטן. null = אין גבולות שמורים
+  /// גבולות החלון השמורים, נקראים ב-[restoreIfAny] ומוחלים ב-
+  /// [applyRestoredBounds] — מוקדם, בעוד החלון מוסתר וה-splash מוצג (כדי
+  /// ששינוי ה-DPI אפשרי יתייצב לפני החשיפה). null = אין גבולות שמורים
   /// (הפעלה ראשונה) → יוחל גודל ברירת מחדל.
   static Rect? _restoredBounds;
 
@@ -65,9 +66,9 @@ class WindowPersistence {
       final clampedWidth = width < minSize.width ? minSize.width : width;
       final clampedHeight = height < minSize.height ? minSize.height : height;
 
-      // לא מחילים את הגבולות עכשיו: בשלב זה החלון מציג את ה-splash הקטן
-      // והשקוף. הגבולות נשמרים ומוחלים ב-[applyRestoredBounds] בעת חשיפת
-      // החלון המלא (revealMainWindow), אחרי שתוכן הטאב הפעיל נטען.
+      // שומרים את הגבולות; הם מוחלים ב-[applyRestoredBounds] מיד לאחר מכן,
+      // בעוד החלון הראשי מוסתר וה-splash הנייטיב מוצג — מוקדם דיו כדי ששינוי
+      // DPI אפשרי (אם הגבולות על מסך אחר ממסך היצירה) יתייצב לפני החשיפה.
       _restoredBounds = Rect.fromLTWH(left, top, clampedWidth, clampedHeight);
     } catch (_) {
       // window manager may fail on first launch;
@@ -78,7 +79,8 @@ class WindowPersistence {
   }
 
   /// מחילה את גבולות החלון השמורים (או גודל ברירת מחדל ממורכז בהפעלה ראשונה).
-  /// נקראת בעת חשיפת החלון המלא, אחרי שלב ה-splash הקטן.
+  /// נקראת מוקדם, מיד לאחר [restoreIfAny], בעוד החלון מוסתר — כדי ששינוי DPI
+  /// אפשרי (מעבר מסך) יתייצב הרבה לפני שהחלון יוצג ב-[presentMainWindow].
   static Future<void> applyRestoredBounds() async {
     _isRestoring = true;
     try {
