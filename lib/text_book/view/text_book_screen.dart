@@ -1066,12 +1066,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                             ),
                             ActionButtonData(
                               widget: IconButton(
-                                icon: const Icon(
-                                    FluentIcons.book_search_24_regular),
+                                icon: const Icon(FluentIcons.search_24_regular),
                                 tooltip: 'חיפוש',
                                 onPressed: null,
                               ),
-                              icon: FluentIcons.book_search_24_regular,
+                              icon: FluentIcons.search_24_regular,
                               tooltip: 'חיפוש',
                               onPressed: null,
                             ),
@@ -2021,7 +2020,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return ToolbarActionButton(
       key: key,
       tooltip: 'חיפוש (${shortcut.toUpperCase()})',
-      icon: FluentIcons.book_search_24_regular,
+      icon: FluentIcons.search_24_regular,
       compact: isCompact,
       onPressed: _openSearchFromToolbar,
     );
@@ -2563,8 +2562,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 label: 'כותרות'
               ),
             (
-              icon: FluentIcons.book_search_24_regular,
-              iconFilled: FluentIcons.book_search_24_filled,
+              icon: FluentIcons.search_24_regular,
+              iconFilled: FluentIcons.search_24_filled,
               label: 'חיפוש'
             ),
           ],
