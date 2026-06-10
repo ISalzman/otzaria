@@ -279,7 +279,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
   bool _hasScheduledSplashReveal = false;
   Timer? _splashFailsafeTimer;
   bool _isShowingStartupManualReindexDialog = false;
-  bool _hasRestoredFullscreen = false;
   bool _hasStartedFileSync = false;
   bool _isSearchOpen = false;
   bool _isFindRefOpen = false;
@@ -701,22 +700,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       if (!mounted) return;
       FocusRepository().scheduleRestoreDebounced();
     };
-  }
-
-  /// Restore fullscreen state from settings when app starts
-  Future<void> _restoreFullscreenState(BuildContext context) async {
-    if (_hasRestoredFullscreen) return;
-    _hasRestoredFullscreen = true;
-
-    if (kIsWeb ||
-        (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS)) {
-      return;
-    }
-
-    final settingsState = context.read<SettingsBloc>().state;
-    if (settingsState.isFullscreen) {
-      await windowManager.setFullScreen(true);
-    }
   }
 
   void _checkAndStartIndexing(
@@ -2286,7 +2269,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
               if (!previous.autoUpdateIndex && current.autoUpdateIndex) {
                 _startIndexing(context);
               }
-              _restoreFullscreenState(context);
             },
           ),
           BlocListener<TabsBloc, TabsState>(
