@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -18,6 +19,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
+import 'package:otzaria/tabs/utils/tab_swipe_direction.dart';
 import 'package:otzaria/search/view/full_text_search_screen.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
 import 'package:otzaria/text_book/view/commentators_tab_screen.dart';
@@ -43,6 +45,19 @@ class _ReadingScreenState extends State<ReadingScreen>
   // PageView לא עוטף ב-Semantics, וה-SliverChildListDelegate משתמש ב-key
   // של הילד עצמו, כך שהזזה שומרת על ה-State.
   PageController? _pageController;
+
+  /// סף ההפעלה (בפיקסלים לוגיים) של החלקה אופקית למעבר טאב בדסקטופ.
+  static const double _kTabSwipeThreshold = 80.0;
+
+  /// הצטברות ה-dx מתחילת מחוות ההחלקה הנוכחית.
+  double _swipeAccum = 0;
+
+  /// האם המחווה הנוכחית כבר הפעילה מעבר טאב (מעבר אחד לכל מחווה).
+  bool _swipeFired = false;
+
+  /// מדכא את [_syncPageController] בזמן אנימציית מעבר מהחלקה, כדי
+  /// ש-jumpToPage של הסנכרון לא יקטע את האנימציה באמצע.
+  bool _suppressPageSync = false;
 
   @override
   void initState() {
@@ -83,7 +98,7 @@ class _ReadingScreenState extends State<ReadingScreen>
     // הטאבים קופצת לטאב הקודם במקום לחדש. דחייה לפוסט-פריים מבטיחה שהקפיצה
     // תתבצע אחרי שהילד החדש כבר בעץ, על תצוגה תקינה.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || _suppressPageSync) return;
       final controller = _pageController;
       if (controller == null || !controller.hasClients) return;
       final state = context.read<TabsBloc>().state;
@@ -94,6 +109,87 @@ class _ReadingScreenState extends State<ReadingScreen>
         controller.jumpToPage(targetIndex);
       }
     });
+  }
+
+  /// עוטפת את ה-PageView בזיהוי החלקה אופקית למעבר טאב בדסקטופ.
+  ///
+  /// ה-physics של ה-PageView נשאר NeverScrollable בדסקטופ (ראו הערה שם),
+  /// והמחווה ממומשת ב-recognizer ייעודי המוגבל לטאצ'פד ולמסך מגע בלבד:
+  /// - גרירות עכבר (kind: mouse) מסוננות לגמרי, כך שסימון טקסט אופקי
+  ///   ב-SelectionArea וב-PDF לא נפגע.
+  /// - ה-recognizer משתתף ב-gesture arena כצומת חיצוני, ולכן מפסיד
+  ///   לכל רכיב פנימי שתובע את המחווה: גלילה אנכית בספרי טקסט,
+  ///   pan/zoom של pdfrx (כולל גלילה אופקית ב-PDF), וסרגלי טאבים
+  ///   פנימיים הנגללים אופקית.
+  /// - אירועי גלגלת (pointer signals) לא מטופלים כלל — אין מצב של
+  ///   טאב "תקוע" באמצע גלילה ואין טיפול כפול מול ה-Listener של ה-PDF.
+  Widget _wrapWithDesktopTabSwipe(Widget child) {
+    if (Platform.isAndroid || Platform.isIOS) return child;
+    return RawGestureDetector(
+      gestures: <Type, GestureRecognizerFactory>{
+        HorizontalDragGestureRecognizer: GestureRecognizerFactoryWithHandlers<
+            HorizontalDragGestureRecognizer>(
+          () => HorizontalDragGestureRecognizer(
+            supportedDevices: const {
+              PointerDeviceKind.trackpad,
+              PointerDeviceKind.touch,
+            },
+          ),
+          (recognizer) {
+            recognizer
+              ..onStart = (_) {
+                _swipeAccum = 0;
+                _swipeFired = false;
+              }
+              ..onUpdate = (details) {
+                if (_swipeFired) return;
+                _swipeAccum += details.delta.dx;
+                if (_swipeAccum.abs() >= _kTabSwipeThreshold) {
+                  _swipeFired = true;
+                  _switchTabBySwipe(tabSwipeDirection(
+                    accumulatedDx: _swipeAccum,
+                    textDirection: Directionality.of(context),
+                  ));
+                }
+              }
+              ..onEnd = (_) {
+                _swipeFired = false;
+              }
+              ..onCancel = () {
+                _swipeFired = false;
+              };
+          },
+        ),
+      },
+      child: child,
+    );
+  }
+
+  /// מעבר לטאב סמוך בעקבות מחוות החלקה. [direction] הוא `1` לטאב הבא
+  /// או `-1` לטאב הקודם (כפי שחושב ב-[tabSwipeDirection]).
+  Future<void> _switchTabBySwipe(int direction) async {
+    final state = context.read<TabsBloc>().state;
+    if (!state.hasOpenTabs) return;
+    final target = state.currentTabIndex + direction;
+    if (target < 0 || target >= state.tabs.length) return;
+    final controller = _pageController;
+    if (controller == null || !controller.hasClients) return;
+    // עדכון ה-bloc קודם כדי שההדגשה בשורת הטאבים תגיב מיד; הסנכרון
+    // (jumpToPage) מדוכא בינתיים כדי שהאנימציה תושלם בלי קטיעה.
+    context.read<TabsBloc>().add(SetCurrentTab(target));
+    _suppressPageSync = true;
+    try {
+      await controller.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    } finally {
+      _suppressPageSync = false;
+      // השלמת סנכרון לכל שינוי טאב שקרה בזמן האנימציה (למשל לחיצה
+      // בשורת הטאבים) ושנבלע על-ידי הדיכוי.
+      if (mounted) _syncPageController();
+    }
   }
 
   @override
@@ -196,12 +292,14 @@ class _ReadingScreenState extends State<ReadingScreen>
                           key: tourReadingScreenTargetKey,
                           child: SizedBox.fromSize(
                             size: MediaQuery.of(context).size,
-                            child: PageView(
+                            child: _wrapWithDesktopTabSwipe(PageView(
                               key: const ValueKey('normal_tab_view'),
                               controller: _pageController,
-                              // גלילה בין טאבים רק במובייל; בדסקטופ tab-bar הוא
-                              // אמצעי הניווט, ו-PageScrollPhysics מתנגשת עם
-                              // סימון טקסט אופקי ועם גלילה אופקית ב-PDF.
+                              // גלילת PageView רק במובייל; בדסקטופ
+                              // PageScrollPhysics מתנגשת עם סימון טקסט אופקי,
+                              // עם גלילה אופקית ב-PDF ועם אירועי גלגלת.
+                              // החלקת טאצ'פד/מגע בדסקטופ ממומשת בנפרד
+                              // ב-_wrapWithDesktopTabSwipe.
                               physics: Platform.isAndroid || Platform.isIOS
                                   ? const PageScrollPhysics()
                                   : const NeverScrollableScrollPhysics(),
@@ -211,15 +309,16 @@ class _ReadingScreenState extends State<ReadingScreen>
                               // וה-callback היה יורה רק על קפיצות תוכנתיות —
                               // כולל ערך clamp שגוי רגעי בעת פתיחת טאב חדש —
                               // ודורס את האינדקס הנכון. לכן מנוטרל.
-                              onPageChanged: Platform.isAndroid || Platform.isIOS
-                                  ? (index) {
-                                      if (index < state.tabs.length) {
-                                        context
-                                            .read<TabsBloc>()
-                                            .add(SetCurrentTab(index));
-                                      }
-                                    }
-                                  : null,
+                              onPageChanged:
+                                  Platform.isAndroid || Platform.isIOS
+                                      ? (index) {
+                                          if (index < state.tabs.length) {
+                                            context
+                                                .read<TabsBloc>()
+                                                .add(SetCurrentTab(index));
+                                          }
+                                        }
+                                      : null,
                               children: [
                                 for (var i = 0; i < state.tabs.length; i++)
                                   _buildTabView(
@@ -227,7 +326,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                                     enableTourTargets: i == validIndex,
                                   ),
                               ],
-                            ),
+                            )),
                           ),
                         ),
                 ),
