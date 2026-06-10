@@ -23,22 +23,22 @@ class HiveCache extends CacheProvider {
 
   @override
   bool? getBool(String key, {bool? defaultValue}) {
-    return _preferences?.get(key);
+    return _preferences?.get(key, defaultValue: defaultValue) ?? defaultValue;
   }
 
   @override
   double? getDouble(String key, {double? defaultValue}) {
-    return _preferences?.get(key);
+    return _preferences?.get(key, defaultValue: defaultValue) ?? defaultValue;
   }
 
   @override
   int? getInt(String key, {int? defaultValue}) {
-    return _preferences?.get(key);
+    return _preferences?.get(key, defaultValue: defaultValue) ?? defaultValue;
   }
 
   @override
   String? getString(String key, {String? defaultValue}) {
-    return _preferences?.get(key);
+    return _preferences?.get(key, defaultValue: defaultValue) ?? defaultValue;
   }
 
   @override

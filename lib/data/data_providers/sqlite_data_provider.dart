@@ -58,7 +58,10 @@ class SqliteDataProvider {
     if (_activeWriteSessions > 0) {
       try {
         await _writeChain;
-      } catch (_) {}
+      } catch (e) {
+        // השגיאה עצמה מטופלת אצל מי שהריץ את הכתיבה; כאן רק ממתינים לסיום.
+        debugPrint('[SqliteDataProvider] write chain ended with error: $e');
+      }
       // ממתינים לפתיחה-מחדש של ה-RO ע"י ה-session — אך בפעימות עם תקרת זמן,
       // לא בהמתנה אינסופית. ההמתנה הישנה (await gate.future ללא תקרה) קפאה
       // לנצח אם reopen התעכב/התפספס (כתיבות חופפות בעלייה, איזולייט שקרס),
@@ -286,10 +289,14 @@ class SqliteDataProvider {
       // checkpoint + המרה ל-DELETE כדי שהפתיחה ה-RO הבאה לא תצטרך -wal/-shm.
       try {
         await writableRepo.executeRawQuery('PRAGMA wal_checkpoint(TRUNCATE)');
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[SqliteDataProvider] wal_checkpoint failed: $e');
+      }
       try {
         await writableRepo.setJournalMode('DELETE');
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[SqliteDataProvider] setJournalMode(DELETE) failed: $e');
+      }
       return result;
     } finally {
       writableDb.close();
