@@ -955,6 +955,12 @@ class _SubmenuItemWidgetState<T> extends State<_SubmenuItemWidget<T>> {
     _closeTimer?.cancel();
     _overlayEntry?.remove();
     _overlayEntry = null;
+    // שחרור מי שממתין ל-future של הסאבמנו (_openSubmenuFromData) — בלי זה
+    // ה-await נשאר תלוי לנצח כשה-widget נזרק בזמן שהסאבמנו פתוח.
+    if (!(_completer?.isCompleted ?? true)) {
+      _completer!.complete(null);
+    }
+    _completer = null;
     super.dispose();
   }
 
