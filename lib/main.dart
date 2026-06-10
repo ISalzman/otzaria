@@ -507,6 +507,10 @@ Future<void> presentMainWindow() async {
     await windowManager.focus();
     // maximize חייב לקרות *אחרי* show (show מבצע restore לגודל הקודם).
     await WindowPersistence.applyPendingMaximize();
+    // מסך מלא חייב לקרות אחרי show ואחרי maximize: על חלון מוסתר setFullScreen
+    // מצלם סגנון ללא WS_VISIBLE והחלון נעלם ביציאה ממסך מלא; ואחרי maximize —
+    // כדי שיציאה ממסך מלא תחזיר את החלון למצבו הממוקסם.
+    await WindowPersistence.applyPendingFullscreen();
     // סוגרים את חלון ה-splash הנייטיב — בדיוק כשהחלון הראשי מופיע עם תוכן.
     await _closeNativeSplash();
     // מכאן והלאה מותר לשמור את גודל החלון.
