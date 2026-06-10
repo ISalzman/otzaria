@@ -107,7 +107,12 @@ class UpdateFacetCounts extends SearchEvent {
 
 class ReplaceFacetCounts extends SearchEvent {
   final Map<String, int> facetCounts;
-  ReplaceFacetCounts(this.facetCounts);
+
+  /// מזהה החיפוש שעבורו חושבו הספירות. נבדק שוב בזמן עיבוד ה-event —
+  /// הבדיקה לפני ה-add לא מספיקה, כי חיפוש חדש יכול להתחיל בזמן שה-event
+  /// ממתין בתור, ואז ספירות ישנות היו דורסות את החדשות.
+  final int requestId;
+  ReplaceFacetCounts(this.facetCounts, {required this.requestId});
 }
 
 // Event לטעינת תוצאות נוספות
