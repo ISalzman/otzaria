@@ -1840,6 +1840,11 @@ class _CombinedViewState extends State<CombinedView> {
     return ContinuousReadingParagraph(
       lines: paragraphLines,
       baseStyle: baseTextStyle,
+      // אותו עיצוב קישורים כמו במצב הרגיל (HtmlWidget): primary + קו תחתון.
+      linkStyle: TextStyle(
+        color: Theme.of(context).colorScheme.primary,
+        decoration: TextDecoration.underline,
+      ),
       onTapUrl: (url) async {
         await HtmlLinkHandler.handleLink(
           context,

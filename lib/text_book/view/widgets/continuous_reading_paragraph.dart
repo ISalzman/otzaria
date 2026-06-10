@@ -250,11 +250,10 @@ List<InlineSpan> _nodeToSpans(
     final href = node.attributes['href'];
     if (href != null && href.isNotEmpty) {
       final childStyle = _styleForElement(node, style);
+      // fallback ללא צבע קשיח: קו תחתון בלבד, הצבע יורש מהטקסט — כמו
+      // ההתנהגות במצב הרגיל. צבע theme (primary) מוזרם דרך linkStyle.
       final effectiveLinkStyle = linkStyle == null
-          ? childStyle.copyWith(
-              color: Colors.blue,
-              decoration: TextDecoration.underline,
-            )
+          ? childStyle.copyWith(decoration: TextDecoration.underline)
           : childStyle.merge(linkStyle);
       final children = _nodesToSpans(
         node.nodes,
