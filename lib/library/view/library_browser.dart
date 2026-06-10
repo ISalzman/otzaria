@@ -1029,6 +1029,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       onOpenSearch: () => _openSearchDialog(context, searchQuery: searchText),
       onOpenLink:
           isDeepLink ? () => _tryHandleDeepLink(context, searchText) : null,
+      showSearchElsewhereHint:
+          searchText.isNotEmpty && state.currentCategory != state.library,
     );
   }
 

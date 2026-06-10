@@ -1247,9 +1247,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           subtitle: Text(
             _libraryVersion ?? 'טוען...',
             style: kSettingsSubtitleStyle,
-            textDirection: _libraryVersion == null
-                ? TextDirection.rtl
-                : TextDirection.ltr,
+            textDirection:
+                _libraryVersion == null ? TextDirection.rtl : TextDirection.ltr,
           ),
           // trailing: TextButton.icon(
           //   icon: const Icon(FluentIcons.history_24_regular, size: 16),

@@ -240,11 +240,78 @@ List<int> _filterBookSearchEntries({
     );
   });
 
+  // Damerau-Levenshtein edit distance (supports transposition of adjacent chars)
+  // e.g. אבועלפיה → אבולעפיה counts as 1 edit, not 2
+  int editDistance(String a, String b) {
+    if (a == b) return 0;
+    if (a.isEmpty) return b.length;
+    if (b.isEmpty) return a.length;
+    final aChars = a.runes.toList();
+    final bChars = b.runes.toList();
+    final la = aChars.length;
+    final lb = bChars.length;
+    // d[i][j] = distance between a[0..i-1] and b[0..j-1]
+    final d = List.generate(
+        la + 1, (i) => List<int>.generate(lb + 1, (j) => j == 0 ? i : 0));
+    for (int j = 0; j <= lb; j++) {
+      d[0][j] = j;
+    }
+    for (int i = 1; i <= la; i++) {
+      for (int j = 1; j <= lb; j++) {
+        final cost = aChars[i - 1] == bChars[j - 1] ? 0 : 1;
+        d[i][j] = [
+          d[i - 1][j] + 1, // deletion
+          d[i][j - 1] + 1, // insertion
+          d[i - 1][j - 1] + cost, // substitution
+        ].reduce((a, b) => a < b ? a : b);
+        // transposition of two adjacent characters
+        if (i > 1 &&
+            j > 1 &&
+            aChars[i - 1] == bChars[j - 2] &&
+            aChars[i - 2] == bChars[j - 1]) {
+          d[i][j] = d[i][j] < d[i - 2][j - 2] + cost
+              ? d[i][j]
+              : d[i - 2][j - 2] + cost;
+        }
+      }
+    }
+    return d[la][lb];
+  }
+
+  // Allowed edit distance by query word length:
+  // 1-4  chars → 0 (exact)
+  // 4-8  chars → 1 typo
+  // 8-12 chars → 2 typos
+  // 12-16 chars → 3 typos
+  // 16+  chars → 4 typos
+  int maxAllowedEdits(int len) {
+    if (len <= 4) return 0;
+    if (len <= 8) return 1;
+    if (len <= 12) return 2;
+    if (len <= 16) return 3;
+    return 4;
+  }
+
+  bool wordMatchesFuzzy(String queryWord, String text) {
+    if (text.contains(queryWord)) return true;
+    if (queryWord.length < 3) return false;
+
+    final allowed = maxAllowedEdits(queryWord.length);
+    final textWords = text.split(' ');
+    for (final textWord in textWords) {
+      if (textWord.isEmpty) continue;
+      // Only compare words of similar length to avoid false positives
+      if ((textWord.length - queryWord.length).abs() > allowed + 1) continue;
+      if (editDistance(queryWord, textWord) <= allowed) return true;
+    }
+    return false;
+  }
+
   final filtered = preparedEntries.where((entry) {
     final matchesQuery = queryWords.every(
       (word) =>
-          entry.normalizedTitle.contains(word) ||
-          entry.normalizedAuthor.contains(word),
+          wordMatchesFuzzy(word, entry.normalizedTitle) ||
+          wordMatchesFuzzy(word, entry.normalizedAuthor),
     );
     final matchesTopics =
         topics.isEmpty || topics.every((topic) => entry.topics.contains(topic));
@@ -257,7 +324,10 @@ List<int> _filterBookSearchEntries({
       for (final entry in filtered)
         _ScoredBookSearchEntry(
           index: entry.index,
-          score: ratio(normalizedQuery, entry.normalizedTitle),
+          // Boost exact matches significantly in scoring
+          score: entry.normalizedTitle.contains(normalizedQuery)
+              ? 100
+              : ratio(normalizedQuery, entry.normalizedTitle),
         ),
     ]..sort((a, b) => b.score.compareTo(a.score));
 

@@ -380,7 +380,7 @@ class TextSettingsTab extends StatelessWidget {
                         ),
                       ],
                     ),
-        ),
+                  ),
 
                 divider,
 
