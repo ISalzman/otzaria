@@ -115,11 +115,18 @@ class AboutDevTab extends StatelessWidget {
       'description': 'השקעה עצומה במעבר ל-SQLite',
     },
     {'name': 'Y.PL.', 'url': 'https://github.com/Y-PLONI'},
+    {'name': 'palmoni', 'url': 'https://github.com/palmoni5'},
     {'name': 'YOSEFTT', 'url': 'https://github.com/YOSEFTT'},
     {'name': 'zevisvei', 'url': 'https://github.com/zevisvei'},
     {'name': 'evel-avalim', 'url': 'https://github.com/evel-avalim'},
     {'name': 'userbot', 'url': 'https://github.com/userbot000'},
+    {'name': 'asz', 'url': 'https://github.com/DeveShlomo'},
     {'name': 'mosh-dvd', 'url': 'https://github.com/mosh-dvd'},
+    {
+      'name': 'אליהו גמבש',
+      'url': 'https://github.com/kdroidFilter',
+      'description': 'המרת נתוני ספריא ל-SQLite',
+    },
     {
       'name': 'NHLOCAL',
       'url': 'https://github.com/NHLOCAL/Shamor-Zachor',

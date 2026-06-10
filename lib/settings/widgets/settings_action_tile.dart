@@ -27,19 +27,18 @@ class SettingsActionTile extends StatelessWidget {
     required String subtitle,
     TextDirection subtitleDirection = TextDirection.rtl,
     required this.actions,
-  }) : title = Text(
+  })  : title = Text(
           title,
           style: kSettingsTitleStyle,
           textDirection: TextDirection.rtl,
         ),
-       subtitle = Text(
-         subtitle,
-         style: kSettingsSubtitleStyle,
-         textDirection: subtitleDirection,
-         textAlign: subtitleDirection == TextDirection.ltr
-             ? TextAlign.end
-             : null,
-       );
+        subtitle = Text(
+          subtitle,
+          style: kSettingsSubtitleStyle,
+          textDirection: subtitleDirection,
+          textAlign:
+              subtitleDirection == TextDirection.ltr ? TextAlign.end : null,
+        );
 
   /// קונסטרקטור ייעודי לנתיבי קבצים.
   /// מוסיף אוטומטית סימן LTR אחרי כל מפריד כדי למנוע שיבוש BiDi בנתיבים מעורבים.

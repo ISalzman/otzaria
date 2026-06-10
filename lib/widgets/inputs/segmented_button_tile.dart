@@ -88,7 +88,9 @@ class AppSegmentedControl<T> extends StatelessWidget {
           return cs.onSurfaceVariant;
         }),
         backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return cs.secondaryContainer;
+          if (states.contains(WidgetState.selected)) {
+            return cs.secondaryContainer;
+          }
           return cs.surface;
         }),
         shape: WidgetStatePropertyAll(
@@ -223,7 +225,8 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
                             Text(
                               widget.subtitle!,
                               style: AppTextStyles.settingSubtitle.copyWith(
-                                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                                color:
+                                    Theme.of(ctx).colorScheme.onSurfaceVariant,
                               ),
                               textDirection: TextDirection.rtl,
                             ),
@@ -271,8 +274,8 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
       onKeyEvent: (_, ev) {
         if (ev is! KeyDownEvent) return KeyEventResult.ignored;
         if (ev.logicalKey == LogicalKeyboardKey.arrowRight) {
-          setState(
-              () => _focusedIndex = (_focusedIndex + 1) % widget.options.length);
+          setState(() =>
+              _focusedIndex = (_focusedIndex + 1) % widget.options.length);
           return KeyEventResult.handled;
         }
         if (ev.logicalKey == LogicalKeyboardKey.arrowLeft) {
