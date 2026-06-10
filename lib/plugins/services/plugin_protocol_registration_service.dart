@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:path/path.dart' as p;
 
 class PluginProtocolRegistrationService {
@@ -11,6 +12,13 @@ class PluginProtocolRegistrationService {
   static const Duration _windowsRegistrationTimeout = Duration(seconds: 5);
 
   Future<void> ensureRegistered() async {
+    // במצב נייד אין לרשום שיוכים מערכתיים: הרישום מצביע על נתיב EXE
+    // שעלול להיעלם (דיסק-און-קי), ומשאיר שאריות ברגיסטרי/desktop של כל
+    // מחשב מארח. התקנת תוספים עדיין זמינה דרך הממשק הפנימי.
+    if (AppPaths.isPortable) {
+      return;
+    }
+
     if (Platform.isWindows) {
       await _ensureWindowsRegistration();
       return;

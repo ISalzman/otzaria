@@ -250,6 +250,14 @@ jobs:
                     Select-Object -First 1 -ExpandProperty FullName
           if (-not $relDir) { throw 'Release directory not found' }
           Compress-Archive -Path "$relDir\runner\Release\*" -DestinationPath otzaria-windows.zip
+          # portable.marker הופך את ה-ZIP לנייד באמת: כל הנתונים נשמרים
+          # בתיקיית otzaria_data ליד ה-EXE (ראה lib/core/app_paths.dart →
+          # isPortable). ה-marker מתווסף ל-ZIP בלבד ולא לתיקיית Release —
+          # המתקינים (regular/full/silent) נבנים מאותה תיקייה בהמשך ואסור
+          # שההתקנות הרגילות יהפכו לניידות.
+          $marker = Join-Path $env:RUNNER_TEMP 'portable.marker'
+          New-Item -ItemType File -Path $marker -Force | Out-Null
+          Compress-Archive -Path $marker -Update -DestinationPath otzaria-windows.zip
 
       - name: Check if commit message is a version tag
         id: check_version
@@ -734,6 +742,11 @@ jobs:
           fi
           mkdir -p linux-build
           cp -r build/linux/x64/release/bundle/* linux-build/
+          # portable.marker הופך את חבילת ה-raw לניידת באמת: כל הנתונים
+          # נשמרים בתיקיית otzaria_data ליד ה-executable (ראה
+          # lib/core/app_paths.dart → isPortable). חבילת ה-FULL מעתיקה את
+          # linux-build ולכן מסירה את ה-marker אצלה במפורש.
+          touch linux-build/portable.marker
       
       - name: Upload Linux DEB package
         if: steps.find_packages.outputs.deb_file != ''
@@ -765,6 +778,9 @@ jobs:
           mkdir -p "$BUNDLE_ROOT/app" "$BUNDLE_ROOT/אוצריא"
 
           cp -r linux-build/. "$BUNDLE_ROOT/app/"
+          # חבילת ה-FULL אינה ניידת (נתוני המשתמש נשארים בתיקיית המשתמש);
+          # ה-marker שייך רק לחבילת ה-raw — מסירים את העותק שהגיע מ-linux-build.
+          rm -f "$BUNDLE_ROOT/app/portable.marker"
           zstd -d -c --long=31 --memory=2048MB full_installer/library_db/seforim.db.zst > "$BUNDLE_ROOT/אוצריא/seforim.db"
           zstd -d -c --long=31 --memory=2048MB full_installer/library_db/otzar-HB_catalog.db.zst > "$BUNDLE_ROOT/אוצריא/otzar-HB_catalog.db"
           zstd -d -c --long=31 --memory=2048MB full_installer/library_db/talmud_bavli_latest.tar.zst | tar -xf - -C "$BUNDLE_ROOT/אוצריא"
@@ -1504,6 +1520,9 @@ jobs:
               emit_link_group "מתקין לווינדוס" "${windows_installers[@]}"
               emit_link_group "מתקין שקט לווינדוס (מתקין ברקע, משמר הגדרות קיימות)" "${windows_silent[@]}"
               emit_link_group "גרסה ניידת לווינדוס" "${windows_portable[@]}"
+              if [ ${#windows_portable[@]} -gt 0 ]; then
+                printf "\n> **שימו לב:** הגרסה הניידת שומרת מעתה את כל הנתונים בתיקיית \`otzaria_data\` שליד התוכנה — ניידות אמיתית, אפשר להריץ מדיסק-און-קי. מי שמעדכן גרסה ניידת ישנה יתחיל עם הגדרות נקיות.\n" >> release-body.md
+              fi
               printf "\n" >> release-body.md
             fi
 
@@ -1539,6 +1558,9 @@ jobs:
               emit_link_group "חבילת DEB ללינוקס" "${linux_deb[@]}"
               emit_link_group "חבילת RPM ללינוקס" "${linux_rpm[@]}"
               emit_link_group "גרסה ניידת ללינוקס" "${linux_portable[@]}"
+              if [ ${#linux_portable[@]} -gt 0 ]; then
+                printf "\n> **שימו לב:** הגרסה הניידת שומרת מעתה את כל הנתונים בתיקיית \`otzaria_data\` שליד התוכנה — ניידות אמיתית, אפשר להריץ מהתקן נייד.\n" >> release-body.md
+              fi
               printf "\n" >> release-body.md
             fi
 

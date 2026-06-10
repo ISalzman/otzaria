@@ -645,6 +645,74 @@ void main() {
           p.join(dataRoot.path, 'books'));
     });
 
+    test('מצב נייד — portable.marker ליד ה-EXE מפנה את dataRoot ליד ה-EXE',
+        () async {
+      final exeRoot = await Directory.systemTemp.createTemp('otzaria_exe_');
+
+      addTearDown(() async {
+        if (await exeRoot.exists()) {
+          await exeRoot.delete(recursive: true);
+        }
+      });
+
+      final exePath = p.join(exeRoot.path, 'otzaria.exe');
+      await File(exePath).writeAsString('fake exe');
+      await File(p.join(exeRoot.path, AppPaths.portableMarkerFileName))
+          .writeAsString('');
+
+      AppPaths.debugOverrideResolvedExecutable(exePath);
+
+      expect(AppPaths.isPortable, isTrue);
+      expect(
+        await AppPaths.getDataRootPath(),
+        p.join(exeRoot.path, 'otzaria_data'),
+      );
+      expect(await AppPaths.detectInstallMode(), InstallMode.perUser);
+    });
+
+    test('מצב נייד — ללא marker הזיהוי כבוי', () async {
+      final exeRoot = await Directory.systemTemp.createTemp('otzaria_exe_');
+
+      addTearDown(() async {
+        if (await exeRoot.exists()) {
+          await exeRoot.delete(recursive: true);
+        }
+      });
+
+      final exePath = p.join(exeRoot.path, 'otzaria.exe');
+      await File(exePath).writeAsString('fake exe');
+
+      AppPaths.debugOverrideResolvedExecutable(exePath);
+
+      expect(AppPaths.isPortable, isFalse);
+    });
+
+    test('מצב נייד — marker גובר על system_install.marker', () async {
+      if (!Platform.isWindows) {
+        return;
+      }
+      final exeRoot = await Directory.systemTemp.createTemp('otzaria_exe_');
+
+      addTearDown(() async {
+        if (await exeRoot.exists()) {
+          await exeRoot.delete(recursive: true);
+        }
+      });
+
+      final exePath = p.join(exeRoot.path, 'otzaria.exe');
+      await File(exePath).writeAsString('fake exe');
+      await File(p.join(exeRoot.path, AppPaths.portableMarkerFileName))
+          .writeAsString('');
+      await File(p.join(exeRoot.path, 'system_install.marker'))
+          .writeAsString('');
+
+      AppPaths.debugOverrideResolvedExecutable(exePath);
+
+      // detectInstallMode בודק את system_install.marker דרך
+      // Platform.resolvedExecutable האמיתי, אבל מצב נייד חייב לנצח קודם.
+      expect(await AppPaths.detectInstallMode(), InstallMode.perUser);
+    });
+
     test('getStaleDefaultIndexPaths מחזיר נתיבים מנורמלים וללא הנתיב הפעיל',
         () async {
       final dataRoot = await Directory.systemTemp.createTemp('otzaria_data_');

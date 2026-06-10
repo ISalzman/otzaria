@@ -27,6 +27,18 @@ class AppPaths {
   /// שם תיקיית הספרייה בתוך חבילות FULL ל-Linux ו-macOS.
   static const String _bundledLibraryFolderName = 'אוצריא';
 
+  /// קובץ marker שמפעיל מצב נייד (portable): כשהוא קיים ליד ה-executable,
+  /// כל נתוני האפליקציה נשמרים בתיקיית [_portableDataFolderName] ליד
+  /// ה-executable במקום בתיקיית המשתמש (APPDATA וכדומה). רלוונטי לדסקטופ
+  /// בלבד.
+  static const String portableMarkerFileName = 'portable.marker';
+
+  /// שם תיקיית הנתונים במצב נייד. לא 'data' — תיקייה בשם זה כבר קיימת
+  /// ליד ה-executable בחבילות Flutter ל-Windows ול-Linux (flutter_assets).
+  static const String _portableDataFolderName = 'otzaria_data';
+
+  static bool? _isPortableCache;
+
   @visibleForTesting
   static void debugOverrideDataRootPath(String? path) {
     _cachedDataRootPath = path;
@@ -42,6 +54,8 @@ class AppPaths {
     _resolvedExecutableOverride = path;
     _bundledLibraryProbed = false;
     _cachedBundledLibraryPath = null;
+    // זיהוי מצב נייד נגזר ממיקום ה-executable — חייב להתאפס יחד איתו.
+    _isPortableCache = null;
   }
 
   static String get _resolvedExecutable =>
@@ -55,7 +69,25 @@ class AppPaths {
     _cachedTantivyLockPathResult = null;
   }
 
+  /// האם האפליקציה רצה במצב נייד — קובץ [portableMarkerFileName] קיים
+  /// ליד ה-executable. במובייל תמיד false.
+  static bool get isPortable {
+    final cached = _isPortableCache;
+    if (cached != null) return cached;
+
+    var result = false;
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      final exeDir = p.dirname(_resolvedExecutable);
+      result = File(p.join(exeDir, portableMarkerFileName)).existsSync();
+    }
+    _isPortableCache = result;
+    return result;
+  }
+
   /// Returns the default writable root for user-scoped app data.
+  ///
+  /// במצב נייד ([isPortable]) — תיקיית [_portableDataFolderName] ליד
+  /// ה-executable, כך שכל הנתונים נודדים יחד עם התוכנה.
   static Future<String> getDataRootPath() async {
     if (_cachedDataRootPath != null && _cachedDataRootPath!.isNotEmpty) {
       return _cachedDataRootPath!;
@@ -64,6 +96,11 @@ class AppPaths {
     final String rootPath;
     if (Platform.isAndroid || Platform.isIOS) {
       rootPath = (await getApplicationDocumentsDirectory()).path;
+    } else if (isPortable) {
+      rootPath = p.join(
+        p.dirname(_resolvedExecutable),
+        _portableDataFolderName,
+      );
     } else if (Platform.isWindows) {
       final appData = Platform.environment['APPDATA'] ?? '';
       rootPath = p.join(appData, 'otzaria');
@@ -84,6 +121,11 @@ class AppPaths {
 
   /// Detects whether the app is installed system-wide or per-user.
   static Future<InstallMode> detectInstallMode() async {
+    // מצב נייד לעולם אינו התקנה מערכתית — הנתונים יושבים ליד ה-executable
+    // ואסור ליפול לנתיבים משותפים כמו ProgramData.
+    if (isPortable) {
+      return InstallMode.perUser;
+    }
     if (Platform.isMacOS) {
       if (await Directory('/Library/Application Support/Otzaria').exists()) {
         return InstallMode.systemWide;
