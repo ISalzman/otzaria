@@ -105,6 +105,48 @@ void main() {
         reason: 'רשימת המפרשים תפסה רק ${splHeight.toStringAsFixed(0)} מתוך '
             '$panelHeight — סימן שחזרה חלוקת ה-50/50 (חיתוך + חלל ריק)');
   });
+
+  testWidgets('תוכן ההערות עטוף ב-SelectionArea (בחירת טקסט אפשרית)',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: Center(
+              child: SizedBox(
+                height: 600,
+                width: 500,
+                child: CommentaryListBase(
+                  openBookCallback: (_) {},
+                  fontSize: 18,
+                  showSearch: true,
+                  shrinkWrap: false,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final noteText =
+        find.textContaining('הערה לבדיקה', findRichText: true).first;
+    expect(noteText, findsOneWidget,
+        reason: 'גוף ההערה חייב להיות מוצג כדי לבדוק את הבחירה');
+
+    // רגרסיה: ההערות הוחזרו בעבר מחוץ ל-SelectionArea של רשימת המפרשים,
+    // ולכן לא ניתן היה לבחור בהן טקסט כלל.
+    expect(
+      find.ancestor(of: noteText, matching: find.byType(SelectionArea)),
+      findsWidgets,
+      reason: 'תוכן ההערות חייב להיות בתוך SelectionArea כדי לאפשר בחירה',
+    );
+  });
 }
 
 TextBookLoaded _loadedStateWithNotesAndCommentary() {

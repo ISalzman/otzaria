@@ -1998,49 +1998,56 @@ class _NotesCommentaryWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
-        return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0, vertical: 12.0),
-                child: Text(
-                  kNotesCommentatorTitle,
-                  style: TextStyle(
-                    fontSize: fontSize * 0.85,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: settingsState.commentatorsFontFamily,
-                  ),
-                ),
-              ),
-              ...notes.map((note) {
-                return Padding(
-                  padding: const EdgeInsets.only(
-                      right: 32.0, left: 16.0, bottom: 12.0),
-                  child: SmartTextWidget(
-                    text: note,
-                    settings: RenderSettings(
-                      removeNikud: removeNikud,
-                      removePunctuation: false,
-                      removeTeamim: false,
-                      replaceHolyNames: settingsState.replaceHolyNames,
-                      searchText: '',
-                      currentSearchIndex: -1,
-                      fontSize: fontSize * 0.85,
-                      fontFamily: settingsState.commentatorsFontFamily,
-                      lineHeight: settingsState.lineHeight,
+        // SelectionArea משלו: הרשימה הזו מוחזרת *מחוץ* ל-SelectionArea של
+        // רשימת המפרשים (שנבנה רק סביב ה-ListView), ולכן בלעדיו לא ניתן
+        // לבחור טקסט בהערות כלל.
+        return RtlSelectionShortcuts(
+          child: SelectionArea(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 12.0),
+                    child: Text(
+                      kNotesCommentatorTitle,
+                      style: TextStyle(
+                        fontSize: fontSize * 0.85,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: settingsState.commentatorsFontFamily,
+                      ),
                     ),
-                    onOpenBook: (tab) {
-                      if (tab is TextBookTab) {
-                        openBookCallback(tab);
-                      }
-                    },
                   ),
-                );
-              }),
-              const Divider(height: 1),
-            ],
+                  ...notes.map((note) {
+                    return Padding(
+                      padding: const EdgeInsets.only(
+                          right: 32.0, left: 16.0, bottom: 12.0),
+                      child: SmartTextWidget(
+                        text: note,
+                        settings: RenderSettings(
+                          removeNikud: removeNikud,
+                          removePunctuation: false,
+                          removeTeamim: false,
+                          replaceHolyNames: settingsState.replaceHolyNames,
+                          searchText: '',
+                          currentSearchIndex: -1,
+                          fontSize: fontSize * 0.85,
+                          fontFamily: settingsState.commentatorsFontFamily,
+                          lineHeight: settingsState.lineHeight,
+                        ),
+                        onOpenBook: (tab) {
+                          if (tab is TextBookTab) {
+                            openBookCallback(tab);
+                          }
+                        },
+                      ),
+                    );
+                  }),
+                  const Divider(height: 1),
+                ],
+              ),
+            ),
           ),
         );
       },

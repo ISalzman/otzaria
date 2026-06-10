@@ -49,45 +49,6 @@ class SmartTextWidget extends StatelessWidget {
     // עיבוד הטקסט דרך השירות המרכזי
     final processedHtml = TextRendererService.render(text, settings);
 
-    if (processedHtml.contains('<sup') ||
-        processedHtml.contains('footnote-marker') ||
-        processedHtml.contains('¹') ||
-        processedHtml.contains('²') ||
-        processedHtml.contains('³')) {
-      assert(() {
-        final supRegex = RegExp(
-          r'<sup[^>]*>(.*?)</sup>',
-          caseSensitive: false,
-          dotAll: true,
-        );
-        final markers = <String>[];
-        for (final match in supRegex.allMatches(processedHtml)) {
-          final inner = (match.group(1) ?? '')
-              .replaceAll(RegExp(r'<[^>]+>'), '')
-              .replaceAll('\u2066', '')
-              .replaceAll('\u2067', '')
-              .replaceAll('\u2068', '')
-              .replaceAll('\u2069', '');
-          if (inner.isNotEmpty) {
-            markers.add(inner);
-          }
-        }
-        if (markers.length >= 2) {
-          debugPrint(
-              '[SmartTextWidget] markers sequence: ${markers.join(', ')}');
-        }
-        return true;
-      }());
-
-      assert(() {
-        final preview = processedHtml.length > 400
-            ? '${processedHtml.substring(0, 400)}…'
-            : processedHtml;
-        debugPrint('[SmartTextWidget] HTML with <sup>: $preview');
-        return true;
-      }());
-    }
-
     return HtmlWidget(
       processedHtml,
       key: widgetKey,

@@ -11,7 +11,9 @@ import 'dart:convert';
 /// v2: תמונות מוטמעות (data URI) וטבלאות עשירות. v3: רשימות ממוספרות
 /// מקוננות (decimal/רומי/אותיות לטיניות/עבריות/multilevel) לפי numbering.xml.
 /// v4: בקרות-תוכן (`w:sdt`) וטבלאות מקוננות בתאים — מניעת אובדן תוכן.
-const int kDocxConverterVersion = 4;
+/// v5: תגיות אוצריא מילוליות בטקסט (`<b>`, `<big>`, `<h1>`–`<h6>`…) מזוהות
+/// ומופעלות כעיצוב אמיתי במקום להיות מוצגות כטקסט (escape).
+const int kDocxConverterVersion = 5;
 
 // Windows-1255 Hebrew range: 0xC0–0xD8 and 0xE0–0xFA map to Unicode with offset 1264.
 // 0xE0 (224) + 1264 = 1488 = U+05D0 = א, ... 0xFA (250) + 1264 = 1514 = U+05EA = ת
@@ -333,6 +335,29 @@ String _escapeHtml(String s) {
 /// (`docx_cache`), כדי ששם קובץ עם `<`/`&` לא ישבור את ה-HTML.
 String escapeHtmlText(String s) => _escapeHtml(s);
 
+/// תגיות העיצוב של פורמט הטקסט של אוצריא, ללא מאפיינים (attributes).
+/// מסמכי Word שנוצרו מהדבקת טקסט בפורמט אוצריא מכילים אותן כטקסט גלוי —
+/// [_escapeHtml] הופך אותן ל-`&lt;b&gt;` והקורא מציג אותן כטקסט משובש
+/// (וב-RTL אף מבולגן ויזואלית). כאן הן מזוהות *אחרי* ההרכבה ומוחזרות
+/// לתגיות אמיתיות.
+final RegExp _otzariaTagEntityRegExp = RegExp(
+  r'&lt;(/?)(b|i|u|big|small|sup|sub|br|h[1-6])&gt;',
+  caseSensitive: false,
+);
+
+/// מחזיר תגיות אוצריא מילוליות (שעברו escape) לתגיות פעילות.
+///
+/// הזיהוי נעשה על טקסט הפסקה המורכב (ולא על כל run בנפרד) כדי לתפוס גם
+/// תגית שפוצלה בין כמה runs ע"י Word — כל תו עבר escape בנפרד אך רצף
+/// הישויות `&lt;h4&gt;` נשאר שלם לאחר האיחוד.
+String _unescapeOtzariaTags(String text) {
+  if (!text.contains('&lt;')) return text;
+  return text.replaceAllMapped(
+    _otzariaTagEntityRegExp,
+    (m) => '<${m[1]}${m[2]}>',
+  );
+}
+
 /// בודק מאפיין on/off של Word (`CT_OnOff`, וכן `w:u`): קיים *ומופעל*.
 ///
 /// `w:val="false"/"0"/"off"/"none"` = כבוי — Word משתמש בזה כדי לבטל עיצוב
@@ -571,7 +596,8 @@ String _renderParagraphInline(xml.XmlElement paragraph, _DocxContext ctx) {
     buf.write(s.close);
     i = j;
   }
-  return buf.toString();
+  // תגיות אוצריא שהוקלדו כטקסט במסמך (הדבקה מפורמט אוצריא) מופעלות כעיצוב.
+  return _unescapeOtzariaTags(buf.toString());
 }
 
 /// מעבד פסקה בודדת ומוסיף אותה ל-[output] (אם אינה ריקה).
