@@ -475,7 +475,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
           currentWorkspaceId: workspaceId,
           currentBookId: bookId,
         );
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('⚠️ refreshPluginEvents failed after init: $e');
+      }
     });
 
     // Setup fullscreen sync with window manager

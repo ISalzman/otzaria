@@ -925,7 +925,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   void _onUpdateCommentators(
     UpdateCommentators event,
     Emitter<TextBookState> emit,
-  ) async {
+  ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
       _userTouchedCommentators = true;
@@ -1002,7 +1002,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     ));
   }
 
-  void _onUpdateVisibleIndecies(
+  Future<void> _onUpdateVisibleIndecies(
     UpdateVisibleIndecies event,
     Emitter<TextBookState> emit,
   ) async {
@@ -1026,62 +1026,56 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         return;
       }
 
-      try {
-        String? newTitle = currentState.currentTitle;
+      String? newTitle = currentState.currentTitle;
 
-        if (event.visibleIndecies.isNotEmpty &&
-            (currentState.visibleIndices.isEmpty ||
-                currentState.visibleIndices.first !=
-                    event.visibleIndecies.first)) {
-          newTitle = await refFromIndex(event.visibleIndecies.first,
-              Future.value(currentState.tableOfContents));
+      if (event.visibleIndecies.isNotEmpty &&
+          (currentState.visibleIndices.isEmpty ||
+              currentState.visibleIndices.first !=
+                  event.visibleIndecies.first)) {
+        newTitle = await refFromIndex(event.visibleIndecies.first,
+            Future.value(currentState.tableOfContents));
+      }
+
+      int? index = currentState.selectedIndex;
+      if (index != null && !event.visibleIndecies.contains(index)) {
+        final oldFirst = currentState.visibleIndices.isNotEmpty
+            ? currentState.visibleIndices.first
+            : 0;
+        final newFirst =
+            event.visibleIndecies.isNotEmpty ? event.visibleIndecies.first : 0;
+
+        if ((oldFirst - newFirst).abs() > 3) {
+          index = null;
         }
+      }
 
-        int? index = currentState.selectedIndex;
-        if (index != null && !event.visibleIndecies.contains(index)) {
-          final oldFirst = currentState.visibleIndices.isNotEmpty
-              ? currentState.visibleIndices.first
-              : 0;
-          final newFirst = event.visibleIndecies.isNotEmpty
-              ? event.visibleIndecies.first
-              : 0;
-
-          if ((oldFirst - newFirst).abs() > 3) {
-            index = null;
-          }
-        }
-
-        final List<Link> visibleLinks;
-        if (currentState.showLeftPane || index != null) {
-          visibleLinks = computeVisibleLinks(
-            links: currentState.links,
-            visibleIndices: event.visibleIndecies,
-            selectedIndex: index,
-            linksByLine: currentState.linksByLine,
-          );
-        } else {
-          visibleLinks = currentState.visibleLinks;
-        }
-
-        emit(currentState.copyWith(
+      final List<Link> visibleLinks;
+      if (currentState.showLeftPane || index != null) {
+        visibleLinks = computeVisibleLinks(
+          links: currentState.links,
           visibleIndices: event.visibleIndecies,
-          currentTitle: newTitle,
           selectedIndex: index,
-          clearSelectedIndex:
-              index == null && currentState.selectedIndex != null,
-          visibleLinks: visibleLinks,
-        ));
+          linksByLine: currentState.linksByLine,
+        );
+      } else {
+        visibleLinks = currentState.visibleLinks;
+      }
 
-        _loadContentRangeInBackground(currentState.book, event.visibleIndecies);
+      emit(currentState.copyWith(
+        visibleIndices: event.visibleIndecies,
+        currentTitle: newTitle,
+        selectedIndex: index,
+        clearSelectedIndex: index == null && currentState.selectedIndex != null,
+        visibleLinks: visibleLinks,
+      ));
 
-        if (_shouldLoadLinksForVisibleIndicesChange(currentState)) {
-          _loadLinksInBackground(
-            currentState.book,
-            event.visibleIndecies,
-          );
-        }
-      } catch (_) {
-        rethrow;
+      _loadContentRangeInBackground(currentState.book, event.visibleIndecies);
+
+      if (_shouldLoadLinksForVisibleIndicesChange(currentState)) {
+        _loadLinksInBackground(
+          currentState.book,
+          event.visibleIndecies,
+        );
       }
     }
   }
@@ -1835,7 +1829,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     );
   }
 
-  void _loadContentRangeInBackground(
+  Future<void> _loadContentRangeInBackground(
     TextBook book,
     List<int> visibleIndices, {
     bool force = false,
@@ -1888,7 +1882,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
   }
 
-  void _warmContentCacheInBackground(TextBook book) async {
+  Future<void> _warmContentCacheInBackground(TextBook book) async {
     if (_isWarmingContentCache) {
       return;
     }
@@ -1934,12 +1928,17 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
         await SchedulerBinding.instance.endOfFrame;
       }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+            '⚠️ TextBookBloc::warmContentCache failed for ${book.title}: $e');
+      }
     } finally {
       _isWarmingContentCache = false;
     }
   }
 
-  void _loadFullBookInBackground(TextBook book) async {
+  Future<void> _loadFullBookInBackground(TextBook book) async {
     try {
       final fullContent = await repository.getBookContent(book);
 
@@ -1968,7 +1967,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
   }
 
-  void _loadLinksInBackground(
+  Future<void> _loadLinksInBackground(
     TextBook book,
     List<int> visibleIndices, {
     bool force = false,
@@ -2105,7 +2104,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
   }
 
-  void _onUpdateLinks(
+  Future<void> _onUpdateLinks(
     UpdateLinks event,
     Emitter<TextBookState> emit,
   ) async {
@@ -2207,7 +2206,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     );
   }
 
-  void _loadCommentatorsInBackground(TextBook book) async {
+  Future<void> _loadCommentatorsInBackground(TextBook book) async {
     try {
       final availableCommentators =
           await repository.getAvailableCommentators(book);
@@ -2238,7 +2237,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
   }
 
-  void _enrichHeCategoriesInBackground(TextBook book) async {
+  Future<void> _enrichHeCategoriesInBackground(TextBook book) async {
     await enrichHeCategories(book);
   }
 }

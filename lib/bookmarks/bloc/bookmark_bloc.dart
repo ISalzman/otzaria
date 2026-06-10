@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_state.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/bookmarks/repository/bookmark_repository.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 
 class BookmarkBloc extends Cubit<BookmarkState> {
@@ -11,13 +13,24 @@ class BookmarkBloc extends Cubit<BookmarkState> {
     _loadBookmarks();
   }
 
-  void _loadBookmarks() async {
+  Future<void> _loadBookmarks() async {
     try {
       final bookmarks = await _repository.loadBookmarks();
-      emit(state.copyWith(bookmarks: bookmarks));
-    } catch (e) {
-      // handle error if needed
+      if (!isClosed) {
+        emit(state.copyWith(bookmarks: bookmarks));
+      }
+    } catch (e, stackTrace) {
+      debugPrint('שגיאה בטעינת סימניות: $e\n$stackTrace');
     }
+  }
+
+  /// שמירה ברקע עם דיווח שגיאה למשתמש — בלי await כדי לא לחסום את ה-UI,
+  /// אבל עם טיפול בכישלון כך שסימניה שלא נשמרה לדיסק לא תיעלם בשקט.
+  void _persistBookmarks(List<Bookmark> bookmarks) {
+    _repository.saveBookmarks(bookmarks).catchError((Object e) {
+      debugPrint('שגיאה בשמירת סימניות: $e');
+      UiSnack.showError('שגיאה בשמירת הסימניות');
+    });
   }
 
   bool addBookmark(
@@ -46,19 +59,22 @@ class BookmarkBloc extends Cubit<BookmarkState> {
     }
 
     final newBookmarks = [...state.bookmarks, bookmark];
-    _repository.saveBookmarks(newBookmarks);
+    _persistBookmarks(newBookmarks);
     emit(state.copyWith(bookmarks: newBookmarks));
     return true;
   }
 
   void removeBookmark(int index) {
     final newBookmarks = [...state.bookmarks]..removeAt(index);
-    _repository.saveBookmarks(newBookmarks);
+    _persistBookmarks(newBookmarks);
     emit(state.copyWith(bookmarks: newBookmarks));
   }
 
   void clearBookmarks() {
-    _repository.clearBookmarks();
+    _repository.clearBookmarks().catchError((Object e) {
+      debugPrint('שגיאה במחיקת סימניות: $e');
+      UiSnack.showError('שגיאה במחיקת הסימניות');
+    });
     emit(state.copyWith(bookmarks: []));
   }
 
@@ -73,7 +89,7 @@ class BookmarkBloc extends Cubit<BookmarkState> {
         .where((b) => bookIdentity(b.book) != targetIdentity)
         .toList();
     if (remaining.length == state.bookmarks.length) return false;
-    _repository.saveBookmarks(remaining);
+    _persistBookmarks(remaining);
     emit(state.copyWith(bookmarks: remaining));
     return true;
   }
