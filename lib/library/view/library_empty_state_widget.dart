@@ -13,7 +13,7 @@ class LibraryEmptyStateWidget extends StatelessWidget {
     required this.onHome,
     required this.onOpenSearch,
     this.onOpenLink,
-    this.isSubfolder = false,
+    this.showSearchElsewhereHint = false,
   });
 
   final String message;
@@ -24,8 +24,9 @@ class LibraryEmptyStateWidget extends StatelessWidget {
   /// כאשר מוגדר, מוצג מצב "קישור ישיר" עם לחצן פתיחת קישור.
   final VoidCallback? onOpenLink;
 
-  /// האם החיפוש בוצע בתת-תיקייה (לא בתיקייה הראשית).
-  final bool isSubfolder;
+  /// האם להציג את הרמז "ניתן לנסות לחפש בתיקייה אחרת".
+  /// מוצג רק כאשר בוצע חיפוש ללא תוצאות בתוך תת-תיקייה.
+  final bool showSearchElsewhereHint;
 
   bool get _isDeepLink => onOpenLink != null;
 
@@ -81,7 +82,7 @@ class LibraryEmptyStateWidget extends StatelessWidget {
             const SizedBox(height: 12),
             _buildNavButtons(),
           ] else ...[
-            if (isSubfolder) ...[
+            if (showSearchElsewhereHint) ...[
               const SizedBox(height: 12),
               Text(
                 'ניתן לנסות לחפש בתיקייה אחרת',

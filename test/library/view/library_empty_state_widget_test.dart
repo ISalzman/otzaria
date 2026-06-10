@@ -8,6 +8,7 @@ Widget _buildWidget({
   VoidCallback? onBack,
   VoidCallback? onHome,
   VoidCallback? onOpenSearch,
+  bool showSearchElsewhereHint = false,
 }) {
   return MaterialApp(
     home: Scaffold(
@@ -16,6 +17,7 @@ Widget _buildWidget({
         onBack: onBack ?? () {},
         onHome: onHome ?? () {},
         onOpenSearch: onOpenSearch ?? () {},
+        showSearchElsewhereHint: showSearchElsewhereHint,
       ),
     ),
   );
@@ -79,6 +81,18 @@ void main() {
       expect(msgY, lessThan(backY));
       expect(backY, lessThan(helpTextY));
       expect(helpTextY, lessThan(searchBtnY));
+    });
+
+    // רמז "לחפש בתיקייה אחרת" — מוצג רק כש-showSearchElsewhereHint=true
+    testWidgets('לא מציג רמז "לחפש בתיקייה אחרת" כברירת מחדל', (tester) async {
+      await tester.pumpWidget(_buildWidget());
+      expect(find.text('ניתן לנסות לחפש בתיקייה אחרת'), findsNothing);
+    });
+
+    testWidgets('מציג רמז "לחפש בתיקייה אחרת" כש-showSearchElsewhereHint=true',
+        (tester) async {
+      await tester.pumpWidget(_buildWidget(showSearchElsewhereHint: true));
+      expect(find.text('ניתן לנסות לחפש בתיקייה אחרת'), findsOneWidget);
     });
 
     // אייקונים
