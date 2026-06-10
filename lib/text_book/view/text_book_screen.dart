@@ -1299,22 +1299,33 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       return _buildTitle(state);
     }
     const gap = 4.0;
-    return Center(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildPreviousTocButton(context, state),
-          _buildPreviousPageButton(context, state),
-          const SizedBox(width: gap),
-          ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 80, maxWidth: 340),
-            child: _buildTitle(state, textAlign: TextAlign.center),
+    // כל כפתור ToolbarActionButton (compact=false) הוא לפחות 40px.
+    // 4 כפתורי ניווט + 2 רווחים = ~168px. כשהמרכז קטן מדי, הכותרת
+    // מתכווצת לפי המקום הפנוי כדי למנוע overflow.
+    const navButtonsWidth = 4 * 40.0 + 2 * gap;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final titleMaxWidth =
+            (constraints.maxWidth - navButtonsWidth).clamp(80.0, 340.0);
+        return Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildPreviousTocButton(context, state),
+              _buildPreviousPageButton(context, state),
+              const SizedBox(width: gap),
+              ConstrainedBox(
+                constraints:
+                    BoxConstraints(minWidth: 80, maxWidth: titleMaxWidth),
+                child: _buildTitle(state, textAlign: TextAlign.center),
+              ),
+              const SizedBox(width: gap),
+              _buildNextPageButton(context, state),
+              _buildNextTocButton(context, state),
+            ],
           ),
-          const SizedBox(width: gap),
-          _buildNextPageButton(context, state),
-          _buildNextTocButton(context, state),
-        ],
-      ),
+        );
+      },
     );
   }
 
