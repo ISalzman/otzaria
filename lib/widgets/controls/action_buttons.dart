@@ -328,6 +328,8 @@ class ToolbarActionButton extends StatelessWidget {
   final String? label;
   final bool compact;
 
+  final bool flipInRtl;
+
   const ToolbarActionButton({
     super.key,
     required this.tooltip,
@@ -337,6 +339,7 @@ class ToolbarActionButton extends StatelessWidget {
     this.selected = false,
     this.label,
     this.compact = false,
+    this.flipInRtl = false,
   });
 
   @override
@@ -362,7 +365,9 @@ class ToolbarActionButton extends StatelessWidget {
             data: IconThemeData(color: fg, size: iconSize),
             child: iconWidget!,
           )
-        : RtlIcon(icon, size: iconSize, color: fg);
+        : flipInRtl
+            ? RtlIcon(icon, size: iconSize, color: fg)
+            : Icon(icon, size: iconSize, color: fg);
 
     Widget button;
     if (label != null) {

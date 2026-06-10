@@ -584,7 +584,7 @@ class TextSettingsTab extends StatelessWidget {
         ),
         if (state.copyWithHeaders != 'none')
           DropdownSettingsTile<String>(
-            icon: Icon(FluentIcons.text_align_right_24_regular),
+            icon: RtlIcon(FluentIcons.text_align_right_24_regular),
             title: 'עיצוב כותרות',
             subtitle: formatSubtitle,
             value: state.copyHeaderFormat,
@@ -872,7 +872,7 @@ class _TextWidthSliderState extends State<_TextWidthSlider> {
     return Column(
       children: [
         ListTile(
-          leading: const Icon(FluentIcons.text_align_distributed_24_regular),
+          leading: const RtlIcon(FluentIcons.text_align_distributed_24_regular),
           title: const Text(
             'רוחב הטקסט',
             style: kSettingsTitleStyle,
