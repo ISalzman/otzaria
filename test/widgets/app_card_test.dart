@@ -105,14 +105,12 @@ void main() {
     final allContainers = tester.widgetList<Container>(
       find.descendant(of: cardFinder, matching: find.byType(Container)),
     );
-    final dividers = allContainers
-        .where((c) {
-          final constraints = c.constraints;
-          return constraints != null &&
-              constraints.minHeight == AppCard.sectionSpacing &&
-              constraints.maxHeight == AppCard.sectionSpacing;
-        })
-        .toList();
+    final dividers = allContainers.where((c) {
+      final constraints = c.constraints;
+      return constraints != null &&
+          constraints.minHeight == AppCard.sectionSpacing &&
+          constraints.maxHeight == AppCard.sectionSpacing;
+    }).toList();
     expect(dividers.length, 2); // N-1 = 3-1 = 2
   });
 

@@ -23,19 +23,22 @@ class AppSurfaces {
     final cs = _cs(context);
     return cs.isDark
         ? Colors.black
-        : Color.alphaBlend(cs.surfaceContainerHighest.withValues(alpha: 0.475), cs.surface);
+        : Color.alphaBlend(
+            cs.surfaceContainerHighest.withValues(alpha: 0.475), cs.surface);
   }
 
   /// נקודת ה-override לרקע מסכי לוח — הכנה לערכות נושא עתידיות.
-  static Color solidPanelBackground(BuildContext context) => panelBackground(context);
+  static Color solidPanelBackground(BuildContext context) =>
+      panelBackground(context);
 
   /// רקע סרגל עליון (AppTopBar) — נקודת ה-override היחידה לצבע הסרגל.
   static Color topBarBackground(BuildContext context) =>
       _cs(context).surfaceContainerHigh;
 
   /// צבע ברירת המחדל לכרטיסי תוכן באפליקציה.
-  static Color card(BuildContext context) =>
-      _cs(context).isDark ? _cs(context).surfaceContainer : _cs(context).surface;
+  static Color card(BuildContext context) => _cs(context).isDark
+      ? _cs(context).surfaceContainer
+      : _cs(context).surface;
 
   /// צבע מפריד פנימי בין שורות בתוך כרטיס תוכן.
   ///
