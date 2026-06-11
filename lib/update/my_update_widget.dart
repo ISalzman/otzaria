@@ -795,10 +795,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   Future<bool> _launchInstaller({required bool relaunchApp}) async {
     if (_installerFile == null) return false;
 
-    final wrappedLaunchInstaller = wrapLinuxInstaller(
-        () => _launchInstallerDirect(relaunchApp: relaunchApp), 'otzaria');
     try {
-      await wrappedLaunchInstaller();
+      await _launchInstallerDirect(relaunchApp: relaunchApp);
       return true;
     } catch (_) {
       _showTransientError();
@@ -836,6 +834,23 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
           relaunchApp: relaunchApp,
         );
         return;
+      }
+    }
+
+    // ב-Linux חבילות deb/rpm מותקנות בטרמינל עם pkexec והפעלה מחדש לפי
+    // [relaunchApp]. אם אין מנהל חבילות נתמך — נופלים לפתיחת הקובץ
+    // במתקין הגרפי של המערכת (ההתנהגות הקודמת).
+    final lowerPath = installer.path.toLowerCase();
+    if (Platform.isLinux &&
+        (lowerPath.endsWith('.deb') || lowerPath.endsWith('.rpm'))) {
+      try {
+        await installLinuxUpdate(
+          packageFile: installer,
+          relaunchApp: relaunchApp,
+        );
+        return;
+      } catch (_) {
+        // נפילה ל-openInstaller למטה.
       }
     }
 
