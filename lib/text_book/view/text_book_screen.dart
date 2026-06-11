@@ -1842,7 +1842,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       tooltip: 'בחר סוג תצוגת מפרשים',
       iconData: _getViewModeIcon(state),
       icon: iconWidget,
-      selected: isSplit || isPage,
       enabled: !widget.isInCombinedView,
       initialValue: state.showPageShapeView
           ? _viewModePage
