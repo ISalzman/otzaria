@@ -60,6 +60,20 @@ void main() {
       expect(script, contains("ditto \"\$NEW_APP\" '$appPath'"));
     });
 
+    test('aborts with a DMG hint when the install dir is not writable', () {
+      final script = buildMacUpdateScript(
+        zipPath: zipPath,
+        appBundlePath: appPath,
+        appPid: 1,
+        relaunchApp: false,
+      );
+
+      expect(script, contains('if [ ! -w "\$APPDIR" ]'));
+      expect(script, contains('DMG'));
+      // הבדיקה חייבת לרוץ לפני ההמתנה לסגירה — כך המשתמש רואה את השגיאה מיד.
+      expect(script.indexOf('APPDIR'), lessThan(script.indexOf('kill -0')));
+    });
+
     test('relaunches the app only when requested', () {
       final withRelaunch = buildMacUpdateScript(
         zipPath: zipPath,

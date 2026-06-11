@@ -445,13 +445,8 @@ Future<void> _runAppBootstrap() async {
     windowManager.addListener(_appWindowListener!);
     await windowManager.setPreventClose(true);
 
-    // בכל פלטפורמות הדסקטופ חלון ה-splash הוא נייטיב ועצמאי (סמל צף, ראה
-    // windows/runner/splash_window.cpp, linux/runner/splash_window.cc,
-    // macos/Runner/MainFlutterWindow.swift) ומוצג כבר ב-runner לפני שמנוע Flutter
-    // עולה. החלון הראשי נשאר *מוסתר* (ה-runner אינו מציג אותו בפריים הראשון) עד
-    // החשיפה (presentMainWindow), ואז נפתח ישר בגבולותיו
-    // הסופיים עם התוכן — ללא חלון מקדים, ללא קפיצה וללא פער. לכן אין כאן
-    // waitUntilReadyToShow.
+    // ה-splash נייטיבי ב-runner והחלון הראשי נשאר מוסתר עד presentMainWindow,
+    // שם הוא נחשף ישר בגבולותיו הסופיים — לכן אין כאן waitUntilReadyToShow.
   }
 
   runApp(
@@ -488,14 +483,8 @@ Future<void> presentMainWindow() async {
     return;
   }
   try {
-    // Windows: עוטפים את כל רצף ההצגה ב-DWM cloak (רק בחשיפה הראשונה — ב-
-    // restart של האפליקציה החלון כבר נראה ואסור להחביאו). תחת cloak החלון
-    // מוצג, ממוקסם ומקבל פוקוס "באמת" — המנוע מצייר ומציג פריימים בגודל
-    // הסופי — אבל ה-DWM לא מצייר אותו. כך שינויי הגודל של show/maximize,
-    // שזורקים את ה-swapchain ומשאירים חלון שקוף עד שפריים חדש מתרסטר,
-    // מתרחשים בלתי-נראים. החשיפה בפועל היא ביטול ה-cloak בצד הנייטיבי —
-    // בדיוק כשהפריים בגודל הסופי הוצג (ראה "close" ב-flutter_window.cpp) —
-    // אטומית ובלי שבריר שנייה ריק.
+    // show/maximize זורקים את ה-swapchain (חלון שקוף עד פריים חדש) — תחת cloak
+    // זה בלתי-נראה; החשיפה היא ביטול ה-cloak הנייטיבי ב-flutter_window.cpp.
     if (!kIsWeb && Platform.isWindows && !await windowManager.isVisible()) {
       try {
         await _splashChannel.invokeMethod<void>('cloak');
@@ -507,19 +496,16 @@ Future<void> presentMainWindow() async {
     await windowManager.focus();
     // maximize חייב לקרות *אחרי* show (show מבצע restore לגודל הקודם).
     await WindowPersistence.applyPendingMaximize();
-    // מסך מלא חייב לקרות אחרי show ואחרי maximize: על חלון מוסתר setFullScreen
-    // מצלם סגנון ללא WS_VISIBLE והחלון נעלם ביציאה ממסך מלא; ואחרי maximize —
-    // כדי שיציאה ממסך מלא תחזיר את החלון למצבו הממוקסם.
+    // חייב אחרי show (setFullScreen על חלון מוסתר מאבד WS_VISIBLE) ואחרי
+    // maximize (כדי שיציאה ממסך מלא תחזיר את החלון למצבו הממוקסם).
     await WindowPersistence.applyPendingFullscreen();
     // מכאן והלאה מותר לשמור את גודל החלון.
     WindowPersistence.splashMode = false;
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Present main window', error, stackTrace);
   } finally {
-    // בקשת הסגירה נשלחת אחרי שהחלון הגיע למצבו הסופי, והיא שמבצעת בצד
-    // הנייטיבי את ה-uncloak + תחילת ה-fade של הסמל ברגע הצגת הפריים הבא.
-    // חייבת לרוץ גם אם אחד משלבי ההצגה נכשל — אחרת החלון נשאר cloaked
-    // (בלתי-נראה) לתמיד.
+    // הסגירה מבצעת בצד הנייטיבי את ה-uncloak; חייבת לרוץ גם אם שלב הצגה
+    // נכשל — אחרת החלון נשאר cloaked (בלתי-נראה) לתמיד.
     await _closeNativeSplash();
     // משחרר את חימומי המטמון הדחויים גם אם אחת מפעולות החלון נכשלה.
     _markMainWindowRevealed();

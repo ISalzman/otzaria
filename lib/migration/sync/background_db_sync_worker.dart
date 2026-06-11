@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:isolate';
 
 import '../../data/data_providers/database_library_provider.dart';
@@ -7,9 +8,11 @@ import '../database/sql/query_loader.dart';
 import '../../settings/services/custom_folders/custom_folder.dart';
 import 'file_sync_service.dart';
 
-/// תקרת זמן לעבודת האיזולייט. אם הוא נתקע, ה-await נכשל ב-TimeoutException
-/// וה-finally הפנימי תמיד מריץ את [restoreAfterWrite] (פתיחה-מחדש של ה-RO) —
-/// כך לא נשארת דליפת write-session (מסך עיון/תצוגה מקדימה ריקים עד restart).
+/// תקרת זמן לעבודת האיזולייט. בפקיעתה [_runWorkerIsolate] *הורג* את האיזולייט
+/// (`Isolate.kill`) ואז ה-finally הפנימי מריץ את [restoreAfterWrite]. ההריגה
+/// חיונית: בלעדיה (כמו ב-`Isolate.run().timeout()`) האיזולייט היה ממשיך לכתוב
+/// ל-seforim.db בזמן שה-RO כבר נפתח מחדש והתור שוחרר — כותב יתום במרוץ עם
+/// קוראים/כותבים אחרים.
 const Duration _isolateSyncWatchdog = Duration(seconds: 90);
 
 /// Runs a full custom-folders DB sync inside a background isolate.
@@ -61,8 +64,9 @@ Future<FileSyncResult> runCustomFoldersDbSyncInIsolate({
   final folders =
       await DatabaseLibraryProvider.operationQueue.enqueue(() async {
     await QueryLoader.initialize();
-    final resultMap = await _runSyncWorkerIsolate(
+    final resultMap = await _runWorkerIsolate(
       buildPayload(syncFolders: true, syncLinks: false),
+      isDelete: false,
     );
     return _resultFromMap(resultMap);
   });
@@ -75,7 +79,7 @@ Future<FileSyncResult> runCustomFoldersDbSyncInIsolate({
     final payload = buildPayload(syncFolders: false, syncLinks: true);
     if (prepareForWrite != null) await prepareForWrite();
     try {
-      final resultMap = await _runSyncWorkerIsolate(payload);
+      final resultMap = await _runWorkerIsolate(payload, isDelete: false);
       return _resultFromMap(resultMap);
     } finally {
       if (restoreAfterWrite != null) await restoreAfterWrite();
@@ -103,24 +107,71 @@ FileSyncResult _resultFromMap(Map<String, Object?> resultMap) => FileSyncResult(
       duration: Duration(milliseconds: resultMap['durationMs'] as int),
     );
 
-/// מריץ את ה-worker באיזולייט. *חובה* להישאר פונקציה נפרדת: ה-closure שנשלח
-/// ל-[Isolate.run] חייב לסגור רק על [payload] (מפה של ערכים שליחים). אם ה-
-/// Isolate.run נכתב ישירות בתוך הפונקציה הקוראת — שחולקת scope עם
-/// prepareForWrite/restoreAfterWrite — הקומפיילר מאגד אותם ל-context משותף,
-/// וה-closure "סוחב" איתו את ה-SqliteDataProvider/FfiDatabase הלא-שליח
+/// מטען ההודעה לאיזולייט. נושא רק ערכים שליחים (SendPort + מפת payload + דגל),
+/// כך ש-[_workerIsolateMain] נשאר top-level וסוגר על כלום — ולעולם לא "סוחב"
+/// את ה-SqliteDataProvider/FfiDatabase הלא-שליח של הפונקציה הקוראת
 /// (Illegal argument in isolate message: object is unsendable).
-Future<Map<String, Object?>> _runSyncWorkerIsolate(
-  Map<String, Object?> payload,
-) {
-  return Isolate.run(() => _syncWorkerEntryPoint(payload))
-      .timeout(_isolateSyncWatchdog);
+class _WorkerMessage {
+  final SendPort responsePort;
+  final Map<String, Object?> payload;
+  final bool isDelete;
+  const _WorkerMessage(this.responsePort, this.payload, this.isDelete);
 }
 
-/// כמו [_runSyncWorkerIsolate] עבור מחיקה — נפרדת כדי שה-closure של
-/// [Isolate.run] יסגור רק על [payload] (ראה ההסבר שם).
-Future<void> _runDeleteWorkerIsolate(Map<String, Object?> payload) {
-  return Isolate.run(() => _deleteWorkerEntryPoint(payload))
-      .timeout(_isolateSyncWatchdog);
+/// נקודת הכניסה לאיזולייט. שולחת בחזרה את מפת התוצאה (ריקה עבור מחיקה); חריגה
+/// מנותבת אוטומטית ל-onError port (`errorsAreFatal`).
+Future<void> _workerIsolateMain(_WorkerMessage message) async {
+  final Map<String, Object?> result;
+  if (message.isDelete) {
+    await _deleteWorkerEntryPoint(message.payload);
+    result = const <String, Object?>{};
+  } else {
+    result = await _syncWorkerEntryPoint(message.payload);
+  }
+  message.responsePort.send(result);
+}
+
+/// מריץ worker באיזולייט עם watchdog שמסוגל *להרוג* אותו בפועל. ב-timeout
+/// קוראים ל-[Isolate.kill] לפני שה-finally של הקורא פותח מחדש את ה-RO, כך
+/// שהכתיבה באמת נפסקת ולא נשאר כותב יתום. ההריגה ב-finally רצה גם בנתיב
+/// ההצלחה — איזולייט מ-[Isolate.spawn] אינו מסתיים מעצמו (בניגוד ל-Isolate.run).
+Future<Map<String, Object?>> _runWorkerIsolate(
+  Map<String, Object?> payload, {
+  required bool isDelete,
+}) async {
+  final responsePort = ReceivePort();
+  final errorPort = ReceivePort();
+  final completer = Completer<Map<String, Object?>>();
+
+  responsePort.listen((message) {
+    if (!completer.isCompleted) {
+      completer.complete((message as Map).cast<String, Object?>());
+    }
+  });
+  errorPort.listen((error) {
+    if (!completer.isCompleted) {
+      final parts = error as List;
+      completer.completeError(
+        Exception('sync worker failed: ${parts.first}'),
+        StackTrace.fromString('${parts.length > 1 ? parts[1] : ''}'),
+      );
+    }
+  });
+
+  final isolate = await Isolate.spawn(
+    _workerIsolateMain,
+    _WorkerMessage(responsePort.sendPort, payload, isDelete),
+    onError: errorPort.sendPort,
+    errorsAreFatal: true,
+  );
+
+  try {
+    return await completer.future.timeout(_isolateSyncWatchdog);
+  } finally {
+    isolate.kill(priority: Isolate.immediate);
+    responsePort.close();
+    errorPort.close();
+  }
 }
 
 /// Runs a folder-delete operation inside a background isolate.
@@ -153,7 +204,7 @@ Future<void> runDeleteFolderFromDbInIsolate({
     // ב-[runCustomFoldersDbSyncInIsolate].
     if (prepareForWrite != null) await prepareForWrite();
     try {
-      await _runDeleteWorkerIsolate(payload);
+      await _runWorkerIsolate(payload, isDelete: true);
     } finally {
       if (restoreAfterWrite != null) await restoreAfterWrite();
     }
