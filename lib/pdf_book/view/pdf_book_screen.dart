@@ -4177,7 +4177,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         scaleX: isBookViewMode ? 1.0 : -1.0,
         child: Icon(iconData),
       ),
-      selected: isBookViewMode,
       position: PopupMenuPosition.under,
       onSelected: (layoutMode) {
         _lockedSpreadStartPage = null;

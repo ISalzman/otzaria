@@ -121,9 +121,6 @@ class AppPopupMenuButton<T> extends StatefulWidget {
   /// הערך [icon] (Widget) ישמש כ-iconWidget ב-ToolbarActionButton.
   final IconData? iconData;
 
-  /// מצב נבחר — מועבר ל-ToolbarActionButton כשמשתמשים ב-[iconData].
-  final bool selected;
-
   const AppPopupMenuButton({
     super.key,
     this.entries,
@@ -139,7 +136,6 @@ class AppPopupMenuButton<T> extends StatefulWidget {
     this.enabled = true,
     this.initialValue,
     this.iconData,
-    this.selected = false,
   });
 
   @override
@@ -148,6 +144,7 @@ class AppPopupMenuButton<T> extends StatefulWidget {
 
 class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
   final GlobalKey _anchorKey = GlobalKey();
+  bool _isMenuOpen = false;
 
   bool get _isTouchMode {
     return switch (defaultTargetPlatform) {
@@ -190,6 +187,7 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
     final anchorContext = _anchorKey.currentContext;
     if (anchorContext == null) return;
 
+    setState(() => _isMenuOpen = true);
     final selected = await showAnchoredAppMenu<T>(
       context: context,
       anchorContext: anchorContext,
@@ -197,6 +195,7 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
       position: widget.position,
       offset: widget.offset,
     );
+    if (mounted) setState(() => _isMenuOpen = false);
 
     if (selected != null) {
       widget.onSelected?.call(selected);
@@ -238,7 +237,7 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
             icon: widget.iconData!,
             iconWidget: widget.icon,
             compact: isCompact,
-            selected: widget.selected,
+            selected: _isMenuOpen,
             onPressed: _showAdaptiveMenu,
           ),
         ),
