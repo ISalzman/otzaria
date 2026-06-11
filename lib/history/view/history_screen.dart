@@ -182,7 +182,6 @@ class _HistoryViewState extends State<HistoryView> {
                       return FilterChip(
                         label: Text(
                           name,
-                          textDirection: TextDirection.rtl,
                           style: TextStyle(
                             fontSize: 12,
                             color:

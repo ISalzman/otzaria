@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
 
 /// דיאלוג לקביעת טווח ההדפסה של לוח השנה.
@@ -32,66 +32,63 @@ class _CalendarPrintDialogState extends State<CalendarPrintDialog>
       CalendarView.day => ('יום', 'ימים', 30),
     };
 
-    final dialog = Directionality(
-      textDirection: TextDirection.rtl,
-      child: AlertDialog(
-        backgroundColor: cs.surfaceContainerHigh,
-        title: const Text('הגדרות הדפסה'),
-        content: SizedBox(
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('בחר כמה $periodNamePlural להדפיס:'),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: Slider(
-                      autofocus: true,
-                      value: _count.toDouble(),
-                      min: 1,
-                      max: maxCount.toDouble(),
-                      divisions: maxCount - 1,
-                      label: _count.toString(),
-                      onChanged: (v) => setState(() => _count = v.round()),
-                    ),
+    final dialog = AlertDialog(
+      backgroundColor: cs.surfaceContainerHigh,
+      title: const Text('הגדרות הדפסה'),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('בחר כמה $periodNamePlural להדפיס:'),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Slider(
+                    autofocus: true,
+                    value: _count.toDouble(),
+                    min: 1,
+                    max: maxCount.toDouble(),
+                    divisions: maxCount - 1,
+                    label: _count.toString(),
+                    onChanged: (v) => setState(() => _count = v.round()),
                   ),
-                  const SizedBox(width: 16),
-                  SizedBox(
-                    width: 100,
-                    child: Text(
-                      _count == 1
-                          ? '$_count $periodName'
-                          : '$_count $periodNamePlural',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'טווח: ${_count == 1 ? periodName : '$_count $periodNamePlural'} החל מהתאריך הנוכחי',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: cs.onSurfaceVariant,
                 ),
+                const SizedBox(width: 16),
+                SizedBox(
+                  width: 100,
+                  child: Text(
+                    _count == 1
+                        ? '$_count $periodName'
+                        : '$_count $periodNamePlural',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'טווח: ${_count == 1 ? periodName : '$_count $periodNamePlural'} החל מהתאריך הנוכחי',
+              style: TextStyle(
+                fontSize: 12,
+                color: cs.onSurfaceVariant,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        actions: [
-          NeutralActionButton(
-            text: 'ביטול',
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          RecommendedActionButton(
-            text: 'הדפס',
-            onPressed: () => Navigator.of(context).pop(_count),
-          ),
-        ],
       ),
+      actions: [
+        NeutralActionButton(
+          text: 'ביטול',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        RecommendedActionButton(
+          text: 'הדפס',
+          onPressed: () => Navigator.of(context).pop(_count),
+        ),
+      ],
     );
 
     Widget result = dialog;

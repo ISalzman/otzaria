@@ -199,7 +199,6 @@ class _HighlightedText extends StatelessWidget {
     final spans = _buildSpans(text, query, highlightColor);
 
     return RichText(
-      textDirection: TextDirection.rtl,
       text: TextSpan(
         style: style ?? DefaultTextStyle.of(context).style,
         children: spans,

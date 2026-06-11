@@ -4,8 +4,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
+import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
 /// פאנל האירועים של לוח השנה.
@@ -221,7 +222,6 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
                                 event.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                textDirection: TextDirection.rtl,
                                 style: Theme.of(context)
                                     .textTheme
                                     .titleMedium
@@ -277,7 +277,6 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
                           truncateDescription(event.description),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          textDirection: TextDirection.rtl,
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: scheme.onSurfaceVariant,
@@ -326,17 +325,10 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
                   ],
                 );
 
-                return Card(
-                  elevation: 0,
-                  color: AppSurfaces.card(context),
-                  surfaceTintColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: content,
-                  ),
+                return AppCard(
+                  radius: AppTokens.radiusMD,
+                  padding: const EdgeInsets.all(12),
+                  child: content,
                 );
               },
             ),
@@ -410,7 +402,6 @@ class _EventMetaChip extends StatelessWidget {
                   text,
                   maxLines: maxLines,
                   overflow: TextOverflow.ellipsis,
-                  textDirection: TextDirection.rtl,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: foregroundColor,
                         fontWeight: FontWeight.w600,

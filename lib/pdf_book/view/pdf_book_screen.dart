@@ -46,7 +46,7 @@ import 'pdf_thumbnails_screen.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/book_view_actions.dart';
@@ -177,7 +177,6 @@ AppContextMenuEntry buildPdfLinksContextMenuEntry({
                 snapshot.data ?? link.fallbackDisplayReference,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                textDirection: TextDirection.rtl,
               ),
             ),
             onTap: () => onOpenLink(link),
@@ -988,7 +987,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return [
       AppContextMenuEntry(
         label: 'חיפוש',
-        icon: FluentIcons.book_search_24_regular,
+        icon: FluentIcons.search_24_regular,
         onTap: _ensureSearchTabIsActive,
       ),
       AppContextMenuEntry(
@@ -2996,17 +2995,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                     },
                   ),
                 ),
-                AppTopBarItem(
-                  widget: ToolbarActionButton(
-                    key: widget.enableTourTargets
-                        ? pdfBookSearchTourTargetKey
-                        : null,
-                    tooltip: 'חיפוש',
-                    icon: FluentIcons.book_search_24_regular,
-                    compact: context.read<SettingsBloc>().state.compactMenuMode,
-                    onPressed: _ensureSearchTabIsActive,
-                  ),
-                ),
               ],
               center: _buildPdfCenter(context),
               trailingItems: [
@@ -3193,7 +3181,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                               children: [
                                 Text(
                                   state.message,
-                                  textDirection: TextDirection.rtl,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color:
@@ -3307,8 +3294,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 label: 'ניווט'
               ),
               (
-                icon: FluentIcons.book_search_24_regular,
-                iconFilled: FluentIcons.book_search_24_filled,
+                icon: FluentIcons.search_24_regular,
+                iconFilled: FluentIcons.search_24_filled,
                 label: 'חיפוש'
               ),
               (
@@ -3713,6 +3700,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         icon: FluentIcons.book_open_24_regular,
         tooltip: 'מצב תצוגה',
         onPressed: null,
+      ),
+      ActionButtonData.simple(
+        key: widget.enableTourTargets ? pdfBookSearchTourTargetKey : null,
+        icon: FluentIcons.search_24_regular,
+        tooltip: 'חיפוש',
+        onPressed: _ensureSearchTabIsActive,
+        compact: isCompact,
       ),
       ActionButtonData.simple(
         icon: FluentIcons.zoom_in_24_regular,
@@ -4183,7 +4177,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         scaleX: isBookViewMode ? 1.0 : -1.0,
         child: Icon(iconData),
       ),
-      selected: isBookViewMode,
       position: PopupMenuPosition.under,
       onSelected: (layoutMode) {
         _lockedSpreadStartPage = null;
@@ -4216,7 +4209,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   child: Icon(icon, color: isSelected ? primaryColor : null),
                 ),
                 const SizedBox(width: 12),
-                Text(text, style: style, textDirection: TextDirection.rtl),
+                Text(text, style: style),
                 if (isSelected) ...[
                   const Spacer(),
                   Icon(FluentIcons.checkmark_24_regular,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 
 /// תצוגה שמופיעה במקום WebView כשהתוסף הקריס את האפליקציה בהפעלה הקודמת
 /// (נשאר ב-PluginCrashGuard). מספקת למשתמש כפתור "נסה שוב" שמסיר את
@@ -66,14 +66,12 @@ class _PluginCrashedViewState extends State<PluginCrashedView> {
               Text(
                 'התוסף "$pluginLabel" גרם לקריסת התוכנה',
                 style: tt.titleLarge,
-                textDirection: TextDirection.rtl,
               ),
               const SizedBox(height: 12),
               Text(
                 'בהפעלה הקודמת התוסף הזה הקריס את התוכנה בעת טעינתו. כדי '
                 'למנוע קריסות חוזרות, אנחנו לא טוענים אותו אוטומטית.',
                 style: tt.bodyMedium,
-                textDirection: TextDirection.rtl,
               ),
               const SizedBox(height: 16),
               Container(
@@ -88,7 +86,6 @@ class _PluginCrashedViewState extends State<PluginCrashedView> {
                     Text(
                       'מה אפשר לעשות:',
                       style: tt.titleSmall,
-                      textDirection: TextDirection.rtl,
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -99,7 +96,6 @@ class _PluginCrashedViewState extends State<PluginCrashedView> {
                       '3. אם זה תוסף שעובד אצל אחרים — דווח לפיתוח עם מספר '
                       'הגרסה שלך.',
                       style: tt.bodySmall,
-                      textDirection: TextDirection.rtl,
                     ),
                   ],
                 ),

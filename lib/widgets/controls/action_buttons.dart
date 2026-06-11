@@ -1,4 +1,4 @@
-// lib/widgets/buttons/action_buttons.dart
+// lib/widgets/controls/action_buttons.dart
 //
 // כפתורי פעולה גנריים בסגנון M3.
 //
@@ -193,6 +193,7 @@ class _BalancedText extends StatelessWidget {
   Widget build(BuildContext context) {
     final effectiveStyle =
         DefaultTextStyle.of(context).style.copyWith(inherit: true);
+    final textDir = Directionality.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
@@ -200,20 +201,18 @@ class _BalancedText extends StatelessWidget {
         // בדוק אם הטקסט נכנס בשורה אחת
         final singleLinePainter = TextPainter(
           text: TextSpan(text: text, style: effectiveStyle),
+          textDirection: textDir,
           maxLines: 1,
-          textDirection: TextDirection.rtl,
         )..layout(maxWidth: double.infinity);
 
         if (singleLinePainter.width <= maxWidth) {
-          return Text(text,
-              textAlign: textAlign, textDirection: TextDirection.rtl);
+          return Text(text, textAlign: textAlign);
         }
 
         // מצא את נקודת השבירה שנותנת שורות שוות ביותר
         final words = text.split(' ');
         if (words.length <= 1) {
-          return Text(text,
-              textAlign: textAlign, textDirection: TextDirection.rtl);
+          return Text(text, textAlign: textAlign);
         }
 
         String bestText = text;
@@ -225,8 +224,8 @@ class _BalancedText extends StatelessWidget {
 
           final p1 = TextPainter(
             text: TextSpan(text: line1, style: effectiveStyle),
+            textDirection: textDir,
             maxLines: 1,
-            textDirection: TextDirection.rtl,
           )..layout(maxWidth: double.infinity);
 
           // אם שורה 1 רחבה מהמקום הפנוי — לא ניתן לשבור כאן
@@ -234,8 +233,8 @@ class _BalancedText extends StatelessWidget {
 
           final p2 = TextPainter(
             text: TextSpan(text: line2, style: effectiveStyle),
+            textDirection: textDir,
             maxLines: 1,
-            textDirection: TextDirection.rtl,
           )..layout(maxWidth: double.infinity);
 
           final diff = (p1.width - p2.width).abs();
@@ -245,8 +244,7 @@ class _BalancedText extends StatelessWidget {
           }
         }
 
-        return Text(bestText,
-            textAlign: textAlign, textDirection: TextDirection.rtl);
+        return Text(bestText, textAlign: textAlign);
       },
     );
   }
@@ -330,6 +328,8 @@ class ToolbarActionButton extends StatelessWidget {
   final String? label;
   final bool compact;
 
+  final bool flipInRtl;
+
   const ToolbarActionButton({
     super.key,
     required this.tooltip,
@@ -339,6 +339,7 @@ class ToolbarActionButton extends StatelessWidget {
     this.selected = false,
     this.label,
     this.compact = false,
+    this.flipInRtl = false,
   });
 
   @override
@@ -364,7 +365,9 @@ class ToolbarActionButton extends StatelessWidget {
             data: IconThemeData(color: fg, size: iconSize),
             child: iconWidget!,
           )
-        : RtlIcon(icon, size: iconSize, color: fg);
+        : flipInRtl
+            ? RtlIcon(icon, size: iconSize, color: fg)
+            : Icon(icon, size: iconSize, color: fg);
 
     Widget button;
     if (label != null) {
@@ -385,7 +388,7 @@ class ToolbarActionButton extends StatelessWidget {
               fontSize: fontSize,
               color: fg,
               fontWeight: selected ? FontWeight.bold : FontWeight.normal),
-          child: Text(label!, textDirection: TextDirection.rtl),
+          child: Text(label!),
         ),
       );
     } else {

@@ -380,7 +380,6 @@ class _FindRefDialogState extends State<FindRefDialog> {
             value: e,
             child: Text(
               e.title,
-              textDirection: TextDirection.rtl,
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -517,7 +516,6 @@ class _FindRefDialogState extends State<FindRefDialog> {
               children: [
                 Text(
                   'כלול ספרים אישיים',
-                  textDirection: TextDirection.rtl,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),

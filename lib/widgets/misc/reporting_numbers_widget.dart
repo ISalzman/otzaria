@@ -38,7 +38,6 @@ class ReportingNumbersWidget extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
-              textDirection: TextDirection.rtl,
             ),
             const SizedBox(height: 12),
 
@@ -107,7 +106,6 @@ class ReportingNumbersWidget extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: enabled ? null : Theme.of(context).disabledColor,
                 ),
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(width: 6),
           InkWell(
@@ -143,7 +141,6 @@ class ReportingNumbersWidget extends StatelessWidget {
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
-              textDirection: TextDirection.rtl,
             ),
 
             // 2. Spacer שתופס את כל המקום הפנוי ודוחף את שאר הווידג'טים שמאלה
@@ -220,7 +217,6 @@ class ReportingNumbersWidget extends StatelessWidget {
                 fontStyle: FontStyle.italic,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-          textDirection: TextDirection.rtl,
         ),
       ],
     );

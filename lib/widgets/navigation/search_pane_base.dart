@@ -135,7 +135,6 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
           ? const Center(
               child: Text(
                 'אין תוצאות',
-                textDirection: TextDirection.rtl,
               ),
             )
           : widget.resultsWidget,
@@ -172,7 +171,6 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
                           fontSize: 12,
                           color: Theme.of(context).textTheme.bodySmall?.color,
                         ),
-                        textDirection: TextDirection.rtl,
                       ),
                     ),
                   )

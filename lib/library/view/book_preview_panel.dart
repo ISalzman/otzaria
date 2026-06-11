@@ -319,7 +319,6 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                       return Center(
                         child: Text(
                           'שגיאה: ${state.message}',
-                          textDirection: TextDirection.rtl,
                         ),
                       );
                     }
@@ -370,7 +369,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
   Widget _buildPdfViewer(String filePath) {
     if (!_pdfFileExists) {
       return const Center(
-        child: Text('הספר איננו קיים', textDirection: TextDirection.rtl),
+        child: Text('הספר איננו קיים'),
       );
     }
     return Stack(

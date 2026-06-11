@@ -1035,26 +1035,23 @@ class _HoverableHighlightedRow extends StatelessWidget {
             border: Border.all(color: primary, width: 1.5),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Directionality(
-            textDirection: TextDirection.rtl,
-            child: Row(
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: metrics.fontSize,
-                    color: primary,
-                  ),
+          child: Row(
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: metrics.fontSize,
+                  color: primary,
                 ),
-                if (icon != null) ...[
-                  const Spacer(),
-                  const SizedBox(width: 6),
-                  Icon(icon, size: metrics.iconSize, color: primary),
-                ],
+              ),
+              if (icon != null) ...[
+                const Spacer(),
+                const SizedBox(width: 6),
+                Icon(icon, size: metrics.iconSize, color: primary),
               ],
-            ),
+            ],
           ),
         ),
       ),

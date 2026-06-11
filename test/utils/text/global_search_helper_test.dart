@@ -109,7 +109,7 @@ void main() {
       expect(flexibleAncestor, findsNothing);
     });
 
-    testWidgets('Row מצויר עם RTL ומתכווץ ל-MainAxisSize.min', (tester) async {
+    testWidgets('Row מתכווץ ל-MainAxisSize.min', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -122,7 +122,6 @@ void main() {
         of: find.text('בראשית'),
         matching: find.byType(Row),
       ));
-      expect(row.textDirection, TextDirection.rtl);
       expect(row.mainAxisSize, MainAxisSize.min);
     });
 

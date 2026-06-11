@@ -128,20 +128,17 @@ class _PersonalNoteContentViewState extends State<PersonalNoteContentView> {
         ),
       );
 
-      return Directionality(
-        textDirection: TextDirection.rtl,
-        child: DefaultTextStyle(
-          style: widget.textStyle ?? Theme.of(context).textTheme.bodyMedium!,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              editor,
-              if (_links.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                _buildLinks(context, _links),
-              ],
+      return DefaultTextStyle(
+        style: widget.textStyle ?? Theme.of(context).textTheme.bodyMedium!,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            editor,
+            if (_links.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _buildLinks(context, _links),
             ],
-          ),
+          ],
         ),
       );
     }
@@ -153,7 +150,6 @@ class _PersonalNoteContentViewState extends State<PersonalNoteContentView> {
           _previewPlain,
           style: widget.textStyle,
           textAlign: widget.textAlign,
-          textDirection: TextDirection.rtl,
         ),
         if (_links.isNotEmpty) ...[
           const SizedBox(height: 8),

@@ -8,7 +8,7 @@ import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
-import 'package:otzaria/settings/settings_card.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
@@ -153,7 +153,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                 children: [
                   // סוג לוח
                   SegmentedSettingsTile<CalendarType>(
-                    icon: FluentIcons.calendar_24_regular,
+                    icon: Icon(FluentIcons.calendar_24_regular),
                     title: 'סוג לוח שנה',
                     subtitle: state.calendarType == CalendarType.hebrew
                         ? 'יוצג לוח השנה היהודי בלבד'
@@ -172,39 +172,41 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                       context.read<CalendarCubit>().changeCalendarType(value);
                     },
                   ),
-                  SegmentedSettingsTile<CalendarDayTransition>(
-                    icon: FluentIcons.weather_sunny_low_24_regular,
+                  DropdownSettingsTile<CalendarDayTransition>(
+                    icon: Icon(FluentIcons.weather_sunny_low_24_regular),
                     title: 'מעבר יום',
                     subtitle:
                         _calendarDayTransitionSubtitle(state.dayTransition),
-                    options: const [
-                      SegmentOption(
+                    value: state.dayTransition,
+                    entries: const [
+                      AppMenuEntry(
                         value: CalendarDayTransition.sunset,
                         label: 'שקיעה',
                       ),
-                      SegmentOption(
+                      AppMenuEntry(
                         value: CalendarDayTransition.tzais,
                         label: 'צאה"כ',
                       ),
-                      SegmentOption(
+                      AppMenuEntry(
                         value: CalendarDayTransition.rabbeinuTam,
                         label: 'רבינו תם',
                       ),
-                      SegmentOption(
+                      AppMenuEntry(
                         value: CalendarDayTransition.midnight,
                         label: '12 בלילה',
                       ),
                     ],
-                    currentValue: state.dayTransition,
-                    onChanged: (value) {
-                      context
-                          .read<CalendarCubit>()
-                          .changeCalendarDayTransition(value);
+                    onSelected: (value) {
+                      if (value != null) {
+                        context
+                            .read<CalendarCubit>()
+                            .changeCalendarDayTransition(value);
+                      }
                     },
                   ),
                   // עיר
-                  _buildResponsiveDropdownTile<String>(
-                    icon: FluentIcons.location_24_regular,
+                  DropdownSettingsTile<String>(
+                    icon: Icon(FluentIcons.location_24_regular),
                     title: 'עיר נבחרת',
                     subtitle: 'בחירת עיר לחישובי זמני היום והלוח',
                     value: state.selectedCity,
@@ -233,10 +235,9 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
               title: 'אירועים ותזכורות',
               children: [
                 // הפעל התראות
-                SwitchSettingsTile(
-                  leading: const Icon(FluentIcons.alert_24_regular),
-                  title: const Text('הפעל התראות על אירועים',
-                      style: kSettingsTitleStyle),
+                SwitchSettingsTile.text(
+                  icon: FluentIcons.alert_24_regular,
+                  title: 'הפעל התראות על אירועים',
                   value: state.calendarNotificationsEnabled,
                   onChanged: (value) {
                     context
@@ -245,10 +246,9 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                   },
                 ),
                 if (state.calendarNotificationsEnabled) ...[
-                  SwitchSettingsTile(
-                    leading: const Icon(FluentIcons.speaker_2_24_regular),
-                    title: const Text('השמע צליל בהתראה',
-                        style: kSettingsTitleStyle),
+                  SwitchSettingsTile.text(
+                    icon: FluentIcons.speaker_2_24_regular,
+                    title: 'השמע צליל בהתראה',
                     value: state.calendarNotificationSound,
                     onChanged: (value) {
                       context
@@ -256,8 +256,8 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                           .changeCalendarNotificationSound(value);
                     },
                   ),
-                  _buildResponsiveDropdownTile<int>(
-                    icon: FluentIcons.alert_snooze_24_regular,
+                  DropdownSettingsTile<int>(
+                    icon: Icon(FluentIcons.alert_snooze_24_regular),
                     title: 'זמן תזכורת לפני האירוע',
                     subtitle: 'כמה זמן לפני תחילת האירוע תופיע התראה',
                     value: state.calendarNotificationTime,
@@ -280,15 +280,12 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                 ],
 
                 // ── לוח שנה גוגל ──
-                SwitchSettingsTile(
-                  leading: const Icon(FluentIcons.arrow_sync_24_regular),
-                  title: const Text('לוח שנה של Google',
-                      style: kSettingsTitleStyle),
-                  subtitle: Text(
-                      isOfflineMode
-                          ? 'מושבת במצב מנותק'
-                          : 'סנכרון אירועים עם Google Calendar',
-                      style: kSettingsSubtitleStyle),
+                SwitchSettingsTile.text(
+                  icon: FluentIcons.arrow_sync_24_regular,
+                  title: 'לוח שנה של Google',
+                  subtitle: isOfflineMode
+                      ? 'מושבת במצב מנותק'
+                      : 'סנכרון אירועים עם Google Calendar',
                   value: state.googleCalendarEnabled,
                   enabled: !isOfflineMode,
                   onChanged: (value) {
@@ -456,93 +453,6 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
       },
     );
   }
-
-  Widget _buildResponsiveDropdownTile<T>({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required T? value,
-    required List<AppMenuEntry<T>> entries,
-    required ValueChanged<T?> onSelected,
-    bool enableSearch = false,
-    double minFieldWidth = 220,
-    double maxFieldWidth = 320,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isCompact = constraints.maxWidth < 620;
-          final fieldWidth = isCompact
-              ? constraints.maxWidth
-              : constraints.maxWidth.clamp(minFieldWidth, maxFieldWidth);
-
-          final info = Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(icon),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: kSettingsTitleStyle,
-                        textDirection: TextDirection.rtl,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: kSettingsSubtitleStyle,
-                        textDirection: TextDirection.rtl,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-
-          final field = SizedBox(
-            width: fieldWidth,
-            child: AppDropdownField<T>(
-              value: value,
-              enableSearch: enableSearch,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              entries: entries,
-              onSelected: onSelected,
-            ),
-          );
-
-          if (isCompact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(children: [info]),
-                const SizedBox(height: 12),
-                field,
-              ],
-            );
-          }
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              info,
-              const SizedBox(width: 16),
-              Flexible(
-                  child: Align(alignment: Alignment.centerLeft, child: field)),
-            ],
-          );
-        },
-      ),
-    );
-  }
 }
 
 String _calendarDayTransitionSubtitle(CalendarDayTransition transition) {
@@ -640,7 +550,7 @@ class _CalendarMultiSelectionDialogState<T>
 
     return AlertDialog(
       backgroundColor: cs.surfaceContainerHigh,
-      title: Text(widget.title, textDirection: TextDirection.rtl),
+      title: Text(widget.title),
       content: SizedBox(
         width: double.maxFinite,
         height: 400,
@@ -658,14 +568,12 @@ class _CalendarMultiSelectionDialogState<T>
                       child: Text(
                         widget.emptyMessage ?? 'לא נמצאו פריטים',
                         style: TextStyle(color: cs.onSurfaceVariant),
-                        textDirection: TextDirection.rtl,
                       ),
                     )
                   : filteredItems.isEmpty
                       ? const Center(
                           child: Text(
                             'לא נמצאו תוצאות',
-                            textDirection: TextDirection.rtl,
                           ),
                         )
                       : ListView.builder(
@@ -678,12 +586,10 @@ class _CalendarMultiSelectionDialogState<T>
                             return CheckboxListTile(
                               title: Text(
                                 item.label,
-                                textDirection: TextDirection.rtl,
                               ),
                               subtitle: item.subtitle != null
                                   ? Text(
                                       item.subtitle!,
-                                      textDirection: TextDirection.rtl,
                                     )
                                   : null,
                               value: isSelected,

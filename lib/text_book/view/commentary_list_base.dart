@@ -1243,7 +1243,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                 Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                           textAlign: TextAlign.center,
-                          textDirection: TextDirection.rtl,
                         ),
                       ),
                     );
@@ -1864,7 +1863,6 @@ class _CollapsibleCommentaryGroupState
                                     .onSurface
                                     .withValues(alpha: 0.5),
                               ),
-                              textDirection: TextDirection.rtl,
                             );
                           },
                         );
@@ -2014,7 +2012,6 @@ class _NotesCommentaryWidget extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     fontFamily: settingsState.commentatorsFontFamily,
                   ),
-                  textDirection: TextDirection.rtl,
                 ),
               ),
               ...notes.map((note) {

@@ -36,14 +36,12 @@ class ToolEmptyState extends StatelessWidget {
                 fontSize: AppTokens.fontXL,
                 color: cs.onSurface.withValues(alpha: 0.6),
               ),
-              textDirection: TextDirection.rtl,
               textAlign: TextAlign.center,
             ),
             if (subtitle != null) ...[
               const SizedBox(height: 8),
               Text(
                 subtitle!,
-                textDirection: TextDirection.rtl,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: cs.onSurfaceVariant.withValues(alpha: 0.7),

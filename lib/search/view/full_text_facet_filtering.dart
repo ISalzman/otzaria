@@ -234,7 +234,6 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                     style: textStyle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    textDirection: TextDirection.rtl,
                   );
 
                   if (textPainter.didExceedMaxLines) {
@@ -278,7 +277,6 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
           padding: EdgeInsets.all(16.0),
           child: Text(
             'לא נמצאו ספרים',
-            textDirection: TextDirection.rtl,
           ),
         ),
       );
@@ -379,7 +377,6 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                         style: textStyle,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        textDirection: TextDirection.rtl,
                       );
 
                       if (textPainter.didExceedMaxLines) {

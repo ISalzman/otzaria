@@ -23,7 +23,7 @@ import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
@@ -597,14 +597,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
             onPressed: () => setState(() => _navPaneOpen = !_navPaneOpen),
           ),
         ),
-        AppTopBarItem(
-          widget: ToolbarActionButton(
-            tooltip: 'חיפוש',
-            icon: FluentIcons.book_search_24_regular,
-            compact: isCompact,
-            onPressed: _openSearchPanel,
-          ),
-        ),
       ],
       center: _buildPdfCommentatorsCenter(context),
       trailingItems: [
@@ -660,6 +652,18 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 tooltip: 'הדפסה',
                 onPressed: () =>
                     _panelKey.currentState?.printDisplayedCommentaries(),
+              ),
+              // חיפוש
+              ActionButtonData(
+                widget: ToolbarActionButton(
+                  tooltip: 'חיפוש',
+                  icon: FluentIcons.search_24_regular,
+                  compact: isCompact,
+                  onPressed: _openSearchPanel,
+                ),
+                icon: FluentIcons.search_24_regular,
+                tooltip: 'חיפוש',
+                onPressed: _openSearchPanel,
               ),
               // כיווץ/הרחבת כל המפרשים
               ActionButtonData(
@@ -749,6 +753,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     const gap = 4.0;
     return Center(
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           ToolbarActionButton(
             tooltip: 'הכותרת הקודמת',
@@ -763,14 +768,14 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
             onPressed: _navigateToPrevParagraph,
           ),
           const SizedBox(width: gap),
-          Flexible(
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 80, maxWidth: 340),
             child: Text(
               'מפרשים על ${widget.tab.sourceTab.book.title}',
               style: AppTopBar.titleStyle(context),
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
-              textDirection: TextDirection.rtl,
             ),
           ),
           const SizedBox(width: gap),
@@ -818,26 +823,28 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                         icon: Icon(FluentIcons.navigation_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('ניווט',
-                            style: TextStyle(fontSize: 11),
-                            textDirection: TextDirection.rtl),
+                        child: Text(
+                          'ניווט',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                       Tab(
                         icon: Icon(FluentIcons.apps_list_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('מפרשים',
-                            style: TextStyle(fontSize: 11),
-                            textDirection: TextDirection.rtl),
+                        child: Text(
+                          'מפרשים',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                       Tab(
-                        icon:
-                            Icon(FluentIcons.book_search_24_regular, size: 16),
+                        icon: Icon(FluentIcons.search_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('חיפוש',
-                            style: TextStyle(fontSize: 11),
-                            textDirection: TextDirection.rtl),
+                        child: Text(
+                          'חיפוש',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                     ],
                     labelColor: colorScheme.primary,
@@ -888,7 +895,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
           child: Text(
             'טוען מפרשים...',
             style: Theme.of(context).textTheme.bodySmall,
-            textDirection: TextDirection.rtl,
           ),
         ),
       );
@@ -922,7 +928,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     final headings = _sortedHeadings;
     if (headings == null || headings.isEmpty) {
       return const Center(
-        child: Text('אין ניווט', textDirection: TextDirection.rtl),
+        child: Text('אין ניווט'),
       );
     }
 
@@ -1080,7 +1086,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 2,
-                textDirection: TextDirection.rtl,
               ),
             ),
             if (hasChildren)
@@ -1142,7 +1147,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 2,
-                textDirection: TextDirection.rtl,
               ),
             ),
           ],

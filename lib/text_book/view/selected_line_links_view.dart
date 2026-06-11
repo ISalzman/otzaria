@@ -380,7 +380,6 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
               fontWeight: FontWeight.bold,
               fontFamily: settingsState.commentatorsFontFamily,
             ),
-            textDirection: TextDirection.rtl,
           );
         },
       ),
@@ -399,7 +398,6 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
                 fontFamily: settingsState.commentatorsFontFamily,
                 color: Theme.of(context).colorScheme.onSurface.withAlpha(128),
               ),
-              textDirection: TextDirection.rtl,
             );
           }
 
@@ -419,7 +417,6 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
                   fontFamily: settingsState.commentatorsFontFamily,
                   color: Theme.of(context).colorScheme.onSurface.withAlpha(128),
                 ),
-                textDirection: TextDirection.rtl,
               );
             },
           );

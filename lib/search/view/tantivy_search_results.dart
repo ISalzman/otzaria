@@ -18,7 +18,7 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 
 class TantivySearchResults extends StatefulWidget {
   final SearchingTab tab;
@@ -68,7 +68,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                 fontWeight: FontWeight.w600,
                 color: colorScheme.onSurface,
               ),
-              textDirection: TextDirection.rtl,
             ),
             const SizedBox(height: 8),
             Text(
@@ -77,7 +76,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                 fontSize: 14,
                 color: colorScheme.onSurfaceVariant,
               ),
-              textDirection: TextDirection.rtl,
               textAlign: TextAlign.center,
             ),
           ],
@@ -244,7 +242,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             padding: const EdgeInsets.all(8.0),
             child: Text(
               state.errorMessage!,
-              textDirection: TextDirection.rtl,
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
@@ -543,7 +540,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                           .onSurfaceVariant,
                                     ),
                                     textAlign: TextAlign.right,
-                                    textDirection: TextDirection.rtl,
                                     softWrap: true,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,

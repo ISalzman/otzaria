@@ -21,59 +21,54 @@ class LiveTipCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Material(
-        elevation: 10,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.8),
-            ),
+    return Material(
+      elevation: 10,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.8),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      textDirection: TextDirection.rtl,
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  IconButton(
-                    onPressed: onDismiss,
-                    icon: const Icon(FluentIcons.dismiss_24_regular),
-                    tooltip: 'סגור',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                description,
-                textDirection: TextDirection.rtl,
-                style: textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 14),
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: NeutralActionButton(
-                  icon: FluentIcons.checkmark_24_regular,
-                  text: 'הבנתי',
-                  onPressed: onDismiss,
                 ),
+                IconButton(
+                  onPressed: onDismiss,
+                  icon: const Icon(FluentIcons.dismiss_24_regular),
+                  tooltip: 'סגור',
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              style: textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 14),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: NeutralActionButton(
+                icon: FluentIcons.checkmark_24_regular,
+                text: 'הבנתי',
+                onPressed: onDismiss,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

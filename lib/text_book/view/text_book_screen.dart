@@ -66,7 +66,7 @@ import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dar
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 
 // קבועים למצבי תצוגה (למניעת magic strings)
@@ -1066,12 +1066,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                             ),
                             ActionButtonData(
                               widget: IconButton(
-                                icon: const Icon(
-                                    FluentIcons.book_search_24_regular),
+                                icon: const Icon(FluentIcons.search_24_regular),
                                 tooltip: 'חיפוש',
                                 onPressed: null,
                               ),
-                              icon: FluentIcons.book_search_24_regular,
+                              icon: FluentIcons.search_24_regular,
                               tooltip: 'חיפוש',
                               onPressed: null,
                             ),
@@ -1270,13 +1269,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return AppTopBar(
       leadingItems: [
         AppTopBarItem(widget: _buildMenuButton(context, state)),
-        AppTopBarItem(
-          widget: _buildSearchButton(
-            context,
-            state,
-            key: widget.enableTourTargets ? textBookSearchTourTargetKey : null,
-          ),
-        ),
         if (state.showPageShapeView)
           AppTopBarItem(widget: _buildPageShapeSettingsButton(context, state)),
       ],
@@ -1299,18 +1291,33 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       return _buildTitle(state);
     }
     const gap = 4.0;
-    return Center(
-      child: Row(
-        children: [
-          _buildPreviousTocButton(context, state),
-          _buildPreviousPageButton(context, state),
-          const SizedBox(width: gap),
-          Flexible(child: _buildTitle(state, textAlign: TextAlign.center)),
-          const SizedBox(width: gap),
-          _buildNextPageButton(context, state),
-          _buildNextTocButton(context, state),
-        ],
-      ),
+    // כל כפתור ToolbarActionButton (compact=false) הוא לפחות 40px.
+    // 4 כפתורי ניווט + 2 רווחים = ~168px. כשהמרכז קטן מדי, הכותרת
+    // מתכווצת לפי המקום הפנוי כדי למנוע overflow.
+    const navButtonsWidth = 4 * 40.0 + 2 * gap;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final titleMaxWidth =
+            (constraints.maxWidth - navButtonsWidth).clamp(80.0, 340.0);
+        return Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildPreviousTocButton(context, state),
+              _buildPreviousPageButton(context, state),
+              const SizedBox(width: gap),
+              ConstrainedBox(
+                constraints:
+                    BoxConstraints(minWidth: 80, maxWidth: titleMaxWidth),
+                child: _buildTitle(state, textAlign: TextAlign.center),
+              ),
+              const SizedBox(width: gap),
+              _buildNextPageButton(context, state),
+              _buildNextTocButton(context, state),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1380,8 +1387,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         final authorStyle = AppTopBar.subtitleStyle(context);
         final textPainter = TextPainter(
           text: TextSpan(text: displayText, style: titleStyle),
+          textDirection: Directionality.of(context),
           maxLines: 1,
-          textDirection: TextDirection.rtl,
         )..layout(minWidth: 0, maxWidth: constraints.maxWidth);
 
         final titleWidget = SelectionArea(
@@ -1567,7 +1574,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           onPressed: () => _toggleAndSaveContinuousReading(context, state),
         ),
 
-      // 4) Zoom In Button
+      // 4) Search Button
+      ActionButtonData(
+        widget: _buildSearchButton(
+          context,
+          state,
+          key: widget.enableTourTargets ? textBookSearchTourTargetKey : null,
+        ),
+        icon: FluentIcons.search_24_regular,
+        tooltip: 'חיפוש',
+        onPressed: _openSearchFromToolbar,
+      ),
+
+      // 5) Zoom In Button
       ActionButtonData(
         widget: _buildZoomInButton(context, state),
         icon: FluentIcons.zoom_in_24_regular,
@@ -1823,7 +1842,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       tooltip: 'בחר סוג תצוגת מפרשים',
       iconData: _getViewModeIcon(state),
       icon: iconWidget,
-      selected: isSplit || isPage,
       enabled: !widget.isInCombinedView,
       initialValue: state.showPageShapeView
           ? _viewModePage
@@ -2006,7 +2024,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return ToolbarActionButton(
       key: key,
       tooltip: 'חיפוש (${shortcut.toUpperCase()})',
-      icon: FluentIcons.book_search_24_regular,
+      icon: FluentIcons.search_24_regular,
       compact: isCompact,
       onPressed: _openSearchFromToolbar,
     );
@@ -2548,8 +2566,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 label: 'כותרות'
               ),
             (
-              icon: FluentIcons.book_search_24_regular,
-              iconFilled: FluentIcons.book_search_24_filled,
+              icon: FluentIcons.search_24_regular,
+              iconFilled: FluentIcons.search_24_filled,
               label: 'חיפוש'
             ),
           ],

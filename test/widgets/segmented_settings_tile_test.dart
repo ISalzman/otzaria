@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/widgets/inputs/segmented_button_tile.dart';
+import 'package:otzaria/settings/widgets/segmented_settings_tile.dart';
+import 'package:otzaria/widgets/controls/segmented_control.dart';
 
 void main() {
   testWidgets(
@@ -20,7 +21,7 @@ void main() {
             child: Scaffold(
               body: StatefulBuilder(
                 builder: (context, setState) => SegmentedSettingsTile<String>(
-                  icon: FluentIcons.panel_left_24_regular,
+                  icon: Icon(FluentIcons.panel_left_24_regular),
                   title: 'הצגת חלונית ניווט בכותרות ופרקים',
                   subtitle: 'בדיקת יציבות פריסה',
                   options: const [
@@ -60,7 +61,7 @@ void main() {
             child: Scaffold(
               body: StatefulBuilder(
                 builder: (context, setState) => SegmentedSettingsTile<String>(
-                  icon: FluentIcons.panel_left_24_regular,
+                  icon: Icon(FluentIcons.panel_left_24_regular),
                   title: 'כותרת',
                   subtitle: 'תיאור',
                   options: const [

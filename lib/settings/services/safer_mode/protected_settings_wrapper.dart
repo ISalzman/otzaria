@@ -138,7 +138,6 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
         appBar: AppBar(
           title: const Text(
             'הגדרות',
-            textDirection: TextDirection.rtl,
           ),
           automaticallyImplyLeading: true,
         ),
@@ -156,13 +155,11 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
                 const SizedBox(height: 24),
                 Text(
                   'הנך במצב מוגן',
-                  textDirection: TextDirection.rtl,
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 12),
                 Text(
                   'נדרשת סיסמה כדי לגשת להגדרות',
-                  textDirection: TextDirection.rtl,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/inputs/app_input_tokens.dart';
 
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 
@@ -384,7 +383,6 @@ class _AppDropdownFieldState<T> extends State<AppDropdownField<T>> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  textDirection: TextDirection.rtl,
                 );
 
         final fieldContent = selectedEntry?.icon == null
