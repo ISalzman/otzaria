@@ -597,14 +597,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
             onPressed: () => setState(() => _navPaneOpen = !_navPaneOpen),
           ),
         ),
-        AppTopBarItem(
-          widget: ToolbarActionButton(
-            tooltip: 'חיפוש',
-            icon: FluentIcons.search_24_regular,
-            compact: isCompact,
-            onPressed: _openSearchPanel,
-          ),
-        ),
       ],
       center: _buildPdfCommentatorsCenter(context),
       trailingItems: [
@@ -660,6 +652,18 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 tooltip: 'הדפסה',
                 onPressed: () =>
                     _panelKey.currentState?.printDisplayedCommentaries(),
+              ),
+              // חיפוש
+              ActionButtonData(
+                widget: ToolbarActionButton(
+                  tooltip: 'חיפוש',
+                  icon: FluentIcons.search_24_regular,
+                  compact: isCompact,
+                  onPressed: _openSearchPanel,
+                ),
+                icon: FluentIcons.search_24_regular,
+                tooltip: 'חיפוש',
+                onPressed: _openSearchPanel,
               ),
               // כיווץ/הרחבת כל המפרשים
               ActionButtonData(
