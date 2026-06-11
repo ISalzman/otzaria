@@ -139,6 +139,72 @@ void main() {
       expect(result, contains('<span style="color: red">נָבוֹן</span>'));
     });
 
+    test('yellowBackground - הדגשה רציפה אחת כולל הרווחים בין המילים', () {
+      const text = 'אמר רבי יוחנן משום רבי שמעון בן יוחאי';
+      final result = highLight(
+        text,
+        'רבי יוחנן משום',
+        yellowBackground: true,
+      );
+
+      expect(
+        result,
+        contains(
+          '<span style="background-color: yellow; color: black">רבי יוחנן משום</span>',
+        ),
+      );
+    });
+
+    test('yellowBackground - פיסוק בין המילים נכלל בהדגשה הרציפה', () {
+      const text = 'אמר ליה רבי יוחנן: הוא אפילו תינוקות';
+      final result = highLight(
+        text,
+        'רבי יוחנן הוא',
+        yellowBackground: true,
+      );
+
+      expect(
+        result,
+        contains(
+          '<span style="background-color: yellow; color: black">רבי יוחנן: הוא</span>',
+        ),
+      );
+    });
+
+    test('yellowBackground - ציטוט שנקטע באמצע מילה עדיין מודגש', () {
+      // קישור ?m= נבנה מטקסט מסומן, וגרירה יכולה לעצור באמצע מילה.
+      const text = 'אִם כְּמָה שֶׁנָּדַרְתָּ עָשִׂיתָ – יְהֵא נֶדֶר';
+      final result = highLight(
+        text,
+        'שֶׁנָּדַרְתָּ עָשִׂיתָ – יְה',
+        yellowBackground: true,
+      );
+
+      expect(
+        result,
+        contains('<span style="background-color: yellow; color: black">'),
+      );
+      expect(result, contains('שֶׁנָּדַרְתָּ'));
+    });
+
+    test('yellowBackground - תגי HTML בתוך הקטע נשארים מחוץ ל-span', () {
+      const text = 'אמר <b>רבי</b> יוחנן';
+      final result = highLight(
+        text,
+        'אמר רבי יוחנן',
+        yellowBackground: true,
+      );
+
+      expect(
+        result,
+        equals(
+          '<span style="background-color: yellow; color: black">אמר </span>'
+          '<b><span style="background-color: yellow; color: black">רבי</span></b>'
+          '<span style="background-color: yellow; color: black"> יוחנן</span>',
+        ),
+      );
+    });
+
     test('multi-word with nikud and searchDistance - highlights both words',
         () {
       const text = 'וְעַתָּה יֵרֶא פַּרְעֹה אִישׁ נָבוֹן וְחָכָם';
