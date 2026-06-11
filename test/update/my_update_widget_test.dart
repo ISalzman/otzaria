@@ -181,6 +181,60 @@ void main() {
     });
   });
 
+  group('pickMacAssetUrl', () {
+    Map<String, dynamic> asset(String name) => {
+          'name': name,
+          'browser_download_url': 'https://example.com/$name',
+        };
+
+    final fullReleaseAssets = [
+      asset('otzaria-0.9.94-windows.exe'),
+      asset('otzaria-windows.zip'),
+      asset('otzaria-macos.dmg'),
+      asset('otzaria-macos.zip'),
+      asset('otzaria-macos-full.zip'),
+      asset('otzaria-0.9.94-linux.deb'),
+    ];
+
+    test('prefers the app zip when self-update is possible', () {
+      expect(
+        pickMacAssetUrl(fullReleaseAssets, selfUpdateCapable: true),
+        'https://example.com/otzaria-macos.zip',
+      );
+    });
+
+    test('prefers the dmg when self-update is not possible', () {
+      expect(
+        pickMacAssetUrl(fullReleaseAssets, selfUpdateCapable: false),
+        'https://example.com/otzaria-macos.dmg',
+      );
+    });
+
+    test('falls back to dmg on old releases without an update zip', () {
+      final oldRelease = [
+        asset('otzaria-macos.dmg'),
+        asset('otzaria-macos-full.zip'),
+      ];
+      expect(
+        pickMacAssetUrl(oldRelease, selfUpdateCapable: true),
+        'https://example.com/otzaria-macos.dmg',
+      );
+    });
+
+    test('never selects full bundles', () {
+      final assets = [asset('otzaria-macos-full.zip')];
+      expect(pickMacAssetUrl(assets, selfUpdateCapable: true), isNull);
+      expect(pickMacAssetUrl(assets, selfUpdateCapable: false), isNull);
+    });
+
+    test('without self-update returns only dmg — zip alone is unusable', () {
+      // zip ללא עדכון עצמי אינו מחולץ ב-Dart ולכן openInstaller נכשל עליו;
+      // עדיף null (צ'יפ שגיאה) מאשר כשל באמצע התקנה.
+      final zipOnly = [asset('otzaria-macos.zip')];
+      expect(pickMacAssetUrl(zipOnly, selfUpdateCapable: false), isNull);
+    });
+  });
+
   group('isSilentWindowsInstallerUrl', () {
     test('identifies the silent installer by its asset name in the URL', () {
       expect(

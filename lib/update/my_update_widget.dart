@@ -17,6 +17,7 @@ import 'package:updat/utils/file_handler.dart'
 import 'package:window_manager/window_manager.dart';
 import 'hebrew_update_widgets.dart';
 import 'linux_installer.dart';
+import 'macos_installer.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 /// סוג ההתקנה המוגדר בזמן build (אופציונלי)
@@ -91,6 +92,42 @@ String? pickWindowsAssetUrl(
     return zip ?? exe;
   }
   return exe ?? zip;
+}
+
+/// בוחר את נכס העדכון המתאים ל-macOS מתוך נכסי ה-release.
+///
+/// כשהאפליקציה מסוגלת לעדכון עצמי ([selfUpdateCapable], כלומר רצה
+/// מ-bundle רגיל וניתן-לכתיבה) — מעדיפים את ה-zip של האפליקציה בלבד
+/// (`otzaria-macos.zip`), שמוחלף ברקע על ידי סקריפט העדכון. אחרת בוחרים
+/// **רק** DMG, שנפתח להתקנה ידנית בגרירה: zip ללא עדכון עצמי הוא נתיב
+/// שבור — הוא אינו מחולץ ב-Dart במאק (ראה `_downloadRelease`) ולכן
+/// `openInstaller` ייכשל עליו. קבצי `full` לעולם אינם נבחרים — הם חבילות
+/// ספרייה מלאות ולא עדכוני תוכנה.
+@visibleForTesting
+String? pickMacAssetUrl(
+  List<Map<String, dynamic>> assets, {
+  required bool selfUpdateCapable,
+}) {
+  String? zip;
+  String? dmg;
+
+  for (final asset in assets) {
+    final name = (asset['name'] as String).toLowerCase();
+    final url = asset['browser_download_url'] as String;
+    final isMacAsset = name.contains('macos') ||
+        name.contains('darwin') ||
+        name.contains('mac');
+    if (!isMacAsset) continue;
+    if (name.contains('full')) continue;
+
+    if (name.endsWith('.zip')) zip ??= url;
+    if (name.endsWith('.dmg')) dmg ??= url;
+  }
+
+  if (selfUpdateCapable) {
+    return zip ?? dmg;
+  }
+  return dmg;
 }
 
 /// האם ה-URL מצביע על המתקין השקט של Windows.
@@ -647,16 +684,10 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         preferredFormat: _preferredWindowsFormat(),
       );
     } else if (platform == 'macos') {
-      for (final a in assets) {
-        final n = (a["name"] as String).toLowerCase();
-        if ((n.contains('macos') ||
-                n.contains('darwin') ||
-                n.contains('mac')) &&
-            n.endsWith('.zip')) {
-          assetUrl = a["browser_download_url"] as String;
-          break;
-        }
-      }
+      assetUrl = pickMacAssetUrl(
+        assets,
+        selfUpdateCapable: findInstalledMacAppBundlePath() != null,
+      );
     } else if (platform == 'linux') {
       for (final a in assets) {
         final n = (a["name"] as String).toLowerCase();
@@ -793,6 +824,21 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       return;
     }
 
+    // ב-macOS, כשירד ה-zip של האפליקציה ויש bundle מותקן בר-החלפה —
+    // עדכון עצמי מלא דרך סקריפט ההחלפה. אחרת (DMG) נופלים ל-openInstaller
+    // שמעגן (mount) את הקובץ להתקנה ידנית בגרירה.
+    if (Platform.isMacOS && installer.path.toLowerCase().endsWith('.zip')) {
+      final appBundlePath = findInstalledMacAppBundlePath();
+      if (appBundlePath != null) {
+        await installMacUpdate(
+          zipFile: installer,
+          appBundlePath: appBundlePath,
+          relaunchApp: relaunchApp,
+        );
+        return;
+      }
+    }
+
     await openInstaller(installer, 'otzaria');
   }
 
@@ -881,7 +927,9 @@ Future<File> _downloadRelease(File file, String url, String appName) async {
     await sink.close();
     sink = null;
 
-    if (file.path.toLowerCase().endsWith('.zip')) {
+    // ב-macOS אין לחלץ את ה-zip ב-Dart: חבילת archive אינה משמרת symlinks
+    // והרשאות הפעלה שבתוך ה-bundle. סקריפט העדכון מחלץ בעצמו עם ditto.
+    if (file.path.toLowerCase().endsWith('.zip') && !Platform.isMacOS) {
       final outDir = Directory(p.join(p.dirname(file.path), appName));
       if (outDir.existsSync()) {
         outDir.deleteSync(recursive: true);
