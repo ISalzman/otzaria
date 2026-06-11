@@ -56,6 +56,12 @@ class RtlIcon extends StatelessWidget {
     FluentIcons.arrow_left_24_regular: FluentIcons.arrow_right_24_regular,
     FluentIcons.arrow_right_24_filled: FluentIcons.arrow_left_24_filled,
     FluentIcons.arrow_left_24_filled: FluentIcons.arrow_right_24_filled,
+    FluentIcons.panel_left_24_regular: FluentIcons.panel_right_24_regular,
+    FluentIcons.panel_right_24_regular: FluentIcons.panel_left_24_regular,
+    FluentIcons.panel_left_24_filled: FluentIcons.panel_right_24_filled,
+    FluentIcons.panel_right_24_filled: FluentIcons.panel_left_24_filled,
+    FluentIcons.text_align_right_24_regular: FluentIcons.text_align_left_24_regular,
+    FluentIcons.text_align_left_24_regular: FluentIcons.text_align_right_24_regular,
   };
 
   // אייקונים ללא גרסת RTL בספריה — מותר להפוך גאומטרית.
@@ -64,7 +70,6 @@ class RtlIcon extends StatelessWidget {
     FluentIcons.book_24_regular,
     FluentIcons.book_24_filled,
     FluentIcons.book_information_24_regular,
-    FluentIcons.text_align_right_24_regular,
     FluentIcons.text_align_distributed_24_regular,
   };
 

@@ -13,6 +13,7 @@ import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 enum _SidebarMode { pinned, openOnBook, closed }
@@ -312,7 +313,7 @@ class DesignSettingsTab extends StatelessWidget {
                             : state.defaultSidebarOpen
                                 ? 'החלונית תוצג בפתיחת ספר ותיסגר בעת גלילה'
                                 : 'החלונית לא תוצג אוטומטית עם פתיחת הספר',
-                        icon: Icon(FluentIcons.panel_left_24_regular),
+                        icon: RtlIcon(FluentIcons.panel_left_24_regular),
                         options: const [
                           SegmentOption(
                               value: _SidebarMode.pinned, label: 'הצגה'),
