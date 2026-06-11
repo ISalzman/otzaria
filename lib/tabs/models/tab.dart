@@ -28,6 +28,7 @@ abstract class OpenedTab {
     if (tab is TextBookTab) {
       bool? splitedView;
       bool? showPageShapeView;
+      List<String>? commentators = tab.commentators;
       // ערכי ברירת מחדל לוקחים את ה‑pinpoint שאיתו נבנה הטאב המקורי. אם
       // ה‑bloc כבר נטען, נעדיף את הערכים המעודכנים מה‑state — כדי לתפוס שינויים
       // (למשל ניקוי ה‑pinpoint עם חיפוש ידני חדש).
@@ -37,15 +38,21 @@ abstract class OpenedTab {
       if (state is TextBookLoaded) {
         splitedView = state.showSplitView;
         showPageShapeView = state.showPageShapeView;
+        commentators = state.activeCommentators;
         pinpointText = state.pinpointHighlightText;
         pinpointSectionIndex = state.pinpointHighlightIndex;
+      } else if (state is TextBookInitial) {
+        // טאב ששמור בשולחן עבודה לא-פעיל מעולם לא נטען — בלי הענף הזה
+        // צורת הדף והתצוגה המפוצלת מתאפסות בכל החלפת שולחן עבודה.
+        splitedView = state.splitedView;
+        showPageShapeView = state.showPageShapeView;
       }
       return TextBookTab(
         index: tab.index,
         book: tab.book,
         searchText: tab.searchText,
-        commentators: tab.commentators,
-        openLeftPane: state is TextBookLoaded ? state.showLeftPane : false,
+        commentators: commentators,
+        openLeftPane: state.showLeftPane,
         splitedView: splitedView,
         showPageShapeView: showPageShapeView,
         isPinned: tab.isPinned,
