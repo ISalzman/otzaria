@@ -102,6 +102,10 @@ Future<Uint8List> createCalendarPdf(
   return pdf.save();
 }
 
+pw.Page _rtlPage(PdfPageFormat format, pw.Widget Function(pw.Context) build) =>
+    pw.Page(
+        pageFormat: format, textDirection: pw.TextDirection.rtl, build: build);
+
 Future<void> _addMonthPages(
   pw.Document pdf,
   CalendarState state,
@@ -112,25 +116,25 @@ Future<void> _addMonthPages(
   for (int i = 0; i < count; i++) {
     final monthState = _getStateForMonthOffset(state, i);
     pdf.addPage(
-      pw.Page(
-        pageFormat: format,
-        textDirection: pw.TextDirection.rtl,
-        build: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-          children: [
-            pw.Container(
-              padding: const pw.EdgeInsets.only(bottom: 16),
-              child: pw.Text(
-                _getMonthYearText(monthState),
-                style: pw.TextStyle(
-                    font: font, fontSize: 24, fontWeight: pw.FontWeight.bold),
-                textAlign: pw.TextAlign.center,
-              ),
-            ),
-            pw.Expanded(child: _buildCalendarGrid(monthState, font)),
-          ],
-        ),
-      ),
+      _rtlPage(
+          format,
+          (context) => pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  pw.Container(
+                    padding: const pw.EdgeInsets.only(bottom: 16),
+                    child: pw.Text(
+                      _getMonthYearText(monthState),
+                      style: pw.TextStyle(
+                          font: font,
+                          fontSize: 24,
+                          fontWeight: pw.FontWeight.bold),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ),
+                  pw.Expanded(child: _buildCalendarGrid(monthState, font)),
+                ],
+              )),
     );
   }
 }
@@ -145,25 +149,25 @@ Future<void> _addWeekPages(
   for (int i = 0; i < count; i++) {
     final weekState = _getStateForWeekOffset(state, i);
     pdf.addPage(
-      pw.Page(
-        pageFormat: format,
-        textDirection: pw.TextDirection.rtl,
-        build: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-          children: [
-            pw.Container(
-              padding: const pw.EdgeInsets.only(bottom: 16),
-              child: pw.Text(
-                _getWeekRangeText(weekState),
-                style: pw.TextStyle(
-                    font: font, fontSize: 18, fontWeight: pw.FontWeight.bold),
-                textAlign: pw.TextAlign.center,
-              ),
-            ),
-            _buildWeekGrid(weekState, font),
-          ],
-        ),
-      ),
+      _rtlPage(
+          format,
+          (context) => pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  pw.Container(
+                    padding: const pw.EdgeInsets.only(bottom: 16),
+                    child: pw.Text(
+                      _getWeekRangeText(weekState),
+                      style: pw.TextStyle(
+                          font: font,
+                          fontSize: 18,
+                          fontWeight: pw.FontWeight.bold),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ),
+                  _buildWeekGrid(weekState, font),
+                ],
+              )),
     );
   }
 }
@@ -182,10 +186,9 @@ Future<void> _addDayPages(
     final events = _eventsForDate(date, dayState);
 
     pdf.addPage(
-      pw.Page(
-        pageFormat: format,
-        textDirection: pw.TextDirection.rtl,
-        build: (context) => pw.Column(
+      _rtlPage(
+        format,
+        (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
             pw.Container(

@@ -1,7 +1,7 @@
 # AI Agent Guidelines for Otzaria
 
 ## CRITICAL: Communication Language
-**ALWAYS respond in Hebrew (עברית)!** This includes:
+**ALWAYS respond in Hebrew!** This includes:
 - All answers and explanations
 - Your thinking process
 - Error messages and debugging info
@@ -171,7 +171,7 @@ RtlTextField(
 ```dart
 import 'package:otzaria/widgets/widgets_exports.dart';
 
-// דיאלוג עם כפתור אחד (אישור בלבד)
+// Single button dialog (confirm only)
 showSingleActionDialog(
   context: context,
   title: 'כותרת',
@@ -179,7 +179,7 @@ showSingleActionDialog(
   confirmText: 'אישור',
 );
 
-// דיאלוג עם שני כפתורים (ביטול ואישור)
+// Two-button dialog (cancel + confirm)
 showTwoActionsDialog(
   context: context,
   title: 'כותרת',
@@ -188,19 +188,19 @@ showTwoActionsDialog(
   confirmText: 'אישור',
 );
 
-// דיאלוג אזהרה (המשתמש צריך לבטל באופן אידיאלי)
+// Warning dialog (user should ideally cancel)
 showWarningDialog(
   context: context,
   title: 'אזהרה',
   content: 'פעולה זו היא סופית',
-  subtitle: 'שים לב שלא ניתן לבטל פעולה זו',  // טקסט באדום
+  subtitle: 'שים לב שלא ניתן לבטל פעולה זו',  // red text
   cancelText: 'ביטול',
   confirmText: 'המשך',
 );
 ```
 
 **Dialog Styling Rules (CRITICAL):**
-- **SingleActionDialog**: כפתור אחד - FilledButton (primary/onPrimary)
+- **SingleActionDialog**: single button - FilledButton (primary/onPrimary)
 - **TwoActionsDialog**: 
   - Cancel = FilledButton.tonal (surfaceContainerHighest/onSurface)
   - Confirm = FilledButton (primary/onPrimary)
@@ -219,18 +219,18 @@ showWarningDialog(
 ```dart
 import 'package:otzaria/widgets/widgets_exports.dart';
 
-// כפתור לפעולה מומלצת (Primary style)
+// Recommended action button (Primary style)
 RecommendedActionButton(
   text: 'שנה מיקום',
   onPressed: () => _changeLocation(),
-  isLoading: false,  // אופציונלי - להצגת אינדיקטור טעינה
+  isLoading: false,  // optional - shows loading indicator
 );
 
-// כפתור לפעולה ניטרלית/לא מומלצת (Tonal style)
+// Neutral/non-recommended action button (Tonal style)
 NeutralActionButton(
   text: 'איפוס',
   onPressed: () => _resetSettings(),
-  isLoading: false,  // אופציונלי - להצגת אינדיקטור טעינה
+  isLoading: false,  // optional - shows loading indicator
 );
 ```
 
@@ -258,7 +258,7 @@ SettingsCard(
   subtitle: 'תיאור אופציונלי',  // אופציונלי
   children: [
     ListTile(...),
-    // Divider מתווסף אוטומטית בין פריטים
+    // Divider is added automatically between items
     SwitchListTile(...),
   ],
 );
@@ -297,7 +297,7 @@ SettingsCard(
 ```dart
 import 'package:otzaria/widgets/widgets_exports.dart';
 
-// הגדרה עם 2-4 אפשרויות
+// Setting with 2-4 options
 SegmentedSettingsTile<String>(
   icon: FluentIcons.text_font_info_24_regular,
   title: 'הצגת הניקוד',
@@ -309,7 +309,7 @@ SegmentedSettingsTile<String>(
   ],
   currentValue: nikudDisplayMode,
   onChanged: (value) {
-    // עדכון ה-BLoC
+    // update BLoC
   },
 );
 ```
@@ -337,16 +337,26 @@ SegmentedSettingsTile<String>(
 ## Code Guidelines
 
 ### RTL Support (Critical!)
-Every Hebrew text MUST have:
-```dart
-Text(
-  'טקסט עברי',
-  textDirection: TextDirection.rtl,  // REQUIRED!
-)
-```
+The app uses `locale: Locale("he", "IL")` + `GlobalWidgetsLocalizations.delegate` in `MaterialApp`.
+This sets `Directionality.rtl` **globally** for the entire widget tree — every `Text` inherits RTL automatically.
+
+**textDirection rule — Critical:**
+- **NEVER add** `textDirection: TextDirection.rtl` to `Text` — it is completely redundant.
+- **ADD** `textDirection: TextDirection.ltr` **only** for inherently LTR content:
+  - OS file / folder paths
+  - Email addresses
+  - Version numbers / hash values
+  - URLs
+  - Technical identifiers (clearly LTR format)
+- For parameters like `subtitleDirection` — pass `textDirection` to `Text` **only when the value is LTR**:
+  ```dart
+  // Correct:
+  textDirection: subtitleDirection == TextDirection.ltr ? TextDirection.ltr : null,
+  // Wrong — never pass TextDirection.rtl:
+  // textDirection: subtitleDirection,  // ❌ when the default is rtl
+  ```
 - Use `RtlTextField` for all text inputs
 - Test UI with Hebrew text before committing
-- All forms, dialogs, and lists must support RTL
 
 ### BLoC Pattern Implementation
 ```dart
@@ -443,11 +453,11 @@ try {
 
 ### Documentation (Hebrew for public APIs)
 ```dart
-/// מחזירה רשימת ספרים לפי קטגוריה
-/// 
-/// [category] - שם הקטגוריה
-/// מחזירה [Future<List<Book>>] - רשימת ספרים או שגיאה
-/// זורקת [RepositoryException] אם הנתונים לא נמצאו
+/// Returns a list of books by category
+///
+/// [category] - the category name
+/// Returns [Future<List<Book>>] - list of books or error
+/// Throws [RepositoryException] if data not found
 Future<List<Book>> getBooksByCategory(String category) async {
   // Implementation
 }
@@ -462,10 +472,10 @@ flutter test test/feature/   # Run ONLY tests related to your changes
 dart format lib/file.dart    # Format ONLY files you modified
 ```
 
-> **טיפ:** הפרויקט מוגדר עם `dart_pre_commit` כ-git pre-commit hook.
-> לאחר clone יש להריץ פעם אחת: `dart run tool/install_git_hooks.dart`.
-> מאותו רגע `dart format` ו-`dart analyze` ירוצו אוטומטית על קבצים ב-staging
-> לפני כל קומיט. טסטים עדיין יש להריץ ידנית - הם לא חלק מההוק.
+> **Tip:** The project uses `dart_pre_commit` as a git pre-commit hook.
+> After cloning, run once: `dart run tool/install_git_hooks.dart`.
+> From that point, `dart format` and `dart analyze` run automatically on staged files
+> before every commit. Tests must still be run manually — they are not part of the hook.
 
 ### When to Run Which Tests
 | Change Type | Tests to Run |
@@ -652,7 +662,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 9. **Color theming** - NEVER use hardcoded colors (Colors.red, Colors.blue, etc.), ALWAYS use `Theme.of(context).colorScheme`
 10. **Hover effects** - Remove from ListTile rows with buttons (`hoverColor: Colors.transparent`)
 11. **No color overrides outside `lib/theme/`** - NEVER add `hoverColor`, `splashColor`, `overlayColor`, or `.withValues(alpha:...)` in feature files — define them in `lib/theme/` only
-11. **Hebrew text** - Always include `textDirection: TextDirection.rtl`
+11. **textDirection** - NEVER add `textDirection: TextDirection.rtl` (the app's locale sets RTL globally). ONLY add `textDirection: TextDirection.ltr` for inherently LTR content: OS paths, email addresses, version numbers, URLs
 12. **Test coverage** - Add/update tests for every code change
 13. **Documentation** - Document all public APIs in Hebrew
 14. **Cross-platform** - Code must work on all supported platforms
@@ -675,7 +685,8 @@ if (Platform.isAndroid || Platform.isIOS) {
 - Using hardcoded colors instead of `Theme.of(context).colorScheme`
 - Not removing hover effects from ListTile rows with action buttons
 - Adding `hoverColor`, `splashColor`, `overlayColor`, or `.withValues(alpha:...)` outside `lib/theme/` — these belong only in the theme layer
-- Forgetting `textDirection: TextDirection.rtl` on Hebrew text
+- Adding `textDirection: TextDirection.rtl` to any `Text` widget — the app's locale already sets RTL globally, this is always redundant
+- Missing `textDirection: TextDirection.ltr` on LTR content (OS paths, emails, version numbers, URLs)
 - Skipping `flutter analyze` before committing
 - Running full test suite instead of relevant tests
 - Formatting entire project instead of modified files
@@ -686,4 +697,4 @@ if (Platform.isAndroid || Platform.isIOS) {
 
 ---
 
-**זכור: תמיד ענה בעברית!**
+**Remember: ALWAYS respond in Hebrew!**

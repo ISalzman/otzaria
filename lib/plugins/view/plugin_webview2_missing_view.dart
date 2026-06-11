@@ -3,7 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 
 /// כתובת ה-bootstrapper הרשמי של Microsoft להתקנת WebView2 Runtime.
 /// קובץ התקנה קטן שמוריד ומתקין את הגרסה העדכנית (Evergreen).
@@ -56,7 +56,6 @@ class PluginWebView2MissingView extends StatelessWidget {
               Text(
                 'להפעלת התוסף נדרש רכיב WebView2',
                 style: tt.titleLarge,
-                textDirection: TextDirection.rtl,
               ),
               const SizedBox(height: 12),
               Text(
@@ -64,7 +63,6 @@ class PluginWebView2MissingView extends StatelessWidget {
                 'שאינו מותקן במחשב זה. ברוב מחשבי Windows 10/11 הרכיב מותקן '
                 'מראש עם מערכת ההפעלה, אך כאן הוא חסר.',
                 style: tt.bodyMedium,
-                textDirection: TextDirection.rtl,
               ),
               const SizedBox(height: 16),
               Container(
@@ -79,7 +77,6 @@ class PluginWebView2MissingView extends StatelessWidget {
                     Text(
                       'מה אפשר לעשות:',
                       style: tt.titleSmall,
-                      textDirection: TextDirection.rtl,
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -90,7 +87,6 @@ class PluginWebView2MissingView extends StatelessWidget {
                       '3. שאר התוספים והכלים שאינם דורשים WebView2 ממשיכים '
                       'לעבוד כרגיל.',
                       style: tt.bodySmall,
-                      textDirection: TextDirection.rtl,
                     ),
                   ],
                 ),

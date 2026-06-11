@@ -87,7 +87,6 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
         title: const Text(
           'הגדרת קיצור מקשים מותאם אישית',
           textAlign: TextAlign.right,
-          textDirection: TextDirection.rtl,
         ),
         content: SizedBox(
           width: 400,
@@ -99,7 +98,6 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
                 'התחל הקלטה ובחר קיצור',
                 textAlign: TextAlign.right,
                 style: TextStyle(fontSize: 14),
-                textDirection: TextDirection.rtl,
               ),
               const SizedBox(height: 20),
               Container(
@@ -129,7 +127,6 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
                     Text(
                       _displayText,
                       textAlign: TextAlign.center,
-                      textDirection: TextDirection.rtl,
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -146,7 +143,6 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
                 Text(
                   'Enter או אישור',
                   textAlign: TextAlign.right,
-                  textDirection: TextDirection.rtl,
                   style: TextStyle(
                     fontSize: 13,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,

@@ -151,7 +151,6 @@ class _SourceCredit extends StatelessWidget {
                 ),
               ],
             ),
-            textDirection: TextDirection.rtl,
           ),
         ),
       ),
@@ -173,7 +172,6 @@ class _TableHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        textDirection: TextDirection.rtl,
         children: [
           SizedBox(
             width: 36,
@@ -202,7 +200,6 @@ class _CategoryHeader extends StatelessWidget {
       padding: const EdgeInsets.only(top: 10, bottom: 2),
       child: Text(
         title,
-        textDirection: TextDirection.rtl,
         style: theme.textTheme.labelMedium?.copyWith(
           fontWeight: FontWeight.bold,
           color: theme.colorScheme.primary,
@@ -242,7 +239,6 @@ class _ZmanTableRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 1),
           child: Row(
-            textDirection: TextDirection.rtl,
             children: [
               // עמודה ימנית — תיבת סימון (V / ביטול)
               SizedBox(
@@ -257,7 +253,6 @@ class _ZmanTableRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   definition.fullName,
-                  textDirection: TextDirection.rtl,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: scheme.onSurface,
                   ),
@@ -268,7 +263,6 @@ class _ZmanTableRow extends StatelessWidget {
                 child: Text(
                   timeLabel,
                   textAlign: TextAlign.center,
-                  textDirection: TextDirection.rtl,
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: timeLabel == '—'
@@ -344,12 +338,11 @@ Future<void> showZmanimSettingsDialog(BuildContext context) {
       value: cubit,
       child: const SingleActionDialog(
         title: Row(
-          textDirection: TextDirection.rtl,
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(FluentIcons.clock_24_regular),
             SizedBox(width: 8),
-            Text('זמנים נוספים', textDirection: TextDirection.rtl),
+            Text('זמנים נוספים'),
           ],
         ),
         customContent: ZmanimSettingsContent(),

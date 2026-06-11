@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -121,9 +121,6 @@ class AppPopupMenuButton<T> extends StatefulWidget {
   /// הערך [icon] (Widget) ישמש כ-iconWidget ב-ToolbarActionButton.
   final IconData? iconData;
 
-  /// מצב נבחר — מועבר ל-ToolbarActionButton כשמשתמשים ב-[iconData].
-  final bool selected;
-
   const AppPopupMenuButton({
     super.key,
     this.entries,
@@ -139,7 +136,6 @@ class AppPopupMenuButton<T> extends StatefulWidget {
     this.enabled = true,
     this.initialValue,
     this.iconData,
-    this.selected = false,
   });
 
   @override
@@ -148,6 +144,7 @@ class AppPopupMenuButton<T> extends StatefulWidget {
 
 class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
   final GlobalKey _anchorKey = GlobalKey();
+  bool _isMenuOpen = false;
 
   bool get _isTouchMode {
     return switch (defaultTargetPlatform) {
@@ -190,6 +187,7 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
     final anchorContext = _anchorKey.currentContext;
     if (anchorContext == null) return;
 
+    setState(() => _isMenuOpen = true);
     final selected = await showAnchoredAppMenu<T>(
       context: context,
       anchorContext: anchorContext,
@@ -197,6 +195,7 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
       position: widget.position,
       offset: widget.offset,
     );
+    if (mounted) setState(() => _isMenuOpen = false);
 
     if (selected != null) {
       widget.onSelected?.call(selected);
@@ -224,13 +223,11 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
         icon: widget.icon ?? const Icon(FluentIcons.more_vertical_24_regular),
         label: Text(
           widget.tooltip!,
-          textDirection: TextDirection.rtl,
         ),
       );
     } else if (widget.iconData != null) {
       // מצב Toolbar: ToolbarActionButton עם אייקון מסוגנן
-      final isCompact =
-          context.read<SettingsBloc>().state.compactMenuMode;
+      final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
       trigger = Opacity(
         opacity: widget.enabled ? 1.0 : 0.38,
         child: IgnorePointer(
@@ -240,7 +237,7 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
             icon: widget.iconData!,
             iconWidget: widget.icon,
             compact: isCompact,
-            selected: widget.selected,
+            selected: _isMenuOpen,
             onPressed: _showAdaptiveMenu,
           ),
         ),
@@ -688,7 +685,6 @@ Widget buildAppMenuRowContent(
         label,
         overflow: TextOverflow.ellipsis,
         softWrap: false,
-        textDirection: TextDirection.rtl,
       );
 
   final row = Row(
@@ -699,17 +695,14 @@ Widget buildAppMenuRowContent(
         Icon(icon, size: metrics.iconSize, color: foregroundColor),
         const SizedBox(width: 8),
       ],
-      Directionality(
-        textDirection: TextDirection.rtl,
-        child: DefaultTextStyle.merge(
-          style: labelTextStyle,
-          child: labelMaxWidth == null
-              ? labelChild
-              : ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: labelMaxWidth),
-                  child: labelChild,
-                ),
-        ),
+      DefaultTextStyle.merge(
+        style: labelTextStyle,
+        child: labelMaxWidth == null
+            ? labelChild
+            : ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: labelMaxWidth),
+                child: labelChild,
+              ),
       ),
       if (isSelected) ...[
         const Spacer(),

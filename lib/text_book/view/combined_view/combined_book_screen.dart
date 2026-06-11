@@ -719,7 +719,6 @@ class _CombinedViewState extends State<CombinedView> {
                     snapshot.data ?? link.fallbackDisplayReference,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    textDirection: TextDirection.rtl,
                   ),
                 ),
                 onTap: () => widget.openBookCallback(
@@ -759,7 +758,7 @@ class _CombinedViewState extends State<CombinedView> {
                       selectedText: cleanedText,
                       suffix: 'בספר זה',
                     ),
-                    icon: FluentIcons.book_search_24_regular,
+                    icon: FluentIcons.search_24_regular,
                     onTap: () =>
                         widget.openLeftPaneTab(1, searchText: cleanedText),
                   ),
@@ -1328,123 +1327,113 @@ class _CombinedViewState extends State<CombinedView> {
                 }
                 _prefetchDictionaryLookups(fixedPlain);
               },
-              child: Directionality(
-                textDirection: TextDirection.rtl,
-                child: Shortcuts(
-                  shortcuts: <ShortcutActivator, Intent>{
-                    // Windows/Linux
-                    LogicalKeySet(
-                      LogicalKeyboardKey.control,
-                      LogicalKeyboardKey.keyC,
-                    ): const _CopySelectedTextIntent(),
-                    // Windows "classic" copy
-                    LogicalKeySet(
-                      LogicalKeyboardKey.control,
-                      LogicalKeyboardKey.insert,
-                    ): const _CopySelectedTextIntent(),
-                    // macOS (למקרה שמריצים שם)
-                    LogicalKeySet(
-                      LogicalKeyboardKey.meta,
-                      LogicalKeyboardKey.keyC,
-                    ): const _CopySelectedTextIntent(),
-                    // Esc לניקוי בחירה
-                    LogicalKeySet(
-                      LogicalKeyboardKey.escape,
-                    ): const ClearSelectionIntent(),
-                  },
-                  child: Actions(
-                    actions: <Type, Action<Intent>>{
-                      _CopySelectedTextIntent:
-                          CallbackAction<_CopySelectedTextIntent>(
-                        onInvoke: (_) {
-                          _copyFormattedText();
-                          return null;
-                        },
-                      ),
-                      CopySelectionTextIntent:
-                          CallbackAction<CopySelectionTextIntent>(
-                        onInvoke: (_) {
-                          _copyFormattedText();
-                          return null;
-                        },
-                      ),
-                      ClearSelectionIntent:
-                          CallbackAction<ClearSelectionIntent>(
-                        onInvoke: (_) {
-                          _selectionManager.exitSelectionMode();
-                          // ניקוי הבחירה ב-SelectionArea
-                          _savedSelectedText.value = null;
-                          _savedSelectedIndex.value = null;
-                          _currentSelectedIndex.value = null;
-                          _selectionLineStart = null;
-                          _selectionLineEnd = null;
-                          _selectionStartColumn = null;
-                          widget.onSelectedTextChanged?.call(null, null, null);
-                          return null;
-                        },
-                      ),
-                    },
-                    child: Directionality(
-                      textDirection: TextDirection.rtl,
-                      child: widget.isPreviewMode
-                          ? Scrollbar(
-                              controller: _previewScrollController,
-                              thumbVisibility: true,
-                              thickness: 8.0,
-                              radius: const Radius.circular(4.0),
-                              child: ListView.builder(
-                                controller: _previewScrollController,
-                                itemCount: state.readingSegments.isNotEmpty
-                                    ? state.readingSegments.length
-                                    : widget.data.length,
-                                itemBuilder: (context, index) {
-                                  return buildExpansiomTile(
-                                    ExpansibleController(),
-                                    index,
-                                    state,
-                                    const <int, List<PersonalNote>>{},
-                                  );
-                                },
-                              ),
-                            )
-                          : ScrollablePositionedListScrollbar(
-                              scrollController: widget.tab.scrollController,
-                              itemPositionsListener:
-                                  widget.tab.positionsListener,
-                              itemCount: state.readingSegments.isNotEmpty
-                                  ? state.readingSegments.length
-                                  : widget.data.length,
-                              child: ProgressiveScroll(
-                                focusNode: _focusNode,
-                                maxSpeed: 10000.0,
-                                curve: 10.0,
-                                accelerationFactor: 5,
-                                scrollController:
-                                    widget.tab.mainOffsetController,
-                                child: BlocBuilder<PersonalNotesBloc,
-                                    PersonalNotesState>(
-                                  builder: (context, notesState) {
-                                    final noteMap = <int, List<PersonalNote>>{};
-                                    if (notesState.bookId == state.book.title) {
-                                      for (final note
-                                          in notesState.locatedNotes) {
-                                        final line = note.lineNumber;
-                                        if (line == null) continue;
-                                        noteMap
-                                            .putIfAbsent(line, () => [])
-                                            .add(note);
-                                      }
-                                    }
-                                    return buildOuterList(
-                                      state,
-                                      noteMap,
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
+              child: Shortcuts(
+                shortcuts: <ShortcutActivator, Intent>{
+                  // Windows/Linux
+                  LogicalKeySet(
+                    LogicalKeyboardKey.control,
+                    LogicalKeyboardKey.keyC,
+                  ): const _CopySelectedTextIntent(),
+                  // Windows "classic" copy
+                  LogicalKeySet(
+                    LogicalKeyboardKey.control,
+                    LogicalKeyboardKey.insert,
+                  ): const _CopySelectedTextIntent(),
+                  // macOS (למקרה שמריצים שם)
+                  LogicalKeySet(
+                    LogicalKeyboardKey.meta,
+                    LogicalKeyboardKey.keyC,
+                  ): const _CopySelectedTextIntent(),
+                  // Esc לניקוי בחירה
+                  LogicalKeySet(
+                    LogicalKeyboardKey.escape,
+                  ): const ClearSelectionIntent(),
+                },
+                child: Actions(
+                  actions: <Type, Action<Intent>>{
+                    _CopySelectedTextIntent:
+                        CallbackAction<_CopySelectedTextIntent>(
+                      onInvoke: (_) {
+                        _copyFormattedText();
+                        return null;
+                      },
                     ),
-                  ),
+                    CopySelectionTextIntent:
+                        CallbackAction<CopySelectionTextIntent>(
+                      onInvoke: (_) {
+                        _copyFormattedText();
+                        return null;
+                      },
+                    ),
+                    ClearSelectionIntent: CallbackAction<ClearSelectionIntent>(
+                      onInvoke: (_) {
+                        _selectionManager.exitSelectionMode();
+                        // ניקוי הבחירה ב-SelectionArea
+                        _savedSelectedText.value = null;
+                        _savedSelectedIndex.value = null;
+                        _currentSelectedIndex.value = null;
+                        _selectionLineStart = null;
+                        _selectionLineEnd = null;
+                        _selectionStartColumn = null;
+                        widget.onSelectedTextChanged?.call(null, null, null);
+                        return null;
+                      },
+                    ),
+                  },
+                  child: widget.isPreviewMode
+                      ? Scrollbar(
+                          controller: _previewScrollController,
+                          thumbVisibility: true,
+                          thickness: 8.0,
+                          radius: const Radius.circular(4.0),
+                          child: ListView.builder(
+                            controller: _previewScrollController,
+                            itemCount: state.readingSegments.isNotEmpty
+                                ? state.readingSegments.length
+                                : widget.data.length,
+                            itemBuilder: (context, index) {
+                              return buildExpansiomTile(
+                                ExpansibleController(),
+                                index,
+                                state,
+                                const <int, List<PersonalNote>>{},
+                              );
+                            },
+                          ),
+                        )
+                      : ScrollablePositionedListScrollbar(
+                          scrollController: widget.tab.scrollController,
+                          itemPositionsListener: widget.tab.positionsListener,
+                          itemCount: state.readingSegments.isNotEmpty
+                              ? state.readingSegments.length
+                              : widget.data.length,
+                          child: ProgressiveScroll(
+                            focusNode: _focusNode,
+                            maxSpeed: 10000.0,
+                            curve: 10.0,
+                            accelerationFactor: 5,
+                            scrollController: widget.tab.mainOffsetController,
+                            child: BlocBuilder<PersonalNotesBloc,
+                                PersonalNotesState>(
+                              builder: (context, notesState) {
+                                final noteMap = <int, List<PersonalNote>>{};
+                                if (notesState.bookId == state.book.title) {
+                                  for (final note in notesState.locatedNotes) {
+                                    final line = note.lineNumber;
+                                    if (line == null) continue;
+                                    noteMap
+                                        .putIfAbsent(line, () => [])
+                                        .add(note);
+                                  }
+                                }
+                                return buildOuterList(
+                                  state,
+                                  noteMap,
+                                );
+                              },
+                            ),
+                          ),
+                        ),
                 ),
               ),
             ));

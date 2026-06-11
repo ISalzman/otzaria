@@ -201,120 +201,115 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
     // לא ידחוף את אזור הכתיבה מטה ומחוץ למסך. הגובה נגזר מסגנון הטקסט בפועל.
     final referenceMaxHeight =
         (referenceStyle?.fontSize ?? 14) * (referenceStyle?.height ?? 1.4) * 3;
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.referenceText != null &&
-              widget.referenceText!.trim().isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color:
-                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(6),
-                  topRight: Radius.circular(6),
-                ),
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: referenceMaxHeight),
-                child: SingleChildScrollView(
-                  child: Text(
-                    widget.referenceText!,
-                    style: referenceStyle,
-                    textAlign: TextAlign.right,
-                    textDirection: TextDirection.rtl,
-                  ),
-                ),
-              ),
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (widget.referenceText != null &&
+            widget.referenceText!.trim().isNotEmpty)
           Container(
-            key: _editorAreaKey,
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              border: Border.all(
-                color: colorScheme.outline.withValues(alpha: 0.6),
-                width: 1.2,
+              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(6),
+                topRight: Radius.circular(6),
               ),
-              borderRadius: BorderRadius.circular(6),
             ),
-            child: Column(
-              children: [
-                _PersonalNoteToolbar(
-                  controller: widget.controller.quillController,
-                  editorFocusNode: widget.focusNode,
-                  onInsertLink: _insertLink,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: referenceMaxHeight),
+              child: SingleChildScrollView(
+                child: Text(
+                  widget.referenceText!,
+                  style: referenceStyle,
+                  textAlign: TextAlign.right,
                 ),
-                const Divider(height: 1),
-                SizedBox(
-                  height: 220,
-                  // RawGestureDetector תופס מחוות גרירה אנכית באזור העורך
-                  // לפני שה-ListView ההורה (פאנל ההערות) רואה אותן.
-                  // אחרת כשהמשתמש גורר אלכסונית כדי לסמן יותר ממילה,
-                  // ה-VerticalDragGestureRecognizer של ה-ListView מנצח
-                  // את ה-HorizontalDragGestureRecognizer של Quill,
-                  // והסימון בעורך כלל לא נוצר.
-                  // ה-recognizer כאן לא עושה כלום — רק "תופס" את המחווה
-                  // כדי לא לתת לאב לגלול. גלילה בגלגלת תמשיך לעבוד
-                  // (היא PointerSignal, לא GestureRecognizer).
-                  child: RawGestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    gestures: <Type, GestureRecognizerFactory>{
-                      VerticalDragGestureRecognizer:
-                          GestureRecognizerFactoryWithHandlers<
-                              VerticalDragGestureRecognizer>(
-                        () => VerticalDragGestureRecognizer(
-                          supportedDevices: const <PointerDeviceKind>{
-                            PointerDeviceKind.mouse,
-                          },
-                        ),
-                        (instance) {},
-                      ),
-                    },
-                    child: CallbackShortcuts(
-                      bindings: {
-                        if (widget.onSaveShortcut != null) ...{
-                          // Ctrl+Enter — קיצור השמירה המומלץ (ללא צליל מערכת).
-                          const SingleActivator(
-                            LogicalKeyboardKey.enter,
-                            control: true,
-                          ): widget.onSaveShortcut!,
-                          // Alt+Enter — נשמר לתאימות לאחור. ב-Windows מפיק
-                          // צליל "דינג" של המערכת (מאפיין של צירופי Alt
-                          // ב-Flutter), ולכן Ctrl+Enter עדיף.
-                          const SingleActivator(
-                            LogicalKeyboardKey.enter,
-                            alt: true,
-                          ): widget.onSaveShortcut!,
+              ),
+            ),
+          ),
+        Container(
+          key: _editorAreaKey,
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: colorScheme.outline.withValues(alpha: 0.6),
+              width: 1.2,
+            ),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Column(
+            children: [
+              _PersonalNoteToolbar(
+                controller: widget.controller.quillController,
+                editorFocusNode: widget.focusNode,
+                onInsertLink: _insertLink,
+              ),
+              const Divider(height: 1),
+              SizedBox(
+                height: 220,
+                // RawGestureDetector תופס מחוות גרירה אנכית באזור העורך
+                // לפני שה-ListView ההורה (פאנל ההערות) רואה אותן.
+                // אחרת כשהמשתמש גורר אלכסונית כדי לסמן יותר ממילה,
+                // ה-VerticalDragGestureRecognizer של ה-ListView מנצח
+                // את ה-HorizontalDragGestureRecognizer של Quill,
+                // והסימון בעורך כלל לא נוצר.
+                // ה-recognizer כאן לא עושה כלום — רק "תופס" את המחווה
+                // כדי לא לתת לאב לגלול. גלילה בגלגלת תמשיך לעבוד
+                // (היא PointerSignal, לא GestureRecognizer).
+                child: RawGestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  gestures: <Type, GestureRecognizerFactory>{
+                    VerticalDragGestureRecognizer:
+                        GestureRecognizerFactoryWithHandlers<
+                            VerticalDragGestureRecognizer>(
+                      () => VerticalDragGestureRecognizer(
+                        supportedDevices: const <PointerDeviceKind>{
+                          PointerDeviceKind.mouse,
                         },
+                      ),
+                      (instance) {},
+                    ),
+                  },
+                  child: CallbackShortcuts(
+                    bindings: {
+                      if (widget.onSaveShortcut != null) ...{
+                        // Ctrl+Enter — קיצור השמירה המומלץ (ללא צליל מערכת).
+                        const SingleActivator(
+                          LogicalKeyboardKey.enter,
+                          control: true,
+                        ): widget.onSaveShortcut!,
+                        // Alt+Enter — נשמר לתאימות לאחור. ב-Windows מפיק
+                        // צליל "דינג" של המערכת (מאפיין של צירופי Alt
+                        // ב-Flutter), ולכן Ctrl+Enter עדיף.
+                        const SingleActivator(
+                          LogicalKeyboardKey.enter,
+                          alt: true,
+                        ): widget.onSaveShortcut!,
                       },
-                      child: quill.QuillEditor(
-                        controller: widget.controller.quillController,
-                        focusNode: widget.focusNode,
-                        scrollController: widget.scrollController,
-                        config: quill.QuillEditorConfig(
-                          autoFocus: widget.autofocus,
-                          expands: false,
-                          padding: const EdgeInsets.all(12),
-                          placeholder: widget.hintText ??
-                              'כתוב כאן... (Ctrl+Enter לשמירה)',
-                          customShortcuts: _rtlArrowShortcuts,
-                          // Quill מציגה אוטומטית תפריט סלקציה ב-desktop
-                          // בסיום גרירה — בהערות אישיות זה מטריד.
-                          // יש לנו טולבר משלנו וניתן להשתמש בקיצורי מקלדת
-                          // וב-right-click הסטנדרטי של המערכת.
-                          enableSelectionToolbar: false,
-                        ),
+                    },
+                    child: quill.QuillEditor(
+                      controller: widget.controller.quillController,
+                      focusNode: widget.focusNode,
+                      scrollController: widget.scrollController,
+                      config: quill.QuillEditorConfig(
+                        autoFocus: widget.autofocus,
+                        expands: false,
+                        padding: const EdgeInsets.all(12),
+                        placeholder: widget.hintText ??
+                            'כתוב כאן... (Ctrl+Enter לשמירה)',
+                        customShortcuts: _rtlArrowShortcuts,
+                        // Quill מציגה אוטומטית תפריט סלקציה ב-desktop
+                        // בסיום גרירה — בהערות אישיות זה מטריד.
+                        // יש לנו טולבר משלנו וניתן להשתמש בקיצורי מקלדת
+                        // וב-right-click הסטנדרטי של המערכת.
+                        enableSelectionToolbar: false,
                       ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

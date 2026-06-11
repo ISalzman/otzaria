@@ -5,7 +5,7 @@ import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
-import 'package:otzaria/settings/settings_card.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
@@ -221,23 +221,49 @@ class TextSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'הגדרות גופן ועיצוב',
       children: [
+        // שורה 1: גודל גופן הספר + גופן טקסט
         LayoutBuilder(
           builder: (context, constraints) {
             final isNarrow = constraints.maxWidth < LayoutBreakpoints.compact;
-            final colorScheme = Theme.of(context).colorScheme;
-            final divider = Divider(
-              height: 1,
-              thickness: 1.5,
-              color: colorScheme.surfaceContainerHighest,
-            );
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // שורה 1: גודל גופן הספר + גופן טקסט
-                if (isNarrow) ...[
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
+            if (isNarrow) {
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _FontSizeSlider(
+                      icon: FluentIcons.text_font_size_24_regular,
+                      label: 'גודל גופן הספר',
+                      value: state.fontSize.clamp(15, 60),
+                      min: 15,
+                      max: 60,
+                      onChanged: (value) {
+                        context.read<SettingsBloc>().add(UpdateFontSize(value));
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _FontDropdown(
+                      icon: FluentIcons.text_font_24_regular,
+                      label: 'גופן טקסט',
+                      value: state.fontFamily,
+                      onChanged: (value) {
+                        if (value != null) {
+                          context
+                              .read<SettingsBloc>()
+                              .add(UpdateFontFamily(value));
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              );
+            }
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
                     child: _FontSizeSlider(
                       icon: FluentIcons.text_font_size_24_regular,
                       label: 'גודל גופן הספר',
@@ -249,9 +275,8 @@ class TextSettingsTab extends StatelessWidget {
                       },
                     ),
                   ),
-                  divider,
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
+                  const SizedBox(width: 16),
+                  Expanded(
                     child: _FontDropdown(
                       icon: FluentIcons.text_font_24_regular,
                       label: 'גופן טקסט',
@@ -265,52 +290,60 @@ class TextSettingsTab extends StatelessWidget {
                       },
                     ),
                   ),
-                ] else
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _FontSizeSlider(
-                            icon: FluentIcons.text_font_size_24_regular,
-                            label: 'גודל גופן הספר',
-                            value: state.fontSize.clamp(15, 60),
-                            min: 15,
-                            max: 60,
-                            onChanged: (value) {
-                              context
-                                  .read<SettingsBloc>()
-                                  .add(UpdateFontSize(value));
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _FontDropdown(
-                            icon: FluentIcons.text_font_24_regular,
-                            label: 'גופן טקסט',
-                            value: state.fontFamily,
-                            onChanged: (value) {
-                              if (value != null) {
-                                context
-                                    .read<SettingsBloc>()
-                                    .add(UpdateFontFamily(value));
-                              }
-                            },
-                          ),
-                        ),
-                      ],
+                ],
+              ),
+            );
+          },
+        ),
+
+        // שורה 2: גודל גופן מפרשים + גופן מפרשים
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < LayoutBreakpoints.compact;
+            if (isNarrow) {
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (!hideCommentaryFontSize) ...[
+                      _FontSizeSlider(
+                        icon: FluentIcons.text_font_size_24_regular,
+                        label: 'גודל גופן מפרשים',
+                        value: state.commentatorsFontSize.clamp(10, 40),
+                        min: 10,
+                        max: 40,
+                        onChanged: (value) {
+                          context
+                              .read<SettingsBloc>()
+                              .add(UpdateCommentatorsFontSize(value));
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    _FontDropdown(
+                      icon: FluentIcons.book_24_regular,
+                      label: 'גופן מפרשים',
+                      value: state.commentatorsFontFamily,
+                      onChanged: (value) {
+                        if (value != null) {
+                          context
+                              .read<SettingsBloc>()
+                              .add(UpdateCommentatorsFontFamily(value));
+                        }
+                      },
                     ),
-                  ),
-
-                divider,
-
-                // שורה 2: גודל גופן מפרשים + גופן מפרשים
-                if (isNarrow) ...[
+                  ],
+                ),
+              );
+            }
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   if (!hideCommentaryFontSize) ...[
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
+                    Expanded(
                       child: _FontSizeSlider(
                         icon: FluentIcons.text_font_size_24_regular,
                         label: 'גודל גופן מפרשים',
@@ -324,10 +357,9 @@ class TextSettingsTab extends StatelessWidget {
                         },
                       ),
                     ),
-                    divider,
+                    const SizedBox(width: 16),
                   ],
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
+                  Expanded(
                     child: _FontDropdown(
                       icon: FluentIcons.book_24_regular,
                       label: 'גופן מפרשים',
@@ -341,97 +373,61 @@ class TextSettingsTab extends StatelessWidget {
                       },
                     ),
                   ),
-                ] else
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (!hideCommentaryFontSize) ...[
-                          Expanded(
-                            child: _FontSizeSlider(
-                              icon: FluentIcons.text_font_size_24_regular,
-                              label: 'גודל גופן מפרשים',
-                              value: state.commentatorsFontSize.clamp(10, 40),
-                              min: 10,
-                              max: 40,
-                              onChanged: (value) {
-                                context
-                                    .read<SettingsBloc>()
-                                    .add(UpdateCommentatorsFontSize(value));
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                        ],
-                        Expanded(
-                          child: _FontDropdown(
-                            icon: FluentIcons.book_24_regular,
-                            label: 'גופן מפרשים',
-                            value: state.commentatorsFontFamily,
-                            onChanged: (value) {
-                              if (value != null) {
-                                context
-                                    .read<SettingsBloc>()
-                                    .add(UpdateCommentatorsFontFamily(value));
-                              }
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                divider,
-
-                // שורה 3: מרווח בין שורות (תמיד חצי רוחב)
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: isNarrow
-                      ? _FontSizeSlider(
-                          icon: FluentIcons
-                              .text_align_distributed_vertical_24_regular,
-                          label: 'מרווח בין שורות',
-                          value: state.lineHeight.clamp(1.0, 3.0),
-                          min: 1.0,
-                          max: 3.0,
-                          divisions: 20,
-                          onChanged: (value) {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdateLineHeight(value));
-                          },
-                        )
-                      : Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: _FontSizeSlider(
-                                icon: FluentIcons
-                                    .text_align_distributed_vertical_24_regular,
-                                label: 'מרווח בין שורות',
-                                value: state.lineHeight.clamp(1.0, 3.0),
-                                min: 1.0,
-                                max: 3.0,
-                                divisions: 20,
-                                onChanged: (value) {
-                                  context
-                                      .read<SettingsBloc>()
-                                      .add(UpdateLineHeight(value));
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            const Expanded(child: SizedBox()),
-                          ],
-                        ),
-                ),
-                divider,
-                _TextWidthSlider(state: state),
-              ],
+                ],
+              ),
             );
           },
         ),
+
+        // שורה 3: מרווח בין שורות
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < LayoutBreakpoints.compact;
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: isNarrow
+                  ? _FontSizeSlider(
+                      icon: FluentIcons
+                          .text_align_distributed_vertical_24_regular,
+                      label: 'מרווח בין שורות',
+                      value: state.lineHeight.clamp(1.0, 3.0),
+                      min: 1.0,
+                      max: 3.0,
+                      divisions: 20,
+                      onChanged: (value) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateLineHeight(value));
+                      },
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _FontSizeSlider(
+                            icon: FluentIcons
+                                .text_align_distributed_vertical_24_regular,
+                            label: 'מרווח בין שורות',
+                            value: state.lineHeight.clamp(1.0, 3.0),
+                            min: 1.0,
+                            max: 3.0,
+                            divisions: 20,
+                            onChanged: (value) {
+                              context
+                                  .read<SettingsBloc>()
+                                  .add(UpdateLineHeight(value));
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        const Expanded(child: SizedBox()),
+                      ],
+                    ),
+            );
+          },
+        ),
+
+        _TextWidthSlider(state: state),
       ],
     );
   }
@@ -467,7 +463,7 @@ class TextSettingsTab extends StatelessWidget {
       title: 'כתרי אותיות',
       children: [
         SegmentedSettingsTile<String>(
-          icon: FluentIcons.text_font_info_24_regular,
+          icon: Icon(FluentIcons.text_font_info_24_regular),
           title: 'הצגת הניקוד',
           subtitle: nikudSubtitle,
           options: const [
@@ -502,43 +498,22 @@ class TextSettingsTab extends StatelessWidget {
             }
           },
         ),
-        SwitchSettingsTile(
-          leading: const Icon(FluentIcons.shield_keyhole_24_regular),
-          title: RichText(
-            textDirection: TextDirection.rtl,
-            text: TextSpan(
-              style: kSettingsTitleStyle.copyWith(
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-              children: const [
-                TextSpan(text: 'הצגת שם הקודש'),
-              ],
-            ),
-          ),
-          subtitle: Text(
-            !state.replaceHolyNames
-                ? 'השם הקדוש יוצג'
-                : 'השם הקדוש לא יוצג מפני קדושתו',
-            style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
+        SwitchSettingsTile.text(
+          icon: FluentIcons.shield_keyhole_24_regular,
+          title: 'הצגת שם הקודש',
+          subtitle: !state.replaceHolyNames
+              ? 'השם הקדוש יוצג'
+              : 'השם הקדוש לא יוצג מפני קדושתו',
           value: !state.replaceHolyNames,
           onChanged: (value) {
             context.read<SettingsBloc>().add(UpdateReplaceHolyNames(!value));
           },
         ),
-        SwitchSettingsTile(
-          leading: const Icon(FluentIcons.text_more_24_regular),
-          title: const Text(
-            'הצגת טעמי המקרא',
-            style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
-          subtitle: Text(
-            state.showTeamim ? 'המקרא יוצג עם טעמים' : 'המקרא יוצג ללא טעמים',
-            style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
+        SwitchSettingsTile.text(
+          icon: FluentIcons.text_more_24_regular,
+          title: 'הצגת טעמי המקרא',
+          subtitle:
+              state.showTeamim ? 'המקרא יוצג עם טעמים' : 'המקרא יוצג ללא טעמים',
           value: state.showTeamim,
           onChanged: (value) {
             context.read<SettingsBloc>().add(UpdateShowTeamim(value));
@@ -594,7 +569,7 @@ class TextSettingsTab extends StatelessWidget {
       title: 'העתקת כותרות ופרקים',
       children: [
         SegmentedSettingsTile<String>(
-          icon: FluentIcons.copy_24_regular,
+          icon: Icon(FluentIcons.copy_24_regular),
           title: 'העתקת הכותרת',
           subtitle: copySubtitle,
           options: const [
@@ -608,114 +583,43 @@ class TextSettingsTab extends StatelessWidget {
           },
         ),
         if (state.copyWithHeaders != 'none')
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isNarrow = constraints.maxWidth < LayoutBreakpoints.compact;
-
-              const formatEntries = [
-                AppMenuEntry(
-                  value: 'same_line_after_brackets',
-                  label: 'אותה שורה אחרי (עם סוגריים)',
-                ),
-                AppMenuEntry(
-                  value: 'same_line_after_no_brackets',
-                  label: 'אותה שורה אחרי (בלי סוגריים)',
-                ),
-                AppMenuEntry(
-                  value: 'same_line_before_brackets',
-                  label: 'אותה שורה לפני (עם סוגריים)',
-                ),
-                AppMenuEntry(
-                  value: 'same_line_before_no_brackets',
-                  label: 'אותה שורה לפני (בלי סוגריים)',
-                ),
-                AppMenuEntry(
-                  value: 'separate_line_after',
-                  label: 'פסקה נפרדת אחרי',
-                ),
-                AppMenuEntry(
-                  value: 'separate_line_before',
-                  label: 'פסקה נפרדת לפני',
-                ),
-              ];
-
-              void onFormatSelected(String? value) {
-                if (value != null) {
-                  context
-                      .read<SettingsBloc>()
-                      .add(UpdateCopyHeaderFormat(value));
-                }
+          DropdownSettingsTile<String>(
+            icon: RtlIcon(FluentIcons.text_align_right_24_regular),
+            title: 'עיצוב כותרות',
+            subtitle: formatSubtitle,
+            value: state.copyHeaderFormat,
+            minFieldWidth: 220,
+            maxFieldWidth: 320,
+            entries: const [
+              AppMenuEntry(
+                value: 'same_line_after_brackets',
+                label: 'אותה שורה אחרי (עם סוגריים)',
+              ),
+              AppMenuEntry(
+                value: 'same_line_after_no_brackets',
+                label: 'אותה שורה אחרי (בלי סוגריים)',
+              ),
+              AppMenuEntry(
+                value: 'same_line_before_brackets',
+                label: 'אותה שורה לפני (עם סוגריים)',
+              ),
+              AppMenuEntry(
+                value: 'same_line_before_no_brackets',
+                label: 'אותה שורה לפני (בלי סוגריים)',
+              ),
+              AppMenuEntry(
+                value: 'separate_line_after',
+                label: 'פסקה נפרדת אחרי',
+              ),
+              AppMenuEntry(
+                value: 'separate_line_before',
+                label: 'פסקה נפרדת לפני',
+              ),
+            ],
+            onSelected: (value) {
+              if (value != null) {
+                context.read<SettingsBloc>().add(UpdateCopyHeaderFormat(value));
               }
-
-              if (isNarrow) {
-                return Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(FluentIcons.text_align_right_24_regular),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'עיצוב כותרות',
-                                  style: kSettingsTitleStyle,
-                                  textDirection: TextDirection.rtl,
-                                ),
-                                Text(
-                                  formatSubtitle,
-                                  style: kSettingsSubtitleStyle,
-                                  textDirection: TextDirection.rtl,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      AppDropdownField<String>(
-                        value: state.copyHeaderFormat,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        entries: formatEntries,
-                        onSelected: onFormatSelected,
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              return ListTile(
-                leading: const Icon(FluentIcons.text_align_right_24_regular),
-                title: const Text(
-                  'עיצוב כותרות',
-                  style: kSettingsTitleStyle,
-                  textDirection: TextDirection.rtl,
-                ),
-                subtitle: Text(
-                  formatSubtitle,
-                  style: kSettingsSubtitleStyle,
-                  textDirection: TextDirection.rtl,
-                ),
-                trailing: SizedBox(
-                  width: 220,
-                  child: AppDropdownField<String>(
-                    value: state.copyHeaderFormat,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    entries: formatEntries,
-                    onSelected: onFormatSelected,
-                  ),
-                ),
-              );
             },
           ),
       ],
@@ -726,20 +630,12 @@ class TextSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'הגדרות לפי ספר',
       children: [
-        SwitchSettingsTile(
-          leading: const Icon(FluentIcons.book_open_24_regular),
-          title: const Text(
-            'שמירת התאמות לכל ספר בנפרד',
-            style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
-          subtitle: Text(
-            state.enablePerBookSettings
-                ? 'שינויים בסרגל הלחצנים יישמרו לכל ספר בנפרד'
-                : 'כל הספרים ישתמשו בהגדרות הכלליות',
-            style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
-          ),
+        SwitchSettingsTile.text(
+          icon: FluentIcons.book_open_24_regular,
+          title: 'שמירת התאמות לכל ספר בנפרד',
+          subtitle: state.enablePerBookSettings
+              ? 'שינויים בסרגל הלחצנים יישמרו לכל ספר בנפרד'
+              : 'כל הספרים ישתמשו בהגדרות הכלליות',
           value: state.enablePerBookSettings,
           onChanged: (value) {
             context
@@ -748,23 +644,16 @@ class TextSettingsTab extends StatelessWidget {
           },
         ),
         if (state.enablePerBookSettings)
-          ListTile(
-            hoverColor: Colors.transparent,
-            leading: const Icon(FluentIcons.delete_24_regular),
-            title: const Text(
-              'איפוס הגדרות לפי ספר',
-              style: kSettingsTitleStyle,
-              textDirection: TextDirection.rtl,
-            ),
-            subtitle: const Text(
-              'מחיקת כל ההתאמות שנשמרו לכל ספר בנפרד',
-              style: kSettingsSubtitleStyle,
-              textDirection: TextDirection.rtl,
-            ),
-            trailing: NeutralActionButton(
-              onPressed: () => _resetPerBookSettings(context),
-              text: 'איפוס',
-            ),
+          SettingsActionTile.text(
+            icon: FluentIcons.delete_24_regular,
+            title: 'איפוס הגדרות לפי ספר',
+            subtitle: 'מחיקת כל ההתאמות שנשמרו לכל ספר בנפרד',
+            actions: [
+              NeutralActionButton(
+                onPressed: () => _resetPerBookSettings(context),
+                text: 'איפוס',
+              ),
+            ],
           ),
       ],
     );
@@ -841,7 +730,6 @@ class _FontSizeSliderState extends State<_FontSizeSlider> {
               child: Text(
                 widget.label,
                 style: kSettingsTitleStyle,
-                textDirection: TextDirection.rtl,
               ),
             ),
             Text(
@@ -911,7 +799,6 @@ class _FontDropdown extends StatelessWidget {
           child: Text(
             label,
             style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
           ),
         ),
         const SizedBox(width: 12),
@@ -985,18 +872,16 @@ class _TextWidthSliderState extends State<_TextWidthSlider> {
     return Column(
       children: [
         ListTile(
-          leading: const Icon(FluentIcons.text_align_distributed_24_regular),
+          leading: const RtlIcon(FluentIcons.text_align_distributed_24_regular),
           title: const Text(
             'רוחב הטקסט',
             style: kSettingsTitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           subtitle: Text(
             currentLevel == 0
                 ? 'הטקסט ימלא את כל הרוחב הזמין'
                 : 'הטקסט יהיה צר יותר ומרוכז במסך',
             style: kSettingsSubtitleStyle,
-            textDirection: TextDirection.rtl,
           ),
           trailing: Text(
             getLevelDescription(currentLevel),

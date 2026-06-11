@@ -21,7 +21,7 @@ import 'package:otzaria/settings/panels/library_settings_panel.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folders_tile.dart';
 import 'package:otzaria/widgets/dialogs/zip_extraction_progress_dialog.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
-import 'package:otzaria/settings/settings_card.dart';
+import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
@@ -62,8 +62,7 @@ class LibrarySettingsTab extends StatefulWidget {
     SettingsSearchEntry(
       id: 'library.custom_folders.merge_into_library',
       title: 'מיזוג ספרים אישיים לעץ הספרייה',
-      subtitle:
-          'תת-התיקיות של התיקייה הנבחרת ימוזגו לקטגוריות הראשיות לפי שם',
+      subtitle: 'תת-התיקיות של התיקייה הנבחרת ימוזגו לקטגוריות הראשיות לפי שם',
       tab: SettingsTab.library,
       cardId: 'library.custom_folders',
       keywords: [
@@ -355,26 +354,19 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                           title: 'תיקיות מותאמות אישית',
                           children: [
                             const CustomFoldersTile(),
-                            SwitchSettingsTile(
-                              leading: const Icon(FluentIcons.person_24_regular),
-                              title: const Text(
-                                'מיזוג ספרים אישיים לעץ הספרייה',
-                                style: kSettingsTitleStyle,
-                              ),
-                              subtitle: Text(
-                                state.mergeUserBooksIntoLibrary
-                                    ? 'תת-התיקיות של התיקייה הנבחרת ימוזגו לקטגוריות הראשיות לפי שם'
-                                    : 'תיקיות אישיות יוצגו תחת קטגוריית "ספרים אישיים"',
-                                style: kSettingsSubtitleStyle,
-                              ),
+                            SwitchSettingsTile.text(
+                              icon: FluentIcons.person_24_regular,
+                              title: 'מיזוג ספרים אישיים לעץ הספרייה',
+                              subtitle: state.mergeUserBooksIntoLibrary
+                                  ? 'תת-התיקיות של התיקייה הנבחרת ימוזגו לקטגוריות הראשיות לפי שם'
+                                  : 'תיקיות אישיות יוצגו תחת קטגוריית "ספרים אישיים"',
                               value: state.mergeUserBooksIntoLibrary,
                               onChanged: (value) {
                                 // ה-RefreshLibrary מופעל ב-listener למעלה,
                                 // אחרי שהערך החדש נשמר ב-`Settings`. אחרת
                                 // הספרייה היתה נבנית עם הערך הישן.
-                                context
-                                    .read<SettingsBloc>()
-                                    .add(UpdateMergeUserBooksIntoLibrary(value));
+                                context.read<SettingsBloc>().add(
+                                    UpdateMergeUserBooksIntoLibrary(value));
                               },
                             ),
                           ],
@@ -406,14 +398,12 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     return SettingsCard(
       title: 'חיפוש ואינדקס',
       children: [
-        SwitchSettingsTile(
-          leading: const Icon(FluentIcons.arrow_clockwise_24_regular),
-          title: const Text('עדכון אינדקס אוטומטי', style: kSettingsTitleStyle),
-          subtitle: Text(
-              state.autoUpdateIndex
-                  ? 'אינדקס החיפוש יתעדכן אוטומטית'
-                  : 'אינדקס החיפוש לא יתעדכן אוטומטית',
-              style: kSettingsSubtitleStyle),
+        SwitchSettingsTile.text(
+          icon: FluentIcons.arrow_clockwise_24_regular,
+          title: 'עדכון אינדקס אוטומטי',
+          subtitle: state.autoUpdateIndex
+              ? 'אינדקס החיפוש יתעדכן אוטומטית'
+              : 'אינדקס החיפוש לא יתעדכן אוטומטית',
           value: state.autoUpdateIndex,
           onChanged: (value) {
             context.read<SettingsBloc>().add(UpdateAutoUpdateIndex(value));
@@ -426,7 +416,6 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             final isActive = indexingState is IndexingInProgress && total > 0;
             final isCheckingManualReindex = _requiresManualReindex == null;
             String subtitleText;
-            TextDirection subtitleDirection = TextDirection.rtl;
             final libraryPath =
                 Settings.getValue<String>(SettingsRepository.keyLibraryPath);
             final library = libraryState.library;
@@ -451,12 +440,10 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
               title: const Text(
                 'אינדקס חיפוש',
                 style: kSettingsTitleStyle,
-                textDirection: TextDirection.rtl,
               ),
               subtitle: Text(
                 subtitleText,
                 style: kSettingsSubtitleStyle,
-                textDirection: subtitleDirection,
               ),
               trailing: isActive
                   ? NeutralActionButton(

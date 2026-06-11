@@ -10,7 +10,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/dictionary/widgets/aramaic_dictionary_entry_view.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/layout/tool_result_card_shell.dart';
 
@@ -123,7 +123,6 @@ class _DictionaryValue extends StatelessWidget {
       value,
       style: textStyle,
       textAlign: TextAlign.right,
-      textDirection: TextDirection.rtl,
     );
   }
 }

@@ -62,12 +62,8 @@ class DualAdaptiveReaderPane extends StatelessWidget {
     required double width,
     required Widget child,
   }) {
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
-    // In RTL the left pane is physically on the right (start), so it slides in
-    // from the right. In LTR it slides in from the left.
-    final hiddenOffset = isLeftPane
-        ? (isRtl ? const Offset(1, 0) : const Offset(-1, 0))
-        : (isRtl ? const Offset(-1, 0) : const Offset(1, 0));
+    // Left pane slides in from the right (app is RTL); right pane slides from the left.
+    final hiddenOffset = isLeftPane ? const Offset(1, 0) : const Offset(-1, 0);
 
     return PositionedDirectional(
       top: 0,

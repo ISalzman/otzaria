@@ -162,7 +162,6 @@ class _SearchOptionsRowState extends State<SearchOptionsRow> {
                     height: 1.0, // מבטיח שהטקסט לא יהיה גבוה מדי
                   ),
                   textAlign: TextAlign.center,
-                  textDirection: TextDirection.rtl,
                 ),
               ),
             ],

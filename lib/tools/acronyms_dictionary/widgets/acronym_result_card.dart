@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/layout/tool_result_card_shell.dart';
 
@@ -56,7 +56,6 @@ class AcronymResultCard extends StatelessWidget {
                 color: cs.onSurface,
               ),
               textAlign: TextAlign.right,
-              textDirection: TextDirection.rtl,
             ),
           ),
           Padding(
@@ -79,7 +78,6 @@ class AcronymResultCard extends StatelessWidget {
                       color: cs.onSurface,
                     ),
                     textAlign: TextAlign.right,
-                    textDirection: TextDirection.rtl,
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -93,7 +91,6 @@ class AcronymResultCard extends StatelessWidget {
                           height: 1.4,
                         ),
                         textAlign: TextAlign.right,
-                        textDirection: TextDirection.rtl,
                       );
                     }).toList(),
                   ),

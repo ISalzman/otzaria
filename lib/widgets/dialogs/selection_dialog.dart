@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/widgets/feedback/tool_empty_state.dart';
@@ -73,7 +73,6 @@ class _SelectionDialogState<T> extends State<SelectionDialog<T>>
         backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
         title: Text(
           widget.title,
-          textDirection: TextDirection.rtl,
         ),
         content: SizedBox(
           width: 300,
@@ -102,7 +101,6 @@ class _SelectionDialogState<T> extends State<SelectionDialog<T>>
                           return ListTile(
                             title: Text(
                               item.label,
-                              textDirection: TextDirection.rtl,
                             ),
                             selected: isSelected,
                             trailing: isSelected

@@ -129,7 +129,6 @@ class LibraryDafYomi extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                   style: dateStyle,
-                  textDirection: TextDirection.rtl,
                   textHeightBehavior: _toolbarTextHeightBehavior,
                   strutStyle: StrutStyle.fromTextStyle(
                     dateStyle,
@@ -143,7 +142,6 @@ class LibraryDafYomi extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                   style: dafStyle,
-                  textDirection: TextDirection.rtl,
                   textHeightBehavior: _toolbarTextHeightBehavior,
                   strutStyle: StrutStyle.fromTextStyle(
                     dafStyle,
@@ -181,7 +179,6 @@ class LibraryDafYomi extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
             style: inlineStyle,
-            textDirection: TextDirection.rtl,
             textHeightBehavior: _toolbarTextHeightBehavior,
             strutStyle: StrutStyle.fromTextStyle(
               inlineStyle,
@@ -198,7 +195,6 @@ class LibraryDafYomi extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
                 style: dateStyle,
-                textDirection: TextDirection.rtl,
                 textHeightBehavior: _toolbarTextHeightBehavior,
                 strutStyle: StrutStyle.fromTextStyle(
                   dateStyle,
@@ -211,7 +207,6 @@ class LibraryDafYomi extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
                 style: dafStyle,
-                textDirection: TextDirection.rtl,
                 textHeightBehavior: _toolbarTextHeightBehavior,
                 strutStyle: StrutStyle.fromTextStyle(
                   dafStyle,

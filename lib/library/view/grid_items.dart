@@ -10,6 +10,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
+import 'package:otzaria/widgets/layout/app_card.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  הנחיות עיצוב:
@@ -81,14 +82,13 @@ bool _textOverflows({
   required TextStyle style,
   required int maxLines,
   required double maxWidth,
-  required TextDirection textDirection,
   required TextAlign textAlign,
 }) {
   final textPainter = TextPainter(
     text: TextSpan(text: text, style: style),
     maxLines: maxLines,
     ellipsis: 'Γאª',
-    textDirection: textDirection,
+    textDirection: Directionality.of(context),
     textAlign: textAlign,
     textScaler: MediaQuery.textScalerOf(context),
   )..layout(maxWidth: maxWidth);
@@ -118,7 +118,6 @@ class LibraryOverflowTooltipText extends StatelessWidget {
   final TextStyle? style;
   final int maxLines;
   final TextAlign textAlign;
-  final TextDirection? textDirection;
 
   const LibraryOverflowTooltipText({
     super.key,
@@ -126,13 +125,11 @@ class LibraryOverflowTooltipText extends StatelessWidget {
     this.style,
     this.maxLines = 2,
     this.textAlign = TextAlign.right,
-    this.textDirection,
   });
 
   @override
   Widget build(BuildContext context) {
     final resolvedStyle = style ?? DefaultTextStyle.of(context).style;
-    final resolvedDirection = textDirection ?? Directionality.of(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -144,7 +141,6 @@ class LibraryOverflowTooltipText extends StatelessWidget {
               style: resolvedStyle,
               maxLines: maxLines,
               maxWidth: constraints.maxWidth,
-              textDirection: resolvedDirection,
               textAlign: textAlign,
             );
 
@@ -153,7 +149,6 @@ class LibraryOverflowTooltipText extends StatelessWidget {
           maxLines: maxLines,
           overflow: TextOverflow.ellipsis,
           textAlign: textAlign,
-          textDirection: resolvedDirection,
           style: resolvedStyle,
         );
 
@@ -198,7 +193,6 @@ class LibraryItemTitle extends StatelessWidget {
       text: text,
       maxLines: maxLines,
       textAlign: TextAlign.right,
-      textDirection: TextDirection.rtl,
       style: theme.textTheme.titleMedium?.copyWith(
         fontWeight: isFolder ? FontWeight.w700 : FontWeight.w600,
         color:
@@ -223,7 +217,6 @@ class HeaderItem extends StatelessWidget {
       padding: const EdgeInsets.all(16.0),
       child: Text(
         category.title,
-        textDirection: TextDirection.rtl,
         style: theme.textTheme.titleMedium?.copyWith(
           color: theme.colorScheme.secondary,
         ),
@@ -254,81 +247,64 @@ class CategoryGridItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    return Card(
-      elevation: 0,
-      color: AppSurfaces.card(context),
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        side: BorderSide.none,
-        borderRadius: BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
-      ),
-      child: InkWell(
-        focusNode: focusNode,
-        mouseCursor: SystemMouseCursors.click,
-        borderRadius: BorderRadius.circular(AppTokens.radiusXL),
-        hoverDuration: Durations.medium1,
-        onTap: () => onCategoryClickCallback(),
-        // Focus: Enter/Space מפעילים אוטומטית ע"י InkWell
-        // Arrow keys: מטופלים בגריד (grid) ולא bubble
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            // שומר על סדר אייקונים משמאל וטקסט מימין בתוך ממשק RTL.
-            textDirection: TextDirection.rtl,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    LibraryItemTitle(
-                      text: category.title,
-                      isFolder: true,
-                    ),
-                    if (category.shortDescription.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      LibraryOverflowTooltipText(
-                        text: category.shortDescription,
-                        maxLines: 2,
-                        textAlign: TextAlign.right,
-                        textDirection: TextDirection.rtl,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSecondaryContainer,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 18),
-              if (category.shortDescription.isNotEmpty)
-                Tooltip(
-                  message: category.shortDescription,
-                  waitDuration: const Duration(milliseconds: 400),
-                  child: Icon(
-                    FluentIcons.info_24_regular,
-                    size: 16,
-                    color: theme.colorScheme.onSecondaryContainer
-                        .withValues(alpha: 0.6),
+    return AppCard(
+      onTap: onCategoryClickCallback,
+      focusNode: focusNode,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          // שומר על סדר אייקונים משמאל וטקסט מימין בתוך ממשק RTL.
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LibraryItemTitle(
+                    text: category.title,
+                    isFolder: true,
                   ),
-                ),
-              const SizedBox(width: 4),
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: cs.secondaryContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                  if (category.shortDescription.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    LibraryOverflowTooltipText(
+                      text: category.shortDescription,
+                      maxLines: 2,
+                      textAlign: TextAlign.right,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSecondaryContainer,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 18),
+            if (category.shortDescription.isNotEmpty)
+              Tooltip(
+                message: category.shortDescription,
+                waitDuration: const Duration(milliseconds: 400),
                 child: Icon(
-                  FluentIcons.folder_24_regular,
-                  color: cs.onSecondaryContainer,
+                  FluentIcons.info_24_regular,
                   size: 16,
+                  color: theme.colorScheme.onSecondaryContainer
+                      .withValues(alpha: 0.6),
                 ),
               ),
-            ],
-          ),
+            const SizedBox(width: 4),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: cs.secondaryContainer,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                FluentIcons.folder_24_regular,
+                color: cs.onSecondaryContainer,
+                size: 16,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -361,67 +337,40 @@ class BookGridItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return GestureDetector(
-      child: Card(
-        elevation: 0,
-        color: AppSurfaces.card(context),
-        clipBehavior: Clip.antiAlias,
-        surfaceTintColor: Colors.transparent,
-        shape: const RoundedRectangleBorder(
-          side: BorderSide.none,
-          borderRadius: BorderRadius.all(
-            Radius.circular(AppTokens.radiusXL),
-          ),
-        ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: isSelected
-                ? cs.secondaryContainer.withValues(alpha: 0.3)
-                : null,
-          ),
-          child: InkWell(
-            focusNode: focusNode,
-            mouseCursor: SystemMouseCursors.click,
-            borderRadius: BorderRadius.circular(AppTokens.radiusXL),
-            onTap: () => onBookClickCallback(),
-            hoverDuration: Durations.medium1,
-            child: SizedBox.expand(
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Row(
-                  textDirection: TextDirection.rtl,
+    return AppCard(
+      onTap: onBookClickCallback,
+      focusNode: focusNode,
+      selected: isSelected,
+      child: SizedBox.expand(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: _BookGridTextColumn(
+                  book: book,
+                  showTopics: showTopics,
+                ),
+              ),
+              const SizedBox(width: 18),
+              SizedBox(
+                width: 32,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  mainAxisSize: MainAxisSize.max,
                   children: [
-                    Expanded(
-                      child: _BookGridTextColumn(
-                        book: book,
-                        showTopics: showTopics,
-                      ),
+                    _BookGridMediaColumn(
+                      book: book,
+                      showTopics: showTopics,
                     ),
-                    const SizedBox(width: 18),
-                    SizedBox(
-                      width: 32,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          _BookGridMediaColumn(
-                            book: book,
-                            showTopics: showTopics,
-                          ),
-                          _BookGridActionColumn(
-                            book: book,
-                            onBookDeleted: onBookDeleted,
-                          ),
-                        ],
-                      ),
+                    _BookGridActionColumn(
+                      book: book,
+                      onBookDeleted: onBookDeleted,
                     ),
                   ],
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -538,7 +487,6 @@ class _BookGridTextColumn extends StatelessWidget {
               style: titleStyle,
               maxLines: 2,
               maxWidth: constraints.maxWidth,
-              textDirection: TextDirection.rtl,
               textAlign: TextAlign.right,
             );
 
@@ -561,7 +509,6 @@ class _BookGridTextColumn extends StatelessWidget {
               text: book.title,
               maxLines: 2,
               textAlign: TextAlign.right,
-              textDirection: TextDirection.rtl,
               style: titleStyle,
             ),
             if (hasAuthor) ...[
@@ -570,7 +517,6 @@ class _BookGridTextColumn extends StatelessWidget {
                 text: book.author!,
                 maxLines: authorMaxLines,
                 textAlign: TextAlign.right,
-                textDirection: TextDirection.rtl,
                 style: authorStyle,
               ),
             ],
@@ -580,7 +526,6 @@ class _BookGridTextColumn extends StatelessWidget {
                 text: book.topics,
                 maxLines: topicsMaxLines,
                 textAlign: TextAlign.right,
-                textDirection: TextDirection.rtl,
                 style: topicsStyle,
               ),
             ],

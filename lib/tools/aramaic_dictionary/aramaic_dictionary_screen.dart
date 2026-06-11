@@ -167,7 +167,6 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
         children: [
           Text(
             'עברית',
-            textDirection: TextDirection.rtl,
             style: TextStyle(
               fontSize: AppTokens.fontLG,
               fontWeight:
@@ -192,7 +191,6 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
           const SizedBox(width: AppTokens.spaceMD - 4),
           Text(
             'ארמית',
-            textDirection: TextDirection.rtl,
             style: TextStyle(
               fontSize: AppTokens.fontLG,
               fontWeight:

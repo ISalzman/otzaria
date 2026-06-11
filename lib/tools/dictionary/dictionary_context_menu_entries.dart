@@ -154,13 +154,9 @@ String _summarizePlainText(String text, {int maxLength = 90}) {
 Widget _buildAcronymDialogContent(String meaning) {
   return SizedBox(
     width: 460,
-    child: Directionality(
-      textDirection: TextDirection.rtl,
-      child: SingleChildScrollView(
-        child: Text(
-          meaning,
-          textDirection: TextDirection.rtl,
-        ),
+    child: SingleChildScrollView(
+      child: Text(
+        meaning,
       ),
     ),
   );
@@ -169,18 +165,15 @@ Widget _buildAcronymDialogContent(String meaning) {
 Widget _buildAramaicDialogContent(AramaicDictionaryEntry entry) {
   return SizedBox(
     width: 520,
-    child: Directionality(
-      textDirection: TextDirection.rtl,
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AramaicDictionaryEntryView(
-              definition: entry.hebrew,
-            ),
-          ],
-        ),
+    child: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AramaicDictionaryEntryView(
+            definition: entry.hebrew,
+          ),
+        ],
       ),
     ),
   );

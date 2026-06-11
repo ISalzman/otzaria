@@ -165,7 +165,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
         children: [
           const Text(
             'נמצאו הקבצים הדחוסים הבאים:',
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 8),
           ...zipFiles.map(
@@ -173,7 +172,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Text(
                 '• $file',
-                textDirection: TextDirection.rtl,
               ),
             ),
           ),
@@ -181,7 +179,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           const Text(
             'אנא השאר רק קובץ דחוס אחד בתיקייה ונסה שוב.',
             style: TextStyle(fontWeight: FontWeight.bold),
-            textDirection: TextDirection.rtl,
           ),
         ],
       ),
@@ -203,7 +200,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           const Text(
             'מוריד ספרייה',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 32),
           SizedBox(
@@ -220,7 +216,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
                   state.message,
                   style: const TextStyle(fontSize: 14),
                   textAlign: TextAlign.center,
-                  textDirection: TextDirection.rtl,
                 ),
                 if (state.progress > 0) ...[
                   const SizedBox(height: 8),
@@ -253,7 +248,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           const Text(
             'מחלץ ספרייה',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 32),
           SizedBox(
@@ -270,7 +264,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
                   state.message,
                   style: const TextStyle(fontSize: 14),
                   textAlign: TextAlign.center,
-                  textDirection: TextDirection.rtl,
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -302,7 +295,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           'לא נמצאה ספריית ספרים',
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
-          textDirection: TextDirection.rtl,
         ),
         const SizedBox(height: 16),
         Text(
@@ -311,7 +303,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
             fontSize: 16,
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
-          textDirection: TextDirection.rtl,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 32),
@@ -364,7 +355,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           textAlign: TextAlign.center,
-          textDirection: TextDirection.rtl,
         ),
         const SizedBox(height: 8),
         InkWell(
@@ -386,7 +376,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
                 decoration: TextDecoration.underline,
               ),
               textAlign: TextAlign.center,
-              textDirection: TextDirection.rtl,
             ),
           ),
         ),
@@ -400,7 +389,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-              textDirection: TextDirection.rtl,
               children: [
                 RtlIcon(
                   FluentIcons.warning_24_regular,
@@ -414,7 +402,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onErrorContainer,
                     ),
-                    textDirection: TextDirection.rtl,
                   ),
                 ),
               ],
@@ -427,7 +414,6 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           const SizedBox(height: 8),
           const Text(
             'בודק את התיקייה...',
-            textDirection: TextDirection.rtl,
           ),
         ],
       ],

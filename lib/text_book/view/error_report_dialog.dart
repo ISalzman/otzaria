@@ -14,7 +14,7 @@ import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/services/phone_report_service.dart';
 import 'package:otzaria/services/book_details_service.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/dialogs/error_report_sender_email_dialog.dart';
 import 'package:otzaria/widgets/misc/phone_report_tab.dart';
@@ -74,34 +74,30 @@ class _DirectReportDetails extends StatelessWidget {
     return SizedBox(
       width: 560,
       child: SingleChildScrollView(
-        child: Directionality(
-          textDirection: TextDirection.rtl,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _ReportDetailRow(label: 'ספר', value: report.bookTitle),
-              _ReportDetailRow(label: 'מיקום', value: report.currentRef),
-              _ReportDetailRow(
-                label: 'שורה',
-                value: report.lineNumber.toString(),
-              ),
-              _ReportDetailRow(label: 'כתובת זיהוי', value: report.senderEmail),
-              _ReportDetailRow(label: 'טקסט שנבחר', value: report.selectedText),
-              _ReportDetailRow(
-                  label: 'פירוט הטעות', value: report.errorDetails),
-              _ReportDetailRow(label: 'הקשר', value: report.contextText),
-              _ReportDetailRow(label: 'נתיב קובץ', value: report.filePath),
-              _ReportDetailRow(
-                label: 'תיקיית מקור',
-                value: report.sourceFolder,
-              ),
-              _ReportDetailRow(
-                label: 'גרסת ספרייה',
-                value: report.libraryVersion,
-              ),
-            ],
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _ReportDetailRow(label: 'ספר', value: report.bookTitle),
+            _ReportDetailRow(label: 'מיקום', value: report.currentRef),
+            _ReportDetailRow(
+              label: 'שורה',
+              value: report.lineNumber.toString(),
+            ),
+            _ReportDetailRow(label: 'כתובת זיהוי', value: report.senderEmail),
+            _ReportDetailRow(label: 'טקסט שנבחר', value: report.selectedText),
+            _ReportDetailRow(label: 'פירוט הטעות', value: report.errorDetails),
+            _ReportDetailRow(label: 'הקשר', value: report.contextText),
+            _ReportDetailRow(label: 'נתיב קובץ', value: report.filePath),
+            _ReportDetailRow(
+              label: 'תיקיית מקור',
+              value: report.sourceFolder,
+            ),
+            _ReportDetailRow(
+              label: 'גרסת ספרייה',
+              value: report.libraryVersion,
+            ),
+          ],
         ),
       ),
     );
@@ -128,12 +124,10 @@ class _ReportDetailRow extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium,
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 3),
           SelectableText(
             displayValue,
-            textDirection: TextDirection.rtl,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],
@@ -1033,7 +1027,6 @@ class _TabbedReportDialogState extends State<TabbedReportDialog>
               child: Text(
                 'דיווח על טעות בספר',
                 style: Theme.of(context).textTheme.headlineSmall,
-                textDirection: TextDirection.rtl,
               ),
             ),
             TabBar(
@@ -1222,7 +1215,6 @@ class _RegularReportTabState extends State<RegularReportTab> {
                             Settings.getValue('key-font-family') ?? 'candara',
                       ),
                       textAlign: TextAlign.right,
-                      textDirection: TextDirection.rtl,
                     ),
                   ),
                 ),

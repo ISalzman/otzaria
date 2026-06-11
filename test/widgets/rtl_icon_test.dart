@@ -11,23 +11,21 @@ Widget _wrap(Widget child, {TextDirection dir = TextDirection.rtl}) =>
 void main() {
   group('RtlIcon — LTR context', () {
     testWidgets('מציג אייקון מקורי ללא שינוי', (tester) async {
-      await tester.pumpWidget(
-          _wrap(const RtlIcon(FluentIcons.arrow_left_24_regular),
-              dir: TextDirection.ltr));
+      await tester.pumpWidget(_wrap(
+          const RtlIcon(FluentIcons.arrow_left_24_regular),
+          dir: TextDirection.ltr));
 
-      final icon =
-          tester.widget<Icon>(find.byType(Icon));
+      final icon = tester.widget<Icon>(find.byType(Icon));
       expect(icon.icon, FluentIcons.arrow_left_24_regular);
-      expect(find.byType(Transform), findsNothing,
-          reason: 'LTR — אין להפוך');
+      expect(find.byType(Transform), findsNothing, reason: 'LTR — אין להפוך');
     });
   });
 
   group('RtlIcon — RTL context, מירור מהמפה', () {
     testWidgets('arrow_left_24_regular מוחלף ב-arrow_right_24_regular',
         (tester) async {
-      await tester.pumpWidget(
-          _wrap(const RtlIcon(FluentIcons.arrow_left_24_regular)));
+      await tester
+          .pumpWidget(_wrap(const RtlIcon(FluentIcons.arrow_left_24_regular)));
 
       final icon = tester.widget<Icon>(find.byType(Icon));
       expect(icon.icon, FluentIcons.arrow_right_24_regular,
@@ -56,9 +54,9 @@ void main() {
           reason: 'האייקון עצמו לא מוחלף — רק עטוף ב-Transform');
     });
 
-    testWidgets('book_open_24_regular מתהפך', (tester) async {
-      await tester
-          .pumpWidget(_wrap(const RtlIcon(FluentIcons.book_open_24_regular)));
+    testWidgets('text_align_distributed_24_regular מתהפך', (tester) async {
+      await tester.pumpWidget(
+          _wrap(const RtlIcon(FluentIcons.text_align_distributed_24_regular)));
 
       expect(find.byType(Transform), findsOneWidget);
     });
@@ -66,8 +64,8 @@ void main() {
 
   group('RtlIcon — RTL context, אייקון סימטרי', () {
     testWidgets('search_24_regular לא מוחלף ולא מתהפך', (tester) async {
-      await tester.pumpWidget(
-          _wrap(const RtlIcon(FluentIcons.search_24_regular)));
+      await tester
+          .pumpWidget(_wrap(const RtlIcon(FluentIcons.search_24_regular)));
 
       expect(find.byType(Transform), findsNothing,
           reason: 'חיפוש סימטרי — אין לגעת בו');
@@ -76,8 +74,8 @@ void main() {
     });
 
     testWidgets('settings_24_regular לא מוחלף ולא מתהפך', (tester) async {
-      await tester.pumpWidget(
-          _wrap(const RtlIcon(FluentIcons.settings_24_regular)));
+      await tester
+          .pumpWidget(_wrap(const RtlIcon(FluentIcons.settings_24_regular)));
 
       expect(find.byType(Transform), findsNothing);
       final icon = tester.widget<Icon>(find.byType(Icon));

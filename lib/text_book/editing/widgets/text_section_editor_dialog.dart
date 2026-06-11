@@ -13,7 +13,7 @@ import '../services/preview_renderer.dart';
 import '../models/editor_settings.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'markdown_toolbar.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -645,7 +645,6 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
                         focusNode: _editorFocusNode,
                         maxLines: null,
                         expands: true,
-                        textDirection: TextDirection.rtl,
                         textAlign: TextAlign.right,
                         textAlignVertical: TextAlignVertical.top,
                         style: TextStyle(
@@ -656,7 +655,6 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
                         decoration: const InputDecoration(
                           border: InputBorder.none,
                           hintText: 'התחל לכתוב כאן...',
-                          hintTextDirection: TextDirection.rtl,
                         ),
                       ),
                     ),
@@ -737,7 +735,6 @@ class _SearchDialogState extends State<_SearchDialog> {
           const Text(
             'החיפוש מתחיל מהסמן הנוכחי וממשיך מהתחלה אם לא נמצא',
             style: TextStyle(fontSize: 12),
-            textDirection: TextDirection.rtl,
           ),
         ],
       ),

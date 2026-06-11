@@ -90,7 +90,6 @@ class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
             const SizedBox(width: 8),
             Text(
               widget.title,
-              textDirection: TextDirection.rtl,
               style: const TextStyle(fontSize: 20),
             ),
           ],
@@ -104,7 +103,6 @@ class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
               if (widget.hint != null) ...[
                 Text(
                   widget.hint!,
-                  textDirection: TextDirection.rtl,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -294,7 +292,6 @@ class _SetPasswordDialogState extends State<SetPasswordDialog>
           children: [
             Text(
               'הגדרת סיסמה',
-              textDirection: TextDirection.rtl,
               style: TextStyle(fontSize: 20),
             ),
             SizedBox(width: 8),
@@ -309,7 +306,6 @@ class _SetPasswordDialogState extends State<SetPasswordDialog>
             children: [
               Text(
                 'הגדר סיסמה להגנה על ההגדרות',
-                textDirection: TextDirection.rtl,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),

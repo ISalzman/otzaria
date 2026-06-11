@@ -120,7 +120,6 @@ class SidebarNavItem extends StatelessWidget {
                     ),
                     child: Text(
                       label,
-                      textDirection: TextDirection.rtl,
                     ),
                   ),
                 ),
@@ -180,10 +179,9 @@ class TopNavItem extends StatelessWidget {
       fontWeight: FontWeight.bold,
       color: textColor,
     );
-    final textDirection = Directionality.of(context);
     final textPainter = TextPainter(
       text: TextSpan(text: label, style: reservedTextStyle),
-      textDirection: textDirection,
+      textDirection: TextDirection.rtl,
       maxLines: 1,
     )..layout();
     final textWidth = textPainter.width.ceilToDouble();
@@ -236,7 +234,6 @@ class TopNavItem extends StatelessWidget {
                           opacity: 0,
                           child: Text(
                             label,
-                            textDirection: TextDirection.rtl,
                             textAlign: TextAlign.center,
                             maxLines: 1,
                             style: reservedTextStyle,
@@ -250,7 +247,6 @@ class TopNavItem extends StatelessWidget {
                           style: animatedTextStyle,
                           child: Text(
                             label,
-                            textDirection: TextDirection.rtl,
                             textAlign: TextAlign.center,
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,

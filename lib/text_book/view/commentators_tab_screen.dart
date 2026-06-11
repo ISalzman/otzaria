@@ -24,7 +24,7 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -487,7 +487,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     'מפרשים על ${widget.tab.sourceTab.book.title}',
                     style: const TextStyle(fontSize: 16),
                     overflow: TextOverflow.ellipsis,
-                    textDirection: TextDirection.rtl,
                   ),
                   actions: [
                     ResponsiveActionBar(
@@ -853,14 +852,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
             onPressed: () => setState(() => _navPaneOpen = !_navPaneOpen),
           ),
         ),
-        AppTopBarItem(
-          widget: ToolbarActionButton(
-            tooltip: 'חיפוש',
-            icon: FluentIcons.book_search_24_regular,
-            compact: context.read<SettingsBloc>().state.compactMenuMode,
-            onPressed: _openSearchPane,
-          ),
-        ),
       ],
       center: _buildCommentatorsCenter(context, state, chapters),
       trailingItems: [
@@ -924,6 +915,18 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                 tooltip: 'הדפסה',
                 onPressed: () =>
                     _commentaryKey.currentState?.printDisplayedCommentaries(),
+              ),
+              // חיפוש
+              ActionButtonData(
+                widget: ToolbarActionButton(
+                  tooltip: 'חיפוש',
+                  icon: FluentIcons.search_24_regular,
+                  compact: context.read<SettingsBloc>().state.compactMenuMode,
+                  onPressed: _openSearchPane,
+                ),
+                icon: FluentIcons.search_24_regular,
+                tooltip: 'חיפוש',
+                onPressed: _openSearchPane,
               ),
               // כיווץ/הרחבת כל המפרשים — שולט במצב הגלובלי בתוך CommentaryListBase
               ActionButtonData(
@@ -1063,7 +1066,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               style: AppTopBar.titleStyle(context),
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
-              textDirection: TextDirection.rtl,
             ),
           ),
           const SizedBox(width: gap),
@@ -1117,26 +1119,28 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                         icon: Icon(FluentIcons.navigation_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('ניווט',
-                            style: TextStyle(fontSize: 11),
-                            textDirection: TextDirection.rtl),
+                        child: Text(
+                          'ניווט',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                       Tab(
                         icon: Icon(FluentIcons.apps_list_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('מפרשים',
-                            style: TextStyle(fontSize: 11),
-                            textDirection: TextDirection.rtl),
+                        child: Text(
+                          'מפרשים',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                       Tab(
-                        icon:
-                            Icon(FluentIcons.book_search_24_regular, size: 16),
+                        icon: Icon(FluentIcons.search_24_regular, size: 16),
                         iconMargin: EdgeInsets.only(bottom: 1),
                         height: 44,
-                        child: Text('חיפוש',
-                            style: TextStyle(fontSize: 11),
-                            textDirection: TextDirection.rtl),
+                        child: Text(
+                          'חיפוש',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                     ],
                     labelColor: colorScheme.primary,
@@ -1193,7 +1197,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           child: Text(
             'טוען מפרשים...',
             style: Theme.of(context).textTheme.bodySmall,
-            textDirection: TextDirection.rtl,
           ),
         ),
       );
@@ -1283,7 +1286,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         child: Text(
           'טוען תוצאות...',
           style: Theme.of(context).textTheme.bodySmall,
-          textDirection: TextDirection.rtl,
         ),
       );
     }
@@ -1326,7 +1328,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     textAlign: TextAlign.right,
-                    textDirection: TextDirection.rtl,
                   ),
                 ),
               ],
@@ -1366,7 +1367,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                   padding: const EdgeInsets.all(10),
                   child: Text.rich(
                     TextSpan(children: highlightedSpans),
-                    textDirection: TextDirection.rtl,
                   ),
                 ),
               ),
@@ -1386,7 +1386,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   }) {
     if (chapters.isEmpty) {
       return const Center(
-        child: Text('אין תוכן עניינים', textDirection: TextDirection.rtl),
+        child: Text('אין תוכן עניינים'),
       );
     }
     final colorScheme = Theme.of(context).colorScheme;
@@ -1489,7 +1489,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                         maxLines: 2,
-                                        textDirection: TextDirection.rtl,
                                       ),
                                     ),
                                   ],
@@ -1764,7 +1763,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 2,
-                textDirection: TextDirection.rtl,
               ),
             ),
           ],

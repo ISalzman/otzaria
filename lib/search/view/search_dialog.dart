@@ -479,7 +479,6 @@ class _SearchDialogState extends State<SearchDialog> {
                   ? colorScheme.primary
                   : colorScheme.onSurfaceVariant,
             ),
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(width: 4),
           Transform.scale(
@@ -544,7 +543,6 @@ class _SearchDialogState extends State<SearchDialog> {
                         : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                   textAlign: TextAlign.center,
-                  textDirection: TextDirection.rtl,
                 ),
               ],
             ),

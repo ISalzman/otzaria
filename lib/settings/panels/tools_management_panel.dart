@@ -16,7 +16,7 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/search/settings_search_registry.dart';
-import 'package:otzaria/settings/settings_card.dart';
+import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
@@ -290,7 +290,7 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
   }) {
     return ListTile(
       leading: Icon(icon),
-      title: Text(label, textDirection: TextDirection.rtl),
+      title: Text(label),
       trailing: Icon(
         expanded
             ? FluentIcons.chevron_up_24_regular
@@ -429,7 +429,6 @@ class _ActionBar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
                   '$count נבחרו',
-                  textDirection: TextDirection.rtl,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ),
@@ -615,7 +614,6 @@ class _ActionChip extends StatelessWidget {
       label: Text(
         label,
         style: fg != null ? TextStyle(color: fg) : null,
-        textDirection: TextDirection.rtl,
       ),
     );
   }
@@ -650,7 +648,7 @@ class _PermissionMenu extends StatelessWidget {
           value: true,
           child: ListTile(
             leading: Icon(FluentIcons.checkmark_24_regular),
-            title: Text('הענק', textDirection: TextDirection.rtl),
+            title: Text('הענק'),
             dense: true,
           ),
         ),
@@ -658,7 +656,7 @@ class _PermissionMenu extends StatelessWidget {
           value: false,
           child: ListTile(
             leading: Icon(FluentIcons.dismiss_24_regular),
-            title: Text('בטל', textDirection: TextDirection.rtl),
+            title: Text('בטל'),
             dense: true,
           ),
         ),
@@ -670,7 +668,7 @@ class _PermissionMenu extends StatelessWidget {
           children: [
             Icon(icon, size: 20),
             const SizedBox(width: 4),
-            Text(label, textDirection: TextDirection.rtl),
+            Text(label),
             const SizedBox(width: 2),
             const Icon(FluentIcons.chevron_down_24_regular, size: 16),
           ],
@@ -709,7 +707,7 @@ class _SelectAllRow extends StatelessWidget {
         value: value,
         onChanged: (_) => toggle(),
       ),
-      title: const Text('בחר הכל', textDirection: TextDirection.rtl),
+      title: const Text('בחר הכל'),
       onTap: toggle,
     );
   }
@@ -741,7 +739,7 @@ class _BuiltInToolRow extends StatelessWidget {
     return ListTile(
       hoverColor: Colors.transparent,
       leading: toolIcon,
-      title: Text(meta.label, textDirection: TextDirection.rtl),
+      title: Text(meta.label),
       subtitle: _StatusBadges(
         hidden: hidden,
         pinnedToNavRail: pinnedToNavRail,
@@ -854,7 +852,6 @@ class _PluginRow extends StatelessWidget {
       leading: Checkbox(value: selected, onChanged: onSelectChanged),
       title: Text(
         '${plugin.name}  •  v${plugin.version}',
-        textDirection: TextDirection.rtl,
       ),
       subtitle: _StatusBadges(
         hidden: plugin.hiddenFromTools,
@@ -967,9 +964,7 @@ class _StatusBadges extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: fg),
           const SizedBox(width: 4),
-          Text(text,
-              textDirection: TextDirection.rtl,
-              style: TextStyle(color: fg, fontSize: 12)),
+          Text(text, style: TextStyle(color: fg, fontSize: 12)),
         ],
       ),
     );

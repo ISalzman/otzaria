@@ -56,6 +56,12 @@ class RtlIcon extends StatelessWidget {
     FluentIcons.arrow_left_24_regular: FluentIcons.arrow_right_24_regular,
     FluentIcons.arrow_right_24_filled: FluentIcons.arrow_left_24_filled,
     FluentIcons.arrow_left_24_filled: FluentIcons.arrow_right_24_filled,
+    FluentIcons.panel_left_24_regular: FluentIcons.panel_right_24_regular,
+    FluentIcons.panel_right_24_regular: FluentIcons.panel_left_24_regular,
+    FluentIcons.panel_left_24_filled: FluentIcons.panel_right_24_filled,
+    FluentIcons.panel_right_24_filled: FluentIcons.panel_left_24_filled,
+    FluentIcons.text_align_right_24_regular: FluentIcons.text_align_left_24_regular,
+    FluentIcons.text_align_left_24_regular: FluentIcons.text_align_right_24_regular,
   };
 
   // אייקונים ללא גרסת RTL בספריה — מותר להפוך גאומטרית.
@@ -63,10 +69,8 @@ class RtlIcon extends StatelessWidget {
   static final Set<IconData> _flippableIcons = {
     FluentIcons.book_24_regular,
     FluentIcons.book_24_filled,
-    FluentIcons.book_open_24_regular,
-    FluentIcons.book_open_24_filled,
-    FluentIcons.book_search_24_regular,
-    FluentIcons.book_search_24_filled,
+    FluentIcons.book_information_24_regular,
+    FluentIcons.text_align_distributed_24_regular,
   };
 
   @override

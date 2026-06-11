@@ -1114,7 +1114,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 snapshot.data ?? link.fallbackDisplayReference,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                textDirection: TextDirection.rtl,
               ),
             ),
             onTap: () => widget.openBookCallback(
@@ -1149,7 +1148,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       final preview = hasSelectedText ? previewForLabel(cleanedText) : '';
       entries.add(AppContextMenuEntry(
         label: 'חיפוש',
-        icon: FluentIcons.book_search_24_regular,
+        icon: FluentIcons.search_24_regular,
         enabled: hasSelectedText,
         children: hasSelectedText
             ? [

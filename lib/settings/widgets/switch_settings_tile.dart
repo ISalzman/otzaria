@@ -15,6 +15,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 // ── CustomSwitch ───────────────────────────────────────────────────────────────
 
@@ -87,6 +89,28 @@ class SwitchSettingsTile extends StatefulWidget {
     required this.onChanged,
     this.enabled = true,
   });
+
+  SwitchSettingsTile.text({
+    super.key,
+    IconData? icon,
+    Widget? leading,
+    required String title,
+    String? subtitle,
+    bool subtitleLtr = false,
+    required this.value,
+    required this.onChanged,
+    this.enabled = true,
+  })  : assert(icon == null || leading == null),
+        leading = leading ?? (icon != null ? RtlIcon(icon) : null),
+        title = Text(title, style: AppTextStyles.settingTitle),
+        subtitle = subtitle == null
+            ? null
+            : Text(
+                subtitle,
+                style: AppTextStyles.settingSubtitle,
+                textDirection: subtitleLtr ? TextDirection.ltr : null,
+                textAlign: subtitleLtr ? TextAlign.end : null,
+              );
 
   @override
   State<SwitchSettingsTile> createState() => _SwitchSettingsTileState();

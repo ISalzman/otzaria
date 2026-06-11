@@ -118,7 +118,6 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
                       Text(
                         widget.title,
                         style: kSettingsTitleStyle,
-                        textDirection: TextDirection.rtl,
                       ),
                       if (widget.subtitle != null &&
                           widget.subtitle!.trim().isNotEmpty) ...[
@@ -126,7 +125,6 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
                         Text(
                           widget.subtitle!,
                           style: kSettingsSubtitleStyle,
-                          textDirection: TextDirection.rtl,
                         ),
                       ],
                     ],

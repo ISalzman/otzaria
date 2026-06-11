@@ -22,9 +22,10 @@ import 'package:otzaria/printing/word_export_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart' hide PdfDocument;
@@ -730,34 +731,32 @@ class _PrintingScreenState extends State<PrintingScreen> {
         pw.Page(
           pageFormat: sheetFormat,
           margin: pw.EdgeInsets.zero,
+          textDirection: pw.TextDirection.rtl,
           build: (context) {
-            return pw.Directionality(
-              textDirection: pw.TextDirection.rtl,
-              child: pw.Column(
-                children: List.generate(rows, (row) {
-                  return pw.SizedBox(
-                    height: cellHeight,
-                    child: pw.Row(
-                      children: List.generate(cols, (col) {
-                        final indexInChunk = row * cols + col;
-                        if (indexInChunk >= chunk.length) {
-                          return pw.Expanded(child: pw.SizedBox());
-                        }
-                        final image = pw.MemoryImage(chunk[indexInChunk]);
-                        return pw.Expanded(
-                          child: pw.Align(
-                            alignment: pw.Alignment.centerRight,
-                            child: pw.Image(
-                              image,
-                              fit: pw.BoxFit.contain,
-                            ),
+            return pw.Column(
+              children: List.generate(rows, (row) {
+                return pw.SizedBox(
+                  height: cellHeight,
+                  child: pw.Row(
+                    children: List.generate(cols, (col) {
+                      final indexInChunk = row * cols + col;
+                      if (indexInChunk >= chunk.length) {
+                        return pw.Expanded(child: pw.SizedBox());
+                      }
+                      final image = pw.MemoryImage(chunk[indexInChunk]);
+                      return pw.Expanded(
+                        child: pw.Align(
+                          alignment: pw.Alignment.centerRight,
+                          child: pw.Image(
+                            image,
+                            fit: pw.BoxFit.contain,
                           ),
-                        );
-                      }),
-                    ),
-                  );
-                }),
-              ),
+                        ),
+                      );
+                    }),
+                  ),
+                );
+              }),
             );
           },
         ),
@@ -2686,7 +2685,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
       child: Text(
         'התצוגה המקדימה מוגבלת ל-$shown עמודים. ההדפסה/הייצוא יכללו את כל הטווח.',
         textAlign: TextAlign.center,
-        textDirection: TextDirection.rtl,
         style: TextStyle(
           color: colorScheme.onSurfaceVariant,
           fontSize: 12,
@@ -2740,7 +2738,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
           children: List.generate(rows, (row) {
             return Expanded(
               child: Row(
-                textDirection: TextDirection.rtl,
                 children: List.generate(cols, (col) {
                   final idx = row * cols + col;
                   if (idx >= chunk.length) {
@@ -2774,35 +2771,29 @@ class _PrintingScreenState extends State<PrintingScreen> {
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
-      elevation: 0,
-      color: AppSurfaces.card(context),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, size: 20, color: colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onSurface,
-                  ),
+    return AppCard(
+      radius: 12,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20, color: colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurface,
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            child,
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
       ),
     );
   }
@@ -2964,7 +2955,6 @@ class _PrintingAppBar extends StatelessWidget {
 
         final titleWidget = Text(
           title,
-          textDirection: TextDirection.rtl,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.titleMedium,
         );

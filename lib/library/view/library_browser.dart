@@ -738,7 +738,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       chipBuilder: (context, item, isSelected) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
         child: Chip(
-          label: Text(item, textDirection: TextDirection.rtl),
+          label: Text(item),
           backgroundColor:
               isSelected ? Theme.of(context).colorScheme.secondary : null,
           labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -1290,7 +1290,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.secondary,
                   ),
-              textDirection: TextDirection.rtl,
             ),
           ),
         ),
@@ -1300,41 +1299,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   List<Widget> _buildGroupedListSectionItems(List<Widget> children) {
-    final cs = Theme.of(context).colorScheme;
-    const radius = Radius.circular(AppTokens.radiusXL);
-
     return [
-      for (int i = 0; i < children.length; i++)
-        Card(
-          elevation: 0,
-          color: AppSurfaces.card(context),
-          clipBehavior: Clip.antiAlias,
-          surfaceTintColor: Colors.transparent,
-          margin: EdgeInsets.only(
-            top: i == 0 ? 2 : 0,
-            bottom: i == children.length - 1 ? 8 : 0,
-          ),
-          shape: RoundedRectangleBorder(
-            side: BorderSide.none,
-            borderRadius: BorderRadius.vertical(
-              top: i == 0 ? radius : Radius.zero,
-              bottom: i == children.length - 1 ? radius : Radius.zero,
-            ),
-          ),
-          child: Column(
-            children: [
-              children[i],
-              if (i < children.length - 1)
-                Divider(
-                  height: 1,
-                  thickness: 1.5,
-                  indent: 0,
-                  endIndent: 0,
-                  color: cs.surfaceContainerHighest,
-                ),
-            ],
-          ),
-        ),
+      AppCard.section(
+        margin: const EdgeInsets.only(top: 2, bottom: 8),
+        children: children,
+      ),
     ];
   }
 
@@ -1384,7 +1353,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           bottom: verticalPadding,
         ),
         child: Row(
-          textDirection: TextDirection.rtl,
           children: [
             Container(
               width: iconBoxSize,
@@ -1408,7 +1376,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               child: LibraryOverflowTooltipText(
                 text: category.title,
                 maxLines: 1,
-                textDirection: TextDirection.rtl,
                 textAlign: TextAlign.right,
                 style: titleStyle,
               ),
@@ -1429,16 +1396,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       return row;
     }
 
-    return Card(
-      elevation: 0,
-      color: AppSurfaces.card(context),
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: Colors.transparent,
+    return AppCard(
       margin: const EdgeInsets.symmetric(vertical: 2),
-      shape: const RoundedRectangleBorder(
-        side: BorderSide.none,
-        borderRadius: BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
-      ),
       child: row,
     );
   }
@@ -1525,7 +1484,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             bottom: verticalPadding,
           ),
           child: Row(
-            textDirection: TextDirection.rtl,
             children: [
               leadingWidget,
               SizedBox(width: isSearch ? 8 : 9),
@@ -1536,7 +1494,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                     LibraryOverflowTooltipText(
                       text: title,
                       maxLines: 1,
-                      textDirection: TextDirection.rtl,
                       textAlign: TextAlign.right,
                       style: titleStyle,
                     ),
@@ -1544,7 +1501,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                       LibraryOverflowTooltipText(
                         text: subtitle,
                         maxLines: 1,
-                        textDirection: TextDirection.rtl,
                         textAlign: TextAlign.right,
                         style: subtitleStyle,
                       ),
@@ -1561,16 +1517,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       return row;
     }
 
-    return Card(
-      elevation: 0,
-      color: AppSurfaces.card(context),
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: Colors.transparent,
+    return AppCard(
       margin: const EdgeInsets.symmetric(vertical: 2),
-      shape: const RoundedRectangleBorder(
-        side: BorderSide.none,
-        borderRadius: BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
-      ),
       child: row,
     );
   }
@@ -1905,7 +1853,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       builder: (ctx) => AlertDialog(
         title: Text(
           'כל הספרים (${books.length})',
-          textDirection: TextDirection.rtl,
         ),
         content: SizedBox(
           width: 600,
@@ -1918,7 +1865,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('סגור', textDirection: TextDirection.rtl),
+            child: const Text('סגור'),
           ),
         ],
       ),
@@ -2096,7 +2043,6 @@ class _SearchingIndicator extends StatelessWidget {
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
-          textDirection: TextDirection.rtl,
         ),
       ],
     );
@@ -2147,7 +2093,6 @@ class _LoadingDotsTextState extends State<_LoadingDotsText>
         return Text(
           'טוען ספרייה${'.' * dots}${' ' * (3 - dots)}',
           style: Theme.of(context).textTheme.bodyMedium,
-          textDirection: TextDirection.rtl,
         );
       },
     );

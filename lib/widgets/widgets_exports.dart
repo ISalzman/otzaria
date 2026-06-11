@@ -5,22 +5,23 @@
 //
 // כפתורי פעולה (RecommendedActionButton, NeutralActionButton,
 // SecondaryIconButton, PrimaryIconButton):
-//   → lib/widgets/buttons/action_buttons.dart
+//   → lib/widgets/controls/action_buttons.dart
 //
-// Segmented button:
-//   → lib/widgets/inputs/segmented_button_tile.dart
+// Segmented control (AppSegmentedControl, SegmentOption):
+//   → lib/widgets/controls/segmented_control.dart
 //
 // SwitchSettingsTile:
 //   → lib/settings/widgets/switch_settings_tile.dart
 //
-// toolCardColor, ToolPanelWrapper:
+// ToolPanelWrapper:
 //   → lib/widgets/misc/tool_ui_helpers.dart
 
 export 'package:otzaria/widgets/dialogs/app_dialogs.dart';
-export 'package:otzaria/widgets/buttons/action_buttons.dart';
-export 'package:otzaria/widgets/inputs/segmented_button_tile.dart';
+export 'package:otzaria/widgets/controls/action_buttons.dart';
+export 'package:otzaria/widgets/controls/segmented_control.dart';
 export 'package:otzaria/settings/widgets/switch_settings_tile.dart';
 export 'package:otzaria/widgets/misc/tool_ui_helpers.dart';
+export 'package:otzaria/widgets/layout/app_card.dart';
 
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';

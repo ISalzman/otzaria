@@ -26,6 +26,7 @@ import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -1172,7 +1173,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           leading: AnimatedRotation(
             turns: isExpanded ? -0.25 : 0,
             duration: const Duration(milliseconds: 200),
-            child: Icon(
+            child: RtlIcon(
               FluentIcons.chevron_left_24_regular,
               size: 20,
               color: Theme.of(context)
@@ -1190,7 +1191,6 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
               fontWeight: FontWeight.bold,
               fontFamily: settingsState.commentatorsFontFamily,
             ),
-            textDirection: TextDirection.rtl,
           ),
           subtitle: FutureBuilder<String>(
             future: link.displayReference,
@@ -1206,7 +1206,6 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                       .onSurface
                       .withValues(alpha: 0.5),
                 ),
-                textDirection: TextDirection.rtl,
               );
             },
           ),
@@ -1560,7 +1559,7 @@ class _CollapsibleCommentaryGroupState
                 AnimatedRotation(
                   turns: widget.isExpanded ? -0.25 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: Icon(
+                  child: RtlIcon(
                     FluentIcons.chevron_left_24_regular,
                     size: 20,
                     color: Theme.of(context)
@@ -1611,7 +1610,6 @@ class _CollapsibleCommentaryGroupState
                               .onSurface
                               .withValues(alpha: 0.5),
                         ),
-                        textDirection: TextDirection.rtl,
                       );
                     },
                   ),

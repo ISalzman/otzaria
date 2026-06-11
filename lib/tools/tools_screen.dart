@@ -28,7 +28,7 @@ import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
-import 'package:otzaria/settings/settings_card.dart';
+import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 
 /// בדיקה האם שני סטים מכילים את אותם הערכים. שימושי ב-`listenWhen`.
@@ -832,7 +832,7 @@ class ToolsScreenState extends State<ToolsScreen>
         backgroundColor: bgColor,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: const Text('כלים', textDirection: TextDirection.rtl),
+        title: const Text('כלים'),
         actions: [
           IconButton(
             icon: const Icon(FluentIcons.puzzle_piece_24_regular),
@@ -901,7 +901,6 @@ class ToolsScreenState extends State<ToolsScreen>
           elevation: 0,
           title: Text(
             _descriptors.isEmpty ? '' : _descriptors[safeIndex].label,
-            textDirection: TextDirection.rtl,
           ),
           leading: Tooltip(
             message: 'חזור (Esc)',

@@ -17,7 +17,8 @@ import 'package:otzaria/tools/calendar/helpers/zmanim_helpers.dart'
 import 'package:otzaria/tools/calendar/dialogs/calendar_zman_alert_dialog.dart';
 import 'package:otzaria/tools/calendar/dialogs/zmanim_settings_dialog.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
+import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 class CalendarTimeEntry {
@@ -743,7 +744,6 @@ class _ZmanCard extends StatelessWidget {
     // של הקטע. כל קטע תופס את כל רוחב חצי הכרטיס, ובו הכותרת/הזמן ומקש
     // ההתראה מוצבים זה לצד זה.
     return Row(
-      textDirection: TextDirection.rtl,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Expanded(
@@ -885,7 +885,6 @@ class _ZmanCard extends StatelessWidget {
                           child: Text(
                             timeData.subtitle,
                             textAlign: TextAlign.center,
-                            textDirection: TextDirection.rtl,
                             style:
                                 Theme.of(context).textTheme.bodySmall?.copyWith(
                                       fontSize: 11,
@@ -1052,7 +1051,6 @@ class _AlertControl extends StatelessWidget {
                   label: option.name,
                   trailing: Text(
                     option.time,
-                    textDirection: TextDirection.rtl,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
@@ -1069,7 +1067,6 @@ class _AlertControl extends StatelessWidget {
           opacity: minutesBefore != null ? 1.0 : 0.0,
           child: Text(
             minutesBefore != null ? _formatAlertMinutes(minutesBefore) : '',
-            textDirection: TextDirection.rtl,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: foregroundColor,
                   fontSize: 11,
@@ -1089,7 +1086,7 @@ bool _textOverflows({
   required TextStyle style,
   required int maxLines,
   required double maxWidth,
-  required TextDirection textDirection,
+  TextDirection textDirection = TextDirection.rtl,
   required TextAlign textAlign,
 }) {
   final textPainter = TextPainter(
@@ -1129,7 +1126,6 @@ class _OverflowAwareTooltipText extends StatelessWidget {
               style: resolvedStyle,
               maxLines: maxLines,
               maxWidth: constraints.maxWidth,
-              textDirection: TextDirection.rtl,
               textAlign: TextAlign.right,
             );
 
@@ -1137,7 +1133,6 @@ class _OverflowAwareTooltipText extends StatelessWidget {
           text,
           maxLines: maxLines,
           overflow: TextOverflow.ellipsis,
-          textDirection: TextDirection.rtl,
           textAlign: TextAlign.center,
           style: resolvedStyle,
         );
@@ -1200,7 +1195,6 @@ class _CompositeLabelValue extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               title,
-              textDirection: TextDirection.rtl,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: textColor,
@@ -1215,7 +1209,6 @@ class _CompositeLabelValue extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              textDirection: TextDirection.rtl,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: textColor,
@@ -1249,73 +1242,61 @@ class _MoladCard extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Card(
-      elevation: 0,
-      color: AppSurfaces.card(context),
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // כותרת ממורכזת כמו ב-_ZmanCard
-            SizedBox(
-              width: double.infinity,
-              child: Text(
-                'מולד ${info.monthName} — ${_moladReasonLabel(info.reason)}',
-                textDirection: TextDirection.rtl,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: scheme.onSurface,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            // קטע 1: המולד הממוצע (הנוסח שמכריזים).
-            Text(
-              'מולד כפי שנהוג להכריז',
-              textDirection: TextDirection.rtl,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
+    return AppCard(
+      radius: AppTokens.radiusMD,
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // כותרת ממורכזת כמו ב-_ZmanCard
+          SizedBox(
+            width: double.infinity,
+            child: Text(
+              'מולד ${info.monthName} — ${_moladReasonLabel(info.reason)}',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              info.announcementText,
-              textDirection: TextDirection.rtl,
-              style: theme.textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurface,
-                fontWeight: FontWeight.w600,
-                height: 1.4,
               ),
             ),
-            const SizedBox(height: 10),
-            // קטע 2: המולד הנראה (אסטרונומי, זמן מקומי בעיר).
-            Text(
-              'מולד הנראה — ${info.cityName}',
-              textDirection: TextDirection.rtl,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
+          ),
+          const SizedBox(height: 10),
+          // קטע 1: המולד הממוצע (הנוסח שמכריזים).
+          Text(
+            'מולד כפי שנהוג להכריז',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(height: 2),
-            Text(
-              '${info.visibleDayName} ${info.visibleHebrewDate} '
-              'בשעה ${info.visibleTimeFormatted}',
-              textDirection: TextDirection.rtl,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            info.announcementText,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurface,
+              fontWeight: FontWeight.w600,
+              height: 1.4,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 10),
+          // קטע 2: המולד הנראה (אסטרונומי, זמן מקומי בעיר).
+          Text(
+            'מולד הנראה — ${info.cityName}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${info.visibleDayName} ${info.visibleHebrewDate} '
+            'בשעה ${info.visibleTimeFormatted}',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurface,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

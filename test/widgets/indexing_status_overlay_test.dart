@@ -44,7 +44,8 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(
       find.byWidgetPredicate(
-        (widget) => widget is Align && widget.alignment == Alignment.bottomLeft,
+        (widget) =>
+            widget is Align && widget.alignment == Alignment.bottomRight,
       ),
       findsOneWidget,
     );

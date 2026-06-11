@@ -99,92 +99,89 @@ class _BooksListDialogState extends State<_BooksListDialog> {
     final maxWidth = media.size.width * 0.9;
     final maxHeight = media.size.height * 0.85;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Dialog(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: maxWidth > 720 ? 720 : maxWidth,
-            maxHeight: maxHeight,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Icon(FluentIcons.book_24_regular, color: cs.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'רשימת הספרים',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: maxWidth > 720 ? 720 : maxWidth,
+          maxHeight: maxHeight,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(FluentIcons.book_24_regular, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'רשימת הספרים',
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    Text(
-                      '${_visibleRows.length} / ${_rows.length}',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                RtlTextField(
-                  controller: _searchController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(FluentIcons.search_24_regular),
-                    hintText: 'חיפוש לפי שם, מחבר או קטגוריה',
-                    border: OutlineInputBorder(),
-                    isDense: true,
                   ),
+                  Text(
+                    '${_visibleRows.length} / ${_rows.length}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              RtlTextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(FluentIcons.search_24_regular),
+                  hintText: 'חיפוש לפי שם, מחבר או קטגוריה',
+                  border: OutlineInputBorder(),
+                  isDense: true,
                 ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: _visibleRows.isEmpty
-                      ? Center(
-                          child: Text(
-                            'לא נמצאו ספרים',
-                            style: TextStyle(color: cs.onSurfaceVariant),
-                          ),
-                        )
-                      : Scrollbar(
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: _visibleRows.isEmpty
+                    ? Center(
+                        child: Text(
+                          'לא נמצאו ספרים',
+                          style: TextStyle(color: cs.onSurfaceVariant),
+                        ),
+                      )
+                    : Scrollbar(
+                        controller: _scrollController,
+                        thumbVisibility: true,
+                        child: ListView.separated(
                           controller: _scrollController,
-                          thumbVisibility: true,
-                          child: ListView.separated(
-                            controller: _scrollController,
-                            itemCount: _visibleRows.length,
-                            separatorBuilder: (_, __) => Divider(
-                              height: 1,
-                              color: cs.surfaceContainerHighest,
-                            ),
-                            itemBuilder: (_, i) => _BookListRow(
-                              row: _visibleRows[i],
-                            ),
+                          itemCount: _visibleRows.length,
+                          separatorBuilder: (_, __) => Divider(
+                            height: 1,
+                            color: cs.surfaceContainerHighest,
+                          ),
+                          itemBuilder: (_, i) => _BookListRow(
+                            row: _visibleRows[i],
                           ),
                         ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    RecommendedActionButton(
-                      text: 'ייצוא ל-CSV',
-                      icon: FluentIcons.arrow_download_24_regular,
-                      isLoading: _isExporting,
-                      onPressed: _exportToCsv,
-                    ),
-                    const Spacer(),
-                    NeutralActionButton(
-                      text: 'סגור',
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                      ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  RecommendedActionButton(
+                    text: 'ייצוא ל-CSV',
+                    icon: FluentIcons.arrow_download_24_regular,
+                    isLoading: _isExporting,
+                    onPressed: _exportToCsv,
+                  ),
+                  const Spacer(),
+                  NeutralActionButton(
+                    text: 'סגור',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -215,14 +212,12 @@ class _BookListRow extends StatelessWidget {
         children: [
           Text(
             row.title,
-            textDirection: TextDirection.rtl,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           if (detailsLine.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
               detailsLine,
-              textDirection: TextDirection.rtl,
               style: subtitleStyle,
             ),
           ],

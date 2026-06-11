@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_spinbox/flutter_spinbox.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 
 enum ZmanMenuAction { toggle }
 
@@ -58,13 +58,11 @@ class _ZmanAlertDialogState extends State<ZmanAlertDialog> {
         children: [
           Text(
             'כמה זמן לפני זמן ${widget.zmanName} ברצונך לקבל התראה?',
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 8),
           Text(
             'הזמן: ${widget.timeLabel}',
             style: Theme.of(context).textTheme.bodySmall,
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 12),
           Row(

@@ -9,7 +9,7 @@ import 'package:otzaria/search/search_scope_preferences.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/utils/find_match_utils.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
-import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 class SearchScopeSelector extends StatefulWidget {
@@ -194,7 +194,6 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
                         fontWeight: FontWeight.w700,
                         color: colorScheme.onSurface,
                       ),
-                      textDirection: TextDirection.rtl,
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -203,7 +202,6 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
                         fontSize: 12,
                         color: colorScheme.onSurfaceVariant,
                       ),
-                      textDirection: TextDirection.rtl,
                     ),
                   ],
                 ),
@@ -413,7 +411,6 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
             fontWeight: FontWeight.w600,
             color: Theme.of(context).colorScheme.primary,
           ),
-          textDirection: TextDirection.rtl,
         ),
         const Spacer(),
         if (hasSelection)
@@ -448,7 +445,6 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
             fontSize: 13,
             color: Theme.of(context).colorScheme.onSurface,
           ),
-          textDirection: TextDirection.rtl,
         ),
       ],
     );
@@ -459,7 +455,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
       controller: _searchController,
       decoration: InputDecoration(
         hintText: 'איתור קטגוריה או ספר...',
-        prefixIcon: const Icon(FluentIcons.book_search_24_regular),
+        prefixIcon: const Icon(FluentIcons.search_24_regular),
         suffixIcon: _searchController.text.isEmpty
             ? null
             : IconButton(
@@ -488,7 +484,6 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
         child: Text(
           'הקלד לפחות $_minSearchQueryLength תווים כדי לחפש.',
           style: TextStyle(color: colorScheme.onSurfaceVariant),
-          textDirection: TextDirection.rtl,
         ),
       );
     }
@@ -498,7 +493,6 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
         child: Text(
           'לא נמצאו קטגוריות או ספרים תואמים.',
           style: TextStyle(color: colorScheme.onSurfaceVariant),
-          textDirection: TextDirection.rtl,
         ),
       );
     }
@@ -517,7 +511,6 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                   fontWeight: FontWeight.w600,
                   color: colorScheme.onSurfaceVariant,
                 ),
-                textDirection: TextDirection.rtl,
               ),
               const SizedBox(height: 6),
               Row(
@@ -602,7 +595,6 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                                     : FontWeight.w700,
                                 color: colorScheme.onSurface,
                               ),
-                              textDirection: TextDirection.rtl,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -614,7 +606,6 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                                   fontSize: 12,
                                   color: colorScheme.onSurfaceVariant,
                                 ),
-                                textDirection: TextDirection.rtl,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1009,7 +1000,6 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                           level == 0 ? FontWeight.w600 : FontWeight.normal,
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
-                    textDirection: TextDirection.rtl,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

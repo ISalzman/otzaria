@@ -192,7 +192,6 @@ class FilterChipsSelector<T> extends StatelessWidget {
           return FilterChip(
             label: Text(
               labelBuilder(item),
-              textDirection: TextDirection.rtl,
             ),
             selected: isSelected,
             onSelected: (_) => _toggleSelection(item),
