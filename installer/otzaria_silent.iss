@@ -66,7 +66,9 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; Value
 
 [Run]
 ; הפעלת התוכנה בסוף ההתקנה — גם במצב שקט (אין skipifsilent).
-Filename: "{app}\{#MyAppExeName}"; Flags: nowait postinstall
+; מדולג כאשר הועבר /NOLAUNCH=1 — מנגנון העדכון הפנימי מעביר אותו כשהעדכון
+; מותקן בעת סגירת התוכנה, כדי שאוצריא לא תיפתח מחדש בניגוד לכוונת המשתמש.
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait postinstall; Check: ShouldLaunchAppAfterInstall
 
 [Languages]
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
@@ -138,6 +140,21 @@ begin
     PathStartsWith(PathDir, ExpandConstant('{commonpf}')) or
     PathStartsWith(PathDir, ExpandConstant('{commonpf32}')) or
     PathStartsWith(PathDir, ExpandConstant('{commonpf64}'));
+end;
+
+// האם להפעיל את אוצריא בסיום ההתקנה (ראה הערה ב-[Run]).
+function ShouldLaunchAppAfterInstall(): Boolean;
+begin
+  Result := ExpandConstant('{param:NOLAUNCH|0}') <> '1';
+end;
+
+// פרמטרים שיש להעביר הלאה כשהמתקין משגר את עצמו מחדש ב-InitializeSetup,
+// כדי ש-/NOLAUNCH=1 לא יאבד במעבר לריצה השקטה/המורמת.
+function PropagatedParams(): String;
+begin
+  Result := '';
+  if ExpandConstant('{param:NOLAUNCH|0}') = '1' then
+    Result := ' /NOLAUNCH=1';
 end;
 
 function RelaunchSetupElevated(Params: String; var ErrorCode: Integer): Boolean;
@@ -323,7 +340,8 @@ begin
       // כדי לקבל UAC; cmd.exe המורם יפעיל את המתקין עם /ALLUSERS.
       PrivilegeFlag := '/ALLUSERS';
       Launched := RelaunchSetupElevated(
-        '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART ' + PrivilegeFlag,
+        '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART ' + PrivilegeFlag +
+        PropagatedParams(),
         ResultCode);
 
       if Launched then
@@ -350,7 +368,8 @@ begin
     end;
 
     Launched := Exec(ExpandConstant('{srcexe}'),
-         '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART ' + PrivilegeFlag,
+         '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART ' + PrivilegeFlag +
+         PropagatedParams(),
          '', SW_HIDE, ewNoWait, ResultCode);
 
     if Launched then
@@ -364,7 +383,8 @@ begin
     // ניסיון fallback ב-ShellExec — לפעמים CreateProcess נכשל בגלל
     // אנטי-וירוס/מנעולי קובץ אבל ShellExecute (דרך ה-shell) עובר.
     Launched := ShellExec('open', ExpandConstant('{srcexe}'),
-         '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART ' + PrivilegeFlag,
+         '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART ' + PrivilegeFlag +
+         PropagatedParams(),
          '', SW_HIDE, ewNoWait, ResultCode);
 
     if Launched then

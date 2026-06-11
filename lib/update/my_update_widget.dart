@@ -51,6 +51,59 @@ bool shouldLaunchInstallerOnExit({
       status == UpdatStatus.dismissed;
 }
 
+/// בוחר את קובץ העדכון המתאים ל-Windows מתוך נכסי ה-release.
+///
+/// בהתקנה רגילה (exe) העדיפות היא למתקין ה**שקט** — הוא מתקין ברקע ללא
+/// אשף, משמר את ההגדרות ומפעיל את אוצריא מחדש בסיום — כך שהעדכון מתבצע
+/// כולו מתוך התוכנה. אם אין מתקין שקט ב-release (גרסאות ישנות), נופלים
+/// למתקין הרגיל. קבצי `full` (עם ספרייה מצורפת) לעולם אינם נבחרים לעדכון.
+@visibleForTesting
+String? pickWindowsAssetUrl(
+  List<Map<String, dynamic>> assets, {
+  required String preferredFormat, // 'exe' | 'zip'
+}) {
+  String? silentExe;
+  String? regularExe;
+  String? zip;
+
+  for (final asset in assets) {
+    final name = (asset['name'] as String).toLowerCase();
+    final url = asset['browser_download_url'] as String;
+    final isWindowsAsset = name.contains('win') ||
+        name.contains('windows') ||
+        name.endsWith('.exe');
+    if (!isWindowsAsset) continue;
+    if (name.contains('full')) continue;
+
+    if (name.endsWith('.exe')) {
+      if (name.contains('silent')) {
+        silentExe ??= url;
+      } else {
+        regularExe ??= url;
+      }
+    } else if (name.endsWith('.zip')) {
+      zip ??= url;
+    }
+  }
+
+  final exe = silentExe ?? regularExe;
+  if (preferredFormat == 'zip') {
+    return zip ?? exe;
+  }
+  return exe ?? zip;
+}
+
+/// האם ה-URL מצביע על המתקין השקט של Windows.
+///
+/// ההכרעה נעשית לפי ה-URL (שמשמר את שם הנכס ב-release) ולא לפי הקובץ
+/// שהורד, כי שם הקובץ המקומי אחיד (`otzaria-<version>.exe`) ואינו מבחין
+/// בין מתקין שקט לרגיל.
+@visibleForTesting
+bool isSilentWindowsInstallerUrl(String url) {
+  final name = url.split('/').last.toLowerCase();
+  return name.endsWith('.exe') && name.contains('silent');
+}
+
 /// מטמון של תוצאות GitHub API. המפתח כולל גם את הערוץ (stable/dev) כדי למנוע
 /// דליפה בין ערוצים אם המשתמש מחליף הגדרה באותו סשן, וגם כדי שלא יחזרו
 /// תוצאות ישנות כאשר שני release-ים בערוץ dev חולקים אותה core version
@@ -368,6 +421,10 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   String? _latestVersion;
   String? _changelog;
   File? _installerFile;
+
+  /// האם הקובץ ב-[_installerFile] הוא המתקין השקט של Windows (נקבע לפי
+  /// ה-URL בעת ההורדה — ראה [isSilentWindowsInstallerUrl]).
+  bool _installerIsSilent = false;
   bool _windowCloseHookInstalled = false;
 
   /// טיימר להעלמה אוטומטית של צ'יפ השגיאה אחרי 4 שניות.
@@ -459,7 +516,10 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         status: _status,
         hasInstallerFile: _installerFile != null,
       )) {
-        await _launchInstaller();
+        // המשתמש סוגר את התוכנה — העדכון מותקן ברקע, אך אין להפעיל את
+        // אוצריא מחדש בסיום בניגוד לכוונתו.
+        final launched = await _launchInstaller(relaunchApp: false);
+        if (launched) _installerFile = null;
       }
     } finally {
       await windowManager.destroy();
@@ -476,8 +536,11 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   /// שהמשתמש יראה את מצב השגיאה ויוכל לנסות שוב.
   Future<void> _installNow() async {
     if (_installerFile == null) return;
-    final launched = await _launchInstaller();
+    final launched = await _launchInstaller(relaunchApp: true);
     if (launched) {
+      // איפוס הקובץ מונע שיגור מתקין כפול אם יגיע אירוע סגירת חלון נוסף
+      // (למשל מהמתקין עצמו) לפני שה-destroy מסתיים.
+      _installerFile = null;
       await windowManager.destroy();
     }
   }
@@ -578,40 +641,11 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
 
     String? assetUrl;
 
-    String? pickWindows(List<String> extsInOrder,
-        {bool allowZipFallback = true}) {
-      String? foundZip;
-      for (final a in assets) {
-        final name = (a["name"] as String).toLowerCase();
-        final url = a["browser_download_url"] as String;
-        final isWin = name.contains('win') ||
-            name.contains('windows') ||
-            name.endsWith('.exe');
-        if (!isWin) continue;
-
-        if (name.contains('-full.exe') || name.contains('_full.exe')) {
-          continue;
-        }
-
-        if (name.contains('silent')) continue;
-
-        for (final ext in extsInOrder) {
-          if (name.endsWith(ext)) return url;
-        }
-        if (allowZipFallback && name.endsWith('.zip') && foundZip == null) {
-          foundZip = url;
-        }
-      }
-      return foundZip;
-    }
-
     if (platform == 'windows') {
-      final pref = _preferredWindowsFormat();
-      final order = switch (pref) {
-        'zip' => ['.zip', '.exe'],
-        _ => ['.exe', '.zip'],
-      };
-      assetUrl = pickWindows(order, allowZipFallback: true);
+      assetUrl = pickWindowsAssetUrl(
+        assets,
+        preferredFormat: _preferredWindowsFormat(),
+      );
     } else if (platform == 'macos') {
       for (final a in assets) {
         final n = (a["name"] as String).toLowerCase();
@@ -712,6 +746,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       if (!mounted) return;
       setState(() {
         _installerFile = installerFile;
+        _installerIsSilent = isSilentWindowsInstallerUrl(url);
         _status = UpdatStatus.readyToInstall;
       });
     } catch (_) {
@@ -722,11 +757,15 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   /// משגר את המתקין ומחזיר `true` אם השיגור הצליח. כשל בשיגור נבלע ומעדכן
   /// את המצב ל-[UpdatStatus.error] (ללא זריקת חריגה), ומחזיר `false`, כדי
   /// שהקוראים יחליטו האם לסגור את החלון בהתאם.
-  Future<bool> _launchInstaller() async {
+  ///
+  /// [relaunchApp] — האם אוצריא תופעל מחדש בסיום ההתקנה (רלוונטי למתקין
+  /// השקט ב-Windows): `true` בעדכון יזום ("התקן כעת"), `false` בעדכון
+  /// בעת סגירת התוכנה.
+  Future<bool> _launchInstaller({required bool relaunchApp}) async {
     if (_installerFile == null) return false;
 
-    final wrappedLaunchInstaller =
-        wrapLinuxInstaller(_launchInstallerDirect, 'otzaria');
+    final wrappedLaunchInstaller = wrapLinuxInstaller(
+        () => _launchInstallerDirect(relaunchApp: relaunchApp), 'otzaria');
     try {
       await wrappedLaunchInstaller();
       return true;
@@ -736,9 +775,25 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     }
   }
 
-  Future<void> _launchInstallerDirect() async {
-    if (_installerFile == null) return;
-    await openInstaller(_installerFile!, 'otzaria');
+  Future<void> _launchInstallerDirect({required bool relaunchApp}) async {
+    final installer = _installerFile;
+    if (installer == null) return;
+
+    // רק המתקין השקט משוגר ישירות ב-Process.start, משתי סיבות: זו הדרך
+    // היחידה להעביר לו /NOLAUNCH=1, והוא בטוח תחת CreateProcess כי הוא
+    // מוגדר PrivilegesRequired=lowest ומטפל בהרמת הרשאות בעצמו. המתקין
+    // הרגיל עלול לדרוש UAC כבר בשיגור, ולכן חייב סמנטיקת ShellExecute —
+    // openInstaller — אחרת CreateProcess ייכשל (ERROR_ELEVATION_REQUIRED).
+    if (Platform.isWindows && _installerIsSilent) {
+      await Process.start(
+        installer.absolute.path,
+        relaunchApp ? const <String>[] : const <String>['/NOLAUNCH=1'],
+        mode: ProcessStartMode.detached,
+      );
+      return;
+    }
+
+    await openInstaller(installer, 'otzaria');
   }
 
   void _dismissUpdate() {
