@@ -1101,6 +1101,37 @@ void main() {
           reason: 'הטקסט על תמונת-רקע מוטמעת');
     });
 
+    test('תמונה inline בתוך תיבת-טקסט אינה מזוהה כתמונת-רקע', () {
+      final docXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<w:document $drawNs><w:body><w:p><w:r><w:drawing>'
+          '<w:txbxContent>'
+          '<w:p><w:r><w:t>לפני תמונה</w:t></w:r>'
+          '<w:r><w:drawing><a:blip r:embed="rId1"/></w:drawing></w:r>'
+          '</w:p>'
+          '</w:txbxContent></w:drawing></w:r></w:p></w:body></w:document>';
+      final relsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+          '<Relationship Id="rId1" '
+          'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+          'Target="media/i.png"/></Relationships>';
+      final encoder = ZipEncoder();
+      final archive = Archive();
+      final d = utf8.encode(docXml);
+      final rels = utf8.encode(relsXml);
+      final png = [0x89, 0x50, 0x4E, 0x47];
+      archive.addFile(ArchiveFile('word/document.xml', d.length, d));
+      archive.addFile(
+          ArchiveFile('word/_rels/document.xml.rels', rels.length, rels));
+      archive.addFile(ArchiveFile('word/media/i.png', png.length, png));
+      final result =
+          docxToText(Uint8List.fromList(encoder.encode(archive)), 'ב');
+      expect(result, contains('לפני תמונה'));
+      expect(result, contains('<img src="data:image/png;base64,'),
+          reason: 'תמונה בתוך תוכן התיבה נשארת inline');
+      expect(result, isNot(contains('background-image')),
+          reason: 'רק תמונה מחוץ ל-txbxContent משמשת כרקע לתיבה');
+    });
+
     test('תיבת-טקסט ריקה עם תמונה → <img> רגיל ולא div ריק', () {
       final docXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
           '<w:document $drawNs><w:body><w:p><w:r><w:drawing>'

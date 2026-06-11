@@ -15,7 +15,8 @@ import 'dart:convert';
 /// ומופעלות כעיצוב אמיתי במקום להיות מוצגות כטקסט (escape).
 /// v6: תיבות-טקסט (`w:txbxContent`) — טקסט בתוך מסגרת, אולי על תמונת-רקע.
 /// v7: דילוג על מסגרות-רקע דקורטיביות (`behindDoc`) שאינן ניתנות לרינדור.
-const int kDocxConverterVersion = 7;
+/// v8: תמונות inline בתוך תיבת-טקסט אינן מזוהות בטעות כתמונת-רקע של התיבה.
+const int kDocxConverterVersion = 8;
 
 // Windows-1255 Hebrew range: 0xC0–0xD8 and 0xE0–0xFA map to Unicode with offset 1264.
 // 0xE0 (224) + 1264 = 1488 = U+05D0 = א, ... 0xFA (250) + 1264 = 1514 = U+05EA = ת
@@ -307,19 +308,35 @@ Map<String, String> _extractImages(Archive archive) {
 
 /// מחזיר את ה-data URI של תמונה מוטמעת ב-run (DrawingML `a:blip` או VML
 /// `v:imagedata`), או `null`.
-String? _imageUriFromRun(xml.XmlElement run, Map<String, String> images) {
+String? _imageUriFromRun(
+  xml.XmlElement run,
+  Map<String, String> images, {
+  bool skipTextBoxContent = false,
+}) {
   if (images.isEmpty) return null;
-  for (final blip in run.findAllElements('a:blip')) {
-    final id = blip.getAttribute('r:embed') ?? blip.getAttribute('r:link');
-    final uri = id == null ? null : images[id];
-    if (uri != null) return uri;
+  String? visit(xml.XmlElement element) {
+    if (skipTextBoxContent && element.name.qualified == 'w:txbxContent') {
+      return null;
+    }
+    if (element.name.qualified == 'a:blip') {
+      final id =
+          element.getAttribute('r:embed') ?? element.getAttribute('r:link');
+      final uri = id == null ? null : images[id];
+      if (uri != null) return uri;
+    }
+    if (element.name.qualified == 'v:imagedata') {
+      final id = element.getAttribute('r:id');
+      final uri = id == null ? null : images[id];
+      if (uri != null) return uri;
+    }
+    for (final child in element.childElements) {
+      final uri = visit(child);
+      if (uri != null) return uri;
+    }
+    return null;
   }
-  for (final data in run.findAllElements('v:imagedata')) {
-    final id = data.getAttribute('r:id');
-    final uri = id == null ? null : images[id];
-    if (uri != null) return uri;
-  }
-  return null;
+
+  return visit(run);
 }
 
 /// האם הגרפיקה היא תמונה צפה *מאחורי* הטקסט (`wp:anchor behindDoc="1"`) —
@@ -343,8 +360,9 @@ bool _isBehindDocDrawing(xml.XmlElement run) {
 String? _drawingHtmlFromRun(xml.XmlElement run, _DocxContext ctx) {
   // תמונת-רקע מאחורי הטקסט — לא ניתנת לרינדור כרקע-עמוד; מדלגים על התמונה
   // (אך עדיין מעבדים טקסט-בתיבה אם קיים, כדי לא לאבד תוכן).
-  final imgUri =
-      _isBehindDocDrawing(run) ? null : _imageUriFromRun(run, ctx.images);
+  final imgUri = _isBehindDocDrawing(run)
+      ? null
+      : _imageUriFromRun(run, ctx.images, skipTextBoxContent: true);
 
   xml.XmlElement? txbx;
   for (final t in run.findAllElements('w:txbxContent')) {
