@@ -852,14 +852,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
             onPressed: () => setState(() => _navPaneOpen = !_navPaneOpen),
           ),
         ),
-        AppTopBarItem(
-          widget: ToolbarActionButton(
-            tooltip: 'חיפוש',
-            icon: FluentIcons.search_24_regular,
-            compact: context.read<SettingsBloc>().state.compactMenuMode,
-            onPressed: _openSearchPane,
-          ),
-        ),
       ],
       center: _buildCommentatorsCenter(context, state, chapters),
       trailingItems: [
@@ -923,6 +915,18 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                 tooltip: 'הדפסה',
                 onPressed: () =>
                     _commentaryKey.currentState?.printDisplayedCommentaries(),
+              ),
+              // חיפוש
+              ActionButtonData(
+                widget: ToolbarActionButton(
+                  tooltip: 'חיפוש',
+                  icon: FluentIcons.search_24_regular,
+                  compact: context.read<SettingsBloc>().state.compactMenuMode,
+                  onPressed: _openSearchPane,
+                ),
+                icon: FluentIcons.search_24_regular,
+                tooltip: 'חיפוש',
+                onPressed: _openSearchPane,
               ),
               // כיווץ/הרחבת כל המפרשים — שולט במצב הגלובלי בתוך CommentaryListBase
               ActionButtonData(

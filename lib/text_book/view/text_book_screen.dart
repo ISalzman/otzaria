@@ -1269,13 +1269,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return AppTopBar(
       leadingItems: [
         AppTopBarItem(widget: _buildMenuButton(context, state)),
-        AppTopBarItem(
-          widget: _buildSearchButton(
-            context,
-            state,
-            key: widget.enableTourTargets ? textBookSearchTourTargetKey : null,
-          ),
-        ),
         if (state.showPageShapeView)
           AppTopBarItem(widget: _buildPageShapeSettingsButton(context, state)),
       ],
@@ -1581,7 +1574,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           onPressed: () => _toggleAndSaveContinuousReading(context, state),
         ),
 
-      // 4) Zoom In Button
+      // 4) Search Button
+      ActionButtonData(
+        widget: _buildSearchButton(
+          context,
+          state,
+          key: widget.enableTourTargets ? textBookSearchTourTargetKey : null,
+        ),
+        icon: FluentIcons.search_24_regular,
+        tooltip: 'חיפוש',
+        onPressed: _openSearchFromToolbar,
+      ),
+
+      // 5) Zoom In Button
       ActionButtonData(
         widget: _buildZoomInButton(context, state),
         icon: FluentIcons.zoom_in_24_regular,

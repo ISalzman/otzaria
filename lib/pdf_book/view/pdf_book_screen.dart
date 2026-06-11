@@ -2995,17 +2995,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                     },
                   ),
                 ),
-                AppTopBarItem(
-                  widget: ToolbarActionButton(
-                    key: widget.enableTourTargets
-                        ? pdfBookSearchTourTargetKey
-                        : null,
-                    tooltip: 'חיפוש',
-                    icon: FluentIcons.search_24_regular,
-                    compact: context.read<SettingsBloc>().state.compactMenuMode,
-                    onPressed: _ensureSearchTabIsActive,
-                  ),
-                ),
               ],
               center: _buildPdfCenter(context),
               trailingItems: [
@@ -3711,6 +3700,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         icon: FluentIcons.book_open_24_regular,
         tooltip: 'מצב תצוגה',
         onPressed: null,
+      ),
+      ActionButtonData.simple(
+        key: widget.enableTourTargets ? pdfBookSearchTourTargetKey : null,
+        icon: FluentIcons.search_24_regular,
+        tooltip: 'חיפוש',
+        onPressed: _ensureSearchTabIsActive,
+        compact: isCompact,
       ),
       ActionButtonData.simple(
         icon: FluentIcons.zoom_in_24_regular,
