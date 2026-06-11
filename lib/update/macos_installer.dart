@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import 'shell_quote.dart';
+
 /// התקנת עדכון ב-macOS על ידי החלפת ה-bundle המותקן.
 ///
 /// האפליקציה רצה ב-App Sandbox, ולכן תהליך-בן ישיר יורש את ה-sandbox ואינו
@@ -30,9 +32,6 @@ String? findInstalledMacAppBundlePath({String? executablePath}) {
   return bundle;
 }
 
-/// עוטף נתיב בגרשיים בודדים עבור bash, כולל טיפול בגרש בודד בתוך הנתיב.
-String _shellQuote(String path) => "'${path.replaceAll("'", "'\\''")}'";
-
 /// בונה את תוכן סקריפט העדכון: ממתין ליציאת אוצריא, מחלץ את ה-zip עם
 /// `ditto` (משמר symlinks והרשאות, בניגוד לחילוץ ב-Dart), מחליף את
 /// ה-bundle המותקן עם שחזור אוטומטי במקרה כשל, ומפעיל מחדש לפי
@@ -44,8 +43,8 @@ String buildMacUpdateScript({
   required int appPid,
   required bool relaunchApp,
 }) {
-  final app = _shellQuote(appBundlePath);
-  final zip = _shellQuote(zipPath);
+  final app = shellQuote(appBundlePath);
+  final zip = shellQuote(zipPath);
   return '''
 #!/bin/bash
 # סקריפט עדכון אוצריא — נוצר אוטומטית על ידי מנגנון העדכון ונמחק בסיומו.
