@@ -35,6 +35,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/tabs/widgets/reader_nav_center.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -3903,8 +3904,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   /// אזור המרכז של הסרגל העליון — כותרת + כפתורי ניווט (בתצוגה רגילה).
   /// בתצוגה משולבת: כותרת בלבד, ניווט עובר לתפריט overflow.
   Widget _buildPdfCenter(BuildContext context) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-
     final title = ValueListenableBuilder<String>(
       valueListenable: widget.tab.currentTitle,
       builder: (context, value, child) {
@@ -3929,45 +3928,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       return title;
     }
 
-    const gap = 4.0;
-    return Center(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ToolbarActionButton(
-            tooltip: 'תחילת הספר (CTRL + HOME)',
-            icon: FluentIcons.arrow_previous_24_filled,
-            compact: isCompact,
-            onPressed: () => _goToPageWithSpreadLock(1),
-          ),
-          ToolbarActionButton(
-            tooltip: 'הקודם',
-            icon: FluentIcons.chevron_left_24_regular,
-            compact: isCompact,
-            onPressed: _goPreviousPage,
-          ),
-          const SizedBox(width: gap),
-          ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 80, maxWidth: 340),
-            child: title,
-          ),
-          PageNumberDisplay(controller: widget.tab.pdfViewerController),
-          const SizedBox(width: gap),
-          ToolbarActionButton(
-            tooltip: 'הבא',
-            icon: FluentIcons.chevron_right_24_regular,
-            compact: isCompact,
-            onPressed: _goNextPage,
-          ),
-          ToolbarActionButton(
-            tooltip: 'סוף הספר (CTRL + END)',
-            icon: FluentIcons.arrow_next_24_filled,
-            compact: isCompact,
-            onPressed: () => _goToPageWithSpreadLock(
-                widget.tab.pdfViewerController.pageCount),
-          ),
-        ],
-      ),
+    return ReaderNavCenter(
+      title: title,
+      prevMajorTooltip: 'תחילת הספר (CTRL + HOME)',
+      prevMinorTooltip: 'הקודם',
+      nextMinorTooltip: 'הבא',
+      nextMajorTooltip: 'סוף הספר (CTRL + END)',
+      onPrevMajor: () => _goToPageWithSpreadLock(1),
+      onPrevMinor: _goPreviousPage,
+      onNextMinor: _goNextPage,
+      onNextMajor: () =>
+          _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
+      afterTitle: PageNumberDisplay(controller: widget.tab.pdfViewerController),
     );
   }
 

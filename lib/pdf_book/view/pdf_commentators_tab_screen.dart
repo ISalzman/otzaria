@@ -28,6 +28,7 @@ import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
+import 'package:otzaria/tabs/widgets/reader_nav_center.dart';
 
 /// ערך מיוחד ל-_selectedParagraphIdx שמשמעו "כל הכותרת" (כל המפרשים בקטע),
 /// במקביל ל-_kAllChapter בכרטסיית הטקסט.
@@ -598,7 +599,23 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
           ),
         ),
       ],
-      center: _buildPdfCommentatorsCenter(context),
+      center: ReaderNavCenter(
+        title: Text(
+          'מפרשים על ${widget.tab.sourceTab.book.title}',
+          style: AppTopBar.titleStyle(context),
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
+        prevMajorTooltip: 'הכותרת הקודמת',
+        prevMinorTooltip: 'הקטע הקודם',
+        nextMinorTooltip: 'הקטע הבא',
+        nextMajorTooltip: 'הכותרת הבאה',
+        onPrevMajor: _navigateToPrevHeading,
+        onPrevMinor: _navigateToPrevParagraph,
+        onNextMinor: _navigateToNextParagraph,
+        onNextMajor: _navigateToNextHeading,
+      ),
       trailingItems: [
         AppTopBarItem(
           widget: ResponsiveActionBar(
@@ -744,55 +761,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
           ),
         ),
       ],
-    );
-  }
-
-  /// אזור המרכז — כותרת + כפתורי ניווט (כותרת ומקטע) ממורכזים בסרגל.
-  Widget _buildPdfCommentatorsCenter(BuildContext context) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    const gap = 4.0;
-    return Center(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ToolbarActionButton(
-            tooltip: 'הכותרת הקודמת',
-            icon: FluentIcons.arrow_previous_24_filled,
-            compact: isCompact,
-            onPressed: _navigateToPrevHeading,
-          ),
-          ToolbarActionButton(
-            tooltip: 'הקטע הקודם',
-            icon: FluentIcons.chevron_left_24_regular,
-            compact: isCompact,
-            onPressed: _navigateToPrevParagraph,
-          ),
-          const SizedBox(width: gap),
-          ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 80, maxWidth: 340),
-            child: Text(
-              'מפרשים על ${widget.tab.sourceTab.book.title}',
-              style: AppTopBar.titleStyle(context),
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          ),
-          const SizedBox(width: gap),
-          ToolbarActionButton(
-            tooltip: 'הקטע הבא',
-            icon: FluentIcons.chevron_right_24_regular,
-            compact: isCompact,
-            onPressed: _navigateToNextParagraph,
-          ),
-          ToolbarActionButton(
-            tooltip: 'הכותרת הבאה',
-            icon: FluentIcons.arrow_next_24_filled,
-            compact: isCompact,
-            onPressed: _navigateToNextHeading,
-          ),
-        ],
-      ),
     );
   }
 

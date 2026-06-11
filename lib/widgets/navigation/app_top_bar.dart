@@ -251,15 +251,27 @@ class _AppTopBarState extends State<AppTopBar>
             height: barH,
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
-              child: Row(
+              child: Stack(
                 children: [
-                  ..._itemsToWidgets(context, widget.leadingItems),
                   if (widget.leadingItems.isNotEmpty)
-                    const SizedBox(width: 8.0),
-                  Expanded(child: widget.center ?? const SizedBox.shrink()),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: _itemsToWidgets(context, widget.leadingItems),
+                      ),
+                    ),
                   if (widget.trailingItems.isNotEmpty)
-                    const SizedBox(width: 8.0),
-                  ..._itemsToWidgets(context, widget.trailingItems),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children:
+                            _itemsToWidgets(context, widget.trailingItems),
+                      ),
+                    ),
+                  if (widget.center != null)
+                    Center(child: widget.center!),
                 ],
               ),
             ),

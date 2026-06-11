@@ -30,6 +30,7 @@ import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/search/utils/snippet_builder.dart';
+import 'package:otzaria/tabs/widgets/reader_nav_center.dart';
 
 const _kAllChapter = -1;
 
@@ -848,7 +849,22 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           ),
         ),
       ],
-      center: _buildCommentatorsCenter(context, state, chapters),
+      center: ReaderNavCenter(
+        title: Text(
+          'מפרשים על ${state.book.title}',
+          style: AppTopBar.titleStyle(context),
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+        ),
+        prevMajorTooltip: 'הפרק הקודם',
+        prevMinorTooltip: 'הקטע הקודם',
+        nextMinorTooltip: 'הקטע הבא',
+        nextMajorTooltip: 'הפרק הבא',
+        onPrevMajor: () => _navigateToPrevChapter(chapters),
+        onPrevMinor: () => _navigateToPrevVerse(chapters),
+        onNextMinor: () => _navigateToNextVerse(chapters),
+        onNextMajor: () => _navigateToNextChapter(chapters),
+      ),
       trailingItems: [
         AppTopBarItem(
           widget: ResponsiveActionBar(
@@ -1026,58 +1042,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           ),
         ),
       ],
-    );
-  }
-
-  /// אזור המרכז — כותרת + כפתורי ניווט (פרק ומקטע) ממורכזים בסרגל.
-  Widget _buildCommentatorsCenter(
-    BuildContext context,
-    TextBookLoaded state,
-    List<TocEntry> chapters,
-  ) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    const gap = 4.0;
-    return Center(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ToolbarActionButton(
-            tooltip: 'הפרק הקודם',
-            icon: FluentIcons.arrow_previous_24_filled,
-            compact: isCompact,
-            onPressed: () => _navigateToPrevChapter(chapters),
-          ),
-          ToolbarActionButton(
-            tooltip: 'הקטע הקודם',
-            icon: FluentIcons.chevron_left_24_regular,
-            compact: isCompact,
-            onPressed: () => _navigateToPrevVerse(chapters),
-          ),
-          const SizedBox(width: gap),
-          ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 80, maxWidth: 340),
-            child: Text(
-              'מפרשים על ${state.book.title}',
-              style: AppTopBar.titleStyle(context),
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: gap),
-          ToolbarActionButton(
-            tooltip: 'הקטע הבא',
-            icon: FluentIcons.chevron_right_24_regular,
-            compact: isCompact,
-            onPressed: () => _navigateToNextVerse(chapters),
-          ),
-          ToolbarActionButton(
-            tooltip: 'הפרק הבא',
-            icon: FluentIcons.arrow_next_24_filled,
-            compact: isCompact,
-            onPressed: () => _navigateToNextChapter(chapters),
-          ),
-        ],
-      ),
     );
   }
 
