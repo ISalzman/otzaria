@@ -179,10 +179,9 @@ class TopNavItem extends StatelessWidget {
       fontWeight: FontWeight.bold,
       color: textColor,
     );
-    final textDirection = Directionality.of(context);
     final textPainter = TextPainter(
       text: TextSpan(text: label, style: reservedTextStyle),
-      textDirection: textDirection,
+      textDirection: TextDirection.rtl,
       maxLines: 1,
     )..layout();
     final textWidth = textPainter.width.ceilToDouble();

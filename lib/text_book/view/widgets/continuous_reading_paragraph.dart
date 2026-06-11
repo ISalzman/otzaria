@@ -45,7 +45,6 @@ class ContinuousReadingParagraph extends StatefulWidget {
   final ValueChanged<int>? onLineSecondaryTap;
   final ContinuousReadingUrlTap? onTapUrl;
   final TextStyle? linkStyle;
-  final TextDirection textDirection;
   final TextAlign textAlign;
 
   const ContinuousReadingParagraph({
@@ -56,7 +55,6 @@ class ContinuousReadingParagraph extends StatefulWidget {
     this.onLineSecondaryTap,
     this.onTapUrl,
     this.linkStyle,
-    this.textDirection = TextDirection.rtl,
     this.textAlign = TextAlign.justify,
   });
 
@@ -117,7 +115,6 @@ class _ContinuousReadingParagraphState
       builder: (context, constraints) {
         return Text.rich(
           textSpan,
-          textDirection: widget.textDirection,
           textAlign: _effectiveTextAlign(
             textSpan: textSpan,
             constraints: constraints,
@@ -155,7 +152,7 @@ class _ContinuousReadingParagraphState
     final textPainter = TextPainter(
       text: textSpan,
       textAlign: TextAlign.start,
-      textDirection: widget.textDirection,
+      textDirection: TextDirection.rtl,
       textScaler: textScaler,
     )..layout(maxWidth: constraints.maxWidth);
 

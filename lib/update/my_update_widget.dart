@@ -755,10 +755,9 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     // הימני ב-RTL. ללא היסט הצ'יפ נצמד לקצה הימני המוחלט ולכן נמתח מעל הסרגל
     // ואל תוך תוכן המסך. ההיסט מצמיד אותו לקצה תוכן המסך בלבד.
     const navRailWidth = 75.0; // 74 רוחב הסרגל + 1 הקו המפריד
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
-    final railInset = isLandscape && isRtl ? navRailWidth : 0.0;
+    final railInset = isLandscape ? navRailWidth : 0.0;
 
     return Stack(
       children: [
