@@ -102,6 +102,27 @@ void main() {
         reason: 'התזוזה חייבת לדלג על האות+ניקוד כיחידה אחת');
   });
 
+  testWidgets('חץ רגיל מכווץ בחירה לקצה שבכיוון החץ', (tester) async {
+    final controller = await pumpField(tester);
+    // בחירה "אבג דהו" (0..7). חץ ימין ויזואלי → קצה ימני = offset נמוך (0).
+    controller.selection = const TextSelection(baseOffset: 0, extentOffset: 7);
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    expect(controller.selection.isCollapsed, isTrue);
+    expect(controller.selection.extentOffset, 0);
+
+    // ושוב בחירה — חץ שמאל ויזואלי → קצה שמאלי = offset גבוה (7).
+    controller.selection = const TextSelection(baseOffset: 0, extentOffset: 7);
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pump();
+    expect(controller.selection.isCollapsed, isTrue);
+    expect(controller.selection.extentOffset, 7);
+  });
+
   testWidgets('חץ ימין ב-offset 0 אינו קורס (אין אינדקס שלילי)',
       (tester) async {
     // ויזואלית-ימין מ-offset 0 = אחורה אל מעבר לתחילת הטקסט. אסור להעביר

@@ -257,6 +257,11 @@ void main(List<String> args) async {
   }
 
   SentryWidgetsFlutterBinding.ensureInitialized();
+
+  // מנטרל את ההבהוב המובנה (הפרטי ב-EditableTextState) כדי ש-RtlTextField
+  // ינהל אותו בעצמו. ראו "ניהול הבהוב הסמן" ב-rtl_text_field.dart.
+  EditableText.debugDeterministicCursor = true;
+
   await _initializeDataRootForEarlyLogging();
   await _initializeLogMetadata();
   hierarchicalLoggingEnabled = true;
