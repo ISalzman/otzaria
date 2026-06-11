@@ -1253,10 +1253,7 @@ class _MenuItemHoverPreviewState extends State<_MenuItemHoverPreview> {
         ),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(12),
-          child: Directionality(
-            textDirection: TextDirection.rtl,
-            child: Builder(builder: widget.previewBuilder),
-          ),
+          child: Builder(builder: widget.previewBuilder),
         ),
       ),
     );
