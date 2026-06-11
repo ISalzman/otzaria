@@ -676,6 +676,55 @@ void main() {
       cloned.dispose();
     });
 
+    test('TextBookTab משמר צורת הדף ותצוגה מפוצלת גם כשה-bloc לא נטען', () {
+      // תרחיש החלפת שולחן עבודה: הטאב השמור מעולם לא הוצג (state נשאר
+      // TextBookInitial), ובחזרה אליו הוא משוכפל שוב.
+      final original = TextBookTab(
+        book: TextBook(title: 'בראשית'),
+        index: 3,
+        splitedView: false,
+        showPageShapeView: true,
+        openLeftPane: true,
+      );
+
+      final cloned = OpenedTab.from(original) as TextBookTab;
+      final clonedState = cloned.bloc.state as TextBookInitial;
+
+      expect(
+        clonedState.showPageShapeView,
+        isTrue,
+        reason:
+            'טאב בשולחן עבודה לא-פעיל נשאר ב-TextBookInitial; בלי קריאת הערכים ממנו צורת הדף מתאפסת בכל החלפת שולחן עבודה.',
+      );
+      expect(clonedState.splitedView, isFalse);
+      expect(clonedState.showLeftPane, isTrue);
+
+      original.dispose();
+      cloned.dispose();
+    });
+
+    test('TextBookTab.toJson משמר מפרשים ו-showLeftPane כשה-bloc לא נטען', () {
+      // saveWorkspaces מסריאלת גם טאבים של שולחנות לא-פעילים שמעולם לא נטענו;
+      // בלי נפילה לערכי הטאב הם היו נשמרים לדיסק עם [] ו-false.
+      final tab = TextBookTab(
+        book: TextBook(title: 'בראשית'),
+        index: 3,
+        commentators: ['רש"י'],
+        openLeftPane: true,
+        splitedView: false,
+        showPageShapeView: true,
+      );
+
+      final json = tab.toJson();
+
+      expect(json['commentators'], ['רש"י']);
+      expect(json['showLeftPane'], isTrue);
+      expect(json['showPageShapeView'], isTrue);
+      expect(json['splitedView'], isFalse);
+
+      tab.dispose();
+    });
+
     test('TextBookTab dispose משחרר גם את openNotesTabNotifier', () {
       final tab = TextBookTab(
         book: TextBook(title: 'ספר בדיקה'),
