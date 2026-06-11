@@ -50,6 +50,14 @@ String buildMacUpdateScript({
 # סקריפט עדכון אוצריא — נוצר אוטומטית על ידי מנגנון העדכון ונמחק בסיומו.
 set -euo pipefail
 
+# בדיקת הרשאה מכאן ולא מהאפליקציה — שם ה-sandbox חוסם כתיבה תמיד.
+APPDIR=\$(dirname $app)
+if [ ! -w "\$APPDIR" ]; then
+  echo "שגיאה: אין הרשאת כתיבה אל \$APPDIR" >&2
+  echo "להתקנת העדכון יש להוריד את קובץ ה-DMG מדף ההורדות ולהתקין ידנית." >&2
+  exit 1
+fi
+
 echo "ממתין לסגירת אוצריא..."
 while kill -0 $appPid 2>/dev/null; do sleep 0.2; done
 

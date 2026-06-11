@@ -96,8 +96,9 @@ String? pickWindowsAssetUrl(
 
 /// בוחר את נכס העדכון המתאים ל-macOS מתוך נכסי ה-release.
 ///
-/// כשהאפליקציה מסוגלת לעדכון עצמי ([selfUpdateCapable], כלומר רצה
-/// מ-bundle רגיל וניתן-לכתיבה) — מעדיפים את ה-zip של האפליקציה בלבד
+/// כשהאפליקציה מסוגלת לעדכון עצמי ([selfUpdateCapable], כלומר רצה מ-bundle
+/// רגיל — לא Translocation ולא DMG; הרשאת הכתיבה בפועל נבדקת בסקריפט העדכון,
+/// שרץ מחוץ ל-sandbox) — מעדיפים את ה-zip של האפליקציה בלבד
 /// (`otzaria-macos.zip`), שמוחלף ברקע על ידי סקריפט העדכון. אחרת בוחרים
 /// **רק** DMG, שנפתח להתקנה ידנית בגרירה: zip ללא עדכון עצמי הוא נתיב
 /// שבור — הוא אינו מחולץ ב-Dart במאק (ראה `_downloadRelease`) ולכן
@@ -808,11 +809,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     final installer = _installerFile;
     if (installer == null) return;
 
-    // רק המתקין השקט משוגר ישירות ב-Process.start, משתי סיבות: זו הדרך
-    // היחידה להעביר לו /NOLAUNCH=1, והוא בטוח תחת CreateProcess כי הוא
-    // מוגדר PrivilegesRequired=lowest ומטפל בהרמת הרשאות בעצמו. המתקין
-    // הרגיל עלול לדרוש UAC כבר בשיגור, ולכן חייב סמנטיקת ShellExecute —
-    // openInstaller — אחרת CreateProcess ייכשל (ERROR_ELEVATION_REQUIRED).
+    // רק המתקין השקט (PrivilegesRequired=lowest) בטוח ב-Process.start; הרגיל
+    // עלול לדרוש UAC בשיגור וחייב ShellExecute, אחרת ERROR_ELEVATION_REQUIRED.
     if (Platform.isWindows && _installerIsSilent) {
       await Process.start(
         installer.absolute.path,
@@ -822,9 +820,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       return;
     }
 
-    // ב-macOS, כשירד ה-zip של האפליקציה ויש bundle מותקן בר-החלפה —
-    // עדכון עצמי מלא דרך סקריפט ההחלפה. אחרת (DMG) נופלים ל-openInstaller
-    // שמעגן (mount) את הקובץ להתקנה ידנית בגרירה.
+    // macOS: zip + bundle בר-החלפה = עדכון עצמי בסקריפט; אחרת openInstaller
+    // מעגן (mount) את ה-DMG להתקנה ידנית בגרירה.
     if (Platform.isMacOS && installer.path.toLowerCase().endsWith('.zip')) {
       final appBundlePath = findInstalledMacAppBundlePath();
       if (appBundlePath != null) {
@@ -866,10 +863,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // ה-Stack עוטף את כל החלון, כולל סרגל הניווט הצדי. בדסקטופ בפריסת
-    // landscape הסרגל (ברוחב 74) והקו המפריד (1) יושבים בצד ההתחלה — בקצה
-    // הימני ב-RTL. ללא היסט הצ'יפ נצמד לקצה הימני המוחלט ולכן נמתח מעל הסרגל
-    // ואל תוך תוכן המסך. ההיסט מצמיד אותו לקצה תוכן המסך בלבד.
+    // ה-Stack עוטף גם את סרגל הניווט הצדי; בלי היסט ברוחב הסרגל הצ'יפ
+    // נצמד לקצה החלון ונמתח מעל הסרגל במקום מעל תוכן המסך.
     const navRailWidth = 75.0; // 74 רוחב הסרגל + 1 הקו המפריד
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;

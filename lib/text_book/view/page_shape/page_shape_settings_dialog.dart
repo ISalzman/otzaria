@@ -6,6 +6,7 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_se
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
+import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 /// סוג שמירת הגדרות מפרשים
@@ -401,26 +402,12 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                         value: _saveForCurrentBookOnly,
                         onChanged: (value) async {
                           if (!value && _saveForCurrentBookOnly) {
-                            final confirm = await showDialog<bool>(
+                            final confirm = await showWarningDialog(
                               context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('חזרה להגדרות גלובליות'),
-                                content: const Text(
+                              title: 'חזרה להגדרות גלובליות',
+                              content:
                                   'האם לאפס את הגדרות התצוגה הספציפיות לספר זה ולחזור להגדרות הגלובליות?',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text('ביטול'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    child: const Text('אפס'),
-                                  ),
-                                ],
-                              ),
+                              confirmText: 'אפס',
                             );
                             if (confirm == true) {
                               await _resetDisplaySettingsToGlobal();
@@ -790,25 +777,13 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
         TextButton.icon(
           onPressed: () async {
             final navigator = Navigator.of(context);
-            final confirm = await showDialog<bool>(
+            final confirm = await showWarningDialog(
               context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('איפוס הגדרות מפרשים'),
-                content: const Text(
-                  'האם לאפס את הגדרות המפרשים לברירות המחדל?\n\n'
-                  'פעולה זו תמחק את ההגדרות השמורות ותטען את המפרשים המתאימים לפי סוג הספר.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('ביטול'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('אפס'),
-                  ),
-                ],
-              ),
+              title: 'איפוס הגדרות מפרשים',
+              content: 'האם לאפס את הגדרות המפרשים לברירות המחדל?',
+              subtitle: 'פעולה זו תמחק את ההגדרות השמורות ותטען את המפרשים '
+                  'המתאימים לפי סוג הספר.',
+              confirmText: 'אפס',
             );
 
             if (confirm == true) {

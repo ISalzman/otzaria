@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/widgets/feedback/scrollbar_target_label.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -356,10 +357,8 @@ class _ScrollablePositionedListScrollbarState
                           height: thumbPixelHeight,
                           child: Container(
                             decoration: BoxDecoration(
-                              color: _isDragging
-                                  ? colorScheme.primary.withValues(alpha: 0.8)
-                                  : colorScheme.onSurfaceVariant
-                                      .withValues(alpha: 0.4),
+                              color: AppSurfaces.scrollbarThumb(colorScheme,
+                                  isDragging: _isDragging),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),

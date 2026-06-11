@@ -24,7 +24,6 @@ AppContextMenuEntry buildLinkContextMenuEntry({
         snapshot.data ?? link.fallbackDisplayReference,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        textDirection: TextDirection.rtl,
       ),
     ),
     onTap: onTap,
@@ -63,7 +62,6 @@ class LinkHoverPreviewContent extends StatelessWidget {
                     fontFamily: settingsState.commentatorsFontFamily,
                     color: colorScheme.primary,
                   ),
-                  textDirection: TextDirection.rtl,
                 );
               },
             ),
@@ -78,7 +76,6 @@ class LinkHoverPreviewContent extends StatelessWidget {
                       color: colorScheme.error,
                       fontSize: settingsState.commentatorsFontSize - 2,
                     ),
-                    textDirection: TextDirection.rtl,
                   );
                 }
                 if (!snapshot.hasData) {
@@ -107,7 +104,6 @@ class LinkHoverPreviewContent extends StatelessWidget {
                       color: colorScheme.onSurfaceVariant,
                       fontSize: settingsState.commentatorsFontSize - 2,
                     ),
-                    textDirection: TextDirection.rtl,
                   );
                 }
 
