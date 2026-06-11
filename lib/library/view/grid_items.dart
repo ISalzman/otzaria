@@ -82,14 +82,13 @@ bool _textOverflows({
   required TextStyle style,
   required int maxLines,
   required double maxWidth,
-  TextDirection textDirection = TextDirection.rtl,
   required TextAlign textAlign,
 }) {
   final textPainter = TextPainter(
     text: TextSpan(text: text, style: style),
     maxLines: maxLines,
     ellipsis: 'Γאª',
-    textDirection: textDirection,
+    textDirection: Directionality.of(context),
     textAlign: textAlign,
     textScaler: MediaQuery.textScalerOf(context),
   )..layout(maxWidth: maxWidth);
@@ -119,7 +118,6 @@ class LibraryOverflowTooltipText extends StatelessWidget {
   final TextStyle? style;
   final int maxLines;
   final TextAlign textAlign;
-  final TextDirection? textDirection;
 
   const LibraryOverflowTooltipText({
     super.key,
@@ -127,13 +125,11 @@ class LibraryOverflowTooltipText extends StatelessWidget {
     this.style,
     this.maxLines = 2,
     this.textAlign = TextAlign.right,
-    this.textDirection,
   });
 
   @override
   Widget build(BuildContext context) {
     final resolvedStyle = style ?? DefaultTextStyle.of(context).style;
-    final resolvedDirection = textDirection ?? Directionality.of(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -145,7 +141,6 @@ class LibraryOverflowTooltipText extends StatelessWidget {
               style: resolvedStyle,
               maxLines: maxLines,
               maxWidth: constraints.maxWidth,
-              textDirection: resolvedDirection,
               textAlign: textAlign,
             );
 
@@ -154,7 +149,6 @@ class LibraryOverflowTooltipText extends StatelessWidget {
           maxLines: maxLines,
           overflow: TextOverflow.ellipsis,
           textAlign: textAlign,
-          textDirection: resolvedDirection,
           style: resolvedStyle,
         );
 

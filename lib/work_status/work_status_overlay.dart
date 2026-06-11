@@ -19,18 +19,12 @@ class WorkStatusOverlay extends StatelessWidget {
 
         final items = state.orderedItems;
         final colorScheme = Theme.of(context).colorScheme;
-        final isRtl = Directionality.of(context) == TextDirection.rtl;
         final isWindows = Theme.of(context).platform == TargetPlatform.windows;
-        final alignment = isWindows
-            ? Alignment.bottomLeft
-            : (isRtl ? Alignment.bottomRight : Alignment.bottomLeft);
+        final alignment =
+            isWindows ? Alignment.bottomLeft : Alignment.bottomRight;
         final padding = isWindows
             ? const EdgeInsets.only(bottom: 24, left: 16)
-            : EdgeInsets.only(
-                bottom: 24,
-                left: isRtl ? 0 : 16,
-                right: isRtl ? 16 : 0,
-              );
+            : const EdgeInsets.only(bottom: 24, right: 16);
         final closeOnRight = alignment == Alignment.topRight;
 
         return Align(
