@@ -475,11 +475,6 @@ class AppPaths {
     return resolveNotesDbPath('user_books.db');
   }
 
-  /// Creates startup directories when eagerly required.
-  static Future<void> createNecessaryDirectories() async {
-    // Directories are created lazily by the services that actually use them.
-  }
-
   /// Gets the root path for all plugin data.
   static Future<String> getPluginsRootPath() async {
     return p.join(await getDataRootPath(), 'plugins');

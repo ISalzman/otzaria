@@ -45,8 +45,7 @@ import 'package:otzaria/update/my_update_widget.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:otzaria/main.dart'
-    show appWindowListener, prepareMainWindowReveal, presentMainWindow;
+import 'package:otzaria/main.dart' show appWindowListener, presentMainWindow;
 import 'package:otzaria/core/splash_screen.dart' show SplashIcon;
 import 'package:otzaria/navigation/view/custom_title_bar.dart';
 import 'package:otzaria/migration/sync/background_sync_initializer.dart';
@@ -272,7 +271,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   // (בלי רגע ריק) וגם "מגשר" על זמן הציור הקר של ה-UI. נפרד מ-_initialContentReady
   // (שמפעיל את ה-Opacity של התוכן). ראה _revealMainWindowOnce.
   bool _splashOverlayVisible = true;
-  // משמש כשומר re-entry: החשיפה מתבצעת אסינכרונית (prepareMainWindowReveal עם
+  // משמש כשומר re-entry: החשיפה מתבצעת אסינכרונית (presentMainWindow עם
   // await), כך ש-_initialContentReady נקבע מאוחר; הדגל הזה מונע כניסה כפולה
   // בזמן ה-await (failsafe timer + stream listener).
   bool _revealStarted = false;
@@ -447,6 +446,21 @@ class MainWindowScreenState extends State<MainWindowScreen>
     _tourCubit = TourCubit();
     _lastScreen = context.read<NavigationBloc>().state.currentScreen;
 
+    // כשהמסך ההתחלתי אינו קריאה (אין טאבים שמורים) אין ספר להמתין לו, ולכן
+    // אין סיבה להסתיר את התוכן: הוא נצבע כבר מהפריים הראשון — בעוד החלון
+    // מוסתר וה-splash הנייטיבי מוצג — כך שהציור הקר (קומפילציית shaders,
+    // אטלס גופנים) מתרחש מאחורי הסמל. בלי זה התוכן עטוף Opacity(0) שמדלג
+    // על הציור כליל, הציור הקר מתחיל רק ברגע החשיפה, והסמל (fade-out קבוע
+    // של ~90ms על thread נייטיבי חסין-עומס) נעלם לפני שהפריים הראשון הספיק
+    // להתרסטר — והמשתמש רואה פער ריק בין היעלמות הסמל להופעת החלון.
+    // LoadLibrary משוגר כאן מאותה סיבה: אין שאילתת תוכן ספר שהוא עלול לעכב,
+    // ועדיף שמסך הספרייה ייחשף כשהקטלוג כבר בבנייה.
+    if (_lastScreen != Screen.reading) {
+      _initialContentReady = true;
+      _splashOverlayVisible = false;
+      context.read<LibraryBloc>().add(LoadLibrary());
+    }
+
     // הצגת פופאפ פרסומת אחרי 5 שניות
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // אתחול tracker למעקב אחרי מיקום הקריאה
@@ -510,7 +524,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
   /// [TextBookError] (או ייסגר) לפני שחושפים. בכל מקרה אחר (מסך שאינו קריאה /
   /// PDF / ספר שכבר נטען) — חושפים מיד. אין timeout שרירותי בנתיב הזה.
   void _scheduleSplashReveal() {
-    if (_hasScheduledSplashReveal || _initialContentReady) return;
+    // _revealStarted (ולא _initialContentReady) כשומר: במסך שאינו קריאה
+    // התוכן כבר נצבע מהפריים הראשון (_initialContentReady=true מ-initState),
+    // אבל החלון עצמו עדיין מוסתר וממתין ל-presentMainWindow שכאן.
+    if (_hasScheduledSplashReveal || _revealStarted) return;
     if (!mounted) return;
 
     final navigationState = context.read<NavigationBloc>().state;
@@ -564,8 +581,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
     _splashFailsafeTimer?.cancel();
     _splashFailsafeTimer = null;
 
-    // עכשיו, אחרי שהספר הפעיל נטען, מתחילים את בניית הקטלוג (LoadLibrary).
-    // הוא נדחה עד לכאן כדי שלא יתחרה בשאילתת תוכן הספר בעלייה (שיפור ביצועים).
     if (!mounted) {
       _initialContentReady = true;
       return;
@@ -583,29 +598,41 @@ class MainWindowScreenState extends State<MainWindowScreen>
           .add(const NavigateToScreen(Screen.library));
     }
 
-    context.read<LibraryBloc>().add(LoadLibrary());
-    // חשיפה:
-    //   1. prepareMainWindowReveal — מביא את החלון לגבולותיו הסופיים (ב-Windows
-    //      בעודו מוסתר).
-    //   2. חושפים את התוכן (Opacity 0→1) ומסירים את אוברליי ה-splash של Flutter
+    // חשיפה (הגבולות והמסגרת הסופיים כבר הוחלו מוקדם, בעוד החלון מוסתר —
+    // ראה _initializeProcessSingletons):
+    //   1. חושפים את התוכן (Opacity 0→1) ומסירים את אוברליי ה-splash של Flutter
     //      *באותו setState* — כך הפריים שמצויר נקי מהסמל הישן (אחרת, בעומס
     //      האתחול, הסרה ב-setState נפרד מתעכבת והסמל הישן מהבהב במרכז החלון).
-    //   3. ממתינים שהפריים יצויר, ואז מציגים את החלון (presentMainWindow). ב-
-    //      Windows הסמל הנייטיב מתחיל fade-out בדיוק כאן (מעבר חלק).
+    //   2. ממתינים שהפריים יצויר, ואז מציגים את החלון (presentMainWindow). ב-
+    //      Windows הסמל הנייטיב מתחיל fade-out כשהפריים בגודל הסופי מוצג בפועל.
+    //   3. רק אז משגרים את LoadLibrary: בניית הקטלוג (~300ms CPU על ה-main
+    //      isolate) נדחתה לכאן כדי שלא תתחרה בשאילתת תוכן הספר הפעיל ולא
+    //      בציור פריים החשיפה. ה-endOfFrame הנוסף לפני השיגור נותן לפריים
+    //      ה-relayout של המיקסום (שעשוי להימשך יותר מפריים אחד) להסתיים לפני
+    //      שהקטלוג תופס את ה-main isolate. ה-bloc חי ברמת AppBootstrap, ולכן
+    //      בטוח לשגר אליו גם אם המסך כבר לא mounted.
+    final libraryBloc = context.read<LibraryBloc>();
     unawaited(() async {
-      await prepareMainWindowReveal();
       if (!mounted) {
         _initialContentReady = true;
         _splashOverlayVisible = false;
         await presentMainWindow();
+        await WidgetsBinding.instance.endOfFrame;
+        libraryBloc.add(LoadLibrary());
         return;
       }
-      setState(() {
-        _initialContentReady = true;
-        _splashOverlayVisible = false;
-      });
+      // במסך שאינו קריאה התוכן כבר נצבע מהפריים הראשון (ראה initState) ואין
+      // צורך ב-setState; ה-endOfFrame עדיין נותן לפריים תלוי-ועומד להסתיים.
+      if (!_initialContentReady || _splashOverlayVisible) {
+        setState(() {
+          _initialContentReady = true;
+          _splashOverlayVisible = false;
+        });
+      }
       await WidgetsBinding.instance.endOfFrame;
       await presentMainWindow();
+      await WidgetsBinding.instance.endOfFrame;
+      libraryBloc.add(LoadLibrary());
     }());
   }
 
