@@ -59,6 +59,7 @@ import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/error_log_file.dart';
 import 'package:otzaria/core/external_activation_queue.dart';
+import 'package:otzaria/core/portable_paths.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
@@ -92,9 +93,15 @@ AppWindowListener? _appWindowListener;
 const ExternalActivationQueue _externalActivationQueue =
     ExternalActivationQueue();
 
-// מסנכרן בין _heavyInitialize לבין waitUntilReadyToShow:
-// החלון יוצג רק אחרי Settings.init + WindowPersistence.restoreIfAny
-final _windowReadyCompleter = Completer<void>();
+// מושלם כשהחלון הראשי נחשף ([presentMainWindow]). חימומי המטמון ממתינים לו
+// כדי שלא יתחרו בטעינת תוכן הספר הפעיל על ה-main isolate ועל seforim.db.
+final _mainWindowRevealedCompleter = Completer<void>();
+
+void _markMainWindowRevealed() {
+  if (!_mainWindowRevealedCompleter.isCompleted) {
+    _mainWindowRevealedCompleter.complete();
+  }
+}
 
 /// Getter for accessing the window listener from other parts of the app
 AppWindowListener? get appWindowListener => _appWindowListener;
@@ -438,13 +445,8 @@ Future<void> _runAppBootstrap() async {
     windowManager.addListener(_appWindowListener!);
     await windowManager.setPreventClose(true);
 
-    // בכל פלטפורמות הדסקטופ חלון ה-splash הוא נייטיב ועצמאי (סמל צף, ראה
-    // windows/runner/splash_window.cpp, linux/runner/splash_window.cc,
-    // macos/Runner/MainFlutterWindow.swift) ומוצג כבר ב-runner לפני שמנוע Flutter
-    // עולה. החלון הראשי נשאר *מוסתר* (ה-runner אינו מציג אותו בפריים הראשון) עד
-    // החשיפה (prepareMainWindowReveal/presentMainWindow), ואז נפתח ישר בגבולותיו
-    // הסופיים עם התוכן — ללא חלון מקדים, ללא קפיצה וללא פער. לכן אין כאן
-    // waitUntilReadyToShow.
+    // ה-splash נייטיבי ב-runner והחלון הראשי נשאר מוסתר עד presentMainWindow,
+    // שם הוא נחשף ישר בגבולותיו הסופיים — לכן אין כאן waitUntilReadyToShow.
   }
 
   runApp(
@@ -471,47 +473,42 @@ Future<void> _closeNativeSplash() async {
   }
 }
 
-/// שלב 1 בחשיפת החלון הראשי: מגדיר מסגרת/מינימום ומחיל את הגבולות הסופיים בעוד
-/// החלון הראשי עדיין **מוסתר** (ה-runner לא הציג אותו בכל פלטפורמות הדסקטופ).
-/// המנוע מצייר את התוכן לתוך משטח החלון המוסתר, והחלון יוצג ב-[presentMainWindow]
-/// רק אחרי שהתוכן צויר — כך הוא "מופיע" בבת אחת בגודלו המלא עם תוכן, ללא
-/// שינוי-גודל גלוי וללא פער. חלון ה-splash הנייטיב הצף מספק משוב עד אז.
-///
-/// נקרא מ-MainWindowScreen ברגע שתוכן הטאב הפעיל נטען.
-Future<void> prepareMainWindowReveal() async {
-  if (kIsWeb || !(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-    return;
-  }
-  try {
-    await windowManager.setMinimumSize(WindowPersistence.minSize);
-    await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-    // מחילים את הגבולות הסופיים בעוד החלון מוסתר — שינוי-הגודל אינו נראה.
-    await WindowPersistence.applyRestoredBounds();
-  } catch (error, stackTrace) {
-    _logNonFatalInitializationError(
-        'Prepare main window reveal', error, stackTrace);
-  }
-}
-
-/// שלב 2 בחשיפת החלון הראשי: מציג את החלון המוסתר (שכבר בגבולותיו הסופיים, עם
+/// חשיפת החלון הראשי: מציג את החלון המוסתר (שכבר בגבולותיו הסופיים, עם
 /// התוכן שצויר), ממקסם אם נדרש, וסוגר את ה-splash הנייטיב באותו רגע — כך החלון
 /// מופיע בבת אחת עם תוכן והסמל הצף מתפוגג, ללא קפיצה וללא פער. נקרא אחרי שהתוכן
 /// נחשף ונצבע.
 Future<void> presentMainWindow() async {
   if (kIsWeb || !(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    _markMainWindowRevealed();
     return;
   }
   try {
+    // show/maximize זורקים את ה-swapchain (חלון שקוף עד פריים חדש) — תחת cloak
+    // זה בלתי-נראה; החשיפה היא ביטול ה-cloak הנייטיבי ב-flutter_window.cpp.
+    if (!kIsWeb && Platform.isWindows && !await windowManager.isVisible()) {
+      try {
+        await _splashChannel.invokeMethod<void>('cloak');
+      } catch (_) {
+        // לא קריטי — בלי cloak נשארת ההתנהגות הקודמת (חשיפה לא-אטומית).
+      }
+    }
     await windowManager.show();
     await windowManager.focus();
     // maximize חייב לקרות *אחרי* show (show מבצע restore לגודל הקודם).
     await WindowPersistence.applyPendingMaximize();
-    // סוגרים את חלון ה-splash הנייטיב — בדיוק כשהחלון הראשי מופיע עם תוכן.
-    await _closeNativeSplash();
+    // חייב אחרי show (setFullScreen על חלון מוסתר מאבד WS_VISIBLE) ואחרי
+    // maximize (כדי שיציאה ממסך מלא תחזיר את החלון למצבו הממוקסם).
+    await WindowPersistence.applyPendingFullscreen();
     // מכאן והלאה מותר לשמור את גודל החלון.
     WindowPersistence.splashMode = false;
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Present main window', error, stackTrace);
+  } finally {
+    // הסגירה מבצעת בצד הנייטיבי את ה-uncloak; חייבת לרוץ גם אם שלב הצגה
+    // נכשל — אחרת החלון נשאר cloaked (בלתי-נראה) לתמיד.
+    await _closeNativeSplash();
+    // משחרר את חימומי המטמון הדחויים גם אם אחת מפעולות החלון נכשלה.
+    _markMainWindowRevealed();
   }
 }
 
@@ -550,9 +547,9 @@ FindRefRepository _buildFindRefRepository() {
 
 /// אתחול כבד שרץ בזמן שה-splash מוצג.
 Future<void> _initializeProcessSingletons() async {
-  // השחרור של ה-completer חייב לקרות גם אם אחד משלבי האתחול נכשל.
-  try {
-    await RustLib.init();
+  // שרשרת ההגדרות/חלון חייבת להישאר סדרתית: WindowPersistence קורא את גבולות
+  // החלון השמורים מ-Settings.
+  Future<void> initSettingsAndWindow() async {
     try {
       await Settings.init(cacheProvider: HiveCache());
     } catch (_) {
@@ -564,16 +561,39 @@ Future<void> _initializeProcessSingletons() async {
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       await WindowPersistence.restoreIfAny();
-    }
-  } finally {
-    if (!_windowReadyCompleter.isCompleted) {
-      _windowReadyCompleter.complete();
+      // מחילים את הגבולות הסופיים כאן — מוקדם, בזמן שה-splash הנייטיב מוצג
+      // והחלון הראשי עדיין מוסתר — ולא ברגע החשיפה. החלון נוצר ב-(10,10) על
+      // המסך הראשי; אם הגבולות השמורים נמצאים על מסך עם DPI שונה, ה-setBounds
+      // משגר WM_DPICHANGED. בכך שמחילים אותו כאן (ולא frame אחד לפני show),
+      // המנוע מספיק לעבד את שינוי ה-DPI ולצייר מחדש ב-devicePixelRatio הנכון
+      // הרבה לפני שהחלון נחשף — מונע מצב שבו כל הממשק מופיע "מוגדל" כי הוצג
+      // לפני שה-DPR התעדכן.
+      await WindowPersistence.applyRestoredBounds();
+      // גם מסגרת החלון מוגדרת כאן — מוקדם, בעוד החלון מוסתר — ולא ברגע
+      // החשיפה: הסתרת ה-title bar (החלון נוצר ב-runner עם WS_OVERLAPPEDWINDOW)
+      // משנה את גודל אזור-הלקוח, מה שמאתחל את ה-swapchain של המנוע וזורק את
+      // כל התוכן שכבר צויר. כשזה רץ ברגע החשיפה, show() הציג חלון ריק לשבריר
+      // שנייה עד שפריים חדש הספיק להתרסטר. כאן השינוי קורה לפני שפריים התוכן
+      // הראשון מצויר בכלל — והוא נצבע ישר במסגרת ובגודל הסופיים.
+      await windowManager.setMinimumSize(WindowPersistence.minSize);
+      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
     }
   }
 
+  // RustLib (טעינת FFI) ו-loadCerts (קריאת asset קטן) אינם תלויים בהגדרות
+  // ולא זה בזה — רצים במקביל לשרשרת ההגדרות/חלון במקום בזה אחר זה.
+  await Future.wait([
+    RustLib.init(),
+    loadCerts(),
+    initSettingsAndWindow(),
+  ]);
+
   await initHive();
-  await createDirs();
-  await loadCerts();
+  // מצב נייד: אם תיקיית הנתונים זזה (אות כונן אחרת / מיקום אחר), הנתיבים
+  // האבסולוטיים השמורים משוכתבים לפני שכל קוד אחר צורך אותם. חייב לרוץ
+  // אחרי Settings.init ואחרי initHive (ה-boxes פתוחים), ולפני
+  // SqliteDataProvider ו-FileSystemData שקוראים את נתיב הספרייה.
+  await PortablePaths.migrateIfMoved();
 
   // שירות ההתראות (לוח השנה) ושירות דיווחי השגיאות אינם חיוניים להצגת
   // המסך הראשי. tz.initializeTimeZones + plugin init של flutter_local_notifications
@@ -686,6 +706,52 @@ Future<void> _runDeferredProtocolRegistration() async {
       stackTrace,
     );
   }
+}
+
+/// חימומי מטמון שאינם חיוניים להצגת המסך הראשי (איתור מקורות, מילון, גופני
+/// מערכת, היברובוקס מקומי). ממתינים לחשיפת החלון ([presentMainWindow]) לפני
+/// שמתחילים — אחרת השאילתות הכבדות על seforim.db והעיבוד על ה-main isolate
+/// (BooksCache/AcronymsCache סורקים עשרות אלפי שורות) מתחרים בטעינת תוכן
+/// הספר הפעיל ומעכבים את הופעתו. ה-timeout הוא רשת ביטחון בלבד: בזרימה רגילה
+/// החשיפה קורית תוך שניות (כולל failsafe של 8 שניות ב-MainWindowScreen).
+Future<void> _runDeferredCacheWarmups() async {
+  try {
+    await _mainWindowRevealedCompleter.future
+        .timeout(const Duration(seconds: 15));
+  } on TimeoutException {
+    // ממשיכים בכל זאת — עדיף חימום מאוחר מאשר אף פעם.
+  }
+  unawaited(
+    DictionaryLookupRepository.instance.ensureLoaded().catchError((e) {
+      if (kDebugMode) debugPrint('Failed to warm up dictionary: $e');
+    }),
+  );
+  unawaited(BooksCache.instance.warmUp().catchError((e) {
+    if (kDebugMode) debugPrint('Failed to warm up BooksCache: $e');
+  }));
+  unawaited(AcronymsCache.instance.warmUp().catchError((e) {
+    if (kDebugMode) debugPrint('Failed to warm up AcronymsCache: $e');
+  }));
+  unawaited(AppFonts.warmUpSystemFontsCache().catchError((e) {
+    if (kDebugMode) debugPrint('Failed to warm up system fonts: $e');
+  }));
+  unawaited(ReferenceBooksCache.instance.warmUp().catchError((e) {
+    if (kDebugMode) {
+      debugPrint('Failed to warm up ReferenceBooksCache: $e');
+    }
+  }));
+  // פרי-וורם של ספרי היברובוקס המקומיים (אם הוגדרה תיקייה): סריקת
+  // התיקייה וטעינת המטא-דאטה מהקטלוג מבוצעות ברקע כדי שהחיפוש הראשון
+  // לא ישלם עבורן. כשאין תיקייה — הקריאה מתקצרת מיד ללא עלות.
+  unawaited(() async {
+    try {
+      await DataRepository.instance.localHebrewBooks;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Failed to warm up local HebrewBooks: $e');
+      }
+    }
+  }());
 }
 
 Future<void> _preWarmWebViewEnvironment() async {
@@ -864,39 +930,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
         _settingsRepository = SettingsRepository();
         _ready = true;
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(
-          DictionaryLookupRepository.instance.ensureLoaded().catchError((e) {
-            if (kDebugMode) debugPrint('Failed to warm up dictionary: $e');
-          }),
-        );
-        unawaited(BooksCache.instance.warmUp().catchError((e) {
-          if (kDebugMode) debugPrint('Failed to warm up BooksCache: $e');
-        }));
-        unawaited(AcronymsCache.instance.warmUp().catchError((e) {
-          if (kDebugMode) debugPrint('Failed to warm up AcronymsCache: $e');
-        }));
-        unawaited(AppFonts.warmUpSystemFontsCache().catchError((e) {
-          if (kDebugMode) debugPrint('Failed to warm up system fonts: $e');
-        }));
-        unawaited(ReferenceBooksCache.instance.warmUp().catchError((e) {
-          if (kDebugMode) {
-            debugPrint('Failed to warm up ReferenceBooksCache: $e');
-          }
-        }));
-        // פרי-וורם של ספרי היברובוקס המקומיים (אם הוגדרה תיקייה): סריקת
-        // התיקייה וטעינת המטא-דאטה מהקטלוג מבוצעות ברקע כדי שהחיפוש הראשון
-        // לא ישלם עבורן. כשאין תיקייה — הקריאה מתקצרת מיד ללא עלות.
-        unawaited(() async {
-          try {
-            await DataRepository.instance.localHebrewBooks;
-          } catch (e) {
-            if (kDebugMode) {
-              debugPrint('Failed to warm up local HebrewBooks: $e');
-            }
-          }
-        }());
-      });
+      unawaited(_runDeferredCacheWarmups());
     }).catchError((Object error, StackTrace stackTrace) {
       _appendUnhandledErrorToLocalLog(
         title: 'Bootstrap Error',
@@ -1033,33 +1067,16 @@ class _AppBootstrapState extends State<AppBootstrap> {
   }
 }
 
-/// Creates the necessary directory structure for the application.
-///
-/// Sets up the unified writable app-data root and its subdirectories.
-Future<void> createDirs() async {
-  await AppPaths.createNecessaryDirectories();
-}
-
-/// Creates a directory if it doesn't already exist.
-///
-/// [path] The full path of the directory to create
-///
-/// Prints status messages indicating whether the directory was created
-/// or already existed.
-void createDirectoryIfNotExists(String path) {
-  Directory directory = Directory(path);
-  if (!directory.existsSync()) {
-    directory.createSync(recursive: true);
-  }
-}
-
 Future<void> initHive() async {
   Hive.init(await AppPaths.getDataRootPath());
-  await Hive.openBox<dynamic>('tabs');
-  await Hive.openBox<dynamic>('workspaces');
-  await Hive.openBox<dynamic>('history');
-  await Hive.openBox<dynamic>('bookmarks');
-  await Hive.openBox<dynamic>('error_reports_queue');
+  // כל box הוא קובץ נפרד ועצמאי — הפתיחות רצות במקביל במקום בזו אחר זו.
+  await Future.wait([
+    Hive.openBox<dynamic>('tabs'),
+    Hive.openBox<dynamic>('workspaces'),
+    Hive.openBox<dynamic>('history'),
+    Hive.openBox<dynamic>('bookmarks'),
+    Hive.openBox<dynamic>('error_reports_queue'),
+  ]);
 }
 
 Future<void> loadCerts() async {

@@ -16,6 +16,7 @@ class PageShapeStrategyImpl extends TextBookViewStrategy {
       key: config.pageShapeKey,
       openBookCallback: config.openBookCallback,
       sidebarTabNotifier: config.pageShapeSidebarTabNotifier,
+      openSettingsNotifier: config.pageShapeOpenSettingsNotifier,
       onOpenSearch: config.openSearch,
       scrollOffsetController: config.tab.mainOffsetController,
       tab: config.tab,

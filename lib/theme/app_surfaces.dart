@@ -76,6 +76,12 @@ class AppSurfaces {
   static Color panelOpenHandle(ColorScheme cs, {required bool isHovering}) =>
       cs.surfaceContainerHighest.withValues(alpha: isHovering ? 0.95 : 0.8);
 
+  /// אגודל הסקרולבר המותאם — בולט בזמן גרירה, מעומעם במנוחה.
+  static Color scrollbarThumb(ColorScheme cs, {required bool isDragging}) =>
+      isDragging
+          ? cs.primary.withValues(alpha: 0.8)
+          : cs.onSurfaceVariant.withValues(alpha: 0.4);
+
   /// overlayColor ל-TabBar שמצייר hover מותאם אישית (foregroundPainter)
   /// ולכן רוצה לבטל את ה-hover/focus הגלובלי של [TabBarTheme].
   static final WidgetStateProperty<Color?> tabBarNoOverlay =

@@ -490,27 +490,31 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
         );
       }
 
-      return MenuItemButton(
-        key: widget.menuItemKeysByLabel?[entry.label ?? ''],
-        requestFocusOnHover: false,
-        style: buildAppSubmenuItemStyle(context, metrics),
-        onPressed: entry.enabled
-            ? () {
-                _closeContextMenu();
-                entry.onTap?.call();
-              }
-            : null,
-        child: buildAppMenuRowContent(
-          context,
-          metrics,
-          maxWidth: maxWidth,
-          label: entry.label ?? '',
-          labelWidget: entry.labelWidget,
-          icon: entry.icon,
-          trailing: entry.trailing,
-          isSelected: entry.isSelected,
-          isDestructive: entry.isDestructive,
-          enabled: entry.enabled,
+      return _wrapWithHoverPreview(
+        entry,
+        metrics,
+        MenuItemButton(
+          key: widget.menuItemKeysByLabel?[entry.label ?? ''],
+          requestFocusOnHover: false,
+          style: buildAppSubmenuItemStyle(context, metrics),
+          onPressed: entry.enabled
+              ? () {
+                  _closeContextMenu();
+                  entry.onTap?.call();
+                }
+              : null,
+          child: buildAppMenuRowContent(
+            context,
+            metrics,
+            maxWidth: maxWidth,
+            label: entry.label ?? '',
+            labelWidget: entry.labelWidget,
+            icon: entry.icon,
+            trailing: entry.trailing,
+            isSelected: entry.isSelected,
+            isDestructive: entry.isDestructive,
+            enabled: entry.enabled,
+          ),
         ),
       );
     }).toList();
@@ -625,30 +629,52 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
         );
       }
 
-      return MenuItemButton(
-        key: entry.key,
-        requestFocusOnHover: false,
-        style: buildAppSubmenuItemStyle(context, metrics),
-        onPressed: entry.enabled
-            ? () {
-                _closeContextMenu();
-                entry.onTap?.call();
-              }
-            : null,
-        child: buildAppMenuRowContent(
-          context,
-          metrics,
-          maxWidth: submenuContentMaxWidth,
-          label: entry.label ?? '',
-          labelWidget: entry.labelWidget,
-          icon: entry.icon,
-          trailing: entry.trailing,
-          isSelected: entry.isSelected,
-          isDestructive: entry.isDestructive,
-          enabled: entry.enabled,
+      return _wrapWithHoverPreview(
+        entry,
+        metrics,
+        MenuItemButton(
+          key: entry.key,
+          requestFocusOnHover: false,
+          style: buildAppSubmenuItemStyle(context, metrics),
+          onPressed: entry.enabled
+              ? () {
+                  _closeContextMenu();
+                  entry.onTap?.call();
+                }
+              : null,
+          child: buildAppMenuRowContent(
+            context,
+            metrics,
+            maxWidth: submenuContentMaxWidth,
+            label: entry.label ?? '',
+            labelWidget: entry.labelWidget,
+            icon: entry.icon,
+            trailing: entry.trailing,
+            isSelected: entry.isSelected,
+            isDestructive: entry.isDestructive,
+            enabled: entry.enabled,
+          ),
         ),
       );
     }).toList();
+  }
+
+  /// עוטף פריט עלה ב-[_MenuItemHoverPreview] כאשר הוגדר לו
+  /// [AppContextMenuEntry.hoverPreviewBuilder] — חלונית תצוגה מקדימה ברפרוף.
+  Widget _wrapWithHoverPreview(
+    AppContextMenuEntry entry,
+    AppMenuMetrics metrics,
+    Widget child,
+  ) {
+    final previewBuilder = entry.hoverPreviewBuilder;
+    if (previewBuilder == null || !entry.enabled) {
+      return child;
+    }
+    return _MenuItemHoverPreview(
+      previewBuilder: previewBuilder,
+      metrics: metrics,
+      child: child,
+    );
   }
 }
 
@@ -1004,6 +1030,244 @@ class _PreserveSelectionSecondaryTapRecognizer extends EagerGestureRecognizer {
 // _HoverableHighlightedRow — שורת תפריט מודגשת בעיצוב pill
 // משמשת לפריטים עם isHighlighted: true (כגון "פתח חלונית" ו"בחר מפרשים מרובים")
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// _MenuItemHoverPreview — חלונית תצוגה מקדימה צפה ברפרוף על פריט תפריט
+//
+// עוטף פריט עלה בתפריט ההקשר. ברפרוף על הפריט נפתחת, לאחר השהיה קצרה,
+// חלונית צפה לצד הפריט עם התוכן שמחזיר previewBuilder. החלונית נעלמת כאשר
+// הסמן עוזב גם את הפריט וגם את החלונית עצמה (מעבר ביניהן אינו סוגר אותה).
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _MenuItemHoverPreview extends StatefulWidget {
+  final WidgetBuilder previewBuilder;
+  final AppMenuMetrics metrics;
+  final Widget child;
+
+  const _MenuItemHoverPreview({
+    required this.previewBuilder,
+    required this.metrics,
+    required this.child,
+  });
+
+  @override
+  State<_MenuItemHoverPreview> createState() => _MenuItemHoverPreviewState();
+}
+
+class _MenuItemHoverPreviewState extends State<_MenuItemHoverPreview> {
+  // השהיית פתיחה — שרפרוף חולף על פריט לא יציף חלוניות.
+  static const Duration _showDelay = Duration(milliseconds: 400);
+  // השהיית סגירה — מספיקה כדי לחצות את הרווח שבין הפריט לחלונית.
+  static const Duration _hideDelay = Duration(milliseconds: 250);
+  static const double _panelMaxWidth = 380;
+  static const double _panelMaxHeight = 360;
+  static const double _screenPadding = 8;
+  static const double _anchorGap = 6;
+
+  OverlayEntry? _previewEntry;
+  Timer? _showTimer;
+  Timer? _hideTimer;
+  final GlobalKey _panelKey = GlobalKey();
+  Offset? _panelOffset;
+  bool _panelVisible = false;
+
+  @override
+  void dispose() {
+    _showTimer?.cancel();
+    _hideTimer?.cancel();
+    _removePreview();
+    super.dispose();
+  }
+
+  void _removePreview() {
+    _previewEntry?.remove();
+    _previewEntry = null;
+    _panelOffset = null;
+    _panelVisible = false;
+  }
+
+  void _scheduleShow() {
+    _hideTimer?.cancel();
+    _hideTimer = null;
+    if (_previewEntry != null) return;
+    _showTimer?.cancel();
+    _showTimer = Timer(_showDelay, () {
+      if (mounted) _showPreview();
+    });
+  }
+
+  void _cancelHide() {
+    _hideTimer?.cancel();
+    _hideTimer = null;
+  }
+
+  void _scheduleHide() {
+    _showTimer?.cancel();
+    _showTimer = null;
+    if (_previewEntry == null) return;
+    _hideTimer?.cancel();
+    _hideTimer = Timer(_hideDelay, () {
+      _removePreview();
+    });
+  }
+
+  Rect? _itemRectInOverlay(RenderBox overlayBox) {
+    final itemRenderObject = context.findRenderObject();
+    if (itemRenderObject is! RenderBox || !itemRenderObject.hasSize) {
+      return null;
+    }
+    return MatrixUtils.transformRect(
+      itemRenderObject.getTransformTo(overlayBox),
+      Offset.zero & itemRenderObject.size,
+    );
+  }
+
+  void _showPreview() {
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    final overlayRenderObject = overlay?.context.findRenderObject();
+    if (overlay == null ||
+        overlayRenderObject is! RenderBox ||
+        !overlayRenderObject.hasSize) {
+      return;
+    }
+
+    final itemRect = _itemRectInOverlay(overlayRenderObject);
+    if (itemRect == null) return;
+
+    final overlaySize = overlayRenderObject.size;
+    final maxWidth = (overlaySize.width - _screenPadding * 2)
+        .clamp(0.0, _panelMaxWidth)
+        .toDouble();
+    final maxHeight = (overlaySize.height - _screenPadding * 2)
+        .clamp(0.0, _panelMaxHeight)
+        .toDouble();
+    if (maxWidth <= 0 || maxHeight <= 0) return;
+
+    // מדידה ראשונית בפינת המסך — שם האילוצים מקסימליים, כך שהגודל הטבעי
+    // שנמדד תקף גם במיקום הסופי (שתמיד מותיר לפחות את אותו מרחב).
+    _panelOffset = const Offset(_screenPadding, _screenPadding);
+    _panelVisible = false;
+
+    _previewEntry = OverlayEntry(
+      builder: (overlayContext) {
+        final offset =
+            _panelOffset ?? const Offset(_screenPadding, _screenPadding);
+        return Positioned(
+          left: offset.dx,
+          top: offset.dy,
+          child: Visibility(
+            visible: _panelVisible,
+            maintainSize: false,
+            maintainAnimation: false,
+            maintainState: true,
+            child: MouseRegion(
+              onEnter: (_) => _cancelHide(),
+              onExit: (_) => _scheduleHide(),
+              // התוכן נטען אסינכרונית — כשהוא מגיע, החלונית גדלה אחרי
+              // שכבר מוקמה לפי גודל הטעינה הקטן ועלולה להיחתך בתחתית
+              // המסך. שינוי גודל מפעיל הצמדה מחדש (בסוף הפריים — הנוטיפיקציה
+              // נורית בזמן layout, כשעדכון ה-overlay אסור).
+              child: NotificationListener<SizeChangedLayoutNotification>(
+                onNotification: (_) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted || _previewEntry == null) return;
+                    _repositionNextToItem(overlayRenderObject, itemRect);
+                  });
+                  return true;
+                },
+                child: SizeChangedLayoutNotifier(
+                  child: _buildPanel(maxWidth, maxHeight),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    overlay.insert(_previewEntry!);
+
+    // מיקום דו-שלבי: בנייה סמויה למדידת הגודל בפועל, ואז הצמדה לצד הפריט.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _previewEntry == null) return;
+      _repositionNextToItem(overlayRenderObject, itemRect);
+    });
+  }
+
+  void _repositionNextToItem(RenderBox overlayBox, Rect itemRect) {
+    final panelRenderObject = _panelKey.currentContext?.findRenderObject();
+    if (panelRenderObject is! RenderBox ||
+        !panelRenderObject.hasSize ||
+        _previewEntry == null) {
+      return;
+    }
+
+    final panelSize = panelRenderObject.size;
+    final overlaySize = overlayBox.size;
+
+    // העדפת צד: שמאלית לפריט (המשך כיוון הפתיחה הטבעי ב-RTL), אחרת ימינה,
+    // ואם אין מקום מלא באף צד — הצמדה לקצה המסך בצד המרווח יותר.
+    final leftCandidate = itemRect.left - _anchorGap - panelSize.width;
+    final rightCandidate = itemRect.right + _anchorGap;
+    final double dx;
+    if (leftCandidate >= _screenPadding) {
+      dx = leftCandidate;
+    } else if (rightCandidate + panelSize.width <=
+        overlaySize.width - _screenPadding) {
+      dx = rightCandidate;
+    } else {
+      final spaceLeft = itemRect.left;
+      final spaceRight = overlaySize.width - itemRect.right;
+      dx = spaceLeft > spaceRight
+          ? _screenPadding
+          : (overlaySize.width - panelSize.width - _screenPadding)
+              .clamp(_screenPadding, double.infinity)
+              .toDouble();
+    }
+
+    final maxDy = (overlaySize.height - panelSize.height - _screenPadding)
+        .clamp(_screenPadding, double.infinity)
+        .toDouble();
+    final dy = itemRect.top.clamp(_screenPadding, maxDy).toDouble();
+
+    _panelOffset = Offset(dx, dy);
+    _panelVisible = true;
+    _previewEntry?.markNeedsBuild();
+  }
+
+  Widget _buildPanel(double maxWidth, double maxHeight) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      key: _panelKey,
+      color: colorScheme.surfaceContainer,
+      elevation: 6,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(widget.metrics.menuBorderRadius),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: widget.metrics.menuMinWidth,
+          maxWidth: maxWidth,
+          maxHeight: maxHeight,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(12),
+          child: Builder(builder: widget.previewBuilder),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => _scheduleShow(),
+      onExit: (_) => _scheduleHide(),
+      child: widget.child,
+    );
+  }
+}
 
 class _HoverableHighlightedRow extends StatelessWidget {
   final String label;

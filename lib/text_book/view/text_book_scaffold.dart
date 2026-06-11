@@ -21,6 +21,9 @@ class TextBookScaffold extends StatelessWidget {
   final Key? pageShapeKey; // מפתח עבור PageShapeScreen
   final GlobalKey? pageShapePrintBoundaryKey; // מפתח עבור צילום למסמך הדפסה
   final ValueNotifier<int?>? pageShapeSidebarTabNotifier;
+
+  /// בקשה לפתיחת דיאלוג הגדרות צורת הדף מתוך PageShapeScreen (עדכון חי)
+  final ValueNotifier<int>? pageShapeOpenSettingsNotifier;
   final ValueChanged<String?>? openSearch;
   final ValueChanged<int>? onSidebarTabChanged;
 
@@ -36,6 +39,7 @@ class TextBookScaffold extends StatelessWidget {
     this.pageShapeKey,
     this.pageShapePrintBoundaryKey,
     this.pageShapeSidebarTabNotifier,
+    this.pageShapeOpenSettingsNotifier,
     this.openSearch,
     this.onSidebarTabChanged,
   });
@@ -59,6 +63,7 @@ class TextBookScaffold extends StatelessWidget {
           pageShapeKey: pageShapeKey,
           pageShapePrintBoundaryKey: pageShapePrintBoundaryKey,
           pageShapeSidebarTabNotifier: pageShapeSidebarTabNotifier,
+          pageShapeOpenSettingsNotifier: pageShapeOpenSettingsNotifier,
           openSearch: openSearch,
           onSidebarTabChanged: onSidebarTabChanged,
         );

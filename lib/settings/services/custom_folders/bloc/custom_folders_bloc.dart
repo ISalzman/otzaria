@@ -237,19 +237,18 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
             '';
     final userBooksDbPath = await UserBooksDatabaseHolder.resolveDbPath();
 
-    // seforim.db פתוח read-only בחיבור הראשי; העובד פותח אותו לכתיבה בנפרד.
-    await sqliteProvider.closeForExternalWrite();
-    try {
-      return await runCustomFoldersDbSyncInIsolate(
-        dbPath: dbPath,
-        userBooksDbPath: userBooksDbPath,
-        libraryPath: libraryPath,
-        customFolders: folders,
-        folderName: folderName,
-      );
-    } finally {
-      await sqliteProvider.reopenAfterExternalWrite();
-    }
+    // ה-close/reopen של ה-RO סביב הכתיבה מנוהלים *בתוך*
+    // [runCustomFoldersDbSyncInIsolate] — בתוך יחידת ה-operationQueue — כדי
+    // שה-RO לא ייסגר בזמן ההמתנה בתור.
+    return await runCustomFoldersDbSyncInIsolate(
+      dbPath: dbPath,
+      userBooksDbPath: userBooksDbPath,
+      libraryPath: libraryPath,
+      customFolders: folders,
+      folderName: folderName,
+      prepareForWrite: sqliteProvider.closeForExternalWrite,
+      restoreAfterWrite: sqliteProvider.reopenAfterExternalWrite,
+    );
   }
 
   Future<void> _deleteFromDatabase(CustomFolder folder) async {
@@ -261,17 +260,14 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     // הזיהוי הוא לפי נתיב התיקייה (שם ה-source הייחודי), לא לפי שם
     // הקטגוריה — כך הסרת תיקייה לא תפגע בספרי תיקייה אחרת בעלת אותו
     // basename שממוזגת לאותה קטגוריה.
-    // seforim.db פתוח read-only בחיבור הראשי; העובד פותח אותו לכתיבה בנפרד.
-    await sqliteProvider.closeForExternalWrite();
-    try {
-      await runDeleteFolderFromDbInIsolate(
-        dbPath: sqliteProvider.dbPath,
-        userBooksDbPath: userBooksDbPath,
-        folderPath: folder.path,
-      );
-    } finally {
-      await sqliteProvider.reopenAfterExternalWrite();
-    }
+    // ה-close/reopen של ה-RO מנוהלים *בתוך* [runDeleteFolderFromDbInIsolate].
+    await runDeleteFolderFromDbInIsolate(
+      dbPath: sqliteProvider.dbPath,
+      userBooksDbPath: userBooksDbPath,
+      folderPath: folder.path,
+      prepareForWrite: sqliteProvider.closeForExternalWrite,
+      restoreAfterWrite: sqliteProvider.reopenAfterExternalWrite,
+    );
   }
 
   Future<void> _saveFolders(List<CustomFolder> folders) async {

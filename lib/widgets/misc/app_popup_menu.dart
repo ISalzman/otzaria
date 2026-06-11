@@ -62,6 +62,12 @@ class AppContextMenuEntry {
   /// טרי בכל קריאה.
   final Stream<Object?>? childrenRefreshStream;
 
+  /// בונה תוכן לחלונית תצוגה מקדימה צפה שנפתחת ברפרוף על הפריט.
+  ///
+  /// החלונית מוצגת לצד הפריט לאחר השהיה קצרה, ונעלמת כשהסמן עוזב גם את
+  /// הפריט וגם את החלונית עצמה. רלוונטי לפריטי עלה בלבד (ללא תת-תפריט).
+  final WidgetBuilder? hoverPreviewBuilder;
+
   const AppContextMenuEntry({
     required this.label,
     this.key,
@@ -76,6 +82,7 @@ class AppContextMenuEntry {
     this.children,
     this.childrenBuilder,
     this.childrenRefreshStream,
+    this.hoverPreviewBuilder,
   }) : isDivider = false;
 
   const AppContextMenuEntry.divider()
@@ -92,7 +99,8 @@ class AppContextMenuEntry {
         trailing = null,
         children = null,
         childrenBuilder = null,
-        childrenRefreshStream = null;
+        childrenRefreshStream = null,
+        hoverPreviewBuilder = null;
 }
 
 bool hasEnabledAppContextMenuEntries(List<AppContextMenuEntry> entries) {
@@ -955,6 +963,12 @@ class _SubmenuItemWidgetState<T> extends State<_SubmenuItemWidget<T>> {
     _closeTimer?.cancel();
     _overlayEntry?.remove();
     _overlayEntry = null;
+    // שחרור מי שממתין ל-future של הסאבמנו (_openSubmenuFromData) — בלי זה
+    // ה-await נשאר תלוי לנצח כשה-widget נזרק בזמן שהסאבמנו פתוח.
+    if (!(_completer?.isCompleted ?? true)) {
+      _completer!.complete(null);
+    }
+    _completer = null;
     super.dispose();
   }
 

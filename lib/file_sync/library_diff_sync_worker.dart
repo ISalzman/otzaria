@@ -11,6 +11,15 @@ import 'package:zstandard/zstandard.dart';
 
 import 'package:otzaria/file_sync/repository/file_sync_repository.dart';
 
+/// תקרת זמן עד קבלת ה-headers של תשובת ההורדה (יצירת חיבור).
+///
+/// בלי תקרה, ברשתות מסוננות שמחזיקות את החיבור פתוח (סינון בצד שרת)
+/// ההורדה נתקעת ללא הגבלה — וכל עליית אפליקציה עם עדכון ממתין נתקעת איתה.
+const Duration _kDownloadConnectTimeout = Duration(seconds: 15);
+
+/// תקרת זמן מרבית בין chunks בזרם ההורדה (זיהוי הורדה שקפאה באמצע).
+const Duration _kDownloadStallTimeout = Duration(seconds: 30);
+
 // ── Protocol types ────────────────────────────────────────────────────────────
 
 sealed class LibraryDiffSyncUpdate {
@@ -310,6 +319,8 @@ Future<int> runDiffSyncLogic({
   required Future<Uint8List?> Function(Uint8List) decompress,
   required bool Function() isCancelled,
   required void Function(LibraryDiffSyncUpdate) onProgress,
+  Duration connectTimeout = _kDownloadConnectTimeout,
+  Duration stallTimeout = _kDownloadStallTimeout,
 }) async {
   final total = assets.length;
   var applied = 0;
@@ -331,6 +342,8 @@ Future<int> runDiffSyncLogic({
       client: httpClient,
       uri: Uri.parse(asset.downloadUrl),
       isCancelled: isCancelled,
+      connectTimeout: connectTimeout,
+      stallTimeout: stallTimeout,
       onProgress: (downloaded, totalBytes) {
         if (throttler.shouldSend()) {
           onProgress(LibraryDiffDownloadProgress(
@@ -438,11 +451,13 @@ Future<Uint8List> _downloadWithProgress({
   required Uri uri,
   required bool Function() isCancelled,
   required void Function(int downloaded, int? total) onProgress,
+  required Duration connectTimeout,
+  required Duration stallTimeout,
 }) async {
   final request = http.Request('GET', uri)
     ..headers['Accept'] = 'application/octet-stream';
 
-  final response = await client.send(request);
+  final response = await client.send(request).timeout(connectTimeout);
 
   if (response.statusCode != 200) {
     throw Exception('שגיאה בהורדה (${response.statusCode}): $uri');
@@ -452,7 +467,10 @@ Future<Uint8List> _downloadWithProgress({
   final builder = BytesBuilder(copy: false);
   var downloaded = 0;
 
-  await for (final chunk in response.stream) {
+  // timeout על הזרם: פער ארוך מדי בין chunks (הורדה שקפאה) זורק
+  // TimeoutException לתוך הזרם, מה שמפיל את הסנכרון עם שגיאה במקום לתקוע
+  // את העלייה ללא הגבלה.
+  await for (final chunk in response.stream.timeout(stallTimeout)) {
     if (isCancelled()) throw const _CancelledException();
     builder.add(chunk);
     downloaded += chunk.length;

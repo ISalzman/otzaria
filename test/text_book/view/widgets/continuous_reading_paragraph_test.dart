@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
@@ -130,6 +131,46 @@ void main() {
     });
   });
 
+  group('עיצוב קישורי inline (<a>)', () {
+    test('עם linkStyle — הקישור מקבל את הצבע והקו התחתון שהוזרמו', () {
+      final recognizers = <TapGestureRecognizer>[];
+      final spans = buildInlineHtmlSpans(
+        'לפני <a href="otzaria://inline-link?path=x">קישור</a> אחרי',
+        const TextStyle(fontSize: 20, color: Color(0xFF111111)),
+        onTapUrl: (_) async => true,
+        linkStyle: const TextStyle(
+          color: Color(0xFF6750A4),
+          decoration: TextDecoration.underline,
+        ),
+        recognizerSink: recognizers,
+      );
+      final link = _findLinkSpan(spans);
+      expect(link, isNotNull);
+      expect(link!.style?.color, const Color(0xFF6750A4));
+      expect(link.style?.decoration, TextDecoration.underline);
+      for (final r in recognizers) {
+        r.dispose();
+      }
+    });
+
+    test('בלי linkStyle — קו תחתון בלבד, הצבע יורש מהטקסט (לא כחול קשיח)', () {
+      final recognizers = <TapGestureRecognizer>[];
+      final spans = buildInlineHtmlSpans(
+        '<a href="otzaria://inline-link?path=x">קישור</a>',
+        const TextStyle(fontSize: 20, color: Color(0xFF111111)),
+        onTapUrl: (_) async => true,
+        recognizerSink: recognizers,
+      );
+      final link = _findLinkSpan(spans);
+      expect(link, isNotNull);
+      expect(link!.style?.decoration, TextDecoration.underline);
+      expect(link.style?.color, const Color(0xFF111111));
+      for (final r in recognizers) {
+        r.dispose();
+      }
+    });
+  });
+
   group('פירוש סטייל inline — ערכי קצה', () {
     test('צבע לא חוקי לא קורס ולא משנה את הצבע', () {
       final spans = buildInlineHtmlSpans(
@@ -153,6 +194,22 @@ void main() {
 }
 
 void _noopLineTap(int lineIndex) {}
+
+/// מאתר את ה-`TextSpan` של קישור — מזוהה לפי recognizer מחובר.
+TextSpan? _findLinkSpan(List<InlineSpan> spans) {
+  TextSpan? result;
+  void visit(InlineSpan span) {
+    if (result != null || span is! TextSpan) return;
+    if (span.recognizer != null) {
+      result = span;
+      return;
+    }
+    span.children?.forEach(visit);
+  }
+
+  spans.forEach(visit);
+  return result;
+}
 
 /// מאתר את ה-`TextSpan` הראשון ברמה הפנימית ביותר שיש לו `style.color`
 /// או `style.backgroundColor` שונה מ-baseStyle. משמש לבדוק שצביעת ה-HTML

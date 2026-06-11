@@ -229,7 +229,12 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       _syncSearchConfigurationFromWidget();
     }
 
-    if (queryChanged || searchConfigurationChanged) {
+    // הרצת חיפוש מ-didUpdateWidget רק כששינוי ה-query מקורו חיצוני (ה-controller
+    // עדיין לא מסונכרן) או כשהקונפיגורציה השתנתה. שינוי query שכבר משוקף
+    // ב-controller הוא ההד של הקלדה ש-onSearchTextChanged כבר טיפל בה — הרצה
+    // נוספת כאן רק מכפילה את העבודה.
+    final isExternalQueryChange = queryChanged && needsControllerSync;
+    if (isExternalQueryChange || searchConfigurationChanged) {
       _syncBlocSearchTextState();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {

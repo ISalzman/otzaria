@@ -61,9 +61,14 @@ String buildAnnotatedLineHtml({
   // 2) סימוני הערות. טווח כל הערה מחוסר מטווחי הקישורים, כך שקישור inline
   // נשאר שלם וההדגשה ממלאת רק את המרווחים שסביבו.
   final hex = _colorToHex(underlineColor);
+  // color: currentcolor (ולא inherit) — flutter_widget_from_html לא מפרש
+  // inherit, וההצהרה הייתה נזרקת כך שטקסט ההערה נצבע בצבע ה-primary של
+  // קישורים (ברירת המחדל של תגית <a>). currentcolor כן נתמך ומשאיר את
+  // צבע הטקסט הרגיל — וכך הערה (קו מקווקו, צבע רגיל) נבדלת מקישור
+  // (קו מלא, צבע primary).
   final openTag = '<a href="otzaria://note?line=$lineIndex0" '
       'style="text-decoration: underline; text-decoration-style: dotted; '
-      'text-decoration-color: $hex; color: inherit;">';
+      'text-decoration-color: $hex; color: currentcolor;">';
 
   void addNoteSpan(int start, int end) {
     for (final gap in _subtractSpans(start, end, linkSpans)) {

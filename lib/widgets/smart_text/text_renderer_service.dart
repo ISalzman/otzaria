@@ -84,9 +84,20 @@ class TextRendererService {
 
   /// מתקן תגי <sup> כדי למנוע היפוך סדר ב-RTL
   ///
-  /// כאשר יש מספר תגי <sup> ברצף, האלגוריתם של bidi עלול להציג אותם בסדר הפוך.
-  /// הפתרון: בידוד כל <sup> באמצעות סימני בידוד דו־כיווניות (LRI/RLI + PDI)
-  /// בהתאם לתוכן (מספרים/לטינית -> LTR, עברית/ערבית -> RTL).
+  /// הבעיה האמיתית אינה bidi של הטקסט: HtmlWidget מממש `<sup>` באמצעות
+  /// WidgetSpan, ומנוע Flutter משבץ inline-placeholders בפסקת RTL בסדר
+  /// ויזואלי (שמאל→ימין) במקום לוגי. לכן כשיש שני סימוני הערות או יותר
+  /// באותה פסקה — ה*תכנים* שלהם מוצגים בסדר הפוך (2 לפני 1), בעוד מיקומי
+  /// העוגנים נשארים נכונים. סימון בודד בשורה אינו מושפע.
+  ///
+  /// הפתרון: sup *מספרי* (עם או בלי class — שניהם משמשים כמרקרים בספרים)
+  /// מומר לספרות-עיליות יוניקוד (¹²³…) — טקסט טהור שמוצג מוגבה ומוקטן בכל
+  /// הגופנים, ללא WidgetSpan. מרקר לא-מספרי *מסומן* (`class="footnote-marker"`,
+  /// למשל אות עברית) נפלט כ-`<span class="footnote-marker-number">` — ה-class
+  /// מקבל גופן מוקטן ונטוי גם ב-[SmartTextWidget] (customStylesBuilder) וגם
+  /// בפרסר של מצב קריאה רציפה. sup לא-מספרי שאינו מסומן (superscript תוכני,
+  /// כגון `<sup>מעלית</sup>`) נשאר sup. בנוסף, התוכן עטוף בסימני בידוד
+  /// דו־כיווניות (LRI/RLI + PDI) בהתאם לתוכן כדי שסימונים סמוכים לא יתמזגו.
   static String _fixFootnoteMarkers(String text) {
     // Early-exit מהיר: אם אין בכלל תג <sup> בשורה, מחזירים את הטקסט כפי שהוא
     // בלי לבצע replaceAllMapped (שמקצה StringBuffer גם כשאין התאמות).
@@ -113,9 +124,46 @@ class TextRendererService {
         return '<sup$attrs>$wrappedInner</sup>';
       }
 
+      // מספר טהור → ספרות-עיליות יוניקוד (מוגבה ומוקטן מטבעו, ללא תגית).
+      // חל גם על <sup>1</sup> חשוף בלי class: חלק מספרי ההערות-inline
+      // מקודדים כך את המרקרים, וההמרה חסרת-אובדן גם ל-superscript מספרי אמיתי.
+      final trimmedInner = innerText.trim();
+      if (_digitsOnlyRegex.hasMatch(trimmedInner)) {
+        final superscript = trimmedInner.split('').map((d) {
+          return _superscriptDigits[d]!;
+        }).join();
+        return _wrapWithBidiIsolate(superscript);
+      }
+
+      // תוכן לא-מספרי: רק מרקר *מסומן* (class="footnote-marker") הופך ל-span.
+      if (isFootnoteMarker) {
+        return '<span class="footnote-marker-number">$wrappedInner</span>';
+      }
+
+      // sup פשוט שאינו מרקר (למשל <sup>מעלית</sup> מייבוא Word) נשאר sup —
+      // שומר הגבהה אמיתית. נשאר חשוף לבאג ההיפוך רק אם יופיעו כמה כאלה
+      // באותה פסקה (נדיר עבור superscript תוכני).
       return '<sup>$wrappedInner</sup>';
     });
   }
+
+  static final RegExp _digitsOnlyRegex = RegExp(r'^[0-9]+$');
+
+  /// מיפוי ספרה רגילה → ספרת-עילית יוניקוד. 1–3 בבלוק Latin-1 (U+00B9/B2/B3),
+  /// השאר בבלוק Superscripts (U+2070, U+2074–U+2079) — אלה נקודות הקוד
+  /// הקנוניות; אין חלופות ל-1–3 בבלוק U+2070.
+  static const Map<String, String> _superscriptDigits = {
+    '0': '⁰',
+    '1': '¹',
+    '2': '²',
+    '3': '³',
+    '4': '⁴',
+    '5': '⁵',
+    '6': '⁶',
+    '7': '⁷',
+    '8': '⁸',
+    '9': '⁹',
+  };
 
   static String _wrapWithBidiIsolate(String innerHtml) {
     if (innerHtml.isEmpty) return innerHtml;

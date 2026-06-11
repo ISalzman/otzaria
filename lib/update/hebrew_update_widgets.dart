@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -80,8 +82,9 @@ Widget hebrewFlatChip({
   }
 
   if (UpdatStatus.readyToInstall == status) {
+    // ב-Windows העדכון מותקן ברקע (מתקין שקט) והתוכנה נפתחת מחדש לבד —
     return Tooltip(
-      message: 'לחץ להתקנה',
+      message: Platform.isWindows ? 'לחץ לעדכון' : 'לחץ להתקנה',
       child: _updateChipSurface(
         context,
         TextButton.icon(

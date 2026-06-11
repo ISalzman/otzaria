@@ -17,6 +17,7 @@ import 'package:updat/utils/file_handler.dart'
 import 'package:window_manager/window_manager.dart';
 import 'hebrew_update_widgets.dart';
 import 'linux_installer.dart';
+import 'macos_installer.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 /// סוג ההתקנה המוגדר בזמן build (אופציונלי)
@@ -49,6 +50,96 @@ bool shouldLaunchInstallerOnExit({
   if (!hasInstallerFile) return false;
   return status == UpdatStatus.readyToInstall ||
       status == UpdatStatus.dismissed;
+}
+
+/// בוחר את קובץ העדכון המתאים ל-Windows מתוך נכסי ה-release.
+///
+/// בהתקנה רגילה (exe) העדיפות היא למתקין ה**שקט** — הוא מתקין ברקע ללא
+/// אשף, משמר את ההגדרות ומפעיל את אוצריא מחדש בסיום — כך שהעדכון מתבצע
+/// כולו מתוך התוכנה. אם אין מתקין שקט ב-release (גרסאות ישנות), נופלים
+/// למתקין הרגיל. קבצי `full` (עם ספרייה מצורפת) לעולם אינם נבחרים לעדכון.
+@visibleForTesting
+String? pickWindowsAssetUrl(
+  List<Map<String, dynamic>> assets, {
+  required String preferredFormat, // 'exe' | 'zip'
+}) {
+  String? silentExe;
+  String? regularExe;
+  String? zip;
+
+  for (final asset in assets) {
+    final name = (asset['name'] as String).toLowerCase();
+    final url = asset['browser_download_url'] as String;
+    final isWindowsAsset = name.contains('win') ||
+        name.contains('windows') ||
+        name.endsWith('.exe');
+    if (!isWindowsAsset) continue;
+    if (name.contains('full')) continue;
+
+    if (name.endsWith('.exe')) {
+      if (name.contains('silent')) {
+        silentExe ??= url;
+      } else {
+        regularExe ??= url;
+      }
+    } else if (name.endsWith('.zip')) {
+      zip ??= url;
+    }
+  }
+
+  final exe = silentExe ?? regularExe;
+  if (preferredFormat == 'zip') {
+    return zip ?? exe;
+  }
+  return exe ?? zip;
+}
+
+/// בוחר את נכס העדכון המתאים ל-macOS מתוך נכסי ה-release.
+///
+/// כשהאפליקציה מסוגלת לעדכון עצמי ([selfUpdateCapable], כלומר רצה מ-bundle
+/// רגיל — לא Translocation ולא DMG; הרשאת הכתיבה בפועל נבדקת בסקריפט העדכון,
+/// שרץ מחוץ ל-sandbox) — מעדיפים את ה-zip של האפליקציה בלבד
+/// (`otzaria-macos.zip`), שמוחלף ברקע על ידי סקריפט העדכון. אחרת בוחרים
+/// **רק** DMG, שנפתח להתקנה ידנית בגרירה: zip ללא עדכון עצמי הוא נתיב
+/// שבור — הוא אינו מחולץ ב-Dart במאק (ראה `_downloadRelease`) ולכן
+/// `openInstaller` ייכשל עליו. קבצי `full` לעולם אינם נבחרים — הם חבילות
+/// ספרייה מלאות ולא עדכוני תוכנה.
+@visibleForTesting
+String? pickMacAssetUrl(
+  List<Map<String, dynamic>> assets, {
+  required bool selfUpdateCapable,
+}) {
+  String? zip;
+  String? dmg;
+
+  for (final asset in assets) {
+    final name = (asset['name'] as String).toLowerCase();
+    final url = asset['browser_download_url'] as String;
+    final isMacAsset = name.contains('macos') ||
+        name.contains('darwin') ||
+        name.contains('mac');
+    if (!isMacAsset) continue;
+    if (name.contains('full')) continue;
+
+    if (name.endsWith('.zip')) zip ??= url;
+    if (name.endsWith('.dmg')) dmg ??= url;
+  }
+
+  if (selfUpdateCapable) {
+    return zip ?? dmg;
+  }
+  return dmg;
+}
+
+/// האם ה-URL מצביע על המתקין השקט של Windows.
+///
+/// ההכרעה נעשית לפי ה-URL (שמשמר את שם הנכס ב-release) ולא לפי הקובץ
+/// שהורד, כי שם הקובץ המקומי אחיד (`otzaria-<version>.exe`) ואינו מבחין
+/// בין מתקין שקט לרגיל.
+@visibleForTesting
+bool isSilentWindowsInstallerUrl(String url) {
+  final name = url.split('/').last.toLowerCase();
+  return name.endsWith('.exe') && name.contains('silent');
 }
 
 /// מטמון של תוצאות GitHub API. המפתח כולל גם את הערוץ (stable/dev) כדי למנוע
@@ -368,6 +459,10 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   String? _latestVersion;
   String? _changelog;
   File? _installerFile;
+
+  /// האם הקובץ ב-[_installerFile] הוא המתקין השקט של Windows (נקבע לפי
+  /// ה-URL בעת ההורדה — ראה [isSilentWindowsInstallerUrl]).
+  bool _installerIsSilent = false;
   bool _windowCloseHookInstalled = false;
 
   /// טיימר להעלמה אוטומטית של צ'יפ השגיאה אחרי 4 שניות.
@@ -459,7 +554,10 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         status: _status,
         hasInstallerFile: _installerFile != null,
       )) {
-        await _launchInstaller();
+        // המשתמש סוגר את התוכנה — העדכון מותקן ברקע, אך אין להפעיל את
+        // אוצריא מחדש בסיום בניגוד לכוונתו.
+        final launched = await _launchInstaller(relaunchApp: false);
+        if (launched) _installerFile = null;
       }
     } finally {
       await windowManager.destroy();
@@ -476,8 +574,11 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   /// שהמשתמש יראה את מצב השגיאה ויוכל לנסות שוב.
   Future<void> _installNow() async {
     if (_installerFile == null) return;
-    final launched = await _launchInstaller();
+    final launched = await _launchInstaller(relaunchApp: true);
     if (launched) {
+      // איפוס הקובץ מונע שיגור מתקין כפול אם יגיע אירוע סגירת חלון נוסף
+      // (למשל מהמתקין עצמו) לפני שה-destroy מסתיים.
+      _installerFile = null;
       await windowManager.destroy();
     }
   }
@@ -578,51 +679,16 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
 
     String? assetUrl;
 
-    String? pickWindows(List<String> extsInOrder,
-        {bool allowZipFallback = true}) {
-      String? foundZip;
-      for (final a in assets) {
-        final name = (a["name"] as String).toLowerCase();
-        final url = a["browser_download_url"] as String;
-        final isWin = name.contains('win') ||
-            name.contains('windows') ||
-            name.endsWith('.exe');
-        if (!isWin) continue;
-
-        if (name.contains('-full.exe') || name.contains('_full.exe')) {
-          continue;
-        }
-
-        if (name.contains('silent')) continue;
-
-        for (final ext in extsInOrder) {
-          if (name.endsWith(ext)) return url;
-        }
-        if (allowZipFallback && name.endsWith('.zip') && foundZip == null) {
-          foundZip = url;
-        }
-      }
-      return foundZip;
-    }
-
     if (platform == 'windows') {
-      final pref = _preferredWindowsFormat();
-      final order = switch (pref) {
-        'zip' => ['.zip', '.exe'],
-        _ => ['.exe', '.zip'],
-      };
-      assetUrl = pickWindows(order, allowZipFallback: true);
+      assetUrl = pickWindowsAssetUrl(
+        assets,
+        preferredFormat: _preferredWindowsFormat(),
+      );
     } else if (platform == 'macos') {
-      for (final a in assets) {
-        final n = (a["name"] as String).toLowerCase();
-        if ((n.contains('macos') ||
-                n.contains('darwin') ||
-                n.contains('mac')) &&
-            n.endsWith('.zip')) {
-          assetUrl = a["browser_download_url"] as String;
-          break;
-        }
-      }
+      assetUrl = pickMacAssetUrl(
+        assets,
+        selfUpdateCapable: findInstalledMacAppBundlePath() != null,
+      );
     } else if (platform == 'linux') {
       for (final a in assets) {
         final n = (a["name"] as String).toLowerCase();
@@ -712,6 +778,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       if (!mounted) return;
       setState(() {
         _installerFile = installerFile;
+        _installerIsSilent = isSilentWindowsInstallerUrl(url);
         _status = UpdatStatus.readyToInstall;
       });
     } catch (_) {
@@ -722,13 +789,15 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   /// משגר את המתקין ומחזיר `true` אם השיגור הצליח. כשל בשיגור נבלע ומעדכן
   /// את המצב ל-[UpdatStatus.error] (ללא זריקת חריגה), ומחזיר `false`, כדי
   /// שהקוראים יחליטו האם לסגור את החלון בהתאם.
-  Future<bool> _launchInstaller() async {
+  ///
+  /// [relaunchApp] — האם אוצריא תופעל מחדש בסיום ההתקנה (רלוונטי למתקין
+  /// השקט ב-Windows): `true` בעדכון יזום ("התקן כעת"), `false` בעדכון
+  /// בעת סגירת התוכנה.
+  Future<bool> _launchInstaller({required bool relaunchApp}) async {
     if (_installerFile == null) return false;
 
-    final wrappedLaunchInstaller =
-        wrapLinuxInstaller(_launchInstallerDirect, 'otzaria');
     try {
-      await wrappedLaunchInstaller();
+      await _launchInstallerDirect(relaunchApp: relaunchApp);
       return true;
     } catch (_) {
       _showTransientError();
@@ -736,9 +805,53 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     }
   }
 
-  Future<void> _launchInstallerDirect() async {
-    if (_installerFile == null) return;
-    await openInstaller(_installerFile!, 'otzaria');
+  Future<void> _launchInstallerDirect({required bool relaunchApp}) async {
+    final installer = _installerFile;
+    if (installer == null) return;
+
+    // רק המתקין השקט (PrivilegesRequired=lowest) בטוח ב-Process.start; הרגיל
+    // עלול לדרוש UAC בשיגור וחייב ShellExecute, אחרת ERROR_ELEVATION_REQUIRED.
+    if (Platform.isWindows && _installerIsSilent) {
+      await Process.start(
+        installer.absolute.path,
+        relaunchApp ? const <String>[] : const <String>['/NOLAUNCH=1'],
+        mode: ProcessStartMode.detached,
+      );
+      return;
+    }
+
+    // macOS: zip + bundle בר-החלפה = עדכון עצמי בסקריפט; אחרת openInstaller
+    // מעגן (mount) את ה-DMG להתקנה ידנית בגרירה.
+    if (Platform.isMacOS && installer.path.toLowerCase().endsWith('.zip')) {
+      final appBundlePath = findInstalledMacAppBundlePath();
+      if (appBundlePath != null) {
+        await installMacUpdate(
+          zipFile: installer,
+          appBundlePath: appBundlePath,
+          relaunchApp: relaunchApp,
+        );
+        return;
+      }
+    }
+
+    // ב-Linux חבילות deb/rpm מותקנות בטרמינל עם pkexec והפעלה מחדש לפי
+    // [relaunchApp]. אם אין מנהל חבילות נתמך — נופלים לפתיחת הקובץ
+    // במתקין הגרפי של המערכת (ההתנהגות הקודמת).
+    final lowerPath = installer.path.toLowerCase();
+    if (Platform.isLinux &&
+        (lowerPath.endsWith('.deb') || lowerPath.endsWith('.rpm'))) {
+      try {
+        await installLinuxUpdate(
+          packageFile: installer,
+          relaunchApp: relaunchApp,
+        );
+        return;
+      } catch (_) {
+        // נפילה ל-openInstaller למטה.
+      }
+    }
+
+    await openInstaller(installer, 'otzaria');
   }
 
   void _dismissUpdate() {
@@ -750,10 +863,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // ה-Stack עוטף את כל החלון, כולל סרגל הניווט הצדי. בדסקטופ בפריסת
-    // landscape הסרגל (ברוחב 74) והקו המפריד (1) יושבים בצד ההתחלה — בקצה
-    // הימני ב-RTL. ללא היסט הצ'יפ נצמד לקצה הימני המוחלט ולכן נמתח מעל הסרגל
-    // ואל תוך תוכן המסך. ההיסט מצמיד אותו לקצה תוכן המסך בלבד.
+    // ה-Stack עוטף גם את סרגל הניווט הצדי; בלי היסט ברוחב הסרגל הצ'יפ
+    // נצמד לקצה החלון ונמתח מעל הסרגל במקום מעל תוכן המסך.
     const navRailWidth = 75.0; // 74 רוחב הסרגל + 1 הקו המפריד
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
@@ -826,7 +937,9 @@ Future<File> _downloadRelease(File file, String url, String appName) async {
     await sink.close();
     sink = null;
 
-    if (file.path.toLowerCase().endsWith('.zip')) {
+    // ב-macOS אין לחלץ את ה-zip ב-Dart: חבילת archive אינה משמרת symlinks
+    // והרשאות הפעלה שבתוך ה-bundle. סקריפט העדכון מחלץ בעצמו עם ditto.
+    if (file.path.toLowerCase().endsWith('.zip') && !Platform.isMacOS) {
       final outDir = Directory(p.join(p.dirname(file.path), appName));
       if (outDir.existsSync()) {
         outDir.deleteSync(recursive: true);

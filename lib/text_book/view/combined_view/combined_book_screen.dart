@@ -9,6 +9,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
+import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -30,6 +31,7 @@ import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/utils/text/global_search_helper.dart';
+import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/utils/text/text_with_inline_links.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
@@ -711,16 +713,8 @@ class _CombinedViewState extends State<CombinedView> {
             ),
             const AppContextMenuEntry.divider(),
           ],
-          ...paragraphLinks.map((link) => AppContextMenuEntry(
-                label: link.fallbackDisplayReference,
-                labelWidget: FutureBuilder<String>(
-                  future: link.displayReference,
-                  builder: (context, snapshot) => Text(
-                    snapshot.data ?? link.fallbackDisplayReference,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+          ...paragraphLinks.map((link) => buildLinkContextMenuEntry(
+                link: link,
                 onTap: () => widget.openBookCallback(
                   TextBookTab(
                     book: TextBook(title: utils.getTitleFromPath(link.path2)),
@@ -1407,6 +1401,23 @@ class _CombinedViewState extends State<CombinedView> {
                           itemCount: state.readingSegments.isNotEmpty
                               ? state.readingSegments.length
                               : widget.data.length,
+                          labelForIndex: state.tableOfContents.isEmpty
+                              ? null
+                              : (index) {
+                                  // במצב קריאה רציף האינדקס הוא אינדקס
+                                  // סגמנט; ממירים לשורת המקור כדי שמיפוי
+                                  // ה-TOC (שמבוסס על מספרי שורות) יהיה נכון.
+                                  final segments = state.readingSegments;
+                                  final lineIndex = segments.isNotEmpty
+                                      ? (index >= 0 && index < segments.length
+                                          ? segments[index].startLineIndex
+                                          : index)
+                                      : index;
+                                  final ref = refFromTocList(
+                                      lineIndex, state.tableOfContents);
+                                  return addBookTitleToRef(
+                                      ref, state.book.title);
+                                },
                           child: ProgressiveScroll(
                             focusNode: _focusNode,
                             maxSpeed: 10000.0,
@@ -1822,6 +1833,11 @@ class _CombinedViewState extends State<CombinedView> {
     return ContinuousReadingParagraph(
       lines: paragraphLines,
       baseStyle: baseTextStyle,
+      // אותו עיצוב קישורים כמו במצב הרגיל (HtmlWidget): primary + קו תחתון.
+      linkStyle: TextStyle(
+        color: Theme.of(context).colorScheme.primary,
+        decoration: TextDecoration.underline,
+      ),
       onTapUrl: (url) async {
         await HtmlLinkHandler.handleLink(
           context,

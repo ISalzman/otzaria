@@ -16,14 +16,27 @@ class ExternalCatalogRepository {
       'https://api.github.com/repos/Otzaria/otzar-HB_catalog/releases/latest';
   static const String _versionMetaKey = 'version';
 
+  /// תקרת זמן לקריאות מטא-דאטה (פרטי רליס, קובץ גרסה).
+  ///
+  /// בלי תקרה, `http.Client` ממתין ללא הגבלה — ברשתות מסוננות שמחזיקות
+  /// חיבורים פתוחים (סינון בצד שרת) בדיקת העדכון בעליית האפליקציה נתקעת לדקות.
+  static const Duration defaultApiTimeout = Duration(seconds: 15);
+
+  /// תקרת זמן להורדת קובץ ה-DB של הקטלוגים.
+  static const Duration defaultDownloadTimeout = Duration(minutes: 5);
+
   static final ExternalCatalogRepository instance = ExternalCatalogRepository();
 
   final http.Client _httpClient;
   final Zstandard _zstandard;
+  final Duration apiTimeout;
+  final Duration downloadTimeout;
 
   ExternalCatalogRepository({
     http.Client? httpClient,
     Zstandard? zstandard,
+    this.apiTimeout = defaultApiTimeout,
+    this.downloadTimeout = defaultDownloadTimeout,
   })  : _httpClient = httpClient ?? http.Client(),
         _zstandard = zstandard ?? Zstandard() {
     HttpClientRegistry.register(_httpClient.close);
@@ -118,13 +131,53 @@ class ExternalCatalogRepository {
     }
 
     await _downloadReleaseDatabase(release.databaseAsset);
+    _ensureVersionStamped(latestVersion);
     return true;
+  }
+
+  /// מוודא שלמסד הקטלוגים שהורד יש גרסה קריאה ב-`db_meta`.
+  ///
+  /// בלי זה, מסד שהורד ללא מפתח `version` משאיר את הגרסה המקומית null,
+  /// ו-[updateDatabaseIfNeeded] מוריד את הקטלוג מחדש בכל עליית אפליקציה.
+  void _ensureVersionStamped(int version) {
+    sqlite3.Database? db;
+    try {
+      db = sqlite3.sqlite3.open(databasePath);
+      db.execute(
+        'CREATE TABLE IF NOT EXISTS db_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+      );
+      final result = db.select(
+        'SELECT value FROM db_meta WHERE key = ? LIMIT 1',
+        [_versionMetaKey],
+      );
+      if (result.isNotEmpty &&
+          parseVersionText(result.first['value']?.toString()) != null) {
+        return;
+      }
+      db.execute(
+        'INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)',
+        [_versionMetaKey, version.toString()],
+      );
+    } catch (e) {
+      debugPrint('Error stamping external catalog DB version: $e');
+    } finally {
+      db?.close();
+    }
   }
 
   /// מוריד את מסד הקטלוגים מהרליס האחרון ומחלץ אותו ליד `seforim.db`.
   Future<void> downloadLatestDatabase() async {
     final release = await _fetchLatestReleaseInfo();
     await _downloadReleaseDatabase(release.databaseAsset);
+    // החתמת גרסה גם במסלול ההורדה הראשונית — אחרת DB שהורד בלי
+    // db_meta.version משאיר גרסה מקומית null, ו-maybeAutoSyncCatalogs יוריד
+    // אותו שוב בעלייה הבאה. best-effort: כשל בקריאת הגרסה (version.txt חסר)
+    // לא מכשיל את ההורדה עצמה, שהצליחה גם בלעדיו עד כה.
+    try {
+      _ensureVersionStamped(await _fetchReleaseVersion(release));
+    } catch (e) {
+      debugPrint('Could not stamp external catalog version after download: $e');
+    }
   }
 
   Future<void> _downloadReleaseDatabase(
@@ -268,7 +321,7 @@ class ExternalCatalogRepository {
         'Accept': 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
       },
-    );
+    ).timeout(apiTimeout);
 
     if (response.statusCode != 200) {
       throw Exception(
@@ -293,7 +346,8 @@ class ExternalCatalogRepository {
   }
 
   Future<Uint8List> _downloadAssetBytes(String downloadUrl) async {
-    final response = await _httpClient.get(Uri.parse(downloadUrl));
+    final response =
+        await _httpClient.get(Uri.parse(downloadUrl)).timeout(downloadTimeout);
     if (response.statusCode != 200) {
       throw Exception('שגיאה בהורדת DB הקטלוגים: ${response.statusCode}');
     }
@@ -301,7 +355,8 @@ class ExternalCatalogRepository {
   }
 
   Future<String> _downloadTextAsset(String downloadUrl) async {
-    final response = await _httpClient.get(Uri.parse(downloadUrl));
+    final response =
+        await _httpClient.get(Uri.parse(downloadUrl)).timeout(apiTimeout);
     if (response.statusCode != 200) {
       throw Exception(
           'שגיאה בהורדת קובץ הגרסה של הקטלוגים: ${response.statusCode}');
