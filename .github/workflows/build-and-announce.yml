@@ -1222,6 +1222,18 @@ jobs:
             "${APP_PATH}" \
             || hdiutil create -volname "Otzaria" -srcfolder "${APP_PATH}" -ov -format UDZO "${DMG_NAME}"
 
+      - name: Create macOS update zip
+        run: |
+          set -euo pipefail
+          # zip של ה-.app בלבד, עבור מנגנון העדכון הפנימי (עדכון עצמי ברקע).
+          # ditto משמר symlinks, הרשאות ו-resource forks — חובה ל-bundle תקין.
+          APP_PATH=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: No .app bundle found for update zip"
+            exit 1
+          fi
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" otzaria-macos.zip
+
       - name: Create macOS FULL portable bundle
         if: true
         shell: bash
@@ -1270,6 +1282,13 @@ jobs:
         with:
           name: otzaria-macos.dmg
           path: otzaria-macos.dmg
+
+      - name: Upload macOS update zip
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: otzaria-macos-update
+          path: otzaria-macos.zip
 
       - name: Upload macOS FULL bundle
         if: true
@@ -1387,6 +1406,11 @@ jobs:
           # macOS DMG
           if [ -d "artifacts/otzaria-macos.dmg" ]; then
             cp artifacts/otzaria-macos.dmg/*.dmg release-files/ || true
+          fi
+
+          # macOS update zip (משמש את מנגנון העדכון הפנימי)
+          if [ -d "artifacts/otzaria-macos-update" ]; then
+            cp artifacts/otzaria-macos-update/*.zip release-files/ || true
           fi
 
           # macOS FULL bundle
