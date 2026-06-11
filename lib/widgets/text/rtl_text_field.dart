@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -56,14 +57,29 @@ class RtlTextField extends StatefulWidget {
 }
 
 class _RtlTextFieldState extends State<RtlTextField> {
+  /// חצי-מחזור הבהוב (תואם ל-_kCursorBlinkHalfPeriod של Flutter).
+  static const Duration _blinkHalfPeriod = Duration(milliseconds: 500);
+
+  /// משך ההבהוב מאז הפעולה האחרונה; אחריו הסמן נעלם עד הפעולה הבאה.
+  static const Duration _blinkTimeout = Duration(seconds: 8);
+
   late TextEditingController _effectiveController;
+  late FocusNode _effectiveFocusNode;
+
+  Timer? _blinkTimer;
+  int _blinkTicks = 0;
+  bool _cursorVisible = true;
 
   @override
   void initState() {
     super.initState();
 
-    // יצירת controller פנימי אם לא סופק
     _effectiveController = widget.controller ?? TextEditingController();
+    // FocusNode פנימי דרוש לניהול ההבהוב לפי מצב הפוקוס
+    _effectiveFocusNode = widget.focusNode ?? FocusNode();
+
+    _effectiveController.addListener(_restartCursorBlink);
+    _effectiveFocusNode.addListener(_handleFocusChange);
 
     // תיקון לבעיית autofocus באנדרואיד
     // במקום להשתמש ב-autofocus: true ישירות, נבקש פוקוס אחרי שהמסך נבנה
@@ -81,17 +97,74 @@ class _RtlTextFieldState extends State<RtlTextField> {
     super.didUpdateWidget(oldWidget);
     // עדכון controller אם השתנה
     if (widget.controller != oldWidget.controller) {
+      _effectiveController.removeListener(_restartCursorBlink);
       _effectiveController = widget.controller ?? TextEditingController();
+      _effectiveController.addListener(_restartCursorBlink);
+    }
+    // עדכון focusNode אם השתנה
+    if (widget.focusNode != oldWidget.focusNode) {
+      _effectiveFocusNode.removeListener(_handleFocusChange);
+      if (oldWidget.focusNode == null) {
+        _effectiveFocusNode.dispose();
+      }
+      _effectiveFocusNode = widget.focusNode ?? FocusNode();
+      _effectiveFocusNode.addListener(_handleFocusChange);
     }
   }
 
   @override
   void dispose() {
-    // נקה controller רק אם יצרנו אותו
+    _blinkTimer?.cancel();
+    _effectiveController.removeListener(_restartCursorBlink);
+    _effectiveFocusNode.removeListener(_handleFocusChange);
+    // נקה controller/focusNode רק אם יצרנו אותם
     if (widget.controller == null) {
       _effectiveController.dispose();
     }
+    if (widget.focusNode == null) {
+      _effectiveFocusNode.dispose();
+    }
     super.dispose();
+  }
+
+  // ניהול הבהוב הסמן: ההבהוב המובנה מנוטרל (debugDeterministicCursor, ראו
+  // main.dart) ומוחלף בהחלפת cursorColor — מתאפס בכל פעולה ונעצר אחרי timeout.
+
+  void _handleFocusChange() {
+    if (_effectiveFocusNode.hasFocus) {
+      _restartCursorBlink();
+    } else {
+      _stopCursorBlink();
+    }
+  }
+
+  /// מציג את הסמן מיידית ומתחיל מחזור הבהוב חדש.
+  void _restartCursorBlink() {
+    if (!_effectiveFocusNode.hasFocus) return;
+    _blinkTimer?.cancel();
+    _blinkTicks = 0;
+    _setCursorVisible(true);
+    _blinkTimer = Timer.periodic(_blinkHalfPeriod, _onBlinkTick);
+  }
+
+  void _stopCursorBlink() {
+    _blinkTimer?.cancel();
+    _blinkTimer = null;
+    _setCursorVisible(false);
+  }
+
+  void _onBlinkTick(Timer timer) {
+    _blinkTicks++;
+    if (_blinkHalfPeriod * _blinkTicks >= _blinkTimeout) {
+      _stopCursorBlink(); // תמה תקופת ההבהוב — הסמן נעלם
+      return;
+    }
+    _setCursorVisible(!_cursorVisible);
+  }
+
+  void _setCursorVisible(bool visible) {
+    if (visible == _cursorVisible) return;
+    setState(() => _cursorVisible = visible);
   }
 
   @override
@@ -104,7 +177,7 @@ class _RtlTextFieldState extends State<RtlTextField> {
 
     Widget textField = TextField(
       controller: _effectiveController,
-      focusNode: widget.focusNode,
+      focusNode: _effectiveFocusNode,
       decoration: widget.decoration,
       contextMenuBuilder: (context, editableTextState) =>
           const SizedBox.shrink(),
@@ -121,7 +194,9 @@ class _RtlTextFieldState extends State<RtlTextField> {
       textAlignVertical: widget.textAlignVertical,
       inputFormatters: widget.inputFormatters,
       obscureText: widget.obscureText,
-      cursorColor: widget.cursorColor,
+      cursorWidth: 1.0, // דק יותר מברירת המחדל (2.0)
+      // שקוף בשלב ה"כבוי" של ההבהוב ולאחר שנעצר (ראו ניהול ההבהוב למעלה)
+      cursorColor: _cursorVisible ? widget.cursorColor : Colors.transparent,
     );
 
     // עטיפה בתיקון חיצים אם RTL
@@ -177,92 +252,32 @@ class _RtlTextFieldState extends State<RtlTextField> {
     );
   }
 
-  /// מטפל בלחיצת חץ עם תמיכה מלאה ב-RTL
-  ///
-  /// [isVisualRight] - האם המקש שנלחץ הוא חץ ימין (ויזואלית)
-  /// [extendSelection] - האם להרחיב בחירה (Shift לחוץ)
-  /// [byWord] - האם לנוע ביחידות מילה (Ctrl/Alt+Shift+חץ) ולא ביחידות תו
+  /// מטפל בלחיצת חץ ב-RTL: מאציל ל-Actions המובנים עם כיוון מהופך
+  /// (ויזואלית-שמאל = forward), מה שמתקן את באג הכיווניות של Flutter.
   void _handleArrowKey({
     required bool isVisualRight,
     required bool extendSelection,
     bool byWord = false,
   }) {
-    final text = _effectiveController.text;
-    final selection = _effectiveController.selection;
+    final focusContext = FocusManager.instance.primaryFocus?.context;
+    if (focusContext == null) return;
 
-    // לוגיקה ל-RTL:
-    // אינדקס 0 נמצא בצד ימין (תחילת הטקסט). אינדקס מקסימלי בצד שמאל (סוף הטקסט).
-    // חץ ימינה (Visual Right) -> מקטין אינדקס (נע לקראת ההתחלה, offset נמוך יותר).
-    // חץ שמאלה (Visual Left) -> מגדיל אינדקס (נע לקראת הסוף, offset גבוה יותר).
-
-    // טיפול ב-Selection Collapse (ללא Shift)
-    if (!extendSelection && selection.isValid && !selection.isCollapsed) {
-      final int targetOffset;
-      if (isVisualRight) {
-        // חץ ימינה -> רוצים להגיע לקצה הימני של הבחירה
-        // ב-RTL הקצה הימני הוא ה-Index הנמוך יותר (start)
-        targetOffset = selection.start;
-      } else {
-        // חץ שמאלה -> רוצים להגיע לקצה השמאלי של הבחירה
-        // ב-RTL הקצה השמאלי הוא ה-Index הגבוה יותר (end)
-        targetOffset = selection.end;
-      }
-      _effectiveController.selection =
-          TextSelection.collapsed(offset: targetOffset);
-      return;
-    }
-
-    // בחירה ברמת מילה: מאצילים לטיפול המובנה של Flutter
-    // (ExtendSelectionToNextWordBoundaryIntent) — גבולות מילה נכונים עבור
-    // פיסוק, גרשיים, מקף ואשכולות-גרפמה, במקום חיתוך לפי רווחים בלבד. ברמת
-    // מילה Flutter אינו מהפך לפי כיווניות, ולכן הכיוון הלוגי כאן ויזואלי-נכון:
-    // ויזואלית-שמאל = offset עולה = forward.
     if (byWord) {
-      final focusContext = FocusManager.instance.primaryFocus?.context;
-      if (focusContext != null) {
-        Actions.invoke(
-          focusContext,
-          ExtendSelectionToNextWordBoundaryIntent(
-            forward: !isVisualRight,
-            collapseSelection: false,
-          ),
-        );
-      }
-      return;
-    }
-
-    // חישוב תזוזה רגילה
-    final int currentOffset =
-        extendSelection ? selection.extentOffset : selection.baseOffset;
-
-    // ב-RTL: ימינה = הקטנת אינדקס (offset נמוך), שמאלה = הגדלת אינדקס (offset גבוה).
-    // התנועה מכבדת אשכולות-גרפמה (CharacterBoundary), כך שניקוד/תווים מורכבים
-    // לא נחצים באמצע.
-    final boundary = CharacterBoundary(text);
-    final int newOffset;
-    if (isVisualRight) {
-      // ויזואלית-ימין = אחורה ב-offset. ב-offset 0 אין לאן לזוז (ונמנעים
-      // מהעברת אינדקס שלילי ל-getLeadingTextBoundaryAt).
-      newOffset = currentOffset > 0
-          ? (boundary.getLeadingTextBoundaryAt(currentOffset - 1) ?? 0)
-          : 0;
-    } else {
-      newOffset = currentOffset < text.length
-          ? (boundary.getTrailingTextBoundaryAt(currentOffset) ?? text.length)
-          : text.length;
-    }
-
-    if (extendSelection) {
-      // מרחיבים/מצמצמים את הבחירה
-      // base נשאר קבוע, extent זז
-      _effectiveController.selection = TextSelection(
-        baseOffset: selection.baseOffset,
-        extentOffset: newOffset,
+      Actions.invoke(
+        focusContext,
+        ExtendSelectionToNextWordBoundaryIntent(
+          forward: !isVisualRight,
+          collapseSelection: false,
+        ),
       );
     } else {
-      // ניווט רגיל - collapsed selection
-      _effectiveController.selection =
-          TextSelection.collapsed(offset: newOffset);
+      Actions.invoke(
+        focusContext,
+        ExtendSelectionByCharacterIntent(
+          forward: !isVisualRight,
+          collapseSelection: !extendSelection,
+        ),
+      );
     }
   }
 
