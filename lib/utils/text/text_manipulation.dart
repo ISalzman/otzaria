@@ -346,6 +346,25 @@ List<_HighlightRange>? _collectMatchedSearchWordRanges(
   return ranges;
 }
 
+/// מדגיש את כל הטווח מהמילה הראשונה עד האחרונה ברצף (כולל רווחים ופיסוק).
+/// תגי HTML פנימיים נשארים מחוץ ל-span כדי לא לשבור קינון תגים.
+String _highlightContinuousMatch(
+  String matchedText,
+  List<_HighlightRange> ranges,
+  String style,
+) {
+  final start = ranges.first.start;
+  final end = ranges.last.end;
+  final highlighted = matchedText.substring(start, end).splitMapJoin(
+        RegExp(r'<[^>]*>'),
+        onNonMatch: (text) =>
+            text.isEmpty ? text : '<span style="$style">$text</span>',
+      );
+  return matchedText.substring(0, start) +
+      highlighted +
+      matchedText.substring(end);
+}
+
 String _highlightMatchedSearchWords(
   String matchedText,
   List<_HighlightRange> ranges,
@@ -450,7 +469,9 @@ String highLight(
     }).toList();
 
     patternGroups.add(wordPatterns);
-    requireTokenBoundaries.add(!hasWordExpansion);
+    // בהדגשת ציטוט (רקע צהוב) הטקסט הועתק מהמקטע עצמו ועשוי להיקטע
+    // באמצע מילה — דרישת גבולות מילה תפסול אז את כל ההדגשה.
+    requireTokenBoundaries.add(!hasWordExpansion && !yellowBackground);
   }
 
   if (patternGroups.isEmpty) return data;
@@ -509,11 +530,15 @@ String highLight(
     for (final highlightMatch in matches) {
       final match = highlightMatch.match;
       final matchedText = match.group(0)!;
-      final replacement = _highlightMatchedSearchWords(
-        matchedText,
-        highlightMatch.ranges,
-        style,
-      );
+      // הדגשת קטע מקושר (רקע צהוב) צריכה להיות רציפה כמו מרקר,
+      // בניגוד להדגשת חיפוש שמסמנת רק את מילות החיפוש עצמן.
+      final replacement = yellowBackground
+          ? _highlightContinuousMatch(matchedText, highlightMatch.ranges, style)
+          : _highlightMatchedSearchWords(
+              matchedText,
+              highlightMatch.ranges,
+              style,
+            );
 
       final start = match.start + offset;
       final end = match.end + offset;
