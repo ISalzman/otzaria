@@ -478,8 +478,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                                 final indexingBloc =
                                     context.read<IndexingBloc>();
 
-                                await _indexingRepository
-                                    .prepareForManualReindex();
+                                await _indexingRepository.clearIndex();
                                 if (!mounted) {
                                   return;
                                 }
