@@ -94,22 +94,19 @@ class BackgroundSyncInitializer {
 
       final userBooksDbPath = await UserBooksDatabaseHolder.resolveDbPath();
 
-      // seforim.db פתוח read-only בחיבור הראשי. העובד פותח אותו לכתיבה
-      // בחיבור נפרד — סוגרים את החיבור הראשי כדי לפנות נעילה ולאפשר כתיבה,
-      // ופותחים מחדש (read-only) לאחר שהעובד סיים.
-      await sqliteProvider.closeForExternalWrite();
-      final FileSyncResult result;
-      try {
-        result = await runCustomFoldersDbSyncInIsolate(
-          dbPath: dbPath,
-          userBooksDbPath: userBooksDbPath,
-          libraryPath: libraryPath,
-          customFolders: customFolders,
-          folderName: folderName,
-        );
-      } finally {
-        await sqliteProvider.reopenAfterExternalWrite();
-      }
+      // seforim.db פתוח read-only בחיבור הראשי. ה-close/reopen של ה-RO סביב
+      // הכתיבה מנוהלים *בתוך* [runCustomFoldersDbSyncInIsolate] — בתוך יחידת
+      // ה-operationQueue — כך שה-RO נסגר רק כשהכתיבה באמת רצה ולא בזמן ההמתנה
+      // בתור (שאחרת חסם קריאות לכל אורך סריקת ספרים אישיים שרצה לפניו).
+      final result = await runCustomFoldersDbSyncInIsolate(
+        dbPath: dbPath,
+        userBooksDbPath: userBooksDbPath,
+        libraryPath: libraryPath,
+        customFolders: customFolders,
+        folderName: folderName,
+        prepareForWrite: sqliteProvider.closeForExternalWrite,
+        restoreAfterWrite: sqliteProvider.reopenAfterExternalWrite,
+      );
 
       _log.info('Background sync completed: $result');
 

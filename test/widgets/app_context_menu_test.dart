@@ -802,4 +802,229 @@ void main() {
       reason: 'קריאה כפולה ל-openMenuAt לא אמורה לפתוח שני תפריטים',
     );
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // hoverPreviewBuilder — חלונית תצוגה מקדימה צפה ברפרוף על פריט
+  //
+  // משמש את תת-תפריט "קישורים": רפרוף על קישור פותח חלונית צפה עם תוכן
+  // הקישור, שנעלמת כשהסמן עוזב גם את הפריט וגם את החלונית עצמה.
+  // ───────────────────────────────────────────────────────────────────────
+
+  group('hoverPreviewBuilder', () {
+    const previewText = 'תוכן תצוגה מקדימה';
+
+    Future<TestGesture> pumpMenuWithPreviewEntry(
+      WidgetTester tester, {
+      bool insideSubmenu = false,
+    }) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      final previewEntry = AppContextMenuEntry(
+        label: 'קישור א',
+        onTap: () {},
+        hoverPreviewBuilder: (_) => const Text(previewText),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppContextMenuRegion(
+              key: key,
+              menuBuilder: (_, __) => [
+                if (insideSubmenu)
+                  AppContextMenuEntry(
+                    label: 'קישורים',
+                    childrenBuilder: () => [previewEntry],
+                  )
+                else
+                  previewEntry,
+              ],
+              child: const SizedBox(
+                width: 400,
+                height: 400,
+                child: ColoredBox(color: Colors.amber),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await key.currentState!.openMenuAt(const Offset(100, 100));
+      await tester.pumpAndSettle();
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      return gesture;
+    }
+
+    testWidgets('ריחוף על פריט עם תצוגה מקדימה פותח חלונית צפה אחרי השהיה',
+        (tester) async {
+      final gesture = await pumpMenuWithPreviewEntry(tester);
+
+      await gesture.moveTo(tester.getCenter(find.text('קישור א')));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text(previewText), findsNothing,
+          reason: 'החלונית לא נפתחת לפני תום השהיית הפתיחה');
+
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      expect(find.text(previewText), findsOneWidget,
+          reason: 'אחרי תום ההשהיה החלונית הצפה מוצגת');
+    });
+
+    testWidgets('ריחוף חולף (פחות מההשהיה) אינו פותח חלונית', (tester) async {
+      final gesture = await pumpMenuWithPreviewEntry(tester);
+
+      await gesture.moveTo(tester.getCenter(find.text('קישור א')));
+      await tester.pump(const Duration(milliseconds: 150));
+      await gesture.moveTo(const Offset(10, 590));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(find.text(previewText), findsNothing,
+          reason: 'יציאה מהפריט לפני תום ההשהיה מבטלת את פתיחת החלונית');
+    });
+
+    testWidgets('יציאה מהפריט סוגרת את החלונית אחרי השהיה קצרה',
+        (tester) async {
+      final gesture = await pumpMenuWithPreviewEntry(tester);
+
+      await gesture.moveTo(tester.getCenter(find.text('קישור א')));
+      await tester.pump(const Duration(milliseconds: 450));
+      await tester.pumpAndSettle();
+      expect(find.text(previewText), findsOneWidget);
+
+      await gesture.moveTo(const Offset(10, 590));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(find.text(previewText), findsNothing,
+          reason: 'כשהסמן עוזב את הפריט (ולא נכנס לחלונית) — החלונית נעלמת');
+    });
+
+    testWidgets('מעבר מהפריט אל החלונית משאיר אותה פתוחה, ויציאה ממנה סוגרת',
+        (tester) async {
+      final gesture = await pumpMenuWithPreviewEntry(tester);
+
+      await gesture.moveTo(tester.getCenter(find.text('קישור א')));
+      await tester.pump(const Duration(milliseconds: 450));
+      await tester.pumpAndSettle();
+      expect(find.text(previewText), findsOneWidget);
+
+      // מעבר אל תוך החלונית — ההשהיה הקצרה מאפשרת לחצות את הרווח
+      await gesture.moveTo(tester.getCenter(find.text(previewText)));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(find.text(previewText), findsOneWidget,
+          reason: 'ריחוף על החלונית עצמה משאיר אותה פתוחה');
+
+      // יציאה מהחלונית — נסגרת אחרי ההשהיה
+      await gesture.moveTo(const Offset(10, 590));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      expect(find.text(previewText), findsNothing,
+          reason: 'יציאה מהחלונית הצפה סוגרת אותה');
+    });
+
+    testWidgets('תצוגה מקדימה פועלת גם על פריט בתוך תת-תפריט (כמו "קישורים")',
+        (tester) async {
+      final gesture =
+          await pumpMenuWithPreviewEntry(tester, insideSubmenu: true);
+
+      await tester.tap(find.text('קישורים'));
+      await tester.pumpAndSettle();
+      expect(find.text('קישור א'), findsOneWidget);
+
+      await gesture.moveTo(tester.getCenter(find.text('קישור א')));
+      await tester.pump(const Duration(milliseconds: 450));
+      await tester.pumpAndSettle();
+
+      expect(find.text(previewText), findsOneWidget,
+          reason: 'רפרוף על קישור בתת-תפריט פותח את חלונית התוכן');
+    });
+
+    testWidgets('חלונית שגדלה אחרי טעינת תוכן אסינכרוני אינה נחתכת בתחתית המסך',
+        (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      const smallKey = ValueKey('loading-content');
+      const grownKey = ValueKey('grown-content');
+      // מדמה את טעינת תוכן הקישור: בהתחלה קטן (כמו ספינר), ואחרי
+      // שהחלונית כבר מוקמה — גדל משמעותית.
+      final grownNotifier = ValueNotifier(false);
+      addTearDown(grownNotifier.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppContextMenuRegion(
+              key: key,
+              menuBuilder: (_, __) => [
+                AppContextMenuEntry(
+                  label: 'קישור א',
+                  onTap: () {},
+                  hoverPreviewBuilder: (_) => ValueListenableBuilder<bool>(
+                    valueListenable: grownNotifier,
+                    builder: (context, grown, _) => grown
+                        ? const SizedBox(key: grownKey, width: 200, height: 500)
+                        : const SizedBox(key: smallKey, width: 200, height: 40),
+                  ),
+                ),
+              ],
+              child: const SizedBox.expand(
+                child: ColoredBox(color: Colors.amber),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // פתיחת התפריט סמוך לתחתית המסך (ברירת מחדל בטסטים: 800x600)
+      await key.currentState!.openMenuAt(const Offset(400, 560));
+      await tester.pumpAndSettle();
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+
+      await gesture.moveTo(tester.getCenter(find.text('קישור א')));
+      await tester.pump(const Duration(milliseconds: 450));
+      await tester.pumpAndSettle();
+      expect(find.byKey(smallKey), findsOneWidget,
+          reason: 'החלונית נפתחת עם תוכן הטעינה הקטן');
+
+      // התוכן "נטען" והחלונית גדלה — אחרי שכבר מוקמה לפי הגודל הקטן
+      grownNotifier.value = true;
+      await tester.pumpAndSettle();
+
+      final grown = find.byKey(grownKey);
+      expect(grown, findsOneWidget,
+          reason: 'התוכן המלא אמור להופיע אחרי הטעינה');
+
+      final overlaySize =
+          tester.view.physicalSize / tester.view.devicePixelRatio;
+      final panelRect = tester.getRect(
+        find.ancestor(of: grown, matching: find.byType(Material)).first,
+      );
+      expect(panelRect.bottom, lessThanOrEqualTo(overlaySize.height),
+          reason: 'החלונית חייבת להישאר בגבולות המסך גם אחרי שהתוכן גדל — '
+              'גדילה אסינכרונית מחייבת הצמדה מחדש של המיקום');
+    });
+
+    testWidgets('לחיצה על הפריט סוגרת את התפריט ואת החלונית יחד',
+        (tester) async {
+      final gesture = await pumpMenuWithPreviewEntry(tester);
+
+      await gesture.moveTo(tester.getCenter(find.text('קישור א')));
+      await tester.pump(const Duration(milliseconds: 450));
+      await tester.pumpAndSettle();
+      expect(find.text(previewText), findsOneWidget);
+
+      await tester.tap(find.text('קישור א'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('קישור א'), findsNothing,
+          reason: 'התפריט נסגר לאחר בחירת הפריט');
+      expect(find.text(previewText), findsNothing,
+          reason: 'החלונית הצפה מוסרת יחד עם סגירת התפריט');
+    });
+  });
 }

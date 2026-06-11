@@ -211,7 +211,9 @@ class TextBookTab extends OpenedTab {
   /// and 'type' keys.
   @override
   Map<String, dynamic> toJson() {
-    List<String> commentators = [];
+    // בטאב שטרם נטען (שולחן עבודה לא-פעיל) הערכים חיים רק בשדות/ב-state
+    // ההתחלתי — ברירות מחדל קבועות היו מאפסות אותם בשמירה לדיסק.
+    List<String> commentators = this.commentators ?? [];
     bool splitedView = _lastSplitView;
     bool showPageShapeView = _lastShowPageShapeView;
     int currentIndex = index; // שמירת האינדקס הנוכחי כברירת מחדל
@@ -236,9 +238,7 @@ class TextBookTab extends OpenedTab {
       'commentators': commentators,
       'splitedView': splitedView,
       'showPageShapeView': showPageShapeView,
-      'showLeftPane': bloc.state is TextBookLoaded
-          ? (bloc.state as TextBookLoaded).showLeftPane
-          : false,
+      'showLeftPane': bloc.state.showLeftPane,
       'isPinned': isPinned,
       'type': 'TextBookTab'
     };

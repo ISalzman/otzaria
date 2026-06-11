@@ -181,6 +181,12 @@ class MyDatabase {
 
     final db = sqlite3.sqlite3.open(_path);
 
+    // Wait-and-retry on lock contention instead of failing immediately with
+    // SQLITE_BUSY (code 5). Without this, a transient lock — e.g. a second app
+    // instance, a stale -wal/-shm, or the schema-creation write racing another
+    // connection — surfaces as "database is locked" on the very first DDL.
+    db.execute('PRAGMA busy_timeout=5000');
+
     // Enable WAL for concurrent read/write access (uniform across all platforms).
     // May fail if another process holds the DB lock (e.g. second instance or stale lock).
     // WAL is an optimisation only — safe to skip on failure.

@@ -85,12 +85,14 @@ Source: "..\build\windows\x64\runner\Release\*"; \
   Excludes: "*.dll"; \
     DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Compressed library assets + extraction tools for post-install extraction
-Source: "library_db\seforim.db.zst"; DestDir: "{app}\_staging"; Flags: ignoreversion nocompression
-Source: "library_db\otzar-HB_catalog.db.zst"; DestDir: "{app}\_staging"; Flags: ignoreversion nocompression
-Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{app}\_staging"; Flags: ignoreversion nocompression
-Source: "zstd.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "7za.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Compressed library assets + extraction tools staged in the setup temp dir —
+; {tmp} is always writable by the installer process (unlike {app} under Program Files)
+; and is auto-deleted when setup exits, even on abort
+Source: "library_db\seforim.db.zst"; DestDir: "{tmp}"; Flags: deleteafterinstall nocompression
+Source: "library_db\otzar-HB_catalog.db.zst"; DestDir: "{tmp}"; Flags: deleteafterinstall nocompression
+Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{tmp}"; Flags: deleteafterinstall nocompression
+Source: "zstd.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+Source: "7za.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 ; MicrosoftEdgeWebview2Setup.exe — bootstrapper קטן (~2MB) שמוריד ומתקין WebView2
 Source: "MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallWV2
@@ -452,7 +454,7 @@ var
   ArchivePath, DatabasePath, ZstdPath, Params, ErrOutput: String;
   ResultCode: Integer;
 begin
-  ArchivePath := ExpandConstant('{app}\_staging\' + ArchiveName);
+  ArchivePath := ExpandConstant('{tmp}\' + ArchiveName);
   if not FileExists(ArchivePath) then
   begin
     Log('Bundled database archive not found, skipping: ' + ArchivePath);
@@ -460,7 +462,7 @@ begin
   end;
 
   DatabasePath := SelectedBooksPath + '\' + DatabaseName;
-  ZstdPath := ExpandConstant('{app}\zstd.exe');
+  ZstdPath := ExpandConstant('{tmp}\zstd.exe');
 
   ForceDirectories(ExtractFileDir(DatabasePath));
 
@@ -483,7 +485,7 @@ var
   ArchivePath, TarPath, ParentDir, TargetDir, ZstdPath, SevenZipPath, Params, ErrOutput: String;
   ResultCode: Integer;
 begin
-  ArchivePath := ExpandConstant('{app}\_staging\' + ArchiveName);
+  ArchivePath := ExpandConstant('{tmp}\' + ArchiveName);
   if not FileExists(ArchivePath) then
   begin
     Log('Bundled archive not found, skipping: ' + ArchivePath);
@@ -493,8 +495,8 @@ begin
   ParentDir := SelectedBooksPath;
   TarPath := ParentDir + '\' + ChangeFileExt(ArchiveName, '');
   TargetDir := SelectedBooksPath + '\' + TargetDirName;
-  ZstdPath := ExpandConstant('{app}\zstd.exe');
-  SevenZipPath := ExpandConstant('{app}\7za.exe');
+  ZstdPath := ExpandConstant('{tmp}\zstd.exe');
+  SevenZipPath := ExpandConstant('{tmp}\7za.exe');
 
   if DirExists(TargetDir) then
   begin
@@ -904,8 +906,8 @@ begin
     exit;
 
   // ─── חילוץ הספריה המצורפת ─────────────────────────────────────────────
-  ZstdPath := ExpandConstant('{app}\zstd.exe');
-  SevenZipPath := ExpandConstant('{app}\7za.exe');
+  ZstdPath := ExpandConstant('{tmp}\zstd.exe');
+  SevenZipPath := ExpandConstant('{tmp}\7za.exe');
 
   if not FileExists(ZstdPath) then
   begin
@@ -935,10 +937,6 @@ begin
 
   WizardForm.ProgressGauge.Style := npbstNormal;
   WizardForm.ProgressGauge.Position := WizardForm.ProgressGauge.Max;
-  DeleteFile(ZstdPath);
-  DeleteFile(SevenZipPath);
-
-  DelTree(ExpandConstant('{app}\_staging'), True, True, True);
 
   if SelectedBooksPath <> '' then
   begin

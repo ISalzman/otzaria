@@ -1,5 +1,7 @@
 #include "flutter_window.h"
 
+#include <dwmapi.h>
+
 #include <algorithm>
 #include <chrono>
 #include <limits>
@@ -8,6 +10,21 @@
 
 #include "flutter/generated_plugin_registrant.h"
 #include "splash_window.h"
+
+namespace {
+
+// מפעיל/מבטל DWM cloaking: החלון נשאר "מוצג" מבחינת המערכת (WS_VISIBLE,
+// מיקסום, פוקוס והצגת פריימים עובדים כרגיל) אבל ה-DWM לא מצייר אותו כלל.
+// ביטול ה-cloak הוא אטומי — פריים קומפוזיציה אחד עם התוכן העדכני.
+void SetWindowCloaked(HWND hwnd, bool cloaked) {
+  if (!hwnd) {
+    return;
+  }
+  BOOL value = cloaked ? TRUE : FALSE;
+  DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &value, sizeof(value));
+}
+
+}  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project, bool headless)
     : project_(project), headless_(headless) {
@@ -165,11 +182,40 @@ bool FlutterWindow::OnCreate() {
           flutter_controller_->engine()->messenger(), "otzaria/splash",
           &flutter::StandardMethodCodec::GetInstance());
   splash_channel_->SetMethodCallHandler(
-      [](const flutter::MethodCall<flutter::EncodableValue>& call,
-         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
-             result) {
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        if (call.method_name() == "cloak") {
+          // הצד של Dart קורא לזה לפני windowManager.show() בחשיפה הראשונה:
+          // החלון יוצג, ימוקסם ויקבל פוקוס בעודו בלתי-נראה, וכל שינויי הגודל
+          // (שזורקים את ה-swapchain ומשאירים חלון שקוף עד לפריים הבא)
+          // מתרחשים מאחורי הקלעים. החשיפה בפועל היא ביטול ה-cloak ב-"close".
+          SetWindowCloaked(GetHandle(), true);
+          result->Success();
+          return;
+        }
         if (call.method_name() == "close") {
-          splash::Close();
+          // Defer the actual reveal until the engine *presents* the next
+          // frame (raster output reaching the swapchain) — by then the
+          // window is at its final size/state (Dart sends "close" after
+          // show/maximize/fullscreen). Uncloaking on that callback makes the
+          // reveal atomic: one DWM composition with the final content, and
+          // the splash icon's fade-out starts at that exact moment. The Dart
+          // side can only observe UI-thread frame completion (endOfFrame),
+          // never the actual present — hence the native callback.
+          // ForceRedraw guarantees a frame is produced even if the previous
+          // one was already presented before the callback was registered.
+          if (flutter_controller_ && flutter_controller_->engine()) {
+            HWND hwnd = GetHandle();
+            flutter_controller_->engine()->SetNextFrameCallback([hwnd]() {
+              SetWindowCloaked(hwnd, false);
+              splash::Close();
+            });
+            flutter_controller_->ForceRedraw();
+          } else {
+            SetWindowCloaked(GetHandle(), false);
+            splash::Close();
+          }
           result->Success();
           return;
         }

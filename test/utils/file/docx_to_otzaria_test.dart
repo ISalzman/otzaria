@@ -981,4 +981,46 @@ void main() {
       expect(result, contains('תא-סדט'), reason: 'תא עטוף ב-sdt לא נאבד');
     });
   });
+
+  group('docxToText - תגיות אוצריא מילוליות', () {
+    test('תגיות אוצריא שהוקלדו כטקסט מופעלות כעיצוב אמיתי', () {
+      // ב-XML של המסמך התגית מופיעה כ-entities — כלומר טקסט גלוי במסמך Word.
+      final docx = _buildDocx(_utf8Xml(_simpleDocXml(
+          '&lt;big&gt;&lt;b&gt;יתגבר כארי&lt;/b&gt;&lt;/big&gt; לעמוד בבקר')));
+      final result = docxToText(docx, 'ב');
+
+      expect(result, contains('<big><b>יתגבר כארי</b></big>'));
+      expect(result, isNot(contains('&lt;big&gt;')));
+    });
+
+    test('תגית כותרת מילולית הופכת לכותרת אמיתית (וזמינה ל-TocParser)', () {
+      final docx =
+          _buildDocx(_utf8Xml(_simpleDocXml('&lt;h4&gt;סעיף א&lt;/h4&gt;')));
+      final result = docxToText(docx, 'ב');
+
+      expect(result, contains('<h4>סעיף א</h4>'));
+      expect(result, isNot(contains('&lt;h4&gt;')));
+    });
+
+    test('תגית שפוצלה בין כמה runs מזוהה לאחר האיחוד', () {
+      final xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<w:document $_xmlNs><w:body><w:p>'
+          '<w:r><w:t xml:space="preserve">&lt;bi</w:t></w:r>'
+          '<w:r><w:t xml:space="preserve">g&gt;מילה&lt;/big&gt;</w:t></w:r>'
+          '</w:p></w:body></w:document>';
+      final result = docxToText(_buildDocx(_utf8Xml(xml)), 'ב');
+
+      expect(result, contains('<big>מילה</big>'));
+    });
+
+    test('סוגריים מחודדים שאינם תגית אוצריא נשארים escaped', () {
+      final docx = _buildDocx(
+          _utf8Xml(_simpleDocXml('נוסחה: a&lt;x&gt; וגם &lt;תנאי&gt; וטקסט')));
+      final result = docxToText(docx, 'ב');
+
+      expect(result, contains('a&lt;x&gt;'));
+      expect(result, contains('&lt;תנאי&gt;'));
+      expect(result, isNot(contains('<x>')));
+    });
+  });
 }

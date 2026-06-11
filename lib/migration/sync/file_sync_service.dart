@@ -595,11 +595,20 @@ class FileSyncService {
 
   /// Pure sync logic — receives all inputs, touches no Settings.
   /// Suitable for running inside a background worker isolate.
+  /// [syncFolders] — לעבד את התיקיות המותאמות (כתיבה ל-user_books.db).
+  /// [syncLinks] — לעבד את תיקיית ה-`links` (כתיבה ל-seforim.db).
+  ///
+  /// השניים מופרדים כדי שניתן יהיה להריץ את כתיבת הספרים האישיים (שצריכה רק
+  /// *קריאה* מ-seforim.db) בלי לסגור את חיבור ה-RO הראשי, ולסגור אותו רק
+  /// סביב שלב ה-links (שכותב ל-seforim.db). ברירת המחדל — שניהם, לשמירת
+  /// תאימות עם קוראים קיימים.
   Future<FileSyncResult> syncCustomFoldersWithInputs({
     required String libraryPath,
     required List<CustomFolder> customFolders,
     String folderName = '',
     void Function(double progress, String message)? onProgress,
+    bool syncFolders = true,
+    bool syncLinks = true,
   }) async {
     if (_isSyncing) {
       _log.warning('Sync already in progress, skipping');
@@ -618,67 +627,69 @@ class FileSyncService {
     final errors = <String>[];
 
     try {
-      // Generator לתיקיות מותאמות אישית — כותב ל-user_books.db.
-      final customFoldersGenerator = DatabaseGenerator(
-        libraryPath,
-        _customFoldersRepo,
-        onProgress: onProgress,
-      );
-      final libraryRoot = folderName.isNotEmpty
-          ? path.join(libraryPath, folderName)
-          : libraryPath;
-      customFoldersGenerator.initializeForSync(libraryRoot: libraryRoot);
+      if (syncFolders) {
+        // Generator לתיקיות מותאמות אישית — כותב ל-user_books.db.
+        final customFoldersGenerator = DatabaseGenerator(
+          libraryPath,
+          _customFoldersRepo,
+          onProgress: onProgress,
+        );
+        final libraryRoot = folderName.isNotEmpty
+            ? path.join(libraryPath, folderName)
+            : libraryPath;
+        customFoldersGenerator.initializeForSync(libraryRoot: libraryRoot);
 
-      _reportProgress(0.4, 'סורק תיקיות מותאמות אישית...');
+        _reportProgress(0.4, 'סורק תיקיות מותאמות אישית...');
 
-      if (customFolders.isNotEmpty) {
-        _log.info('Found ${customFolders.length} custom folders to sync');
+        if (customFolders.isNotEmpty) {
+          _log.info('Found ${customFolders.length} custom folders to sync');
 
-        for (final folder in customFolders) {
-          final folderDir = Directory(folder.path);
-          if (!await folderDir.exists()) {
-            _log.warning('Custom folder does not exist: ${folder.path}');
-            errors.add('תיקייה לא קיימת: ${folder.name}');
-            continue;
-          }
+          for (final folder in customFolders) {
+            final folderDir = Directory(folder.path);
+            if (!await folderDir.exists()) {
+              _log.warning('Custom folder does not exist: ${folder.path}');
+              errors.add('תיקייה לא קיימת: ${folder.name}');
+              continue;
+            }
 
-          _log.info(
-              'Scanning custom folder: ${folder.path} (addToDatabase: ${folder.addToDatabase})');
+            _log.info(
+                'Scanning custom folder: ${folder.path} (addToDatabase: ${folder.addToDatabase})');
 
-          final folderValidKeys = <String>{};
-          final result = await _scanAndImportPath(
-            rootPath: folder.path,
-            categoryPrefix: ['ספרים אישיים', folder.name],
-            insertContent: folder.addToDatabase,
-            customSourceName: _buildCustomFolderSourceName(folder.path),
-            generator: customFoldersGenerator,
-            validBookKeys: folderValidKeys,
-          );
+            final folderValidKeys = <String>{};
+            final result = await _scanAndImportPath(
+              rootPath: folder.path,
+              categoryPrefix: ['ספרים אישיים', folder.name],
+              insertContent: folder.addToDatabase,
+              customSourceName: _buildCustomFolderSourceName(folder.path),
+              generator: customFoldersGenerator,
+              validBookKeys: folderValidKeys,
+            );
 
-          addedBooks += result.addedBooks;
-          updatedBooks += result.updatedBooks;
-          addedCategories += result.addedCategories;
-          skippedFiles += result.skippedFiles;
-          errors.addAll(result.errors);
+            addedBooks += result.addedBooks;
+            updatedBooks += result.updatedBooks;
+            addedCategories += result.addedCategories;
+            skippedFiles += result.skippedFiles;
+            errors.addAll(result.errors);
 
-          // הסרת ספרים מה-DB שקובצם נמחק מהתיקייה. רץ רק אם הסריקה
-          // הושלמה (לא בוטלה) — אחרת folderValidKeys חלקי והיינו עלולים
-          // למחוק ספרים שקבציהם עדיין קיימים.
-          if (_isSyncing) {
-            await _pruneDeletedBooksInFolder(folder, folderValidKeys);
+            // הסרת ספרים מה-DB שקובצם נמחק מהתיקייה. רץ רק אם הסריקה
+            // הושלמה (לא בוטלה) — אחרת folderValidKeys חלקי והיינו עלולים
+            // למחוק ספרים שקבציהם עדיין קיימים.
+            if (_isSyncing) {
+              await _pruneDeletedBooksInFolder(folder, folderValidKeys);
+            }
           }
         }
+
+        // category_closure מתעדכן אינקרמנטלית בכל insertCategory, אז אין צורך
+        // ב-rebuild גלובלי כאן גם כשהוספו קטגוריות חדשות.
+
+        await pruneRemovedCustomFoldersFromDatabase(customFolders);
       }
-
-      // category_closure מתעדכן אינקרמנטלית בכל insertCategory, אז אין צורך
-      // ב-rebuild גלובלי כאן גם כשהוספו קטגוריות חדשות.
-
-      await pruneRemovedCustomFoldersFromDatabase(customFolders);
 
       final linksPath = path.join(libraryPath, 'links');
       final linksDir = Directory(linksPath);
 
-      if (await linksDir.exists()) {
+      if (syncLinks && await linksDir.exists()) {
         _log.info('Scanning links folder: $linksPath');
         _reportProgress(0.6, 'סורק תיקיית קישורים...');
 

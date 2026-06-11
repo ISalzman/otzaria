@@ -61,6 +61,12 @@ class _SearchWorkerHost {
   int _nextRequestId = 0;
   final Map<int, Completer<List<TextSearchResult>>> _pending = {};
 
+  // מעקב אחר התוכן האחרון שנשלח ל-worker. כל עוד מדובר באותו אובייקט תוכן
+  // (אותו ספר פתוח) שולחים רק את השאילתה — לא את הספר כולו — וה-worker
+  // משתמש ב-cache שלו לפי המזהה.
+  List<String>? _lastSentContent;
+  int _lastContentId = 0;
+
   Future<List<TextSearchResult>> search({
     required List<String> content,
     required String query,
@@ -71,12 +77,23 @@ class _SearchWorkerHost {
     final completer = Completer<List<TextSearchResult>>();
     _pending[requestId] = completer;
 
-    _workerSendPort!.send({
+    final bool contentChanged = !identical(content, _lastSentContent);
+    if (contentChanged) {
+      _lastSentContent = content;
+      _lastContentId++;
+    }
+
+    final message = <String, dynamic>{
       'type': 'search',
       'requestId': requestId,
-      'content': content,
+      'contentId': _lastContentId,
       'query': query,
-    });
+    };
+    if (contentChanged) {
+      message['content'] = content;
+    }
+
+    _workerSendPort!.send(message);
 
     return completer.future;
   }
@@ -185,6 +202,8 @@ class _SearchWorkerHost {
     _startFuture = null;
     _startCompleter = null;
     _nextRequestId = 0;
+    _lastSentContent = null;
+    _lastContentId = 0;
     _isolate?.kill(priority: Isolate.immediate);
     _isolate = null;
   }
@@ -204,6 +223,13 @@ class SectionSearchWorkerRuntime {
   final SendPort _mainSendPort;
   Map<String, dynamic>? _queuedRequest;
   bool _isProcessing = false;
+
+  // Cache של ספר אחד (LRU=1): התוכן הגולמי והשורות לאחר ניקוי. הניקוי
+  // (הסרת ניקוד/HTML/הערות) אינו תלוי בשאילתה, ולכן מחושב פעם אחת לכל ספר
+  // ולא מחדש בכל הקלדה. מתחלף כשמגיע תוכן עם מזהה שונה.
+  int? _cachedContentId;
+  List<String>? _cachedRawContent;
+  List<String>? _cachedCleanLines;
 
   void onMessage(dynamic message) {
     if (message is! Map) {
@@ -230,26 +256,51 @@ class SectionSearchWorkerRuntime {
         final requestId = request['requestId'] as int;
 
         try {
-          final content = (request['content'] as List<dynamic>).cast<String>();
+          final contentId = request['contentId'] as int?;
           final query = request['query'] as String;
+
+          // ודא שה-cache תואם לתוכן המבוקש; אחרת בנה אותו פעם אחת.
+          // בקשה ללא contentId (תאימות לאחור) נחשבת תמיד כתוכן חדש.
+          final bool cacheValid = contentId != null &&
+              contentId == _cachedContentId &&
+              _cachedCleanLines != null;
+          if (!cacheValid) {
+            final rawContent = request.containsKey('content')
+                ? (request['content'] as List<dynamic>).cast<String>()
+                : _cachedRawContent;
+            if (rawContent == null) {
+              throw StateError('לא התקבל תוכן לחיפוש (contentId=$contentId)');
+            }
+            final built = await _buildCache(contentId, rawContent);
+            if (!built) {
+              // הבנייה הופסקה כי הגיעה בקשה לתוכן אחר — הבקשה הנוכחית מיושנת.
+              // מדווחים ביטול וממשיכים אל הבקשה החדשה בלולאה.
+              _mainSendPort.send({
+                'type': 'canceled',
+                'requestId': requestId,
+              });
+              continue;
+            }
+          }
+
+          final cleanLines = _cachedCleanLines!;
+          final sourceLines = _cachedRawContent!;
 
           final results = <Map<String, dynamic>>[];
           final address = <String>[];
           bool canceled = false;
 
-          for (int i = 0; i < content.length; i++) {
-            final line = content[i];
+          for (int i = 0; i < cleanLines.length; i++) {
+            final rawLine = sourceLines[i];
 
-            if (line.contains('<h') && !line.startsWith('<h1')) {
-              _updateAddress(address, line);
+            if (rawLine.contains('<h') && !rawLine.startsWith('<h1')) {
+              _updateAddress(address, rawLine);
             }
 
-            final cleanLine = utils.removeVolwels(
-                utils.stripHtmlIfNeeded(notes.stripInlineNotesForSearch(line)));
-            if (_containsWholeWord(cleanLine, query)) {
+            if (_containsWholeWord(cleanLines[i], query)) {
               results.add({
                 'index': i,
-                'snippet': cleanLine,
+                'snippet': cleanLines[i],
                 'address': utils
                     .removeVolwels(utils.stripHtmlIfNeeded(address.join(', '))),
                 'query': query,
@@ -292,6 +343,31 @@ class SectionSearchWorkerRuntime {
     } finally {
       _isProcessing = false;
     }
+  }
+
+  /// מנקה את כל שורות הספר פעם אחת ושומר ב-cache. הניקוי כבד ואינו תלוי
+  /// בשאילתה, ולכן מבוצע רק כשמתחלף הספר. ה-yield התקופתי מונע חסימה ארוכה
+  /// של ה-isolate ומאפשר לקלוט בקשות חדשות בזמן הבנייה.
+  /// מחזיר `false` אם הבנייה הופסקה באמצע כי בינתיים הגיעה בקשה לתוכן אחר
+  /// (contentId שונה); במקרה כזה לא נשמר cache חלקי. שינוי שאילתה בלבד על
+  /// אותו ספר אינו מפסיק את הבנייה — היא עדיין שימושית לשאילתה החדשה.
+  Future<bool> _buildCache(int? contentId, List<String> content) async {
+    final clean = List<String>.filled(content.length, '', growable: false);
+    for (int i = 0; i < content.length; i++) {
+      clean[i] = utils.removeVolwels(
+          utils.stripHtmlIfNeeded(notes.stripInlineNotesForSearch(content[i])));
+      if ((i + 1) % _searchChunkSize == 0) {
+        await Future<void>.delayed(Duration.zero);
+        final next = _queuedRequest;
+        if (next != null && next['contentId'] != contentId) {
+          return false;
+        }
+      }
+    }
+    _cachedContentId = contentId;
+    _cachedRawContent = content;
+    _cachedCleanLines = clean;
+    return true;
   }
 }
 

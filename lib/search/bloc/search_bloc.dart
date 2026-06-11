@@ -259,7 +259,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       bookByIndexedFilePath,
     );
 
-    add(ReplaceFacetCounts(aggregated));
+    add(ReplaceFacetCounts(aggregated, requestId: requestId));
   }
 
   Future<void> _onUpdateFilterQuery(
@@ -652,6 +652,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     ReplaceFacetCounts event,
     Emitter<SearchState> emit,
   ) {
+    // התעלמות מספירות של חיפוש שכבר הוחלף בזמן שה-event המתין בתור.
+    if (event.requestId != _searchRequestId) return;
     emit(state.copyWith(facetCounts: event.facetCounts));
   }
 

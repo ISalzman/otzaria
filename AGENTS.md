@@ -463,6 +463,25 @@ Future<List<Book>> getBooksByCategory(String category) async {
 }
 ```
 
+### Code Comments — Minimal & For the First-Time Reader (MANDATORY)
+
+**הכלל: פחות הערות, וקצרות. הוסף הערה רק כשהיא באמת נצרכת.**
+
+- **כמות** - אל תוסיף הרבה הערות. רוב הקוד צריך להסביר את עצמו דרך שמות ברורים.
+- **אורך** - הערה נצרכת תהיה קצרה - **מקסימום 2 שורות**.
+- **קהל היעד** - כתוב הערה רק למי שקורא את הקוד **בפעם הראשונה**. ההערה מסבירה *למה* הקוד עושה משהו לא מובן מאליו, או מתעדת מלכוד שאם ישנו אותו יחזור באג. זו ההצדקה היחידה להערה.
+- **לא רלוונטי** - אסור להערות שמתעדות היסטוריה: "פעם היה כך", "שונה ב-commit X", "הוספנו כי...", "TODO ישן", קוד מבוטל בהערה. למשתמש שקורא עכשיו לא מעניין מה היה - הגיט מתעד את זה.
+
+```dart
+// ❌ רע - מתעד היסטוריה, לא רלוונטי לקורא:
+// פעם השתמשנו ב-setFullScreen אבל זה איבד WS_VISIBLE אז שינינו
+
+// ✅ טוב - מזהיר ממלכוד שיחזיר באג אם ישונה (קצר):
+// setFullScreen על חלון מוסתר מאבד WS_VISIBLE - חובה להציג קודם
+```
+
+**אם נתקלת בהערה קיימת שמפרה את ההנחיה משמעותית** (ארוכה מדי, מתעדת היסטוריה, מיותרת) - **תקן/מחק אותה** כחלק מהעבודה על אותו קובץ.
+
 ## Testing Strategy
 
 ### Before Every Commit (MANDATORY)
@@ -541,6 +560,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 13. **Documentation** - Document all public APIs in Hebrew
 14. **Cross-platform** - Code must work on all supported platforms
 15. **Pre-commit trinity** - `analyze` + `test` + `format` = mandatory
+16. **Minimal comments** - Few comments, max 2 lines each, for the first-time reader only (explain *why* / prevent regressions) — never document history. Fix violating comments you encounter
 
 ### Common Mistakes to Avoid
 - Fixing a bug by adding code instead of finding and removing the root cause
@@ -568,6 +588,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 - Not testing on multiple platforms
 - Hardcoding platform-specific paths
 - Creating unnecessary MD files to document changes (CHANGES.md, SUMMARY.md, etc.)
+- Adding too many comments, long comments (over 2 lines), or comments that document history ("used to be X", "changed in commit Y") instead of explaining *why* for a first-time reader
 
 ---
 

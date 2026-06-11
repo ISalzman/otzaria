@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:window_manager/window_manager.dart';
 
 class WindowPersistence {
@@ -20,9 +21,11 @@ class WindowPersistence {
   static bool _restored = false;
   static bool _isRestoring = false;
   static bool _pendingMaximize = false;
+  static bool _pendingFullscreen = false;
 
-  /// גבולות החלון השמורים, נקראים ב-[restoreIfAny] אך מוחלים רק ב-
-  /// [applyRestoredBounds] — אחרי שלב ה-splash הקטן. null = אין גבולות שמורים
+  /// גבולות החלון השמורים, נקראים ב-[restoreIfAny] ומוחלים ב-
+  /// [applyRestoredBounds] — מוקדם, בעוד החלון מוסתר וה-splash מוצג (כדי
+  /// ששינוי ה-DPI אפשרי יתייצב לפני החשיפה). null = אין גבולות שמורים
   /// (הפעלה ראשונה) → יוחל גודל ברירת מחדל.
   static Rect? _restoredBounds;
 
@@ -52,6 +55,12 @@ class WindowPersistence {
       final height = Settings.getValue<double>(_kHeight);
 
       _pendingMaximize = isMaximized;
+      // מצב מסך מלא משוחזר אף הוא רק אחרי show() (ב-applyPendingFullscreen):
+      // קריאה ל-setFullScreen בעוד החלון מוסתר גורמת ל-plugin לצלם את סגנון
+      // החלון ללא WS_VISIBLE, וביציאה ממסך מלא הסגנון השמור מוחל כלשונו —
+      // והחלון נעלם (נשאר תהליך רץ בלי חלון).
+      _pendingFullscreen =
+          Settings.getValue<bool>(SettingsRepository.keyIsFullscreen) ?? false;
 
       // If we don't have a complete set of bounds, do nothing.
       // Maximize (if needed) will be applied after `show()` via
@@ -65,9 +74,9 @@ class WindowPersistence {
       final clampedWidth = width < minSize.width ? minSize.width : width;
       final clampedHeight = height < minSize.height ? minSize.height : height;
 
-      // לא מחילים את הגבולות עכשיו: בשלב זה החלון מציג את ה-splash הקטן
-      // והשקוף. הגבולות נשמרים ומוחלים ב-[applyRestoredBounds] בעת חשיפת
-      // החלון המלא (revealMainWindow), אחרי שתוכן הטאב הפעיל נטען.
+      // שומרים את הגבולות; הם מוחלים ב-[applyRestoredBounds] מיד לאחר מכן,
+      // בעוד החלון הראשי מוסתר וה-splash הנייטיב מוצג — מוקדם דיו כדי ששינוי
+      // DPI אפשרי (אם הגבולות על מסך אחר ממסך היצירה) יתייצב לפני החשיפה.
       _restoredBounds = Rect.fromLTWH(left, top, clampedWidth, clampedHeight);
     } catch (_) {
       // window manager may fail on first launch;
@@ -78,7 +87,8 @@ class WindowPersistence {
   }
 
   /// מחילה את גבולות החלון השמורים (או גודל ברירת מחדל ממורכז בהפעלה ראשונה).
-  /// נקראת בעת חשיפת החלון המלא, אחרי שלב ה-splash הקטן.
+  /// נקראת מוקדם, מיד לאחר [restoreIfAny], בעוד החלון מוסתר — כדי ששינוי DPI
+  /// אפשרי (מעבר מסך) יתייצב הרבה לפני שהחלון יוצג ב-[presentMainWindow].
   static Future<void> applyRestoredBounds() async {
     _isRestoring = true;
     try {
@@ -109,6 +119,36 @@ class WindowPersistence {
     _isRestoring = true;
     try {
       await windowManager.maximize();
+    } catch (_) {
+      // Ignore; window stays at the restored bounds.
+    } finally {
+      _isRestoring = false;
+    }
+  }
+
+  /// מחילה שחזור מסך מלא שנדחה מ-[restoreIfAny] עד אחרי `windowManager.show()`
+  /// (ואחרי [applyPendingMaximize], כדי שיציאה עתידית ממסך מלא תחזיר את החלון
+  /// למצב הממוקסם אם זה היה מצבו). חובה לקרוא רק כשהחלון גלוי: setFullScreen
+  /// על חלון מוסתר מצלם סגנון ללא WS_VISIBLE, וביציאה ממסך מלא החלון נעלם.
+  static Future<void> applyPendingFullscreen() async {
+    if (!_pendingFullscreen) return;
+    _pendingFullscreen = false;
+    _isRestoring = true;
+    try {
+      // show() מצדו מבצע ShowWindowAsync — ההצגה נרשמת אסינכרונית, וקריאת
+      // setFullScreen מיד אחריה עלולה עדיין לצלם סגנון ללא WS_VISIBLE.
+      // ממתינים שהחלון גלוי בפועל; אם לא נהיה גלוי (לא אמור לקרות) מדלגים —
+      // עדיף חלון רגיל גלוי ממסך מלא שייעלם ביציאה ממנו.
+      var visible = false;
+      for (var i = 0; i < 50 && !visible; i++) {
+        visible = await windowManager.isVisible();
+        if (!visible) {
+          await Future<void>.delayed(const Duration(milliseconds: 16));
+        }
+      }
+      if (visible) {
+        await windowManager.setFullScreen(true);
+      }
     } catch (_) {
       // Ignore; window stays at the restored bounds.
     } finally {

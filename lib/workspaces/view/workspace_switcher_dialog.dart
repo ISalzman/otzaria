@@ -5,6 +5,9 @@ import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_event.dart';
 import 'package:otzaria/workspaces/bloc/workspace_state.dart';
 import 'package:otzaria/workspaces/workspace.dart';
+import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
+import 'package:otzaria/navigation/bloc/navigation_event.dart';
+import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
@@ -180,6 +183,12 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                     currentTabsToSave: tabsState.tabs,
                     currentTabIndexToSave: tabsState.currentTabIndex,
                   ));
+              // כמו בעליית התוכנה: שולחן עם ספרים נפתח בעיון, ריק — בספרייה.
+              final hasBooks = isActive
+                  ? tabsState.tabs.isNotEmpty
+                  : workspace.tabs.isNotEmpty;
+              context.read<NavigationBloc>().add(
+                  NavigateToScreen(hasBooks ? Screen.reading : Screen.library));
               Navigator.of(context).pop();
             },
             child: Column(

@@ -59,10 +59,7 @@ import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
-import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
-import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/link_helpers.dart';
-import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
@@ -155,8 +152,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   bool _hasResolvedCompanionPdf = false;
   bool _leftPaneAutoCloseQueuedByScroll = false;
 
-  // Key עבור PageShapeScreen - שינוי המפתח יגרום לבנייה מחדש
-  Key _pageShapeKey = UniqueKey();
+  // Key עבור PageShapeScreen
+  final Key _pageShapeKey = UniqueKey();
+
+  // בקשה לפתיחת דיאלוג הגדרות צורת הדף מתוך PageShapeScreen (עדכון חי)
+  final ValueNotifier<int> _pageShapeOpenSettingsNotifier =
+      ValueNotifier<int>(0);
 
   // RepaintBoundary key עבור הדפסה של "צורת הדף" כפי שמוצג
   final GlobalKey _pageShapePrintBoundaryKey = GlobalKey();
@@ -794,6 +795,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     _bookContentFocusNode.dispose();
     _sidebarWidth.dispose();
     _pageShapeSidebarTabNotifier.dispose();
+    _pageShapeOpenSettingsNotifier.dispose();
     _settingsSub.cancel();
     super.dispose();
   }
@@ -1321,7 +1323,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-  /// כפתור הגדרות צורת הדף
+  /// כפתור הגדרות צורת הדף.
+  /// הדיאלוג נפתח ע"י PageShapeScreen עצמו (דרך ה-notifier), כדי שכל שינוי
+  /// בדיאלוג יוחל על המסך בעדכון חי בלי להמתין לסגירתו.
   Widget _buildPageShapeSettingsButton(
       BuildContext context, TextBookLoaded state) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
@@ -1329,43 +1333,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       tooltip: 'הגדרות צורת הדף',
       icon: FluentIcons.settings_24_regular,
       compact: isCompact,
-      onPressed: () async {
-        // טעינת ההגדרות הנוכחיות
-        final config = PageShapeSettingsManager.loadConfiguration(
-          state.book.title,
-          heCategories: state.book.heCategories,
-        );
-
-        // אם אין הגדרות שמורות, נשתמש בברירות מחדל
-        final currentSettings = config ??
-            await DefaultCommentators.getDefaults(
-              state.book,
-              availableCommentators: state.availableCommentators,
-            );
-
-        if (!context.mounted) return;
-
-        final availableCommentators = state.availableCommentators;
-        final bookTitle = state.book.title;
-        final hadChanges = await showDialog<bool>(
-          context: context,
-          builder: (builderContext) => PageShapeSettingsDialog(
-            availableCommentators: availableCommentators,
-            bookTitle: bookTitle,
-            heCategories: state.book.heCategories,
-            currentLeft: currentSettings['left'],
-            currentRight: currentSettings['right'],
-            currentBottom: currentSettings['bottom'],
-            currentBottomRight: currentSettings['bottomRight'],
-          ),
-        );
-        // אם היו שינויים, נשנה את המפתח כדי לגרום ל-PageShapeScreen להיבנות מחדש
-        if (hadChanges == true && context.mounted) {
-          setState(() {
-            _pageShapeKey = UniqueKey();
-          });
-        }
-      },
+      onPressed: () => _pageShapeOpenSettingsNotifier.value++,
     );
   }
 
@@ -2526,6 +2494,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               pageShapeKey: _pageShapeKey,
               pageShapePrintBoundaryKey: _pageShapePrintBoundaryKey,
               pageShapeSidebarTabNotifier: _pageShapeSidebarTabNotifier,
+              pageShapeOpenSettingsNotifier: _pageShapeOpenSettingsNotifier,
               openSearch: _openSearchWithText,
             ),
           ),

@@ -139,6 +139,69 @@ COMMIT;
       expect(_readDbVersion(dbPath), 135);
     });
 
+    test('שרת שלא עונה נכשל ב-TimeoutException ולא נתקע לנצח', () async {
+      // רגרסיה: בלי timeout, רשת מסוננת שמחזיקה את החיבור פתוח תקעה את
+      // הסנכרון בעליית האפליקציה ללא הגבלת זמן (issue #343).
+      final asset = DiffReleaseAsset(
+        fromVersion: 133,
+        toVersion: 134,
+        assetName: '133-134.DIFF.zst',
+        downloadUrl: 'https://example.com/133-134.DIFF.zst',
+        releaseTag: 'db-v134',
+        releaseName: 'db-v134',
+      );
+
+      final client = MockClient.streaming(
+        (request, bodyStream) => Completer<http.StreamedResponse>().future,
+      );
+
+      await expectLater(
+        runDiffSyncLogic(
+          dbPath: dbPath,
+          assets: [asset],
+          httpClient: client,
+          decompress: (_) async => Uint8List.fromList(const [1]),
+          isCancelled: () => false,
+          onProgress: (_) {},
+          connectTimeout: const Duration(milliseconds: 50),
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test('הורדה שקפאה באמצע נכשלת ב-TimeoutException של ה-stall', () async {
+      final asset = DiffReleaseAsset(
+        fromVersion: 133,
+        toVersion: 134,
+        assetName: '133-134.DIFF.zst',
+        downloadUrl: 'https://example.com/133-134.DIFF.zst',
+        releaseTag: 'db-v134',
+        releaseName: 'db-v134',
+      );
+
+      // chunk ראשון מגיע, ואז הזרם משתתק בלי להיסגר — מדמה הורדה שקפאה.
+      final stalledController = StreamController<List<int>>();
+      addTearDown(stalledController.close);
+
+      final client = MockClient.streaming((request, bodyStream) async {
+        stalledController.add(const [1, 2, 3]);
+        return http.StreamedResponse(stalledController.stream, 200);
+      });
+
+      await expectLater(
+        runDiffSyncLogic(
+          dbPath: dbPath,
+          assets: [asset],
+          httpClient: client,
+          decompress: (_) async => Uint8List.fromList(const [1]),
+          isCancelled: () => false,
+          onProgress: (_) {},
+          stallTimeout: const Duration(milliseconds: 50),
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
     test('ביטול בזמן הורדה זורק ומפסיק', () async {
       var cancelled = false;
       final updates = <LibraryDiffSyncUpdate>[];

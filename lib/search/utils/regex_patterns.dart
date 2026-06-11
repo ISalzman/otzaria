@@ -359,8 +359,12 @@ class SearchRegexPatterns {
     if (word.isEmpty) return word;
     String result = word;
 
-    // הסרת קידומות
-    result = result.replaceFirst(grammaticalPrefixes, '');
+    // הסרת קידומות - ההתאמה כוללת את שאר המילה (קבוצה 2), לכן
+    // מחליפים את ההתאמה כולה בקבוצה 2 במקום למחוק אותה
+    result = result.replaceFirstMapped(
+      grammaticalPrefixes,
+      (match) => match.group(2)!,
+    );
 
     // הסרת סיומות
     result = result.replaceFirst(grammaticalSuffixes, '');

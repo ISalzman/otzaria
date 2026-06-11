@@ -46,6 +46,13 @@ void main() {
 
     await SqliteDataProvider.instance.dispose();
     await SqliteDataProvider.instance.initialize();
+
+    // איפוס פרמטרי ההמתנה ל-gate לברירת המחדל — ה-provider הוא singleton
+    // ועקיפה בטסט אחד הייתה דולפת לבא אחריו.
+    SqliteDataProvider.instance.debugSetExternalWriteWait(
+      pollInterval: const Duration(seconds: 2),
+      maxPolls: 15,
+    );
   });
 
   tearDown(() async {
@@ -170,6 +177,61 @@ void main() {
     await reader.timeout(const Duration(seconds: 5));
 
     expect(SqliteDataProvider.instance.isInitialized, isTrue);
+  });
+
+  test(
+      'initialize() לא נתקעת לנצח כש-reopen מתפספס — חוזרת בתקרת הזמן '
+      '(תיקון מסך עיון/תצוגה מקדימה ריקים שדורשים restart)', () async {
+    // מקצרים את תקרת ההמתנה כדי לבדוק את החסימה בלי להמתין ~30ש'.
+    SqliteDataProvider.instance.debugSetExternalWriteWait(
+      pollInterval: const Duration(milliseconds: 20),
+      maxPolls: 3,
+    );
+
+    // מדמים דליפת session: סוגרים לכתיבה חיצונית אך *לעולם* לא קוראים ל-
+    // reopen (איזולייט שקרס / close בלי finally תואם). ה-gate לא יושלם.
+    await SqliteDataProvider.instance.closeForExternalWrite();
+    expect(SqliteDataProvider.instance.isInitialized, isFalse);
+
+    // הקורא חייב לחזור בתוך תקרת ההמתנה, לא להיתקע לנצח. בלי התיקון
+    // (await gate.future ללא תקרה) ה-timeout כאן היה מתפוצץ.
+    await SqliteDataProvider.instance
+        .initialize()
+        .timeout(const Duration(seconds: 5));
+
+    // עדיין יש session פעיל (דלף) ולכן ה-RO לא נפתח — אבל האפליקציה
+    // רספונסיבית: הקורא חזר (יציג ריק) במקום לקפוא על סקלטון.
+    expect(SqliteDataProvider.instance.isInitialized, isFalse,
+        reason: 'ה-session דלף — RO לא נפתח, אבל הקורא לא נתקע');
+
+    // ניקוי: סוגרים את ה-session הדלוף כדי שלא ידלוף לטסט הבא.
+    await SqliteDataProvider.instance.reopenAfterExternalWrite();
+  });
+
+  test(
+      'initialize() מתאוששת מיד כש-reopen מגיע אחרי השהיה (לא ממתינה פעימה מלאה)',
+      () async {
+    SqliteDataProvider.instance.debugSetExternalWriteWait(
+      pollInterval: const Duration(seconds: 30),
+      maxPolls: 15,
+    );
+
+    await SqliteDataProvider.instance.closeForExternalWrite();
+
+    var readerDone = false;
+    final reader =
+        SqliteDataProvider.instance.initialize().then((_) => readerDone = true);
+
+    // reopen מגיע אחרי השהיה קצרה (כמו סנכרון שנמשך "כמה שניות"). אף שפעימת
+    // ההמתנה היא 30ש', gate.future מסתיים מיד עם reopen והקורא מתעורר — לא
+    // ממתין את הפעימה המלאה.
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(readerDone, isFalse);
+    await SqliteDataProvider.instance.reopenAfterExternalWrite();
+
+    await reader.timeout(const Duration(seconds: 2));
+    expect(SqliteDataProvider.instance.isInitialized, isTrue,
+        reason: 'הקורא התעורר מיד עם reopen, לא חיכה לתום הפעימה');
   });
 
   test('write-sessions סדרתיים — שתי כתיבות מצטברות', () async {

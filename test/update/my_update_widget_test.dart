@@ -111,4 +111,150 @@ void main() {
       expect(selected['tag_name'], '0.9.92');
     });
   });
+
+  group('pickWindowsAssetUrl', () {
+    Map<String, dynamic> asset(String name) => {
+          'name': name,
+          'browser_download_url': 'https://example.com/$name',
+        };
+
+    // נכסי release מציאותיים, כפי שמועלים ע"י build-and-announce.yml.
+    final fullReleaseAssets = [
+      asset('otzaria-0.9.94-windows.exe'),
+      asset('otzaria-0.9.94-windows-silent.exe'),
+      asset('otzaria-0.9.94-windows-full.exe'),
+      asset('otzaria-0.9.94-windows-full-silent.exe'),
+      asset('otzaria-windows.zip'),
+      asset('otzaria-0.9.94-linux.deb'),
+      asset('otzaria-macos.dmg'),
+    ];
+
+    test('prefers the silent installer for exe installs', () {
+      expect(
+        pickWindowsAssetUrl(fullReleaseAssets, preferredFormat: 'exe'),
+        'https://example.com/otzaria-0.9.94-windows-silent.exe',
+      );
+    });
+
+    test('falls back to the regular installer when no silent asset exists', () {
+      final assets = [
+        asset('otzaria-0.9.94-windows.exe'),
+        asset('otzaria-windows.zip'),
+      ];
+      expect(
+        pickWindowsAssetUrl(assets, preferredFormat: 'exe'),
+        'https://example.com/otzaria-0.9.94-windows.exe',
+      );
+    });
+
+    test('never selects full installers', () {
+      final assets = [
+        asset('otzaria-0.9.94-windows-full.exe'),
+        asset('otzaria-0.9.94-windows-full-silent.exe'),
+      ];
+      expect(pickWindowsAssetUrl(assets, preferredFormat: 'exe'), isNull);
+    });
+
+    test('prefers zip for portable installs with silent exe as fallback', () {
+      expect(
+        pickWindowsAssetUrl(fullReleaseAssets, preferredFormat: 'zip'),
+        'https://example.com/otzaria-windows.zip',
+      );
+
+      final withoutZip = [
+        asset('otzaria-0.9.94-windows.exe'),
+        asset('otzaria-0.9.94-windows-silent.exe'),
+      ];
+      expect(
+        pickWindowsAssetUrl(withoutZip, preferredFormat: 'zip'),
+        'https://example.com/otzaria-0.9.94-windows-silent.exe',
+      );
+    });
+
+    test('ignores assets of other platforms', () {
+      final assets = [
+        asset('otzaria-0.9.94-linux.deb'),
+        asset('otzaria-macos.dmg'),
+        asset('otzaria-macos.zip'),
+      ];
+      expect(pickWindowsAssetUrl(assets, preferredFormat: 'exe'), isNull);
+    });
+  });
+
+  group('pickMacAssetUrl', () {
+    Map<String, dynamic> asset(String name) => {
+          'name': name,
+          'browser_download_url': 'https://example.com/$name',
+        };
+
+    final fullReleaseAssets = [
+      asset('otzaria-0.9.94-windows.exe'),
+      asset('otzaria-windows.zip'),
+      asset('otzaria-macos.dmg'),
+      asset('otzaria-macos.zip'),
+      asset('otzaria-macos-full.zip'),
+      asset('otzaria-0.9.94-linux.deb'),
+    ];
+
+    test('prefers the app zip when self-update is possible', () {
+      expect(
+        pickMacAssetUrl(fullReleaseAssets, selfUpdateCapable: true),
+        'https://example.com/otzaria-macos.zip',
+      );
+    });
+
+    test('prefers the dmg when self-update is not possible', () {
+      expect(
+        pickMacAssetUrl(fullReleaseAssets, selfUpdateCapable: false),
+        'https://example.com/otzaria-macos.dmg',
+      );
+    });
+
+    test('falls back to dmg on old releases without an update zip', () {
+      final oldRelease = [
+        asset('otzaria-macos.dmg'),
+        asset('otzaria-macos-full.zip'),
+      ];
+      expect(
+        pickMacAssetUrl(oldRelease, selfUpdateCapable: true),
+        'https://example.com/otzaria-macos.dmg',
+      );
+    });
+
+    test('never selects full bundles', () {
+      final assets = [asset('otzaria-macos-full.zip')];
+      expect(pickMacAssetUrl(assets, selfUpdateCapable: true), isNull);
+      expect(pickMacAssetUrl(assets, selfUpdateCapable: false), isNull);
+    });
+
+    test('without self-update returns only dmg — zip alone is unusable', () {
+      // zip ללא עדכון עצמי אינו מחולץ ב-Dart ולכן openInstaller נכשל עליו;
+      // עדיף null (צ'יפ שגיאה) מאשר כשל באמצע התקנה.
+      final zipOnly = [asset('otzaria-macos.zip')];
+      expect(pickMacAssetUrl(zipOnly, selfUpdateCapable: false), isNull);
+    });
+  });
+
+  group('isSilentWindowsInstallerUrl', () {
+    test('identifies the silent installer by its asset name in the URL', () {
+      expect(
+        isSilentWindowsInstallerUrl(
+          'https://github.com/Otzaria/otzaria/releases/download/0.9.94/otzaria-0.9.94-windows-silent.exe',
+        ),
+        isTrue,
+      );
+      expect(
+        isSilentWindowsInstallerUrl(
+          'https://github.com/Otzaria/otzaria/releases/download/0.9.94/otzaria-0.9.94-windows.exe',
+        ),
+        isFalse,
+      );
+      expect(
+        isSilentWindowsInstallerUrl(
+          'https://github.com/Otzaria/otzaria/releases/download/0.9.94/otzaria-windows.zip',
+        ),
+        isFalse,
+      );
+    });
+  });
 }

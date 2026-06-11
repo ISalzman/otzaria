@@ -148,7 +148,7 @@ void main() {
       build: SearchBloc.new,
       act: (bloc) {
         bloc.add(UpdateFacetCounts({'/ישן': 1, '/נשאר': 2}));
-        bloc.add(ReplaceFacetCounts({'/נשאר': 3}));
+        bloc.add(ReplaceFacetCounts({'/נשאר': 3}, requestId: 0));
       },
       expect: () => [
         isA<SearchState>()
@@ -159,6 +159,22 @@ void main() {
             .having((state) => state.facetCounts.length, 'length', 1)
             .having((state) => state.facetCounts['/ישן'], '/ישן', isNull)
             .having((state) => state.facetCounts['/נשאר'], '/נשאר', 3),
+      ],
+    );
+
+    blocTest<SearchBloc, SearchState>(
+      'ReplaceFacetCounts עם requestId ישן (מחיפוש שהוחלף) נזרק ולא דורס',
+      build: SearchBloc.new,
+      act: (bloc) {
+        bloc.add(UpdateFacetCounts({'/עדכני': 5}));
+        // requestId שלא תואם את החיפוש הנוכחי (0) — מדמה ספירות שחושבו
+        // עבור חיפוש קודם והגיעו באיחור.
+        bloc.add(ReplaceFacetCounts({'/ישן': 1}, requestId: 99));
+      },
+      expect: () => [
+        isA<SearchState>()
+            .having((state) => state.facetCounts['/עדכני'], '/עדכני', 5),
+        // אין state נוסף — ה-ReplaceFacetCounts הישן לא גרם ל-emit.
       ],
     );
 
