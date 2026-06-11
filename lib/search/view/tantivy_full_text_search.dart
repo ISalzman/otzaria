@@ -476,11 +476,11 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                     ],
                     center: state.searchQuery.isEmpty
                         ? const SizedBox.shrink()
-                        : Row(
-                            children: [
-                              Flexible(
-                                fit: FlexFit.loose,
-                                child: Text(
+                        : Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
                                   'מוצגות תוצאות של חיפוש: ',
                                   style: TextStyle(
                                     fontSize: 14,
@@ -489,40 +489,42 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                         .onSurface
                                         .withValues(alpha: 0.7),
                                   ),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: ScrollConfiguration(
-                                  behavior: ScrollConfiguration.of(context)
-                                      .copyWith(scrollbars: false),
-                                  child: SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: SearchTermsDisplay(tab: widget.tab),
+                                const SizedBox(width: 4),
+                                ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 240),
+                                  child: ScrollConfiguration(
+                                    behavior: ScrollConfiguration.of(context)
+                                        .copyWith(scrollbars: false),
+                                    child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child:
+                                          SearchTermsDisplay(tab: widget.tab),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              ToolbarActionButton(
-                                tooltip: _showEditPanel
-                                    ? 'סגור עריכה'
-                                    : 'ערוך חיפוש',
-                                icon: _showEditPanel
-                                    ? FluentIcons.chevron_up_24_regular
-                                    : FluentIcons.edit_24_regular,
-                                selected: _showEditPanel,
-                                compact: context
-                                    .read<SettingsBloc>()
-                                    .state
-                                    .compactMenuMode,
-                                onPressed: () {
-                                  setState(() {
-                                    _showEditPanel = !_showEditPanel;
-                                  });
-                                },
-                              ),
-                            ],
+                                const SizedBox(width: 8),
+                                ToolbarActionButton(
+                                  tooltip: _showEditPanel
+                                      ? 'סגור עריכה'
+                                      : 'ערוך חיפוש',
+                                  icon: _showEditPanel
+                                      ? FluentIcons.chevron_up_24_regular
+                                      : FluentIcons.edit_24_regular,
+                                  selected: _showEditPanel,
+                                  compact: context
+                                      .read<SettingsBloc>()
+                                      .state
+                                      .compactMenuMode,
+                                  onPressed: () {
+                                    setState(() {
+                                      _showEditPanel = !_showEditPanel;
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
                           ),
                     trailingItems: state.searchQuery.isEmpty
                         ? const []
