@@ -1187,6 +1187,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           subtitle: Text(
             _appVersion ?? 'טוען...',
             style: kSettingsSubtitleStyle,
+            // ltr בתוך RTL מצמיד לשמאל - יישור ימינה משאיר את הערך מתחת לכותרת
+            textAlign: TextAlign.right,
             textDirection: _appVersion == null ? null : TextDirection.ltr,
           ),
           trailing: TextButton.icon(
@@ -1204,7 +1206,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           subtitle: Text(
             _libraryVersion ?? 'טוען...',
             style: kSettingsSubtitleStyle,
-            textDirection: _libraryVersion == null ? null : TextDirection.ltr,
+            textAlign: TextAlign.right,
+            // 'לא ידוע' הוא עברית - ltr רק כשמדובר במספר גרסה אמיתי
+            textDirection:
+                _libraryVersion == null || _libraryVersion == 'לא ידוע'
+                    ? null
+                    : TextDirection.ltr,
           ),
           // trailing: TextButton.icon(
           //   icon: const Icon(FluentIcons.history_24_regular, size: 16),
