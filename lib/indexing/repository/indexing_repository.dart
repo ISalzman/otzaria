@@ -508,7 +508,7 @@ class IndexingRepository {
     final catalogueOrder =
         catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF;
 
-    // בניית רשימת מסמכים בקריאת FFI אחת במקום loop של upsertDocument
+    // בניית רשימת מסמכים בקריאת FFI אחת
     final docs = [
       for (final document in documents)
         DocumentInput(
@@ -526,7 +526,11 @@ class IndexingRepository {
         ),
     ];
 
-    await index.upsertDocumentsBatch(docs: docs);
+    // אינדוקס בלבד: כל מסלולי הכתיבה מדלגים על ספר שכבר מאונדקס
+    // (isBookIndexed), כך שהספר כאן תמיד חדש ואין מה למחוק. שימוש ב-add
+    // (ללא delete_term לכל מסמך) חוסך מיליוני מחיקות מיותרות שמאטות
+    // דרמטית את ה-commit במנוע החיפוש.
+    await index.addDocumentsBatch(docs: docs);
   }
 
   @visibleForTesting
