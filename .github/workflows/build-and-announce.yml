@@ -6,9 +6,10 @@ permissions:
 on:
   workflow_dispatch:
 
-  # טריגר לפרסום בלבד
+  # טריגר לפרסום בלבד. published נשלח גם על prerelease —
+  # הוספת prereleased לרשימה גורמת להרצה כפולה (שני פוסטים בפורום)
   release:
-    types: [published, prereleased]
+    types: [published]
 
 jobs:
   check_version:
