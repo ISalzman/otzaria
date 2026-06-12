@@ -1,4 +1,4 @@
-; מתקין FULL שקט עבור אוצריא.
+﻿; מתקין FULL שקט עבור אוצריא.
 ; משלב את הגרסה השקטה (שיגור-מחדש ב-/VERYSILENT, שימור הגדרות) עם
 ; תכולת ה-FULL — חילוץ ספריית seforim.db + קטלוג + תלמוד בבלי, והתקנה
 ; שקטה של WebView2 Runtime אם הוא חסר. אין דפי אשף, אין דיאלוגים.
@@ -7,7 +7,7 @@
 ; מוחלפת בחבילה החדשה — זהה ל-FULL הרגיל. סיום ההתקנה משיק את אוצריא.
 
 #define MyAppName "אוצריא"
-#define MyAppVersion "0.9.93"
+#define MyAppVersion "0.9.94"
 #define MyAppPublisher "sivan22"
 #define MyAppURL "https://github.com/otzaria/otzaria"
 #define MyAppExeName "otzaria.exe"

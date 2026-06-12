@@ -5,7 +5,7 @@
 ; ההתקנה משמרת את ההגדרות הקודמות, וסיומה משיק את אוצריא אוטומטית.
 
 #define MyAppName "אוצריא"
-#define MyAppVersion "0.9.93"
+#define MyAppVersion "0.9.94"
 #define MyAppPublisher "sivan22"
 #define MyAppURL "https://github.com/otzaria/otzaria"
 #define MyAppExeName "otzaria.exe"
