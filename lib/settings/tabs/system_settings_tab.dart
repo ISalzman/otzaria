@@ -1261,41 +1261,25 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     return SettingsCard(
       title: 'מערכת אוצריא',
       children: [
-        ListTile(
-          leading: const Icon(FluentIcons.info_24_regular),
-          title: const Text(
-            'גרסת תוכנה',
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: Text(
-            _appVersion ?? 'טוען...',
-            style: kSettingsSubtitleStyle,
-            // ltr בתוך RTL מצמיד לשמאל - יישור ימינה משאיר את הערך מתחת לכותרת
-            textAlign: TextAlign.right,
-            textDirection: _appVersion == null ? null : TextDirection.ltr,
-          ),
-          trailing: TextButton.icon(
-            icon: const Icon(FluentIcons.history_24_regular, size: 16),
-            label: const Text('יומן שינויים'),
-            onPressed: () => _showChangelogDialog(context),
-          ),
+        SettingsActionTile.text(
+          icon: FluentIcons.info_24_regular,
+          title: 'גרסת תוכנה',
+          subtitle: _appVersion ?? 'טוען...',
+          subtitleLtr: _appVersion != null,
+          actions: [
+            TextButton.icon(
+              icon: const Icon(FluentIcons.history_24_regular, size: 16),
+              label: const Text('יומן שינויים'),
+              onPressed: () => _showChangelogDialog(context),
+            ),
+          ],
         ),
-        ListTile(
-          leading: const Icon(FluentIcons.library_24_regular),
-          title: const Text(
-            'גרסת ספרייה',
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: Text(
-            _libraryVersion ?? 'טוען...',
-            style: kSettingsSubtitleStyle,
-            textAlign: TextAlign.right,
-            // 'לא ידוע' הוא עברית - ltr רק כשמדובר במספר גרסה אמיתי
-            textDirection:
-                _libraryVersion == null || _libraryVersion == 'לא ידוע'
-                    ? null
-                    : TextDirection.ltr,
-          ),
+        SettingsActionTile.text(
+          icon: FluentIcons.library_24_regular,
+          title: 'גרסת ספרייה',
+          subtitle: _libraryVersion ?? 'טוען...',
+          subtitleLtr: _libraryVersion != null && _libraryVersion != 'לא ידוע',
+          actions: const [],
           // trailing: TextButton.icon(
           //   icon: const Icon(FluentIcons.history_24_regular, size: 16),
           //   label: const Text('יומן שינויים'),
