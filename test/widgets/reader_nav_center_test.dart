@@ -45,7 +45,7 @@ void main() {
         _buildHarness(
           settingsBloc: settingsBloc,
           child: SizedBox(
-            width: 300,
+            width: 200,
             child: ReaderNavCenter(
               title: const Text(
                 'כותרת ארוכה מאוד מאוד מאוד שלא נכנסת במקום צר',
