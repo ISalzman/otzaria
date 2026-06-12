@@ -803,7 +803,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             },
           ),
           SwitchSettingsTile.text(
-            icon: FluentIcons.bug_24_regular,
+            icon: FluentIcons.beaker_24_regular,
             title: 'עדכון לגרסאות מפתחים',
             subtitle:
                 Settings.getValue<bool>(SettingsRepository.keyDevChannel) ??
