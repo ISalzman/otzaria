@@ -17,6 +17,7 @@ import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart' hide UpdateFontSize;
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/widgets/navigation/reader_nav_center.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -1274,7 +1275,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         if (state.showPageShapeView)
           AppTopBarItem(widget: _buildPageShapeSettingsButton(context, state)),
       ],
-      center: _buildTextBookCenter(context, state),
+      center: widget.isInCombinedView
+          ? _buildTitle(state)
+          : ReaderNavCenter(
+              title: _buildTitle(state, textAlign: TextAlign.center),
+              prevMajorTooltip: 'הדף/פרק הקודם',
+              prevMinorTooltip: 'הקטע הקודם',
+              nextMinorTooltip: 'הקטע הבא',
+              nextMajorTooltip: 'הדף/פרק הבא',
+              onPrevMajor: () => _navigateToPreviousToc(state),
+              onPrevMinor: () => _scrollToPreviousSegment(state),
+              onNextMinor: () => _scrollToNextSegment(state),
+              onNextMajor: () => _navigateToNextToc(state),
+            ),
       trailingItems: [
         AppTopBarItem(
           widget: Row(
@@ -1283,43 +1296,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ),
         ),
       ],
-    );
-  }
-
-  /// אזור המרכז — כותרת + כפתורי ניווט ממורכזים בסרגל.
-  /// בתצוגה משולבת: כותרת בלבד (ניווט עובר לתפריט overflow).
-  Widget _buildTextBookCenter(BuildContext context, TextBookLoaded state) {
-    if (widget.isInCombinedView) {
-      return _buildTitle(state);
-    }
-    const gap = 4.0;
-    // כל כפתור ToolbarActionButton (compact=false) הוא לפחות 40px.
-    // 4 כפתורי ניווט + 2 רווחים = ~168px. כשהמרכז קטן מדי, הכותרת
-    // מתכווצת לפי המקום הפנוי כדי למנוע overflow.
-    const navButtonsWidth = 4 * 40.0 + 2 * gap;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final titleMaxWidth =
-            (constraints.maxWidth - navButtonsWidth).clamp(80.0, 340.0);
-        return Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildPreviousTocButton(context, state),
-              _buildPreviousPageButton(context, state),
-              const SizedBox(width: gap),
-              ConstrainedBox(
-                constraints:
-                    BoxConstraints(minWidth: 80, maxWidth: titleMaxWidth),
-                child: _buildTitle(state, textAlign: TextAlign.center),
-              ),
-              const SizedBox(width: gap),
-              _buildNextPageButton(context, state),
-              _buildNextTocButton(context, state),
-            ],
-          ),
-        );
-      },
     );
   }
 

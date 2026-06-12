@@ -33,7 +33,6 @@ import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 // הרוחב שמתחתיו עוברים לשורה שנייה
 const double _kTopBarNarrowBreakpoint = 540.0;
 const double _kTopBarMediumBreakpoint = 860.0;
-const double _kTopBarWideBreakpoint = 1160.0;
 const double _kMonthDateAreaWidth = 252.0;
 const double _kWeekDateAreaWidth = 344.0;
 const double _kMonthDateNavGap = 20.0;
@@ -712,8 +711,6 @@ class _CalendarTopBarState extends State<CalendarTopBar>
               final isMedium =
                   constraints.maxWidth >= _kTopBarNarrowBreakpoint &&
                       constraints.maxWidth < _kTopBarMediumBreakpoint;
-              final isWide = constraints.maxWidth >= _kTopBarMediumBreakpoint &&
-                  constraints.maxWidth < _kTopBarWideBreakpoint;
 
               // isNarrow ו-isMedium — אותו layout דו-שורתי:
               // שורה 1: viewSwitcher + trailingActions
@@ -747,46 +744,22 @@ class _CalendarTopBarState extends State<CalendarTopBar>
                 );
               }
 
-              if (isWide) {
-                return AppTopBar(
-                  leadingItems: [
-                    AppTopBarItem(widget: viewSwitcher),
-                  ],
-                  center: Align(
-                    alignment: Alignment.center,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: dateNavGroup,
-                    ),
-                  ),
-                  trailingItems: [
-                    AppTopBarItem(widget: trailingActions),
-                  ],
-                );
-              }
-
-              // extra-wide (≥ _kTopBarWideBreakpoint)
+              // wide (≥ _kTopBarMediumBreakpoint): NavigationToolbar ממרכז
+              // את dateNavGroup גאומטרית בסרגל, viewSwitcher ו-trailingActions בצדדים.
               return AppTopBar(
-                center: Stack(
+                leadingItems: [
+                  AppTopBarItem(widget: viewSwitcher),
+                ],
+                center: Align(
                   alignment: Alignment.center,
-                  children: [
-                    dateNavGroup,
-                    PositionedDirectional(
-                      start: 0,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          viewSwitcher,
-                          _buildTopBarDivider(context, isCompact),
-                        ],
-                      ),
-                    ),
-                    PositionedDirectional(
-                      end: 0,
-                      child: trailingActions,
-                    ),
-                  ],
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: dateNavGroup,
+                  ),
                 ),
+                trailingItems: [
+                  AppTopBarItem(widget: trailingActions),
+                ],
               );
             },
           );

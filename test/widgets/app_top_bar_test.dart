@@ -41,7 +41,90 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+
+    testWidgets(
+      'center ממורכז גאומטרית בסרגל גם כשהצדדים לא סימטריים',
+      (tester) async {
+        final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+        addTearDown(settingsBloc.close);
+
+        const centerKey = Key('center');
+        await tester.pumpWidget(
+          _buildBar(
+            settingsBloc: settingsBloc,
+            leadingItems: const [
+              AppTopBarItem(widget: SizedBox(width: 200, height: 40)),
+            ],
+            center: const SizedBox(key: centerKey, width: 100, height: 8),
+            trailingItems: const [
+              AppTopBarItem(widget: SizedBox(width: 40, height: 40)),
+            ],
+          ),
+        );
+
+        final barWidth = tester.getSize(find.byType(AppTopBar)).width;
+        expect(
+          tester.getCenter(find.byKey(centerKey)).dx,
+          moreOrLessEquals(barWidth / 2, epsilon: 1.0),
+        );
+      },
+    );
+
+    testWidgets(
+      'center רחב לא גולש ולא חוסם לחיצות על trailing',
+      (tester) async {
+        final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+        addTearDown(settingsBloc.close);
+
+        var tapped = false;
+        const trailingKey = Key('trailing-button');
+        await tester.pumpWidget(
+          _buildBar(
+            settingsBloc: settingsBloc,
+            center: const SizedBox(width: 2000, height: 8),
+            trailingItems: [
+              AppTopBarItem(
+                widget: GestureDetector(
+                  key: trailingKey,
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => tapped = true,
+                  child: const SizedBox(width: 40, height: 40),
+                ),
+              ),
+            ],
+          ),
+        );
+
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.byKey(trailingKey));
+        expect(tapped, isTrue);
+      },
+    );
   });
+}
+
+Widget _buildBar({
+  required SettingsBloc settingsBloc,
+  List<AppTopBarItem> leadingItems = const [],
+  Widget? center,
+  List<AppTopBarItem> trailingItems = const [],
+}) {
+  return MaterialApp(
+    home: Scaffold(
+      body: BlocProvider<SettingsBloc>.value(
+        value: settingsBloc,
+        child: Column(
+          children: [
+            AppTopBar(
+              leadingItems: leadingItems,
+              center: center,
+              trailingItems: trailingItems,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _TestApp extends StatelessWidget {
