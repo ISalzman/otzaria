@@ -134,6 +134,18 @@ bool shouldShowOpenPdfLinksPaneEntry({
   return hasRelevantLinks && !isLinksTabActive;
 }
 
+/// האם יש לחשב מחדש את טווח השורות (currentTextLineNumber/End) בעקבות
+/// מעבר בין מצבי תצוגה. הטווח תלוי במצב — בתצוגת ספר הוא מכסה את שני עמודי
+/// הספירייד, וברגילה עמוד יחיד — לכן מעבר מצב מחייב חישוב מחדש, אחרת טווח
+/// המפרשים נשאר של המצב הקודם. ה-baseline (previous=null) לא מטריגר חישוב.
+@visibleForTesting
+bool shouldRecomputeLineRangeOnLayoutModeChange(
+  PdfLayoutMode? previous,
+  PdfLayoutMode current,
+) {
+  return previous != null && previous != current;
+}
+
 /// מחזירה את מספר העמוד הנוכחי של ה-controller רק אם הוא מחובר ומוכן.
 ///
 /// [isReady] - האם ה-controller מחובר ל-PdfViewer (`controller.isReady`).
@@ -2805,6 +2817,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
   }
 
+  // מצב התצוגה האחרון שנצפה ב-BlocListener, לזיהוי מעבר בין מצבים.
+  PdfLayoutMode? _lastObservedLayoutMode;
   int _lastComputedForPage = -1;
   int? _initialPageNumber; // שמירת מספר העמוד ההתחלתי
   bool _isJumping = false; // flag לציון שאנחנו בתהליך קפיצה
@@ -2899,7 +2913,40 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     );
   }
 
-  void _onBlocStateChanged(BuildContext context, PdfBookState state) {}
+  void _onBlocStateChanged(BuildContext context, PdfBookState state) {
+    final mode = switch (state) {
+      PdfBookInitial s => s.layoutMode,
+      PdfBookLoading s => s.layoutMode,
+      PdfBookLoaded s => s.layoutMode,
+      _ => null,
+    };
+    if (mode == null) return;
+    final previous = _lastObservedLayoutMode;
+    _lastObservedLayoutMode = mode;
+    if (shouldRecomputeLineRangeOnLayoutModeChange(previous, mode)) {
+      _recomputeTextLineRangeForCurrentPage();
+    }
+  }
+
+  /// מחשב מחדש את הכותרת וטווח השורות של העמוד הנוכחי לפי מצב התצוגה הפעיל.
+  /// נדרש אחרי מעבר בין מצבים, כי הטווח תלוי במצב (ספירייד מול עמוד יחיד)
+  /// ואחרת טווח המפרשים המוצג נשאר של המצב הקודם.
+  Future<void> _recomputeTextLineRangeForCurrentPage() async {
+    final currentPage = widget.tab.pdfViewerController.isReady
+        ? (widget.tab.pdfViewerController.pageNumber ?? widget.tab.pageNumber)
+        : widget.tab.pageNumber;
+    final titles = await _resolveTitlesForPage(currentPage);
+    if (!mounted) return;
+    widget.tab.currentTitle.value = titles.display;
+    final resolved = await _resolveTextLineNumberForPage(
+      currentPage,
+      resolvedTitle: titles.single,
+    );
+    if (!mounted) return;
+    widget.tab.currentTextLineNumber = resolved.start;
+    widget.tab.currentTextLineNumberEnd = resolved.end;
+    setState(() {});
+  }
 
   Widget _buildContent(BuildContext context) {
     final wideScreen = MediaQuery.of(context).size.width >= 600;

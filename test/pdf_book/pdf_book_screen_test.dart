@@ -422,6 +422,64 @@ void main() {
     });
   });
 
+  group('shouldRecomputeLineRangeOnLayoutModeChange', () {
+    // רגרסיה: טווח השורות (currentTextLineNumber/End) שמזין את רשימת המפרשים
+    // תלוי במצב התצוגה — בתצוגת ספר הוא מכסה ספירייד של שני עמודים, וברגילה
+    // עמוד יחיד. לפני התיקון מעבר בין המצבים לא חישב מחדש את הטווח, ולכן
+    // רשימת המפרשים נשארה תקועה על הטווח של המצב הקודם.
+    test('מעבר מתצוגה רגילה לתצוגת ספר מחייב חישוב מחדש', () {
+      expect(
+        shouldRecomputeLineRangeOnLayoutModeChange(
+          PdfLayoutMode.regularView,
+          PdfLayoutMode.bookView,
+        ),
+        isTrue,
+      );
+    });
+
+    test('מעבר מתצוגת ספר לתצוגה רגילה מחייב חישוב מחדש', () {
+      expect(
+        shouldRecomputeLineRangeOnLayoutModeChange(
+          PdfLayoutMode.bookView,
+          PdfLayoutMode.regularView,
+        ),
+        isTrue,
+      );
+    });
+
+    test('אותו מצב — לא מחשב מחדש', () {
+      expect(
+        shouldRecomputeLineRangeOnLayoutModeChange(
+          PdfLayoutMode.bookView,
+          PdfLayoutMode.bookView,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldRecomputeLineRangeOnLayoutModeChange(
+          PdfLayoutMode.regularView,
+          PdfLayoutMode.regularView,
+        ),
+        isFalse,
+      );
+    });
+
+    test('baseline ראשון (previous=null) לא מחשב מחדש', () {
+      // הצפייה הראשונה ב-state רק רושמת את המצב הנוכחי, בלי לטרגר חישוב
+      // מיותר שמתנגש בנתיב הטעינה הרגיל.
+      expect(
+        shouldRecomputeLineRangeOnLayoutModeChange(
+            null, PdfLayoutMode.bookView),
+        isFalse,
+      );
+      expect(
+        shouldRecomputeLineRangeOnLayoutModeChange(
+            null, PdfLayoutMode.regularView),
+        isFalse,
+      );
+    });
+  });
+
   group('resolveReadyPdfPageNumber', () {
     test('מחזירה את מספר העמוד כש-ה-controller מוכן', () {
       expect(
