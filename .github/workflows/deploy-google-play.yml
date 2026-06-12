@@ -189,10 +189,7 @@ jobs:
           fi
 
       - name: Install Flutter dependencies
-        run: |
-          flutter pub get
-          # עקיפה זמנית: otzaria_search_engine 0.6.1 פורסם עם CRLF ושובר את cargokit (Otzaria/otzaria_search_engine#6)
-          find "${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev" -path "*otzaria_search_engine*" -name "*.sh" -exec perl -pi -e 's/\r$//' {} +
+        run: flutter pub get
 
       - name: Generate settings search index
         run: dart run tool/generate_search_index.dart

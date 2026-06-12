@@ -615,8 +615,6 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
-          # עקיפה זמנית: otzaria_search_engine 0.6.1 פורסם עם CRLF ושובר את cargokit (Otzaria/otzaria_search_engine#6)
-          find "${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev" -path "*otzaria_search_engine*" -name "*.sh" -exec perl -pi -e 's/\r$//' {} +
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
 
@@ -1029,8 +1027,6 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           flutter pub get
-          # עקיפה זמנית: otzaria_search_engine 0.6.1 פורסם עם CRLF ושובר את cargokit (Otzaria/otzaria_search_engine#6)
-          find "${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev" -path "*otzaria_search_engine*" -name "*.sh" -exec perl -pi -e 's/\r$//' {} +
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
           flutter build apk --verbose
@@ -1160,8 +1156,6 @@ jobs:
       - name: Prepare Flutter dependencies for macOS release
         run: |
           flutter pub get
-          # עקיפה זמנית: otzaria_search_engine 0.6.1 פורסם עם CRLF ושובר את cargokit (Otzaria/otzaria_search_engine#6)
-          find "${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev" -path "*otzaria_search_engine*" -name "*.sh" -exec perl -pi -e 's/\r$//' {} +
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
 
