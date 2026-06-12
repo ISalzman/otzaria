@@ -244,16 +244,27 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
     // סופר ברמת ספר במנוע עצמו, בלי למשוך עשרות אלפי snippets לדארט.
     final activeFacets = List<String>.from(state.searchScopeFacets);
-    final bookCounts = await TantivyDataProvider.instance.countByBook(
-      SearchQueryBuilder.sanitizeQuery(query),
-      activeFacets,
-      fuzzy: state.fuzzy,
-      distance: state.distance,
-      searchMode: state.configuration.searchMode,
-      customSpacing: event.customSpacing,
-      alternativeWords: event.alternativeWords,
-      searchOptions: event.searchOptions,
-    );
+    final Map<String, int> bookCounts;
+    try {
+      bookCounts = await TantivyDataProvider.instance.countByBook(
+        SearchQueryBuilder.sanitizeQuery(query),
+        activeFacets,
+        fuzzy: state.fuzzy,
+        distance: state.distance,
+        searchMode: state.configuration.searchMode,
+        customSpacing: event.customSpacing,
+        alternativeWords: event.alternativeWords,
+        searchOptions: event.searchOptions,
+      );
+    } catch (e, stackTrace) {
+      // עדכון ה-facets רץ ב-fire-and-forget (unawaited). המנוע דוחה שאילתה
+      // רחבה מדי בשגיאת max expansions — כולל מילה בודדת רחבה — ובלי ה-catch
+      // הזה השגיאה הייתה בורחת כחריגה אסינכרונית לא מטופלת. מסלול החיפוש
+      // הראשי כבר תופס את אותה שגיאה ומציג toast, לכן כאן רק נרשם ללוג ונשמרות
+      // ספירות ה-facets החלקיות שכבר חושבו מהתוצאות.
+      debugPrint('❌ Facet count refresh failed: $e\n$stackTrace');
+      return;
+    }
 
     // Ignore stale results if query changed while searching
     if (state.searchQuery != query || requestId != _searchRequestId) {
