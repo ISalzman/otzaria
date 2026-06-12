@@ -63,10 +63,14 @@ class ReaderNavCenter extends StatelessWidget {
               onPressed: onPrevMinor,
             ),
             const SizedBox(width: gap),
-            ConstrainedBox(
-              constraints:
-                  BoxConstraints(minWidth: 80, maxWidth: titleMaxWidth),
-              child: title,
+            // Flexible — קו הגנה אחרון: כשהמרכז צר מ-248px הכותרת מוותרת
+            // גם על ה-minWidth במקום לגלוש.
+            Flexible(
+              child: ConstrainedBox(
+                constraints:
+                    BoxConstraints(minWidth: 80, maxWidth: titleMaxWidth),
+                child: title,
+              ),
             ),
             if (afterTitle != null) afterTitle!,
             const SizedBox(width: gap),
