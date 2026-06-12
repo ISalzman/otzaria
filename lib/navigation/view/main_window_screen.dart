@@ -2854,8 +2854,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     );
 
     // עוטפים את התוכן ב-Opacity: כל עוד הספר הפעיל לא נטען, התוכן נבנה ונטען
-    // ברקע אך אינו נראה (opacity 0), וחלון ה-splash הקטן/השקוף מציג רק את הסמל
-    // הצף. כשהתוכן מוכן — _revealMainWindowOnce מרחיב את החלון ומציג את ה-UI.
+    // ברקע אך אינו נראה (opacity 0). כשהתוכן מוכן — _revealMainWindowOnce מסיר
+    // את האוברליי וחושף את החלון.
     return Stack(
       children: [
         Opacity(
@@ -3217,17 +3217,17 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 }
 
-/// מסך הפתיחה בזמן עליית התוכנה: סמל בלבד על רקע **שקוף**, כך שבחלון ה-splash
-/// השקוף נראה רק הסמל הצף במרכז המסך (ללא קופסה). מוצג עד שתוכן הטאב הפעיל
-/// נטען, ואז החלון מתרחב לחלון המלא והתוכן נחשף.
+/// מסך הפתיחה בזמן עליית התוכנה (החלון מוסתר עד החשיפה): מוצג עד שתוכן הטאב
+/// הפעיל נטען. הרקע אטום בכוונה — סצנה שקופה מייצרת פריימים ריקים, ופריים ריק
+/// בזמן resize משכלף את ה-surface בגלל באג מנוע (flutter#187922).
 class _StartupSplashOverlay extends StatelessWidget {
   const _StartupSplashOverlay();
 
   @override
   Widget build(BuildContext context) {
-    return const ColoredBox(
-      color: Color(0x00000000),
-      child: SplashIcon(),
+    return ColoredBox(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: const SplashIcon(),
     );
   }
 }
