@@ -18,7 +18,6 @@ class AppSurfaces {
       _cs(context).isDark ? AppColors.darkScaffold : _cs(context).surface;
 
   /// רקע מסכי לוח — הגדרות, ספריה, כלים וכל מסך משני
-  ///
   static Color panelBackground(BuildContext context) {
     final cs = _cs(context);
     return cs.isDark
@@ -41,16 +40,9 @@ class AppSurfaces {
       : _cs(context).surface;
 
   /// צבע מפריד פנימי בין שורות בתוך כרטיס תוכן.
-  ///
-  /// משמש ב-[AppCard.section] וב-[AppCard.sectionDivider]:
-  /// נצבע ב-Container בגובה [AppCard.sectionSpacing] בין הילדים.
-  ///
-  /// **שימוש:**
-  /// ```dart
-  /// Divider(color: AppSurfaces.cardRowDivider(context))
-  /// ```
+  /// משמש בהגדרות עם עץ נפתח
   static Color cardRowDivider(BuildContext context) =>
-      Theme.of(context).scaffoldBackgroundColor;
+      panelBackground(context);
 
   /// שכבת בחירה לכרטיסי תוכן.
   ///

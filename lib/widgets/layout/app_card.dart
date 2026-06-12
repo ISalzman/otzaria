@@ -108,11 +108,13 @@ class AppCard extends StatelessWidget {
 
   Widget _buildSection(BuildContext context) {
     final resolvedRadius = BorderRadius.circular(radius ?? AppTokens.radiusXL);
-    final dividerColor = AppSurfaces.cardRowDivider(context);
+    final cardColor = AppSurfaces.card(context);
 
     Widget wrapChild(Widget w) {
       if (padding != null) w = Padding(padding: padding!, child: w);
-      return w;
+      // Material per-row so ListTile ink/hover paint correctly,
+      // and the transparent SizedBox gap shows the background behind the card.
+      return Material(color: cardColor, child: w);
     }
 
     Widget content = Column(
@@ -121,17 +123,15 @@ class AppCard extends StatelessWidget {
         for (int i = 0; i < children!.length; i++) ...[
           wrapChild(children![i]),
           if (i < children!.length - 1)
-            Container(height: sectionSpacing, color: dividerColor),
+            const SizedBox(height: sectionSpacing),
         ],
       ],
     );
 
     if (selected) content = _withSelected(context, content);
 
-    return Material(
-      color: AppSurfaces.card(context),
+    return ClipRRect(
       borderRadius: resolvedRadius,
-      clipBehavior: Clip.antiAlias,
       child: content,
     );
   }
