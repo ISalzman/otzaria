@@ -2,76 +2,41 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 
 void main() {
-  group('TantivyDataProvider.shouldInvalidateStoredIndexState', () {
-    test('מחזיר true כשגרסת מצב האינדקס השתנתה', () {
-      final shouldInvalidate =
-          TantivyDataProvider.shouldInvalidateStoredIndexState(
-        storedIndexStateVersion:
-            TantivyDataProvider.currentIndexStateVersion - 1,
-        storedCatalogueOrderSignature: 'same-signature',
-        currentCatalogueOrderSignature: 'same-signature',
+  group('TantivyDataProvider.isRebuildRequiredStatus', () {
+    test('מחזיר true כשהאינדקס ישן מדי עבור המנוע (rebuild_required)', () {
+      expect(
+        TantivyDataProvider.isRebuildRequiredStatus('rebuild_required'),
+        isTrue,
       );
-
-      expect(shouldInvalidate, isTrue);
     });
 
-    test('מחזיר true כשחתימת הקטלוג השתנתה', () {
-      final shouldInvalidate =
-          TantivyDataProvider.shouldInvalidateStoredIndexState(
-        storedIndexStateVersion: TantivyDataProvider.currentIndexStateVersion,
-        storedCatalogueOrderSignature: 'old-signature',
-        currentCatalogueOrderSignature: 'new-signature',
+    test('מחזיר true כשהאינדקס נוצר ע"י מנוע חדש יותר (engine_too_old)', () {
+      expect(
+        TantivyDataProvider.isRebuildRequiredStatus('engine_too_old'),
+        isTrue,
       );
-
-      expect(shouldInvalidate, isTrue);
     });
 
-    test('מחזיר false כשהגרסה והחתימה תואמות', () {
-      final shouldInvalidate =
-          TantivyDataProvider.shouldInvalidateStoredIndexState(
-        storedIndexStateVersion: TantivyDataProvider.currentIndexStateVersion,
-        storedCatalogueOrderSignature: 'same-signature',
-        currentCatalogueOrderSignature: 'same-signature',
+    test('מחזיר false לאינדקס תקין', () {
+      expect(
+        TantivyDataProvider.isRebuildRequiredStatus('compatible'),
+        isFalse,
       );
-
-      expect(shouldInvalidate, isFalse);
-    });
-  });
-
-  group('TantivyDataProvider.shouldPromptForManualReindex', () {
-    test('מחזיר false כשאין אינדקס קיים גם אם הגרסה השתנתה', () {
-      final shouldPrompt = TantivyDataProvider.shouldPromptForManualReindex(
-        indexExistedBeforeInit: false,
-        storedIndexStateVersion:
-            TantivyDataProvider.currentIndexStateVersion - 1,
-        storedCatalogueOrderSignature: 'same-signature',
-        currentCatalogueOrderSignature: 'same-signature',
+      expect(
+        TantivyDataProvider.isRebuildRequiredStatus('legacy_compatible'),
+        isFalse,
       );
-
-      expect(shouldPrompt, isFalse);
     });
 
-    test('מחזיר true כשיש אינדקס קיים והגרסה השתנתה', () {
-      final shouldPrompt = TantivyDataProvider.shouldPromptForManualReindex(
-        indexExistedBeforeInit: true,
-        storedIndexStateVersion:
-            TantivyDataProvider.currentIndexStateVersion - 1,
-        storedCatalogueOrderSignature: 'same-signature',
-        currentCatalogueOrderSignature: 'same-signature',
+    test('מחזיר false כשאין אינדקס - אינדוקס רגיל יבנה אותו', () {
+      expect(
+        TantivyDataProvider.isRebuildRequiredStatus('missing_index'),
+        isFalse,
       );
-
-      expect(shouldPrompt, isTrue);
     });
 
-    test('מחזיר false כשרק חתימת הקטלוג השתנתה והגרסה תואמת', () {
-      final shouldPrompt = TantivyDataProvider.shouldPromptForManualReindex(
-        indexExistedBeforeInit: true,
-        storedIndexStateVersion: TantivyDataProvider.currentIndexStateVersion,
-        storedCatalogueOrderSignature: 'old-signature',
-        currentCatalogueOrderSignature: 'new-signature',
-      );
-
-      expect(shouldPrompt, isFalse);
+    test('מחזיר false כשבדיקת התאימות לא רצה (null)', () {
+      expect(TantivyDataProvider.isRebuildRequiredStatus(null), isFalse);
     });
   });
 }

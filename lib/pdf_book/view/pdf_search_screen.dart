@@ -20,7 +20,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:search_engine/search_engine.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
 class PdfBookSearchView extends StatefulWidget {
   const PdfBookSearchView({
@@ -459,10 +459,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
             },
             height: 50,
             query: widget.searchController.text,
-            searchOptions: _activeSearchParameters.searchOptions,
-            alternativeWords: _activeSearchParameters.alternativeWords,
-            spacingValues: _activeSearchParameters.customSpacing,
-            searchDistance: _searchDistance,
+            isSimpleSearch: _isSimpleSearch,
           );
         },
       ),
@@ -572,10 +569,7 @@ class SearchResultTile extends StatelessWidget {
     required this.onTap,
     required this.height,
     required this.query,
-    required this.searchOptions,
-    required this.alternativeWords,
-    required this.spacingValues,
-    required this.searchDistance,
+    required this.isSimpleSearch,
     super.key,
   });
 
@@ -583,17 +577,19 @@ class SearchResultTile extends StatelessWidget {
   final void Function() onTap;
   final double height;
   final String query;
-  final Map<String, Map<String, bool>> searchOptions;
-  final Map<int, List<String>> alternativeWords;
-  final Map<String, String> spacingValues;
-  final int searchDistance;
+  final bool isSimpleSearch;
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
-        final text =
-            _createHighlightedText(result.text, query, settingsState, context);
+        final text = _createHighlightedText(
+          result.text,
+          query,
+          isSimpleSearch,
+          settingsState,
+          context,
+        );
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -626,55 +622,62 @@ class SearchResultTile extends StatelessWidget {
   Widget _createHighlightedText(
     String text,
     String query,
+    bool isSimpleSearch,
     SettingsState settingsState,
     BuildContext context,
   ) {
-    var displayText = utils.stripHtmlIfNeeded(text);
+    final defaultStyle = TextStyle(
+      fontSize: 16,
+      fontFamily: settingsState.fontFamily,
+      color: Theme.of(context).colorScheme.onSurface,
+      height: 1.5,
+    );
+
+    var html = text;
     if (settingsState.replaceHolyNames) {
-      displayText = utils.replaceHolyNames(displayText);
+      html = utils.replaceHolyNames(html);
     }
 
     if (query.isEmpty) {
       return Text(
-        displayText,
-        style: TextStyle(
-          fontSize: 16,
-          fontFamily: settingsState.fontFamily,
-          color: Theme.of(context).colorScheme.onSurface,
-          height: 1.5,
+        utils.stripHtmlIfNeeded(html),
+        style: defaultStyle,
+      );
+    }
+
+    final highlightStyle = TextStyle(
+      fontWeight: FontWeight.bold,
+      fontSize: 18,
+      color: Theme.of(context).colorScheme.error,
+    );
+
+    if (isSimpleSearch) {
+      final spans = SnippetBuilder.highlightLiteral(
+        plainText: utils.stripHtmlIfNeeded(html),
+        query: query,
+        defaultStyle: defaultStyle,
+        highlightStyle: highlightStyle,
+      );
+
+      return Text.rich(
+        TextSpan(
+          children: spans,
+          style: defaultStyle,
         ),
       );
     }
 
-    final spans = SnippetBuilder.buildHighlightSpans(
-      plainText: displayText,
-      query: query,
-      defaultStyle: TextStyle(
-        fontSize: 16,
-        fontFamily: settingsState.fontFamily,
-        color: Theme.of(context).colorScheme.onSurface,
-        height: 1.5,
-      ),
-      highlightStyle: TextStyle(
-        fontWeight: FontWeight.bold,
-        fontSize: 18,
-        color: Theme.of(context).colorScheme.error,
-      ),
-      searchOptions: searchOptions,
-      alternativeWords: alternativeWords,
-      spacingValues: spacingValues,
-      searchDistance: searchDistance,
+    // המנוע מחזיר את ההתאמות מסומנות בתגי הדגשה בתוך ה-HTML.
+    final spans = SnippetBuilder.fromHighlightedHtml(
+      html: html,
+      defaultStyle: defaultStyle,
+      highlightStyle: highlightStyle,
     );
 
     return Text.rich(
       TextSpan(
         children: spans,
-        style: TextStyle(
-          fontSize: 16,
-          fontFamily: settingsState.fontFamily,
-          color: Theme.of(context).colorScheme.onSurface,
-          height: 1.5,
-        ),
+        style: defaultStyle,
       ),
     );
   }
