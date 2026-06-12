@@ -1001,7 +1001,7 @@ void main() {
     });
 
     const downloadUrl =
-        'https://github.com/Otzarya-Org/Otzarya-Library/releases/latest/download/books.zip';
+        'https://github.com/Open-Otzarya-Projects/Otzarya-Unofficial-Books/releases/latest/download/books.zip';
 
     PluginBridgeAdapter buildAdapter({
       required Future<String?> Function({String? title}) pickFolder,
@@ -1012,7 +1012,7 @@ void main() {
           permissions: const ['ui.feedback', 'network.access'],
           networkEnabled: true,
           networkAllowlist: const [
-            'https://github.com/Otzarya-Org/Otzarya-Library'
+            'https://github.com/Open-Otzarya-Projects/Otzarya-Unofficial-Books'
           ],
         ),
         dependencies: PluginBridgeDependencies(
