@@ -1381,10 +1381,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 style: titleStyle,
               ),
             ),
-            Icon(
-              isExpanded
-                  ? FluentIcons.chevron_up_24_regular
-                  : FluentIcons.chevron_down_24_regular,
+            ExpandingChevron(
+              isExpanded: isExpanded,
               color: cs.onSecondaryContainer,
               size: 18,
             ),

@@ -3,3 +3,4 @@ export 'switch_settings_tile.dart';
 export 'settings_action_tile.dart';
 export 'dropdown_settings_tile.dart';
 export 'segmented_settings_tile.dart';
+export 'expandable_settings_tile.dart';
