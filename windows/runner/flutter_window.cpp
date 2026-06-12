@@ -206,6 +206,15 @@ bool FlutterWindow::OnCreate() {
           // ForceRedraw guarantees a frame is produced even if the previous
           // one was already presented before the callback was registered.
           if (flutter_controller_ && flutter_controller_->engine()) {
+            // עוקף באג מנוע: פריים ריק באמצע resize משכלף את מידות ה-surface
+            // (OnEmptyFrameGenerated). ‏±1px כופה resize שמתקן לפני החשיפה.
+            HWND child = flutter_controller_->view()->GetNativeWindow();
+            RECT frame = GetClientArea();
+            const int width = frame.right - frame.left;
+            const int height = frame.bottom - frame.top;
+            MoveWindow(child, frame.left, frame.top, width + 1, height, FALSE);
+            MoveWindow(child, frame.left, frame.top, width, height, FALSE);
+
             HWND hwnd = GetHandle();
             flutter_controller_->engine()->SetNextFrameCallback([hwnd]() {
               SetWindowCloaked(hwnd, false);
