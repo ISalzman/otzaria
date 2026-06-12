@@ -547,6 +547,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | ExternalCatalogMapper | `test/data_providers/external_catalog_mapper_test.dart` |
 | TantivyDataProvider (search index) | `test/data/data_providers/tantivy_data_provider_test.dart` |
 | External books scanner | `test/data/data_providers/scan_external_books_test.dart` |
+| Library book search (fuzzy + acronyms) | `test/data/repository/book_search_fuzzy_match_test.dart` |
 
 **Search**
 | Area | Test File |
