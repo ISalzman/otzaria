@@ -42,6 +42,8 @@ DisableWelcomePage=yes
 ; ChangesEnvironment=yes נדרש כדי שעדכון ה-PATH (registration אוטומטית של
 ; otzaria pack-plugin) ייכנס לתוקף מיד עבור תהליכים חדשים ללא logoff.
 ChangesEnvironment=yes
+; לוג אוטומטי ל-%TEMP% של המשתמש המריץ — חיוני לאבחון עדכונים שקטים שנכשלים בשטח.
+SetupLogging=yes
 
 [InstallDelete]
 ; ניקוי מסד הנתונים הישן של Isar שהוחלף על ידי hive_ce — מחיקה מכוונת בעת שדרוג.
@@ -65,10 +67,11 @@ Root: HKA; Subkey: "Software\Classes\otzaria\shell\open\command"; ValueType: str
 Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Flags: preservestringtype; Check: NeedsAddPath(ExpandConstant('{app}'))
 
 [Run]
-; הפעלת התוכנה בסוף ההתקנה — גם במצב שקט (אין skipifsilent).
+; אסור postinstall — רשומות postinstall תלויות בדף הסיום שלא מוצג ב-VERYSILENT,
+; ולכן לא ירוצו לעולם. runasoriginaluser מונע הרצת אוצריא מורמת אחרי עדכון עם UAC.
 ; מדולג כאשר הועבר /NOLAUNCH=1 — מנגנון העדכון הפנימי מעביר אותו כשהעדכון
 ; מותקן בעת סגירת התוכנה, כדי שאוצריא לא תיפתח מחדש בניגוד לכוונת המשתמש.
-Filename: "{app}\{#MyAppExeName}"; Flags: nowait postinstall; Check: ShouldLaunchAppAfterInstall
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait runasoriginaluser; Check: ShouldLaunchAppAfterInstall
 
 [Languages]
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"

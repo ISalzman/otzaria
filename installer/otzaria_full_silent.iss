@@ -44,6 +44,8 @@ DisableWelcomePage=yes
 ; ChangesEnvironment=yes נדרש כדי שעדכון ה-PATH (registration אוטומטית של
 ; otzaria pack-plugin) ייכנס לתוקף מיד עבור תהליכים חדשים ללא logoff.
 ChangesEnvironment=yes
+; לוג אוטומטי ל-%TEMP% של המשתמש המריץ — חיוני לאבחון התקנות שקטות שנכשלות בשטח.
+SetupLogging=yes
 
 [InstallDelete]
 ; ניקוי מסד הנתונים הישן של Isar שהוחלף על ידי hive_ce — מחיקה מכוונת בעת שדרוג.
@@ -71,8 +73,9 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; Value
 ; התקנה שקטה של WebView2 Runtime אם הוא חסר. waituntilterminated כדי
 ; לוודא שאוצריא לא מופעלת לפני שה-runtime מוכן.
 Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "מתקין Microsoft WebView2 Runtime..."; Flags: waituntilterminated; Check: ShouldInstallWV2
-; הפעלת התוכנה בסוף ההתקנה — גם במצב שקט (אין skipifsilent).
-Filename: "{app}\{#MyAppExeName}"; Flags: nowait postinstall
+; אסור postinstall — רשומות postinstall תלויות בדף הסיום שלא מוצג ב-VERYSILENT,
+; ולכן לא ירוצו לעולם. runasoriginaluser מונע הרצת אוצריא מורמת אחרי התקנה עם UAC.
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait runasoriginaluser
 
 [Languages]
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
