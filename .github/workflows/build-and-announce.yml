@@ -241,7 +241,7 @@ jobs:
           EnforceProcessCountAcrossBuilds: 'true'
           CMAKE_BUILD_PARALLEL_LEVEL: '4'
         run: |
-          flutter build windows --release
+          flutter build windows --release --verbose
 
       - name: Zip Windows build
         shell: pwsh
@@ -635,7 +635,7 @@ jobs:
           tries=0
           until [ $tries -ge 3 ]
           do
-            if flutter build linux; then
+            if flutter build linux --verbose; then
               break
             fi
             tries=$((tries+1))
@@ -1033,7 +1033,7 @@ jobs:
           find "${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev" -path "*otzaria_search_engine*" -name "*.sh" -exec perl -pi -e 's/\r$//' {} +
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
-          flutter build apk
+          flutter build apk --verbose
           # ניקוי מיידי של קבצים מיותרים מהבנייה (לא ה-APK הסופי)
           rm -rf build/app/intermediates || true
           rm -rf build/app/.transforms || true
@@ -1168,7 +1168,7 @@ jobs:
       - name: Build Flutter macOS app (Universal Binary)
         run: |
           # Build Universal Binary that supports both Intel (x86_64) and Apple Silicon (arm64)
-          flutter build macos --release
+          flutter build macos --release --verbose
 
       - name: Download library assets for macOS FULL bundle
         if: true
