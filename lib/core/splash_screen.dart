@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// סמל מסך הפתיחה: ממורכז במרכז המסך, עם אטימות קבועה של 70%. החלון בשלב ה-splash
-/// הוא 240x240 ממורכז, כך שמרכזו = מרכז המסך; הסמל יציב וקבוע לכל אורך הטעינה
-/// (אין עוד יישור מחושב — ההגדלה לגבולות הסופיים מתבצעת רק בחשיפה, בעוד החלון מוסתר).
+/// סמל מסך הפתיחה, באטימות 70%. החלון הראשי מוסתר לכל אורך שלב ה-splash —
+/// הסמל שנראה למשתמש הוא חלון ה-splash הנייטיבי הנפרד (ראה runner).
 class SplashIcon extends StatelessWidget {
   const SplashIcon({super.key});
 
@@ -27,12 +26,11 @@ class SplashApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // רקע שקוף לחלוטין כדי שחלון ה-splash השקוף יציג רק את הסמל הצף (ללא קופסה).
+    // הרקע חייב להיות אטום (נצבע): סצנה שקופה מייצרת פריימים ריקים, ופריים ריק
+    // בזמן resize משכלף את ה-surface בגלל באג מנוע (flutter#187922) — זום מוזר.
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      color: Color(0x00000000),
       home: Scaffold(
-        backgroundColor: Color(0x00000000),
         body: SplashIcon(),
       ),
     );
