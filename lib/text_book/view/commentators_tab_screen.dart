@@ -30,7 +30,7 @@ import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/search/utils/snippet_builder.dart';
-import 'package:otzaria/tabs/widgets/reader_nav_center.dart';
+import 'package:otzaria/widgets/navigation/reader_nav_center.dart';
 
 const _kAllChapter = -1;
 
