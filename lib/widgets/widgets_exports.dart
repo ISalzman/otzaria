@@ -22,6 +22,7 @@ export 'package:otzaria/widgets/controls/segmented_control.dart';
 export 'package:otzaria/settings/widgets/switch_settings_tile.dart';
 export 'package:otzaria/widgets/misc/tool_ui_helpers.dart';
 export 'package:otzaria/widgets/layout/app_card.dart';
+export 'package:otzaria/widgets/misc/expanding_chevron.dart';
 
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
