@@ -2,10 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 
-/// In-memory cache for the `book_acronym` table.
-///
-/// This cache is used exclusively by the FindRef feature for matching
-/// book acronyms during reference searches.
+/// In-memory cache for the `book_acronym` table, used for matching
+/// book acronyms and alternative titles (FindRef, library book search).
 ///
 /// המונחים נשמרים במצב מנורמל מראש (ללא ניקוד/גרשיים) כדי לחסוך
 /// נורמליזציה חוזרת בכל חיפוש.
