@@ -1560,9 +1560,10 @@ class _CombinedViewState extends State<CombinedView> {
         AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
-          decoration: backgroundColor != null
-              ? BoxDecoration(color: backgroundColor)
-              : null,
+          // decoration קבוע (גם כשהצבע null) — מעבר null<->BoxDecoration היה
+          // מוסיף/מסיר DecoratedBox ומשנה את עומק הטקסט ב-tree, מה שאיפס מצב
+          // <details> פתוח (טקסט מוסתר) בכל בחירת שורה.
+          decoration: BoxDecoration(color: backgroundColor),
           child: EnhancedGestureDetector(
             behavior: HitTestBehavior.translucent,
             onDragSelectionStart: () {
