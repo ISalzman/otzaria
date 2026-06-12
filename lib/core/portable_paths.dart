@@ -63,8 +63,6 @@ class PortablePaths {
 
     if (previousRoot != null && !p.equals(previousRoot, currentRoot)) {
       await _rewriteAll(previousRoot, currentRoot);
-      // נתיב ה-Hive box של מצב האינדוקס נגזר מנתיב האינדקס — חייב להתאפס.
-      AppPaths.clearTantivyLockPathCache();
     }
 
     try {
