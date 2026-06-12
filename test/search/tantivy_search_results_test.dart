@@ -12,7 +12,7 @@ import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:search_engine/search_engine.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
 class MockSearchBloc extends MockBloc<SearchEvent, SearchState>
     implements SearchBloc {}
@@ -45,6 +45,28 @@ const _kPlainTextIndex = 0;
 const _kHtmlTextIndex = 1;
 const _kHolyNamesIndex = 2;
 
+String _allTextFromInlineSpan(InlineSpan span) {
+  if (span is TextSpan) {
+    return [
+      span.text ?? '',
+      for (final child in span.children ?? const <InlineSpan>[])
+        _allTextFromInlineSpan(child),
+    ].join();
+  }
+  return '';
+}
+
+String _highlightedTextFromInlineSpan(InlineSpan span) {
+  if (span is TextSpan) {
+    return [
+      if (span.style?.fontWeight == FontWeight.bold) span.text ?? '',
+      for (final child in span.children ?? const <InlineSpan>[])
+        _highlightedTextFromInlineSpan(child),
+    ].join();
+  }
+  return '';
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -71,7 +93,7 @@ void main() {
           id: BigInt.from(2),
           title: 'ספר ב',
           reference: 'סימן ב',
-          text: '<b>טקסט</b> עם <em>HTML</em>',
+          text: '<font color="red">טקסט</font> עם HTML',
           segment: BigInt.one,
           isPdf: false,
           filePath: 'book_1.txt',
@@ -270,10 +292,29 @@ void main() {
       await tester.pump();
 
       expect(copiedText, isNotNull);
-      expect(copiedText, isNot(contains('<b>')));
-      expect(copiedText, isNot(contains('<em>')));
+      expect(copiedText, isNot(contains('<font')));
       expect(copiedText, contains('טקסט'));
       expect(copiedText, contains('HTML'));
+    });
+
+    testWidgets('מציג הדגשת HTML שמגיעה ממנוע החיפוש', (tester) async {
+      await tester.pumpWidget(buildWidget());
+      await tester.pump();
+
+      final highlightedResultText = tester
+          .widgetList<RichText>(
+            find.byWidgetPredicate(
+              (widget) =>
+                  widget is RichText &&
+                  _allTextFromInlineSpan(widget.text).contains('HTML'),
+            ),
+          )
+          .single;
+
+      expect(
+          _allTextFromInlineSpan(highlightedResultText.text), 'טקסט עם HTML');
+      expect(
+          _highlightedTextFromInlineSpan(highlightedResultText.text), 'טקסט');
     });
 
     testWidgets('כאשר replaceHolyNames פעיל, הטקסט המועתק כולל החלפת שמות קודש',

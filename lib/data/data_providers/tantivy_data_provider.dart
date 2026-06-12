@@ -1,27 +1,29 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:search_engine/search_engine.dart';
-import 'package:hive_ce/hive.dart';
-import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
-import 'package:otzaria/search/search_query_builder.dart';
+import 'package:otzaria/search/search_engine_gateway.dart';
 import 'package:otzaria/core/app_paths.dart';
 
 /// A singleton class that manages search functionality using Tantivy search engine.
 ///
 /// This provider handles the search operations for both text-based and PDF books,
 /// maintaining an index for full-text search capabilities.
+///
+/// מצב האינדקס (אילו ספרים מאונדקסים, האם נדרשת בנייה מחדש) נקרא מהאינדקס
+/// עצמו דרך מנוע החיפוש — לא מאחסון חיצוני של האפליקציה.
 class TantivyDataProvider {
-  static const int currentIndexStateVersion = 5;
-  static const String _booksDoneKey = 'key-books-done';
-  static const String _indexStateVersionKey = 'key-index-state-version';
-  static const String _catalogueOrderSignatureKey =
-      'key-catalogue-order-signature';
+  static const SearchEngineGateway _searchGateway = SearchEngineGateway();
+
+  /// סטטוסים של [checkIndexCompatibility] שמשמעותם שהאינדקס הקיים אינו
+  /// תואם למנוע הנוכחי וחובה לאפס ולבנות אותו מחדש.
+  static const Set<String> _rebuildRequiredStatuses = {
+    'rebuild_required',
+    'engine_too_old',
+  };
 
   /// Instance of the search engine pointing to the index directory
   late Future<SearchEngine> engine;
-
-  bool _indexExistedBeforeInit = false;
 
   /// Track if index is being reopened to prevent concurrent reopens
   bool _isReopening = false;
@@ -36,11 +38,11 @@ class TantivyDataProvider {
 
   // Track ongoing counts to prevent duplicates
   static final Set<String> _ongoingCounts = {};
-  int _storedIndexStateVersion = 0;
-  String? _catalogueOrderSignature;
 
-  Box? _hiveBox;
-  String? _hiveBoxDirectory;
+  /// תוצאת בדיקת התאימות של האינדקס, כפי שנקראה מהאינדקס עצמו
+  /// (otzaria_index_meta.json או meta.json של Tantivy) דרך מנוע החיפוש.
+  IndexCompatibility? _indexCompatibility;
+  IndexCompatibility? get indexCompatibility => _indexCompatibility;
 
   /// Clear global cache when starting new search
   static void clearGlobalCache() {
@@ -54,42 +56,65 @@ class TantivyDataProvider {
   /// Indicates whether the indexing process is currently running
   ValueNotifier<bool> isIndexing = ValueNotifier(false);
 
-  /// מסמן שהטעינה האסינכרונית של מצב האינדקס מהדיסק (booksDone, חתימת קטלוג וכו')
-  /// הסתיימה. עד שהערך הופך ל-true, אסור להסיק "אין אינדקס" מ-booksDone.isEmpty.
+  /// מסמן שקריאת מצב האינדקס מהאינדקס עצמו ([indexedFilePaths]) הסתיימה.
+  /// עד שהערך הופך ל-true, אסור להסיק "אין אינדקס" מ-indexedFilePaths.isEmpty.
   final ValueNotifier<bool> isInitialized = ValueNotifier(false);
 
-  /// Maintains a list of processed books to avoid reindexing
-  late List<String> booksDone = [];
+  /// נתיבי הספרים (שדה filePath של המסמכים) שיש להם לפחות מסמך חי באינדקס.
+  /// נקרא מהאינדקס עצמו בעת פתיחת המנוע, ומתעדכן בזיכרון תוך כדי אינדוקס.
+  final Set<String> indexedFilePaths = {};
 
   TantivyDataProvider._internal() {
-    // Initialize sequentially: check index existence BEFORE the engine
-    // recreates the directory, then load booksDone.
     engine = _initAll();
   }
 
+  /// בודק את תאימות האינדקס, פותח את המנוע, וקורא ממנו את רשימת
+  /// הספרים המאונדקסים. בדיקת התאימות רצה לפני פתיחת המנוע, כי המנוע
+  /// יוצר את תיקיית האינדקס (וכותב otzaria_index_meta.json) אם אינה קיימת.
   Future<SearchEngine> _initAll() async {
-    // Check if the index directory existed BEFORE the engine creates it.
+    // בפתיחה מחדש (reopen/clear) הערך כבר true; איפוס מונע מהצרכנים
+    // להסיק "אין אינדקס" מ-indexedFilePaths בזמן שהטעינה מחדש רצה.
+    isInitialized.value = false;
+
     final indexPath = await AppPaths.getIndexPath();
-    final indexExistedBefore = Directory(indexPath).existsSync();
-    _indexExistedBeforeInit = indexExistedBefore;
+    _indexCompatibility = _checkIndexCompatibility(indexPath);
 
-    // Load persisted booksDone from disk.
-    await _loadBooksDone();
+    final engine = await _initEngine();
+    await _loadIndexedFilePaths(engine);
 
-    // If the index was manually deleted, clear booksDone so every book
-    // is re-indexed from scratch.
-    if (!indexExistedBefore && booksDone.isNotEmpty) {
-      debugPrint('⚠️ תיקיית האינדקס נמחקה – מנקה רשימת ספרים מאונדקסים');
-      booksDone.clear();
-      await saveBooksDoneToDisk();
-    }
-
-    // booksDone כעת משקפת נכונה את מצב האינדקס על הדיסק. צרכנים שמסיקים
-    // "אין אינדקס" מתוך הרשימה צריכים לחכות לסימן הזה כדי לא להציג שגוי בהפעלה.
+    // indexedFilePaths כעת משקפת את מצב האינדקס בפועל. צרכנים שמסיקים
+    // "אין אינדקס" מתוך הקבוצה צריכים לחכות לסימן הזה כדי לא להציג שגוי בהפעלה.
     isInitialized.value = true;
+    return engine;
+  }
 
-    // Now initialise the search engine (creates the directory if needed).
-    return _initEngine();
+  /// קורא את תוצאת בדיקת התאימות מהאינדקס עצמו. כשל בבדיקה אינו עוצר את
+  /// האתחול — המנוע ייפתח כרגיל והסטטוס יישאר לא ידוע (null).
+  IndexCompatibility? _checkIndexCompatibility(String indexPath) {
+    try {
+      final compatibility = checkIndexCompatibility(path: indexPath);
+      debugPrint(
+        '🔎 תאימות אינדקס: ${compatibility.status} '
+        '(נמצא: ${compatibility.foundSchemaVersion}, '
+        'נדרש: ${compatibility.requiredSchemaVersion})',
+      );
+      return compatibility;
+    } catch (e) {
+      debugPrint('⚠️ בדיקת תאימות האינדקס נכשלה: $e');
+      return null;
+    }
+  }
+
+  /// טוען מהאינדקס עצמו את רשימת הספרים שיש להם מסמכים חיים.
+  Future<void> _loadIndexedFilePaths(SearchEngine engine) async {
+    indexedFilePaths.clear();
+    try {
+      indexedFilePaths.addAll(await engine.getIndexedFilePaths());
+      debugPrint(
+          '📚 נקראו ${indexedFilePaths.length} ספרים מאונדקסים מהאינדקס');
+    } catch (e) {
+      debugPrint('⚠️ קריאת הספרים המאונדקסים מהאינדקס נכשלה: $e');
+    }
   }
 
   Future<SearchEngine> _initEngine() async {
@@ -177,132 +202,15 @@ class TantivyDataProvider {
     }
   }
 
-  /// פותח את box ה-Hive בנתיב הנתון. אם כבר פתוח באותו נתיב — מחזיר אותו.
-  /// אם פתוח בנתיב אחר — סוגר קודם ופותח מחדש.
-  Future<Box> _openBox(String directory) async {
-    if (_hiveBox != null &&
-        _hiveBox!.isOpen &&
-        _hiveBoxDirectory == directory) {
-      return _hiveBox!;
-    }
-    if (_hiveBox != null && _hiveBox!.isOpen) {
-      await _hiveBox!.close();
-    }
-    _hiveBox = await Hive.openBox('books_indexed', path: directory);
-    _hiveBoxDirectory = directory;
-    return _hiveBox!;
-  }
+  /// האם האינדקס הקיים דורש איפוס ובנייה מחדש, לפי בדיקת התאימות
+  /// שנקראה מהאינדקס עצמו בעת פתיחת המנוע.
+  bool get requiresManualReindex =>
+      isRebuildRequiredStatus(_indexCompatibility?.status);
 
-  Future<void> _closeBox() async {
-    if (_hiveBox != null && _hiveBox!.isOpen) {
-      await _hiveBox!.close();
-    }
-    _hiveBox = null;
-    _hiveBoxDirectory = null;
-  }
-
-  Future<void> _loadBooksDone() async {
-    try {
-      final lockPath = await AppPaths.getTantivyLockPath();
-      booksDone = await _readBooksDoneFromBox(lockPath);
-
-      final box = await _openBox(lockPath);
-      _storedIndexStateVersion = _readIndexStateVersionFromBox(box);
-      _catalogueOrderSignature = _readCatalogueOrderSignatureFromBox(box);
-    } catch (e) {
-      debugPrint('⚠️ Error loading books done: $e');
-      booksDone = [];
-    }
-  }
-
-  Future<List<String>> _readBooksDoneFromBox(String directory) async {
-    final box = await _openBox(directory);
-    final dynamic value = box.get(_booksDoneKey, defaultValue: []);
-    if (value is List) {
-      return value.map<String>((e) => e.toString()).toList();
-    }
-    return [];
-  }
-
-  int _readIndexStateVersionFromBox(Box box) {
-    final dynamic value = box.get(_indexStateVersionKey, defaultValue: 0);
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return 0;
-  }
-
-  String? _readCatalogueOrderSignatureFromBox(Box box) {
-    final dynamic value = box.get(_catalogueOrderSignatureKey);
-    if (value is String && value.isNotEmpty) return value;
-    return null;
-  }
-
+  /// האם סטטוס תאימות נתון מחייב בנייה מחדש של האינדקס.
   @visibleForTesting
-  static bool shouldInvalidateStoredIndexState({
-    required int storedIndexStateVersion,
-    required String? storedCatalogueOrderSignature,
-    required String currentCatalogueOrderSignature,
-  }) {
-    return storedIndexStateVersion != currentIndexStateVersion ||
-        storedCatalogueOrderSignature != currentCatalogueOrderSignature;
-  }
-
-  @visibleForTesting
-  static bool shouldPromptForManualReindex({
-    required bool indexExistedBeforeInit,
-    required int storedIndexStateVersion,
-    required String? storedCatalogueOrderSignature,
-    required String currentCatalogueOrderSignature,
-  }) {
-    return indexExistedBeforeInit &&
-        storedIndexStateVersion != currentIndexStateVersion;
-  }
-
-  bool requiresManualReindex({
-    required String currentCatalogueOrderSignature,
-  }) {
-    return shouldPromptForManualReindex(
-      indexExistedBeforeInit: _indexExistedBeforeInit,
-      storedIndexStateVersion: _storedIndexStateVersion,
-      storedCatalogueOrderSignature: _catalogueOrderSignature,
-      currentCatalogueOrderSignature: currentCatalogueOrderSignature,
-    );
-  }
-
-  Future<bool> ensureIndexStateMatchesCatalogue(
-    String currentCatalogueOrderSignature,
-  ) async {
-    if (!requiresManualReindex(
-      currentCatalogueOrderSignature: currentCatalogueOrderSignature,
-    )) {
-      return false;
-    }
-
-    debugPrint(
-      '⚠️ מצב האינדקס לא תואם לקטלוג הנוכחי '
-      '(version=$_storedIndexStateVersion, '
-      'signatureMatch=${_catalogueOrderSignature == currentCatalogueOrderSignature}) '
-      '- נדרש איפוס ואינדוקס ידני באישור המשתמש',
-    );
-    return true;
-  }
-
-  Future<void> prepareForManualReindex(
-    String currentCatalogueOrderSignature,
-  ) async {
-    final lockPath = await AppPaths.getTantivyLockPath();
-    booksDone = [];
-    _storedIndexStateVersion = currentIndexStateVersion;
-    _catalogueOrderSignature = currentCatalogueOrderSignature;
-    await _persistIndexState(lockPath);
-  }
-
-  Future<void> _persistIndexState(String directory) async {
-    final box = await _openBox(directory);
-    await box.put(_booksDoneKey, booksDone);
-    await box.put(_indexStateVersionKey, _storedIndexStateVersion);
-    await box.put(_catalogueOrderSignatureKey, _catalogueOrderSignature ?? '');
-  }
+  static bool isRebuildRequiredStatus(String? status) =>
+      _rebuildRequiredStatuses.contains(status);
 
   Future<void> _handleSchemaError() async {
     try {
@@ -333,28 +241,28 @@ class TantivyDataProvider {
     debugPrint('🔄 Reopening search index...');
 
     try {
-      final indexPath = await AppPaths.getIndexPath();
-      _indexExistedBeforeInit = Directory(indexPath).existsSync();
-
       // Dispose previous engine to release locks
       await dispose();
 
-      // Reset engines
-      engine = _initEngine();
+      // Reset engines (כולל קריאה מחדש של מצב האינדקס מהאינדקס עצמו)
+      engine = _initAll();
 
       // Check engine
       engine.then((value) {
         try {
           // Test the search engine
-          value
+          _searchGateway
               .search(
-                  regexTerms: ['a'],
-                  limit: 10,
-                  offset: 0,
-                  slop: 0,
-                  maxExpansions: 10,
-                  facets: ["/"],
-                  order: ResultsOrder.catalogue)
+            RustSearchEngineOperations(value),
+            const SearchEngineRequest(
+              query: 'a',
+              limit: 10,
+              offset: 0,
+              facets: ["/"],
+              order: ResultsOrder.catalogue,
+              searchMode: SearchMode.exact,
+            ),
+          )
               .then((results) {
             // Engine test successful
             debugPrint('✅ Search engine test successful');
@@ -374,24 +282,11 @@ class TantivyDataProvider {
         }
       });
 
-      await _loadBooksDone();
-
       debugPrint('✅ Search index reopened successfully');
     } finally {
       _isReopening = false;
     }
   }
-
-  /// Persists the list of indexed books to disk using Hive storage.
-  Future<void> saveBooksDoneToDisk() async {
-    final lockPath = await AppPaths.getTantivyLockPath();
-    await _persistIndexState(lockPath);
-  }
-
-  /// מחזיר האם תיקיית האינדקס כבר הייתה קיימת לפני פתיחת המנוע הנוכחי.
-  ///
-  /// משמש כדי להבחין בין יצירת אינדקס ראשונית לבין בנייה מחדש מעל אינדקס ישן.
-  bool get indexExistedBeforeInit => _indexExistedBeforeInit;
 
   Future<int> countTexts(String query, List<String> books, List<String> facets,
       {bool fuzzy = false,
@@ -402,7 +297,7 @@ class TantivyDataProvider {
       Map<String, Map<String, bool>>? searchOptions}) async {
     // Global cache check
     final cacheKey =
-        '$query|${facets.join(',')}|$fuzzy|$distance|${customSpacing.toString()}|${alternativeWords.toString()}|${searchOptions.toString()}';
+        '$query|${facets.join(',')}|$fuzzy|$searchMode|$distance|${customSpacing.toString()}|${alternativeWords.toString()}|${searchOptions.toString()}';
 
     if (_lastCachedQuery == query && _globalFacetCache.containsKey(cacheKey)) {
       debugPrint(
@@ -426,34 +321,20 @@ class TantivyDataProvider {
 
     // Mark this count as in progress
     _ongoingCounts.add(cacheKey);
-    final index = await engine;
-
-    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
-      searchMode,
-      customSpacing: customSpacing,
-      alternativeWords: alternativeWords,
-      searchOptions: searchOptions,
-    );
-
-    // המרת החיפוש לפורמט המנוע החדש - בדיוק כמו ב-SearchRepository!
-    final params = SearchQueryBuilder.prepareQueryParams(
-      query,
-      fuzzy,
-      distance,
-      normalizedParameters.customSpacing,
-      normalizedParameters.alternativeWords,
-      normalizedParameters.searchOptions,
-    );
-    final List<String> regexTerms = params['regexTerms'] as List<String>;
-    final int effectiveSlop = params['effectiveSlop'] as int;
-    final int maxExpansions = params['maxExpansions'] as int;
 
     try {
-      final count = await index.count(
-          regexTerms: regexTerms,
+      final count = await _searchGateway.count(
+        RustSearchEngineOperations(await engine),
+        SearchEngineRequest(
+          query: query,
           facets: facets,
-          slop: effectiveSlop,
-          maxExpansions: maxExpansions);
+          searchMode: fuzzy ? SearchMode.fuzzy : searchMode,
+          distance: distance,
+          customSpacing: customSpacing ?? const {},
+          alternativeWords: alternativeWords ?? const {},
+          searchOptions: searchOptions ?? const {},
+        ),
+      );
 
       // Save to global cache
       _lastCachedQuery = query;
@@ -463,15 +344,15 @@ class TantivyDataProvider {
 
       return count;
     } catch (e) {
-      // Remove from ongoing counts even on error
-      _ongoingCounts.remove(cacheKey);
       // Log error in production
       rethrow;
+    } finally {
+      // Remove from ongoing counts even on error
+      _ongoingCounts.remove(cacheKey);
     }
   }
 
-  Future<void> resetIndex(String indexPath,
-      {bool closeBooksDoneBox = true}) async {
+  Future<void> resetIndex(String indexPath) async {
     debugPrint('🔄 Resetting index at: $indexPath');
 
     // Close engines first to release locks
@@ -483,14 +364,6 @@ class TantivyDataProvider {
     }
 
     Directory indexDirectory = Directory(indexPath);
-    if (closeBooksDoneBox) {
-      try {
-        await _closeBox();
-      } catch (e) {
-        debugPrint('⚠️ Error closing Hive box: $e');
-      }
-    }
-
     if (indexDirectory.existsSync()) {
       try {
         indexDirectory.deleteSync(recursive: true);
@@ -519,34 +392,17 @@ class TantivyDataProvider {
     Map<int, List<String>>? alternativeWords,
     Map<String, Map<String, bool>>? searchOptions,
   }) async {
-    final index = await engine;
-
-    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
-      searchMode,
-      customSpacing: customSpacing,
-      alternativeWords: alternativeWords,
-      searchOptions: searchOptions,
-    );
-
-    final params = SearchQueryBuilder.prepareQueryParams(
-      query,
-      fuzzy,
-      distance,
-      normalizedParameters.customSpacing,
-      normalizedParameters.alternativeWords,
-      normalizedParameters.searchOptions,
-    );
-    final List<String> regexTerms = params['regexTerms'] as List<String>;
-    final int effectiveSlop = params['effectiveSlop'] as int;
-    final int maxExpansions = params['maxExpansions'] as int;
-
-    if (regexTerms.isEmpty) return {};
-
-    final results = await index.countByBook(
-      regexTerms: regexTerms,
-      facets: facets,
-      slop: effectiveSlop,
-      maxExpansions: maxExpansions,
+    final results = await _searchGateway.countByBook(
+      RustSearchEngineOperations(await engine),
+      SearchEngineRequest(
+        query: query,
+        facets: facets,
+        searchMode: fuzzy ? SearchMode.fuzzy : searchMode,
+        distance: distance,
+        customSpacing: customSpacing ?? const {},
+        alternativeWords: alternativeWords ?? const {},
+        searchOptions: searchOptions ?? const {},
+      ),
     );
 
     return Map<String, int>.from(results);
@@ -562,11 +418,16 @@ class TantivyDataProvider {
   /// Returns a Stream of search results that can be listened to for real-time updates
   Stream<List<SearchResult>> searchTextsStream(
       String query, List<String> facets, int limit, bool fuzzy) async* {
-    // הפונקציה הזו לא נתמכת במנוע החדש - נחזיר תוצאה חד-פעמית
-    final searchRepository = SearchRepository();
-    final results =
-        await searchRepository.searchTexts(query, facets, limit, fuzzy: fuzzy);
-    yield results;
+    yield* _searchGateway.searchStream(
+      RustSearchEngineOperations(await engine),
+      SearchEngineRequest(
+        query: query,
+        facets: facets,
+        limit: limit,
+        searchMode: fuzzy ? SearchMode.fuzzy : SearchMode.exact,
+      ),
+      chunkSize: 50,
+    );
   }
 
   /// ספירה מקבצת של תוצאות עבור מספר facets בבת אחת - לשיפור ביצועים.
@@ -585,27 +446,17 @@ class TantivyDataProvider {
         '🔍 TantivyDataProvider: Starting batch count for ${facets.length} facets');
     final stopwatch = Stopwatch()..start();
 
-    final index = await engine;
+    final operations = RustSearchEngineOperations(await engine);
     final results = <String, int>{};
-
-    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
-      searchMode,
-      customSpacing: customSpacing,
-      alternativeWords: alternativeWords,
-      searchOptions: searchOptions,
+    final baseRequest = SearchEngineRequest(
+      query: query,
+      facets: facets,
+      searchMode: fuzzy ? SearchMode.fuzzy : searchMode,
+      distance: distance,
+      customSpacing: customSpacing ?? const {},
+      alternativeWords: alternativeWords ?? const {},
+      searchOptions: searchOptions ?? const {},
     );
-
-    final params = SearchQueryBuilder.prepareQueryParams(
-      query,
-      fuzzy,
-      distance,
-      normalizedParameters.customSpacing,
-      normalizedParameters.alternativeWords,
-      normalizedParameters.searchOptions,
-    );
-    final List<String> regexTerms = params['regexTerms'] as List<String>;
-    final int effectiveSlop = params['effectiveSlop'] as int;
-    final int maxExpansions = params['maxExpansions'] as int;
 
     // קיבוץ facets לפי parent prefix כדי לחסוך קריאות FFI
     final Map<String, List<String>> byParent = {};
@@ -624,12 +475,10 @@ class TantivyDataProvider {
         try {
           debugPrint(
               '🔍 getFacetCounts: parent=$parent (${siblings.length} siblings)');
-          final facetCounts = await index.getFacetCounts(
-            regexTerms: regexTerms,
-            facets: [parent],
+          final facetCounts = await _searchGateway.getFacetCounts(
+            operations,
+            baseRequest.copyWith(facets: [parent]),
             facetPrefix: parent,
-            slop: effectiveSlop,
-            maxExpansions: maxExpansions,
           );
           final countMap = {
             for (final fc in facetCounts) fc.path: fc.count.toInt(),
@@ -644,11 +493,10 @@ class TantivyDataProvider {
           // fallback לקריאות count נפרדות
           for (final facet in siblings) {
             try {
-              results[facet] = await index.count(
-                  regexTerms: regexTerms,
-                  facets: [facet],
-                  slop: effectiveSlop,
-                  maxExpansions: maxExpansions);
+              results[facet] = await _searchGateway.count(
+                operations,
+                baseRequest.copyWith(facets: [facet]),
+              );
             } catch (e2) {
               debugPrint('❌ count failed for $facet: $e2');
               results[facet] = 0;
@@ -659,11 +507,10 @@ class TantivyDataProvider {
         // sibling יחיד - count ישיר יעיל יותר
         final facet = siblings[0];
         try {
-          results[facet] = await index.count(
-              regexTerms: regexTerms,
-              facets: [facet],
-              slop: effectiveSlop,
-              maxExpansions: maxExpansions);
+          results[facet] = await _searchGateway.count(
+            operations,
+            baseRequest.copyWith(facets: [facet]),
+          );
         } catch (e) {
           debugPrint('❌ count failed for $facet: $e');
           results[facet] = 0;
@@ -687,8 +534,7 @@ class TantivyDataProvider {
   /// את הספרייה לכונן אחר, האינדקס הבא ייבנה ליד הספרייה החדשה.
   Future<void> clear() async {
     isIndexing.value = false;
-    booksDone.clear();
-    _storedIndexStateVersion = currentIndexStateVersion;
+    indexedFilePaths.clear();
 
     // שחרור משאבים לפני מחיקה פיזית של הקבצים (חשוב במיוחד ב-Windows
     // שבו קבצים פתוחים אינם ניתנים למחיקה).
@@ -697,26 +543,17 @@ class TantivyDataProvider {
     } catch (e) {
       debugPrint('⚠️ Engine dispose during clear failed: $e');
     }
-    try {
-      await _closeBox();
-    } catch (e) {
-      debugPrint('⚠️ Hive box close during clear failed: $e');
-    }
 
     // מחיקת תיקיית האינדקס הפעילה + כל ברירות המחדל הישנות. בלי זה,
     // אם נשארת תיקייה ב-APPDATA למשל, getIndexPath בהפעלה הבאה היה
     // ממשיך לבחור בה במקום בנתיב החדש ליד הספרייה.
     await _deleteAllKnownIndexDirectories();
 
-    // אחרי המחיקה אין יותר אינדקס קיים על הדיסק.
-    _indexExistedBeforeInit = false;
-
     // פתיחה מחדש: getIndexPath יחזיר עכשיו את ברירת המחדל הנוכחית
-    // (ליד הספרייה, אם אין הגדרה ידנית ב-keyIndexPath).
-    engine = _initEngine();
-
-    // שמירת המצב הנקי בתיקיית ה-lock של הנתיב החדש.
-    await saveBooksDoneToDisk();
+    // (ליד הספרייה, אם אין הגדרה ידנית ב-keyIndexPath). ההמתנה מבטיחה
+    // שתאימות האינדקס ורשימת הספרים נקראו מחדש לפני שממשיכים.
+    engine = _initAll();
+    await engine;
   }
 
   Future<void> _deleteAllKnownIndexDirectories() async {

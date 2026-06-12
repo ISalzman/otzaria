@@ -15,11 +15,14 @@ import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:flutter/foundation.dart';
-import 'package:search_engine/search_engine.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
-  final SearchRepository _repository = SearchRepository();
+  final SearchRepository _repository;
   int _searchRequestId = 0;
+
+  @visibleForTesting
+  SearchRepository get repositoryForTesting => _repository;
 
   static int _defaultDistanceForMode(SearchMode mode) {
     return mode == SearchMode.fuzzy ? 2 : 0;
@@ -38,8 +41,11 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     return _defaultDistanceForMode(newMode);
   }
 
-  SearchBloc({SearchConfiguration? initialConfiguration})
-      : super(SearchState(
+  SearchBloc({
+    SearchConfiguration? initialConfiguration,
+    SearchRepository repository = const SearchRepository(),
+  })  : _repository = repository,
+        super(SearchState(
           configuration: initialConfiguration ?? const SearchConfiguration(),
         )) {
     on<UpdateSearchQuery>(_onUpdateSearchQuery);
@@ -238,16 +244,27 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
     // סופר ברמת ספר במנוע עצמו, בלי למשוך עשרות אלפי snippets לדארט.
     final activeFacets = List<String>.from(state.searchScopeFacets);
-    final bookCounts = await TantivyDataProvider.instance.countByBook(
-      SearchQueryBuilder.sanitizeQuery(query),
-      activeFacets,
-      fuzzy: state.fuzzy,
-      distance: state.distance,
-      searchMode: state.configuration.searchMode,
-      customSpacing: event.customSpacing,
-      alternativeWords: event.alternativeWords,
-      searchOptions: event.searchOptions,
-    );
+    final Map<String, int> bookCounts;
+    try {
+      bookCounts = await TantivyDataProvider.instance.countByBook(
+        SearchQueryBuilder.sanitizeQuery(query),
+        activeFacets,
+        fuzzy: state.fuzzy,
+        distance: state.distance,
+        searchMode: state.configuration.searchMode,
+        customSpacing: event.customSpacing,
+        alternativeWords: event.alternativeWords,
+        searchOptions: event.searchOptions,
+      );
+    } catch (e, stackTrace) {
+      // עדכון ה-facets רץ ב-fire-and-forget (unawaited). המנוע דוחה שאילתה
+      // רחבה מדי בשגיאת max expansions — כולל מילה בודדת רחבה — ובלי ה-catch
+      // הזה השגיאה הייתה בורחת כחריגה אסינכרונית לא מטופלת. מסלול החיפוש
+      // הראשי כבר תופס את אותה שגיאה ומציג toast, לכן כאן רק נרשם ללוג ונשמרות
+      // ספירות ה-facets החלקיות שכבר חושבו מהתוצאות.
+      debugPrint('❌ Facet count refresh failed: $e\n$stackTrace');
+      return;
+    }
 
     // Ignore stale results if query changed while searching
     if (state.searchQuery != query || requestId != _searchRequestId) {
