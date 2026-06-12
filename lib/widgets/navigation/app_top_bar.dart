@@ -251,16 +251,24 @@ class _AppTopBarState extends State<AppTopBar>
             height: barH,
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
-              child: Row(
-                children: [
-                  ..._itemsToWidgets(context, widget.leadingItems),
-                  if (widget.leadingItems.isNotEmpty)
-                    const SizedBox(width: 8.0),
-                  Expanded(child: widget.center ?? const SizedBox.shrink()),
-                  if (widget.trailingItems.isNotEmpty)
-                    const SizedBox(width: 8.0),
-                  ..._itemsToWidgets(context, widget.trailingItems),
-                ],
+              // NavigationToolbar ממרכז את האמצע גאומטרית בסרגל, אך מגביל את
+              // רוחבו למקום הפנוי בין הצדדים — בלי חפיפה ובלי חסימת לחיצות.
+              child: NavigationToolbar(
+                middleSpacing: 8.0,
+                leading: widget.leadingItems.isEmpty
+                    ? null
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: _itemsToWidgets(context, widget.leadingItems),
+                      ),
+                middle: widget.center,
+                trailing: widget.trailingItems.isEmpty
+                    ? null
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children:
+                            _itemsToWidgets(context, widget.trailingItems),
+                      ),
               ),
             ),
           ),

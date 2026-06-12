@@ -278,16 +278,20 @@ class DesignSettingsTab extends StatelessWidget {
                 SettingsAnchor(
                   cardId: 'design.tabs',
                   child: SettingsCard(
-                    title: 'כרטיסיות הספרים',
+                    title: 'התאמת ממשק',
                     children: [
                       if (!(Platform.isAndroid || Platform.isIOS))
-                        SwitchSettingsTile.text(
-                          icon: FluentIcons.list_24_regular,
-                          title: 'תפריטים קומפקטיים',
+                        SegmentedSettingsTile<bool>(
+                          icon: Icon(FluentIcons.column_triple_24_regular),
+                          title: 'צפיפות ממשק',
                           subtitle: state.compactMenuMode
-                              ? 'התפריטים יוצגו בצפיפות עבודה בסגנון Chrome'
-                              : 'התפריטים יוצגו במרווח נוח ובגרסה הרגילה',
-                          value: state.compactMenuMode,
+                              ? 'הצג יותר תוכן על ידי הקטנת המרווחים'
+                              : 'הצג פריטים במרווחים נוחים ללחיצה',
+                          options: const [
+                            SegmentOption(value: false, label: 'רחב'),
+                            SegmentOption(value: true, label: 'קומפקטי'),
+                          ],
+                          currentValue: state.compactMenuMode,
                           onChanged: (value) {
                             context
                                 .read<SettingsBloc>()

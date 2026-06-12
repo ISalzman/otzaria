@@ -477,9 +477,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                     center: state.searchQuery.isEmpty
                         ? const SizedBox.shrink()
                         : Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Flexible(
-                                fit: FlexFit.loose,
                                 child: Text(
                                   'מוצגות תוצאות של חיפוש: ',
                                   style: TextStyle(
@@ -492,7 +492,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 4),
                               Flexible(
                                 child: ScrollConfiguration(
                                   behavior: ScrollConfiguration.of(context)
