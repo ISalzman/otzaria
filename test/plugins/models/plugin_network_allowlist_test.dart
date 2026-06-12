@@ -6,7 +6,7 @@ void main() {
     test('מתיר URL של מאגר הספרים המאושר ותתי-נתיביו', () {
       expect(
         isUriAllowedForPluginNetwork(Uri.parse(
-            'https://github.com/Otzarya-Org/Otzarya-Library/releases/latest/download/a.zip')),
+            'https://github.com/Open-Otzarya-Projects/Otzarya-Unofficial-Books/releases/latest/download/a.zip')),
         isTrue,
       );
     });
@@ -69,7 +69,7 @@ const List<String> pluginNetworkAllowlist = <String>[
 
   group('isGithubReleaseRedirectAllowed', () {
     final allowedGithubRelease = Uri.parse(
-        'https://github.com/Otzarya-Org/Otzarya-Library/releases/latest/download/a.zip');
+        'https://github.com/Open-Otzarya-Projects/Otzarya-Unofficial-Books/releases/latest/download/a.zip');
     final cdn =
         Uri.parse('https://release-assets.githubusercontent.com/abc/a.zip');
 
