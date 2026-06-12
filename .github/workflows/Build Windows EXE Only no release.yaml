@@ -228,13 +228,17 @@ jobs:
       - name: Download library assets for full installer
         if: true
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           Write-Host "Downloading bundled library assets for full installer..."
           $ErrorActionPreference = "Stop"
+          # אימות מונע רייט-לימיט של api.github.com (ה-IP של ה-runner משותף עם משתמשים אחרים)
+          $apiHeaders = @{ Authorization = "Bearer $env:GH_TOKEN" }
 
           try {
             # הורדת מסד הספרייה הראשי
-            $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Otzaria/SeforimLibrary/releases/latest"
+            $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Otzaria/SeforimLibrary/releases/latest" -Headers $apiHeaders
             $dbAsset = $latestRelease.assets | Where-Object { $_.name -eq "seforim.db.zst" }
 
             if (-not $dbAsset) {
@@ -258,7 +262,7 @@ jobs:
 
             # הורדת מסד הקטלוגים החיצוני
             Write-Host "Downloading external catalog DB for full installer from Otzaria/otzar-HB_catalog..."
-            $catalogRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Otzaria/otzar-HB_catalog/releases/latest"
+            $catalogRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Otzaria/otzar-HB_catalog/releases/latest" -Headers $apiHeaders
             $catalogAsset = $catalogRelease.assets | Where-Object { $_.name -eq "otzar-HB_catalog.db.zst" }
 
             if (-not $catalogAsset) {
@@ -280,9 +284,9 @@ jobs:
             Write-Host "Compressed Talmud Bavli PDFs downloaded successfully"
 
             # הורדת כלי החילוץ כדי שה-installer יוכל לחלץ את קבצי הספרייה בזמן ההתקנה
-            $zstdRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/facebook/zstd/releases/latest"
+            $zstdRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/facebook/zstd/releases/latest" -Headers $apiHeaders
             $zstdAsset = $zstdRelease.assets | Where-Object { $_.name -like "zstd-*-win64.zip" } | Select-Object -First 1
-            $sevenZipRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/ip7z/7zip/releases/latest"
+            $sevenZipRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/ip7z/7zip/releases/latest" -Headers $apiHeaders
             $sevenZipBootstrap = $sevenZipRelease.assets | Where-Object { $_.name -eq "7zr.exe" } | Select-Object -First 1
             $sevenZipExtra = $sevenZipRelease.assets | Where-Object { $_.name -like "7z*-extra.7z" } | Select-Object -First 1
 
