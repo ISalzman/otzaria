@@ -169,22 +169,22 @@ begin
     PathStartsWith(PathDir, ExpandConstant('{commonpf64}'));
 end;
 
+// Exec/ShellExec המובנות מסרבות להריץ את קובץ ה-Setup עצמו מתוך InitializeSetup;
+// ייבוא ישיר של ה-API עוקף זאת, וכך ה-UAC מציג את מתקין אוצריא ולא את cmd.exe.
+function ShellExecuteW(hwnd: HWND; lpOperation, lpFile, lpParameters,
+  lpDirectory: String; nShowCmd: Integer): THandle;
+  external 'ShellExecuteW@shell32.dll stdcall';
+
 function RelaunchSetupElevated(Params: String; var ErrorCode: Integer): Boolean;
 var
-  CmdLine: String;
+  InstanceHandle: THandle;
 begin
-  // Inno Setup לא מאפשר להריץ את Setup עצמו דרך ShellExec מתוך
-  // InitializeSetup. לכן מרימים את cmd.exe, והוא מפעיל את המתקין.
-  CmdLine :=
-    '/c start "" "' + ExpandConstant('{srcexe}') + '" ' + Params;
-  Result := ShellExec(
-    'runas',
-    ExpandConstant('{sys}\cmd.exe'),
-    CmdLine,
-    '',
-    SW_SHOWNORMAL,
-    ewNoWait,
-    ErrorCode);
+  InstanceHandle :=
+    ShellExecuteW(0, 'runas', ExpandConstant('{srcexe}'), Params, '', SW_HIDE);
+  // ערך מעל 32 = הצלחה; אחרת זהו קוד שגיאת SE_ERR, נשמר לדיווח הכשל.
+  Result := InstanceHandle > 32;
+  if not Result then
+    ErrorCode := InstanceHandle;
 end;
 
 // מחזירה את תיקיית ההתקנה הקודמת. RequiresAdmin נקבע לפי מקור הזיהוי
