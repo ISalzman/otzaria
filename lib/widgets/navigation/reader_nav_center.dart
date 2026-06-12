@@ -42,11 +42,13 @@ class ReaderNavCenter extends StatelessWidget {
     // 4 כפתורי ניווט + 2 רווחים = ~168px. כשהמרכז קטן מדי, הכותרת
     // מתכווצת לפי המקום הפנוי כדי למנוע overflow.
     const navButtonsWidth = 4 * 40.0 + 2 * gap;
+    const minTitleWidth = 80.0;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final titleMaxWidth = constraints.hasBoundedWidth
-            ? (constraints.maxWidth - navButtonsWidth).clamp(80.0, 340.0)
+        final contentMaxWidth = constraints.hasBoundedWidth
+            ? (constraints.maxWidth - navButtonsWidth).clamp(0.0, 340.0)
             : 340.0;
+        final titleMaxWidth = contentMaxWidth.clamp(minTitleWidth, 340.0);
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -67,12 +69,18 @@ class ReaderNavCenter extends StatelessWidget {
             // גם על ה-minWidth במקום לגלוש.
             Flexible(
               child: ConstrainedBox(
-                constraints:
-                    BoxConstraints(minWidth: 80, maxWidth: titleMaxWidth),
+                constraints: BoxConstraints(
+                    minWidth: minTitleWidth, maxWidth: titleMaxWidth),
                 child: title,
               ),
             ),
-            if (afterTitle != null) afterTitle!,
+            // afterTitle נקשח לגודלו הטבעי כל עוד יש מקום אחרי הכפתורים,
+            // ובמרכז צר מתכווץ ויזואלית (scaleDown) במקום לגלוש.
+            if (afterTitle != null)
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: contentMaxWidth),
+                child: FittedBox(fit: BoxFit.scaleDown, child: afterTitle!),
+              ),
             const SizedBox(width: gap),
             ToolbarActionButton(
               tooltip: nextMinorTooltip,

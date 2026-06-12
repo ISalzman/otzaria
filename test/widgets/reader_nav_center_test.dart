@@ -67,6 +67,50 @@ void main() {
 
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('afterTitle בגודל טבעי כשיש מקום ומתכווץ במרכז צר בלי לגלוש',
+        (tester) async {
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+      addTearDown(settingsBloc.close);
+
+      // רוחב 100 — גדול מ-PageNumberDisplay טיפוסי, כדי לא להניח רוחב מסוים.
+      const afterTitleKey = Key('after-title');
+      Widget harness(double width) => _buildHarness(
+            settingsBloc: settingsBloc,
+            child: SizedBox(
+              width: width,
+              child: ReaderNavCenter(
+                title: const Text(
+                  'כותרת ארוכה מאוד מאוד מאוד שלא נכנסת במקום צר',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                afterTitle:
+                    const SizedBox(key: afterTitleKey, width: 100, height: 20),
+                prevMajorTooltip: 'פרק קודם',
+                prevMinorTooltip: 'קטע קודם',
+                nextMinorTooltip: 'קטע הבא',
+                nextMajorTooltip: 'פרק הבא',
+                onPrevMajor: () {},
+                onPrevMinor: () {},
+                onNextMinor: () {},
+                onNextMajor: () {},
+              ),
+            ),
+          );
+
+      // ברוחב מספיק — גודל טבעי מלא.
+      await tester.pumpWidget(harness(600));
+      expect(tester.getSize(find.byType(FittedBox)).width, 100);
+      expect(tester.takeException(), isNull);
+
+      // במרכז צר — מתכווץ למקום שנשאר אחרי הכפתורים (200-168=32) בלי לגלוש.
+      await tester.pumpWidget(harness(200));
+      expect(find.byKey(afterTitleKey), findsOneWidget);
+      expect(
+          tester.getSize(find.byType(FittedBox)).width, lessThanOrEqualTo(32));
+      expect(tester.takeException(), isNull);
+    });
   });
 }
 
