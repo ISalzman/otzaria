@@ -58,28 +58,27 @@ class DesignSettingsTab extends StatelessWidget {
       keywords: ['צבע', 'ערכת נושא'],
     ),
     SettingsSearchEntry(
+      id: 'design.display.compact',
+      title: 'צפיפות ממשק',
+      subtitle: 'הצגת פריטים קומפקטית או מרווחת',
+      tab: SettingsTab.design,
+      cardId: 'design.display',
+      keywords: [
+        'קומפקטי',
+        'צפוף',
+        'נוח',
+        'מרווח',
+        'מופעל',
+        'לא מופעל',
+      ],
+    ),
+    SettingsSearchEntry(
       id: 'design.pdf.book_view',
       title: 'תצוגת ספר בPDF',
       subtitle: 'פתיחת ספרי PDF בתצוגת ספר או רגילה',
       tab: SettingsTab.design,
       cardId: 'design.pdf',
       keywords: ['pdf', 'תצוגה', 'תצוגת ספר', 'רגילה', 'מופעל', 'לא מופעל'],
-    ),
-    SettingsSearchEntry(
-      id: 'design.tabs.compact',
-      title: 'תפריטים קומפקטיים',
-      subtitle: 'צפיפות תפריטים בסגנון Chrome',
-      tab: SettingsTab.design,
-      cardId: 'design.tabs',
-      keywords: [
-        'קומפקטי',
-        'צפוף',
-        'chrome',
-        'נוח',
-        'מרווח',
-        'מופעל',
-        'לא מופעל',
-      ],
     ),
     SettingsSearchEntry(
       id: 'design.layout.sidebar_mode',
@@ -209,6 +208,36 @@ class DesignSettingsTab extends StatelessWidget {
 
                 kSettingsCardSpacing,
 
+                // צפיפות תצוגה (רק בדסקטופ)
+                if (!Platform.isAndroid && !Platform.isIOS) ...[
+                  SettingsAnchor(
+                    cardId: 'design.display',
+                    child: SettingsCard(
+                      title: 'תצוגה',
+                      children: [
+                        SegmentedSettingsTile<bool>(
+                          icon: Icon(FluentIcons.column_triple_24_regular),
+                          title: 'צפיפות ממשק',
+                          subtitle: state.compactMenuMode
+                              ? 'הצג יותר תוכן על ידי הקטנת המרווחים'
+                              : 'הצג פריטים במרווחים נוחים ללחיצה',
+                          options: const [
+                            SegmentOption(value: false, label: 'רחב'),
+                            SegmentOption(value: true, label: 'קומפקטי'),
+                          ],
+                          currentValue: state.compactMenuMode,
+                          onChanged: (value) {
+                            context
+                                .read<SettingsBloc>()
+                                .add(UpdateCompactMenuMode(value));
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  kSettingsCardSpacing,
+                ],
+
                 SettingsAnchor(
                   cardId: 'design.pdf',
                   child: SettingsCard(
@@ -231,36 +260,6 @@ class DesignSettingsTab extends StatelessWidget {
                               .add(UpdatePdfBookViewByDefault(value));
                         },
                       ),
-                    ],
-                  ),
-                ),
-
-                kSettingsCardSpacing,
-
-                // הגדרות טאבים
-                SettingsAnchor(
-                  cardId: 'design.tabs',
-                  child: SettingsCard(
-                    title: 'התאמת ממשק',
-                    children: [
-                      if (!(Platform.isAndroid || Platform.isIOS))
-                        SegmentedSettingsTile<bool>(
-                          icon: Icon(FluentIcons.column_triple_24_regular),
-                          title: 'צפיפות ממשק',
-                          subtitle: state.compactMenuMode
-                              ? 'הצג יותר תוכן על ידי הקטנת המרווחים'
-                              : 'הצג פריטים במרווחים נוחים ללחיצה',
-                          options: const [
-                            SegmentOption(value: false, label: 'רחב'),
-                            SegmentOption(value: true, label: 'קומפקטי'),
-                          ],
-                          currentValue: state.compactMenuMode,
-                          onChanged: (value) {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdateCompactMenuMode(value));
-                          },
-                        ),
                     ],
                   ),
                 ),
