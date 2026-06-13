@@ -293,12 +293,12 @@ List<int> filterBookSearchEntries({
       for (final entry in filtered)
         _ScoredBookSearchEntry(
           index: entry.index,
-          // Boost exact matches significantly in scoring;
-          // התאמה מדויקת בכינוי מדורגת מעט מתחת להתאמה מדויקת בכותרת
+          // שלוש שכבות עדיפות שאינן חופפות (כותרת > כינוי > fuzzy), ובתוך כל
+          // שכבה ה-ratio מכריע — כך כותרת קצרה/מדויקת ('סוטה') צפה מעל ארוכה.
           score: entry.normalizedTitle.contains(normalizedQuery)
-              ? 100
+              ? 200 + ratio(normalizedQuery, entry.normalizedTitle)
               : entry.acronyms.any((a) => a.contains(normalizedQuery))
-                  ? 99
+                  ? 100 + ratio(normalizedQuery, entry.normalizedTitle)
                   : ratio(normalizedQuery, entry.normalizedTitle),
         ),
     ]..sort((a, b) => b.score.compareTo(a.score));
