@@ -46,19 +46,25 @@ bool launchWindowsSilentInstaller({
 /// יוצר תהליך מנותק מה-Job של אוצריא כך שישרוד את סגירתה. אם ה-Job אינו מתיר
 /// breakaway — נסיגה ליצירה רגילה כדי לא להישבר לגמרי.
 bool _createBreakawayProcess(String commandLine) {
+  const base = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
+  return _createProcess(commandLine, base | CREATE_BREAKAWAY_FROM_JOB) ||
+      _createProcess(commandLine, base);
+}
+
+/// עוטף CreateProcess עם מאגרים טריים. כל קריאה מקבלת מאגר commandLine משלה
+/// כי CreateProcessW עלול לשנות את תוכנו (ולא לשחזרו אם הקריאה נכשלת),
+/// ולכן אסור לעשות בו שימוש חוזר בין ניסיונות.
+bool _createProcess(String commandLine, int creationFlags) {
   final cmdLinePtr = commandLine.toNativeUtf16();
   final si = calloc<STARTUPINFO>();
   si.ref.cb = sizeOf<STARTUPINFO>();
   final pi = calloc<PROCESS_INFORMATION>();
   try {
-    const base = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
-    var ok = CreateProcess(nullptr, cmdLinePtr, nullptr, nullptr, FALSE,
-        base | CREATE_BREAKAWAY_FROM_JOB, nullptr, nullptr, si, pi);
-    if (ok == 0) {
-      ok = CreateProcess(nullptr, cmdLinePtr, nullptr, nullptr, FALSE, base,
-          nullptr, nullptr, si, pi);
+    if (CreateProcess(nullptr, cmdLinePtr, nullptr, nullptr, FALSE,
+            creationFlags, nullptr, nullptr, si, pi) ==
+        0) {
+      return false;
     }
-    if (ok == 0) return false;
     CloseHandle(pi.ref.hProcess);
     CloseHandle(pi.ref.hThread);
     return true;
