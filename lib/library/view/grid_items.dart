@@ -69,7 +69,7 @@ Widget _buildBookIconChild(Book book, ColorScheme cs, double iconSize) {
   }
   return Icon(
     book.fileType == 'docx'
-        ? FluentIcons.document_one_page_24_regular
+        ? FluentIcons.document_edit_24_regular
         : FluentIcons.document_text_24_regular,
     color: cs.onSecondaryContainer,
     size: iconSize,

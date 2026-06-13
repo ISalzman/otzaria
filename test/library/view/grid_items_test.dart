@@ -226,6 +226,17 @@ void main() {
     expect(menuIconCenter.dy, greaterThan(fileIconCenter.dy));
   });
 
+  testWidgets('קובץ Word (docx) מקבל אייקון ייעודי נבדל מספר טקסט',
+      (tester) async {
+    final book = DocxBook(title: 'מסמך וורד', path: r'C:\library\doc.docx');
+
+    await tester.pumpWidget(buildTestWidget(book: book));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(FluentIcons.document_edit_24_regular), findsOneWidget);
+    expect(find.byIcon(FluentIcons.document_text_24_regular), findsNothing);
+  });
+
   testWidgets('מציג אייקון תיקייה בקו regular ולא filled', (tester) async {
     final category = Category(
       title: 'קטגוריה',
