@@ -733,7 +733,7 @@ class _SearchDialogState extends State<SearchDialog> {
                                                 foregroundColor:
                                                     Theme.of(context)
                                                         .colorScheme
-                                                        .primary,
+                                                        .onPrimaryContainer,
                                                 padding:
                                                     const EdgeInsets.all(6),
                                                 minimumSize: const Size(32, 32),
