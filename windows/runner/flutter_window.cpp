@@ -47,8 +47,12 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project, bool headless)
                        L"processes will not be contained on fast-exit.\n");
     return;
   }
+  // BREAKAWAY_OK: ילד שנוצר עם CREATE_BREAKAWAY_FROM_JOB מתנתק מה-Job
+  // ושורד את סגירת אוצריא (מתקין העדכון); ילדים רגילים (WebView2) נשארים
+  // מוכלים ונהרגים בסגירה כרצוי.
   JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};
-  info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+  info.BasicLimitInformation.LimitFlags =
+      JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
   if (!SetInformationJobObject(job_handle_,
                                JobObjectExtendedLimitInformation, &info,
                                sizeof(info))) {

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/bloc/tour_state.dart';
 import 'package:updat/updat.dart';
@@ -18,6 +19,7 @@ import 'package:window_manager/window_manager.dart';
 import 'hebrew_update_widgets.dart';
 import 'linux_installer.dart';
 import 'macos_installer.dart';
+import 'windows_installer.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 /// סוג ההתקנה המוגדר בזמן build (אופציונלי)
@@ -313,29 +315,19 @@ class _ParsedVersion implements Comparable<_ParsedVersion> {
   int get hashCode => Object.hash(major, minor, patch);
 }
 
-/// זיהוי סוג ההתקנה ב-Windows
-/// אם הוגדר INSTALL_KIND בזמן build - משתמש בו
-/// אחרת - מזהה לפי נתיב הקובץ
+/// בוחר פורמט עדכון לפי סוג ההתקנה: מתקין (`exe`) לאפליקציה מותקנת, או
+/// חבילה ניידת (`zip`) לחילוץ ידני.
+@visibleForTesting
+String preferredWindowsFormatForInstall({required bool isInstalledApp}) =>
+    isInstalledApp ? 'exe' : 'zip';
+
+/// זיהוי פורמט העדכון ב-Windows. אם הוגדר INSTALL_KIND בזמן build - משתמש בו;
+/// אחרת לפי האות האחיד [AppPaths.isPortable] (קובץ portable.marker ליד ה-EXE):
+/// נייד → zip, מותקן (admin או per-user) → מתקין exe.
 String _preferredWindowsFormat() {
   if (!Platform.isWindows) return 'unknown';
-
-  // אם הוגדר סוג התקנה בזמן build - משתמש בו
   if (_kInstallKind != 'auto') return _kInstallKind; // 'exe' | 'zip'
-
-  try {
-    // זיהוי אוטומטי לפי נתיב הקובץ
-    final executablePath = Platform.resolvedExecutable.toLowerCase();
-
-    if (executablePath.contains('\\program files\\') ||
-        executablePath.contains('\\program files (x86)\\')) {
-      return 'exe'; // התקנה תקנית
-    }
-
-    return 'zip'; // גרסה ניידת/ידנית
-  } catch (e) {
-    // במקרה של שגיאה, ברירת מחדל היא EXE
-    return 'exe';
-  }
+  return preferredWindowsFormatForInstall(isInstalledApp: !AppPaths.isPortable);
 }
 
 String _normalizeVersion(String version) {
@@ -809,14 +801,15 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     final installer = _installerFile;
     if (installer == null) return;
 
-    // רק המתקין השקט (PrivilegesRequired=lowest) בטוח ב-Process.start; הרגיל
-    // עלול לדרוש UAC בשיגור וחייב ShellExecute, אחרת ERROR_ELEVATION_REQUIRED.
+    // המתקין השקט נוצר ב-CreateProcess עם breakaway (ולא Process.start) כדי
+    // שישרוד את סגירת אוצריא — ראה launchWindowsSilentInstaller.
     if (Platform.isWindows && _installerIsSilent) {
-      await Process.start(
-        installer.absolute.path,
-        relaunchApp ? const <String>[] : const <String>['/NOLAUNCH=1'],
-        mode: ProcessStartMode.detached,
-      );
+      if (!launchWindowsSilentInstaller(
+        installerPath: installer.absolute.path,
+        relaunchApp: relaunchApp,
+      )) {
+        throw Exception('Failed to launch the silent installer');
+      }
       return;
     }
 

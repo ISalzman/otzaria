@@ -84,6 +84,7 @@ dependencies:
   zstandard: ^1.5.0
   zstandard_native: ^1.5.0
   ffi: ^2.2.0
+  win32: ^5.15.0
   googleapis: ^16.0.0
   googleapis_auth: ^2.3.2
   characters: ^1.4.1
