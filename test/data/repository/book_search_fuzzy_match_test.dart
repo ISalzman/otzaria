@@ -115,5 +115,24 @@ void main() {
     test('ספר בלי כינויים לא מושפע', () {
       expect(search('מסילת ישרים'), equals([2]));
     });
+
+    test('כותרת מדויקת מדורגת לפני כותרת ארוכה שמכילה את השאילתה', () {
+      const withExactAndLong = [
+        BookSearchEntry(
+            index: 0, title: 'ביאור על מסכת סוטה', author: '', topics: ''),
+        BookSearchEntry(index: 1, title: 'מסכת סוטה', author: '', topics: ''),
+        BookSearchEntry(index: 2, title: 'סוטה', author: '', topics: ''),
+      ];
+      final results = filterBookSearchEntries(
+        entries: withExactAndLong,
+        queryWords: const ['סוטה'],
+        topics: const [],
+        sortByRatio: true,
+        normalizedQuery: 'סוטה',
+      );
+      expect(results.first, 2,
+          reason: "'סוטה' המדויק אמור לצוף מעל כותרות ארוכות שמכילות אותו");
+      expect(results.indexOf(1), lessThan(results.indexOf(0)));
+    });
   });
 }
