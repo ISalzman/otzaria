@@ -64,7 +64,7 @@ class BackupService {
     required bool includeNotes,
     required bool includeWorkspaces,
     required bool includeShamorZachor,
-    required bool includeUserOverrides,
+    // [EDITING DISABLED] required bool includeUserOverrides,
     required bool includePlugins,
   }) async {
     final skippedSections = <String>[];
@@ -87,7 +87,7 @@ class BackupService {
           'notes': includeNotes,
           'workspaces': includeWorkspaces,
           'shamorZachor': includeShamorZachor,
-          'userOverrides': includeUserOverrides,
+          // [EDITING DISABLED] 'userOverrides': includeUserOverrides,
           'plugins': includePlugins,
         },
       };
@@ -112,10 +112,10 @@ class BackupService {
         backupData['notes'] = await _backupNotes();
       }
 
-      // Backup user overrides
-      if (includeUserOverrides) {
-        backupData['user_overrides'] = await _backupUserOverrides();
-      }
+      // [EDITING DISABLED]
+      // if (includeUserOverrides) {
+      //   backupData['user_overrides'] = await _backupUserOverrides();
+      // }
 
       // Backup plugins
       if (includePlugins) {
@@ -265,42 +265,31 @@ class BackupService {
     };
   }
 
-  /// Backup user overrides
-  static Future<Map<String, dynamic>> _backupUserOverrides() async {
-    final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
+  // [EDITING DISABLED]
+  // /// Backup user overrides
+  // static Future<Map<String, dynamic>> _backupUserOverrides() async {
+  //   final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
+  //   if (!await overridesDir.exists()) return {};
+  //   final overridesData = <String, dynamic>{};
+  //   await for (final entity in overridesDir.list(recursive: true)) {
+  //     if (entity is File &&
+  //         (entity.path.endsWith('.md') ||
+  //             entity.path.endsWith('.tmp') ||
+  //             entity.path.endsWith('.recovery'))) {
+  //       final relativePath = p.relative(entity.path, from: overridesDir.path);
+  //       try {
+  //         overridesData[relativePath] = await entity.readAsString();
+  //       } catch (e) {
+  //         _logger.warning('Failed to backup override file $relativePath: $e');
+  //       }
+  //     }
+  //   }
+  //   return overridesData;
+  // }
 
-    if (!await overridesDir.exists()) {
-      return {};
-    }
-
-    final overridesData = <String, dynamic>{};
-
-    await for (final entity in overridesDir.list(recursive: true)) {
-      if (entity is File &&
-          (entity.path.endsWith('.md') ||
-              entity.path.endsWith('.tmp') ||
-              entity.path.endsWith('.recovery'))) {
-        final relativePath = p.relative(entity.path, from: overridesDir.path);
-        try {
-          overridesData[relativePath] = await entity.readAsString();
-        } catch (e) {
-          _logger.warning('Failed to backup override file $relativePath: $e');
-        }
-      }
-    }
-
-    return overridesData;
-  }
-
-  /// מגבה תוספים מותקנים: קבצי התוסף, רשומות ה-DB (הרשאות, KV, published)
-  /// ותיקיית הנתונים של כל תוסף.
-  ///
-  /// תוספי פיתוח (`development`) מדולגים — הם מצביעים על תיקיית קוד חיצונית
-  /// במחשב המקור (`devRootPath`) שאינה קיימת במחשב היעד.
-  ///
-  /// אם גיבוי קבצי תוסף נכשל (למשל קובץ לא קריא), התוסף **כולו** מדולג
-  /// והסעיף `plugins` מסומן ב-[skippedSections] (גיבוי חלקי) — כדי שלא ייווצר
-  /// גיבוי עם קבצים חסרים שיגרום בשחזור למחיקת התקנה תקינה.
+  //גיבוי תוספים: גיבוי קבצים, תיקיית נתונים, הרשאות ונתוני DB
+  // תוספי פיתוח (`development`) מדולגים, כיון שאינם קיימים במחשב היעד.
+  // גיבוי תוסף שנכשל מתבצע דילוג, ומסומן ב-[skippedSections] למניעת שגיאות בשחזור
   static Future<List<Map<String, dynamic>>> _backupPlugins(
       List<String> skippedSections) async {
     final db = PluginSystemDatabase.instance;
@@ -440,14 +429,14 @@ class BackupService {
       );
     }
 
-    // Restore user_overrides
-    final includeOverrides =
-        includes['userOverrides'] as bool? ?? includes['notes'] == true;
-    if (includeOverrides && backupData.containsKey('user_overrides')) {
-      await _restoreUserOverrides(
-        backupData['user_overrides'] as Map<String, dynamic>,
-      );
-    }
+    // [EDITING DISABLED]
+    // final includeOverrides =
+    //     includes['userOverrides'] as bool? ?? includes['notes'] == true;
+    // if (includeOverrides && backupData.containsKey('user_overrides')) {
+    //   await _restoreUserOverrides(
+    //     backupData['user_overrides'] as Map<String, dynamic>,
+    //   );
+    // }
 
     // Restore workspaces
     if (includes['workspaces'] == true &&
@@ -570,42 +559,30 @@ class BackupService {
     );
   }
 
-  /// Restore user overrides to files
-  static Future<void> _restoreUserOverrides(
-      Map<String, dynamic> overridesData) async {
-    final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
+  // [EDITING DISABLED]
+    /// Restore user overrides to files
+  // static Future<void> _restoreUserOverrides(
+  //     Map<String, dynamic> overridesData) async {
+  //   final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
+  //   for (final entry in overridesData.entries) {
+  //     try {
+  //       final relativePath = entry.key;
+  //       final content = entry.value as String;
+  //       final filePath = p.join(overridesDir.path, relativePath);
+  //       final file = File(filePath);
+            // Ensure parent directory exists
+  //       await file.parent.create(recursive: true);
+            // Only restore if file doesn't exist, to not overwrite user's latest edits,
+            // or overwrite it if wanted. The standard restore overwrites.
+  //       await file.writeAsString(content);
+  //     } catch (e) {
+  //       _logger.warning('Failed to restore override file ${entry.key}: $e');
+  //     }
+  //   }
+  // }
 
-    for (final entry in overridesData.entries) {
-      try {
-        final relativePath = entry.key;
-        final content = entry.value as String;
-
-        final filePath = p.join(overridesDir.path, relativePath);
-        final file = File(filePath);
-
-        // Ensure parent directory exists
-        await file.parent.create(recursive: true);
-
-        // Only restore if file doesn't exist, to not overwrite user's latest edits,
-        // or overwrite it if wanted. The standard restore overwrites.
-        await file.writeAsString(content);
-      } catch (e) {
-        _logger.warning('Failed to restore override file ${entry.key}: $e');
-      }
-    }
-  }
-
-  /// משחזר תוספים מגיבוי: כותב מחדש את קבצי התוסף ונתוניו לדיסק, ומשחזר
-  /// את רשומות ה-DB (התקנה, הרשאות, KV, published records).
-  ///
-  /// נתיב ההתקנה מחושב מחדש למחשב היעד — שם המשתמש או הפלטפורמה עשויים
-  /// להשתנות. הנתיבים `entrypoint_path` ו-`icon_path` יחסיים (מתוך ה-manifest)
-  /// ולכן נשארים תקפים ללא שינוי.
-  ///
-  /// מחזיר `true` אם לפחות תוסף אחד נכשל בשחזור — הקורא משתמש בזה כדי
-  /// לסמן את הסעיף `plugins` כדילוג ולהציג למשתמש שחזור חלקי. זה קריטי
-  /// כי [_restoreDirFromBase64] מוחק את תיקיית ההתקנה הקיימת *לפני* הכתיבה,
-  /// כך שכשל באמצע עלול להשאיר תוסף חצי-משוחזר.
+  // שחזור תוספים: נתיב ההתקנה מותאם לשינויי מערכות ושם משתמש
+  // אם תוסף אחד נכשל - מחזיר `true`, כי [_restoreDirFromBase64] מוחק את תיקיית ההתקנה הקיימת *לפני* הכתיבה,
   static Future<bool> _restorePlugins(
     List<Map<String, dynamic>> pluginsData,
   ) async {
@@ -789,8 +766,8 @@ class BackupService {
         Settings.getValue<bool>('key-backup-workspaces') ?? true;
     final includeShamorZachor =
         Settings.getValue<bool>('key-backup-shamor-zachor') ?? true;
-    final includeUserOverrides =
-        Settings.getValue<bool>('key-backup-user-overrides') ?? true;
+    // [EDITING DISABLED]
+    // final includeUserOverrides = Settings.getValue<bool>('key-backup-user-overrides') ?? true;
     final includePlugins =
         Settings.getValue<bool>('key-backup-plugins') ?? true;
 
@@ -801,7 +778,7 @@ class BackupService {
       includeNotes: includeNotes,
       includeWorkspaces: includeWorkspaces,
       includeShamorZachor: includeShamorZachor,
-      includeUserOverrides: includeUserOverrides,
+      // [EDITING DISABLED] includeUserOverrides: includeUserOverrides,
       includePlugins: includePlugins,
     );
 
