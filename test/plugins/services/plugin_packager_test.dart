@@ -202,7 +202,7 @@ void main() {
 
     test('allows name and toolTab.title to differ (per official docs)',
         () async {
-      // לפי `docs/plugin-development-guide.md`, contributes.toolTab.title
+      // לפי `docs/plugin-sdk/README.md`, contributes.toolTab.title
       // הוא שדה אופציונלי שברירת המחדל שלו היא שם התוסף — שני השדות יכולים
       // להיות שונים. הוולידטור החדש לא חוסם.
       final manifest = _minimalManifest(name: 'שם התוסף', title: 'שם הטאב');
