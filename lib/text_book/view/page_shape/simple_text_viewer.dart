@@ -1756,6 +1756,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                                   child: ScrollablePositionedList.builder(
                                     itemScrollController: _scrollController,
                                     itemPositionsListener: _positionsListener,
+                                    scrollOffsetController: widget.isMainText
+                                        ? state.scrollOffsetController
+                                        : null,
                                     itemCount: itemCount,
                                     padding: const EdgeInsets.all(4),
                                     itemBuilder: (context, index) => _buildLine(

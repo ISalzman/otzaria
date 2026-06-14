@@ -31,8 +31,9 @@ bool _isHebrewLetter(int codeUnit) {
       (codeUnit >= 0xFB1D && codeUnit <= 0xFB4F);
 }
 
-bool _containsWholeWord(String text, String query) {
-  if (!text.contains(query)) return false;
+/// מיקום ההתאמה הראשונה של [query] כמילה שלמה ב-[text], או -1 אם אין.
+int _wholeWordMatchOffset(String text, String query) {
+  if (query.isEmpty || !text.contains(query)) return -1;
 
   int idx = text.indexOf(query);
   while (idx != -1) {
@@ -41,11 +42,27 @@ bool _containsWholeWord(String text, String query) {
         ? text.codeUnitAt(idx + query.length)
         : -1;
 
-    if (!_isHebrewLetter(before) && !_isHebrewLetter(after)) return true;
+    if (!_isHebrewLetter(before) && !_isHebrewLetter(after)) return idx;
 
     idx = text.indexOf(query, idx + 1);
   }
-  return false;
+  return -1;
+}
+
+bool _containsWholeWord(String text, String query) =>
+    _wholeWordMatchOffset(text, query) >= 0;
+
+/// מיקום יחסי (0..1) של ההתאמה ל-[query] בשורת המקור [rawLine], לאחר ניקוי
+/// זהה לחיפוש. משמש לדיוק גלילה אל המילה בתוך פסקה ארוכה. 0 אם אין התאמה.
+double matchFractionInLine(String rawLine, String query) {
+  final q = utils.hasNikud(query) ? utils.removeVolwels(query) : query;
+  if (q.isEmpty) return 0;
+  final clean = utils.removeVolwels(
+      utils.stripHtmlIfNeeded(notes.stripInlineNotesForSearch(rawLine)));
+  if (clean.isEmpty) return 0;
+  final offset = _wholeWordMatchOffset(clean, q);
+  if (offset <= 0) return 0;
+  return (offset / clean.length).clamp(0.0, 1.0);
 }
 
 class _SearchWorkerHost {

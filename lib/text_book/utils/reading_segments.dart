@@ -285,7 +285,8 @@ List<ReadingSegment> updateReadingSegmentsForRange(
   }
 
   final normalizedStart = startLine < 0 ? 0 : startLine;
-  final normalizedEnd = endLine >= nextLines.length ? nextLines.length - 1 : endLine;
+  final normalizedEnd =
+      endLine >= nextLines.length ? nextLines.length - 1 : endLine;
   if (normalizedStart > normalizedEnd) {
     return currentSegments;
   }
@@ -393,9 +394,8 @@ List<ReadingSegment> updateReadingSegmentsForRange(
   final expandedWindowStart = replaceStartSegment.isLoaded
       ? replaceStartSegment.startLineIndex
       : windowStart;
-  final expandedWindowEnd = replaceEndSegment.isLoaded
-      ? replaceEndSegment.endLineIndex
-      : windowEnd;
+  final expandedWindowEnd =
+      replaceEndSegment.isLoaded ? replaceEndSegment.endLineIndex : windowEnd;
   final replacementSegments = _buildContinuousSegments(
     nextLines,
     startIndex: expandedWindowStart,
@@ -466,15 +466,23 @@ int segmentIndexForLine(List<ReadingSegment> segments, int lineIndex) {
 ///
 /// משמש לדיוק עדין של גלילה: אחרי שגולשים לסגמנט, ה-`scrollOffsetController`
 /// מתקדם בשבר הזה בתוך הסגמנט כדי שהשורה הספציפית תהיה גלויה.
-double lineFractionWithinSegment(ReadingSegment segment, int lineIndex) {
+/// [intraLineFraction] (0..1) מוסיף דיוק לתוך השורה עצמה — מיקום ההתאמה בתוך
+/// הפסקה — כדי שהגלילה תגיע למילה ולא לתחילת הפסקה.
+double lineFractionWithinSegment(
+  ReadingSegment segment,
+  int lineIndex, {
+  double intraLineFraction = 0,
+}) {
   if (!segment.isLoaded) {
     return 0;
   }
+  final within = intraLineFraction.clamp(0.0, 1.0);
+  final lineCount = segment.sourceLineIndices.length;
   final lineOffset = lineIndex - segment.startLineIndex;
-  if (lineOffset <= 0 || segment.sourceLineIndices.length <= 1) {
-    return 0;
+  if (lineCount <= 1) {
+    return within;
   }
-  return lineOffset / segment.sourceLineIndices.length;
+  return ((lineOffset.clamp(0, lineCount - 1)) + within) / lineCount;
 }
 
 /// ממיר רשימת `ItemPosition` (במונחי segmentIndex) לרשימת שורות-מקור גלויות.
@@ -507,7 +515,8 @@ List<int> sourceLineIndicesForSegmentViewports(
 
     if (!segment.isLoaded) {
       final startFraction = (-viewport.leadingEdge / extent).clamp(0.0, 1.0);
-      final endFraction = ((1.0 - viewport.leadingEdge) / extent).clamp(0.0, 1.0);
+      final endFraction =
+          ((1.0 - viewport.leadingEdge) / extent).clamp(0.0, 1.0);
       final centerFraction = (startFraction + endFraction) / 2;
       final centerOffset = (centerFraction * (lineCount - 1)).round();
       final sliceStart = (centerOffset - 1).clamp(0, lineCount - 1);

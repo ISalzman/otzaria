@@ -313,6 +313,24 @@ void main() {
       final segments = buildReadingSegments(['א'], continuous: false);
       expect(lineFractionWithinSegment(segments.first, 0), 0);
     });
+
+    test('intraLineFraction בסגמנט שורה אחת — מיקום ההתאמה בפסקה', () {
+      final segments = buildReadingSegments(['א'], continuous: false);
+      expect(
+        lineFractionWithinSegment(segments.first, 0, intraLineFraction: 0.5),
+        0.5,
+      );
+    });
+
+    test('intraLineFraction בפסקה רב-שורתית משוקלל לפי מספר השורות', () {
+      final segments =
+          buildReadingSegments(['א', 'ב', 'ג', 'ד'], continuous: true);
+      // שורה 2 (offset 2) מתוך 4, + חצי שורה פנימה → (2 + 0.5) / 4 = 0.625.
+      expect(
+        lineFractionWithinSegment(segments.first, 2, intraLineFraction: 0.5),
+        0.625,
+      );
+    });
   });
 
   group('sourceLineIndicesForSegmentViewports', () {
