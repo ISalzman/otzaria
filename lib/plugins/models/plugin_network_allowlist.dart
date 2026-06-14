@@ -45,15 +45,17 @@ const List<String> pluginNetworkAllowlist = <String>[
   'https://nakdan.dicta.org.il/api',
   'https://nakdan-u1-0.loadbalancer.dicta.org.il/api',
   'https://nakdan-5-1.loadbalancer.dicta.org.il/api',
+
   // Google Apps Script — תוסף ספריית אוצריא
   'https://script.google.com/macros/s/AKfycbwU7ktk7_VdSqIxlMBnj4L8dIOKX7C5XIYxxyJsr2gohCtJuLEKA4RPUWO6d88Ry8TAoA/exec',
-  // GitHub API — ספריית Open-Otzarya-Projects/Otzarya-Unofficial-Books
   'https://api.github.com/repos/Open-Otzarya-Projects/Otzarya-Unofficial-Books',
-  // GitHub Releases — הורדת קבצי ZIP של מאגר Open-Otzarya-Projects/Otzarya-Unofficial-Books
-  // (מכסה את כל הנתיבים תחת המאגר, כולל /releases/latest/download/...).
   'https://github.com/Open-Otzarya-Projects/Otzarya-Unofficial-Books',
-  // GitHub raw — קריאת רשימת הספרים (books_data.js) ממאגר Open-Otzarya-Projects/Otzarya-Unofficial-Books
   'https://raw.githubusercontent.com/Open-Otzarya-Projects/Otzarya-Unofficial-Books',
+
+  //תוסף עיון ההלכה
+  'https://api.github.com/repos/Y-PLONI/iyun_h-halacha_plugin',
+  'https://github.com/Y-PLONI/iyun_h-halacha_plugin',
+  'https://raw.githubusercontent.com/Y-PLONI/iyun_h-halacha_plugin',
 ];
 
 /// דומייני ה-CDN שאליהם GitHub מפנה (redirect) בהורדת asset של release.
