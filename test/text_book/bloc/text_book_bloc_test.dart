@@ -336,6 +336,68 @@ void main() {
       },
     );
 
+    test(
+      'מסווג קפיצה אמיתית מתחילת הספר כעדכון גלוי ולא כתקלה ראשונית',
+      () {
+        final classification = TextBookBloc
+            .classifyRawPositionsDuringInitialPageShapeVisibleSyncForTesting(
+          awaitingInitialPageShapeVisibleSync: true,
+          showPageShapeView: true,
+          currentVisibleIndices: const [0],
+          selectedIndex: null,
+          nextVisibleIndices: const [84, 85, 86],
+        );
+
+        expect(classification.shouldIgnore, isFalse);
+        expect(classification.shouldDispatchImmediately, isTrue);
+      },
+    );
+
+    test(
+      'בצורת הדף מקבל דיווח גלילה אמיתי מסימן רחוק גם אם state התחיל בתחילת הספר',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: true,
+          initialIndex: 0,
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+
+        await _waitFor(
+          () => repository.getBookLinksInRangeCalls >= 1,
+          description: 'getBookLinksInRangeCalls >= 1',
+        );
+
+        expect((bloc.state as TextBookLoaded).visibleIndices, const [0]);
+        expect(repository.lastStartIndex, 0);
+
+        bloc.add(const UpdateVisibleIndecies([84, 85, 86]));
+
+        await _waitFor(
+          () => repository.getBookLinksInRangeCalls >= 2,
+          description: 'getBookLinksInRangeCalls >= 2',
+        );
+
+        expect(
+          (bloc.state as TextBookLoaded).visibleIndices,
+          const [84, 85, 86],
+        );
+        expect(repository.lastStartIndex, 59);
+        expect(repository.lastEndIndex, 136);
+
+        await bloc.close();
+      },
+    );
+
     test('בצורת הדף טוען קישורים רק למפרשים שנבחרו בחלוניות', () async {
       final repository = _FakeTextBookRepository();
       await PageShapeSettingsManager.saveConfiguration(
@@ -948,6 +1010,7 @@ TextBookBloc _createBloc({
   required bool showPageShapeView,
   List<String> commentators = const [],
   TextBook? book,
+  int initialIndex = 10,
   Future<String?> Function(
     String title,
     int currentLine, {
@@ -960,7 +1023,7 @@ TextBookBloc _createBloc({
     quickPreviewLoader: quickPreviewLoader,
     initialState: TextBookInitial.named(
       book ?? TextBook(title: 'בראשית'),
-      10,
+      initialIndex,
       false,
       commentators,
       searchMode: SearchMode.exact,
