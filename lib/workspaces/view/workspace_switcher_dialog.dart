@@ -13,6 +13,7 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 class WorkspaceSwitcherDialog extends StatefulWidget {
   const WorkspaceSwitcherDialog({super.key});
@@ -217,81 +218,7 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                 ),
                 Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: Builder(builder: (context) {
-                    bool isEditing = false; // Flag to track editing
-                    late TextEditingController editController;
-                    return StatefulBuilder(builder: (context, setState) {
-                      void commitRenameAndClose() {
-                        final newName = editController.text.trim();
-                        if (newName.isNotEmpty && newName != workspace.name) {
-                          context.read<WorkspaceBloc>().add(
-                                RenameWorkspace(
-                                  workspaceId: workspace.id,
-                                  newName: newName,
-                                ),
-                              );
-                        }
-                        setState(() {
-                          isEditing = false;
-                        });
-                        FocusManager.instance.primaryFocus?.unfocus();
-                      }
-
-                      return isEditing
-                          ? Row(
-                              children: [
-                                Expanded(
-                                  child: RtlTextField(
-                                    controller: editController,
-                                    autofocus: true,
-                                    decoration: const InputDecoration(
-                                      border: OutlineInputBorder(),
-                                      isDense: true,
-                                    ),
-                                    onSubmitted: (_) => commitRenameAndClose(),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                IconButton(
-                                  tooltip: 'שמור',
-                                  icon: const Icon(
-                                      FluentIcons.checkmark_24_regular),
-                                  onPressed: commitRenameAndClose,
-                                ),
-                              ],
-                            )
-                          : Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    workspace.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                IconButton(
-                                    icon:
-                                        const Icon(FluentIcons.edit_24_regular),
-                                    onPressed: () {
-                                      setState(() {
-                                        editController = TextEditingController(
-                                            text: workspace.name);
-                                        // Set cursor position to end of text
-                                        editController.selection =
-                                            TextSelection.fromPosition(
-                                          TextPosition(
-                                              offset: workspace.name.length),
-                                        );
-                                        isEditing = true;
-                                      });
-                                    })
-                              ],
-                            );
-                    });
-                  }),
+                  child: _WorkspaceNameField(workspace: workspace),
                 )
               ],
             ),
@@ -339,6 +266,94 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
           );
         }).toList(),
       ),
+    );
+  }
+}
+
+/// שורת שם השולחן עם מצב עריכה. המצב מוחזק ב-State (ולא במשתני closure בתוך
+/// Builder) כדי שלא יתאפס ב-rebuild שגורמת פתיחת המקלדת — איפוס כזה היה מסיר
+/// את שדה הקלט וסוגר את המקלדת מיד אחרי שנפתחה.
+class _WorkspaceNameField extends StatefulWidget {
+  const _WorkspaceNameField({required this.workspace});
+
+  final Workspace workspace;
+
+  @override
+  State<_WorkspaceNameField> createState() => _WorkspaceNameFieldState();
+}
+
+class _WorkspaceNameFieldState extends State<_WorkspaceNameField> {
+  final TextEditingController _controller = TextEditingController();
+  bool _isEditing = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _startEditing() {
+    final name = widget.workspace.name;
+    _controller.text = name;
+    _controller.selection =
+        TextSelection.fromPosition(TextPosition(offset: name.length));
+    setState(() => _isEditing = true);
+  }
+
+  void _commitRenameAndClose() {
+    final newName = _controller.text.trim();
+    if (newName.isNotEmpty && newName != widget.workspace.name) {
+      context.read<WorkspaceBloc>().add(
+            RenameWorkspace(
+              workspaceId: widget.workspace.id,
+              newName: newName,
+            ),
+          );
+    }
+    setState(() => _isEditing = false);
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isEditing) {
+      return Row(
+        children: [
+          Expanded(
+            child: RtlTextField(
+              controller: _controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              onSubmitted: (_) => _commitRenameAndClose(),
+            ),
+          ),
+          const SizedBox(width: 6),
+          IconButton(
+            tooltip: 'שמור',
+            icon: const RtlIcon(FluentIcons.checkmark_24_regular),
+            onPressed: _commitRenameAndClose,
+          ),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            widget.workspace.name,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        IconButton(
+          icon: const RtlIcon(FluentIcons.edit_24_regular),
+          onPressed: _startEditing,
+        ),
+      ],
     );
   }
 }
