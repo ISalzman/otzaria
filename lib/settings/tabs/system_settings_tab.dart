@@ -38,6 +38,7 @@ import 'package:otzaria/widgets/dialogs/selection_dialog.dart';
 import 'package:otzaria/widgets/dialogs/error_report_sender_email_dialog.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
+import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
@@ -1498,21 +1499,31 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           icon: const Icon(FluentIcons.calendar_clock_24_regular),
           title: const Text('גיבוי הגדרות ונתונים אישיים'),
           subtitle: _buildBackupSubtitle(),
-          trailing: AppSegmentedControl<String>(
-            options: const [
-              SegmentOption<String>(value: 'none', label: 'ללא'),
-              SegmentOption<String>(value: 'weekly', label: 'שבועי'),
-              SegmentOption<String>(value: 'monthly', label: 'חודשי'),
-            ],
-            currentValue: autoFrequency,
-            onChanged: (value) {
-              Settings.setValue<String>(_keyAutoBackupFrequency, value);
-              setState(() {});
-            },
-          ),
           onTap: () => setState(() => _isBackupExpanded = !_isBackupExpanded),
           isExpanded: _isBackupExpanded,
           children: [
+            DropdownSettingsTile<String>(
+              icon: const Icon(FluentIcons.calendar_clock_24_regular),
+              title: 'גיבוי אוטומטי',
+              subtitle: switch (autoFrequency) {
+                'daily' => 'יתבצע גיבוי בכל יום',
+                'weekly' => 'יתבצע גיבוי כל שבוע',
+                'monthly' => 'יתבצע גיבוי כל חודש',
+                _ => 'גיבוי אוטומטי מושבת',
+              },
+              value: autoFrequency,
+              entries: const [
+                AppMenuEntry(value: 'none', label: 'ללא'),
+                AppMenuEntry(value: 'daily', label: 'יומי'),
+                AppMenuEntry(value: 'weekly', label: 'שבועי'),
+                AppMenuEntry(value: 'monthly', label: 'חודשי'),
+              ],
+              onSelected: (value) {
+                if (value == null) return;
+                Settings.setValue<String>(_keyAutoBackupFrequency, value);
+                setState(() {});
+              },
+            ),
             SegmentedSettingsTile<_BackupMode>(
               icon: Icon(FluentIcons.options_24_regular),
               title: 'מצב גיבוי',

@@ -3,28 +3,8 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'settings_tile_helpers.dart';
 
-/// שורת הגדרה עם תפריט נפתח (dropdown) — מקבילה ל-[SegmentedSettingsTile].
-///
-/// Layout רספונסיבי:
-/// • רחב (≥ [LayoutBreakpoints.compact]): Row — מידע משמאל, dropdown מימין.
-/// • צר: Column — מידע למעלה, dropdown ברוחב מלא למטה.
-///
-/// דוגמה:
-/// ```dart
-/// DropdownSettingsTile<MyEnum>(
-///   icon: FluentIcons.calendar_24_regular,
-///   title: 'בחירת ערך',
-///   subtitle: 'תיאור הערך הנוכחי',
-///   value: currentValue,
-///   entries: const [
-///     AppMenuEntry(value: MyEnum.a, label: 'אפשרות א'),
-///     AppMenuEntry(value: MyEnum.b, label: 'אפשרות ב'),
-///   ],
-///   onSelected: (v) { if (v != null) setState(() => currentValue = v); },
-/// )
-/// ```
+/// שורת הגדרה עם תפריט נפתח (dropdown) — מקבילה לשאר הווידג'טים בהגדרות.
 class DropdownSettingsTile<T> extends StatelessWidget {
-  /// ווידג'ט האייקון — [Icon] או [RtlIcon] לפי בחירת הקורא.
   final Widget? icon;
   final String title;
   final String subtitle;
