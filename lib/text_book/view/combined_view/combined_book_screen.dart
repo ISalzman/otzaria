@@ -1490,11 +1490,15 @@ class _CombinedViewState extends State<CombinedView> {
       itemCount: itemCount,
       itemBuilder: (context, index) {
         ExpansibleController controller = ExpansibleController();
-        return buildExpansiomTile(
-          controller,
-          index,
-          state,
-          noteMap,
+        // מבודד את שכבת הצביעה של כל פריט - rebuild של פריט בודד (בחירה/
+        // הדגשה) או emit של warming לא יצבע מחדש את כל ה-viewport.
+        return RepaintBoundary(
+          child: buildExpansiomTile(
+            controller,
+            index,
+            state,
+            noteMap,
+          ),
         );
       },
     );
