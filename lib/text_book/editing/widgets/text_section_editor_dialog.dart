@@ -12,6 +12,7 @@ import '../../bloc/text_book_event.dart';
 import '../services/preview_renderer.dart';
 import '../models/editor_settings.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
@@ -58,7 +59,8 @@ class TextSectionEditorDialog extends StatefulWidget {
       _TextSectionEditorDialogState();
 }
 
-class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
+class _TextSectionEditorDialogState extends State<TextSectionEditorDialog>
+    with DialogFocusRestorerMixin<TextSectionEditorDialog> {
   late TextEditingController _textController;
   late PreviewRenderer _previewRenderer;
   Timer? _debounceTimer;
@@ -66,6 +68,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
   bool _hasUnsavedChanges = false;
   String _previewContent = '';
   final FocusNode _editorFocusNode = FocusNode();
+  final FocusNode _keyboardListenerFocusNode = FocusNode();
   String? _lastSearchText; // לשמירת טקסט החיפוש האחרון עבור F3
 
   // Undo functionality
@@ -103,6 +106,8 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
     _editorScrollController.addListener(_syncScrollFromEditor);
     _previewScrollController.addListener(_syncScrollFromPreview);
 
+    registerDialogFocusRestorer(_editorFocusNode);
+
     // Initialize undo stack with initial content
     _saveToUndoStack(widget.initialContent,
         TextSelection.collapsed(offset: widget.initialContent.length));
@@ -123,6 +128,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
     _renderIsolate?.kill();
     _receivePort?.close();
     _editorFocusNode.dispose();
+    _keyboardListenerFocusNode.dispose();
     _editorScrollController.dispose();
     _previewScrollController.dispose();
     super.dispose();
@@ -541,7 +547,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
     final theme = Theme.of(context);
 
     return KeyboardListener(
-      focusNode: FocusNode(),
+      focusNode: _keyboardListenerFocusNode,
       onKeyEvent: _handleKeyEvent,
       child: Scaffold(
         appBar: AppBar(

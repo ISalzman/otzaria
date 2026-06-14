@@ -1,6 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
@@ -60,8 +61,8 @@ class EmailFieldWithAutocomplete extends StatefulWidget {
       _EmailFieldWithAutocompleteState();
 }
 
-class _EmailFieldWithAutocompleteState
-    extends State<EmailFieldWithAutocomplete> {
+class _EmailFieldWithAutocompleteState extends State<EmailFieldWithAutocomplete>
+    with DialogFocusRestorerMixin<EmailFieldWithAutocomplete> {
   late final TextEditingController _controller;
   final LayerLink _layerLink = LayerLink();
   final GlobalKey _fieldKey = GlobalKey();
@@ -85,6 +86,7 @@ class _EmailFieldWithAutocompleteState
     _controller.addListener(_onTextChanged);
     _focusNode.addListener(_onFocusChanged);
     _focusNode.onKeyEvent = _handleKeyEvent;
+    registerDialogFocusRestorer(_focusNode);
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {

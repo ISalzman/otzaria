@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
@@ -23,7 +24,9 @@ class PasswordVerificationDialog extends StatefulWidget {
 }
 
 class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
-    with DialogNavigationMixin {
+    with
+        DialogNavigationMixin,
+        DialogFocusRestorerMixin<PasswordVerificationDialog> {
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _textFieldFocusNode = FocusNode();
   bool _isObscured = true;
@@ -32,7 +35,7 @@ class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
   @override
   void initState() {
     super.initState();
-
+    registerDialogFocusRestorer(_textFieldFocusNode);
     // תן פוקוס לשדה הטקסט אחרי שהדיאלוג נפתח
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _textFieldFocusNode.requestFocus();
@@ -214,7 +217,7 @@ class SetPasswordDialog extends StatefulWidget {
 }
 
 class _SetPasswordDialogState extends State<SetPasswordDialog>
-    with DialogNavigationMixin {
+    with DialogNavigationMixin, DialogFocusRestorerMixin<SetPasswordDialog> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
   final FocusNode _passwordFocusNode = FocusNode();
@@ -226,6 +229,7 @@ class _SetPasswordDialogState extends State<SetPasswordDialog>
   @override
   void initState() {
     super.initState();
+    registerDialogFocusRestorer(_passwordFocusNode);
     // תן פוקוס לשדה הראשון אחרי שהדיאלוג נפתח
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _passwordFocusNode.requestFocus();
