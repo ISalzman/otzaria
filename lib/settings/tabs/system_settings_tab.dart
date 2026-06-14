@@ -40,6 +40,7 @@ import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
@@ -304,6 +305,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   // ── גיבוי (expandable) ─────────────────────────────────────────────────────
   bool _isBackupExpanded = false;
+  BackupStatus? _backupStatus;
 
   // ── גרסאות ────────────────────────────────────────────────────────────────
   String? _appVersion;
@@ -321,6 +323,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   void initState() {
     super.initState();
     _loadVersionInfo();
+    _loadBackupStatus();
   }
 
   @override
@@ -351,6 +354,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     });
   }
 
+  Future<void> _loadBackupStatus() async {
+    final status = await BackupService.analyzeBackupStatus();
+    if (!mounted) return;
+    setState(() => _backupStatus = status);
+  }
+
   Future<void> _openBooksListDialog(BuildContext context) async {
     try {
       final library = await DataRepository.instance.library;
@@ -363,6 +372,31 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       if (!mounted) return;
       UiSnack.showError('שגיאה בטעינת רשימת הספרים: $e');
     }
+  }
+
+  Widget? _buildBackupSubtitle() {
+    final status = _backupStatus;
+    if (status == null) return null;
+
+    if (status.lastBackupDate == null) {
+      return const Text(
+        'לא נמצא קובץ גיבוי במערכת. מומלץ ליצור גיבוי כדי לשמור על הנתונים שלך.',
+      );
+    }
+
+    final d = status.lastBackupDate!;
+    final dateStr = getHebrewDateFormattedAsString(d);
+    final timeStr =
+        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+    if (!status.hasSignificantChanges) {
+      return Text(
+        'הנתונים שמורים. הגיבוי האחרון נוצר ב$dateStr בשעה $timeStr.',
+      );
+    }
+    return Text(
+      'הגיבוי האחרון מ-$dateStr. ואינו מעודכן, מומלץ ליצור גיבוי ולהגדיר מצב שבועי.',
+    );
   }
 
   bool _shouldInclude(String key) =>
@@ -1315,6 +1349,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       final size = exists ? await file.length() : 0;
       if (!mounted) return;
       if (exists) {
+        _loadBackupStatus();
         final partial = result.skippedSections.isNotEmpty;
         final sizeStr = '${(size / 1024).toStringAsFixed(1)} KB';
         final message = partial
@@ -1460,7 +1495,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ExpandableSection(
           headerKey: tourBackupSettingsTargetKey,
           icon: const Icon(FluentIcons.calendar_clock_24_regular),
-          title: const Text('גיבוי אוטומטי'),
+          title: const Text('גיבוי הגדרות ונתונים אישיים'),
+          subtitle: _buildBackupSubtitle(),
           trailing: AppSegmentedControl<String>(
             options: const [
               SegmentOption<String>(value: 'none', label: 'ללא'),

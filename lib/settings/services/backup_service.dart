@@ -17,6 +17,17 @@ import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/core/app_paths.dart';
 
+/// Status of the most recent backup and whether a new one is recommended.
+class BackupStatus {
+  final DateTime? lastBackupDate;
+  final bool hasSignificantChanges;
+
+  const BackupStatus({
+    this.lastBackupDate,
+    required this.hasSignificantChanges,
+  });
+}
+
 /// Service for backing up and restoring app data
 class BackupService {
   static final Logger _logger = Logger('BackupService');
@@ -815,5 +826,254 @@ class BackupService {
     final files = await dir.list().toList();
     return files.where((f) => f is File && f.path.endsWith('.json')).toList()
       ..sort((a, b) => b.path.compareTo(a.path)); // Sort by date (newest first)
+  }
+
+  /// Analyzes the most recent backup and returns whether a new backup is recommended.
+  static Future<BackupStatus> analyzeBackupStatus() async {
+    try {
+      final backups = await getAvailableBackups();
+      if (backups.isEmpty) {
+        return const BackupStatus(
+            lastBackupDate: null, hasSignificantChanges: false);
+      }
+
+      final latestFile = backups.first as File;
+      final stat = await latestFile.stat();
+      final backupDate = stat.modified;
+
+      // Don't recommend again within 24 hours of the last backup
+      if (DateTime.now().difference(backupDate).inHours < 24) {
+        return BackupStatus(
+            lastBackupDate: backupDate, hasSignificantChanges: false);
+      }
+
+      Map<String, dynamic> backupData;
+      try {
+        final content = await latestFile.readAsString();
+        backupData = json.decode(content) as Map<String, dynamic>;
+      } catch (_) {
+        return BackupStatus(
+            lastBackupDate: backupDate, hasSignificantChanges: false);
+      }
+
+      final hasChanges =
+          await _hasSignificantChanges(backupData, backupDate);
+      return BackupStatus(
+          lastBackupDate: backupDate, hasSignificantChanges: hasChanges);
+    } catch (e) {
+      _logger.warning('Failed to analyze backup status: $e');
+      return const BackupStatus(
+          lastBackupDate: null, hasSignificantChanges: false);
+    }
+  }
+
+  static Future<bool> _hasSignificantChanges(
+    Map<String, dynamic> backupData,
+    DateTime backupDate,
+  ) async {
+    // Always recommend: any settings change
+    if (_hasSettingsChanges(backupData)) return true;
+
+    // Always recommend: workspace added
+    if (_hasWorkspaceAdded(backupData)) return true;
+
+    // Always recommend: plugin added
+    if (await _hasPluginAdded(backupData)) return true;
+
+    // Threshold: shamor zachor changes
+    if (_hasShamorZachorChanges(backupData)) return true;
+
+    // Threshold: notes changes
+    if (await _hasNotesChanges(backupData, backupDate)) return true;
+
+    // Threshold: bookmarks/history after 1 week with >50% change
+    if (DateTime.now().difference(backupDate).inDays >= 7 &&
+        await _hasBookmarksHistoryChanges(backupData)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  static bool _hasSettingsChanges(Map<String, dynamic> backupData) {
+    final backedUpSettings =
+        backupData['settings'] as Map<String, dynamic>?;
+    if (backedUpSettings == null) return false;
+    for (final entry in backedUpSettings.entries) {
+      final current = Settings.getValue(entry.key);
+      if (current?.toString() != entry.value?.toString()) return true;
+    }
+    return false;
+  }
+
+  static bool _hasWorkspaceAdded(Map<String, dynamic> backupData) {
+    final backedUpWorkspaces = backupData['workspaces'] as List?;
+    if (backedUpWorkspaces == null) return false;
+    final (workspaces, _) = WorkspaceRepository().loadWorkspaces();
+    return workspaces.length > backedUpWorkspaces.length;
+  }
+
+  static Future<bool> _hasPluginAdded(
+      Map<String, dynamic> backupData) async {
+    final backedUpPlugins = backupData['plugins'] as List?;
+    if (backedUpPlugins == null) return false;
+    try {
+      final db = PluginSystemDatabase.instance;
+      final currentPlugins = await db.getAllInstalledPlugins();
+      final currentCount =
+          currentPlugins.where((p) => !p.isDevelopment).length;
+      return currentCount > backedUpPlugins.length;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Checks if shamor zachor data changed meaningfully since the backup:
+  /// new books added, a book newly marked, or a review cycle crossed 50% for any book.
+  static bool _hasShamorZachorChanges(Map<String, dynamic> backupData) {
+    final szBackup =
+        backupData['shamorZachor'] as Map<String, dynamic>?;
+    if (szBackup == null) return false;
+
+    final backupProgressStr =
+        szBackup['sz:progress_by_id'] as String?;
+    final currentProgressStr =
+        Settings.getValue<String>('sz:progress_by_id');
+    if (backupProgressStr == null ||
+        currentProgressStr == null ||
+        currentProgressStr.isEmpty) {
+      return false;
+    }
+
+    try {
+      final backupProgress =
+          json.decode(backupProgressStr) as Map<String, dynamic>;
+      final currentProgress =
+          json.decode(currentProgressStr) as Map<String, dynamic>;
+
+      final backupBookIds = backupProgress.keys.toSet();
+
+      // New books added
+      if (currentProgress.keys.any((id) => !backupBookIds.contains(id))) {
+        return true;
+      }
+
+      // Existing books: newly marked or 50% review threshold crossed
+      for (final bookId in backupBookIds) {
+        final backupBook =
+            backupProgress[bookId] as Map<String, dynamic>? ?? {};
+        final currentBook =
+            currentProgress[bookId] as Map<String, dynamic>? ?? {};
+
+        int backupLearn = 0, currentLearn = 0;
+        int backupR1 = 0, currentR1 = 0;
+        int backupR2 = 0, currentR2 = 0;
+        int backupR3 = 0, currentR3 = 0;
+
+        for (final page in backupBook.values) {
+          if (page is Map) {
+            if (page['learn'] == true) backupLearn++;
+            if (page['review1'] == true) backupR1++;
+            if (page['review2'] == true) backupR2++;
+            if (page['review3'] == true) backupR3++;
+          }
+        }
+        for (final page in currentBook.values) {
+          if (page is Map) {
+            if (page['learn'] == true) currentLearn++;
+            if (page['review1'] == true) currentR1++;
+            if (page['review2'] == true) currentR2++;
+            if (page['review3'] == true) currentR3++;
+          }
+        }
+
+        // Book newly started (was untouched, now has progress)
+        if (backupLearn == 0 && currentLearn > 0) return true;
+
+        // Any review cycle crossed the 50% threshold since backup
+        final total = currentBook.length;
+        if (total > 0) {
+          final half = total * 0.5;
+          if (backupR1 < half && currentR1 >= half) return true;
+          if (backupR2 < half && currentR2 >= half) return true;
+          if (backupR3 < half && currentR3 >= half) return true;
+        }
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Checks if notes changed significantly since backup:
+  /// 5 or more new notes, or 30%+ of previous notes edited.
+  static Future<bool> _hasNotesChanges(
+    Map<String, dynamic> backupData,
+    DateTime backupDate,
+  ) async {
+    final backedUpNotesList = backupData['notes'] as List?;
+    if (backedUpNotesList == null) return false;
+
+    int backupNoteCount = 0;
+    for (final entry in backedUpNotesList) {
+      final notes = (entry as Map<String, dynamic>)['notes'] as List?;
+      if (notes != null) backupNoteCount += notes.length;
+    }
+
+    try {
+      final database = PersonalNotesDatabase.instance;
+      final booksWithNotes = await database.listBooksWithNotes();
+
+      int currentNoteCount = 0;
+      int editedAfterBackup = 0;
+
+      for (final bookInfo in booksWithNotes) {
+        try {
+          final notes = await database.loadNotes(bookInfo.bookId);
+          currentNoteCount += notes.length;
+          editedAfterBackup +=
+              notes.where((n) => n.updatedAt.isAfter(backupDate)).length;
+        } catch (_) {}
+      }
+
+      // 5+ new notes
+      if (currentNoteCount - backupNoteCount >= 5) return true;
+
+      // 30%+ of previous notes edited
+      if (backupNoteCount > 0 &&
+          editedAfterBackup >= backupNoteCount * 0.3) {
+        return true;
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
+  /// Checks if bookmarks or history changed by more than half since backup (used after 1 week).
+  static Future<bool> _hasBookmarksHistoryChanges(
+      Map<String, dynamic> backupData) async {
+    final backedUpBookmarks = backupData['bookmarks'] as List?;
+    if (backedUpBookmarks != null) {
+      try {
+        final currentBookmarks =
+            await BookmarkRepository().loadBookmarks();
+        final backupCount = backedUpBookmarks.length;
+        final diff = (currentBookmarks.length - backupCount).abs();
+        if (backupCount > 0 && diff > backupCount / 2) return true;
+      } catch (_) {}
+    }
+
+    final backedUpHistory = backupData['history'] as List?;
+    if (backedUpHistory != null) {
+      try {
+        final currentHistory =
+            await HistoryRepository().loadHistory();
+        final backupCount = backedUpHistory.length;
+        final diff = (currentHistory.length - backupCount).abs();
+        if (backupCount > 0 && diff > backupCount / 2) return true;
+      } catch (_) {}
+    }
+
+    return false;
   }
 }
