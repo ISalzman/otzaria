@@ -60,6 +60,15 @@ class PluginBridgeHandler {
   static bool isRateLimitExempt(String method) =>
       method == 'library.getBookContent';
 
+  /// קובע אם קריאת RPC מוחרגת מ-timeout ברירת המחדל של 30 שניות.
+  ///
+  /// `network.download` ו-`fs.extractZip` הן פעולות I/O ארוכות מטבען (הזרמת
+  /// קובץ לדיסק, חילוץ ארכיון), ו-30 שניות חתכו אותן באמצע על קבצים גדולים.
+  /// ההורדה אוכפת timeout על *תקיעה* (היעדר בייטים נכנסים) בתוך שירות ההורדה,
+  /// כך שהורדה איטית נמשכת כל עוד יש התקדמות; החילוץ חסום מטבעו לפי גודל הקובץ.
+  static bool hasOwnTimeout(String method) =>
+      method == 'network.download' || method == 'fs.extractZip';
+
   Future<dynamic> _handleRpc(List<dynamic> args) async {
     if (args.isEmpty) {
       return _errorResp("error.invalid_params", "No arguments provided");
@@ -118,10 +127,12 @@ class PluginBridgeHandler {
         }
       }
 
-      // Execute with timeout
-      final result = await adapter
-          .execute(domain, action, request.payload)
-          .timeout(const Duration(seconds: 30));
+      // פעולות I/O ארוכות (download/extractZip) מנהלות בעצמן את חסם הזמן; שאר
+      // הקריאות אמורות להיות מהירות ולכן נחתכות אחרי 30 שניות.
+      final execution = adapter.execute(domain, action, request.payload);
+      final result = hasOwnTimeout(request.method)
+          ? await execution
+          : await execution.timeout(const Duration(seconds: 30));
       return _successResp(result);
     } on PluginDatabaseException catch (e) {
       return _errorResp(e.code, e.message);
