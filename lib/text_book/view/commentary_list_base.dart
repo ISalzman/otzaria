@@ -95,6 +95,10 @@ class CommentaryListBase extends StatefulWidget {
   /// בסרגל הצד במקום פופ-אפ.
   final VoidCallback? onFilterOpenRequested;
 
+  /// כשאמת, חלונית המפרשים תתפוס פוקוס אוטומטית כשהיא נטענת (לכרטיסיית
+  /// המפרשים העצמאית, לא לתצוגה בתוך הספר שבה הפוקוס שייך לגוף הטקסט).
+  final bool autofocus;
+
   const CommentaryListBase({
     super.key,
     required this.openBookCallback,
@@ -121,6 +125,7 @@ class CommentaryListBase extends StatefulWidget {
     this.onOpenInNewTab,
     this.externalAllExpandedNotifier,
     this.onFilterOpenRequested,
+    this.autofocus = false,
   });
 
   @override
@@ -271,6 +276,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       _currentSearchIndexNotifier.value++;
       _scrollToSearchResult();
     }
+  }
+
+  /// ממקד את אזור הגלילה כדי שגלילה עם החיצים תעבוד בלי לחיצה. נקרא
+  /// מכרטיסיית המפרשים כשהיא הופכת לטאב הפעיל.
+  void requestScrollFocus() {
+    if (_focusNode.canRequestFocus) _focusNode.requestFocus();
   }
 
   ValueNotifier<int> get totalSearchResultsNotifier =>
@@ -1414,8 +1425,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                             },
                           ),
                         },
-                        child: Focus(
-                          focusNode: _focusNode,
+                        child: Listener(
+                          // לחיצה בכל מקום בחלונית ממקדת את ה-ProgressiveScroll
+                          // כדי שגלילה עם החיצים תעבוד בלי לבחור טקסט קודם.
+                          behavior: HitTestBehavior.translucent,
+                          onPointerDown: (_) => _focusNode.requestFocus(),
                           child: AppFutureBuilder<List<CommentaryGroup>>(
                             future: _getCachedGroups(data),
                             loadingWidget: _buildSkeletonLoading(),
@@ -1426,46 +1440,50 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                     groupKey, () => _allExpanded);
                               }
 
-                              final Widget listView = ProgressiveScroll(
+                              final Widget listView =
+                                  ScrollablePositionedList.builder(
+                                itemScrollController: _itemScrollController,
+                                itemPositionsListener: _itemPositionsListener,
+                                initialScrollIndex: _lastScrollIndex.clamp(
+                                    0, groups.length - 1),
+                                key: PageStorageKey(
+                                    'commentary_${selectedCommentators.join(',')}_$_allExpanded'),
+                                physics: const ClampingScrollPhysics(),
+                                scrollOffsetController: scrollController,
+                                shrinkWrap: widget.shrinkWrap,
+                                itemCount: groups.length,
+                                itemBuilder: (context, groupIndex) {
+                                  final group = groups[groupIndex];
+                                  return _buildCommentaryGroupTile(
+                                    group: group,
+                                    state: state,
+                                    indexesKey: indexesKey,
+                                  );
+                                },
+                              );
+
+                              // ProgressiveScroll עוטף את SelectionArea (מעליו),
+                              // כך שגלילת החיצים נקלטת גם כש-SelectableRegion הוא
+                              // ה-primaryFocus — האירוע מתפשט כלפי מעלה דרכו.
+                              return ProgressiveScroll(
+                                focusNode: _focusNode,
+                                autofocus: widget.autofocus,
                                 scrollController: scrollController,
                                 maxSpeed: 10000.0,
                                 curve: 10.0,
                                 accelerationFactor: 5,
-                                child: ScrollablePositionedList.builder(
-                                  itemScrollController: _itemScrollController,
-                                  itemPositionsListener: _itemPositionsListener,
-                                  initialScrollIndex: _lastScrollIndex.clamp(
-                                      0, groups.length - 1),
-                                  key: PageStorageKey(
-                                      'commentary_${selectedCommentators.join(',')}_$_allExpanded'),
-                                  physics: const ClampingScrollPhysics(),
-                                  scrollOffsetController: scrollController,
-                                  shrinkWrap: widget.shrinkWrap,
-                                  itemCount: groups.length,
-                                  itemBuilder: (context, groupIndex) {
-                                    final group = groups[groupIndex];
-                                    return _buildCommentaryGroupTile(
-                                      group: group,
-                                      state: state,
-                                      indexesKey: indexesKey,
-                                    );
-                                  },
-                                ),
-                              );
-
-                              // SelectionArea יחיד סביב כל הרשימה — מאפשר בחירה
-                              // רציפה ובחירת מקלדת (Shift+חץ) על תוכן המפרשים,
-                              // גם במצב "מפרשים למטה".
-                              return RtlSelectionShortcuts(
-                                child: SelectionArea(
-                                  key: ValueKey(
-                                      'commentary_list_$_selectionRevision'),
-                                  contextMenuBuilder: (context, _) =>
-                                      const SizedBox.shrink(),
-                                  onSelectionChanged: (selection) =>
-                                      _onListSelectionChanged(
-                                          selection?.plainText),
-                                  child: listView,
+                                itemScrollController: _itemScrollController,
+                                child: RtlSelectionShortcuts(
+                                  child: SelectionArea(
+                                    key: ValueKey(
+                                        'commentary_list_$_selectionRevision'),
+                                    contextMenuBuilder: (context, _) =>
+                                        const SizedBox.shrink(),
+                                    onSelectionChanged: (selection) =>
+                                        _onListSelectionChanged(
+                                            selection?.plainText),
+                                    child: listView,
+                                  ),
                                 ),
                               );
                             },

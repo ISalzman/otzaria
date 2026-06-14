@@ -12,6 +12,11 @@ class ProgressiveScroll extends StatefulWidget {
   final double accelerationFactor;
   final double curve;
   final FocusNode? focusNode;
+  final bool autofocus;
+  // ScrollOffsetController לא חושף isAttached, ו-animateScroll זורק אם הרשימה
+  // אינה מחוברת (נטענת/לא ב-tree). ItemScrollController (שמתחבר יחד עם
+  // ScrollOffsetController לאותו ScrollablePositionedList) כן חושף isAttached.
+  final ItemScrollController? itemScrollController;
 
   const ProgressiveScroll({
     super.key,
@@ -21,6 +26,8 @@ class ProgressiveScroll extends StatefulWidget {
     this.accelerationFactor = 0.1,
     this.curve = 2.0,
     this.focusNode,
+    this.autofocus = false,
+    this.itemScrollController,
   });
 
   @override
@@ -36,6 +43,9 @@ class _ProgressiveScrollState extends State<ProgressiveScroll> {
   late final FocusNode _focusNode;
   bool _isLocalFocusNode = false;
 
+  // גלילה אפשרית רק כשה-ScrollablePositionedList מחובר; אחרת animateScroll זורק.
+  bool get _canScroll => widget.itemScrollController?.isAttached ?? false;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +54,13 @@ class _ProgressiveScrollState extends State<ProgressiveScroll> {
       _isLocalFocusNode = true;
     } else {
       _focusNode = widget.focusNode!;
+    }
+    // בקשת פוקוס מפורשת — Focus.autofocus לא יורה כשכבר יש primaryFocus
+    // ב-scope (כמו ה-Focus של ה-Scaffold בכרטיסיית המפרשים).
+    if (widget.autofocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusNode.requestFocus();
+      });
     }
     _startScrolling();
   }
@@ -72,7 +89,7 @@ class _ProgressiveScrollState extends State<ProgressiveScroll> {
         _timePressedInSeconds = 0;
       }
 
-      if (_scrollSpeed != 0) {
+      if (_scrollSpeed != 0 && _canScroll) {
         widget.scrollController.animateScroll(
           offset: _scrollSpeed,
           duration: const Duration(milliseconds: 16),
@@ -85,31 +102,40 @@ class _ProgressiveScrollState extends State<ProgressiveScroll> {
     });
   }
 
-  void _handleKeyEvent(KeyEvent event) {
-    if (event is KeyDownEvent) {
-      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-        _isKeyPressed = true;
-        _scrollDirection = 1;
-      } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-        _isKeyPressed = true;
-        _scrollDirection = -1;
-      }
-    } else if (event is KeyUpEvent) {
-      if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
-          event.logicalKey == LogicalKeyboardKey.arrowUp) {
-        _isKeyPressed = false;
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    final isArrowDown = event.logicalKey == LogicalKeyboardKey.arrowDown;
+    final isArrowUp = event.logicalKey == LogicalKeyboardKey.arrowUp;
+    if (!isArrowDown && !isArrowUp) return KeyEventResult.ignored;
+
+    // Shift+חץ שמור לבחירת טקסט, ושאר הצירופים לקיצורים — לא מתערבים בהם.
+    if (HardwareKeyboard.instance.isShiftPressed ||
+        HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isAltPressed ||
+        HardwareKeyboard.instance.isMetaPressed) {
+      return KeyEventResult.ignored;
+    }
+
+    if (event is KeyUpEvent) {
+      _isKeyPressed = false;
+      if (_canScroll) {
         widget.scrollController.animateScroll(
           offset: 100.0 * _scrollDirection,
           duration: const Duration(milliseconds: 150),
         );
-        _scrollDirection = 0;
       }
+      _scrollDirection = 0;
+    } else {
+      _isKeyPressed = true;
+      _scrollDirection = isArrowDown ? 1 : -1;
     }
+    // בולעים את החץ כדי שלא יגלול גם Scrollable שמעל — כש"מפרשים מתחת"
+    // מקונן בתוך גלילת גוף הטקסט הראשי, אחרת שניהם היו גוללים יחד.
+    return KeyEventResult.handled;
   }
 
   @override
   Widget build(BuildContext context) {
-    return KeyboardListener(
+    return Focus(
       focusNode: _focusNode,
       onKeyEvent: _handleKeyEvent,
       child: widget.child,

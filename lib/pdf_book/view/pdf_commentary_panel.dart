@@ -27,6 +27,7 @@ import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
+import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -154,6 +155,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       ItemPositionsListener.create();
   final ScrollOffsetController _scrollOffsetController =
       ScrollOffsetController();
+  final FocusNode _commentaryFocusNode = FocusNode();
   final Map<String, GlobalKey> _itemKeys = {};
   final Map<String, Future<String>> _linkContentCache = {};
   final Map<String, bool> _expandedLinkStates = {};
@@ -386,6 +388,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     widget.externalSearchController?.removeListener(_onExternalSearchChanged);
     _searchFocusNode.removeListener(_handleSearchFocusChange);
     _searchFocusNode.dispose();
+    _commentaryFocusNode.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -405,6 +408,14 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       setState(() => _currentSearchIndex++);
       widget.externalCurrentIndexNotifier?.value = _currentSearchIndex;
       _scrollToSearchResult();
+    }
+  }
+
+  /// ממקד את אזור הגלילה (לגלילה עם החיצים) — נקרא מכרטיסיית המפרשים
+  /// כשהטאב הופך פעיל.
+  void requestScrollFocus() {
+    if (_commentaryFocusNode.canRequestFocus) {
+      _commentaryFocusNode.requestFocus();
     }
   }
 
@@ -487,28 +498,47 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (widget.isFullScreen) {
-      // במצב fullscreen: הכותרת + הניווט מופעלים מ-PdfCommentatorsTabScreen.
-      // הפאנל מציג רק את תוכן המפרשים (כולל שורת חיפוש ופילטר)
-      return RtlSelectionShortcuts(
-          child: SelectionArea(
-        contextMenuBuilder: (context, selectableRegionState) {
-          return const SizedBox.shrink();
-        },
+  /// עוטף תוכן ב-SelectionArea (לבחירת טקסט) + מעקב כיוון גרירה ל-RTL.
+  Widget _wrapWithSelection(Widget child) {
+    return RtlSelectionShortcuts(
+      child: SelectionArea(
+        contextMenuBuilder: (context, _) => const SizedBox.shrink(),
         onSelectionChanged: (selection) {
-          // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
           trackRtlSelection(selection?.plainText);
-          if (rtlSelectionPriming) return; // שינוי זמני בזמן priming
+          if (rtlSelectionPriming) return;
           if (selection != null && selection.plainText.isNotEmpty) {
             setState(() {
               _savedSelectedText = selection.plainText;
             });
           }
         },
-        child: _buildCommentariesView(),
-      ));
+        child: child,
+      ),
+    );
+  }
+
+  /// עוטף את תוכן המפרשים ב-ProgressiveScroll מעל ה-SelectionArea, כדי
+  /// שגלילת החיצים תיקלט גם כש-SelectableRegion הוא ה-primaryFocus. autofocus
+  /// במצב מסך-מלא (כרטיסייה) בלבד.
+  Widget _wrapCommentariesScrollable(Widget child) {
+    return ProgressiveScroll(
+      focusNode: _commentaryFocusNode,
+      autofocus: widget.isFullScreen,
+      scrollController: _scrollOffsetController,
+      maxSpeed: 10000.0,
+      curve: 10.0,
+      accelerationFactor: 5,
+      itemScrollController: _itemScrollController,
+      child: _wrapWithSelection(child),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.isFullScreen) {
+      // במצב fullscreen: הכותרת + הניווט מופעלים מ-PdfCommentatorsTabScreen.
+      // הפאנל מציג רק את תוכן המפרשים (כולל שורת חיפוש ופילטר)
+      return _wrapCommentariesScrollable(_buildCommentariesView());
     }
 
     return Column(
@@ -537,48 +567,33 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             ),
           ],
         ),
-        // תוכן הכרטיסיות - עטוף ב-SelectionArea כדי לאפשר בחירת טקסט
+        // כל לשונית עוטפת את עצמה ב-SelectionArea; המפרשים בנוסף ב-
+        // ProgressiveScroll (מעל ה-SelectionArea) כדי שגלילת החיצים תעבוד.
         Expanded(
-          child: RtlSelectionShortcuts(
-              child: SelectionArea(
-            contextMenuBuilder: (context, selectableRegionState) {
-              return const SizedBox.shrink();
-            },
-            onSelectionChanged: (selection) {
-              // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
-              trackRtlSelection(selection?.plainText);
-              if (rtlSelectionPriming) return; // שינוי זמני בזמן priming
-              if (selection != null && selection.plainText.isNotEmpty) {
-                setState(() {
-                  _savedSelectedText = selection.plainText;
-                });
-              }
-            },
-            child: TabBarView(
-              controller: _tabController,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                _KeepAliveTab(
-                  key: ValueKey(
-                    'commentary_${widget.tab.currentTextLineNumber}_${widget.tab.activeCommentators.hashCode}_$_showFilterTab',
-                  ),
-                  child: _buildCommentariesView(),
+          child: TabBarView(
+            controller: _tabController,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              _KeepAliveTab(
+                key: ValueKey(
+                  'commentary_${widget.tab.currentTextLineNumber}_${widget.tab.activeCommentators.hashCode}_$_showFilterTab',
                 ),
-                _KeepAliveTab(
-                  key: ValueKey(
-                    'links_${widget.tab.currentTextLineNumber}',
-                  ),
-                  child: _buildLinksView(),
+                child: _wrapCommentariesScrollable(_buildCommentariesView()),
+              ),
+              _KeepAliveTab(
+                key: ValueKey(
+                  'links_${widget.tab.currentTextLineNumber}',
                 ),
-                _KeepAliveTab(
-                  key: ValueKey(
-                    'notes_${widget.tab.currentTextLineNumber}',
-                  ),
-                  child: _buildNotesView(),
+                child: _wrapWithSelection(_buildLinksView()),
+              ),
+              _KeepAliveTab(
+                key: ValueKey(
+                  'notes_${widget.tab.currentTextLineNumber}',
                 ),
-              ],
-            ),
-          )),
+                child: _wrapWithSelection(_buildNotesView()),
+              ),
+            ],
+          ),
         ),
       ],
     );

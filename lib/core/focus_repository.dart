@@ -147,6 +147,28 @@ class FocusRepository {
     );
   }
 
+  // ── מיקוד תוכן הטאב הפעיל (per-tab) ────────────────────────────────────────
+  // ממופתח לפי זהות הטאב כי הטאבים נשמרים חיים (KeepAlive); כל מסך קריאה רושם
+  // פונקציה שממקדת את אזור הגלילה שלו, ו-reading_screen קורא ל-
+  // [requestTabContentFocus] עם הטאב הפעיל בכל מעבר.
+  final Map<Object, VoidCallback> _tabContentFocusRequesters = {};
+
+  void registerTabContentFocusRequester(Object tabKey, VoidCallback requester) {
+    _tabContentFocusRequesters[tabKey] = requester;
+  }
+
+  void unregisterTabContentFocusRequester(Object tabKey) {
+    _tabContentFocusRequesters.remove(tabKey);
+  }
+
+  /// ממקד את אזור הקריאה של הטאב הפעיל (אם נרשם). מחזיר true אם נמצא ומופעל.
+  bool requestTabContentFocus(Object tabKey) {
+    final requester = _tabContentFocusRequesters[tabKey];
+    if (requester == null) return false;
+    requester();
+    return true;
+  }
+
   /// רישום FocusNode של תוכן ספר (נקרא מ-TextBookViewerBloc)
   void registerBookContentFocusNode(FocusNode focusNode) {
     _currentBookContentFocusNode = focusNode;
@@ -246,6 +268,7 @@ class FocusRepository {
   void resetForTesting() {
     _screenRestorer = null;
     _dialogRestorers.clear();
+    _tabContentFocusRequesters.clear();
     _hasScheduledRestore = false;
     _resizeDebounceTimer?.cancel();
     _resizeDebounceTimer = null;
