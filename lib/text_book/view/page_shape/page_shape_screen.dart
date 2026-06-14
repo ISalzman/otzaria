@@ -116,24 +116,6 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     _loadSizes();
   }
 
-  /// בדיקה האם מפרש ברירת המחדל קיים, ואם לא – הסתרת הטור כברירת מחדל
-  void _hideColumnIfDefaultMissing(
-      Map<String, String?> commentators, List<String> availableCommentators) {
-    final newColumnVisibility = Map<String, bool>.from(_columnVisibility);
-    for (final entry in commentators.entries) {
-      final col = entry.key;
-      final def = entry.value;
-      // אם יש ברירת מחדל אך היא לא קיימת בספר – הסתר
-      if (def != null && !availableCommentators.contains(def)) {
-        newColumnVisibility[col] = false;
-      }
-    }
-    if (!mounted) return;
-    setState(() {
-      _columnVisibility = newColumnVisibility;
-    });
-  }
-
   /// טעינת גדלים שמורים או חישוב ברירות מחדל
   void _loadSizes() {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -276,8 +258,6 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         state.book,
         availableCommentators: state.availableCommentators,
       );
-      // כאן נבדוק אם ברירת המחדל לא קיימת – נסיר את הטור
-      _hideColumnIfDefaultMissing(commentators, state.availableCommentators);
     }
 
     if (mounted) {
@@ -442,8 +422,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
           commentatorName: resolvedSingle,
           openBookCallback: widget.openBookCallback,
           selectionSyncController: _selectionSyncController,
-          onLoadFailed: () =>
-              _hideColumn('right', global: false, showSnack: false),
+          onLoadFailed: () => _hideColumn(
+            'right',
+            global: false,
+            showSnack: false,
+            persist: false,
+          ),
         );
       }
     }
@@ -475,7 +459,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   }
 
   /// הסתרת טור - ניתן לבחור אם לשמור גלובלית או רק לספר הנוכחי
-  void _hideColumn(String column, {bool global = true, bool showSnack = true}) {
+  void _hideColumn(
+    String column, {
+    bool global = true,
+    bool showSnack = true,
+    bool persist = true,
+  }) {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
 
@@ -483,13 +472,13 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       _columnVisibility[column] = false;
     });
 
-    // שמירה גלובלית או פר-ספר
-    PageShapeSettingsManager.saveColumnVisibility(
-        state.book.title, _columnVisibility,
-        saveAsGlobal: global);
+    if (persist) {
+      PageShapeSettingsManager.saveColumnVisibility(
+          state.book.title, _columnVisibility,
+          saveAsGlobal: global);
+    }
 
-    // הודעה למשתמש (רק אם יזום)
-    if (showSnack && global) {
+    if (showSnack && global && persist) {
       UiSnack.show('הטור הוסתר בכל הספרים. ניתן לשנות בהגדרות צורת הדף.');
     }
 
@@ -826,9 +815,11 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                 selectionSyncController:
                                                     _selectionSyncController,
                                                 onLoadFailed: () => _hideColumn(
-                                                    'left',
-                                                    global: false,
-                                                    showSnack: false),
+                                                  'left',
+                                                  global: false,
+                                                  showSnack: false,
+                                                  persist: false,
+                                                ),
                                               ),
                                             ),
                                           ] else ...[
@@ -1089,11 +1080,11 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                                 _selectionSyncController,
                                                             onLoadFailed: () =>
                                                                 _hideColumn(
-                                                                    'bottom',
-                                                                    global:
-                                                                        false,
-                                                                    showSnack:
-                                                                        false),
+                                                              'bottom',
+                                                              global: false,
+                                                              showSnack: false,
+                                                              persist: false,
+                                                            ),
                                                           ),
                                                         ),
                                                         SizedBox(
@@ -1141,10 +1132,11 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                               _selectionSyncController,
                                                           onLoadFailed: () =>
                                                               _hideColumn(
-                                                                  'bottomRight',
-                                                                  global: false,
-                                                                  showSnack:
-                                                                      false),
+                                                            'bottomRight',
+                                                            global: false,
+                                                            showSnack: false,
+                                                            persist: false,
+                                                          ),
                                                         ),
                                                       ),
                                                       const SizedBox(width: 4),
@@ -1194,7 +1186,11 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                               _selectionSyncController,
                                                           onLoadFailed: () =>
                                                               _hideColumn(
-                                                                  'bottom'),
+                                                            'bottom',
+                                                            global: false,
+                                                            showSnack: false,
+                                                            persist: false,
+                                                          ),
                                                         ),
                                                       ),
                                                     ],
