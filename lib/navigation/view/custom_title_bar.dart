@@ -34,6 +34,7 @@ import 'package:otzaria/workspaces/bloc/workspace_event.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
+import 'package:otzaria/update/my_update_widget.dart';
 
 class CustomTitleBar extends StatefulWidget {
   final VoidCallback? onReadingSettingsPressed;
@@ -296,6 +297,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                const ManagedUpdateTitleBarIndicator(),
                                 _buildFullscreenCaptionButton(
                                     context, settingsState),
                                 if (settingsState.isFullscreen)
