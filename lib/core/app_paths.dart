@@ -395,10 +395,10 @@ class AppPaths {
     return p.join(await getDataRootPath(), 'plugins');
   }
 
-  /// Gets the root path for user overrides.
-  static Future<String> getUserOverridesRootPath() async {
-    return p.join(await getDataRootPath(), 'user_overrides');
-  }
+  // [EDITING DISABLED]
+  // static Future<String> getUserOverridesRootPath() async {
+  //   return p.join(await getDataRootPath(), 'user_overrides');
+  // }
 
   /// Gets the root path for per-book settings files.
   static Future<String> getPerBookSettingsPath() async {
