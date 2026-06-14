@@ -759,6 +759,16 @@ Rename-Item .\my-plugin.zip my-plugin.otzplugin
 5. אשר את ההרשאות
 6. התוסף יופיע בפאנל הצדדי; אם `defaultPinned: true` — יוצג כטאב מיד
 
+### פתיחה ישירה דרך deep-link
+
+אפשר לפתוח תוסף מותקן ישירות (גם אם אינו מוצמד ללשוניות) באמצעות קישור:
+
+```text
+otzaria://open/plugin/<plugin-id>
+```
+
+לדוגמה: `otzaria://open/plugin/com.example.myplugin`. שימושי לקישור מתוך אתר התוסף, מאפליקציה אחרת, או מקיצור דרך. פירוט מלא של סכמת `otzaria://` — בקובץ [`docs/deep_links.md`](../deep_links.md).
+
 ---
 
 ## שגיאות נפוצות

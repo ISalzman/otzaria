@@ -34,6 +34,7 @@
 | `otzaria://open/settings` | פותח את ההגדרות |
 | `otzaria://open/tools` | פותח את מסך הכלים (בלשונית האחרונה שהיתה פעילה) |
 | `otzaria://open/tool/<tool-id>` | פותח לשונית כלי לפי מזהה מלא — תומך גם בתוספים מוצמדים |
+| `otzaria://open/plugin/<plugin-id>` | פותח תוסף ישירות לפי מזהה התוסף — גם תוסף שאינו מוצמד ללשוניות (נפתח במצב transient) |
 | `otzaria://open/book/<id>` | פותח ספר בעיון לפי מזהה מסד הנתונים |
 | `otzaria://open/book/<id>?index=<n>` | פותח את הספר בסעיף `n` (אינדקס לא שלילי). |
 | `otzaria://open/book/<id>?q=<text>` | פותח את הספר עם מחרוזת חיפוש להדגשה. ניתן לשלב עם `index`. |
@@ -49,6 +50,7 @@ otzaria://open/calendar
 otzaria://open/library
 otzaria://open/tool/builtin.gematria
 otzaria://open/tool/com.example.myplugin
+otzaria://open/plugin/com.example.myplugin
 otzaria://open/book/1234
 otzaria://open/book/1234?index=42
 otzaria://open/book/1234?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
@@ -68,7 +70,9 @@ otzaria://open/pdf/120?index=17
 - ניתן לשלב `mark` עם `q=` (חיפוש פעיל + הדגשת שורה).
 - ניתן לשלב `m=` עם `q=` (חיפוש פעיל + הדגשת טקסט ספציפי).
 
-**רגישות לאותיות גדולות/קטנות:** הסכמה, ה‑host, ושמות הפעולה (`calendar`, `library`, `book`, `tool`, וכד') כולם case‑insensitive — `OTZARIA://OPEN/CALENDAR` ו‑`otzaria://Open/Book/1234` תקפים בדיוק כמו הצורה הקטנה. הערכים (tool id, מזהי ספרים, כתובות `url=`) נשמרים כפי שהם.
+**`tool/<id>` מול `plugin/<id>`:** שניהם פותחים לשונית, אך `tool/<id>` מטפל בכלים מובנים ובתוספים **מוצמדים** בלבד (מנותב ל-`requestOpenTool`), בעוד `plugin/<plugin-id>` פותח **כל** תוסף מותקן ומופעל — גם כזה שאינו מוצמד ללשוניות — במצב transient. לפתיחת תוסף מומלץ להשתמש ב-`plugin/<plugin-id>`. תוסף שאינו קיים מציג `UiSnack.showError`, ותוסף מושבת מציג הודעה מתאימה.
+
+**רגישות לאותיות גדולות/קטנות:** הסכמה, ה‑host, ושמות הפעולה (`calendar`, `library`, `book`, `tool`, `plugin`, וכד') כולם case‑insensitive — `OTZARIA://OPEN/CALENDAR` ו‑`otzaria://Open/Book/1234` תקפים בדיוק כמו הצורה הקטנה. הערכים (tool id, plugin id, מזהי ספרים, כתובות `url=`) נשמרים כפי שהם.
 
 ### `otzaria://plugin/install?url=...` — התקנת תוסף
 
@@ -225,6 +229,7 @@ _externalActivationWatchSub = queueFile.parent.watch().listen((event) {
 |---------|--------|------|
 | `OpenScreenAction(Screen)` | `otzaria://open/library`, `/settings`, ... | מסך עליון |
 | `OpenToolAction(String toolId)` | `otzaria://open/calendar`, `/tool/<id>`, ... | לשונית כלי |
+| `OpenPluginAction(String pluginId)` | `otzaria://open/plugin/<plugin-id>` | פתיחת תוסף ישירות (גם לא-מוצמד) |
 | `OpenBookAction(int bookId, {int? index, String? searchQuery, bool markSection, String? markText})` | `otzaria://open/book/<id>?index=<n>&q=<text>&mark&m=<text>` | ספר בעיון |
 | `RunSearchAction(String query)` | `otzaria://open/search?q=<text>` | חיפוש מלא בלשונית חדשה |
 | `InstallPluginAction(PluginStoreInstallRequest)` | `otzaria://plugin/install?url=...` | התקנת תוסף מהחנות |
@@ -241,6 +246,7 @@ _externalActivationWatchSub = queueFile.parent.watch().listen((event) {
 3. `_dispatchExternalUriAction` עם `switch` יחיד על ה‑sealed class:
    - **`OpenScreenAction`** — שולח `NavigateToScreen` ל‑NavigationBloc.
    - **`OpenToolAction`** — שולח `NavigateToScreen(Screen.more)` ואז `moreScreenKey.currentState?.requestOpenTool(toolId)` עם retry מדורג ב‑`_openToolWhenAvailable` עד שה‑state מוכן. ב‑[`ToolsScreen.requestOpenTool`](../lib/tools/tools_screen.dart) יש תור pending — אם ה‑descriptor של הכלי עוד לא נטען (תוסף שעוד לא הגיע מ‑PluginSystemBloc), הבקשה מחכה לרענון הבא של descriptors. אחרי 5 שניות בלי הצלחה — `UiSnack.showError`.
+   - **`OpenPluginAction`** — שולח `NavigateToScreen(Screen.more)` ואז `_openPluginByIdWhenAvailable(pluginId)`. ה‑helper ממתין (retry מדורג של עד 5 שניות) הן ל‑`moreScreenKey.currentState` והן ל‑`PluginSystemLoaded`, מאתר את ה‑`InstalledPlugin` לפי `pluginId`, וקורא ל‑[`ToolsScreen.openPluginTransiently`](../lib/tools/tools_screen.dart) — שמטפל גם בתוסף מוצמד (מנתב ל‑`requestOpenTool`) וגם בלא‑מוצמד (לשונית transient). תוסף שלא נמצא או מושבת מציג `UiSnack.showError`; תוסף שדורש רשת במצב מנותק נחסם בתוך `openPluginTransiently`.
    - **`OpenBookAction`** — `await DataRepository.instance.library`, מחפש לפי `b.id`. אם נמצא — `openBook(context, book, index ?? 0, searchQuery ?? '', markSection: markSection, markText: markText)`. אם לא — `UiSnack.showError`.
    - **`RunSearchAction`** — יוצר `SearchingTab` חדש עם הקוורי, מוסיף ל‑`HistoryBloc` ול‑`TabsBloc`, ומנווט ל‑`Screen.search`. ה‑`UpdateSearchQuery` מופעל אוטומטית מ‑`TantivyFullTextSearch.initState` ברגע שהלשונית מוצגת.
    - **`InstallPluginAction`** — `NavigateToScreen(Screen.more)` + `InstallRemotePluginRequested` ל‑PluginSystemBloc.
