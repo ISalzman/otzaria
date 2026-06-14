@@ -287,3 +287,32 @@ class FocusRepository {
     if (r != null && r.canRestore()) r.restore();
   }
 }
+
+/// Mixin לדיאלוגים עם שדה קלט: שומר את הפוקוס בשדה לאחר אירועי חלון
+/// (maximize/resize). בלעדיו, ה-screen restorer חוטף את הפוקוס למסך שמאחור.
+///
+/// שימוש: `with DialogFocusRestorerMixin<MyDialog>` + קריאה ל-
+/// [registerDialogFocusRestorer] מ-initState. ביטול הרישום אוטומטי ב-dispose.
+mixin DialogFocusRestorerMixin<T extends StatefulWidget> on State<T> {
+  FocusRestorer? _dialogFocusRestorer;
+
+  /// רושם את [focusNode] כ-owner של שכבת הדיאלוג. קרא מ-initState.
+  void registerDialogFocusRestorer(FocusNode focusNode) {
+    _dialogFocusRestorer = FocusRepository().registerActiveRestorer(
+      restore: () {
+        if (mounted && focusNode.canRequestFocus) focusNode.requestFocus();
+      },
+      canRestore: () =>
+          mounted &&
+          focusNode.canRequestFocus &&
+          (ModalRoute.of(context)?.isCurrent ?? false),
+    );
+  }
+
+  @override
+  void dispose() {
+    final restorer = _dialogFocusRestorer;
+    if (restorer != null) FocusRepository().unregisterActiveRestorer(restorer);
+    super.dispose();
+  }
+}
