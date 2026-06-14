@@ -49,8 +49,8 @@ class CustomTitleBar extends StatefulWidget {
   State<CustomTitleBar> createState() => _CustomTitleBarState();
 }
 
-/// סמן ל-hit-test על שטח כל טאב, לזיהוי "לחיצה כפולה על טאב" באזור הטאבים
-/// (ראה [_CustomTitleBarState._hitTestTab]).
+/// סמן ל-hit-test על רכיבי שורת הטאבים (טאבים וחיצי גלילה), לזיהוי לחיצה כפולה
+/// עליהם כדי לדלג על maximize/restore (ראה [_CustomTitleBarState._hitTestTab]).
 const String _kTabHitMarker = 'custom-title-bar-tab';
 
 const double _kAppBarControlsWidth = 105.0;
@@ -97,8 +97,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     super.dispose();
   }
 
-  /// בודק אם הנקודה הגלובלית פוגעת בשטח של טאב (מסומן ב-[_kTabHitMarker]).
-  /// משמש כדי לדלג על maximize בלחיצה כפולה על טאב, בלי להסתמך על gesture arena.
+  /// בודק אם הנקודה הגלובלית פוגעת ברכיב של שורת הטאבים — טאב או חץ גלילה
+  /// (מסומן ב-[_kTabHitMarker]). משמש כדי לדלג על maximize בלחיצה כפולה עליהם,
+  /// בלי להסתמך על gesture arena.
   bool _hitTestTab(BuildContext context, Offset globalPosition) {
     final result = HitTestResult();
     WidgetsBinding.instance
@@ -132,32 +133,41 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   /// והטאב הפעיל עלול להישאר גלול מחוץ לתצוגה.
   ///
   /// [animate] - האם להנפיש את הגלילה (false בטעינה ראשונית כדי למקם מיידית).
-  void _ensureSelectedTabVisible({required bool animate, int attempt = 0}) {
+  ///
+  /// [prevMax] - ה-maxScrollExtent מהניסיון הקודם. כל עוד הוא ממשיך לגדול
+  /// (ה-ListView ה-lazy מודד רוחבי טאבים נוספים ו-overflow מתגלה בהדרגה),
+  /// ממשיכים לנסות גם כשהטאב נראה כרגע — אחרת הוא נדחק החוצה אחרי שהחץ מופיע.
+  void _ensureSelectedTabVisible(
+      {required bool animate, int attempt = 0, double? prevMax}) {
     if (attempt >= 12) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_tabsScrollController.hasClients) {
-        _ensureSelectedTabVisible(animate: animate, attempt: attempt + 1);
+        _ensureSelectedTabVisible(
+            animate: animate, attempt: attempt + 1, prevMax: prevMax);
         return;
       }
       final pos = _tabsScrollController.position;
       if (!pos.hasContentDimensions) {
         // המידות עדיין לא נמדדו — ננסה שוב בפריים הבא.
-        _ensureSelectedTabVisible(animate: animate, attempt: attempt + 1);
+        _ensureSelectedTabVisible(
+            animate: animate, attempt: attempt + 1, prevMax: prevMax);
         return;
       }
+      final currentMax = pos.maxScrollExtent;
+      final maxGrew = prevMax == null || currentMax > prevMax + 0.5;
       final ctx = _selectedTabKey.currentContext;
       if (ctx == null) {
         // הטאב הנבחר מחוץ לתחום הרינדור (ReorderableListView הוא lazy). קפיצה
         // להערכה לינארית לפי האינדקס מכניסה אותו לתחום, ופריים נוסף מדייק.
         final state = context.read<TabsBloc>().state;
-        if (state.tabs.length <= 1 || pos.maxScrollExtent <= 0) return;
-        final estimate = (pos.maxScrollExtent *
-                state.currentTabIndex /
-                (state.tabs.length - 1))
-            .clamp(pos.minScrollExtent, pos.maxScrollExtent);
+        if (state.tabs.length <= 1 || currentMax <= 0) return;
+        final estimate =
+            (currentMax * state.currentTabIndex / (state.tabs.length - 1))
+                .clamp(pos.minScrollExtent, currentMax);
         if ((estimate - pos.pixels).abs() < 1.0) return; // כבר שם — מניעת לולאה
         _tabsScrollController.jumpTo(estimate);
-        _ensureSelectedTabVisible(animate: animate, attempt: attempt + 1);
+        _ensureSelectedTabVisible(
+            animate: animate, attempt: attempt + 1, prevMax: currentMax);
         return;
       }
       final renderObject = ctx.findRenderObject();
@@ -170,8 +180,16 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       final double? target = pos.pixels > leadingEdge
           ? leadingEdge
           : (pos.pixels < trailingEdge ? trailingEdge : null);
-      if (target == null) return;
-      final clamped = target.clamp(pos.minScrollExtent, pos.maxScrollExtent);
+      if (target == null) {
+        // הטאב נראה. אם המידות עדיין גדלות (overflow מתגלה), נמשיך לוודא בפריים
+        // הבא — אך רק במצב מיידי, כדי לא לקטוע אנימציית בחירה.
+        if (!animate && maxGrew) {
+          _ensureSelectedTabVisible(
+              animate: animate, attempt: attempt + 1, prevMax: currentMax);
+        }
+        return;
+      }
+      final clamped = target.clamp(pos.minScrollExtent, currentMax);
       if (animate) {
         _tabsScrollController.animateTo(
           clamped,
@@ -180,6 +198,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         );
       } else {
         _tabsScrollController.jumpTo(clamped);
+        // ייתכן ש-overflow נוסף יתגלה אחרי הקפיצה; נמשיך לוודא עד התייצבות.
+        if (maxGrew) {
+          _ensureSelectedTabVisible(
+              animate: animate, attempt: attempt + 1, prevMax: currentMax);
+        }
       }
     });
   }
@@ -486,13 +509,18 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       mq.size.width.round(),
       mq.orientation,
     );
-    if (signature != _lastScrollSignature) {
+    // כניסה-מחדש של השורה לעץ (חזרה למסך עיון ממסך אחר) מאתחלת את ה-offset ל-0
+    // והטאב הנבחר נעלם, אך ה-signature זהה לזה שלפני היציאה — לכן בודקים גם
+    // hasClients: בפריים הראשון של הכניסה ה-ScrollController עדיין מנותק.
+    final reentering = !_tabsScrollController.hasClients;
+    if (reentering || signature != _lastScrollSignature) {
       final isFirstScroll = _lastScrollSignature == null;
-      // מנפישים רק כשהבחירה עצמה השתנתה; שינוי גודל/מבנה — גלילה מיידית.
+      // מנפישים רק כשהבחירה עצמה השתנתה; שינוי גודל/מבנה/כניסה — גלילה מיידית.
       final selectionChanged = !identical(state.currentTab, _lastScrolledTab);
       _lastScrollSignature = signature;
       _lastScrolledTab = state.currentTab;
-      _ensureSelectedTabVisible(animate: selectionChanged && !isFirstScroll);
+      _ensureSelectedTabVisible(
+          animate: selectionChanged && !isFirstScroll && !reentering);
     }
     // ReorderableListView מטפל במלוא הגרירה-לסידור: הרמת הטאב, ה-placeholder
     // היחיד שזז, סידור שאר הטאבים לתצוגת התוצאה, והאנימציה — ללא לולאת ה-shift
@@ -591,14 +619,20 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   }
 
   Widget _buildTabsScrollArrow(IconData icon, bool enabled, double delta) {
-    return SizedBox(
-      width: 32,
-      height: 32,
-      child: IconButton(
-        padding: EdgeInsets.zero,
-        iconSize: 18,
-        onPressed: enabled ? () => _scrollTabsBy(delta) : null,
-        icon: Icon(icon),
+    // סימון כרכיב של שורת הטאבים כדי שלחיצה כפולה על החץ תיבלע ולא תפעיל
+    // maximize/restore של החלון (ראה _hitTestTab).
+    return MetaData(
+      metaData: _kTabHitMarker,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 32,
+        height: 32,
+        child: IconButton(
+          padding: EdgeInsets.zero,
+          iconSize: 18,
+          onPressed: enabled ? () => _scrollTabsBy(delta) : null,
+          icon: Icon(icon),
+        ),
       ),
     );
   }
@@ -912,14 +946,15 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       // _ensureSelectedTabVisible). הטאבים האחרים ללא key (null).
       key: isSelected ? _selectedTabKey : null,
       child: Listener(
-        // בחירת הטאב על pointer-down: לחצן אמצעי סוגר, וכל לחצן אחר בוחר מיד.
-        // משתמשים ב-Listener פסיבי (ולא ב-onTap) כי הגרירה המיידית
-        // (ReorderableDragStartListener) זוכה ב-gesture arena וחוסמת onTap. כך כל
-        // אינטראקציה — לחיצה רגילה או תחילת גרירה — בוחרת את הטאב מיד.
+        // בחירת הטאב על pointer-down: לחצן אמצעי סוגר, לחצן ראשי (או תחילת
+        // גרירה) בוחר. לחצן ימני אינו בוחר — אחרת הבחירה גוררת rebuild שהורס את
+        // ה-AppContextMenuRegion לפני שתפריט ההקשר נפתח. משתמשים ב-Listener
+        // פסיבי כי הגרירה המיידית (ReorderableDragStartListener) זוכה ב-arena
+        // וחוסמת onTap.
         onPointerDown: (PointerDownEvent event) {
           if (event.buttons == 4) {
             closeTab(tab, context);
-          } else if (index != state.currentTabIndex) {
+          } else if (event.buttons == 1 && index != state.currentTabIndex) {
             context.read<TabsBloc>().add(SetCurrentTab(index));
           }
         },
