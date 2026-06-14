@@ -30,8 +30,8 @@ import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
-  static const int _linkLookBehindLines = 25;
-  static const int _linkLookAheadLines = 50;
+  static const int _linkLookBehindLines = 60;
+  static const int _linkLookAheadLines = 140;
   static const int _linksReloadThresholdLines = 20;
   static const int _initialContentLookBehindLines = 80;
   static const int _initialContentLookAheadLines = 180;
@@ -1927,11 +1927,20 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     _isWarmingContentCache = true;
     try {
+      List<int> lastWarmVisible = const [];
       while (!isClosed) {
         final currentState = state;
         if (currentState is! TextBookLoaded ||
             currentState.book.title != book.title) {
           return;
+        }
+
+        // השהיית warming בזמן גלילה: אם החלון הנראה זז המשתמש גולל (warming
+        // לא מזיזו), ונותנים קדימות לטעינה האינטראקטיבית במקום להתחרות עליה.
+        if (!_listsEqual(lastWarmVisible, currentState.visibleIndices)) {
+          lastWarmVisible = currentState.visibleIndices;
+          await Future<void>.delayed(_visibleIndicesDebounceDuration);
+          continue;
         }
 
         final totalLines = _loadedContentTotalLines;

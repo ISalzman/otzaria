@@ -42,7 +42,7 @@ void main() {
 
       expect(repository.getBookLinksInRangeCalls, 1);
       expect(repository.lastStartIndex, 0);
-      expect(repository.lastEndIndex, 60);
+      expect(repository.lastEndIndex, 150);
       expect(repository.lastTargetBookTitles, isEmpty);
 
       await bloc.close();
@@ -69,7 +69,7 @@ void main() {
 
       expect(repository.getBookLinksInRangeCalls, 1);
       expect(repository.lastStartIndex, 0);
-      expect(repository.lastEndIndex, 60);
+      expect(repository.lastEndIndex, 150);
       expect(repository.lastTargetBookTitles, isEmpty);
 
       await bloc.close();
@@ -391,8 +391,8 @@ void main() {
           (bloc.state as TextBookLoaded).visibleIndices,
           const [84, 85, 86],
         );
-        expect(repository.lastStartIndex, 59);
-        expect(repository.lastEndIndex, 136);
+        expect(repository.lastStartIndex, 24);
+        expect(repository.lastEndIndex, 226);
 
         await bloc.close();
       },
@@ -582,8 +582,8 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 80));
 
         expect(repository.getBookLinksInRangeCalls, 3);
-        expect(repository.lastStartIndex, 15);
-        expect(repository.lastEndIndex, 92);
+        expect(repository.lastStartIndex, 0);
+        expect(repository.lastEndIndex, 182);
         expect(repository.lastTargetBookTitles, ['אבן עזרא על בראשית']);
 
         await bloc.close();

@@ -95,12 +95,44 @@ class TextBookRepository {
     required int startLine,
     required int endLine,
   }) async {
+    final categoryId = book.categoryId;
+    final fileType = book.fileType ?? 'txt';
+
+    // ספרי seforim.db בלבד: השאילתה וה-split רצים ב-isolate (כמו הקישורים),
+    // כדי שלא יחסמו את ה-UI thread בזמן גלילה. ה-isolate פותח רק את seforim.db,
+    // לכן ספרי משתמש נשארים במסלול ה-drift, וכישלון נופל אליו (file-backed וכו').
+    final provider = LibraryProviderManager.instance.getProviderForBook(
+      book.title,
+      categoryId: categoryId,
+      fileType: fileType,
+    );
+    if (provider is DatabaseLibraryProvider &&
+        categoryId != null &&
+        !book.isUserBook) {
+      final range = await provider.getBookTextRange(
+        book.title,
+        categoryId,
+        fileType,
+        startLine: startLine,
+        endLine: endLine,
+      );
+      if (range != null && range.lines.isNotEmpty) {
+        return BookContentRange(
+          startLine: range.startLine,
+          endLine: range.endLine,
+          totalLines: range.totalLines,
+          lines: range.lines,
+        );
+      }
+    }
+
     final range = await _sqliteProvider.getBookTextRangeFromDb(
       book.title,
       startLine: startLine,
       endLine: endLine,
       categoryId: book.categoryId,
       fileType: book.fileType ?? 'txt',
+      preferUserBooks: book.isUserBook,
     );
     if (range == null || range.text.isEmpty) {
       return null;

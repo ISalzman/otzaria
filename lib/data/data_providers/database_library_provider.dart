@@ -476,6 +476,81 @@ Future<List<Map<String, Object?>>> _runBookLinksInRangeInIsolate({
   );
 }
 
+/// Top-level worker לטעינת טווח שורות על חיבור RO חדש ב-isolate; ה-join+split
+/// מתבצע כאן כדי לא לחסום את ה-UI thread. ראה [_runAlternativeStructuresInIsolate].
+({int startLine, int endLine, int totalLines, List<String> lines})?
+    _loadBookTextRangeRowsInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+  required String fileType,
+  required int startLine,
+  required int endLine,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+
+    final bookResults = db.select(
+      'SELECT id, totalLines FROM book WHERE title = ? AND categoryId = ? AND fileType = ? LIMIT 1',
+      [title, categoryId, fileType],
+    ).toMapList();
+    if (bookResults.isEmpty) {
+      return null;
+    }
+
+    final totalLines = bookResults.first['totalLines'] as int;
+    if (totalLines <= 0) {
+      return null;
+    }
+    final bookId = bookResults.first['id'] as int;
+
+    final normalizedStart = startLine.clamp(0, totalLines - 1);
+    final normalizedEnd = endLine.clamp(normalizedStart, totalLines - 1);
+
+    final rows = db.select(
+      'SELECT content FROM line WHERE bookId = ? AND lineIndex >= ? AND lineIndex <= ? ORDER BY lineIndex',
+      [bookId, normalizedStart, normalizedEnd],
+    ).toMapList();
+    if (rows.isEmpty) {
+      return null;
+    }
+
+    final text = rows.map((row) => row['content'] as String? ?? '').join('\n');
+    return (
+      startLine: normalizedStart,
+      endLine: normalizedEnd,
+      totalLines: totalLines,
+      lines: text.split('\n'),
+    );
+  } finally {
+    db?.close();
+  }
+}
+
+/// Top-level wrapper עבור טעינת טווח תוכן ב-isolate.
+/// ראה ההסבר ב-[_runAlternativeStructuresInIsolate].
+Future<({int startLine, int endLine, int totalLines, List<String> lines})?>
+    _runBookTextRangeInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+  required String fileType,
+  required int startLine,
+  required int endLine,
+}) {
+  return Isolate.run(
+    () => _loadBookTextRangeRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+      startLine: startLine,
+      endLine: endLine,
+    ),
+  );
+}
+
 /// מתאם כל פעולות הכתיבה לספרים האישיים: add-folder scan, rescan, toggle, remove.
 ///
 /// תור סריאלי יחיד עם ספירת עסוקות נצפית.
@@ -2398,6 +2473,38 @@ class DatabaseLibraryProvider implements LibraryProvider {
     } catch (e) {
       debugPrint('⚠️ Error in getLinksForBookRange "$title": $e');
       return [];
+    }
+  }
+
+  /// טוען טווח שורות תוכן ב-isolate נפרד (כמו [getLinksForBookRange]), כדי
+  /// שהשאילתה וה-split לא יחסמו את ה-UI thread בזמן גלילה.
+  Future<({int startLine, int endLine, int totalLines, List<String> lines})?>
+      getBookTextRange(
+    String title,
+    int categoryId,
+    String fileType, {
+    required int startLine,
+    required int endLine,
+  }) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return null;
+    }
+
+    // ראה הערה ב-_runAlternativeStructuresInIsolate.
+    final dbPath = _sqliteProvider.dbPath;
+
+    try {
+      return await _runBookTextRangeInIsolate(
+        dbPath: dbPath,
+        title: title,
+        categoryId: categoryId,
+        fileType: fileType,
+        startLine: startLine,
+        endLine: endLine,
+      );
+    } catch (e) {
+      debugPrint('⚠️ Error in getBookTextRange "$title": $e');
+      return null;
     }
   }
 
