@@ -734,6 +734,7 @@ class BackupService {
     if (lastBackup != null) {
       final daysSince = now.difference(DateTime.parse(lastBackup)).inDays;
       final dueAfterDays = switch (frequency) {
+        'daily' => 1,
         'weekly' => 7,
         'monthly' => 30,
         _ => null,
