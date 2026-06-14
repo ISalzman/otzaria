@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/layout/reader_side_panel_shell.dart';
 import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
 
@@ -6,7 +7,10 @@ import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
 ///
 /// נועד למסכים כמו PDF שבהם יש גם חלונית ניווט וגם חלונית מפרשים/הערות,
 /// בלי להשאיר את ניהול ה-layout מפוזר בתוך המסך עצמו.
-class DualAdaptiveReaderPane extends StatelessWidget {
+///
+/// במסך רחב כל חלונית דוחקת את התוכן ונפתחת/נסגרת באנימציית רוחב; במסך צר
+/// היא נפתחת כ-overlay מעל התוכן. בשני המצבים המעבר מונפש.
+class DualAdaptiveReaderPane extends StatefulWidget {
   final Widget mainContent;
   final bool showLeftPane;
   final Widget leftPaneContent;
@@ -48,41 +52,150 @@ class DualAdaptiveReaderPane extends StatelessWidget {
     this.minMainContentWidth = 640,
   });
 
+  @override
+  State<DualAdaptiveReaderPane> createState() => _DualAdaptiveReaderPaneState();
+}
+
+class _DualAdaptiveReaderPaneState extends State<DualAdaptiveReaderPane> {
+  // רוחב אזור הפגיעה של ידית הגרירה (ידית עדינה).
+  static const double _kHandleHitSize = 4;
+
+  // אופטימיזציית ביצועים: לא לבנות את תוכן החלונית לפני שנפתחה לראשונה.
+  // אחרי הפתיחה הראשונה התוכן נשמר במגדל הוויידג'טים גם בסגירה — כך נשמר
+  // ה-state, וגם אנימציית הסגירה מציגה את התוכן בזמן הכיווץ.
+  bool _leftEverOpened = false;
+  bool _rightEverOpened = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _leftEverOpened = widget.showLeftPane;
+    _rightEverOpened = widget.showRightPane;
+  }
+
+  @override
+  void didUpdateWidget(DualAdaptiveReaderPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.showLeftPane && !_leftEverOpened) _leftEverOpened = true;
+    if (widget.showRightPane && !_rightEverOpened) _rightEverOpened = true;
+  }
+
   bool _hasRoomForSideBySide(BoxConstraints constraints) {
-    final requiredWidth = minMainContentWidth +
-        (showLeftPane ? leftPaneWidth : 0) +
-        (showRightPane ? rightPaneWidth : 0);
+    final requiredWidth = widget.minMainContentWidth +
+        (widget.showLeftPane ? widget.leftPaneWidth : 0) +
+        (widget.showRightPane ? widget.rightPaneWidth : 0);
     return constraints.maxWidth >= requiredWidth;
   }
 
-  Widget _buildOverlayPane({
-    required BuildContext context,
-    required bool isVisible,
-    required bool isLeftPane,
-    required double width,
-    required Widget child,
-  }) {
-    // Left pane slides in from the right (app is RTL); right pane slides from the left.
-    final hiddenOffset = isLeftPane ? const Offset(1, 0) : const Offset(-1, 0);
+  ResizableDragHandle _buildHandle({required bool isLeft}) {
+    final onChanged =
+        isLeft ? widget.onLeftPaneWidthChanged : widget.onRightPaneWidthChanged;
+    return ResizableDragHandle(
+      isVertical: true,
+      hitSize: _kHandleHitSize,
+      onDragDelta: onChanged == null
+          ? null
+          : (delta) {
+              if (isLeft) {
+                // החלונית בימין (RTL) — גרירה ימינה מקטינה אותה.
+                final nextWidth = (widget.leftPaneWidth - delta).clamp(
+                  widget.leftMinPaneWidth,
+                  widget.leftMaxPaneWidth ?? double.infinity,
+                );
+                widget.onLeftPaneWidthChanged!.call(nextWidth.toDouble());
+              } else {
+                final nextWidth = (widget.rightPaneWidth + delta).clamp(
+                  widget.rightMinPaneWidth,
+                  widget.rightMaxPaneWidth ?? double.infinity,
+                );
+                widget.onRightPaneWidthChanged!.call(nextWidth.toDouble());
+              }
+            },
+      onDragEnd:
+          isLeft ? widget.onLeftPaneResizeEnd : widget.onRightPaneResizeEnd,
+    );
+  }
+
+  /// סלוט חלונית במצב רחב: רוחב מונפש בין 0 לרוחב המלא. התוכן נשאר ברוחבו
+  /// המלא ונחתך הדרגתית מהקצה הפנימי (ClipRect + OverflowBox), כך שהחלונית
+  /// "נדחפת" פנימה מהקצה החיצוני ודוחקת את תוכן הקריאה.
+  Widget _buildWidePaneSlot(BuildContext context, {required bool isLeft}) {
+    final show = isLeft ? widget.showLeftPane : widget.showRightPane;
+    final everOpened = isLeft ? _leftEverOpened : _rightEverOpened;
+    final width = isLeft ? widget.leftPaneWidth : widget.rightPaneWidth;
+    final occupied = width + _kHandleHitSize;
+
+    final Widget content;
+    if (!everOpened) {
+      content = const SizedBox.shrink();
+    } else {
+      final shell = SizedBox(
+        width: width,
+        child: ReaderSidePanelShell(
+          alignment: isLeft
+              ? AlignmentDirectional.centerEnd
+              : AlignmentDirectional.centerStart,
+          child: isLeft ? widget.leftPaneContent : widget.rightPaneContent,
+        ),
+      );
+      final handle = _buildHandle(isLeft: isLeft);
+      content = SizedBox(
+        width: occupied,
+        // ידית הגרירה יושבת בקצה הפנימי (הצמוד לתוכן הקריאה).
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: isLeft ? [shell, handle] : [handle, shell],
+        ),
+      );
+    }
+
+    return AnimatedContainer(
+      duration: AppTokens.animPanelSlide,
+      curve: Curves.easeInOut,
+      width: show ? occupied : 0,
+      child: ClipRect(
+        child: OverflowBox(
+          minWidth: 0,
+          maxWidth: occupied,
+          alignment: isLeft
+              ? AlignmentDirectional.centerStart
+              : AlignmentDirectional.centerEnd,
+          child: content,
+        ),
+      ),
+    );
+  }
+
+  /// חלונית במצב צר: מרחפת מעל התוכן ומחליקה פנימה/החוצה. נשארת בעץ גם
+  /// בסגירה (מותנה ב-everOpened) כדי שאנימציית ההחלקה תרוץ בכניסה וביציאה.
+  Widget _buildOverlayPane(BuildContext context, {required bool isLeft}) {
+    final show = isLeft ? widget.showLeftPane : widget.showRightPane;
+    final everOpened = isLeft ? _leftEverOpened : _rightEverOpened;
+    final width = isLeft ? widget.leftPaneWidth : widget.rightPaneWidth;
+    // החלונית השמאלית מחליקה פנימה מימין (האפליקציה RTL), הימנית — משמאל.
+    final hiddenOffset = isLeft ? const Offset(1, 0) : const Offset(-1, 0);
 
     return PositionedDirectional(
       top: 0,
       bottom: 0,
-      start: isLeftPane ? 0 : null,
-      end: isLeftPane ? null : 0,
+      start: isLeft ? 0 : null,
+      end: isLeft ? null : 0,
       width: width,
       child: IgnorePointer(
-        ignoring: !isVisible,
+        ignoring: !show,
         child: AnimatedSlide(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-          offset: isVisible ? Offset.zero : hiddenOffset,
-          child: ReaderSidePanelShell(
-            alignment: isLeftPane
-                ? AlignmentDirectional.centerEnd
-                : AlignmentDirectional.centerStart,
-            child: child,
-          ),
+          duration: AppTokens.animPanelSlide,
+          curve: Curves.easeInOut,
+          offset: show ? Offset.zero : hiddenOffset,
+          child: everOpened
+              ? ReaderSidePanelShell(
+                  alignment: isLeft
+                      ? AlignmentDirectional.centerEnd
+                      : AlignmentDirectional.centerStart,
+                  child:
+                      isLeft ? widget.leftPaneContent : widget.rightPaneContent,
+                )
+              : const SizedBox.shrink(),
         ),
       ),
     );
@@ -92,102 +205,45 @@ class DualAdaptiveReaderPane extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final hasRoomForSideBySide = _hasRoomForSideBySide(constraints);
-
-        if (hasRoomForSideBySide) {
+        if (_hasRoomForSideBySide(constraints)) {
           return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (showLeftPane)
-                SizedBox(
-                  width: leftPaneWidth,
-                  child: ReaderSidePanelShell(
-                    alignment: AlignmentDirectional.centerEnd,
-                    child: leftPaneContent,
-                  ),
-                ),
-              if (showLeftPane)
-                ResizableDragHandle(
-                  isVertical: true,
-                  hitSize: 4,
-                  onDragDelta: onLeftPaneWidthChanged == null
-                      ? null
-                      : (delta) {
-                          final nextWidth = (leftPaneWidth - delta).clamp(
-                            leftMinPaneWidth,
-                            leftMaxPaneWidth ?? double.infinity,
-                          );
-                          onLeftPaneWidthChanged!.call(nextWidth.toDouble());
-                        },
-                  onDragEnd: onLeftPaneResizeEnd,
-                ),
-              Expanded(child: mainContent),
-              if (showRightPane)
-                ResizableDragHandle(
-                  isVertical: true,
-                  hitSize: 4,
-                  onDragDelta: onRightPaneWidthChanged == null
-                      ? null
-                      : (delta) {
-                          final nextWidth = (rightPaneWidth + delta).clamp(
-                            rightMinPaneWidth,
-                            rightMaxPaneWidth ?? double.infinity,
-                          );
-                          onRightPaneWidthChanged!.call(nextWidth.toDouble());
-                        },
-                  onDragEnd: onRightPaneResizeEnd,
-                ),
-              if (showRightPane)
-                SizedBox(
-                  width: rightPaneWidth,
-                  child: ReaderSidePanelShell(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: rightPaneContent,
-                  ),
-                ),
+              _buildWidePaneSlot(context, isLeft: true),
+              Expanded(child: widget.mainContent),
+              _buildWidePaneSlot(context, isLeft: false),
             ],
           );
         }
 
-        final showAnyPane = showLeftPane || showRightPane;
+        final showAnyPane = widget.showLeftPane || widget.showRightPane;
 
         return Stack(
           children: [
-            Positioned.fill(child: mainContent),
-            if (showAnyPane)
-              Positioned.fill(
+            Positioned.fill(child: widget.mainContent),
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !showAnyPane,
                 child: GestureDetector(
                   onTap: () {
-                    if (showRightPane) {
-                      onCloseRightPane();
-                    }
-                    if (showLeftPane) {
-                      onCloseLeftPane();
-                    }
+                    if (widget.showRightPane) widget.onCloseRightPane();
+                    if (widget.showLeftPane) widget.onCloseLeftPane();
                   },
-                  child: ColoredBox(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .scrim
-                        .withValues(alpha: 0.30),
+                  child: AnimatedOpacity(
+                    duration: AppTokens.animPanelOpacity,
+                    opacity: showAnyPane ? 1.0 : 0.0,
+                    child: ColoredBox(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .scrim
+                          .withValues(alpha: 0.30),
+                    ),
                   ),
                 ),
               ),
-            if (showLeftPane)
-              _buildOverlayPane(
-                context: context,
-                isVisible: showLeftPane,
-                isLeftPane: true,
-                width: leftPaneWidth,
-                child: leftPaneContent,
-              ),
-            if (showRightPane)
-              _buildOverlayPane(
-                context: context,
-                isVisible: showRightPane,
-                isLeftPane: false,
-                width: rightPaneWidth,
-                child: rightPaneContent,
-              ),
+            ),
+            _buildOverlayPane(context, isLeft: true),
+            _buildOverlayPane(context, isLeft: false),
           ],
         );
       },
