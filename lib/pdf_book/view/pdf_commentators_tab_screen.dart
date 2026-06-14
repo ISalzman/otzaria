@@ -7,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -97,6 +98,13 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     _ensureDataLoaded();
     _loadTextContent();
     _loadCommentatorGroups();
+
+    // ממקד את חלונית המפרשים כשהטאב הופך פעיל (מעבר טאב) כדי שגלילה עם
+    // החיצים תעבוד מיד בלי לחיצה.
+    FocusRepository().registerTabContentFocusRequester(
+      widget.tab,
+      () => _panelKey.currentState?.requestScrollFocus(),
+    );
   }
 
   /// מרענן את הדגשת כפתורי הסרגל בעת מעבר לשונית, וממקד את שדה החיפוש.
@@ -349,6 +357,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
 
   @override
   void dispose() {
+    FocusRepository().unregisterTabContentFocusRequester(widget.tab);
     widget.tab.sourceTab.currentTitle.removeListener(_syncWithSourceTab);
     _navTabController.removeListener(_handleTabChanged);
     _navTabController.dispose();
