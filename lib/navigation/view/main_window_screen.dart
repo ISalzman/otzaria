@@ -939,6 +939,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
         // עם hop קצר מבטיחים שהלשונית תיפתח גם בפעם הראשונה שנכנסים אליה.
         _openToolWhenAvailable(toolId);
         return true;
+      case OpenPluginAction(:final pluginId):
+        context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
+        _openPluginByIdWhenAvailable(pluginId);
+        return true;
       case OpenBookAction():
         return await _openBookByExternalId(action);
       case OpenPdfBookAction():
@@ -1026,6 +1030,37 @@ class MainWindowScreenState extends State<MainWindowScreen>
       Future<void>.delayed(const Duration(milliseconds: 50), () {
         if (!mounted) return;
         _openToolWhenAvailable(toolId, attemptsLeft: attemptsLeft - 1);
+      });
+    });
+  }
+
+  /// פותח תוסף לפי מזהה (deep-link `otzaria://open/plugin/<id>`). ממתין הן
+  /// ל-ToolsScreen (נבנה lazy) והן ל-PluginSystemLoaded, ואז פותח דרך
+  /// `openPluginTransiently` שמטפל גם בתוסף מוצמד וגם בלא-מוצמד.
+  void _openPluginByIdWhenAvailable(String pluginId, {int attemptsLeft = 100}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final toolsState = moreScreenKey.currentState;
+      final blocState = context.read<PluginSystemBloc>().state;
+      if (toolsState != null && blocState is PluginSystemLoaded) {
+        final plugin =
+            blocState.plugins.firstWhereOrNull((p) => p.pluginId == pluginId);
+        if (plugin == null) {
+          UiSnack.showError('התוסף "$pluginId" לא נמצא');
+        } else if (!plugin.enabled) {
+          UiSnack.showError('התוסף "${plugin.name}" מושבת');
+        } else {
+          toolsState.openPluginTransiently(plugin);
+        }
+        return;
+      }
+      if (attemptsLeft <= 0) {
+        UiSnack.showError('התוסף "$pluginId" לא נמצא');
+        return;
+      }
+      Future<void>.delayed(const Duration(milliseconds: 50), () {
+        if (!mounted) return;
+        _openPluginByIdWhenAvailable(pluginId, attemptsLeft: attemptsLeft - 1);
       });
     });
   }

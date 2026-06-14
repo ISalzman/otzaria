@@ -19,6 +19,15 @@ class OpenToolAction extends ExternalUriAction {
   const OpenToolAction(this.toolId);
 }
 
+/// פתיחת תוסף ישירות לפי מזהה התוסף — גם אם אינו מוצמד ללשוניות.
+///
+/// בניגוד ל-[OpenToolAction] (שמטפל בכלים מובנים ובתוספים מוצמדים בלבד),
+/// פעולה זו פותחת כל תוסף מותקן, כולל תוסף לא-מוצמד, במצב transient.
+class OpenPluginAction extends ExternalUriAction {
+  final String pluginId;
+  const OpenPluginAction(this.pluginId);
+}
+
 /// פתיחת ספר בעיון לפי מזהה הספר ב-DB.
 ///
 /// [index] — אינדקס סעיף התחלתי (אופציונלי). מתעלמים מערכים שליליים.
@@ -91,6 +100,7 @@ class RunSearchAction extends ExternalUriAction {
 /// * `otzaria://open/settings`              – הגדרות
 /// * `otzaria://open/tools`                 – מסך הכלים
 /// * `otzaria://open/tool/<tool-id>`        – לשונית כלי לפי מזהה מלא
+/// * `otzaria://open/plugin/<plugin-id>`    – פתיחת תוסף ישירות לפי מזהה (גם לא-מוצמד)
 /// * `otzaria://open/book/<id>`             – פתיחת ספר טקסט בעיון לפי מזהה DB
 ///   - `?index=<n>` קפיצה לסעיף התחלתי (n >= 0)
 ///   - `?q=<text>`  מחרוזת חיפוש להדגשה
@@ -190,6 +200,14 @@ class ExternalUriRouter {
         return null;
       }
       return OpenToolAction(rawId);
+    }
+
+    if (segments.length == 2 && firstLower == 'plugin') {
+      final rawId = segments[1].trim();
+      if (rawId.isEmpty) {
+        return null;
+      }
+      return OpenPluginAction(rawId);
     }
 
     if (segments.length == 2 && firstLower == 'book') {

@@ -129,6 +129,50 @@ void main() {
       });
     });
 
+    group('open/plugin/<id>', () {
+      test('פותחת תוסף לפי מזהה כפי שהוא', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/plugin/com.example.myplugin'),
+        );
+
+        expect(action, isA<OpenPluginAction>());
+        expect(
+          (action as OpenPluginAction).pluginId,
+          'com.example.myplugin',
+        );
+      });
+
+      test('המילה plugin אינה רגישה לאותיות גדולות/קטנות', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/PLUGIN/com.example.myplugin'),
+        );
+
+        expect(action, isA<OpenPluginAction>());
+        expect(
+          (action as OpenPluginAction).pluginId,
+          'com.example.myplugin',
+        );
+      });
+
+      test('המזהה נשמר עם אותיות גדולות/קטנות מקוריות', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/plugin/com.Example.MyPlugin'),
+        );
+
+        expect(
+          (action as OpenPluginAction).pluginId,
+          'com.Example.MyPlugin',
+        );
+      });
+
+      test('דוחה plugin/ עם מזהה ריק', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/plugin/')),
+          isNull,
+        );
+      });
+    });
+
     group('open/book/<id>', () {
       test('פותחת ספר לפי מזהה DB', () {
         final action = ExternalUriRouter.parseUri(
