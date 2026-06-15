@@ -844,6 +844,158 @@ void main() {
       expect(results.map((r) => r.reference),
           contains('פסקי הרא"ש על ברכות פרק ג הלכה ה'));
     });
+
+    test('שאילתה מקוצרת "ראש ברכות ג ה" — ה\' הידיעה לא מפילה את חיפוש ה-TOC',
+        () async {
+      // "ראש" תופס את "פסקי הרא"ש על ברכות" כ-contains (rank 2), "ברכות" מזוהה
+      // כחלק מהכותרת, ו"ראש" חייב להתנקות מהשאריות אף שבכותרת הוא "הראש" —
+      // אחרת הוא נשאר בטוקני ה-TOC ומפיל את החיפוש ההיררכי.
+      List<String>? tocTokens;
+      int? leadingPhraseLimit;
+
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        getCategoryPath: (_) async => '',
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'ראש') {
+            leadingPhraseLimit = limit;
+            return [
+              _hit(
+                bookId: 2141,
+                title: 'פסקי הרא"ש על ברכות',
+                normalizedTitle: 'פסקי הראש על ברכות',
+                matchRank: 2,
+              )
+            ];
+          }
+          if (query == 'ברכות') {
+            return [_hit(bookId: 103, title: 'ברכות', matchRank: 0)];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async {
+          tocTokens = queryTokens;
+          return [
+            {
+              'reference': 'פסקי הרא"ש על ברכות פרק ג הלכה ה',
+              'segment': 42,
+              'level': 2,
+            },
+          ];
+        },
+      );
+
+      final results = await repo.findRefs('ראש ברכות ג ה');
+
+      expect(tocTokens, equals(const ['ג', 'ה']),
+          reason: 'ה\' הידיעה הוסרה — נותרו רק טוקני המיקום הפנימי');
+      expect(results.map((r) => r.reference),
+          contains('פסקי הרא"ש על ברכות פרק ג הלכה ה'));
+      expect(leadingPhraseLimit, greaterThan(50),
+          reason: 'בשאילתה רב-מילים אסור לחתוך את הספרים מוקדם (limit גבוה), '
+              'אחרת ספר רלוונטי נזרק לפני הסינון לפי שאר הטוקנים');
+    });
+
+    test('תקרת קריאות TOC — שאילתה רחבה בלי suppress לא מציפה את ה-DB',
+        () async {
+      // טוקן ראשון רחב ("ראש") מתאים 60 ספרים, והטוקן הבא ("ב") אינו ספר עצמאי
+      // → אין suppress, וכל המועמדים זכאים ל-TOC. התקרה חייבת להגביל ל-50.
+      var tocCalls = 0;
+      final manyHits = List.generate(
+        60,
+        (i) => _hit(
+          bookId: i + 1,
+          title: 'ראש ספר ${i + 1}',
+          normalizedTitle: 'ראש ספר ${i + 1}',
+          matchRank: 1,
+          orderIndex: (i + 1).toDouble(),
+        ),
+      );
+
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        getCategoryPath: (_) async => '',
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'ראש') return manyHits;
+          return const <ReferenceBookHit>[]; // "ב" אינו ספר → אין suppress
+        },
+        getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async {
+          tocCalls++;
+          return const <Map<String, dynamic>>[];
+        },
+      );
+
+      await repo.findRefs('ראש ב');
+
+      expect(tocCalls, equals(50),
+          reason: 'התקרה גוזרת את מספר קריאות ה-TOC מ-60 ל-50');
+    });
+
+    test('תקרת TOC לא חוסמת ספר רלוונטי מאוחר שהקודמים לו נחסמו ב-suppress',
+        () async {
+      // 59 ספרים תואמי "ראש" שאינם מכילים "ברכות" → נחסמים ב-suppress ואינם
+      // נספרים לתקרה. הספר הרלוונטי (שמכיל "ברכות") מופיע אחרון — וחייב לעבור.
+      var tocCalledForTarget = false;
+      final hits = [
+        ...List.generate(
+          59,
+          (i) => _hit(
+            bookId: i + 1,
+            title: 'ראש ספר ${i + 1}',
+            normalizedTitle: 'ראש ספר ${i + 1}',
+            matchRank: 1,
+            orderIndex: (i + 1).toDouble(),
+          ),
+        ),
+        _hit(
+          bookId: 2141,
+          title: 'פסקי הרא"ש על ברכות',
+          normalizedTitle: 'פסקי הראש על ברכות',
+          matchRank: 2,
+          orderIndex: 999.0,
+        ),
+      ];
+
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        getCategoryPath: (_) async => '',
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'ראש') return hits;
+          if (query == 'ברכות') {
+            return [_hit(bookId: 103, title: 'ברכות', matchRank: 0)];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async {
+          if (bookId == 2141) {
+            tocCalledForTarget = true;
+            return [
+              {
+                'reference': 'פסקי הרא"ש על ברכות פרק ג הלכה ה',
+                'segment': 42,
+                'level': 2,
+              },
+            ];
+          }
+          return const <Map<String, dynamic>>[];
+        },
+      );
+
+      final results = await repo.findRefs('ראש ברכות ג ה');
+
+      expect(tocCalledForTarget, isTrue,
+          reason:
+              'הספרים שנחסמו ב-suppress אינם נספרים לתקרה, כך שהספר הרלוונטי '
+              'המאוחר עדיין עובר חיפוש TOC');
+      expect(results.map((r) => r.reference),
+          contains('פסקי הרא"ש על ברכות פרק ג הלכה ה'));
+    });
   });
 
   // ─── שאריות-ריקות → רק הספר עצמו ────────────────────────────────────────────
