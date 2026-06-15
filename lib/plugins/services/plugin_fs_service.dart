@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
+import 'package:otzaria/plugins/services/plugin_path_safety.dart';
 
 /// שירות פעולות קבצים עבור גשר התוספים: חילוץ ZIP ומחיקת קובץ.
 ///
@@ -43,7 +44,7 @@ class PluginFsService {
     }
     await Directory(destFolder).create(recursive: true);
 
-    final canonicalDest = p.canonicalize(destFolder);
+    final realDest = Directory(destFolder).resolveSymbolicLinksSync();
     final input = InputFileStream(zipPath);
     try {
       final archive = ZipDecoder().decodeStream(input);
@@ -53,15 +54,21 @@ class PluginFsService {
         if (++entryCount > maxEntries) {
           throw Exception('error.too_large: archive has too many entries');
         }
-
-        final outPath = p.join(destFolder, p.normalize(file.name));
-        // הגנת path-traversal: רשומה עם `../` או symlink לא תיכתב מחוץ ליעד.
-        if (!p.isWithin(canonicalDest, p.canonicalize(outPath))) {
-          continue;
-        }
         if (file.isSymbolicLink) {
           continue;
         }
+
+        final outPath = p.join(destFolder, p.normalize(file.name));
+        // הנתיב הקנוני האמיתי (כולל פתרון symlink-תיקייה קיים ביעד) חייב
+        // להישאר בתוך היעד — נבדק *לפני* כל יצירת תיקייה, כדי שגם רשומת תיקייה
+        // או אב של קובץ לא ייצרו תיקיות מחוץ ליעד דרך symlink, וגם `../` נחסם.
+        final canonical = canonicalizeNearestExisting(outPath);
+        if (canonical == null ||
+            (!p.equals(canonical, realDest) &&
+                !p.isWithin(realDest, canonical))) {
+          continue;
+        }
+
         if (file.isDirectory) {
           await Directory(outPath).create(recursive: true);
           continue;
@@ -70,6 +77,11 @@ class PluginFsService {
         // בדיקה מקדימה לפי הגודל המוצהר — חוסמת קובץ ענק עוד לפני כתיבתו.
         if (totalBytes + file.size > maxUncompressedBytes) {
           throw Exception('error.too_large: extracted size exceeds limit');
+        }
+        await File(outPath).parent.create(recursive: true);
+        // קובץ-symlink קיים ייכתב דרכו אל היעד שלו; מוחקים כדי לכתוב קובץ רגיל.
+        if (FileSystemEntity.isLinkSync(outPath)) {
+          Link(outPath).deleteSync();
         }
         final output = OutputFileStream(outPath);
         try {
