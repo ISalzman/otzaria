@@ -26,16 +26,25 @@ Future<String?> showErrorReportSenderEmailDialog({
   String title = 'כתובת מייל לזיהוי',
   String subtitle =
       'כתובת זו תצורף לדיווח כדי שצוות אוצריא יוכל לחזור אליכם במקרה הצורך.',
+  String? Function(String)? validator,
 }) async {
   String capturedValue = initialValue;
+  final fieldKey = GlobalKey<_EmailFieldWithAutocompleteState>();
 
   final confirmed = await showSingleActionDialog(
     context: context,
     title: title,
     confirmText: 'שמור',
+    // אם הוולידציה נכשלת מציגים שגיאה בשדה ומשאירים את הדיאלוג פתוח
+    // כדי שהמשתמש לא יאבד את מה שהקליד.
+    onConfirm: validator == null
+        ? null
+        : () => fieldKey.currentState?.validate() ?? true,
     customContent: EmailFieldWithAutocomplete(
+      key: fieldKey,
       initialValue: initialValue,
       subtitle: subtitle,
+      validator: validator,
       onValueChanged: (v) => capturedValue = v,
     ),
   );
@@ -49,11 +58,15 @@ class EmailFieldWithAutocomplete extends StatefulWidget {
   final String subtitle;
   final ValueChanged<String>? onValueChanged;
 
+  /// מחזיר הודעת שגיאה אם הערך לא תקין, או null אם תקין.
+  final String? Function(String)? validator;
+
   const EmailFieldWithAutocomplete({
     super.key,
     required this.initialValue,
     required this.subtitle,
     this.onValueChanged,
+    this.validator,
   });
 
   @override
@@ -70,6 +83,14 @@ class _EmailFieldWithAutocompleteState extends State<EmailFieldWithAutocomplete>
   OverlayEntry? _overlay;
   List<String> _filteredDomains = const [];
   int _selectedIndex = -1;
+  String? _errorText;
+
+  /// בודק את הערך מול ה-validator; מציג שגיאה ומחזיר false אם לא תקין.
+  bool validate() {
+    final error = widget.validator?.call(_controller.text);
+    setState(() => _errorText = error);
+    return error == null;
+  }
 
   @override
   void initState() {
@@ -142,6 +163,9 @@ class _EmailFieldWithAutocompleteState extends State<EmailFieldWithAutocomplete>
   void _onTextChanged() {
     if (!mounted) return;
     widget.onValueChanged?.call(_controller.text);
+    if (_errorText != null) {
+      setState(() => _errorText = null);
+    }
     final text = _controller.text;
     final selection = _controller.selection;
 
@@ -306,9 +330,10 @@ class _EmailFieldWithAutocompleteState extends State<EmailFieldWithAutocomplete>
                 focusNode: _focusNode,
                 keyboardType: TextInputType.emailAddress,
                 textAlign: TextAlign.left,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'כתובת דוא"ל',
                   hintText: 'name@example.com',
+                  errorText: _errorText,
                 ),
                 autofocus: true,
               ),

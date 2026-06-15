@@ -191,6 +191,72 @@ void main() {
     });
   });
 
+  group('showErrorReportSenderEmailDialog — ולידציה', () {
+    Future<String?> openDialog(
+      WidgetTester tester, {
+      required String typedValue,
+    }) async {
+      String? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(size: Size(600, 800)),
+            child: Scaffold(
+              body: Builder(
+                builder: (context) => ElevatedButton(
+                  onPressed: () async {
+                    result = await showErrorReportSenderEmailDialog(
+                      context: context,
+                      validator: (email) => email.contains('@')
+                          ? null
+                          : 'יש להזין כתובת דוא"ל תקינה.',
+                    );
+                  },
+                  child: const Text('פתח'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('פתח'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), typedValue);
+      await tester.pumpAndSettle();
+      return result;
+    }
+
+    testWidgets('ערך לא תקין משאיר את הדיאלוג פתוח ומציג שגיאה',
+        (tester) async {
+      await openDialog(tester, typedValue: 'invalid');
+
+      await tester.tap(find.widgetWithText(FilledButton, 'שמור'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('יש להזין כתובת דוא"ל תקינה.'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget,
+          reason: 'הדיאלוג צריך להישאר פתוח כדי שהקלט לא יאבד');
+    });
+
+    testWidgets('תיקון הערך אחרי שגיאה מנקה אותה ומאפשר שמירה', (tester) async {
+      await openDialog(tester, typedValue: 'invalid');
+
+      await tester.tap(find.widgetWithText(FilledButton, 'שמור'));
+      await tester.pumpAndSettle();
+      expect(find.text('יש להזין כתובת דוא"ל תקינה.'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'name@example.com');
+      await tester.pumpAndSettle();
+      expect(find.text('יש להזין כתובת דוא"ל תקינה.'), findsNothing);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'שמור'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing,
+          reason: 'ערך תקין סוגר את הדיאלוג');
+    });
+  });
+
   group('EmailFieldWithAutocomplete — Ctrl+V (הדבקה)', () {
     setUp(() {
       // נדמה את הקלסבורד עם טקסט מוכן להדבקה

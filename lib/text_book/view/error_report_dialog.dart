@@ -476,14 +476,12 @@ $detailsSection
     final enteredEmail = await showErrorReportSenderEmailDialog(
       context: context,
       initialValue: currentEmail,
+      validator: (email) => DirectErrorReportService.isValidSenderEmail(email)
+          ? null
+          : 'יש להזין כתובת דוא"ל תקינה.',
     );
 
     if (enteredEmail == null || enteredEmail.isEmpty) {
-      return null;
-    }
-
-    if (!DirectErrorReportService.isValidSenderEmail(enteredEmail)) {
-      UiSnack.showError('יש להזין כתובת דוא"ל תקינה.');
       return null;
     }
 
