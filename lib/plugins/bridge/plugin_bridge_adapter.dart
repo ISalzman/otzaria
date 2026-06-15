@@ -46,6 +46,7 @@ import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
+import 'package:otzaria/plugins/services/plugin_path_safety.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
 
 // ===================================================================
@@ -919,10 +920,10 @@ class PluginBridgeAdapter {
   /// תיקייה מאושרת אל מחוץ לה. בלי פתרון ה-symlink בדיקת [p.isWithin] על המחרוזת
   /// בלבד הייתה מאשרת כתיבה/מחיקה מחוץ לתיקייה דרך קישור סימבולי.
   bool _isPathInGrantedFolder(String targetPath) {
-    final canonicalTarget = _canonicalizePath(targetPath);
+    final canonicalTarget = canonicalizeNearestExisting(targetPath);
     if (canonicalTarget == null) return false;
     for (final root in _grantedFolders) {
-      final canonicalRoot = _canonicalizePath(root);
+      final canonicalRoot = canonicalizeNearestExisting(root);
       if (canonicalRoot == null) continue;
       if (p.equals(canonicalTarget, canonicalRoot) ||
           p.isWithin(canonicalRoot, canonicalTarget)) {
@@ -930,36 +931,6 @@ class PluginBridgeAdapter {
       }
     }
     return false;
-  }
-
-  /// מחזירה את הנתיב הקנוני של [path] (מוחלט, מנורמל ועם symlinks פתורים),
-  /// או `null` אם לא ניתן לפתור אותו.
-  ///
-  /// אם [path] עצמו אינו קיים (למשל יעד כתיבה חדש ב-`download`/`extractZip`),
-  /// פותרת בצורה קנונית את האב הקיים הקרוב ביותר ומצרפת אליו את הסיומת שטרם
-  /// נוצרה — כך גם נתיב חדש שעובר דרך symlink מאותר לפי יעדו האמיתי.
-  static String? _canonicalizePath(String path) {
-    var existing = p.normalize(p.absolute(path));
-    final pending = <String>[];
-    while (
-        FileSystemEntity.typeSync(existing) == FileSystemEntityType.notFound) {
-      final parent = p.dirname(existing);
-      if (parent == existing) return null; // הגענו לשורש ושום דבר לא קיים
-      pending.insert(0, p.basename(existing));
-      existing = parent;
-    }
-    try {
-      final isDir =
-          FileSystemEntity.typeSync(existing) == FileSystemEntityType.directory;
-      final canonical = isDir
-          ? Directory(existing).resolveSymbolicLinksSync()
-          : File(existing).resolveSymbolicLinksSync();
-      return pending.isEmpty
-          ? canonical
-          : p.normalize(p.joinAll([canonical, ...pending]));
-    } catch (_) {
-      return null;
-    }
   }
 
   // ----------------------------------------------------------------

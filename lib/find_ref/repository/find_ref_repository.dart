@@ -409,6 +409,12 @@ class FindRefRepository {
     // Prefer matching the longest leading phrase (up to 3 tokens) as the book key.
     // This supports multi-word acronyms like "שוע אוח".
     final maxPhraseTokens = queryTokens.length >= 3 ? 3 : queryTokens.length;
+
+    // כש-query רב-מילים, ה-hits מסוננים *אחרי* החיפוש לפי שאר הטוקנים (suppress
+    // וכותרות פנימיות), ולכן אסור לחתוך מוקדם: ספר רלוונטי כמו "פסקי הרא"ש על
+    // ברכות" נדחק ע"י עשרות התאמות "ראש" קצרות יותר ונזרק לפני הסינון. ה-cap
+    // הגבוה הוא רשת ביטחון נגד ספריות ענק; החיתוך הפונקציונלי הוא 15 הסופיות.
+    final bookSearchLimit = queryTokens.length >= 2 ? 1000 : 50;
     var bookQueryTokenCount = 1;
     List<ReferenceBookHit> bookHits = const <ReferenceBookHit>[];
 
@@ -422,7 +428,7 @@ class FindRefRepository {
 
     for (var n = maxPhraseTokens; n >= 1; n--) {
       final phrase = queryTokens.take(n).join(' ');
-      final hits = searchBooks(phrase, limit: 50);
+      final hits = searchBooks(phrase, limit: bookSearchLimit);
       if (hits.isEmpty) continue;
 
       // For single-token queries, keep all hits as usual.
@@ -514,6 +520,13 @@ class FindRefRepository {
     final hasExactNextTokenMatch =
         nextTokenMatches.any((hit) => hit.matchRank == 0);
 
+    // תקרה על קריאות ה-TOC היקרות (שאילתת DB / outline לכל ספר). ה-limit הגבוה
+    // מאפשר לטוקן ראשון רחב ("ראש") להתאים מאות ספרים; ה-suppress מסנן את רובם
+    // בחינם, אך כשאין טוקן-ספר הבא (אין suppress) התקרה מונעת הצפת שאילתות.
+    // הספרים מסודרים לפי דירוג ה-search, כך שהתקרה חותכת את הזנב הפחות-רלוונטי.
+    var tocLookups = 0;
+    const maxTocLookups = 50;
+
     for (final hit in bookHits) {
       final bookId = hit.bookId;
       final title = hit.title;
@@ -527,6 +540,13 @@ class FindRefRepository {
         titleTokens,
         stripLeadingTokensCount: matchedByAcronym ? bookQueryTokenCount : 0,
       );
+
+      // הטוקן שאחרי שם-הספר עלול להיות בעצמו ספר עצמאי ("תורה אור" — "אור" ספר),
+      // ואז חיפוש TOC לפיו יוצר התאמות-שווא חוצות-ספרים. אבל אם הטוקן הוא חלק
+      // מכותרת הספר הנוכחי ("ברכות" בתוך "פסקי הרא"ש על ברכות") — אין חציית ספר,
+      // ומותר לרדת לכותרות הפנימיות.
+      final suppressTocForCrossBook =
+          hasExactNextTokenMatch && !titleTokens.contains(nextToken);
 
       // bookId == -1: file-system PDF not in DB — use PDF outline as TOC,
       // mirroring the regular book flow as closely as possible.
@@ -548,30 +568,32 @@ class FindRefRepository {
           continue;
         }
 
+        if (suppressTocForCrossBook) continue;
+        if (tocLookups >= maxTocLookups) continue;
+        tocLookups++;
+
         final outlineFn = getPdfOutlineEntries ??
             ReferenceBooksCache.instance.getPdfOutlineEntries;
         final outlineEntries = await outlineFn(hit.filePath);
         final normalizedBookTitle = _normalizeForMatch(title);
 
-        if (!hasExactNextTokenMatch) {
-          // Mirror regular book: add ALL matching outline entries (not just first).
-          for (final (normChapter, origChapter, pageNumber) in outlineEntries) {
-            if (normChapter == normalizedBookTitle) continue;
-            final chapterWords = _tokenize(normChapter);
-            final matches = remainingTokens.every(
-              (t) => chapterWords.any((w) => w.startsWith(t)),
-            );
-            if (!matches) continue;
-            results.add(DbReferenceResult(
-              title: title,
-              reference: '$title $origChapter',
-              segment: pageNumber,
-              isPdf: true,
-              filePath: hit.filePath,
-              orderIndex: hit.orderIndex,
-              tocLevel: 2,
-            ));
-          }
+        // Mirror regular book: add ALL matching outline entries (not just first).
+        for (final (normChapter, origChapter, pageNumber) in outlineEntries) {
+          if (normChapter == normalizedBookTitle) continue;
+          final chapterWords = _tokenize(normChapter);
+          final matches = remainingTokens.every(
+            (t) => chapterWords.any((w) => w.startsWith(t)),
+          );
+          if (!matches) continue;
+          results.add(DbReferenceResult(
+            title: title,
+            reference: '$title $origChapter',
+            segment: pageNumber,
+            isPdf: true,
+            filePath: hit.filePath,
+            orderIndex: hit.orderIndex,
+            tocLevel: 2,
+          ));
         }
         // FS PDFs have no DB category path — bookPath stays ''.
         continue;
@@ -589,7 +611,10 @@ class FindRefRepository {
           orderIndex: hit.orderIndex,
           bookId: bookId,
         ));
-      } else if (!hasExactNextTokenMatch) {
+      } else if (!suppressTocForCrossBook) {
+        if (tocLookups >= maxTocLookups) continue;
+        tocLookups++;
+
         final tocEntries = await fetchTocEntries(
           bookId,
           title,
@@ -920,7 +945,12 @@ class FindRefRepository {
     }
 
     for (final token in titleTokens) {
-      final idx = remaining.indexOf(token);
+      var idx = remaining.indexOf(token);
+      // ה' הידיעה: כותרת "הרא"ש"/"הטור" מול שאילתה "ראש"/"טור" בלי ה'. מסירים
+      // רק כשהשארית באורך >=2, כדי לא לבלוע טוקן מיקום של אות בודדת ("עמוד א").
+      if (idx == -1 && token.length >= 3 && token.startsWith('ה')) {
+        idx = remaining.indexOf(token.substring(1));
+      }
       if (idx != -1) {
         remaining.removeAt(idx);
       }

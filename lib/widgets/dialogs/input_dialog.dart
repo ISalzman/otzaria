@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
 
@@ -33,7 +34,8 @@ class InputDialog extends StatefulWidget {
   State<InputDialog> createState() => _InputDialogState();
 }
 
-class _InputDialogState extends State<InputDialog> with DialogNavigationMixin {
+class _InputDialogState extends State<InputDialog>
+    with DialogNavigationMixin, DialogFocusRestorerMixin<InputDialog> {
   late final TextEditingController _controller;
   final FocusNode _textFieldFocusNode = FocusNode();
 
@@ -41,6 +43,7 @@ class _InputDialogState extends State<InputDialog> with DialogNavigationMixin {
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialValue);
+    registerDialogFocusRestorer(_textFieldFocusNode);
     // תן פוקוס לשדה הטקסט אחרי שהדיאלוג נפתח
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _textFieldFocusNode.requestFocus();

@@ -39,6 +39,7 @@ import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
 import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
+import 'package:otzaria/text_book/view/selection/enhanced_gesture_detector.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
@@ -1755,6 +1756,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                                   child: ScrollablePositionedList.builder(
                                     itemScrollController: _scrollController,
                                     itemPositionsListener: _positionsListener,
+                                    scrollOffsetController: widget.isMainText
+                                        ? state.scrollOffsetController
+                                        : null,
                                     itemCount: itemCount,
                                     padding: const EdgeInsets.all(4),
                                     itemBuilder: (context, index) => _buildLine(
@@ -1855,11 +1859,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final notesForLine =
         noteMap[primaryLineIndex + 1] ?? const <PersonalNote>[];
 
-    return GestureDetector(
+    // EnhancedGestureDetector ולא GestureDetector רגיל: לחיצה משולשת לבחירת
+    // פסקה ב-SelectableRegion חייבת לא לזלוג ל-onTap שמאפס את הבחירה.
+    return EnhancedGestureDetector(
       behavior: HitTestBehavior.translucent,
       // במצב רציף לחיצה רגילה לא בוחרת שורה — לחיצות פר-שורה מטופלות
       // בתוך ContinuousReadingParagraph (recognizer לכל שורה).
-      onTap: widget.isMainText && !isContinuousParagraph
+      onSingleTap: widget.isMainText && !isContinuousParagraph
           ? () {
               _requestKeyboardFocus('line-tap-$primaryLineIndex');
               // איפוס הטקסט השמור

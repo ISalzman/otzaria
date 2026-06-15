@@ -121,12 +121,17 @@ List<TocEntry> _sortEntriesByRelevance(
 ) {
   final sorted = List<TocEntry>.from(entries)
     ..sort((a, b) {
-      final rankCompare = _matchRank(a, query).compareTo(_matchRank(b, query));
+      final rankA = _matchRank(a, query);
+      final rankCompare = rankA.compareTo(_matchRank(b, query));
       if (rankCompare != 0) return rankCompare;
 
-      final lengthCompare =
-          _matchLengthDelta(a, query).compareTo(_matchLengthDelta(b, query));
-      if (lengthCompare != 0) return lengthCompare;
+      // length-delta רלוונטי רק לערכים שתאמו בעצמם; ערכי-אב שנכללו בגלל
+      // צאצא בלבד (rank 6) חייבים לשמור על סדר הספר ולא להידרג לפי אורך.
+      if (rankA < 6) {
+        final lengthCompare =
+            _matchLengthDelta(a, query).compareTo(_matchLengthDelta(b, query));
+        if (lengthCompare != 0) return lengthCompare;
+      }
 
       final levelCompare = a.level.compareTo(b.level);
       if (levelCompare != 0) return levelCompare;

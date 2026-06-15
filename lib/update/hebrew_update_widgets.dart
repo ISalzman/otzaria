@@ -5,21 +5,32 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:updat/updat.dart';
-import 'package:otzaria/settings/settings_exports.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// עוטף את צ'יפ העדכון ברקע קל עם גבול עדין, כדי שיהיה ניכר מעל טקסט
-/// התוכן שמאחוריו (הצ'יפ צף מעל מסך התוכן).
+/// עוטף את צ'יפ העדכון בצבע פעולה בולט, בלי לצאת מצבעי התמה.
 Widget _updateChipSurface(BuildContext context, Widget child) {
   final colorScheme = Theme.of(context).colorScheme;
   return Material(
-    color: colorScheme.surfaceContainerHighest,
+    color: colorScheme.primaryContainer,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
-      side: BorderSide(color: colorScheme.outlineVariant),
+      side: BorderSide(color: colorScheme.primary, width: 1.2),
     ),
     clipBehavior: Clip.antiAlias,
     child: child,
+  );
+}
+
+ButtonStyle _updateChipButtonStyle(BuildContext context) {
+  final theme = Theme.of(context);
+  return TextButton.styleFrom(
+    foregroundColor: theme.colorScheme.onPrimaryContainer,
+    textStyle: theme.textTheme.labelLarge?.copyWith(
+      fontWeight: FontWeight.w700,
+    ),
+    minimumSize: const Size(0, 32),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
   );
 }
 
@@ -54,6 +65,7 @@ Widget hebrewFlatChip({
         context,
         TextButton.icon(
           onPressed: openDialog,
+          style: _updateChipButtonStyle(context),
           icon: const Icon(FluentIcons.arrow_download_24_regular),
           label: const Text('עדכון זמין'),
         ),
@@ -68,11 +80,13 @@ Widget hebrewFlatChip({
         context,
         TextButton.icon(
           onPressed: () {},
-          icon: const SizedBox(
+          style: _updateChipButtonStyle(context),
+          icon: SizedBox(
             width: 15,
             height: 15,
             child: CircularProgressIndicator(
               strokeWidth: 2,
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
             ),
           ),
           label: const Text('מוריד...'),
@@ -89,6 +103,7 @@ Widget hebrewFlatChip({
         context,
         TextButton.icon(
           onPressed: launchInstaller,
+          style: _updateChipButtonStyle(context),
           icon: const Icon(FluentIcons.checkmark_circle_24_regular),
           label: const Text('מוכן להתקנה'),
         ),
@@ -97,23 +112,7 @@ Widget hebrewFlatChip({
   }
 
   if (UpdatStatus.error == status) {
-    // לא להציג הודעת שגיאה במצב אופליין
-    final isOfflineMode =
-        Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ?? false;
-    if (isOfflineMode) {
-      return Container();
-    }
-    return Tooltip(
-      message: 'אירעה שגיאה בעדכון. לחץ לבדיקה חוזרת.',
-      child: _updateChipSurface(
-        context,
-        TextButton.icon(
-          onPressed: checkForUpdate,
-          icon: const Icon(FluentIcons.warning_24_regular),
-          label: const Text('שגיאה בחיבור לרשת במהלך בדיקת עדכונים'),
-        ),
-      ),
-    );
+    return Container();
   }
 
   return Container();

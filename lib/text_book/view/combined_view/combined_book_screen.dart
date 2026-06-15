@@ -23,6 +23,7 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -270,6 +271,12 @@ class _CombinedViewState extends State<CombinedView> {
       _previewScrollController = ScrollController();
     }
     _focusNode = FocusNode();
+    // רישום למיקוד אזור הקריאה במעבר טאב (לא ב-preview שאינו טאב פעיל).
+    if (!widget.isPreviewMode) {
+      FocusRepository().registerTabContentFocusRequester(widget.tab, () {
+        if (_focusNode.canRequestFocus) _focusNode.requestFocus();
+      });
+    }
     // שמירת ה-BLoC מראש
     _textBookBloc = context.read<TextBookBloc>();
 
@@ -349,6 +356,9 @@ class _CombinedViewState extends State<CombinedView> {
     _savedSelectedText.dispose();
     _savedSelectedIndex.dispose();
     _currentSelectedIndex.dispose();
+    if (!widget.isPreviewMode) {
+      FocusRepository().unregisterTabContentFocusRequester(widget.tab);
+    }
     _focusNode.dispose();
     widget.selectionSyncController
         ?.removeListener(_handleExternalSelectionChange);
@@ -1424,6 +1434,7 @@ class _CombinedViewState extends State<CombinedView> {
                             curve: 10.0,
                             accelerationFactor: 5,
                             scrollController: widget.tab.mainOffsetController,
+                            itemScrollController: widget.tab.scrollController,
                             child: BlocBuilder<PersonalNotesBloc,
                                 PersonalNotesState>(
                               builder: (context, notesState) {
@@ -1479,11 +1490,15 @@ class _CombinedViewState extends State<CombinedView> {
       itemCount: itemCount,
       itemBuilder: (context, index) {
         ExpansibleController controller = ExpansibleController();
-        return buildExpansiomTile(
-          controller,
-          index,
-          state,
-          noteMap,
+        // מבודד את שכבת הצביעה של כל פריט - rebuild של פריט בודד (בחירה/
+        // הדגשה) או emit של warming לא יצבע מחדש את כל ה-viewport.
+        return RepaintBoundary(
+          child: buildExpansiomTile(
+            controller,
+            index,
+            state,
+            noteMap,
+          ),
         );
       },
     );

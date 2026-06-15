@@ -21,6 +21,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_screen.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../../test_helpers/memory_cache_provider.dart';
@@ -90,9 +91,71 @@ void main() {
     );
     expect(dialog.onSettingsChanged, isNotNull);
   });
+
+  testWidgets('כשל טעינת מפרש תחתון אינו שומר הסתרה גלובלית', (tester) async {
+    const missingCommentator = 'מפרש בדיקה שלא קיים במאגר';
+
+    await PageShapeSettingsManager.saveConfiguration(
+      'ספר בדיקה',
+      const {
+        'left': null,
+        'right': null,
+        'bottom': missingCommentator,
+        'bottomRight': null,
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(
+              value: _TestTextBookBloc(
+                _loadedState(
+                  availableCommentators: const [missingCommentator],
+                ),
+              ),
+            ),
+            BlocProvider<PersonalNotesBloc>.value(
+              value: _TestPersonalNotesBloc(
+                const PersonalNotesState(
+                  isLoading: false,
+                  bookId: 'ספר בדיקה',
+                  locatedNotes: [],
+                  missingNotes: [],
+                  errorMessage: null,
+                  filteredLocatedNotes: [],
+                  filteredMissingNotes: [],
+                ),
+              ),
+            ),
+            BlocProvider<SettingsBloc>.value(
+              value: _TestSettingsBloc(SettingsState.initial()),
+            ),
+          ],
+          child: PageShapeScreen(openBookCallback: (_) {}),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pump();
+
+    expect(
+      Settings.getValue<bool>('page_shape_global_visibility_bottom'),
+      isNot(false),
+    );
+    expect(
+      Settings.getValue<bool>('page_shape_use_book_settings_ספר בדיקה'),
+      isNot(true),
+    );
+  });
 }
 
-TextBookLoaded _loadedState() {
+TextBookLoaded _loadedState({
+  List<String> availableCommentators = const ['רש"י על ספר בדיקה'],
+}) {
   return TextBookLoaded(
     book: TextBook(title: 'ספר בדיקה'),
     showLeftPane: false,
@@ -102,7 +165,7 @@ TextBookLoaded _loadedState() {
     showPageShapeView: true,
     activeCommentators: const [],
     commentatorGroups: const [],
-    availableCommentators: const ['רש"י על ספר בדיקה'],
+    availableCommentators: availableCommentators,
     links: const [],
     visibleLinks: const [],
     linksByLine: const {},

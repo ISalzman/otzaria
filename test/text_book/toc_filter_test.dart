@@ -74,4 +74,30 @@ void main() {
       'מאירי על שבת דף ע',
     ]);
   });
+
+  test('container parents keep book order when only descendants match', () {
+    TocEntry section(String title, int index, String childTitle) {
+      final parent = _entry(text: title, index: index, level: 1);
+      parent.children = [
+        _entry(text: childTitle, index: index + 1, level: 2, parent: parent),
+      ];
+      return parent;
+    }
+
+    final entries = [
+      section('אורח חיים', 0, 'סימן א'),
+      section('יורה דעה', 2, 'סימן א'),
+      section('אבן העזר', 4, 'סימן א'),
+      section('חושן משפט', 6, 'סימן א'),
+    ];
+
+    final filtered = filterTocEntriesForSearch(entries, 'סימן א');
+
+    expect(filtered.map((entry) => entry.text).toList(), [
+      'אורח חיים',
+      'יורה דעה',
+      'אבן העזר',
+      'חושן משפט',
+    ]);
+  });
 }

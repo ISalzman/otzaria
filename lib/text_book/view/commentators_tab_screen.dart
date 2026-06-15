@@ -9,6 +9,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
@@ -248,10 +249,18 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         loadCommentators: true,
       ));
     });
+
+    // ממקד את חלונית המפרשים כשהטאב הופך פעיל (מעבר טאב) כדי שגלילה עם
+    // החיצים תעבוד מיד בלי לחיצה.
+    FocusRepository().registerTabContentFocusRequester(
+      widget.tab,
+      () => _commentaryKey.currentState?.requestScrollFocus(),
+    );
   }
 
   @override
   void dispose() {
+    FocusRepository().unregisterTabContentFocusRequester(widget.tab);
     _navTabController.dispose();
     _commentarySearchController.dispose();
     _searchFocusNode.dispose();
@@ -633,6 +642,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           fontSize: settingsState.commentatorsFontSize,
           indexes: effectiveIndexes,
           showSearch: true,
+          autofocus: true,
           useAvailableCommentators: _selectedCommentatorsOverride == null,
           selectedCommentatorsOverride: _selectedCommentatorsOverride,
           onSelectedCommentatorsOverrideChanged: (list) {

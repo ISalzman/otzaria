@@ -2,7 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:otzaria/search/utils/find_match_utils.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
+
+/// מחזירה האם כותרת סימנייה תואמת לשאילתת החיפוש, עם נורמליזציה כמו באיתור
+/// (הסרת ניקוד וגרשיים) כך שכותרות עבריות יימצאו גם ללא תווים אלו.
+bool pdfOutlineTitleMatchesQuery(String title, String rawQuery) {
+  final normalizedQuery = normalizeFindText(rawQuery);
+  if (normalizedQuery.isEmpty) return true;
+  return findNormalizedTextMatches(
+    normalizedQuery: normalizedQuery,
+    normalizedPrimaryText: normalizeFindText(title),
+  );
+}
 
 class OutlineView extends StatefulWidget {
   const OutlineView({
@@ -299,11 +311,9 @@ class _OutlineViewState extends State<OutlineView>
 
     getAllNodes(widget.outline, 0);
 
-    // דילוג על רמה 0 (כותרת ראשית של הספר) כדי למנוע התאמות שגויות
-    // לאותיות שמופיעות בשם הספר
     final filteredNodes = allNodes
         .where((item) =>
-            item.level > 0 && item.node.title.contains(searchController.text))
+            pdfOutlineTitleMatchesQuery(item.node.title, searchController.text))
         .toList();
 
     return SingleChildScrollView(

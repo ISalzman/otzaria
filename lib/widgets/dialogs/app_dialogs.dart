@@ -33,6 +33,10 @@ class SingleActionDialog extends StatefulWidget {
   final String confirmText;
   final TextDirection? textDirection;
 
+  /// נקרא בלחיצת אישור. אם מחזיר false הדיאלוג נשאר פתוח (למשל כשוולידציה
+  /// בתוכן נכשלה). null = התנהגות רגילה שסוגרת תמיד.
+  final bool Function()? onConfirm;
+
   const SingleActionDialog({
     super.key,
     required this.title,
@@ -40,6 +44,7 @@ class SingleActionDialog extends StatefulWidget {
     this.customContent,
     this.confirmText = 'אישור',
     this.textDirection,
+    this.onConfirm,
   }) : assert(
           content != null || customContent != null,
           'content או customContent חייבים להיות מוגדרים',
@@ -51,11 +56,16 @@ class SingleActionDialog extends StatefulWidget {
 
 class _SingleActionDialogState extends State<SingleActionDialog>
     with DialogNavigationMixin {
+  void _handleConfirm() {
+    if (widget.onConfirm != null && !widget.onConfirm!()) return;
+    Navigator.of(context).pop(true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return buildKeyboardNavigator(
-      onConfirm: () => Navigator.of(context).pop(true),
+      onConfirm: _handleConfirm,
       onCancel: () => Navigator.of(context).pop(false),
       child: AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
@@ -66,7 +76,7 @@ class _SingleActionDialogState extends State<SingleActionDialog>
             Text(widget.content!, textDirection: widget.textDirection),
         actions: [
           FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: _handleConfirm,
             style: FilledButton.styleFrom(
                 backgroundColor: cs.primary, foregroundColor: cs.onPrimary),
             child: Text(
@@ -236,6 +246,7 @@ Future<bool?> showSingleActionDialog({
   String confirmText = 'אישור',
   TextDirection? textDirection,
   bool barrierDismissible = true,
+  bool Function()? onConfirm,
 }) =>
     showDialog<bool>(
       context: context,
@@ -245,7 +256,8 @@ Future<bool?> showSingleActionDialog({
           content: content,
           customContent: customContent,
           confirmText: confirmText,
-          textDirection: textDirection),
+          textDirection: textDirection,
+          onConfirm: onConfirm),
     );
 
 Future<bool?> showTwoActionsDialog({
