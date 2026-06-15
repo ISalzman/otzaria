@@ -528,6 +528,13 @@ class FindRefRepository {
         stripLeadingTokensCount: matchedByAcronym ? bookQueryTokenCount : 0,
       );
 
+      // הטוקן שאחרי שם-הספר עלול להיות בעצמו ספר עצמאי ("תורה אור" — "אור" ספר),
+      // ואז חיפוש TOC לפיו יוצר התאמות-שווא חוצות-ספרים. אבל אם הטוקן הוא חלק
+      // מכותרת הספר הנוכחי ("ברכות" בתוך "פסקי הרא"ש על ברכות") — אין חציית ספר,
+      // ומותר לרדת לכותרות הפנימיות.
+      final suppressTocForCrossBook =
+          hasExactNextTokenMatch && !titleTokens.contains(nextToken);
+
       // bookId == -1: file-system PDF not in DB — use PDF outline as TOC,
       // mirroring the regular book flow as closely as possible.
       if (bookId == -1) {
@@ -553,7 +560,7 @@ class FindRefRepository {
         final outlineEntries = await outlineFn(hit.filePath);
         final normalizedBookTitle = _normalizeForMatch(title);
 
-        if (!hasExactNextTokenMatch) {
+        if (!suppressTocForCrossBook) {
           // Mirror regular book: add ALL matching outline entries (not just first).
           for (final (normChapter, origChapter, pageNumber) in outlineEntries) {
             if (normChapter == normalizedBookTitle) continue;
@@ -589,7 +596,7 @@ class FindRefRepository {
           orderIndex: hit.orderIndex,
           bookId: bookId,
         ));
-      } else if (!hasExactNextTokenMatch) {
+      } else if (!suppressTocForCrossBook) {
         final tocEntries = await fetchTocEntries(
           bookId,
           title,
