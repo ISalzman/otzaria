@@ -797,6 +797,53 @@ void main() {
       expect(tocCalled, isFalse,
           reason: 'כשהטוקן הבא הוא ספר מדויק, יש לדלג על חיפוש TOC מסונן');
     });
+
+    test('כשהטוקן הבא הוא חלק מכותרת הספר עצמו — TOC כן נשלף', () async {
+      // "ברכות" הוא ספר עצמאי (מסכת ברכות, rank=0) אבל גם המילה האחרונה בכותרת
+      // "פסקי הרא"ש על ברכות". אסור שהגנת cross-book תחסום את הירידה לכותרת
+      // הפנימית "פרק ג הלכה ה" — אחרת לא ניתן להגיע לקטע ספציפי בספר "X על Y".
+      List<String>? tocTokens;
+
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        getCategoryPath: (_) async => '',
+        searchReferenceBooks: (query, {int limit = 50}) {
+          if (query == 'פסקי הראש על') {
+            return [
+              _hit(
+                bookId: 2141,
+                title: 'פסקי הרא"ש על ברכות',
+                normalizedTitle: 'פסקי הראש על ברכות',
+                matchRank: 1,
+              )
+            ];
+          }
+          if (query == 'ברכות') {
+            return [_hit(bookId: 103, title: 'ברכות', matchRank: 0)];
+          }
+          return const <ReferenceBookHit>[];
+        },
+        getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async {
+          tocTokens = queryTokens;
+          return [
+            {
+              'reference': 'פסקי הרא"ש על ברכות פרק ג הלכה ה',
+              'segment': 42,
+              'level': 2,
+            },
+          ];
+        },
+      );
+
+      final results = await repo.findRefs('פסקי הרא"ש על ברכות ג ה');
+
+      expect(tocTokens, equals(const ['ג', 'ה']),
+          reason: 'TOC נשלף עם טוקני המיקום הפנימי בלבד');
+      expect(results.map((r) => r.reference),
+          contains('פסקי הרא"ש על ברכות פרק ג הלכה ה'));
+    });
   });
 
   // ─── שאריות-ריקות → רק הספר עצמו ────────────────────────────────────────────
