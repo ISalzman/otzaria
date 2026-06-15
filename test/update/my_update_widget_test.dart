@@ -235,6 +235,22 @@ void main() {
     });
   });
 
+  group('preferredWindowsFormatForInstall', () {
+    test('installed app (admin or per-user) uses the exe installer', () {
+      expect(
+        preferredWindowsFormatForInstall(isInstalledApp: true),
+        'exe',
+      );
+    });
+
+    test('portable mode (portable.marker present) uses the zip', () {
+      expect(
+        preferredWindowsFormatForInstall(isInstalledApp: false),
+        'zip',
+      );
+    });
+  });
+
   group('isSilentWindowsInstallerUrl', () {
     test('identifies the silent installer by its asset name in the URL', () {
       expect(

@@ -149,6 +149,17 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   @override
   Widget build(BuildContext context) {
     return TextBookStateBuilder(
+      // רשימת הקישורים תלויה ב-visibleLinks בלבד (ובהצגת הטקסט), לא בתוכן
+      // הספר. דילוג על emit-ים של warming/הרחבת-טווח שלא נוגעים לקישורים.
+      buildWhen: (previous, current) {
+        if (previous is! TextBookLoaded || current is! TextBookLoaded) {
+          return true;
+        }
+        return previous.visibleLinks != current.visibleLinks ||
+            previous.fontSize != current.fontSize ||
+            previous.removeNikud != current.removeNikud ||
+            previous.removePunctuation != current.removePunctuation;
+      },
       builder: (context, state) {
         return Column(
           children: [

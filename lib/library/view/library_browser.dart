@@ -1578,7 +1578,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return Icon(
       book is PdfBook
           ? FluentIcons.document_pdf_24_regular
-          : FluentIcons.document_text_24_regular,
+          : book is DocxBook || book.fileType == 'docx'
+              ? FluentIcons.document_edit_24_regular
+              : FluentIcons.document_text_24_regular,
       color: cs.onSecondaryContainer,
       size: iconSize,
     );

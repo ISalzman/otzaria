@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
@@ -25,7 +26,7 @@ class SelectionDialog<T> extends StatefulWidget {
 }
 
 class _SelectionDialogState<T> extends State<SelectionDialog<T>>
-    with DialogNavigationMixin {
+    with DialogNavigationMixin, DialogFocusRestorerMixin<SelectionDialog<T>> {
   late List<SelectionItem<T>> filteredItems;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -36,6 +37,7 @@ class _SelectionDialogState<T> extends State<SelectionDialog<T>>
     focusedButtonIndex = 0;
     filteredItems = widget.items;
     _searchController.addListener(_filterItems);
+    registerDialogFocusRestorer(_searchFocusNode);
   }
 
   @override

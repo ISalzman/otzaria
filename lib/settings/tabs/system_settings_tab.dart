@@ -373,14 +373,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final email = await showErrorReportSenderEmailDialog(
       context: context,
       initialValue: reportService.senderEmail,
+      validator: (value) => DirectErrorReportService.isValidSenderEmail(value)
+          ? null
+          : 'יש להזין כתובת דוא"ל תקינה.',
     );
 
     if (email == null) {
-      return;
-    }
-
-    if (!DirectErrorReportService.isValidSenderEmail(email)) {
-      UiSnack.showError('יש להזין כתובת דוא"ל תקינה.');
       return;
     }
 
@@ -459,6 +457,26 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     } else {
       UiSnack.showError(result.message);
     }
+  }
+
+  Future<void> _markPendingReportAsSent(DirectErrorReport report) async {
+    final confirmed = await showTwoActionsDialog(
+      context: context,
+      title: 'לסמן כנשלח?',
+      content:
+          'הדיווח יעבור להיסטוריית הדיווחים שנשלחו ויוסר מהתור, ללא שליחה לשרת. '
+          'השתמשו בכך אם כבר שלחתם את הדיווח בדרך אחרת.',
+      cancelText: 'ביטול',
+      confirmText: 'סמן כנשלח',
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    await DirectErrorReportService().markPendingReportAsSent(report);
+    if (!mounted) return;
+    setState(() {});
+    UiSnack.show('הדיווח סומן כנשלח.');
   }
 
   Future<void> _editPendingReport(DirectErrorReport report) async {
@@ -1102,6 +1120,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               text: 'מחק',
               icon: FluentIcons.delete_24_regular,
               onPressed: () => _deletePendingReport(report),
+            ),
+            NeutralActionButton(
+              text: 'סמן כנשלח',
+              icon: FluentIcons.checkmark_24_regular,
+              onPressed: () => _markPendingReportAsSent(report),
             ),
             _buildManagedActionButton(
               enabled: canSend,

@@ -524,6 +524,10 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     if (loadedState is! TextBookLoaded) {
       return;
     }
+    final intraLineFraction =
+        (result.index >= 0 && result.index < _content.length)
+            ? matchFractionInLine(_content[result.index], result.query)
+            : 0.0;
     unawaited(scrollToSourceLine(
       scrollController: widget.scrollControler,
       scrollOffsetController: loadedState.scrollOffsetController,
@@ -534,6 +538,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       duration: const Duration(milliseconds: 250),
       curve: Curves.ease,
       alignment: 0.35,
+      intraLineFraction: intraLineFraction,
     ));
 
     if (closePaneOnAndroid && Platform.isAndroid) {

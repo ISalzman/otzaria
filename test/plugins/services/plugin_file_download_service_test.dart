@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -233,6 +234,65 @@ void main() {
         throwsA(isA<Exception>()),
       );
     });
+  });
+
+  test('זורק TimeoutException כשהזרם נתקע (אין בייטים בחלון התקיעה)', () async {
+    // זרם שמתעכב מעבר לחלון התקיעה לפני הבייט הראשון — מדמה חיבור מת.
+    final client = MockClient.streaming((request, bodyStream) async {
+      Stream<List<int>> stalled() async* {
+        await Future.delayed(const Duration(seconds: 1));
+        yield [1];
+      }
+
+      return http.StreamedResponse(stalled(), 200);
+    });
+    final service = PluginFileDownloadService(
+      client: client,
+      stallTimeout: const Duration(milliseconds: 50),
+    );
+
+    await expectLater(
+      service.downloadToDownloads(
+        Uri.parse(
+            'https://github.com/Owner/Repo/releases/latest/download/a.zip'),
+        isAllowed: allowAll,
+        targetDir: tempDir,
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
+    // הקובץ החלקי נמחק בכישלון — אין שאריות בתיקיית היעד.
+    expect(tempDir.listSync(), isEmpty);
+  });
+
+  test('זורק TimeoutException כשגוף תשובת ה-redirect נתקע ב-drain', () async {
+    // 302 שגופו לא נסגר — לפני התיקון ה-drain היה נתקע לנצח (download מוחרג
+    // מה-timeout הכללי של ה-RPC).
+    final client = MockClient.streaming((request, bodyStream) async {
+      Stream<List<int>> neverEnds() async* {
+        await Future.delayed(const Duration(seconds: 1));
+        yield [0];
+      }
+
+      return http.StreamedResponse(
+        neverEnds(),
+        302,
+        headers: {'location': 'https://github.com/Owner/Repo/final/a.zip'},
+      );
+    });
+    final service = PluginFileDownloadService(
+      client: client,
+      stallTimeout: const Duration(milliseconds: 50),
+    );
+
+    await expectLater(
+      service.downloadToDownloads(
+        Uri.parse(
+            'https://github.com/Owner/Repo/releases/latest/download/a.zip'),
+        isAllowed: allowAll,
+        targetDir: tempDir,
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
   });
 
   test('dispose מסיר את ה-closer מ-HttpClientRegistry', () async {

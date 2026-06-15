@@ -100,4 +100,28 @@ void main() {
       expect(results, isEmpty);
     });
   });
+
+  group('matchFractionInLine', () {
+    test('מילה בתחילת השורה — שבר 0', () {
+      expect(matchFractionInLine('ישראל עם קדוש', 'ישראל'), 0);
+    });
+
+    test('מילה בסוף השורה — שבר גבוה', () {
+      expect(matchFractionInLine('שמע ישראל', 'ישראל'), greaterThan(0.3));
+    });
+
+    test('שאילתה מנוקדת מול שורה מנוקדת', () {
+      final fraction =
+          matchFractionInLine('בְּרֵאשִׁית בָּרָא אֱלֹהִים', 'אלהים');
+      expect(fraction, greaterThan(0.5));
+    });
+
+    test('אין התאמה — שבר 0', () {
+      expect(matchFractionInLine('שמע ישראל', 'משה'), 0);
+    });
+
+    test('שורה ריקה — שבר 0', () {
+      expect(matchFractionInLine('', 'שמע'), 0);
+    });
+  });
 }

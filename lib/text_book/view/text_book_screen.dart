@@ -1223,7 +1223,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                         !textSearchFocusNode.hasFocus &&
                         !navigationSearchFocusNode.hasFocus &&
                         !altTitlesSearchFocusNode.hasFocus) {
-                      _bookContentFocusNode.requestFocus();
+                      // ממקד את אזור הגלילה (ProgressiveScroll) דרך ה-requester
+                      // שרשם CombinedView; הוא צאצא של ה-KeyboardListener הזה,
+                      // לכן Ctrl+P/Home וכו' ממשיכים לעבוד. fallback ל-node הזה
+                      // אם אין requester (למשל צורת הדף).
+                      final didFocus = _focusRepository
+                              ?.requestTabContentFocus(widget.tab) ??
+                          false;
+                      if (!didFocus) _bookContentFocusNode.requestFocus();
                     }
                   });
 

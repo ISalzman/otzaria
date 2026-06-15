@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
@@ -35,7 +36,8 @@ class PersonalNoteEditorDialog extends StatefulWidget {
       _PersonalNoteEditorDialogState();
 }
 
-class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog> {
+class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog>
+    with DialogFocusRestorerMixin<PersonalNoteEditorDialog> {
   int _focusedButtonIndex = 1; // 0 = ביטול, 1 = שמור (ברירת מחדל)
   final FocusNode _textFieldFocusNode = FocusNode();
   late final PersonalNoteEditorController _editorController;
@@ -54,6 +56,7 @@ class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog> {
     );
     _initialResult = _editorController.buildResult();
     _editorController.quillController.addListener(_checkForChanges);
+    registerDialogFocusRestorer(_textFieldFocusNode);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _textFieldFocusNode.requestFocus();
     });

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
@@ -19,8 +20,10 @@ class CustomShortcutDialog extends StatefulWidget {
   State<CustomShortcutDialog> createState() => _CustomShortcutDialogState();
 }
 
-class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
+class _CustomShortcutDialogState extends State<CustomShortcutDialog>
+    with DialogFocusRestorerMixin<CustomShortcutDialog> {
   final Set<LogicalKeyboardKey> _pressedKeys = {};
+  final FocusNode _focusNode = FocusNode();
   String _displayText = 'לחץ על המקשים...';
   bool _isRecording = false;
 
@@ -31,6 +34,13 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
       _displayText =
           ShortcutHelper.formatShortcutForDisplay(widget.initialShortcut!);
     }
+    registerDialogFocusRestorer(_focusNode);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
   }
 
   void _updateDisplay() {
@@ -60,7 +70,7 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
   @override
   Widget build(BuildContext context) {
     return KeyboardListener(
-      focusNode: FocusNode()..requestFocus(),
+      focusNode: _focusNode,
       autofocus: true,
       onKeyEvent: (KeyEvent event) {
         if (!_isRecording) {

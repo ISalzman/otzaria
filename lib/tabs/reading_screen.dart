@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -217,6 +218,15 @@ class _ReadingScreenState extends State<ReadingScreen>
               // שומרת בעצמה ב-TabsBloc. קריאה נוספת כאן גרמה לשמירה כפולה
               // (encoding של כל הטאבים) בכל מעבר טאב.
               _syncPageController();
+              // ממקד את אזור הקריאה של הטאב הפעיל כדי שגלילה עם החיצים תעבוד
+              // מיד במעבר טאב — הטאבים נשמרים חיים ולכן initState לא רץ שוב.
+              final activeTab = state.currentTab;
+              if (activeTab != null) {
+                final focusRepo = context.read<FocusRepository>();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  focusRepo.requestTabContentFocus(activeTab);
+                });
+              }
             }
           },
           listenWhen: (previous, current) =>

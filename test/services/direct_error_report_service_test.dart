@@ -331,6 +331,29 @@ void main() {
       expect(reports.single.errorDetails, 'פרט מתוקן');
     });
 
+    test('markPendingReportAsSent moves a queued report to sent history',
+        () async {
+      final repository = InMemoryDirectErrorReportRepository();
+      final sentRepository = InMemoryDirectErrorReportRepository();
+      final report = _buildReport(id: 'manual-sent-report');
+      await repository.save([
+        report,
+        _buildReport(id: 'other-report'),
+      ]);
+      final service = DirectErrorReportService(
+        queueRepository: repository,
+        sentRepository: sentRepository,
+      );
+
+      await service.markPendingReportAsSent(report);
+
+      expect(
+        (await repository.load()).map((report) => report.id).toList(),
+        ['other-report'],
+      );
+      expect((await sentRepository.load()).single.id, 'manual-sent-report');
+    });
+
     test('deleteSentReport removes a report from sent history', () async {
       final sentRepository = InMemoryDirectErrorReportRepository();
       await sentRepository.save([

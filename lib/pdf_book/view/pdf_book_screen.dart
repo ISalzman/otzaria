@@ -566,11 +566,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       initialIndex: _currentLeftPaneTabIndex,
     );
 
-    // הוספת listeners לשדות טקסט - ללא החזרה אוטומטית של פוקוס ל-PDF
-    // כדי לאפשר לדיאלוגים וחלוניות אחרות לקבל פוקוס
-    _searchFieldFocusNode.addListener(() {});
-    _navigationFieldFocusNode.addListener(() {});
-
     // טעינת headings וlinks
     _loadPdfHeadingsAndLinks();
 

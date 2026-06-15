@@ -147,6 +147,28 @@ class FocusRepository {
     );
   }
 
+  // ── מיקוד תוכן הטאב הפעיל (per-tab) ────────────────────────────────────────
+  // ממופתח לפי זהות הטאב כי הטאבים נשמרים חיים (KeepAlive); כל מסך קריאה רושם
+  // פונקציה שממקדת את אזור הגלילה שלו, ו-reading_screen קורא ל-
+  // [requestTabContentFocus] עם הטאב הפעיל בכל מעבר.
+  final Map<Object, VoidCallback> _tabContentFocusRequesters = {};
+
+  void registerTabContentFocusRequester(Object tabKey, VoidCallback requester) {
+    _tabContentFocusRequesters[tabKey] = requester;
+  }
+
+  void unregisterTabContentFocusRequester(Object tabKey) {
+    _tabContentFocusRequesters.remove(tabKey);
+  }
+
+  /// ממקד את אזור הקריאה של הטאב הפעיל (אם נרשם). מחזיר true אם נמצא ומופעל.
+  bool requestTabContentFocus(Object tabKey) {
+    final requester = _tabContentFocusRequesters[tabKey];
+    if (requester == null) return false;
+    requester();
+    return true;
+  }
+
   /// רישום FocusNode של תוכן ספר (נקרא מ-TextBookViewerBloc)
   void registerBookContentFocusNode(FocusNode focusNode) {
     _currentBookContentFocusNode = focusNode;
@@ -246,6 +268,7 @@ class FocusRepository {
   void resetForTesting() {
     _screenRestorer = null;
     _dialogRestorers.clear();
+    _tabContentFocusRequesters.clear();
     _hasScheduledRestore = false;
     _resizeDebounceTimer?.cancel();
     _resizeDebounceTimer = null;
@@ -262,5 +285,34 @@ class FocusRepository {
   void restoreNowForTesting() {
     final r = _effectiveRestorer;
     if (r != null && r.canRestore()) r.restore();
+  }
+}
+
+/// Mixin לדיאלוגים עם שדה קלט: שומר את הפוקוס בשדה לאחר אירועי חלון
+/// (maximize/resize). בלעדיו, ה-screen restorer חוטף את הפוקוס למסך שמאחור.
+///
+/// שימוש: `with DialogFocusRestorerMixin<MyDialog>` + קריאה ל-
+/// [registerDialogFocusRestorer] מ-initState. ביטול הרישום אוטומטי ב-dispose.
+mixin DialogFocusRestorerMixin<T extends StatefulWidget> on State<T> {
+  FocusRestorer? _dialogFocusRestorer;
+
+  /// רושם את [focusNode] כ-owner של שכבת הדיאלוג. קרא מ-initState.
+  void registerDialogFocusRestorer(FocusNode focusNode) {
+    _dialogFocusRestorer = FocusRepository().registerActiveRestorer(
+      restore: () {
+        if (mounted && focusNode.canRequestFocus) focusNode.requestFocus();
+      },
+      canRestore: () =>
+          mounted &&
+          focusNode.canRequestFocus &&
+          (ModalRoute.of(context)?.isCurrent ?? false),
+    );
+  }
+
+  @override
+  void dispose() {
+    final restorer = _dialogFocusRestorer;
+    if (restorer != null) FocusRepository().unregisterActiveRestorer(restorer);
+    super.dispose();
   }
 }

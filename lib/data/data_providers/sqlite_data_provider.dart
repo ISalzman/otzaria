@@ -413,6 +413,7 @@ class SqliteDataProvider {
     required int endLine,
     int? categoryId,
     String? fileType,
+    bool preferUserBooks = false,
   }) async {
     if (!_isInitialized) {
       await initialize();
@@ -424,6 +425,7 @@ class SqliteDataProvider {
         title,
         categoryId: categoryId,
         fileType: fileType,
+        preferUserBooks: preferUserBooks,
       );
       if (resolvedBook == null || resolvedBook.book.totalLines <= 0) {
         return null;

@@ -503,6 +503,62 @@ void main() {
       );
     });
 
+    testWidgets(
+        'חזרה למסך עיון אחרי יציאה — הטאב הנבחר נגלל לתצוגה גם ללא שינוי בחירה',
+        (tester) async {
+      // הטאב הנבחר היה גלוי, המשתמש עבר למסך אחר (שורת הטאבים יוצאת מהעץ
+      // וה-ScrollController מאבד את ה-offset), וחזר למסך עיון — אותו state בדיוק.
+      // ה-signature זהה ולכן לבדו אינו מפעיל גלילה; הטריגר על כניסה-מחדש לעץ
+      // (hasClients) מחזיר את הטאב הנבחר לתצוגה.
+      final tabs = List.generate(20, (i) => _makeTextTab('ספר מספר $i'));
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 19),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final t in tabs) {
+          t.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+
+      final scrollableFinder = find.descendant(
+        of: find.byType(ReorderableListView),
+        matching: find.byType(Scrollable),
+      );
+      expect(
+          tester.state<ScrollableState>(scrollableFinder.first).position.pixels,
+          greaterThan(0));
+
+      // יציאה למסך אחר וחזרה — אותו state, ללא שינוי בחירה. (settings ולא
+      // library — library דורש LibraryBloc שאינו מסופק בטסט.)
+      navigationBloc.emitScreen(Screen.settings);
+      await tester.pumpAndSettle();
+      navigationBloc.emitScreen(Screen.reading);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.state<ScrollableState>(scrollableFinder.first).position.pixels,
+        greaterThan(0),
+        reason: 'בחזרה למסך עיון הטאב הנבחר צריך להיגלל שוב לתצוגה',
+      );
+    });
+
     testWidgets('טאב נבחר ראשון — אין גלילה מיותרת (נשאר ב-offset 0)',
         (tester) async {
       final tabs = List.generate(20, (i) => _makeTextTab('ספר מספר $i'));
@@ -775,6 +831,50 @@ void main() {
       expect(resizeCalls, contains('maximize'),
           reason: 'לחיצה כפולה על אזור ריק צריכה לשנות את גודל החלון');
     });
+
+    testWidgets('לחיצה כפולה על חץ גלילת הטאבים אינה משנה את גודל החלון',
+        (tester) async {
+      // הרבה טאבים ברוחב מצומצם → overflow וחיצי גלילה מופיעים. לחיצה כפולה על
+      // חץ לא צריכה לבלוע ל-maximize (החץ מסומן כרכיב שורת הטאבים).
+      final tabs = List.generate(15, (i) => _makeTextTab('ספר מספר $i'));
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final t in tabs) {
+          t.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      installWindowChannelSpy(tester);
+      await _setSurfaceSize(tester, const Size(900, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+
+      final arrow =
+          find.byIcon(FluentIcons.chevron_left_24_regular).evaluate().isNotEmpty
+              ? find.byIcon(FluentIcons.chevron_left_24_regular)
+              : find.byIcon(FluentIcons.chevron_right_24_regular);
+      expect(arrow, findsWidgets, reason: 'overflow צריך להציג חץ גלילה');
+
+      await _doubleTapAt(tester, tester.getCenter(arrow.first));
+
+      expect(resizeCalls, isEmpty,
+          reason: 'לחיצה כפולה על חץ גלילה לא צריכה לשנות את גודל החלון');
+    });
   });
 }
 
@@ -897,6 +997,10 @@ class _SelectingTabsBloc extends _TestTabsBloc {
 class _TestNavigationBloc extends Cubit<NavigationState>
     implements NavigationBloc {
   _TestNavigationBloc(super.initialState);
+
+  /// מאפשר לטסט לדמות מעבר מסך (למשל library → reading).
+  void emitScreen(Screen screen) =>
+      emit(NavigationState(currentScreen: screen));
 
   @override
   void add(NavigationEvent event) {}

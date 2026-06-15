@@ -30,8 +30,8 @@ import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
-  static const int _linkLookBehindLines = 25;
-  static const int _linkLookAheadLines = 50;
+  static const int _linkLookBehindLines = 60;
+  static const int _linkLookAheadLines = 140;
   static const int _linksReloadThresholdLines = 20;
   static const int _initialContentLookBehindLines = 80;
   static const int _initialContentLookAheadLines = 180;
@@ -194,6 +194,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return selectedIndex;
   }
 
+  static const int _initialVisibleSyncTolerance = 2;
+
+  static ({int min, int max}) _visibleBounds(List<int> indices) {
+    return (
+      min: indices.reduce((a, b) => a < b ? a : b),
+      max: indices.reduce((a, b) => a > b ? a : b),
+    );
+  }
+
   @visibleForTesting
   static bool isInitialPageShapeVisibleSyncAlignedForTesting({
     required List<int> currentVisibleIndices,
@@ -208,12 +217,23 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       return true;
     }
 
-    final minVisible = nextVisibleIndices.reduce((a, b) => a < b ? a : b);
-    final maxVisible = nextVisibleIndices.reduce((a, b) => a > b ? a : b);
-    const tolerance = 2;
+    final bounds = _visibleBounds(nextVisibleIndices);
+    return expectedIndex >= (bounds.min - _initialVisibleSyncTolerance) &&
+        expectedIndex <= (bounds.max + _initialVisibleSyncTolerance);
+  }
 
-    return expectedIndex >= (minVisible - tolerance) &&
-        expectedIndex <= (maxVisible + tolerance);
+  static bool _looksLikeStaleInitialStartReport({
+    required int? expectedIndex,
+    required List<int> nextVisibleIndices,
+  }) {
+    if (expectedIndex == null || nextVisibleIndices.isEmpty) {
+      return false;
+    }
+
+    final bounds = _visibleBounds(nextVisibleIndices);
+    return expectedIndex > _initialVisibleSyncTolerance &&
+        bounds.min <= _initialVisibleSyncTolerance &&
+        bounds.max < expectedIndex - _initialVisibleSyncTolerance;
   }
 
   @visibleForTesting
@@ -358,20 +378,26 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     );
   }
 
-  bool _isInitialPageShapeVisibleSyncAligned(
-    TextBookLoaded state,
-    List<int> nextVisibleIndices,
-  ) {
-    return isInitialPageShapeVisibleSyncAlignedForTesting(
-      currentVisibleIndices: state.visibleIndices,
-      selectedIndex: state.selectedIndex,
-      nextVisibleIndices: nextVisibleIndices,
-    );
-  }
-
   @visibleForTesting
   static ({bool shouldIgnore, bool shouldDispatchImmediately})
       classifyRawPositionsDuringInitialPageShapeVisibleSyncForTesting({
+    required bool awaitingInitialPageShapeVisibleSync,
+    required bool showPageShapeView,
+    required List<int> currentVisibleIndices,
+    required int? selectedIndex,
+    required List<int> nextVisibleIndices,
+  }) =>
+          _classifyRawPositionsDuringInitialPageShapeVisibleSync(
+            awaitingInitialPageShapeVisibleSync:
+                awaitingInitialPageShapeVisibleSync,
+            showPageShapeView: showPageShapeView,
+            currentVisibleIndices: currentVisibleIndices,
+            selectedIndex: selectedIndex,
+            nextVisibleIndices: nextVisibleIndices,
+          );
+
+  static ({bool shouldIgnore, bool shouldDispatchImmediately})
+      _classifyRawPositionsDuringInitialPageShapeVisibleSync({
     required bool awaitingInitialPageShapeVisibleSync,
     required bool showPageShapeView,
     required List<int> currentVisibleIndices,
@@ -392,9 +418,18 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       selectedIndex: selectedIndex,
       nextVisibleIndices: nextVisibleIndices,
     );
+    final expectedIndex = expectedInitialPageShapeVisibleIndexForTesting(
+      visibleIndices: currentVisibleIndices,
+      selectedIndex: selectedIndex,
+    );
+    final shouldIgnore = !isAligned &&
+        _looksLikeStaleInitialStartReport(
+          expectedIndex: expectedIndex,
+          nextVisibleIndices: nextVisibleIndices,
+        );
     return (
-      shouldIgnore: !isAligned,
-      shouldDispatchImmediately: isAligned,
+      shouldIgnore: shouldIgnore,
+      shouldDispatchImmediately: !shouldIgnore,
     );
   }
 
@@ -641,7 +676,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         }
 
         final initialSyncClassification =
-            classifyRawPositionsDuringInitialPageShapeVisibleSyncForTesting(
+            _classifyRawPositionsDuringInitialPageShapeVisibleSync(
           awaitingInitialPageShapeVisibleSync:
               _awaitingInitialPageShapeVisibleSync,
           showPageShapeView: currentState.showPageShapeView,
@@ -649,12 +684,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           selectedIndex: currentState.selectedIndex,
           nextVisibleIndices: visibleIndicesNow,
         );
-        if (initialSyncClassification.shouldIgnore ||
-            initialSyncClassification.shouldDispatchImmediately) {
-          if (initialSyncClassification.shouldIgnore) {
-            return;
-          }
-
+        if (initialSyncClassification.shouldIgnore) {
+          return;
+        }
+        if (initialSyncClassification.shouldDispatchImmediately) {
           _debounceTimer?.cancel();
           add(UpdateVisibleIndecies(visibleIndicesNow));
           return;
@@ -1011,11 +1044,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       if (_awaitingInitialPageShapeVisibleSync &&
           currentState.showPageShapeView) {
-        final isAligned = _isInitialPageShapeVisibleSyncAligned(
-          currentState,
-          event.visibleIndecies,
+        final initialSyncClassification =
+            _classifyRawPositionsDuringInitialPageShapeVisibleSync(
+          awaitingInitialPageShapeVisibleSync:
+              _awaitingInitialPageShapeVisibleSync,
+          showPageShapeView: currentState.showPageShapeView,
+          currentVisibleIndices: currentState.visibleIndices,
+          selectedIndex: currentState.selectedIndex,
+          nextVisibleIndices: event.visibleIndecies,
         );
-        if (!isAligned) {
+        if (initialSyncClassification.shouldIgnore) {
           return;
         }
 
@@ -1889,11 +1927,20 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     _isWarmingContentCache = true;
     try {
+      List<int> lastWarmVisible = const [];
       while (!isClosed) {
         final currentState = state;
         if (currentState is! TextBookLoaded ||
             currentState.book.title != book.title) {
           return;
+        }
+
+        // השהיית warming בזמן גלילה: אם החלון הנראה זז המשתמש גולל (warming
+        // לא מזיזו), ונותנים קדימות לטעינה האינטראקטיבית במקום להתחרות עליה.
+        if (!_listsEqual(lastWarmVisible, currentState.visibleIndices)) {
+          lastWarmVisible = currentState.visibleIndices;
+          await Future<void>.delayed(_visibleIndicesDebounceDuration);
+          continue;
         }
 
         final totalLines = _loadedContentTotalLines;

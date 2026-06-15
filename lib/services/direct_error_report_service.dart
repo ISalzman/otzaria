@@ -170,6 +170,13 @@ class DirectErrorReportService {
     await _queueRepository.save(reports);
   }
 
+  /// מסמן דיווח מהתור כנשלח ידנית: מעביר אותו להיסטוריית הנשלחים
+  /// ומסיר אותו מהתור, מבלי לפנות לשרת.
+  Future<void> markPendingReportAsSent(DirectErrorReport report) async {
+    await _saveSentReport(report);
+    await deletePendingReport(report.id);
+  }
+
   Future<void> queueReport(
     DirectErrorReport report, {
     DirectErrorReportQueueType queueType = DirectErrorReportQueueType.manual,

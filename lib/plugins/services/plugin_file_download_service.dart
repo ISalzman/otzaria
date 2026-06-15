@@ -34,8 +34,18 @@ class PluginFileDownloadService {
   /// מספר ה-redirects המרבי שיתבצע לפני שתיזרק שגיאה.
   static const int _maxRedirects = 5;
 
-  PluginFileDownloadService({http.Client? client})
-      : _client = client ?? http.Client() {
+  /// משך מרבי ללא התקדמות לפני שההורדה נקטעת ב-[TimeoutException].
+  ///
+  /// timeout על *תקיעה* ולא על משך כולל: הוא מתאפס עם כל בייט נכנס, כך
+  /// שהורדה איטית או של קובץ גדול נמשכת כל עוד הנתונים זורמים, ורק חיבור
+  /// שמת באמת (אין בייטים כלל בחלון הזה) נקטע. חל גם על שלב יצירת החיבור.
+  final Duration _stallTimeout;
+
+  PluginFileDownloadService({
+    http.Client? client,
+    Duration stallTimeout = const Duration(seconds: 60),
+  })  : _client = client ?? http.Client(),
+        _stallTimeout = stallTimeout {
     HttpClientRegistry.register(_closer);
   }
 
@@ -84,7 +94,7 @@ class PluginFileDownloadService {
 
     final sink = outFile.openWrite();
     try {
-      await sink.addStream(response.stream);
+      await sink.addStream(response.stream.timeout(_stallTimeout));
       await sink.flush();
       await sink.close();
     } catch (_) {
@@ -131,7 +141,7 @@ class PluginFileDownloadService {
 
     final sink = outFile.openWrite();
     try {
-      await sink.addStream(response.stream);
+      await sink.addStream(response.stream.timeout(_stallTimeout));
       await sink.flush();
       await sink.close();
     } catch (_) {
@@ -168,12 +178,12 @@ class PluginFileDownloadService {
       }
 
       final request = http.Request('GET', current)..followRedirects = false;
-      final response = await _client.send(request);
+      final response = await _client.send(request).timeout(_stallTimeout);
 
       if (_isRedirect(response.statusCode)) {
         final location = response.headers['location'];
         // ניקוז גוף תשובת ה-redirect כדי לשחרר את החיבור.
-        await response.stream.drain<void>();
+        await response.stream.timeout(_stallTimeout).drain<void>();
         if (location == null || location.isEmpty) {
           throw Exception('שגיאה בהורדת הקובץ (redirect ללא Location)');
         }
@@ -183,7 +193,7 @@ class PluginFileDownloadService {
       }
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        await response.stream.drain<void>();
+        await response.stream.timeout(_stallTimeout).drain<void>();
         throw Exception('שגיאה בהורדת הקובץ (${response.statusCode})');
       }
 

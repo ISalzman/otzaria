@@ -57,6 +57,7 @@ void main() {
   testWidgets('DualAdaptiveReaderPane closes overlay pane on scrim tap',
       (tester) async {
     var leftPaneOpen = true;
+    var closeCalled = false;
 
     await tester.pumpWidget(
       StatefulBuilder(
@@ -66,6 +67,7 @@ void main() {
             showLeftPane: leftPaneOpen,
             showRightPane: false,
             onCloseLeftPane: () {
+              closeCalled = true;
               setState(() {
                 leftPaneOpen = false;
               });
@@ -81,7 +83,41 @@ void main() {
     await tester.tapAt(const Offset(320, 300));
     await tester.pumpAndSettle();
 
-    expect(find.text('left pane'), findsNothing);
+    // הלחיצה על ה-scrim מבקשת סגירה; החלונית מוחלקת החוצה (נשארת בעץ
+    // לצורך אנימציית היציאה) ומפסיקה לקלוט מגע.
+    expect(closeCalled, isTrue);
+    expect(find.text('main'), findsOneWidget);
+  });
+
+  testWidgets('DualAdaptiveReaderPane animates wide pane out on close',
+      (tester) async {
+    await tester.pumpWidget(
+      buildPane(
+        width: 1400,
+        showLeftPane: true,
+        showRightPane: false,
+        onCloseLeftPane: () {},
+        onCloseRightPane: () {},
+      ),
+    );
+    expect(find.text('left pane'), findsOneWidget);
+
+    // סגירה: רוחב החלונית מונפש ל-0, אך התוכן נשאר בעץ בזמן הכיווץ (לפני
+    // התיקון הוא נעלם מיד ללא אנימציה).
+    await tester.pumpWidget(
+      buildPane(
+        width: 1400,
+        showLeftPane: false,
+        showRightPane: false,
+        onCloseLeftPane: () {},
+        onCloseRightPane: () {},
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('left pane'), findsOneWidget);
+
+    // בתום האנימציה החלונית מכווצת לרוחב 0 אך נשמרת בעץ (state preservation).
+    await tester.pumpAndSettle();
     expect(find.text('main'), findsOneWidget);
   });
 }

@@ -1,6 +1,8 @@
 import 'dart:isolate';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
+import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
@@ -168,18 +170,25 @@ class DataRepository {
       allBooks.addAll(await localHebrewBooks);
     }
 
-    final searchEntries = <_BookSearchEntry>[
+    // no-op אם הקאש כבר חומם בעליית האפליקציה
+    await AcronymsCache.instance.warmUp();
+
+    final searchEntries = <BookSearchEntry>[
       for (var i = 0; i < allBooks.length; i++)
-        _BookSearchEntry(
+        BookSearchEntry(
           index: i,
           title: allBooks[i].title,
           author: allBooks[i].author ?? '',
           topics: allBooks[i].topics,
+          acronyms: allBooks[i].id == null
+              ? const []
+              : AcronymsCache.instance.getAcronymsForBook(allBooks[i].id!) ??
+                  const [],
         ),
     ];
 
     final matchingIndices = await Isolate.run(
-      () => _filterBookSearchEntries(
+      () => filterBookSearchEntries(
         entries: searchEntries,
         queryWords: queryWords,
         topics: topics ?? const <String>[],
@@ -202,22 +211,28 @@ class DataRepository {
   }
 }
 
-class _BookSearchEntry {
+@visibleForTesting
+class BookSearchEntry {
   final int index;
   final String title;
   final String author;
   final String topics;
 
-  const _BookSearchEntry({
+  /// כינויים מנורמלים מראש מטבלת book_acronym (ראה [AcronymsCache]).
+  final List<String> acronyms;
+
+  const BookSearchEntry({
     required this.index,
     required this.title,
     required this.author,
     required this.topics,
+    this.acronyms = const [],
   });
 }
 
-List<int> _filterBookSearchEntries({
-  required List<_BookSearchEntry> entries,
+@visibleForTesting
+List<int> filterBookSearchEntries({
+  required List<BookSearchEntry> entries,
   required List<String> queryWords,
   required List<String> topics,
   required bool sortByRatio,
@@ -232,86 +247,40 @@ List<int> _filterBookSearchEntries({
         .where((topic) => topic.isNotEmpty)
         .toSet();
 
+    // כל המילים שמולן נבדקת השאילתה — כותרת, מחבר וכינויים יחד
+    final searchWords = <String>{
+      ...normalizedTitle.split(' '),
+      ...normalizedAuthor.split(' '),
+      for (final acronym in entry.acronyms) ...acronym.split(' '),
+    }..remove('');
+
     return _PreparedBookSearchEntry(
       index: entry.index,
       normalizedTitle: normalizedTitle,
-      normalizedAuthor: normalizedAuthor,
+      searchWords: searchWords,
       topics: topics,
+      acronyms: entry.acronyms,
     );
   });
 
-  // Damerau-Levenshtein edit distance (supports transposition of adjacent chars)
-  // e.g. אבועלפיה → אבולעפיה counts as 1 edit, not 2
-  int editDistance(String a, String b) {
-    if (a == b) return 0;
-    if (a.isEmpty) return b.length;
-    if (b.isEmpty) return a.length;
-    final aChars = a.runes.toList();
-    final bChars = b.runes.toList();
-    final la = aChars.length;
-    final lb = bChars.length;
-    // d[i][j] = distance between a[0..i-1] and b[0..j-1]
-    final d = List.generate(
-        la + 1, (i) => List<int>.generate(lb + 1, (j) => j == 0 ? i : 0));
-    for (int j = 0; j <= lb; j++) {
-      d[0][j] = j;
-    }
-    for (int i = 1; i <= la; i++) {
-      for (int j = 1; j <= lb; j++) {
-        final cost = aChars[i - 1] == bChars[j - 1] ? 0 : 1;
-        d[i][j] = [
-          d[i - 1][j] + 1, // deletion
-          d[i][j - 1] + 1, // insertion
-          d[i - 1][j - 1] + cost, // substitution
-        ].reduce((a, b) => a < b ? a : b);
-        // transposition of two adjacent characters
-        if (i > 1 &&
-            j > 1 &&
-            aChars[i - 1] == bChars[j - 2] &&
-            aChars[i - 2] == bChars[j - 1]) {
-          d[i][j] = d[i][j] < d[i - 2][j - 2] + cost
-              ? d[i][j]
-              : d[i - 2][j - 2] + cost;
-        }
+  // מטמון לזוגות (מילת שאילתה, מילת טקסט) — מילים נפוצות ('מסכת', 'על')
+  // חוזרות באלפי ספרים ומחושבות פעם אחת בלבד.
+  final pairMemo = {
+    for (final word in queryWords) word: <String, bool>{},
+  };
+  bool wordMatchesEntry(String queryWord, Set<String> searchWords) {
+    final memo = pairMemo[queryWord]!;
+    for (final textWord in searchWords) {
+      if (memo[textWord] ??= _wordPairMatches(queryWord, textWord)) {
+        return true;
       }
-    }
-    return d[la][lb];
-  }
-
-  // Allowed edit distance by query word length:
-  // 1-4  chars → 0 (exact)
-  // 4-8  chars → 1 typo
-  // 8-12 chars → 2 typos
-  // 12-16 chars → 3 typos
-  // 16+  chars → 4 typos
-  int maxAllowedEdits(int len) {
-    if (len <= 4) return 0;
-    if (len <= 8) return 1;
-    if (len <= 12) return 2;
-    if (len <= 16) return 3;
-    return 4;
-  }
-
-  bool wordMatchesFuzzy(String queryWord, String text) {
-    if (text.contains(queryWord)) return true;
-    if (queryWord.length < 3) return false;
-
-    final allowed = maxAllowedEdits(queryWord.length);
-    final textWords = text.split(' ');
-    for (final textWord in textWords) {
-      if (textWord.isEmpty) continue;
-      // Only compare words of similar length to avoid false positives
-      if ((textWord.length - queryWord.length).abs() > allowed + 1) continue;
-      if (editDistance(queryWord, textWord) <= allowed) return true;
     }
     return false;
   }
 
   final filtered = preparedEntries.where((entry) {
     final matchesQuery = queryWords.every(
-      (word) =>
-          wordMatchesFuzzy(word, entry.normalizedTitle) ||
-          wordMatchesFuzzy(word, entry.normalizedAuthor),
+      (word) => wordMatchesEntry(word, entry.searchWords),
     );
     final matchesTopics =
         topics.isEmpty || topics.every((topic) => entry.topics.contains(topic));
@@ -324,10 +293,13 @@ List<int> _filterBookSearchEntries({
       for (final entry in filtered)
         _ScoredBookSearchEntry(
           index: entry.index,
-          // Boost exact matches significantly in scoring
+          // שלוש שכבות עדיפות שאינן חופפות (כותרת > כינוי > fuzzy), ובתוך כל
+          // שכבה ה-ratio מכריע — כך כותרת קצרה/מדויקת ('סוטה') צפה מעל ארוכה.
           score: entry.normalizedTitle.contains(normalizedQuery)
-              ? 100
-              : ratio(normalizedQuery, entry.normalizedTitle),
+              ? 200 + ratio(normalizedQuery, entry.normalizedTitle)
+              : entry.acronyms.any((a) => a.contains(normalizedQuery))
+                  ? 100 + ratio(normalizedQuery, entry.normalizedTitle)
+                  : ratio(normalizedQuery, entry.normalizedTitle),
         ),
     ]..sort((a, b) => b.score.compareTo(a.score));
 
@@ -344,14 +316,18 @@ List<int> _filterBookSearchEntries({
 class _PreparedBookSearchEntry {
   final int index;
   final String normalizedTitle;
-  final String normalizedAuthor;
+
+  /// כל המילים המנורמלות של הכותרת, המחבר והכינויים — מאוחדות לבדיקה אחת.
+  final Set<String> searchWords;
   final Set<String> topics;
+  final List<String> acronyms;
 
   const _PreparedBookSearchEntry({
     required this.index,
     required this.normalizedTitle,
-    required this.normalizedAuthor,
+    required this.searchWords,
     required this.topics,
+    required this.acronyms,
   });
 }
 
@@ -363,6 +339,89 @@ class _ScoredBookSearchEntry {
     required this.index,
     required this.score,
   });
+}
+
+// Damerau-Levenshtein (OSA) הבודק רק האם המרחק ≤ k, עם שורות מתגלגלות
+// ויציאה מוקדמת. הנרמול משאיר תווי BMP בלבד, לכן codeUnit == תו.
+bool _editDistanceAtMost(String a, String b, int k) {
+  final la = a.length;
+  final lb = b.length;
+  var prev2 = List<int>.filled(lb + 1, 0);
+  var prev = List<int>.generate(lb + 1, (j) => j);
+  var curr = List<int>.filled(lb + 1, 0);
+  var prevMin = 0;
+  for (var i = 1; i <= la; i++) {
+    curr[0] = i;
+    var rowMin = i;
+    final ca = a.codeUnitAt(i - 1);
+    for (var j = 1; j <= lb; j++) {
+      final cost = ca == b.codeUnitAt(j - 1) ? 0 : 1;
+      var best = prev[j - 1] + cost; // substitution
+      final deletion = prev[j] + 1;
+      if (deletion < best) best = deletion;
+      final insertion = curr[j - 1] + 1;
+      if (insertion < best) best = insertion;
+      // transposition of two adjacent characters
+      // e.g. אבועלפיה → אבולעפיה counts as 1 edit, not 2
+      if (i > 1 &&
+          j > 1 &&
+          ca == b.codeUnitAt(j - 2) &&
+          a.codeUnitAt(i - 2) == b.codeUnitAt(j - 1)) {
+        final transposition = prev2[j - 2] + cost;
+        if (transposition < best) best = transposition;
+      }
+      curr[j] = best;
+      if (best < rowMin) rowMin = best;
+    }
+    // ערכים עתידיים נגזרים משתי השורות האחרונות בתוספת עלות לא-שלילית,
+    // ולכן כשהמינימום בשתיהן חצה את k המרחק כבר לא ירד חזרה
+    if (rowMin > k && prevMin > k) return false;
+    final recycled = prev2;
+    prev2 = prev;
+    prev = curr;
+    curr = recycled;
+    prevMin = rowMin;
+  }
+  return prev[lb] <= k;
+}
+
+// Allowed edit distance by word length:
+// 1-4  chars → 0 (exact)
+// 4-8  chars → 1 typo
+// 8-12 chars → 2 typos
+// 12-16 chars → 3 typos
+// 16+  chars → 4 typos
+int _maxAllowedEdits(int len) {
+  if (len <= 4) return 0;
+  if (len <= 8) return 1;
+  if (len <= 12) return 2;
+  if (len <= 16) return 3;
+  return 4;
+}
+
+/// התאמת זוג מילים בודדות: הכלה, או מרחק עריכה שסיפו נגזר מהארוכה
+/// מבין השתיים — כך ההתאמה הדדית (מדות↔מידות).
+bool _wordPairMatches(String queryWord, String textWord) {
+  if (textWord.contains(queryWord)) return true;
+  if (queryWord.length < 3) return false;
+
+  final allowed = _maxAllowedEdits(
+      queryWord.length > textWord.length ? queryWord.length : textWord.length);
+  // שוויון מלא כבר כוסה ע"י contains
+  if (allowed == 0) return false;
+  // הפרש האורכים הוא חסם תחתון למרחק העריכה
+  if ((textWord.length - queryWord.length).abs() > allowed) return false;
+  return _editDistanceAtMost(queryWord, textWord, allowed);
+}
+
+/// התאמת מילת שאילתה לטקסט שלם (כותרת/מחבר מנורמלים) עם סלחנות לשגיאות כתיב.
+@visibleForTesting
+bool bookSearchWordMatchesFuzzy(String queryWord, String text) {
+  for (final textWord in text.split(' ')) {
+    if (textWord.isEmpty) continue;
+    if (_wordPairMatches(queryWord, textWord)) return true;
+  }
+  return false;
 }
 
 String _normalizeBookSearchText(String input) {

@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/bloc/tour_state.dart';
 import 'package:updat/updat.dart';
@@ -18,6 +20,7 @@ import 'package:window_manager/window_manager.dart';
 import 'hebrew_update_widgets.dart';
 import 'linux_installer.dart';
 import 'macos_installer.dart';
+import 'windows_installer.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 /// סוג ההתקנה המוגדר בזמן build (אופציונלי)
@@ -313,29 +316,19 @@ class _ParsedVersion implements Comparable<_ParsedVersion> {
   int get hashCode => Object.hash(major, minor, patch);
 }
 
-/// זיהוי סוג ההתקנה ב-Windows
-/// אם הוגדר INSTALL_KIND בזמן build - משתמש בו
-/// אחרת - מזהה לפי נתיב הקובץ
+/// בוחר פורמט עדכון לפי סוג ההתקנה: מתקין (`exe`) לאפליקציה מותקנת, או
+/// חבילה ניידת (`zip`) לחילוץ ידני.
+@visibleForTesting
+String preferredWindowsFormatForInstall({required bool isInstalledApp}) =>
+    isInstalledApp ? 'exe' : 'zip';
+
+/// זיהוי פורמט העדכון ב-Windows. אם הוגדר INSTALL_KIND בזמן build - משתמש בו;
+/// אחרת לפי האות האחיד [AppPaths.isPortable] (קובץ portable.marker ליד ה-EXE):
+/// נייד → zip, מותקן (admin או per-user) → מתקין exe.
 String _preferredWindowsFormat() {
   if (!Platform.isWindows) return 'unknown';
-
-  // אם הוגדר סוג התקנה בזמן build - משתמש בו
   if (_kInstallKind != 'auto') return _kInstallKind; // 'exe' | 'zip'
-
-  try {
-    // זיהוי אוטומטי לפי נתיב הקובץ
-    final executablePath = Platform.resolvedExecutable.toLowerCase();
-
-    if (executablePath.contains('\\program files\\') ||
-        executablePath.contains('\\program files (x86)\\')) {
-      return 'exe'; // התקנה תקנית
-    }
-
-    return 'zip'; // גרסה ניידת/ידנית
-  } catch (e) {
-    // במקרה של שגיאה, ברירת מחדל היא EXE
-    return 'exe';
-  }
+  return preferredWindowsFormatForInstall(isInstalledApp: !AppPaths.isPortable);
 }
 
 String _normalizeVersion(String version) {
@@ -465,9 +458,6 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   bool _installerIsSilent = false;
   bool _windowCloseHookInstalled = false;
 
-  /// טיימר להעלמה אוטומטית של צ'יפ השגיאה אחרי 4 שניות.
-  Timer? _errorDismissTimer;
-
   /// מנוי על מצב הסיור המודרך, פעיל רק כל עוד אנו ממתינים לסיומו לפני
   /// בדיקת העדכון הראשונית.
   StreamSubscription<TourState>? _tourSubscription;
@@ -509,7 +499,6 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   @override
   void dispose() {
     _tourSubscription?.cancel();
-    _errorDismissTimer?.cancel();
     if (_windowCloseHookInstalled) {
       windowManager.removeListener(_windowListener);
       _windowCloseHookInstalled = false;
@@ -517,18 +506,12 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     super.dispose();
   }
 
-  /// מציג מצב שגיאה זמני: מרענן את הצ'יפ ומתזמן העלמה אוטומטית אחרי 4 שניות.
-  /// לחיצה על הצ'יפ מפעילה בדיקה חוזרת (`_checkForUpdate`) שמבטלת את הטיימר.
-  void _showTransientError() {
+  void _showUpdateError(String message) {
     if (!mounted) return;
     setState(() {
-      _status = UpdatStatus.error;
+      _status = UpdatStatus.dismissed;
     });
-    _errorDismissTimer?.cancel();
-    _errorDismissTimer = Timer(const Duration(seconds: 4), () {
-      if (!mounted || _status != UpdatStatus.error) return;
-      _dismissUpdate();
-    });
+    UiSnack.showError(message);
   }
 
   Future<void> _installWindowCloseHook() async {
@@ -584,7 +567,6 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   }
 
   Future<void> _checkForUpdate() async {
-    _errorDismissTimer?.cancel();
     setState(() {
       _status = UpdatStatus.checking;
     });
@@ -627,7 +609,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         _status = UpdatStatus.upToDate;
       });
     } catch (_) {
-      _showTransientError();
+      _showUpdateError('שגיאה בחיבור לרשת במהלך בדיקת עדכונים');
     }
   }
 
@@ -782,13 +764,12 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         _status = UpdatStatus.readyToInstall;
       });
     } catch (_) {
-      _showTransientError();
+      _showUpdateError('שגיאה בהורדת העדכון');
     }
   }
 
-  /// משגר את המתקין ומחזיר `true` אם השיגור הצליח. כשל בשיגור נבלע ומעדכן
-  /// את המצב ל-[UpdatStatus.error] (ללא זריקת חריגה), ומחזיר `false`, כדי
-  /// שהקוראים יחליטו האם לסגור את החלון בהתאם.
+  /// משגר את המתקין ומחזיר `true` אם השיגור הצליח. כשל בשיגור נבלע,
+  /// מציג הודעת שגיאה רגילה ומחזיר `false`.
   ///
   /// [relaunchApp] — האם אוצריא תופעל מחדש בסיום ההתקנה (רלוונטי למתקין
   /// השקט ב-Windows): `true` בעדכון יזום ("התקן כעת"), `false` בעדכון
@@ -800,7 +781,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       await _launchInstallerDirect(relaunchApp: relaunchApp);
       return true;
     } catch (_) {
-      _showTransientError();
+      _showUpdateError('שגיאה בהפעלת מתקין העדכון');
       return false;
     }
   }
@@ -809,14 +790,15 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     final installer = _installerFile;
     if (installer == null) return;
 
-    // רק המתקין השקט (PrivilegesRequired=lowest) בטוח ב-Process.start; הרגיל
-    // עלול לדרוש UAC בשיגור וחייב ShellExecute, אחרת ERROR_ELEVATION_REQUIRED.
+    // המתקין השקט נוצר ב-CreateProcess עם breakaway (ולא Process.start) כדי
+    // שישרוד את סגירת אוצריא — ראה launchWindowsSilentInstaller.
     if (Platform.isWindows && _installerIsSilent) {
-      await Process.start(
-        installer.absolute.path,
-        relaunchApp ? const <String>[] : const <String>['/NOLAUNCH=1'],
-        mode: ProcessStartMode.detached,
-      );
+      if (!launchWindowsSilentInstaller(
+        installerPath: installer.absolute.path,
+        relaunchApp: relaunchApp,
+      )) {
+        throw Exception('Failed to launch the silent installer');
+      }
       return;
     }
 
@@ -863,45 +845,89 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // ה-Stack עוטף גם את סרגל הניווט הצדי; בלי היסט ברוחב הסרגל הצ'יפ
-    // נצמד לקצה החלון ונמתח מעל הסרגל במקום מעל תוכן המסך.
-    const navRailWidth = 75.0; // 74 רוחב הסרגל + 1 הקו המפריד
-    final isLandscape =
-        MediaQuery.of(context).orientation == Orientation.landscape;
-    final railInset = isLandscape ? navRailWidth : 0.0;
+    return ManagedUpdateScope(
+      latestVersion: _latestVersion,
+      appVersion: _currentVersion ?? 'unknown',
+      status: _status,
+      changelog: _changelog,
+      checkForUpdate: _checkForUpdate,
+      startUpdate: _startUpdate,
+      launchInstaller: _installNow,
+      dismissUpdate: _dismissUpdate,
+      child: widget.child,
+    );
+  }
+}
 
-    return Stack(
-      children: [
-        Positioned.fill(child: widget.child),
-        Positioned(
-          right: 10 + railInset,
-          bottom: 10,
-          child: hebrewFlatChip(
-            context: context,
-            latestVersion: _latestVersion,
-            appVersion: _currentVersion ?? 'unknown',
-            status: _status,
-            checkForUpdate: _checkForUpdate,
-            openDialog: () {
-              hebrewDefaultDialog(
-                context: context,
-                latestVersion: _latestVersion,
-                appVersion: _currentVersion ?? 'unknown',
-                status: _status,
-                changelog: _changelog,
-                checkForUpdate: _checkForUpdate,
-                openDialog: () {},
-                startUpdate: _startUpdate,
-                launchInstaller: _installNow,
-                dismissUpdate: _dismissUpdate,
-              );
-            },
-            startUpdate: _startUpdate,
-            launchInstaller: _installNow,
-            dismissUpdate: _dismissUpdate,
-          ),
-        ),
-      ],
+class ManagedUpdateScope extends InheritedWidget {
+  const ManagedUpdateScope({
+    super.key,
+    required this.latestVersion,
+    required this.appVersion,
+    required this.status,
+    required this.changelog,
+    required this.checkForUpdate,
+    required this.startUpdate,
+    required this.launchInstaller,
+    required this.dismissUpdate,
+    required super.child,
+  });
+
+  final String? latestVersion;
+  final String appVersion;
+  final UpdatStatus status;
+  final String? changelog;
+  final VoidCallback checkForUpdate;
+  final VoidCallback startUpdate;
+  final Future<void> Function() launchInstaller;
+  final VoidCallback dismissUpdate;
+
+  static ManagedUpdateScope? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<ManagedUpdateScope>();
+  }
+
+  @override
+  bool updateShouldNotify(ManagedUpdateScope oldWidget) {
+    return latestVersion != oldWidget.latestVersion ||
+        appVersion != oldWidget.appVersion ||
+        status != oldWidget.status ||
+        changelog != oldWidget.changelog;
+  }
+}
+
+class ManagedUpdateTitleBarIndicator extends StatelessWidget {
+  const ManagedUpdateTitleBarIndicator({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final update = ManagedUpdateScope.maybeOf(context);
+    if (update == null) return const SizedBox.shrink();
+
+    void openDialog() {
+      hebrewDefaultDialog(
+        context: context,
+        latestVersion: update.latestVersion,
+        appVersion: update.appVersion,
+        status: update.status,
+        changelog: update.changelog,
+        checkForUpdate: update.checkForUpdate,
+        openDialog: () {},
+        startUpdate: update.startUpdate,
+        launchInstaller: update.launchInstaller,
+        dismissUpdate: update.dismissUpdate,
+      );
+    }
+
+    return hebrewFlatChip(
+      context: context,
+      latestVersion: update.latestVersion,
+      appVersion: update.appVersion,
+      status: update.status,
+      checkForUpdate: update.checkForUpdate,
+      openDialog: openDialog,
+      startUpdate: update.startUpdate,
+      launchInstaller: update.launchInstaller,
+      dismissUpdate: update.dismissUpdate,
     );
   }
 }
