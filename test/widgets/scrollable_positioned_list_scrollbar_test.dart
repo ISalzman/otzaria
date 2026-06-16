@@ -453,6 +453,59 @@ void main() {
     expect(heightTall, closeTo(heightShort, heightShort * 0.3));
   });
 
+  testWidgets('שינוי גודל מסך מנקה את מאגר הגבהים (גבהים ביחידות מסך מתיישנים)',
+      (tester) async {
+    // הגבהים נשמרים ביחידות מסך; שינוי גודל חלון מייתר אותם. בלי ניקוי
+    // ב-didChangeDependencies הממוצע היה ממשיך לערב גבהים ישנים שגויים.
+    final listener = ItemPositionsListener.create();
+    final positions =
+        listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>;
+    final controller = ItemScrollController();
+
+    Widget build(Size size) => MaterialApp(
+          home: Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(size: size),
+              child: Scaffold(
+                body: ScrollablePositionedListScrollbar(
+                  scrollController: controller,
+                  itemPositionsListener: listener,
+                  itemCount: 100,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(build(const Size(400, 600)));
+    // צובר 90 פריטים קצרים (גובה 0.1) למאגר.
+    positions.value = List.generate(
+      90,
+      (i) => ItemPosition(
+        index: i,
+        itemLeadingEdge: i * 0.1,
+        itemTrailingEdge: (i + 1) * 0.1,
+      ),
+    );
+    await tester.pump();
+
+    // שינוי גודל מסך → didChangeDependencies מנקה את המאגר.
+    await tester.pumpWidget(build(const Size(800, 600)));
+    // כעת 2 פריטים ארוכים (גובה 0.5). אם המאגר נוקה, הממוצע מבוסס רק עליהם.
+    positions.value = const [
+      ItemPosition(index: 0, itemLeadingEdge: 0.0, itemTrailingEdge: 0.5),
+      ItemPosition(index: 1, itemLeadingEdge: 0.5, itemTrailingEdge: 1.0),
+    ];
+    await tester.pump();
+
+    final thumbHeight =
+        tester.widget<Positioned>(find.byType(Positioned)).height!;
+    // נוקה: avg=0.5 → גובה 1/(0.5*100)=0.02→clamp 0.05 → 30px. בלי ניקוי
+    // הממוצע היה ~0.11 → ~55px. הגובה הקטן מוכיח שהמאגר נוקה.
+    expect(thumbHeight, closeTo(30.0, 4.0));
+  });
+
   testWidgets('listener ישן לא מעדכן State אחרי החלפת widget ו-dispose',
       (tester) async {
     final firstListener = ItemPositionsListener.create();
