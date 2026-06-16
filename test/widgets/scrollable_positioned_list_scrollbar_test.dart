@@ -347,6 +347,112 @@ void main() {
     expect(thumbTopAfterSettle, closeTo(thumbTopAfterTap, 2.0));
   });
 
+  testWidgets('גובה האגודל יציב בין מצבי גלילה עם פריטים חלקיים, והמיקום מחליק',
+      (tester) async {
+    // רגרסיה: גובה האגודל חושב מ-visibleItems/itemCount — מספר שלם שמתחלף
+    // 4↔5 כשפריט חלקי נכנס/יוצא, ולכן האגודל גדל/קטן כל הזמן. כעת הגובה
+    // נשען על הקצוות הרציפים ולכן יציב; והמיקום משלב את החלק שנגלל מהפריט
+    // העליון ולכן מחליק חלק במקום לקפוץ בצעדי-פריט.
+    final listener = ItemPositionsListener.create();
+    final positions =
+        listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>;
+    final controller = ItemScrollController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 40,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    // מצב A: 4 פריטים בגובה אחיד 0.25 שמרצפים את המסך בדיוק.
+    positions.value = const [
+      ItemPosition(index: 0, itemLeadingEdge: 0.0, itemTrailingEdge: 0.25),
+      ItemPosition(index: 1, itemLeadingEdge: 0.25, itemTrailingEdge: 0.5),
+      ItemPosition(index: 2, itemLeadingEdge: 0.5, itemTrailingEdge: 0.75),
+      ItemPosition(index: 3, itemLeadingEdge: 0.75, itemTrailingEdge: 1.0),
+    ];
+    await tester.pump();
+    final thumbA = tester.widget<Positioned>(find.byType(Positioned));
+    final heightA = thumbA.height!;
+    final topA = thumbA.top!;
+
+    // מצב B: אותם פריטים נגללו ב-0.1 — כעת 5 פריטים חלקיים גלויים. ב-
+    // visibleItems השלם זו קפיצה מ-4 ל-5 (גובה +25%); ברציף הגובה זהה.
+    positions.value = const [
+      ItemPosition(index: 0, itemLeadingEdge: -0.1, itemTrailingEdge: 0.15),
+      ItemPosition(index: 1, itemLeadingEdge: 0.15, itemTrailingEdge: 0.4),
+      ItemPosition(index: 2, itemLeadingEdge: 0.4, itemTrailingEdge: 0.65),
+      ItemPosition(index: 3, itemLeadingEdge: 0.65, itemTrailingEdge: 0.9),
+      ItemPosition(index: 4, itemLeadingEdge: 0.9, itemTrailingEdge: 1.15),
+    ];
+    await tester.pump();
+    final thumbB = tester.widget<Positioned>(find.byType(Positioned));
+    final heightB = thumbB.height!;
+    final topB = thumbB.top!;
+
+    // גובה יציב: ההפרש זניח (לפני התיקון היה ~25%).
+    expect(heightB, closeTo(heightA, 1.0));
+    // המיקום התקדם מעט כלפי מטה — מחליק, לא נשאר במקום.
+    expect(topB, greaterThan(topA));
+  });
+
+  testWidgets('גובה האגודל נשאר יציב כשגוללים לאזור עם סגמנטים בגובה שונה',
+      (tester) async {
+    // רגרסיה לשורש האמיתי בקריאה רציפה: סגמנטים בגבהים שונים מאוד. ממוצע על
+    // הפריטים הגלויים *כרגע* מתנודד כשעוברים מאזור קצר לאזור ארוך, והאגודל
+    // גדל/קטן. הממוצע הגלובלי (על כל מה שנמדד) יציב — האגודל כמעט לא משתנה.
+    final listener = ItemPositionsListener.create();
+    final positions =
+        listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>;
+    final controller = ItemScrollController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 100,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    // אזור גדול של סגמנטים קצרים (גובה 0.1) — נמדדים ומבססים את האומדן.
+    positions.value = List.generate(
+      90,
+      (i) => ItemPosition(
+        index: i,
+        itemLeadingEdge: i * 0.1,
+        itemTrailingEdge: (i + 1) * 0.1,
+      ),
+    );
+    await tester.pump();
+    final heightShort =
+        tester.widget<Positioned>(find.byType(Positioned)).height!;
+
+    // גלילה לאזור עם סגמנטים ארוכים פי 5 (גובה 0.5). הממוצע המקומי לבדו היה
+    // מכווץ את האגודל פי ~5; הגלובלי מחזיק אותו כמעט קבוע.
+    positions.value = const [
+      ItemPosition(index: 90, itemLeadingEdge: 0.0, itemTrailingEdge: 0.5),
+      ItemPosition(index: 91, itemLeadingEdge: 0.5, itemTrailingEdge: 1.0),
+    ];
+    await tester.pump();
+    final heightTall =
+        tester.widget<Positioned>(find.byType(Positioned)).height!;
+
+    // יציב: נשאר בטווח 30% מהגובה המקורי (לפני התיקון היה מתכווץ לחמישית).
+    expect(heightTall, closeTo(heightShort, heightShort * 0.3));
+  });
+
   testWidgets('listener ישן לא מעדכן State אחרי החלפת widget ו-dispose',
       (tester) async {
     final firstListener = ItemPositionsListener.create();
