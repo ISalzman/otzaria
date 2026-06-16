@@ -54,9 +54,15 @@ class _ScrollablePositionedListScrollbarState
   // גובהי הפריטים שנמדדו עד כה (אינדקס → גובה ביחידות מסך). בקריאה רציפה
   // הסגמנטים בגבהים שונים מאוד, ולכן ממוצע על הפריטים הגלויים *כרגע* מתנודד
   // וגורם לאגודל לגדול/לקטון תוך כדי גלילה. ממוצע גלובלי על כל מה שנמדד יציב
-  // ומתכנס. מתעדכן כל פעם שפריט נראה (self-healing לשינויי גופן/גודל חלון).
+  // ומתכנס. שינוי גודל חלון/textScaler מנקה את המאגר (didChangeDependencies);
+  // שינוי גודל גופן פנימי נרפא-עצמית ע"י דריסת הערכים תוך כדי גלילה.
   final Map<int, double> _itemHeights = {};
   double _itemHeightSum = 0.0;
+
+  // המצב האחרון של גודל המסך/scale — לזיהוי שינוי תצוגה שמייתר את הגבהים
+  // השמורים (שנמדדים ביחידות מסך). הניקוי עצמו ב-didChangeDependencies.
+  Size? _lastScreenSize;
+  TextScaler? _lastTextScaler;
 
   // תווית היעד הצפה (כתובת המקום שאליו נקפוץ בלחיצה). מבודדת מעץ הסרגל דרך
   // Overlay כדי שלא תגרום ל-rebuild של הרשימה. _labelIndex/_labelText
@@ -76,12 +82,12 @@ class _ScrollablePositionedListScrollbarState
   @override
   void didUpdateWidget(covariant ScrollablePositionedListScrollbar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // החלפת ספר מסומנת ע"י שינוי itemCount או החלפת ה-listener. בשני המקרים
-    // גבהי הפריטים הישנים אינם רלוונטיים — שני ספרים שונים עלולים לחלוק
-    // בדיוק אותו itemCount, ואז בלי הניקוי הזה הגבהים הישנים נשארים עד
-    // שהריפוי-העצמי דורס אותם בהדרגה.
+    // החלפת ספר מסומנת ע"י שינוי itemCount, ה-listener או ה-scrollController.
+    // בכל אחד מהם גבהי הפריטים הישנים אינם רלוונטיים — שני ספרים שונים עלולים
+    // לחלוק בדיוק אותו itemCount, וה-scrollController כמעט תמיד מוחלף ביניהם.
     if (oldWidget.itemCount != widget.itemCount ||
-        oldWidget.itemPositionsListener != widget.itemPositionsListener) {
+        oldWidget.itemPositionsListener != widget.itemPositionsListener ||
+        oldWidget.scrollController != widget.scrollController) {
       _itemHeights.clear();
       _itemHeightSum = 0.0;
     }
@@ -91,6 +97,23 @@ class _ScrollablePositionedListScrollbarState
       widget.itemPositionsListener.itemPositions
           .addListener(_updateScrollPosition);
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // הגבהים נשמרים ביחידות מסך, ולכן שינוי גודל החלון או textScaler מייתר
+    // אותם. didChangeDependencies הוא המקום האידיומטי להגיב לשינויי MediaQuery
+    // (נקרא גם בבנייה הראשונה, ולכן השמירה לבד מספיקה בלי ניקוי מיותר).
+    final mediaQuery = MediaQuery.of(context);
+    if (_lastScreenSize != null &&
+        (_lastScreenSize != mediaQuery.size ||
+            _lastTextScaler != mediaQuery.textScaler)) {
+      _itemHeights.clear();
+      _itemHeightSum = 0.0;
+    }
+    _lastScreenSize = mediaQuery.size;
+    _lastTextScaler = mediaQuery.textScaler;
   }
 
   @override
@@ -183,7 +206,12 @@ class _ScrollablePositionedListScrollbarState
     for (final position in positions) {
       final height = position.itemTrailingEdge - position.itemLeadingEdge;
       if (height > 0) {
-        _itemHeightSum += height - (_itemHeights[position.index] ?? 0.0);
+        // max(0): חיבור/חיסור חוזרים עלולים לצבור סחיפת נקודה-צפה זעירה
+        // ולהפוך את הסכום לשלילי קטן במקרי קצה. הסכום תמיד אי-שלילי בפועל.
+        _itemHeightSum = max(
+          0.0,
+          _itemHeightSum + height - (_itemHeights[position.index] ?? 0.0),
+        );
         _itemHeights[position.index] = height;
       }
     }
