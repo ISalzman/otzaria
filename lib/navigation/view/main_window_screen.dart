@@ -1310,6 +1310,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
       } else if (_lastScreen == Screen.more) {
         moreScreenKey.currentState?.closeTransientPanels();
       }
+      // יציאה ממסך הכלים משהה את התוסף הפעיל (חוסך CPU/RAM ברקע); חזרה מחדשת.
+      PluginRuntimeDispatcher.instance
+          .setToolsScreenVisible(state.currentScreen == Screen.more);
       _lastScreen = state.currentScreen;
     }
 
