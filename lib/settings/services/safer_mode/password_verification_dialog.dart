@@ -5,7 +5,7 @@ import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
 
-/// דיאלוג לאימות סיסמה למצב מוגן
+/// דיאלוג לאימות סיסמה למצב סייפר
 class PasswordVerificationDialog extends StatefulWidget {
   final Future<bool> Function(String password) onVerify;
   final String title;

@@ -131,7 +131,7 @@ class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog>
   }
 
   void _submit() async {
-    // במצב מוגן, נדרוש סיסמה לפני שמירה
+    // במצב סייפר, נדרוש סיסמה לפני שמירה
     if (!await verifyPasswordForAction(context) || !mounted) {
       return;
     }
