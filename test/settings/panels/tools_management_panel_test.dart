@@ -357,7 +357,7 @@ void main() {
 
       // "בחר הכל" גלוי מיד עם כניסה למצב בחירה, ללא צורך לבחור תוסף קודם.
       expect(find.text('בחר הכל'), findsOneWidget);
-      expect(find.textContaining('נבחרו'), findsNothing);
+      expect(find.text('0 נבחרו'), findsOneWidget);
 
       // לחיצה — כל התוספים נבחרים, וסרגל הפעולות מופיע.
       await tester.tap(find.text('בחר הכל'));
@@ -593,7 +593,7 @@ void main() {
       await _enterSelectionMode(tester);
       await _selectPlugin(tester, 'תוסף-A');
 
-      await tester.tap(find.text('טעינה אוטומטית בעלייה').first);
+      await tester.tap(find.text('טעינה בעליה').first);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('בטל'));
