@@ -243,6 +243,22 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               ),
               textAlign: TextAlign.center,
             ),
+            const SizedBox(height: 16),
+            FilledButton.tonal(
+              onPressed: () {
+                setState(() {
+                  _showEditPanel = true;
+                });
+              },
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(FluentIcons.edit_24_regular, size: 18),
+                  SizedBox(width: 8),
+                  Text('ערוך חיפוש'),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -415,7 +431,14 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                       Container(
                         clipBehavior: Clip.hardEdge,
                         decoration: const BoxDecoration(),
-                        child: TantivySearchResults(tab: widget.tab),
+                        child: TantivySearchResults(
+                          tab: widget.tab,
+                          onEditSearch: () {
+                            setState(() {
+                              _showEditPanel = true;
+                            });
+                          },
+                        ),
                       ),
                     ValueListenableBuilder(
                       valueListenable: widget.tab.isLeftPaneOpen,
@@ -626,6 +649,11 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                       decoration: const BoxDecoration(),
                                       child: TantivySearchResults(
                                         tab: widget.tab,
+                                        onEditSearch: () {
+                                          setState(() {
+                                            _showEditPanel = true;
+                                          });
+                                        },
                                       ),
                                     );
                                   },
