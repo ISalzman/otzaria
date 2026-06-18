@@ -33,6 +33,7 @@
 | `otzaria://open/search?q=<text>` | פותח לשונית חיפוש חדשה ומפעיל חיפוש מיידית בכל הספרים, עם ברירות המחדל (מצב מתקדם, scope `/`) |
 | `otzaria://open/settings` | פותח את ההגדרות |
 | `otzaria://open/tools` | פותח את מסך הכלים (בלשונית האחרונה שהיתה פעילה) |
+| `otzaria://open/detection?q=<text>` | פותח את דיאלוג איתור מקורות עם טקסט מילוי-מראש ומפעיל חיפוש מיידית |
 | `otzaria://open/tool/<tool-id>` | פותח לשונית כלי לפי מזהה מלא — תומך גם בתוספים מוצמדים |
 | `otzaria://open/plugin/<plugin-id>` | פותח תוסף ישירות לפי מזהה התוסף — גם תוסף שאינו מוצמד ללשוניות (נפתח במצב transient) |
 | `otzaria://open/book/<id>` | פותח ספר בעיון לפי מזהה מסד הנתונים |
@@ -60,9 +61,10 @@ otzaria://open/book/1234?index=42&m=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
 otzaria://open/search?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
 otzaria://open/pdf/120
 otzaria://open/pdf/120?index=17
+otzaria://open/detection?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
 ```
 
-**הערות על קידוד:** טקסט בעברית ב‑`q=` ו-`m=` חייב להיות URL‑encoded (UTF‑8). ערך `index` שלילי או לא מספרי מתעלם — הספר ייפתח בתחילתו. `q=` ריק מתעלם. `m=` ריק או רווחים בלבד מתעלם.
+**הערות על קידוד:** טקסט בעברית ב‑`q=` ו-`m=` חייב להיות URL‑encoded (UTF‑8). ערך `index` שלילי או לא מספרי מתעלם — הספר ייפתח בתחילתו. `q=` ריק מתעלם. `m=` ריק או רווחים בלבד מתעלם. לגבי `detection?q=` — חובה לספק ערך לא-ריק; קישור ללא `q=` מתעלם לחלוטין.
 
 **הבדל בין `mark` ל-`m=`:**
 - `?mark` — מדגיש את **כל רקע המקטע** בצהוב (הדגשת שורה שלמה).
@@ -232,6 +234,7 @@ _externalActivationWatchSub = queueFile.parent.watch().listen((event) {
 | `OpenPluginAction(String pluginId)` | `otzaria://open/plugin/<plugin-id>` | פתיחת תוסף ישירות (גם לא-מוצמד) |
 | `OpenBookAction(int bookId, {int? index, String? searchQuery, bool markSection, String? markText})` | `otzaria://open/book/<id>?index=<n>&q=<text>&mark&m=<text>` | ספר בעיון |
 | `RunSearchAction(String query)` | `otzaria://open/search?q=<text>` | חיפוש מלא בלשונית חדשה |
+| `RunDetectionAction(String query)` | `otzaria://open/detection?q=<text>` | פתיחת דיאלוג איתור מקורות עם טקסט מילוי-מראש |
 | `InstallPluginAction(PluginStoreInstallRequest)` | `otzaria://plugin/install?url=...` | התקנת תוסף מהחנות |
 | `InstallLocalPluginAction(String archivePath)` | `otzaria://plugin/install-local?path=<abs>` | התקנת תוסף מקובץ `.otzplugin` מקומי (לחיצה כפולה על קובץ משויך) |
 
