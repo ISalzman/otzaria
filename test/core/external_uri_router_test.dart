@@ -367,6 +367,60 @@ void main() {
       });
     });
 
+    group('open/detection', () {
+      test('עם q — מחזיר RunDetectionAction עם הקוורי', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse(
+            'otzaria://open/detection?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA',
+          ),
+        );
+
+        expect(action, isA<RunDetectionAction>());
+        expect((action as RunDetectionAction).query, 'בראשית');
+      });
+
+      test('שם פעולה אינו רגיש לאותיות גדולות/קטנות', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse(
+            'otzaria://open/DETECTION?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA',
+          ),
+        );
+        expect(action, isA<RunDetectionAction>());
+      });
+
+      test('ללא q — מחזיר null (אין טעם לפתוח דיאלוג ריק)', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/detection')),
+          isNull,
+        );
+      });
+
+      test('q ריק — מחזיר null', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/detection?q=')),
+          isNull,
+        );
+      });
+
+      test('q עם רווחים בלבד — מחזיר null', () {
+        expect(
+          ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/detection?q=%20%20'),
+          ),
+          isNull,
+        );
+      });
+
+      test('q מפוענח נכון מ-URL encoding', () {
+        final encoded = Uri.encodeQueryComponent('בראשית פרק א');
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/detection?q=$encoded'),
+        ) as RunDetectionAction;
+
+        expect(action.query, 'בראשית פרק א');
+      });
+    });
+
     group('open/search', () {
       test('ללא q — פתיחת המסך בלבד', () {
         final action = ExternalUriRouter.parseUri(

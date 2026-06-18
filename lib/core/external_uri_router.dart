@@ -88,6 +88,14 @@ class RunSearchAction extends ExternalUriAction {
   const RunSearchAction(this.query);
 }
 
+/// פתיחת דיאלוג איתור מקורות (FindRefDialog) עם טקסט מילוי-מראש.
+///
+/// [query] — הטקסט שייכתב בשדה החיפוש של הדיאלוג ויפעיל חיפוש מיידית.
+class RunDetectionAction extends ExternalUriAction {
+  final String query;
+  const RunDetectionAction(this.query);
+}
+
 /// מפענח קישורי `otzaria://...` לפעולה דומיין.
 ///
 /// סכמות וכתובות נתמכות:
@@ -99,6 +107,7 @@ class RunSearchAction extends ExternalUriAction {
 /// * `otzaria://open/search?q=<text>`        – פותח לשונית חיפוש חדשה ומפעיל חיפוש
 /// * `otzaria://open/settings`              – הגדרות
 /// * `otzaria://open/tools`                 – מסך הכלים
+/// * `otzaria://open/detection?q=<text>`    – פותח דיאלוג איתור מקורות עם טקסט מילוי-מראש
 /// * `otzaria://open/tool/<tool-id>`        – לשונית כלי לפי מזהה מלא
 /// * `otzaria://open/plugin/<plugin-id>`    – פתיחת תוסף ישירות לפי מזהה (גם לא-מוצמד)
 /// * `otzaria://open/book/<id>`             – פתיחת ספר טקסט בעיון לפי מזהה DB
@@ -181,6 +190,16 @@ class ExternalUriRouter {
         if (rawQuery != null && rawQuery.isNotEmpty) {
           return RunSearchAction(rawQuery);
         }
+      }
+
+      // detection?q=<text> — פותח דיאלוג איתור מקורות עם טקסט מילוי-מראש.
+      if (firstLower == 'detection') {
+        final rawQuery = uri.queryParameters['q']?.trim();
+        if (rawQuery != null && rawQuery.isNotEmpty) {
+          return RunDetectionAction(rawQuery);
+        }
+        // ללא q — מתעלמים (אין טעם לפתוח דיאלוג ריק דרך deep link)
+        return null;
       }
 
       final toolId = _toolAliases[firstLower];

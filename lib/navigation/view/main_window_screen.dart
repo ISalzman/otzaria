@@ -963,6 +963,14 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case RunSearchAction(:final query):
         _runExternalSearch(query);
         return true;
+      case RunDetectionAction(:final query):
+        final focusRepository = context.read<FocusRepository>();
+        focusRepository.findRefSearchController.text = query;
+        focusRepository.findRefSearchController.selection =
+            TextSelection.collapsed(offset: query.length);
+        context.read<FindRefBloc>().add(SearchRefRequested(query));
+        _handleFindRefOpen(context, transparentBarrier: false);
+        return true;
     }
   }
 
