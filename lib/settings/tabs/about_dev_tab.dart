@@ -132,6 +132,7 @@ class AboutDevTab extends StatelessWidget {
       'url': 'https://github.com/NHLOCAL/Shamor-Zachor',
       'description': "מפתח 'שמור וזכור'",
     },
+    {'name': 'michaelush', 'url': 'https://github.com/mmichaelush'},
   ];
 
   static const _essentialPeople = <Map<String, String>>[

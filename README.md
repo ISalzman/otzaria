@@ -136,7 +136,7 @@
 * עבור גרסאות רשמיות קיים גם חבילה מלאה (FULL): `otzaria-linux-full.tar.gz`.
 * החבילה המלאה כוללת את האפליקציה והספרייה יחד. חלצו אותה והריצו את `run-otzaria.sh`.
 * בהרצה הראשונה של האפליקציה, תתבקשו להוריד את הספרייה.
-* לחלופין, ניתן להוריד את הספרייה ידנית מ-[כאן](https://github.com/otzaria/otzaria/releases), לחלץ אותה ולספק את הנתיב שלה לאפליקציה.
+* לחלופין, ניתן להוריד את הספרייה ידנית מ-[כאן](https://github.com/Otzaria/SeforimLibrary/releases), לחלץ אותה ולספק את הנתיב שלה לאפליקציה.
 
 ### Android
 * האפליקציה זמינה ב-Google Play: [קישור](https://play.google.com/store/apps/details?id=org.otzaria.otzaria)
@@ -144,7 +144,7 @@
 * עבור גרסאות רשמיות קיים גם חבילה מלאה (FULL): `otzaria-android-full.zip`.
 * החבילה המלאה ל-Android כוללת את ה-APK יחד עם תוכן הספרייה הלא-מקוון להפצה.
 * בהרצה הראשונה של האפליקציה, תתבקשו להוריד את הספרייה.
-* לחלופין, ניתן להוריד את הספרייה ידנית מ-[כאן](https://github.com/otzaria/otzaria/releases) ולספק את קובץ ה-zip לאפליקציה.
+* לחלופין, ניתן להוריד את הספרייה ידנית מ-[כאן](https://github.com/Otzaria/SeforimLibrary/releases) ולספק את קובץ ה-zip לאפליקציה.
 
 ### iOS (אייפון/אייפד)
 * האפליקציה זמינה ב-AppStore: [קישור](https://apps.apple.com/us/app/otzaria/id6738098031)
@@ -156,7 +156,7 @@
 * החבילה המלאה כוללת את האפליקציה והספרייה יחד. חלצו אותה והפעילו את `Run Otzaria.command`.
 * הריצו את האפליקציה תוך לחיצה על מקש ctrl.
 * בהרצה הראשונה של האפליקציה, תתבקשו להוריד את הספרייה.
-* לחלופין, ניתן להוריד את הספרייה ידנית מ-[כאן](https://github.com/otzaria/otzaria/releases), לחלץ אותה ולספק את הנתיב שלה לאפליקציה.
+* לחלופין, ניתן להוריד את הספרייה ידנית מ-[כאן](https://github.com/Otzaria/SeforimLibrary/releases), לחלץ אותה ולספק את הנתיב שלה לאפליקציה.
 
 
 
@@ -247,6 +247,7 @@ flutter build windows
 [userbot](https://github.com/userbot000),
 [mosh-dvd](https://github.com/mosh-dvd),
 [asz](https://github.com/DeveShlomo),
+[michaelush](https://github.com/mmichaelush),
 [NHLOCAL (פיתוח "שמור וזכור")](https://github.com/NHLOCAL/Shamor-Zachor).
 
 תודה מיוחדת ל-**[אליהו גמבש](https://github.com/kdroidFilter)** על העבודה העצומה בהמרת נתוני ספריא ל-SQLite.
