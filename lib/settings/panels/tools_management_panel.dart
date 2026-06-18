@@ -16,7 +16,7 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/search/settings_search_registry.dart';
-import 'package:otzaria/settings/widgets/settings_card.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
@@ -263,43 +263,23 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
             child: ToolPanelWrapper(child: pinnedBar),
           ),
         ),
-      // גוף הכרטיס — שורת פתיחה/סגירה ומתחתיה הפריטים כשפתוח.
+      // גוף הכרטיס — שורה מתקפלת עם אנימציה.
       SliverToBoxAdapter(
         child: ToolPanelWrapper(
           child: SettingsCardBody(
             children: [
-              _sectionToggleRow(
-                label: summaryLabel,
+              ExpandableSection(
                 icon: summaryIcon,
-                expanded: expanded,
-                onToggle: onToggle,
+                title: Text(summaryLabel),
+                isExpanded: expanded,
+                onTap: onToggle,
+                children: children,
               ),
-              if (expanded) ...children,
             ],
           ),
         ),
       ),
     ];
-  }
-
-  /// שורת פתיחה/סגירה (תווית + חץ) בראש גוף הכרטיס.
-  Widget _sectionToggleRow({
-    required String label,
-    required IconData icon,
-    required bool expanded,
-    required VoidCallback onToggle,
-  }) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(label),
-      trailing: Icon(
-        expanded
-            ? FluentIcons.chevron_up_24_regular
-            : FluentIcons.chevron_down_24_regular,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      onTap: onToggle,
-    );
   }
 
   List<Widget> _builtInToolRows(SettingsState state) {

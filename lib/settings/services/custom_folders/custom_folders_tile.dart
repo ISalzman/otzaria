@@ -11,6 +11,7 @@ import 'package:otzaria/widgets/dialogs/confirmation_dialog.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/dialogs/zip_extraction_progress_dialog.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 
 /// סיווג הרכב הקבצים בתיקייה מותאמת אישית — קובע אילו אפשרויות אחסון
 /// רלוונטיות ואילו הסברים להציג למשתמש.
@@ -220,59 +221,48 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
         final folders = state.folders;
         final isSyncing =
             state.isSyncing || DatabaseLibraryProvider.operationQueue.isBusy;
-        return Column(
+        return ExpandableSection(
+          icon: FluentIcons.folder_add_24_regular,
+          title: const Text('הוסף תיקייה לאוצריא'),
+          subtitle: Text(
+            folders.isEmpty
+                ? 'לחץ להוספת תיקיות אישיות'
+                : '${folders.length} תיקיות',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (folders.isNotEmpty)
+                IconButton(
+                  icon: isSyncing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(FluentIcons.arrow_clockwise_24_regular),
+                  onPressed: isSyncing
+                      ? null
+                      : () => context
+                          .read<CustomFoldersBloc>()
+                          .add(const RescanCustomFolders()),
+                  tooltip: 'סרוק מחדש תיקיות אישיות',
+                ),
+              RecommendedActionButton(
+                text: 'הוסף תיקייה',
+                icon: FluentIcons.folder_add_24_regular,
+                onPressed: _addFolder,
+                isLoading: isSyncing,
+              ),
+            ],
+          ),
+          isExpanded: _isExpanded,
+          onTap: () => setState(() => _isExpanded = !_isExpanded),
+          hasContent: folders.isNotEmpty,
           children: [
-            ListTile(
-              leading: const Icon(FluentIcons.folder_add_24_regular),
-              title: const Text('הוסף תיקייה לאוצריא'),
-              subtitle: Text(
-                folders.isEmpty
-                    ? 'לחץ להוספת תיקיות אישיות'
-                    : '${folders.length} תיקיות',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              hoverColor: Colors.transparent,
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (folders.isNotEmpty)
-                    IconButton(
-                      icon: isSyncing
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(FluentIcons.arrow_clockwise_24_regular),
-                      onPressed: isSyncing
-                          ? null
-                          : () => context
-                              .read<CustomFoldersBloc>()
-                              .add(const RescanCustomFolders()),
-                      tooltip: 'סרוק מחדש תיקיות אישיות',
-                    ),
-                  RecommendedActionButton(
-                    text: 'הוסף תיקייה',
-                    icon: FluentIcons.folder_add_24_regular,
-                    onPressed: _addFolder,
-                    isLoading: isSyncing,
-                  ),
-                  if (folders.isNotEmpty)
-                    IconButton(
-                      icon: Icon(
-                        _isExpanded
-                            ? FluentIcons.chevron_up_24_regular
-                            : FluentIcons.chevron_down_24_regular,
-                      ),
-                      onPressed: () =>
-                          setState(() => _isExpanded = !_isExpanded),
-                      tooltip: _isExpanded ? 'הסתר' : 'הצג תיקיות',
-                    ),
-                ],
-              ),
-            ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.secondaryContainer,
@@ -310,31 +300,30 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                 ),
               ),
             ),
-            if (_isExpanded && folders.isNotEmpty)
-              Container(
-                margin: const EdgeInsets.only(right: 16, left: 16, bottom: 8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: [
-                    _buildStorageLegend(),
-                    Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                    ),
-                    ...folders.map(
-                      (folder) => _buildFolderItem(
-                        folder,
-                        isSyncing,
-                        state.activePath,
-                      ),
-                    ),
-                  ],
-                ),
+            Container(
+              margin: const EdgeInsets.only(right: 16, left: 16, bottom: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
               ),
+              child: Column(
+                children: [
+                  _buildStorageLegend(),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                  ...folders.map(
+                    (folder) => _buildFolderItem(
+                      folder,
+                      isSyncing,
+                      state.activePath,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         );
       },
