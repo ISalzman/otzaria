@@ -6,24 +6,28 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 
 /// מעשיר מידע קטגוריה לספר ברקע משלוש מקורות: DB, metadata, ונתיב.
-Future<void> enrichHeCategories(TextBook book) async {
+/// מחזיר את ה-id שנמצא ב-DB אם הספר נמצא שם (ללא קשר אם heCategories הועשר).
+Future<int?> enrichHeCategories(TextBook book) async {
   if (book.heCategories != null && book.heCategories!.isNotEmpty) {
-    return;
+    // heCategories קיים — אבל ייתכן שה-id עדיין חסר, נחפש ב-DB
+    return _tryGetIdFromDatabase(book);
   }
 
   try {
-    if (await _tryLoadFromDatabase(book)) return;
-    if (await _tryLoadFromMetadata(book)) return;
+    final id = await _tryLoadFromDatabase(book);
+    if (id != null) return id;
+    if (await _tryLoadFromMetadata(book)) return null;
     await _tryLoadFromPath(book);
   } catch (e) {
     debugPrint('⚠️ Failed to enrich heCategories in background: $e');
   }
+  return null;
 }
 
-Future<bool> _tryLoadFromDatabase(TextBook book) async {
+Future<int?> _tryLoadFromDatabase(TextBook book) async {
   final sqliteProvider = SqliteDataProvider.instance;
   if (!await sqliteProvider.databaseExists() && !book.isUserBook) {
-    return false;
+    return null;
   }
 
   final resolvedBook = await BookDatabaseResolver.resolveBook(
@@ -36,14 +40,39 @@ Future<bool> _tryLoadFromDatabase(TextBook book) async {
       categoryPath: book.categoryPath,
     ),
   );
-  if (resolvedBook == null) return false;
+  if (resolvedBook == null) return null;
 
   book.heCategories = await BookDatabaseResolver.buildCategoryPath(
     resolvedBook.repository,
     resolvedBook.book.categoryId,
   );
   debugPrint('📚 Background: נטען heCategories מה-DB: "${book.heCategories}"');
-  return book.heCategories != null && book.heCategories!.isNotEmpty;
+  return resolvedBook.book.id;
+}
+
+/// מחפש רק את ה-id ב-DB מבלי לשנות heCategories (כשהוא כבר קיים).
+Future<int?> _tryGetIdFromDatabase(TextBook book) async {
+  if (book.id != null) return null; // כבר יש id
+  final sqliteProvider = SqliteDataProvider.instance;
+  if (!await sqliteProvider.databaseExists() && !book.isUserBook) {
+    return null;
+  }
+  try {
+    final resolvedBook = await BookDatabaseResolver.resolveBook(
+      title: book.title,
+      categoryId: book.categoryId,
+      fileType: book.fileType,
+      filePath: book.filePath,
+      preferUserBooks: BookDatabaseResolver.isLikelyUserBook(
+        isUserBook: book.isUserBook,
+        categoryPath: book.categoryPath,
+      ),
+    );
+    return resolvedBook?.book.id;
+  } catch (e) {
+    debugPrint('⚠️ Failed to get book id from DB: $e');
+    return null;
+  }
 }
 
 Future<bool> _tryLoadFromMetadata(TextBook book) async {
