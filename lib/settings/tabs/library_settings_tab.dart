@@ -351,6 +351,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                         cardId: 'library.custom_folders',
                         child: SettingsCard(
                           title: 'תיקיות מותאמות אישית',
+                          subtitle:
+                              'לאחר הוספת ספרים חדשים לתיקייה קיימת, יש ללחוץ על סמל הרענון.',
                           children: [
                             const CustomFoldersTile(),
                             SettingsActionTile.switchTile(
