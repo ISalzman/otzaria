@@ -126,6 +126,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             SqliteDataProvider.instance.getBookQuickPreview,
         super(initialState) {
     on<LoadContent>(_onLoadContent);
+    on<UpdateResolvedBookId>(_onUpdateResolvedBookId);
     on<UpdateFontSize>(_onUpdateFontSize);
     on<ToggleLeftPane>(_onToggleLeftPane);
     on<ToggleSplitView>(_onToggleSplitView);
@@ -2285,6 +2286,50 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   Future<void> _enrichHeCategoriesInBackground(TextBook book) async {
-    await enrichHeCategories(book);
+    final resolvedId = await enrichHeCategories(book);
+    if (book.id == null && resolvedId != null) {
+      add(UpdateResolvedBookId(
+        bookTitle: book.title,
+        resolvedId: resolvedId,
+      ));
+    }
+  }
+
+  void _onUpdateResolvedBookId(
+    UpdateResolvedBookId event,
+    Emitter<TextBookState> emit,
+  ) {
+    final current = state;
+    if (current is! TextBookLoaded) return;
+    if (current.book.title != event.bookTitle) return;
+    if (current.book.id != null) return;
+
+    // id הוא final — יוצרים TextBook חדש עם כל השדות + id מעודכן
+    final updatedBook = TextBook(
+      id: event.resolvedId,
+      title: current.book.title,
+      category: current.book.category,
+      author: current.book.author,
+      heCategories: current.book.heCategories,
+      heEra: current.book.heEra,
+      compDateStringHe: current.book.compDateStringHe,
+      compPlaceStringHe: current.book.compPlaceStringHe,
+      pubDateStringHe: current.book.pubDateStringHe,
+      pubPlaceStringHe: current.book.pubPlaceStringHe,
+      heShortDesc: current.book.heShortDesc,
+      heDesc: current.book.heDesc,
+      pubDate: current.book.pubDate,
+      pubPlace: current.book.pubPlace,
+      order: current.book.order,
+      topics: current.book.topics,
+      filePath: current.book.filePath,
+      fileType: current.book.fileType,
+      categoryPath: current.book.categoryPath,
+      categoryId: current.book.categoryId,
+      extraTitles: current.book.extraTitles,
+      isUserBook: current.book.isUserBook,
+      externalLibraryId: current.book.externalLibraryId,
+    );
+    emit(current.copyWith(book: updatedBook));
   }
 }

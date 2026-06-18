@@ -446,7 +446,8 @@ class TextBookLoaded extends TextBookState {
   @override
   List<Object?> get props => [
         book.title,
-      contentVersion,
+        book.id,
+        contentVersion,
         content.length,
         fontSize,
         showLeftPane,
