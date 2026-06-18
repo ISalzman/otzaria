@@ -65,9 +65,6 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
     super.dispose();
   }
 
-  static const String _customFoldersReloadNotice =
-      'לאחר הוספת ספרים חדשים לתיקייה קיימת, יש ללחוץ על סמל הרענון.';
-
   /// סורק את התיקייה (רק לפי סיומות, לא קורא תוכן) ומסווג את הרכב הקבצים.
   /// הסריקה אסינכרונית ולא חוסמת את ה-UI, ועוצרת מוקדם ברגע שהתגלה גם
   /// טקסט וגם קובץ בינארי (כלומר "מעורב").
@@ -261,45 +258,6 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
           onTap: () => setState(() => _isExpanded = !_isExpanded),
           hasContent: folders.isNotEmpty,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Icon(
-                          FluentIcons.info_24_regular,
-                          size: 18,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSecondaryContainer,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _customFoldersReloadNotice,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSecondaryContainer,
-                                  ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
             Container(
               margin: const EdgeInsets.only(right: 16, left: 16, bottom: 8),
               decoration: BoxDecoration(
