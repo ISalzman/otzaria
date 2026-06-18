@@ -20,6 +20,7 @@ import 'package:otzaria/settings/search/settings_search_registry.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
@@ -110,7 +111,6 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
   // הרחבה אוטומטית בניווט מחיפוש לכלים המובנים.
   late final ValueListenable<bool> _builtInFlash;
 
-  bool get _anySelected => _selectedIds.isNotEmpty;
 
   @override
   void initState() {
@@ -244,55 +244,74 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                         child: ToolPanelWrapper(
                           child: SettingsCardBody(
                             children: [
-                              SettingsActionTile.text(
-                                icon: FluentIcons.puzzle_piece_24_regular,
-                                title: 'רשימת התוספים',
-                                subtitle: _isSelectionMode
-                                    ? '${_selectedIds.length} נבחרו'
-                                    : 'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
-                                actions: _isSelectionMode
-                                    ? [
-                                        NeutralActionButton(
-                                          icon: FluentIcons
-                                              .checkbox_checked_24_regular,
-                                          text: 'בחר הכל',
-                                          onPressed:
-                                              _selectedIds.length ==
-                                                      plugins.length
-                                                  ? null
-                                                  : () =>
-                                                      _selectAllPlugins(plugins),
-                                        ),
-                                        NeutralActionButton(
-                                          icon: FluentIcons
-                                              .dismiss_circle_24_regular,
-                                          text: 'ביטול',
-                                          onPressed: _exitSelectionMode,
-                                        ),
-                                      ]
-                                    : [
-                                        NeutralActionButton(
-                                          icon: FluentIcons
-                                              .multiselect_rtl_24_regular,
-                                          text: 'בחירה',
-                                          onPressed: _enterSelectionMode,
-                                        ),
-                                      ],
+                              // כותרת + סרגל פעולות כילד אחד — כמו ב-ExpandableSection,
+                              // כך שה-divider מופיע בתוך הפתוח בלבד, ללא כפילות.
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SettingsActionTile.text(
+                                    icon: FluentIcons.puzzle_piece_24_regular,
+                                    title: 'רשימת התוספים',
+                                    subtitle: _isSelectionMode
+                                        ? '${_selectedIds.length} נבחרו'
+                                        : 'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
+                                    actions: _isSelectionMode
+                                        ? [
+                                            NeutralActionButton(
+                                              icon: FluentIcons
+                                                  .checkbox_checked_24_regular,
+                                              text: 'בחר הכל',
+                                              onPressed:
+                                                  _selectedIds.length ==
+                                                          plugins.length
+                                                      ? null
+                                                      : () =>
+                                                          _selectAllPlugins(
+                                                              plugins),
+                                            ),
+                                            NeutralActionButton(
+                                              icon: FluentIcons
+                                                  .dismiss_circle_24_regular,
+                                              text: 'ביטול',
+                                              onPressed: _exitSelectionMode,
+                                            ),
+                                          ]
+                                        : [
+                                            NeutralActionButton(
+                                              icon: FluentIcons
+                                                  .multiselect_rtl_24_regular,
+                                              text: 'בחירה',
+                                              onPressed: _enterSelectionMode,
+                                            ),
+                                          ],
+                                  ),
+                                  AnimatedSize(
+                                    duration: AppTokens.animNormal,
+                                    curve: Curves.easeInOut,
+                                    child: _isSelectionMode
+                                        ? Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Builder(
+                                                builder: (ctx) =>
+                                                    AppCard.sectionDivider(ctx),
+                                              ),
+                                              _ActionBar(
+                                                selectedIds:
+                                                    _selectedIds.toSet(),
+                                                plugins: plugins,
+                                              ),
+                                            ],
+                                          )
+                                        : const SizedBox.shrink(),
+                                  ),
+                                ],
                               ),
                               ..._pluginRows(plugins),
                             ],
                           ),
                         ),
                       ),
-                      if (_isSelectionMode && _anySelected)
-                        SliverToBoxAdapter(
-                          child: ToolPanelWrapper(
-                            child: _ActionBar(
-                              selectedIds: _selectedIds.toSet(),
-                              plugins: plugins,
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ],
@@ -483,64 +502,82 @@ class _ActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final hasSelection = selectedIds.isNotEmpty;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      elevation: 0,
-      color: cs.surfaceContainerHigh,
-      child: SizedBox(
-        width: double.infinity,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              _ActionChip(
-                icon: _allSelectedAreHidden
-                    ? FluentIcons.eye_24_regular
-                    : FluentIcons.eye_off_24_regular,
-                label: _allSelectedAreHidden ? 'הצג' : 'הסתר',
-                onPressed: () => _onToggleHide(context),
+    return SizedBox(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+          NeutralActionButton(
+            icon: _allSelectedAreHidden
+                ? FluentIcons.eye_24_regular
+                : FluentIcons.eye_off_24_regular,
+            text: _allSelectedAreHidden ? 'הצג' : 'הסתר',
+            onPressed: hasSelection ? () => _onToggleHide(context) : null,
+          ),
+          NeutralActionButton(
+            icon: _allSelectedArePinnedToNav
+                ? FluentIcons.pin_24_filled
+                : FluentIcons.pin_24_regular,
+            text: _allSelectedArePinnedToNav ? 'הסר מניווט' : 'הצמד לניווט',
+            onPressed:
+                hasSelection ? () => _onTogglePinNavRail(context) : null,
+          ),
+          NeutralActionButton(
+            icon: _allSelectedPluginsEnabled
+                ? FluentIcons.pause_circle_24_regular
+                : FluentIcons.play_circle_24_regular,
+            text: _allSelectedPluginsEnabled ? 'השבת' : 'הפעל',
+            onPressed: hasSelection ? () => _onToggleEnabled(context) : null,
+          ),
+          MenuAnchor(
+            menuChildren: [
+              MenuItemButton(
+                leadingIcon: const Icon(FluentIcons.checkmark_24_regular),
+                onPressed: () => _setNetworkAccess(context, granted: true),
+                child: const Text('הענק'),
               ),
-              _ActionChip(
-                icon: _allSelectedArePinnedToNav
-                    ? FluentIcons.pin_24_filled
-                    : FluentIcons.pin_24_regular,
-                label: _allSelectedArePinnedToNav
-                    ? 'הסר מסרגל הניווט'
-                    : 'הצמד לסרגל הניווט',
-                onPressed: () => _onTogglePinNavRail(context),
-              ),
-              _ActionChip(
-                icon: _allSelectedPluginsEnabled
-                    ? FluentIcons.pause_circle_24_regular
-                    : FluentIcons.play_circle_24_regular,
-                label: _allSelectedPluginsEnabled ? 'השבת' : 'הפעל',
-                onPressed: () => _onToggleEnabled(context),
-              ),
-              _PermissionMenu(
-                icon: FluentIcons.globe_24_regular,
-                label: 'גישה לרשת',
-                onGrant: () => _setNetworkAccess(context, granted: true),
-                onRevoke: () => _setNetworkAccess(context, granted: false),
-              ),
-              _PermissionMenu(
-                icon: FluentIcons.power_24_regular,
-                label: 'טעינה אוטומטית בעלייה',
-                onGrant: () => _setRunOnStartup(context, granted: true),
-                onRevoke: () => _setRunOnStartup(context, granted: false),
-              ),
-              _ActionChip(
-                icon: FluentIcons.delete_24_regular,
-                label: 'מחק',
-                danger: true,
-                onPressed: () => _onDelete(context),
+              MenuItemButton(
+                leadingIcon: const Icon(FluentIcons.dismiss_24_regular),
+                onPressed: () => _setNetworkAccess(context, granted: false),
+                child: const Text('בטל'),
               ),
             ],
+            builder: (_, controller, __) => NeutralActionButton(
+              icon: FluentIcons.globe_24_regular,
+              text: 'גישה לרשת',
+              onPressed: hasSelection ? controller.open : null,
+            ),
           ),
+          MenuAnchor(
+            menuChildren: [
+              MenuItemButton(
+                leadingIcon: const Icon(FluentIcons.checkmark_24_regular),
+                onPressed: () => _setRunOnStartup(context, granted: true),
+                child: const Text('הפעל'),
+              ),
+              MenuItemButton(
+                leadingIcon: const Icon(FluentIcons.dismiss_24_regular),
+                onPressed: () => _setRunOnStartup(context, granted: false),
+                child: const Text('בטל'),
+              ),
+            ],
+            builder: (_, controller, __) => NeutralActionButton(
+              icon: FluentIcons.power_24_regular,
+              text: 'טעינה בעליה',
+              onPressed: hasSelection ? controller.open : null,
+            ),
+          ),
+          NeutralActionButton(
+            icon: FluentIcons.delete_24_regular,
+            text: 'מחק',
+            onPressed: hasSelection ? () => _onDelete(context) : null,
+          ),
+        ],
         ),
       ),
     );
@@ -652,92 +689,6 @@ class _ActionBar extends StatelessWidget {
   }
 }
 
-class _ActionChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onPressed;
-  final bool danger;
-
-  const _ActionChip({
-    required this.icon,
-    required this.label,
-    this.onPressed,
-    this.danger = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final fg = danger ? cs.error : null;
-    return TextButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, color: fg),
-      label: Text(
-        label,
-        style: fg != null ? TextStyle(color: fg) : null,
-      ),
-    );
-  }
-}
-
-/// פעולה דו-כיוונית מפורשת — תפריט נפתח עם "הענק" ו"בטל".
-///
-/// משמשת לפעולות שאי אפשר לקבוע "מצב נוכחי" ממידע ה-state (כי ההרשאה
-/// נשמרת ב-permission grant table הנפרד, לא ב-`InstalledPlugin`).
-/// במקום לנחש כיוון או להחזיק מצב a-synchronous, נציע למשתמש שתי
-/// בחירות מפורשות.
-class _PermissionMenu extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onGrant;
-  final VoidCallback onRevoke;
-
-  const _PermissionMenu({
-    required this.icon,
-    required this.label,
-    required this.onGrant,
-    required this.onRevoke,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<bool>(
-      tooltip: label,
-      onSelected: (grant) => grant ? onGrant() : onRevoke(),
-      itemBuilder: (_) => const [
-        PopupMenuItem<bool>(
-          value: true,
-          child: ListTile(
-            leading: Icon(FluentIcons.checkmark_24_regular),
-            title: Text('הענק'),
-            dense: true,
-          ),
-        ),
-        PopupMenuItem<bool>(
-          value: false,
-          child: ListTile(
-            leading: Icon(FluentIcons.dismiss_24_regular),
-            title: Text('בטל'),
-            dense: true,
-          ),
-        ),
-      ],
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 20),
-            const SizedBox(width: 4),
-            Text(label),
-            const SizedBox(width: 2),
-            const Icon(FluentIcons.chevron_down_24_regular, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // שורות הטבלה
