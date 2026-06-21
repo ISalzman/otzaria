@@ -608,8 +608,6 @@ class TextSettingsTab extends StatelessWidget {
             title: 'עיצוב כותרות',
             subtitle: formatSubtitle,
             value: state.copyHeaderFormat,
-            minFieldWidth: 220,
-            maxFieldWidth: 320,
             entries: const [
               AppMenuEntry(
                 value: 'same_line_after_brackets',
@@ -665,7 +663,7 @@ class TextSettingsTab extends StatelessWidget {
         ),
         if (state.enablePerBookSettings)
           SettingsActionTile.text(
-            icon: FluentIcons.delete_24_regular,
+            icon: Icon(FluentIcons.delete_24_regular),
             title: 'איפוס הגדרות לפי ספר',
             subtitle: 'מחיקת כל ההתאמות שנשמרו לכל ספר בנפרד',
             actions: [

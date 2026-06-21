@@ -3,8 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/misc/app_dropdown_field.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 
-/// הטריגר של AppDropdownField אמור להיות תמיד AppSelectionField (לא DropdownMenu),
-/// בין אם enableSearch=false ובין אם true. enableSearch משפיע רק על תוכן ה-popup.
 void main() {
   Future<void> pumpDropdown<T>(
     WidgetTester tester, {
@@ -33,7 +31,7 @@ void main() {
   }
 
   group('AppDropdownField - טריגר אחיד', () {
-    testWidgets('משתמש ב-AppSelectionField גם כש-enableSearch=false',
+    testWidgets('לא משתמש ב-DropdownMenu של Material 3 (enableSearch=false)',
         (tester) async {
       await pumpDropdown<String>(
         tester,
@@ -46,12 +44,12 @@ void main() {
         enableSearch: false,
       );
 
-      expect(find.byType(AppSelectionField), findsOneWidget);
+      expect(find.byType(AppDropdownField<String>), findsOneWidget);
       expect(find.byType(DropdownMenu<String>), findsNothing,
           reason: 'הטריגר לא צריך להיות DropdownMenu של Material 3');
     });
 
-    testWidgets('משתמש ב-AppSelectionField גם כש-enableSearch=true',
+    testWidgets('לא משתמש ב-DropdownMenu של Material 3 (enableSearch=true)',
         (tester) async {
       await pumpDropdown<String>(
         tester,
@@ -64,9 +62,9 @@ void main() {
         enableSearch: true,
       );
 
-      expect(find.byType(AppSelectionField), findsOneWidget);
+      expect(find.byType(AppDropdownField<String>), findsOneWidget);
       expect(find.byType(DropdownMenu<String>), findsNothing,
-          reason: 'גם עם enableSearch הטריגר נשאר נקי כ-AppSelectionField');
+          reason: 'גם עם enableSearch הטריגר לא צריך להיות DropdownMenu');
     });
   });
 
@@ -95,7 +93,7 @@ void main() {
         onSelected: (_) {},
       );
 
-      expect(find.byType(AppSelectionField), findsOneWidget);
+      expect(find.byType(AppDropdownField<String>), findsOneWidget);
       expect(find.text('אבא'), findsNothing);
     });
   });
@@ -113,10 +111,9 @@ void main() {
         onSelected: (_) {},
       );
 
-      await tester.tap(find.byType(AppSelectionField));
+      await tester.tap(find.byType(AppDropdownField<String>));
       await tester.pumpAndSettle();
 
-      // הפריטים מופיעים בתפריט (ב-PopupMenu של Flutter)
       expect(find.text('בית'), findsOneWidget);
       expect(find.text('גמל'), findsOneWidget);
     });
@@ -133,7 +130,7 @@ void main() {
         onSelected: (v) => selected = v,
       );
 
-      await tester.tap(find.byType(AppSelectionField));
+      await tester.tap(find.byType(AppDropdownField<String>));
       await tester.pumpAndSettle();
       await tester.tap(find.text('בית').last);
       await tester.pumpAndSettle();
@@ -152,7 +149,7 @@ void main() {
         onSelected: (_) => selected = true,
       );
 
-      await tester.tap(find.byType(AppSelectionField));
+      await tester.tap(find.byType(AppDropdownField<String>));
       await tester.pumpAndSettle();
 
       expect(selected, isFalse,
@@ -169,12 +166,10 @@ void main() {
         onSelected: null,
       );
 
-      // לחיצה לא אמורה להפיל בעיות
-      await tester.tap(find.byType(AppSelectionField));
+      await tester.tap(find.byType(AppDropdownField<String>));
       await tester.pumpAndSettle();
 
-      // אין פעולה — לא קורה כלום
-      expect(find.byType(AppSelectionField), findsOneWidget);
+      expect(find.byType(AppDropdownField<String>), findsOneWidget);
     });
   });
 }

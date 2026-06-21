@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 /// שורת הגדרה עם אייקון, כותרת, תת-כותרת וכפתורי פעולה.
+///
+/// [icon] הוא Widget — הקורא מחליט אם להשתמש ב-[RtlIcon] או [Icon].
 ///
 /// במסך רחב הכפתורים מוצגים ב-`trailing` של [ListTile]. במסך צר
 /// (`<LayoutBreakpoints.compact`) הם עוברים לשורה תחת ה-subtitle.
 class SettingsActionTile extends StatelessWidget {
-  final IconData icon;
+  final Widget? icon;
   final Widget title;
   final Widget subtitle;
   final List<Widget> actions;
 
   const SettingsActionTile({
     super.key,
-    required this.icon,
+    this.icon,
     required this.title,
     required this.subtitle,
     required this.actions,
@@ -22,7 +23,7 @@ class SettingsActionTile extends StatelessWidget {
 
   SettingsActionTile.text({
     super.key,
-    required this.icon,
+    this.icon,
     required String title,
     required String subtitle,
     bool subtitleLtr = false,
@@ -39,7 +40,7 @@ class SettingsActionTile extends StatelessWidget {
   /// מוסיף אוטומטית סימן LTR אחרי כל מפריד כדי למנוע שיבוש BiDi בנתיבים מעורבים.
   SettingsActionTile.path({
     super.key,
-    required this.icon,
+    this.icon,
     required String title,
     required String? path,
     required String placeholder,
@@ -73,7 +74,7 @@ class SettingsActionTile extends StatelessWidget {
         if (!isNarrow) {
           return ListTile(
             hoverColor: Colors.transparent,
-            leading: RtlIcon(icon),
+            leading: icon,
             title: title,
             subtitle: subtitle,
             trailing: actionsRow,
@@ -88,10 +89,11 @@ class SettingsActionTile extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2, left: 16),
-                    child: RtlIcon(icon),
-                  ),
+                  if (icon != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2, left: 16),
+                      child: icon,
+                    ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

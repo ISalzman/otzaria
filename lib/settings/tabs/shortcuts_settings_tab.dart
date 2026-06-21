@@ -556,7 +556,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
             title: 'כללי',
             children: [
               SettingsActionTile.text(
-                icon: FluentIcons.arrow_reset_24_regular,
+                icon: Icon(FluentIcons.arrow_reset_24_regular),
                 title: 'איפוס קיצורי מקשים',
                 subtitle: 'החזר את כל קיצורי המקשים לברירת המחדל',
                 actions: [
@@ -817,7 +817,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
                 'פעולות הקיימות באפליקציה ועדיין לא הוגדר להן קיצור מקלדת',
             children: [
               SettingsActionTile.text(
-                icon: FluentIcons.add_24_regular,
+                icon: Icon(FluentIcons.add_24_regular),
                 title: 'הוסף קיצור לפעולה זמינה',
                 subtitle: '${unconfiguredKeys.length} פעולות זמינות',
                 actions: [
