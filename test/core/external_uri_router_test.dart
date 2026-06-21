@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/external_uri_router.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/settings/view/settings_screen.dart' show SettingsTab;
 
 void main() {
   group('ExternalUriRouter', () {
@@ -37,10 +38,8 @@ void main() {
           Screen.library,
         );
         expect(
-          (ExternalUriRouter.parseUri(Uri.parse('otzaria://open/settings'))
-                  as OpenScreenAction)
-              .screen,
-          Screen.settings,
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/settings')),
+          isA<OpenSettingsTabAction>(),
         );
         expect(
           (ExternalUriRouter.parseUri(Uri.parse('otzaria://open/search'))
@@ -811,6 +810,199 @@ void main() {
             Uri.parse('otzaria://plugin/install-local?path='),
           ),
           isNull,
+        );
+      });
+    });
+
+    group('aliases חדשים לכלים מובנים', () {
+      test('daily → builtin.calendar', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/daily'),
+        );
+        expect(action, isA<OpenToolAction>());
+        expect((action as OpenToolAction).toolId, 'builtin.calendar');
+      });
+
+      test('shamor_zachor → builtin.shamor_zachor', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/shamor_zachor'),
+        );
+        expect(action, isA<OpenToolAction>());
+        expect((action as OpenToolAction).toolId, 'builtin.shamor_zachor');
+      });
+
+      test('measurements → builtin.measurements', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/measurements'),
+        );
+        expect(action, isA<OpenToolAction>());
+        expect((action as OpenToolAction).toolId, 'builtin.measurements');
+      });
+
+      test('aramaic_dictionary → builtin.aramaic_dictionary', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/aramaic_dictionary'),
+        );
+        expect(action, isA<OpenToolAction>());
+        expect((action as OpenToolAction).toolId, 'builtin.aramaic_dictionary');
+      });
+
+      test('acronyms_dictionary → builtin.acronyms_dictionary', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/acronyms_dictionary'),
+        );
+        expect(action, isA<OpenToolAction>());
+        expect(
+            (action as OpenToolAction).toolId, 'builtin.acronyms_dictionary');
+      });
+
+      test('aliases אינם רגישים לאותיות גדולות/קטנות', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/DAILY')),
+          isA<OpenToolAction>(),
+        );
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/SHAMOR_ZACHOR')),
+          isA<OpenToolAction>(),
+        );
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/MEASUREMENTS')),
+          isA<OpenToolAction>(),
+        );
+      });
+    });
+
+    group('open/history', () {
+      test('מחזיר OpenHistoryAction', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/history'),
+        );
+        expect(action, isA<OpenHistoryAction>());
+      });
+
+      test('אינו רגיש לאותיות גדולות/קטנות', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/HISTORY')),
+          isA<OpenHistoryAction>(),
+        );
+      });
+    });
+
+    group('open/bookmarks', () {
+      test('מחזיר OpenBookmarksAction', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/bookmarks'),
+        );
+        expect(action, isA<OpenBookmarksAction>());
+      });
+
+      test('אינו רגיש לאותיות גדולות/קטנות', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/BOOKMARKS')),
+          isA<OpenBookmarksAction>(),
+        );
+      });
+    });
+
+    group('open/settings', () {
+      test('ללא sub-tab — מחזיר OpenSettingsTabAction עם tab=null', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/settings'),
+        );
+        expect(action, isA<OpenSettingsTabAction>());
+        expect((action as OpenSettingsTabAction).tab, isNull);
+      });
+
+      test('settings/design', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/settings/design'),
+        ) as OpenSettingsTabAction;
+        expect(action.tab, SettingsTab.design);
+      });
+
+      test('settings/text', () {
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/settings/text'),
+          ) as OpenSettingsTabAction)
+              .tab,
+          SettingsTab.text,
+        );
+      });
+
+      test('settings/library', () {
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/settings/library'),
+          ) as OpenSettingsTabAction)
+              .tab,
+          SettingsTab.library,
+        );
+      });
+
+      test('settings/tools', () {
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/settings/tools'),
+          ) as OpenSettingsTabAction)
+              .tab,
+          SettingsTab.tools,
+        );
+      });
+
+      test('settings/shortcuts', () {
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/settings/shortcuts'),
+          ) as OpenSettingsTabAction)
+              .tab,
+          SettingsTab.shortcuts,
+        );
+      });
+
+      test('settings/system', () {
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/settings/system'),
+          ) as OpenSettingsTabAction)
+              .tab,
+          SettingsTab.system,
+        );
+      });
+
+      test('settings/about', () {
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/settings/about'),
+          ) as OpenSettingsTabAction)
+              .tab,
+          SettingsTab.about,
+        );
+      });
+
+      test('settings/<לשונית לא מוכרת> — מחזיר null', () {
+        expect(
+          ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/settings/unknown'),
+          ),
+          isNull,
+        );
+      });
+
+      test('שמות sub-tab אינם רגישים לאותיות גדולות/קטנות', () {
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/SETTINGS/DESIGN'),
+          ) as OpenSettingsTabAction)
+              .tab,
+          SettingsTab.design,
+        );
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/Settings/About'),
+          ) as OpenSettingsTabAction)
+              .tab,
+          SettingsTab.about,
         );
       });
     });

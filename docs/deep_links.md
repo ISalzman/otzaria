@@ -26,13 +26,27 @@
 | כתובת | תוצאה |
 |--------|--------|
 | `otzaria://open/calendar` | פותח את לוח השנה (לשונית במסך הכלים) |
+| `otzaria://open/daily` | פותח את לוח השנה (alias קצר) |
 | `otzaria://open/gematria` | פותח את כלי הגימטריה |
 | `otzaria://open/notes` | פותח הערות אישיות |
+| `otzaria://open/shamor_zachor` | פותח שמור וזכור |
+| `otzaria://open/measurements` | פותח מדות ושיעורים |
+| `otzaria://open/aramaic_dictionary` | פותח מילון ארמי-עברי |
+| `otzaria://open/acronyms_dictionary` | פותח ראשי תיבות |
 | `otzaria://open/library` | פותח את מסך הספרייה |
 | `otzaria://open/search` | פותח את מסך החיפוש (ללא הפעלת חיפוש) |
 | `otzaria://open/search?q=<text>` | פותח לשונית חיפוש חדשה ומפעיל חיפוש מיידית בכל הספרים, עם ברירות המחדל (מצב מתקדם, scope `/`) |
-| `otzaria://open/settings` | פותח את ההגדרות |
+| `otzaria://open/settings` | פותח את ההגדרות (הלשונית הנוכחית) |
+| `otzaria://open/settings/design` | פותח הגדרות › מראה |
+| `otzaria://open/settings/text` | פותח הגדרות › כתב |
+| `otzaria://open/settings/library` | פותח הגדרות › ספרייה |
+| `otzaria://open/settings/tools` | פותח הגדרות › כלים |
+| `otzaria://open/settings/shortcuts` | פותח הגדרות › קיצורים |
+| `otzaria://open/settings/system` | פותח הגדרות › מערכת |
+| `otzaria://open/settings/about` | פותח הגדרות › אודות |
 | `otzaria://open/tools` | פותח את מסך הכלים (בלשונית האחרונה שהיתה פעילה) |
+| `otzaria://open/history` | פותח את דיאלוג ההיסטוריה |
+| `otzaria://open/bookmarks` | פותח את דיאלוג הסימניות |
 | `otzaria://open/detection?q=<text>` | פותח את דיאלוג איתור מקורות עם טקסט מילוי-מראש ומפעיל חיפוש מיידית |
 | `otzaria://open/tool/<tool-id>` | פותח לשונית כלי לפי מזהה מלא — תומך גם בתוספים מוצמדים |
 | `otzaria://open/plugin/<plugin-id>` | פותח תוסף ישירות לפי מזהה התוסף — גם תוסף שאינו מוצמד ללשוניות (נפתח במצב transient) |
@@ -48,7 +62,22 @@
 
 ```text
 otzaria://open/calendar
+otzaria://open/daily
+otzaria://open/shamor_zachor
+otzaria://open/measurements
+otzaria://open/aramaic_dictionary
+otzaria://open/acronyms_dictionary
 otzaria://open/library
+otzaria://open/history
+otzaria://open/bookmarks
+otzaria://open/settings
+otzaria://open/settings/design
+otzaria://open/settings/text
+otzaria://open/settings/library
+otzaria://open/settings/tools
+otzaria://open/settings/shortcuts
+otzaria://open/settings/system
+otzaria://open/settings/about
 otzaria://open/tool/builtin.gematria
 otzaria://open/tool/com.example.myplugin
 otzaria://open/plugin/com.example.myplugin
@@ -229,10 +258,13 @@ _externalActivationWatchSub = queueFile.parent.watch().listen((event) {
 
 | variant | מאיפה | תוכן |
 |---------|--------|------|
-| `OpenScreenAction(Screen)` | `otzaria://open/library`, `/settings`, ... | מסך עליון |
-| `OpenToolAction(String toolId)` | `otzaria://open/calendar`, `/tool/<id>`, ... | לשונית כלי |
+| `OpenScreenAction(Screen)` | `otzaria://open/library`, ... | מסך עליון |
+| `OpenToolAction(String toolId)` | `otzaria://open/calendar`, `/daily`, `/shamor_zachor`, `/measurements`, `/aramaic_dictionary`, `/acronyms_dictionary`, `/gematria`, `/notes`, `/tool/<id>`, ... | לשונית כלי |
 | `OpenPluginAction(String pluginId)` | `otzaria://open/plugin/<plugin-id>` | פתיחת תוסף ישירות (גם לא-מוצמד) |
 | `OpenBookAction(int bookId, {int? index, String? searchQuery, bool markSection, String? markText})` | `otzaria://open/book/<id>?index=<n>&q=<text>&mark&m=<text>` | ספר בעיון |
+| `OpenSettingsTabAction({SettingsTab? tab})` | `otzaria://open/settings`, `/settings/design`, `/settings/text`, ... | פתיחת הגדרות, אופציונלית עם ניווט לטאב |
+| `OpenHistoryAction()` | `otzaria://open/history` | דיאלוג היסטוריה |
+| `OpenBookmarksAction()` | `otzaria://open/bookmarks` | דיאלוג סימניות |
 | `RunSearchAction(String query)` | `otzaria://open/search?q=<text>` | חיפוש מלא בלשונית חדשה |
 | `RunDetectionAction(String query)` | `otzaria://open/detection?q=<text>` | פתיחת דיאלוג איתור מקורות עם טקסט מילוי-מראש |
 | `InstallPluginAction(PluginStoreInstallRequest)` | `otzaria://plugin/install?url=...` | התקנת תוסף מהחנות |
@@ -250,6 +282,9 @@ _externalActivationWatchSub = queueFile.parent.watch().listen((event) {
    - **`OpenScreenAction`** — שולח `NavigateToScreen` ל‑NavigationBloc.
    - **`OpenToolAction`** — שולח `NavigateToScreen(Screen.more)` ואז `moreScreenKey.currentState?.requestOpenTool(toolId)` עם retry מדורג ב‑`_openToolWhenAvailable` עד שה‑state מוכן. ב‑[`ToolsScreen.requestOpenTool`](../lib/tools/tools_screen.dart) יש תור pending — אם ה‑descriptor של הכלי עוד לא נטען (תוסף שעוד לא הגיע מ‑PluginSystemBloc), הבקשה מחכה לרענון הבא של descriptors. אחרי 5 שניות בלי הצלחה — `UiSnack.showError`.
    - **`OpenPluginAction`** — שולח `NavigateToScreen(Screen.more)` ואז `_openPluginByIdWhenAvailable(pluginId)`. ה‑helper ממתין (retry מדורג של עד 5 שניות) הן ל‑`moreScreenKey.currentState` והן ל‑`PluginSystemLoaded`, מאתר את ה‑`InstalledPlugin` לפי `pluginId`, וקורא ל‑[`ToolsScreen.openPluginTransiently`](../lib/tools/tools_screen.dart) — שמטפל גם בתוסף מוצמד (מנתב ל‑`requestOpenTool`) וגם בלא‑מוצמד (לשונית transient). תוסף שלא נמצא או מושבת מציג `UiSnack.showError`; תוסף שדורש רשת במצב מנותק נחסם בתוך `openPluginTransiently`.
+   - **`OpenSettingsTabAction`** — שולח `NavigateToScreen(Screen.settings)`. אם `tab != null` — קורא ל‑`_settingsScreenController.openTab(tab)` לניווט לטאב הרצוי.
+   - **`OpenHistoryAction`** — פותח `HistoryDialog` דרך `showDialog`.
+   - **`OpenBookmarksAction`** — פותח `BookmarksDialog` דרך `showDialog`.
    - **`OpenBookAction`** — `await DataRepository.instance.library`, מחפש לפי `b.id`. אם נמצא — `openBook(context, book, index ?? 0, searchQuery ?? '', markSection: markSection, markText: markText)`. אם לא — `UiSnack.showError`.
    - **`RunSearchAction`** — יוצר `SearchingTab` חדש עם הקוורי, מוסיף ל‑`HistoryBloc` ול‑`TabsBloc`, ומנווט ל‑`Screen.search`. ה‑`UpdateSearchQuery` מופעל אוטומטית מ‑`TantivyFullTextSearch.initState` ברגע שהלשונית מוצגת.
    - **`InstallPluginAction`** — `NavigateToScreen(Screen.more)` + `InstallRemotePluginRequested` ל‑PluginSystemBloc.
@@ -257,37 +292,40 @@ _externalActivationWatchSub = queueFile.parent.watch().listen((event) {
 
 ## הוספת יעד חדש
 
-נניח שרוצים להוסיף `otzaria://open/bookmarks` שיפתח את מסך הסימניות.
+נניח שרוצים להוסיף `otzaria://open/myfeature` שיבצע פעולה חדשה לגמרי.
 
-### 1. הגדרת alias בראוטר
+### 1. הגדרת פעולה בראוטר
 
-ב‑[`lib/core/external_uri_router.dart`](../lib/core/external_uri_router.dart), בתוך `_screenAliases` (אם זה מסך עליון):
-
-```dart
-static const Map<String, Screen> _screenAliases = {
-  'library': Screen.library,
-  // ...
-  'bookmarks': Screen.bookmarks,  // ← חדש
-};
-```
-
-אם זו פעולה חדשה לגמרי (לא מסך/כלי/ספר), צור variant חדש ב‑`sealed class ExternalUriAction`:
+אם זו פעולה חדשה (לא מסך/כלי/ספר), צור variant חדש ב‑`sealed class ExternalUriAction`:
 
 ```dart
-class OpenBookmarksAction extends ExternalUriAction {
-  const OpenBookmarksAction();
+class OpenMyFeatureAction extends ExternalUriAction {
+  const OpenMyFeatureAction();
 }
 ```
 
-ועדכן את `ExternalUriRouter.parseUri` (או את `_parseOpen`) כדי להחזיר אותו.
+ועדכן את `_parseOpen` ב‑[`lib/core/external_uri_router.dart`](../lib/core/external_uri_router.dart) להחזיר אותו:
+
+```dart
+if (firstLower == 'myfeature') {
+  return const OpenMyFeatureAction();
+}
+```
+
+אם זה כלי מובנה חדש — מספיק להוסיף alias ב‑`_toolAliases`:
+
+```dart
+'myalias': 'builtin.my_tool_id',
+```
 
 ### 2. דיספצ׳ר
 
 ב‑[`main_window_screen.dart`](../lib/navigation/view/main_window_screen.dart) ב‑`_dispatchExternalUriAction`, הוסף `case`:
 
 ```dart
-case OpenBookmarksAction():
-  context.read<NavigationBloc>().add(const NavigateToScreen(Screen.bookmarks));
+case OpenMyFeatureAction():
+  // לוגיקת הפתיחה כאן
+  return true;
 ```
 
 הקומפיילר אוכף exhaustive matching על ה‑`sealed class`, אז אם תשכח להוסיף — תקבל שגיאת קומפילציה.
@@ -298,7 +336,7 @@ case OpenBookmarksAction():
 
 ### 4. עדכון תיעוד
 
-הוסף שורה לטבלת ה־"כתובות נתמכות" במסמך זה.
+הוסף שורה לטבלת ה‑"כתובות נתמכות" במסמך זה.
 
 ## אבטחה ושיקולי שימוש
 
@@ -311,12 +349,15 @@ case OpenBookmarksAction():
 
 | קובץ | תפקיד |
 |--------|--------|
-| [`lib/core/external_uri_router.dart`](../lib/core/external_uri_router.dart) | ראוטר אחיד + sealed `ExternalUriAction` (`OpenScreen`/`OpenTool`/`OpenBook`/`InstallPlugin`) |
+| [`lib/core/external_uri_router.dart`](../lib/core/external_uri_router.dart) | ראוטר אחיד + sealed `ExternalUriAction` (כולל `OpenTool`/`OpenScreen`/`OpenSettingsTab`/`OpenHistory`/`OpenBookmarks`/`OpenBook`/`InstallPlugin`) |
 | [`lib/plugins/services/plugin_store_link_parser.dart`](../lib/plugins/services/plugin_store_link_parser.dart) | פענוח פנימי של `plugin/install` (משמש את הראוטר) |
 | [`lib/plugins/services/plugin_protocol_registration_service.dart`](../lib/plugins/services/plugin_protocol_registration_service.dart) | רישום דינמי של סכמת `otzaria://` ב‑Windows ובלינוקס בזמן ריצה |
 | [`lib/core/external_activation_queue.dart`](../lib/core/external_activation_queue.dart) | תור JSONL להעברת URIs בין מופעים |
 | [`lib/core/external_activation_channel.dart`](../lib/core/external_activation_channel.dart) | ערוץ פלטפורמה ל‑URIs שמגיעים בזמן ריצה (Android/iOS) |
 | [`lib/navigation/view/main_window_screen.dart`](../lib/navigation/view/main_window_screen.dart) | מאזין, פענוח ודיספצ׳ר (ראה `_handleExternalActivationUriString` ו‑`_dispatchExternalUriAction`) |
+| [`lib/settings/view/settings_screen.dart`](../lib/settings/view/settings_screen.dart) | מגדיר `SettingsTab` enum ו‑`SettingsScreenController` לניווט לטאב |
+| [`lib/history/view/history_screen.dart`](../lib/history/view/history_screen.dart) | `HistoryDialog` — נפתח דרך `showDialog` |
+| [`lib/bookmarks/view/bookmark_screen.dart`](../lib/bookmarks/view/bookmark_screen.dart) | `BookmarksDialog` — נפתח דרך `showDialog` |
 | [`lib/tools/tools_screen.dart`](../lib/tools/tools_screen.dart) | `requestOpenTool` עם תור pending לתוספים שטרם נטענו |
 | [`windows/runner/main.cpp`](../windows/runner/main.cpp) | זיהוי single‑instance + העברת ארגומנטים לתור (לא רישום) |
 | [`test/core/external_uri_router_test.dart`](../test/core/external_uri_router_test.dart) | בדיקות הראוטר האחיד |
