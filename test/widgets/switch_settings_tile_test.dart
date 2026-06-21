@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/settings/widgets/switch_settings_tile.dart';
+import 'package:otzaria/settings/widgets/settings_card.dart';
 
 void main() {
   testWidgets('SwitchSettingsTile toggles when tapping the row',
@@ -12,9 +12,9 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: StatefulBuilder(
-            builder: (context, setState) => SwitchSettingsTile(
-              title: const Text('אפשרות'),
-              subtitle: const Text('תיאור'),
+            builder: (context, setState) => SettingsActionTile.switchTile(
+              title: 'אפשרות',
+              subtitle: 'תיאור',
               value: currentValue,
               onChanged: (value) => setState(() => currentValue = value),
             ),
@@ -40,9 +40,9 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: StatefulBuilder(
-            builder: (context, setState) => SwitchSettingsTile(
-              title: const Text('אפשרות'),
-              subtitle: const Text('תיאור'),
+            builder: (context, setState) => SettingsActionTile.switchTile(
+              title: 'אפשרות',
+              subtitle: 'תיאור',
               value: currentValue,
               onChanged: (value) => setState(() => currentValue = value),
             ),

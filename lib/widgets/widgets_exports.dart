@@ -10,8 +10,8 @@
 // Segmented control (AppSegmentedControl, SegmentOption):
 //   → lib/widgets/controls/segmented_control.dart
 //
-// SwitchSettingsTile:
-//   → lib/settings/widgets/switch_settings_tile.dart
+// SettingsActionTile (switchTile / dropdownTile / segmentedTile):
+//   → lib/settings/widgets/settings_card.dart
 //
 // ToolPanelWrapper:
 //   → lib/widgets/misc/tool_ui_helpers.dart
@@ -19,7 +19,6 @@
 export 'package:otzaria/widgets/dialogs/app_dialogs.dart';
 export 'package:otzaria/widgets/controls/action_buttons.dart';
 export 'package:otzaria/widgets/controls/segmented_control.dart';
-export 'package:otzaria/settings/widgets/switch_settings_tile.dart';
 export 'package:otzaria/widgets/misc/tool_ui_helpers.dart';
 export 'package:otzaria/widgets/layout/app_card.dart';
 export 'package:otzaria/widgets/misc/expanding_chevron.dart';

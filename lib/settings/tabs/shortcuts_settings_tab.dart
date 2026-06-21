@@ -10,13 +10,13 @@ import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/view/custom_shortcut_dialog.dart';
 import 'package:otzaria/shortcuts/view/shortcut_dropdown_tile.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 
 /// טאב קיצורי מקלדת — מוצג רק בדסקטופ.
@@ -556,7 +556,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
             title: 'כללי',
             children: [
               SettingsActionTile.text(
-                icon: Icon(FluentIcons.arrow_reset_24_regular),
+                icon: FluentIcons.arrow_reset_24_regular,
                 title: 'איפוס קיצורי מקשים',
                 subtitle: 'החזר את כל קיצורי המקשים לברירת המחדל',
                 actions: [
@@ -817,7 +817,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
                 'פעולות הקיימות באפליקציה ועדיין לא הוגדר להן קיצור מקלדת',
             children: [
               SettingsActionTile.text(
-                icon: Icon(FluentIcons.add_24_regular),
+                icon: FluentIcons.add_24_regular,
                 title: 'הוסף קיצור לפעולה זמינה',
                 subtitle: '${unconfiguredKeys.length} פעולות זמינות',
                 actions: [

@@ -4,8 +4,8 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/external_catalog/view/external_catalog_settings_helper.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
-import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 /// פאנל הגדרות תצוגת ספרייה
@@ -78,8 +78,8 @@ class LibrarySettingsPanel extends StatelessWidget {
             SettingsCard(
               title: 'תצוגת ספרייה',
               children: [
-                SegmentedSettingsTile<String>(
-                  icon: Icon(FluentIcons.grid_24_regular),
+                SettingsActionTile.segmentedTile<String>(
+                  icon: FluentIcons.grid_24_regular,
                   title: 'סוג תצוגה',
                   subtitle: state.libraryViewMode == 'list'
                       ? 'תצוגת רשימה (עץ מתרחב)'
@@ -103,7 +103,7 @@ class LibrarySettingsPanel extends StatelessWidget {
                         .add(UpdateLibraryViewMode(value));
                   },
                 ),
-                SwitchSettingsTile.text(
+                SettingsActionTile.switchTile(
                   icon: FluentIcons.eye_24_regular,
                   title: 'הצג תצוגה מקדימה',
                   subtitle: state.libraryShowPreview
@@ -128,7 +128,7 @@ class LibrarySettingsPanel extends StatelessWidget {
                 // מיקום היברובוקס (יוצג ראשון במידה והועבר לו ווידג'ט - דסקטופ בלבד)
                 if (hebrewBooksPathWidget != null) hebrewBooksPathWidget!,
 
-                SwitchSettingsTile.text(
+                SettingsActionTile.switchTile(
                   icon: FluentIcons.globe_24_regular,
                   title: 'הצגת ספרים מאתרים חיצוניים',
                   subtitle: state.showExternalBooks
@@ -143,7 +143,7 @@ class LibrarySettingsPanel extends StatelessWidget {
                   },
                 ),
                 if (state.showExternalBooks) ...[
-                  SwitchSettingsTile.text(
+                  SettingsActionTile.switchTile(
                     icon: FluentIcons.library_24_regular,
                     title: 'הצג ספרים מאוצר החכמה',
                     subtitle: 'ספרים מאתר אוצר החכמה',
@@ -155,7 +155,7 @@ class LibrarySettingsPanel extends StatelessWidget {
                       );
                     },
                   ),
-                  SwitchSettingsTile.text(
+                  SettingsActionTile.switchTile(
                     icon: FluentIcons.book_open_24_regular,
                     title: 'הצג ספרים מהיברובוקס',
                     subtitle: 'ספרים מאתר HebrewBooks',
@@ -167,7 +167,7 @@ class LibrarySettingsPanel extends StatelessWidget {
                       );
                     },
                   ),
-                  SwitchSettingsTile.text(
+                  SettingsActionTile.switchTile(
                     icon: FluentIcons.arrow_sync_24_regular,
                     title: 'סנכרון קטלוגים אוטומטי',
                     subtitle: 'עדכן קטלוגים חיצוניים אוטומטית',

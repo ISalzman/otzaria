@@ -4,8 +4,8 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart'
     hide SwitchSettingsTile;
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
-import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
@@ -138,8 +138,8 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
           child: SettingsCard(
             title: 'חיפוש גימטריה',
             children: [
-              DropdownSettingsTile<int>(
-                icon: Icon(FluentIcons.number_row_24_regular),
+              SettingsActionTile.dropdownTile<int>(
+                icon: FluentIcons.number_row_24_regular,
                 title: 'מספר תוצאות מקסימלי',
                 subtitle: 'כמות התוצאות המקסימלית להצגה',
                 value: maxResults,
@@ -153,7 +153,7 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
                   }
                 },
               ),
-              SwitchSettingsTile.text(
+              SettingsActionTile.switchTile(
                 icon: FluentIcons.filter_24_regular,
                 title: 'סינון תוצאות כפולות',
                 subtitle: filterDuplicates
@@ -166,7 +166,7 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
                       'key-gematria-filter-duplicates', filterDuplicates);
                 },
               ),
-              SwitchSettingsTile.text(
+              SettingsActionTile.switchTile(
                 icon: FluentIcons.text_word_count_24_regular,
                 title: 'חיפוש פסוק שלם בלבד',
                 subtitle: wholeVerseOnly
@@ -179,8 +179,8 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
                       'key-gematria-whole-verse-only', wholeVerseOnly);
                 },
               ),
-              SwitchSettingsTile.text(
-                icon: FluentIcons.book_24_regular,
+              SettingsActionTile.switchTile(
+                rtlIcon: FluentIcons.book_24_regular,
                 title: 'חיפוש בתורה בלבד',
                 subtitle: torahOnly
                     ? 'חיפוש רק בחמישה חומשי תורה'
@@ -198,7 +198,7 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
         SettingsCard(
           title: 'שיטת חישוב גימטריה',
           children: [
-            SwitchSettingsTile.text(
+            SettingsActionTile.switchTile(
               icon: FluentIcons.number_symbol_24_regular,
               title: 'גימטריה קטנה',
               subtitle: 'כל אות מחושבת לפי ספרה אחת',
@@ -216,7 +216,7 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
                     'key-gematria-use-small', useSmallGematria);
               },
             ),
-            SwitchSettingsTile.text(
+            SettingsActionTile.switchTile(
               icon: FluentIcons.text_font_24_regular,
               title: 'אותיות סופיות שונות',
               subtitle: 'מנצפ"ך בערכים שונים',
@@ -233,7 +233,7 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
                     'key-gematria-use-final-letters', useFinalLetters);
               },
             ),
-            SwitchSettingsTile.text(
+            SettingsActionTile.switchTile(
               icon: FluentIcons.add_circle_24_regular,
               title: 'עם הכולל',
               subtitle: 'הוספת מספר האותיות לסכום',
