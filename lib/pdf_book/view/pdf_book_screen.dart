@@ -65,6 +65,7 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/utils/link_helpers.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -1420,6 +1421,36 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   Settings.getValue<String>('key-shortcut-print') ?? 'ctrl+p';
               if (ShortcutHelper.matchesShortcut(event, printShortcut)) {
                 _handlePrintPress(context);
+                return KeyEventResult.handled;
+              }
+              // העתקת קישורים — קיצורים אופציונליים. ב-PDF "קישור למקטע" מעתיק
+              // קישור לעמוד הנוכחי (אותו מפתח כמו קישור-למקטע בספר טקסט).
+              final copyBookLinkShortcut = ShortcutValidator.getShortcutValue(
+                      ShortcutValidator.copyBookLinkKey) ??
+                  '';
+              final copyPageLinkShortcut = ShortcutValidator.getShortcutValue(
+                      ShortcutValidator.copySectionLinkKey) ??
+                  '';
+              if (copyBookLinkShortcut.isNotEmpty &&
+                  ShortcutHelper.matchesShortcut(event, copyBookLinkShortcut)) {
+                final bookId = widget.tab.book.id;
+                if (bookId == null) {
+                  UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+                } else {
+                  copyLinkToClipboard(buildPdfBookLink(bookId));
+                }
+                return KeyEventResult.handled;
+              }
+              if (copyPageLinkShortcut.isNotEmpty &&
+                  ShortcutHelper.matchesShortcut(event, copyPageLinkShortcut)) {
+                final bookId = widget.tab.book.id;
+                if (bookId == null) {
+                  UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+                } else {
+                  final page = widget.tab.pdfViewerController.pageNumber ??
+                      widget.tab.pageNumber;
+                  copyLinkToClipboard(buildPdfPageLink(bookId, page));
+                }
                 return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {

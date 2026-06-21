@@ -164,6 +164,23 @@ void main() {
     });
   });
 
+  group('copyLinkShortcutKeys', () {
+    test('כל מפתח רשום ב-shortcutKeys, defaultShortcuts (ריק) ו-shortcutNames',
+        () {
+      for (final key in ShortcutValidator.copyLinkShortcutKeys) {
+        expect(ShortcutValidator.shortcutKeys, contains(key));
+        expect(ShortcutValidator.defaultShortcuts[key], '');
+        expect(ShortcutValidator.shortcutNames[key], isNotNull);
+      }
+    });
+
+    test('ללא ברירת מחדל — getShortcutValue מחזיר ערך ריק כל עוד לא הוגדר', () {
+      for (final key in ShortcutValidator.copyLinkShortcutKeys) {
+        expect(ShortcutValidator.getShortcutValue(key), '');
+      }
+    });
+  });
+
   group('קיצורי תוספים (registerPluginShortcutKeys)', () {
     const pluginId = 'com.example.my_plugin';
     final key = ShortcutValidator.openPluginShortcutKey(pluginId);

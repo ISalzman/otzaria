@@ -33,6 +33,22 @@ class ShortcutValidator {
     'key-shortcut-open-tool-acronyms-dictionary': 'builtin.acronyms_dictionary',
   };
 
+  /// קיצורי "העתק קישור" אופציונליים. הקיצור פועל לפי הטאב הפעיל: קישור למקטע
+  /// בספר טקסט, וקישור לעמוד ב-PDF — שניהם תחת אותו מפתח. שני האחרונים רלוונטיים
+  /// לספר טקסט בלבד (PDF אינו תומך בהדגשת מקטע/טקסט).
+  static const String copyBookLinkKey = 'key-shortcut-copy-book-link';
+  static const String copySectionLinkKey = 'key-shortcut-copy-section-link';
+  static const String copySectionMarkLinkKey =
+      'key-shortcut-copy-section-mark-link';
+  static const String copyTextMarkLinkKey = 'key-shortcut-copy-text-mark-link';
+
+  static const List<String> copyLinkShortcutKeys = [
+    copyBookLinkKey,
+    copySectionLinkKey,
+    copySectionMarkLinkKey,
+    copyTextMarkLinkKey,
+  ];
+
   static const String _openPluginKeyPrefix = 'key-shortcut-open-plugin-';
 
   /// מפתח הגדרת הקיצור לפתיחת תוסף לפי מזההו (deep-link
@@ -98,6 +114,11 @@ class ShortcutValidator {
     'key-shortcut-open-tool-gematria',
     'key-shortcut-open-tool-aramaic-dictionary',
     'key-shortcut-open-tool-acronyms-dictionary',
+    // העתקת קישורים — אופציונלי, ללא ברירת מחדל (ראה copyLinkShortcutKeys).
+    copyBookLinkKey,
+    copySectionLinkKey,
+    copySectionMarkLinkKey,
+    copyTextMarkLinkKey,
   ];
 
   /// Default values for shortcuts
@@ -139,6 +160,10 @@ class ShortcutValidator {
     'key-shortcut-open-tool-gematria': '',
     'key-shortcut-open-tool-aramaic-dictionary': '',
     'key-shortcut-open-tool-acronyms-dictionary': '',
+    copyBookLinkKey: '',
+    copySectionLinkKey: '',
+    copySectionMarkLinkKey: '',
+    copyTextMarkLinkKey: '',
   };
 
   /// Shortcut names for display (סטטיים + שמות תוספים רשומים)
@@ -183,6 +208,10 @@ class ShortcutValidator {
     'key-shortcut-open-tool-gematria': 'פתיחת גימטריה',
     'key-shortcut-open-tool-aramaic-dictionary': 'פתיחת מילון ארמי-עברי',
     'key-shortcut-open-tool-acronyms-dictionary': 'פתיחת ראשי תיבות',
+    copyBookLinkKey: 'העתק קישור ישיר לספר',
+    copySectionLinkKey: 'העתק קישור למקטע / לעמוד',
+    copySectionMarkLinkKey: 'העתק קישור עם הדגשת המקטע',
+    copyTextMarkLinkKey: 'העתק קישור עם הדגשת הטקסט',
   };
 
   /// Check for conflicts in current shortcuts

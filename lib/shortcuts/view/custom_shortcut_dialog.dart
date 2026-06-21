@@ -11,9 +11,14 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 class CustomShortcutDialog extends StatefulWidget {
   final String? initialShortcut;
 
+  /// שם הפעולה שעבורה מגדירים את הקיצור. מוצג בין הכותרת לבין "התחל הקלטה"
+  /// כדי שיהיה ברור לאיזו פעולה הקיצור משויך.
+  final String? actionName;
+
   const CustomShortcutDialog({
     super.key,
     this.initialShortcut,
+    this.actionName,
   });
 
   @override
@@ -109,6 +114,19 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog>
                 textAlign: TextAlign.right,
                 style: TextStyle(fontSize: 14),
               ),
+              if (widget.actionName != null &&
+                  widget.actionName!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  widget.actionName!,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.all(20),
