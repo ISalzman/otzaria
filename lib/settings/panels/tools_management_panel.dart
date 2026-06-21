@@ -10,6 +10,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
+import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
@@ -185,8 +186,8 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                 ..._collapsibleSectionSlivers(
                   cardId: _builtInCardId,
                   title: 'כלים מובנים',
-                  subtitle: 'הסתר כלים מהממשק או הצמד אותם לסרגל הניווט הראשי.',
                   summaryLabel: 'רשימת הכלים',
+                  summarySubtitle: 'הסתר כלים מהממשק או הצמד אותם לסרגל הניווט הראשי.',
                   summaryIcon: FluentIcons.apps_24_regular,
                   expanded: _builtInExpanded,
                   onToggle: () =>
@@ -202,9 +203,9 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                     slivers: _collapsibleSectionSlivers(
                       cardId: _pluginsCardId,
                       title: 'תוספים מותקנים',
-                      subtitle:
-                          'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
                       summaryLabel: 'רשימת התוספים',
+                      summarySubtitle:
+                          'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
                       summaryIcon: FluentIcons.puzzle_piece_24_regular,
                       expanded: _pluginsExpanded,
                       onToggle: () => setState(() {
@@ -241,6 +242,7 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
     required String title,
     String? subtitle,
     required String summaryLabel,
+    String? summarySubtitle,
     required IconData summaryIcon,
     required bool expanded,
     required VoidCallback onToggle,
@@ -272,6 +274,7 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
               ExpandableSection(
                 icon: summaryIcon,
                 title: Text(summaryLabel),
+                subtitle: summarySubtitle != null ? Text(summarySubtitle) : null,
                 isExpanded: expanded,
                 onTap: onToggle,
                 children: children,
@@ -845,6 +848,20 @@ class _PluginRow extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon),
+          IconButton(
+            icon: const Icon(FluentIcons.settings_24_regular),
+            tooltip: 'הגדרות תוסף',
+            onPressed: () async {
+              await showDialog<bool>(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => BlocProvider<PluginSystemBloc>.value(
+                  value: context.read<PluginSystemBloc>(),
+                  child: PluginSettingsScreen(plugin: plugin),
+                ),
+              );
+            },
+          ),
           if (dragHandle != null) dragHandle!,
         ],
       ),

@@ -68,6 +68,7 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
         insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 60),
         clipBehavior: Clip.antiAlias,
         child: Scaffold(
+          backgroundColor: Theme.of(context).dialogTheme.backgroundColor,
           appBar: AppBar(
             title: Text(
               'הגדרות תוסף: ${currentPlugin.name}',
