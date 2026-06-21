@@ -101,6 +101,9 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
   /// האם מצב הבחירה הרב-שורתית פעיל.
   bool _isSelectionMode = false;
 
+  /// מפתחות גלובליים לעטיפות האנימציה — מאפשרים לקרוא ל-playAnimation ישירות.
+  final Map<String, GlobalKey<_AnimatedPluginMoveWrapperState>> _moveWrapperKeys = {};
+
   /// מצב פתיחה/סגירה של אזור הכלים המובנים — סגור כברירת מחדל.
   bool _builtInExpanded = false;
 
@@ -367,25 +370,45 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
 
   List<Widget> _pluginRows(List<InstalledPlugin> plugins) {
     return [
-      for (final plugin in plugins)
-        _DraggableSettingsPluginRow(
-          key: ValueKey(plugin.pluginId),
-          plugin: plugin,
-          isSelectionMode: _isSelectionMode,
-          selected: _selectedIds.contains(plugin.pluginId),
-          onSelectChanged: (v) => _toggleSelection(plugin.pluginId, v),
-          onAcceptSource: (sourceId) => _handleReorder(
-            context: context,
-            allPlugins: plugins,
-            sourcePluginId: sourceId,
-            targetPluginId: plugin.pluginId,
+      for (int i = 0; i < plugins.length; i++)
+        _AnimatedPluginMoveWrapper(
+          key: _moveWrapperKeys.putIfAbsent(
+              plugins[i].pluginId, () => GlobalKey()),
+          child: _DraggableSettingsPluginRow(
+            plugin: plugins[i],
+            isSelectionMode: _isSelectionMode,
+            selected: _selectedIds.contains(plugins[i].pluginId),
+            onSelectChanged: (v) => _toggleSelection(plugins[i].pluginId, v),
+            isFirst: i == 0,
+            isLast: i == plugins.length - 1,
+            onMoveUp: i == 0 ? null : () => _handleMove(plugins, i, i - 1),
+            onMoveDown: i == plugins.length - 1
+                ? null
+                : () => _handleMove(plugins, i, i + 1),
+            onAcceptSource: (sourceId) => _handleReorder(
+              context: context,
+              allPlugins: plugins,
+              sourcePluginId: sourceId,
+              targetPluginId: plugins[i].pluginId,
+            ),
+            onToggleHide: () => _togglePluginHide(plugins[i]),
+            onTogglePinNavRail: () => _togglePluginPinNavRail(plugins[i]),
+            onToggleEnabled: () => _togglePluginEnabled(plugins[i]),
+            onDelete: () => _deletePlugin(plugins[i]),
           ),
-          onToggleHide: () => _togglePluginHide(plugin),
-          onTogglePinNavRail: () => _togglePluginPinNavRail(plugin),
-          onToggleEnabled: () => _togglePluginEnabled(plugin),
-          onDelete: () => _deletePlugin(plugin),
         ),
     ];
+  }
+
+  void _handleMove(List<InstalledPlugin> plugins, int from, int to) {
+    final movedId = plugins[from].pluginId;
+    _moveWrapperKeys[movedId]?.currentState?.playAnimation(movedUp: to < from);
+    final reordered = List.of(plugins);
+    final item = reordered.removeAt(from);
+    reordered.insert(to, item);
+    context.read<PluginSystemBloc>().add(
+          ReorderPluginsRequested(reordered.map((p) => p.pluginId).toList()),
+        );
   }
 
   void _handleReorder({
@@ -812,18 +835,25 @@ class _DraggableSettingsPluginRow extends StatelessWidget {
   final bool selected;
   final ValueChanged<bool?> onSelectChanged;
   final ValueChanged<String> onAcceptSource;
+  final bool isFirst;
+  final bool isLast;
+  final VoidCallback? onMoveUp;
+  final VoidCallback? onMoveDown;
   final VoidCallback onToggleHide;
   final VoidCallback onTogglePinNavRail;
   final VoidCallback onToggleEnabled;
   final VoidCallback onDelete;
 
   const _DraggableSettingsPluginRow({
-    super.key,
     required this.plugin,
     required this.isSelectionMode,
     required this.selected,
     required this.onSelectChanged,
     required this.onAcceptSource,
+    required this.isFirst,
+    required this.isLast,
+    required this.onMoveUp,
+    required this.onMoveDown,
     required this.onToggleHide,
     required this.onTogglePinNavRail,
     required this.onToggleEnabled,
@@ -854,6 +884,10 @@ class _DraggableSettingsPluginRow extends StatelessWidget {
               isSelectionMode: isSelectionMode,
               selected: selected,
               onSelectChanged: onSelectChanged,
+              isFirst: isFirst,
+              isLast: isLast,
+              onMoveUp: onMoveUp,
+              onMoveDown: onMoveDown,
               onToggleHide: onToggleHide,
               onTogglePinNavRail: onTogglePinNavRail,
               onToggleEnabled: onToggleEnabled,
@@ -889,6 +923,10 @@ class _PluginRow extends StatelessWidget {
   final bool isSelectionMode;
   final bool selected;
   final ValueChanged<bool?> onSelectChanged;
+  final bool isFirst;
+  final bool isLast;
+  final VoidCallback? onMoveUp;
+  final VoidCallback? onMoveDown;
   final VoidCallback onToggleHide;
   final VoidCallback onTogglePinNavRail;
   final VoidCallback onToggleEnabled;
@@ -900,6 +938,10 @@ class _PluginRow extends StatelessWidget {
     required this.isSelectionMode,
     required this.selected,
     required this.onSelectChanged,
+    required this.isFirst,
+    required this.isLast,
+    required this.onMoveUp,
+    required this.onMoveDown,
     required this.onToggleHide,
     required this.onTogglePinNavRail,
     required this.onToggleEnabled,
@@ -934,53 +976,144 @@ class _PluginRow extends StatelessWidget {
         networkRevoked:
             plugin.manifest.networkEnabled && !plugin.networkAccessGranted,
       ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: const Icon(FluentIcons.settings_24_regular),
-            tooltip: 'הגדרות תוסף',
-            onPressed: () async {
-              await showDialog<bool>(
-                context: context,
-                barrierDismissible: false,
-                builder: (_) => BlocProvider<PluginSystemBloc>.value(
-                  value: context.read<PluginSystemBloc>(),
-                  child: PluginSettingsScreen(plugin: plugin),
+      trailing: isSelectionMode
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                NeutralActionButton(
+                  icon: FluentIcons.arrow_up_24_regular,
+                  text: 'הזז למעלה',
+                  onPressed: isFirst ? null : onMoveUp,
                 ),
-              );
-            },
-          ),
-          AnimatedPinButton(
-            isPinned: plugin.pinnedToNavRail,
-            tooltip: plugin.pinnedToNavRail
-                ? 'הסר מסרגל הניווט'
-                : 'הצמד לסרגל הניווט',
-            onPressed: onTogglePinNavRail,
-          ),
-          IconButton(
-            tooltip: plugin.hiddenFromTools ? 'הצג בממשק' : 'הסתר מהממשק',
-            isSelected: plugin.hiddenFromTools,
-            icon: const Icon(FluentIcons.eye_off_24_regular),
-            selectedIcon: const Icon(FluentIcons.eye_24_regular),
-            onPressed: onToggleHide,
-          ),
-          IconButton(
-            tooltip: plugin.enabled ? 'השבת' : 'הפעל',
-            isSelected: !plugin.enabled,
-            icon: const Icon(FluentIcons.pause_circle_24_regular),
-            selectedIcon: const Icon(FluentIcons.play_circle_24_regular),
-            onPressed: onToggleEnabled,
-          ),
-          IconButton(
-            tooltip: 'מחק תוסף',
-            icon: const Icon(FluentIcons.delete_24_regular),
-            onPressed: onDelete,
-          ),
-          if (dragHandle != null) dragHandle!,
-        ],
-      ),
+                const SizedBox(width: 8),
+                NeutralActionButton(
+                  icon: FluentIcons.arrow_down_24_regular,
+                  text: 'הזז למטה',
+                  onPressed: isLast ? null : onMoveDown,
+                ),
+              ],
+            )
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(FluentIcons.settings_24_regular),
+                  tooltip: 'הגדרות תוסף',
+                  onPressed: () async {
+                    await showDialog<bool>(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (_) => BlocProvider<PluginSystemBloc>.value(
+                        value: context.read<PluginSystemBloc>(),
+                        child: PluginSettingsScreen(plugin: plugin),
+                      ),
+                    );
+                  },
+                ),
+                AnimatedPinButton(
+                  isPinned: plugin.pinnedToNavRail,
+                  tooltip: plugin.pinnedToNavRail
+                      ? 'הסר מסרגל הניווט'
+                      : 'הצמד לסרגל הניווט',
+                  onPressed: onTogglePinNavRail,
+                ),
+                IconButton(
+                  tooltip: plugin.hiddenFromTools ? 'הצג בממשק' : 'הסתר מהממשק',
+                  isSelected: plugin.hiddenFromTools,
+                  icon: const Icon(FluentIcons.eye_off_24_regular),
+                  selectedIcon: const Icon(FluentIcons.eye_24_regular),
+                  onPressed: onToggleHide,
+                ),
+                IconButton(
+                  tooltip: plugin.enabled ? 'השבת' : 'הפעל',
+                  isSelected: !plugin.enabled,
+                  icon: const Icon(FluentIcons.pause_circle_24_regular),
+                  selectedIcon: const Icon(FluentIcons.play_circle_24_regular),
+                  onPressed: onToggleEnabled,
+                ),
+                IconButton(
+                  tooltip: 'מחק תוסף',
+                  icon: const Icon(FluentIcons.delete_24_regular),
+                  onPressed: onDelete,
+                ),
+                if (dragHandle != null) dragHandle!,
+              ],
+            ),
       onTap: isSelectionMode ? () => onSelectChanged(!selected) : null,
+    );
+  }
+}
+
+class _AnimatedPluginMoveWrapper extends StatefulWidget {
+  final Widget child;
+
+  const _AnimatedPluginMoveWrapper({
+    super.key,
+    required this.child,
+  });
+
+  @override
+  State<_AnimatedPluginMoveWrapper> createState() =>
+      _AnimatedPluginMoveWrapperState();
+}
+
+class _AnimatedPluginMoveWrapperState extends State<_AnimatedPluginMoveWrapper>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _progress;
+  bool _movedUp = true;
+
+  void playAnimation({required bool movedUp}) {
+    _movedUp = movedUp;
+    _ctrl.forward(from: 0);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      duration: const Duration(milliseconds: 450),
+      vsync: this,
+      value: 1.0,
+    );
+    _progress = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final slideSign = _movedUp ? 1.0 : -1.0;
+    return AnimatedBuilder(
+      animation: _progress,
+      builder: (context, child) {
+        final t = _progress.value;
+        final slideY = slideSign * 0.25 * (1.0 - t);
+        final shadowAlpha = 0.28 * (1.0 - t);
+        final bgAlpha = 0.10 * (1.0 - t);
+        return FractionalTranslation(
+          translation: Offset(0, slideY),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withValues(alpha: bgAlpha),
+              boxShadow: [
+                BoxShadow(
+                  color: cs.shadow.withValues(alpha: shadowAlpha),
+                  blurRadius: 8.0 * (1.0 - t),
+                  offset: Offset(0, 4.0 * (1.0 - t)),
+                ),
+              ],
+            ),
+            child: child,
+          ),
+        );
+      },
+      child: widget.child,
     );
   }
 }
