@@ -61,6 +61,8 @@ import 'package:otzaria/work_status/work_status_item.dart';
 import 'package:otzaria/work_status/work_status_overlay.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
+import 'package:otzaria/history/view/history_screen.dart';
+import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_event.dart';
@@ -970,6 +972,29 @@ class MainWindowScreenState extends State<MainWindowScreen>
             TextSelection.collapsed(offset: query.length);
         context.read<FindRefBloc>().add(SearchRefRequested(query));
         _handleFindRefOpen(context, transparentBarrier: false);
+        return true;
+      case OpenHistoryAction():
+        showDialog(
+          context: context,
+          builder: (_) => const HistoryDialog(),
+        );
+        return true;
+      case OpenBookmarksAction():
+        showDialog(
+          context: context,
+          builder: (_) => const BookmarksDialog(),
+        );
+        return true;
+      case OpenSettingsTabAction(:final tab):
+        context
+            .read<NavigationBloc>()
+            .add(const NavigateToScreen(Screen.settings));
+        if (tab != null) {
+          // ה-controller נוצר ב-initState ומועבר ל-MySettingsScreen דרך ה-build.
+          // קריאה ישירה לאחר ה-NavigateToScreen מספיקה כי ה-controller מאזין
+          // ל-ChangeNotifier — והמסך מגיב בקריאה הבאה ל-build.
+          _settingsScreenController.openTab(tab);
+        }
         return true;
     }
   }
