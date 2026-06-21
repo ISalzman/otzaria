@@ -136,6 +136,31 @@ void main() {
       await _closeBlocAndAllowDeferredDispose(bloc);
     });
 
+    test('navigateToPositionIfReused ממקד טאב קיים של אותו ספר גם בכותרת אחרת',
+        () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final existingTab = _createTextTab('ספר א', index: 0, categoryId: 1)
+        ..currentTitle.value = 'פרק א';
+
+      bloc.add(AddTab(existingTab));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      final targetTab = _createTextTab('ספר א', index: 25, categoryId: 1);
+      bloc.add(OpenOrFocusTab(
+        targetTab,
+        targetTitle: 'פרק ב',
+        navigateToPositionIfReused: true,
+      ));
+      // עם הדגל, ההתאמה לפי זהות הספר בלבד — הטאב הקיים ממוקד ומנווט,
+      // לא נפתח טאב חדש. הטאב כבר פעיל באינדקס 0 ולכן אין emission חדש.
+      await pumpEventQueue();
+
+      expect(bloc.state.tabs, hasLength(1));
+      expect(bloc.state.currentTabIndex, 0);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
     test('ממקד טאב PDF קיים לפי כותרת גם אם העמוד שונה', () async {
       final bloc = TabsBloc(repository: _FakeTabsRepository());
       final existingTab = PdfBookTab(

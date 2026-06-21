@@ -49,6 +49,10 @@ class Bookmark {
   final SearchMode? searchMode;
   final BookmarkTargetKind targetKind;
 
+  /// טקסט תיאור שהמשתמש רואה ויכול לערוך. בעת יצירה מאותחל למילים הראשונות
+  /// של הקטע המסומן. null = להציג את מיקום ברירת המחדל (ref).
+  final String? label;
+
   /// מועד יצירת הסימניה — משמש למיון "לפי תאריך הוספה".
   /// null בסימניות ישנות שנשמרו לפני הוספת השדה.
   final DateTime? createdAt;
@@ -69,8 +73,33 @@ class Bookmark {
     this.searchScopeFacets,
     this.searchMode,
     this.targetKind = BookmarkTargetKind.book,
+    this.label,
     this.createdAt,
   });
+
+  /// מחזיר עותק עם שדות מעודכנים. [clearLabel] מאפס את [label] ל-null
+  /// (חזרה להצגת המיקום) — נחוץ כי null כערך פירושו "ללא שינוי".
+  Bookmark copyWith({
+    String? label,
+    bool clearLabel = false,
+  }) {
+    return Bookmark(
+      ref: ref,
+      book: book,
+      index: index,
+      commentatorsToShow: commentatorsToShow,
+      isSearch: isSearch,
+      searchOptions: searchOptions,
+      alternativeWords: alternativeWords,
+      spacingValues: spacingValues,
+      workspaceName: workspaceName,
+      searchScopeFacets: searchScopeFacets,
+      searchMode: searchMode,
+      targetKind: targetKind,
+      label: clearLabel ? null : (label ?? this.label),
+      createdAt: createdAt,
+    );
+  }
 
   factory Bookmark.fromJson(Map<String, dynamic> json) {
     final rawCommentators = json['commentatorsToShow'] as List<dynamic>?;
@@ -114,6 +143,7 @@ class Bookmark {
               orElse: () => BookmarkTargetKind.book,
             )
           : BookmarkTargetKind.book,
+      label: json['label'] as String?,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String)
           : null,
@@ -145,6 +175,7 @@ class Bookmark {
       'searchScopeFacets': searchScopeFacets,
       'searchMode': searchMode?.name,
       'targetKind': targetKind.name,
+      'label': label,
       'createdAt': createdAt?.toIso8601String(),
     };
   }

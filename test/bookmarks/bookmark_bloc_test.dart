@@ -188,6 +188,17 @@ void main() {
         expect(bloc.state.bookmarks.length, 2);
       });
 
+      test('שומר label בסימנייה חדשה', () async {
+        final bloc = await _makeBloc();
+        bloc.addBookmark(
+          ref: 'בראשית א',
+          book: _book(),
+          index: 0,
+          label: 'בראשית ברא אלהים',
+        );
+        expect(bloc.state.bookmarks.first.label, 'בראשית ברא אלהים');
+      });
+
       test('אותו ספר + אותו index אבל targetKind שונה — מותר (לא כפולה)',
           () async {
         // סימנייה רגילה וסימנייה של מפרשים על אותו מיקום הן שתי רשומות נפרדות.
@@ -283,6 +294,33 @@ void main() {
         ]);
         bloc.removeBookmark(2);
         expect(bloc.state.bookmarks.map((b) => b.ref).toList(), ['א', 'ב']);
+      });
+    });
+
+    group('updateBookmarkLabel', () {
+      test('מעדכן את ה-label של סימנייה קיימת', () async {
+        final bloc = await _makeBloc(initial: [_bookmark(ref: 'בראשית א')]);
+        bloc.updateBookmarkLabel(0, 'תיאור חדש');
+        expect(bloc.state.bookmarks.first.label, 'תיאור חדש');
+      });
+
+      test('label ריק מאפס לברירת המחדל (null)', () async {
+        final bloc = await _makeBloc(initial: [
+          Bookmark(
+            ref: 'בראשית א',
+            book: _book(),
+            index: 0,
+            label: 'תיאור קיים',
+          ),
+        ]);
+        bloc.updateBookmarkLabel(0, '   ');
+        expect(bloc.state.bookmarks.first.label, isNull);
+      });
+
+      test('אינדקס מחוץ לתחום לא משנה דבר', () async {
+        final bloc = await _makeBloc(initial: [_bookmark(ref: 'בראשית א')]);
+        bloc.updateBookmarkLabel(5, 'תיאור');
+        expect(bloc.state.bookmarks.first.label, isNull);
       });
     });
 

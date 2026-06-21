@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
+import 'package:otzaria/widgets/misc/app_context_menu.dart';
+import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
 class ItemsListView extends StatefulWidget {
@@ -9,6 +11,13 @@ class ItemsListView extends StatefulWidget {
   final Function(BuildContext, dynamic, int originalIndex) onItemTap;
   final Function(BuildContext, int originalIndex) onDelete;
   final Function(BuildContext) onClearAll;
+
+  /// כשמסופק, מתווסף לתפריט ההקשר פריט "ערוך תיאור".
+  final Function(BuildContext, dynamic item, int originalIndex)? onEdit;
+
+  /// כשtrue — פעולות המחיקה/עריכה עוברות לתפריט הקשר (קליק ימני / לחיצה ארוכה)
+  /// במקום כפתור מחיקה גלוי בשורה.
+  final bool actionsInContextMenu;
   final String hintText;
   final String emptyText;
   final String notFoundText;
@@ -44,6 +53,8 @@ class ItemsListView extends StatefulWidget {
     required this.onItemTap,
     required this.onDelete,
     required this.onClearAll,
+    this.onEdit,
+    this.actionsInContextMenu = false,
     required this.hintText,
     required this.emptyText,
     required this.notFoundText,
@@ -175,7 +186,7 @@ class _ItemsListViewState extends State<ItemsListView> {
     final subtitle = widget.subtitleBuilder?.call(item);
     final subtitleTooltip = widget.subtitleTooltipBuilder?.call(item);
 
-    return InkWell(
+    final row = InkWell(
       onTap: () => widget.onItemTap(context, item, originalIndex),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -204,14 +215,35 @@ class _ItemsListViewState extends State<ItemsListView> {
                 ],
               ),
             ),
-            IconButton(
-              icon: const Icon(FluentIcons.delete_24_regular),
-              tooltip: 'מחק',
-              onPressed: () => widget.onDelete(context, originalIndex),
-            ),
+            if (!widget.actionsInContextMenu)
+              IconButton(
+                icon: const Icon(FluentIcons.delete_24_regular),
+                tooltip: 'מחק',
+                onPressed: () => widget.onDelete(context, originalIndex),
+              ),
           ],
         ),
       ),
+    );
+
+    if (!widget.actionsInContextMenu) return row;
+
+    return AppContextMenuRegion(
+      menuBuilder: (menuContext, _) => [
+        if (widget.onEdit != null)
+          AppContextMenuEntry(
+            label: 'ערוך תיאור',
+            icon: FluentIcons.edit_24_regular,
+            onTap: () => widget.onEdit!(menuContext, item, originalIndex),
+          ),
+        AppContextMenuEntry(
+          label: 'מחק',
+          icon: FluentIcons.delete_24_regular,
+          isDestructive: true,
+          onTap: () => widget.onDelete(menuContext, originalIndex),
+        ),
+      ],
+      child: row,
     );
   }
 

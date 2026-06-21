@@ -12,7 +12,7 @@ import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
+import 'package:otzaria/bookmarks/utils/section_bookmark.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart' hide UpdateFontSize;
@@ -1433,7 +1433,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               ? {
                   _getViewModeTooltip(state):
                       textBookOverflowCommentatorsTourTargetKey,
-                  'הוסף סימניה': textBookOverflowBookmarkTourTargetKey,
+                  'סימניות בספר זה': textBookOverflowBookmarkTourTargetKey,
                   'חיפוש': textBookOverflowSearchTourTargetKey,
                   'הדפסה': textBookOverflowPrintTourTargetKey,
                 }
@@ -1571,24 +1571,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // כפתורי ניווט - רק בתצוגה משולבת
       if (widget.isInCombinedView) ...navigationActions,
 
-      // 1) הוספת סימניה
+      // הצגת סימניות הספר הנוכחי (הוספת סימניה עברה לתפריט ההקשר בטקסט)
       ActionButtonData(
         widget: KeyedSubtree(
           key: widget.enableTourTargets ? textBookBookmarkTourTargetKey : null,
-          child: _buildBookmarkButton(context, state),
-        ),
-        icon: FluentIcons.bookmark_add_24_regular,
-        tooltip: 'הוסף סימניה',
-        onPressed: () => _handleBookmarkPress(context, state),
-      ),
-
-      // 1.5) הצגת סימניות הספר הנוכחי
-      ActionButtonData(
-        widget: ToolbarActionButton(
-          tooltip: 'סימניות בספר זה',
-          icon: FluentIcons.bookmark_multiple_24_regular,
-          compact: context.read<SettingsBloc>().state.compactMenuMode,
-          onPressed: () => _showBookmarksForCurrentBook(context, state.book),
+          child: ToolbarActionButton(
+            tooltip: 'סימניות בספר זה',
+            icon: FluentIcons.bookmark_multiple_24_regular,
+            compact: context.read<SettingsBloc>().state.compactMenuMode,
+            onPressed: () => _showBookmarksForCurrentBook(context, state.book),
+          ),
         ),
         icon: FluentIcons.bookmark_multiple_24_regular,
         tooltip: 'סימניות בספר זה',
@@ -1918,34 +1910,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           : FluentIcons.text_align_justify_24_regular,
       compact: isCompact,
       onPressed: () => _toggleAndSaveContinuousReading(context, state),
-    );
-  }
-
-  Widget _buildBookmarkButton(BuildContext context, TextBookLoaded state) {
-    final shortcut =
-        Settings.getValue<String>('key-shortcut-add-bookmark') ?? 'ctrl+b';
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    return ToolbarActionButton(
-      tooltip: 'הוסף סימניה (${shortcut.toUpperCase()})',
-      icon: FluentIcons.bookmark_add_24_regular,
-      compact: isCompact,
-      onPressed: () async {
-        int index = _topmostVisibleSourceLine(state);
-        final toc = state.book.tableOfContents;
-        String ref = await refFromIndex(index, toc);
-        // הוספת שם הספר לכותרת
-        ref = addBookTitleToRef(ref, state.book.title);
-        if (!mounted || !context.mounted) return;
-
-        bool bookmarkAdded = context.read<BookmarkBloc>().addBookmark(
-              ref: ref,
-              book: state.book,
-              index: index,
-              commentatorsToShow: state.activeCommentators,
-            );
-        UiSnack.showQuick(
-            bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
-      },
     );
   }
 
@@ -2352,26 +2316,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       requiresStableLayout: true,
       insertAdjacent: true,
     );
-  }
-
-  void _handleBookmarkPress(BuildContext context, TextBookLoaded state) async {
-    final index = _topmostVisibleSourceLine(state);
-    final toc = state.book.tableOfContents;
-    final bookmarkBloc = context.read<BookmarkBloc>();
-    String ref = await refFromIndex(index, toc);
-    // הוספת שם הספר לכותרת
-    ref = addBookTitleToRef(ref, state.book.title);
-    if (!mounted || !context.mounted) return;
-
-    final bookmarkAdded = bookmarkBloc.addBookmark(
-      ref: ref,
-      book: state.book,
-      index: index,
-      commentatorsToShow: state.activeCommentators,
-    );
-
-    UiSnack.showQuick(
-        bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
   }
 
   /// עיגון מחדש לפריט העליון הנראה לפני שינוי רוחב התוכן: SPL שומר היסט בפיקסלים
@@ -3024,23 +2968,7 @@ Future<void> _savePerBookSettingsDirectly(
 void _addBookmarkFromKeyboard(
     BuildContext context, TextBookLoaded state) async {
   final index = _topmostVisibleSourceLine(state);
-  final toc = state.book.tableOfContents;
-  final bookmarkBloc = context.read<BookmarkBloc>();
-  String ref = await refFromIndex(index, toc);
-  // הוספת שם הספר לכותרת
-  ref = addBookTitleToRef(ref, state.book.title);
-
-  if (!context.mounted) return;
-
-  final bookmarkAdded = bookmarkBloc.addBookmark(
-    ref: ref,
-    book: state.book,
-    index: index,
-    commentatorsToShow: state.activeCommentators,
-  );
-
-  UiSnack.showQuick(
-      bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
+  await addTextSectionBookmark(context, state, index);
 }
 
 /// Helper function to add note from keyboard shortcut
