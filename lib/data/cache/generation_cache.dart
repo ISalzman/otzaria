@@ -81,9 +81,10 @@ class GenerationCache {
       );
     } catch (e) {
       debugPrint('[GenerationCache] Warmup failed: $e');
+      // לא מסמנים loaded: כשל זמני (למשל DB locked בעלייה) יאופשר retry
+      // ב-warmUp הבא לפני החיפוש, במקום להישאר עם כל הספרים כ-other לכל ה-session.
       if (myGen == _generation) {
         _orderByBookId.clear();
-        _isLoaded = true; // למנוע ניסיונות חוזרים
       }
     }
   }

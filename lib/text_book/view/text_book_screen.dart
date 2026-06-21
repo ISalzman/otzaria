@@ -727,7 +727,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       return;
     }
 
-    final settings = await TextBookPerBookSettings.load(widget.tab.book.title);
+    final settings = await TextBookPerBookSettings.load(widget.tab.book);
 
     if (settings == null) {
       return;
@@ -767,7 +767,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// איפוס הגדרות פר-ספר
   Future<void> _resetPerBookSettings() async {
-    await TextBookPerBookSettings.delete(widget.tab.book.title);
+    await TextBookPerBookSettings.delete(widget.tab.book);
 
     // טעינה מחדש של ההגדרות הכלליות
     if (!mounted) return;
@@ -2911,7 +2911,7 @@ Future<void> _savePerBookSettingsDirectly(
 
   // עדכון אטומי: ה-load וה-merge מבוצעים בתוך תור הכתיבה כדי למנוע דריסה
   // הדדית עם שמירת רוחבי הטורים (_saveSizes) על אותו קובץ.
-  await TextBookPerBookSettings.mutate(state.book.title, (existingSettings) {
+  await TextBookPerBookSettings.mutate(state.book, (existingSettings) {
     // בניית הגדרות חדשות - רק שדות ששונו מברירת המחדל
     double? newFontSize = existingSettings?.fontSize;
     bool? newCommentatorsBelow = existingSettings?.commentatorsBelow;

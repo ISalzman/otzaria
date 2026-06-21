@@ -654,7 +654,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           final settings = PdfBookPerBookSettings(
             activeCommentators: List.from(widget.tab.activeCommentators),
           );
-          await settings.save(widget.tab.book.title);
+          await settings.save(widget.tab.book);
         },
       ),
     );

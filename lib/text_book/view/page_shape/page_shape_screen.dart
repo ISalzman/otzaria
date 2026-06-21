@@ -146,10 +146,10 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   /// טעינת רוחבי הטורים השמורים לספר הנוכחי (אסינכרוני).
   /// דורס את הערכים הגלובליים שנטענו ב-[_loadSizes] רק עבור שדות שנשמרו לספר.
   Future<void> _loadPerBookSizes() async {
-    final bookTitle = widget.tab?.book.title;
-    if (bookTitle == null) return;
+    final book = widget.tab?.book;
+    if (book == null) return;
 
-    final settings = await TextBookPerBookSettings.load(bookTitle);
+    final settings = await TextBookPerBookSettings.load(book);
     if (settings == null || !mounted) return;
 
     setState(() {
@@ -202,8 +202,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   /// השמירה אטומית (דרך [TextBookPerBookSettings.mutate]) כדי שלא תדרוס
   /// שמירה מקבילה של גופן/ניקוד וכו' על אותו ספר.
   Future<void> _savePerBookSizes() async {
-    final bookTitle = widget.tab?.book.title;
-    if (bookTitle == null) return;
+    final book = widget.tab?.book;
+    if (book == null) return;
 
     final leftWidth = _leftWidth;
     final rightWidth = _rightWidth;
@@ -211,7 +211,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final bottomLeftWidth = _bottomLeftWidth;
 
     await TextBookPerBookSettings.mutate(
-      bookTitle,
+      book,
       (existing) => (existing ?? TextBookPerBookSettings()).copyWith(
         pageShapeLeftWidth: leftWidth,
         pageShapeRightWidth: rightWidth,

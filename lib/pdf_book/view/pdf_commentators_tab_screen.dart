@@ -290,10 +290,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     final tab = widget.tab.sourceTab;
     try {
       final library = await DataRepository.instance.library;
-      TextBook? textBook =
-          library.findBookByTitle(tab.book.title, TextBook) as TextBook?;
-      textBook ??= library.findBookByTitleFlexible(tab.book.title, TextBook)
-          as TextBook?;
+      final textBook =
+          library.getCompanionBook(tab.book, TextBook) as TextBook?;
       if (textBook == null || !mounted) return;
       final text = await textBook.text;
       if (!mounted) return;
@@ -330,10 +328,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     if (tab.links.isEmpty) {
       try {
         final library = await DataRepository.instance.library;
-        TextBook? textBook =
-            library.findBookByTitle(tab.book.title, TextBook) as TextBook?;
-        textBook ??= library.findBookByTitleFlexible(tab.book.title, TextBook)
-            as TextBook?;
+        final textBook =
+            library.getCompanionBook(tab.book, TextBook) as TextBook?;
         if (textBook != null) {
           final loaded = await textBook.links
             ..sort((a, b) => a.index1.compareTo(b.index1));
@@ -364,10 +360,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     if (headings == null || headings.isEmpty) return;
     try {
       final library = await DataRepository.instance.library;
-      var textBook = library.findBookByTitle(
-          widget.tab.sourceTab.book.title, TextBook) as TextBook?;
-      textBook ??= library.findBookByTitleFlexible(
-          widget.tab.sourceTab.book.title, TextBook) as TextBook?;
+      final textBook = library.getCompanionBook(
+          widget.tab.sourceTab.book, TextBook) as TextBook?;
       if (textBook == null) return;
 
       int lo = 0;
@@ -443,7 +437,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     final sourceTab = widget.tab.sourceTab;
     if (available.isEmpty || sourceTab.activeCommentators.isNotEmpty) return;
 
-    final saved = await PdfBookPerBookSettings.load(sourceTab.book.title);
+    final saved = await PdfBookPerBookSettings.load(sourceTab.book);
     final selection = await DefaultCommentators.resolveAutoSelection(
       sourceTab.book,
       availableCommentators: available,
@@ -712,10 +706,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     if (hasSelectedHeading) {
       try {
         final library = await DataRepository.instance.library;
-        var textBook = library.findBookByTitle(sourceTab.book.title, TextBook)
-            as TextBook?;
-        textBook ??= library.findBookByTitleFlexible(
-            sourceTab.book.title, TextBook) as TextBook?;
+        final textBook =
+            library.getCompanionBook(sourceTab.book, TextBook) as TextBook?;
         if (textBook != null) {
           final mapped = await textToPdfPage(
               textBook, headings[_selectedHeadingIdx].value);
@@ -1045,7 +1037,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
           activeCommentators:
               List.from(widget.tab.sourceTab.activeCommentators),
         );
-        await settings.save(widget.tab.sourceTab.book.title);
+        await settings.save(widget.tab.sourceTab.book);
       },
     );
   }
