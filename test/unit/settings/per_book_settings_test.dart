@@ -1,5 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   group('TextBookPerBookSettings JSON', () {
@@ -144,6 +150,103 @@ void main() {
 
       final restored = TextBookPerBookSettings.fromJson(json);
       expect(restored.continuousReadingMode, isFalse);
+    });
+  });
+
+  group('PerBookSettings.bookKey — מפתח ייחודי לספר', () {
+    test('ספר אישי וספר רשמי באותו שם מקבלים מפתחות נפרדים', () {
+      final official = TextBook(title: 'ספר', categoryId: 1);
+      final user = TextBook(title: 'ספר', categoryId: 1, isUserBook: true);
+
+      expect(PerBookSettings.bookKey(official),
+          isNot(PerBookSettings.bookKey(user)));
+    });
+
+    test('שני ספרי טקסט באותו שם בקטגוריות שונות נפרדים', () {
+      final a = TextBook(title: 'ספר', categoryId: 1);
+      final b = TextBook(title: 'ספר', categoryId: 2);
+
+      expect(PerBookSettings.bookKey(a), isNot(PerBookSettings.bookKey(b)));
+    });
+
+    test('ספרי PDF באותו שם בנתיבים שונים נפרדים (מפתוח לפי path)', () {
+      final a = PdfBook(title: 'ספר', path: '/a/book.pdf');
+      final b = PdfBook(title: 'ספר', path: '/b/book.pdf');
+
+      expect(PerBookSettings.bookKey(a), isNot(PerBookSettings.bookKey(b)));
+    });
+
+    test('נתיבים שונים בעלי sanitize זהה עדיין נפרדים (a_b מול a/b)', () {
+      // ללא hash, _sanitizeBookName היה ממיר את שניהם לאותו שם קובץ.
+      final a = PdfBook(title: 'ספר', path: r'C:\library\a_b.pdf');
+      final b = PdfBook(title: 'ספר', path: r'C:\library\a\b.pdf');
+
+      expect(PerBookSettings.bookKey(a), isNot(PerBookSettings.bookKey(b)));
+    });
+
+    test('אותו ספר מחזיר מפתח יציב', () {
+      final book = TextBook(title: 'ספר', categoryId: 1);
+      expect(
+          PerBookSettings.bookKey(book), equals(PerBookSettings.bookKey(book)));
+    });
+  });
+
+  group('PdfBookPerBookSettings — שמירה/טעינה בפועל', () {
+    late Directory tempDir;
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('per_book_test');
+      AppPaths.debugOverrideDataRootPath(tempDir.path);
+    });
+
+    tearDown(() async {
+      AppPaths.debugOverrideDataRootPath(null);
+      if (await tempDir.exists()) await tempDir.delete(recursive: true);
+    });
+
+    Future<File> writeLegacy(String title, Map<String, dynamic> json) async {
+      final dir = Directory(p.join(tempDir.path, 'per_book_settings'));
+      await dir.create(recursive: true);
+      final file = File(p.join(dir.path, 'settings_$title.json'));
+      await file.writeAsString(jsonEncode(json));
+      return file;
+    }
+
+    test('שני נתיבים בעלי sanitize זהה נשמרים ונטענים בנפרד', () async {
+      final a = PdfBook(title: 'ספר', path: r'C:\library\a_b.pdf');
+      final b = PdfBook(title: 'ספר', path: r'C:\library\a\b.pdf');
+
+      await PdfBookPerBookSettings(zoom: 1.5).save(a);
+      await PdfBookPerBookSettings(zoom: 2.5).save(b);
+
+      expect((await PdfBookPerBookSettings.load(a))?.zoom, 1.5);
+      expect((await PdfBookPerBookSettings.load(b))?.zoom, 2.5);
+    });
+
+    test('שני ספרים באותו שם יורשים legacy; איפוס אחד לא פוגע באחר', () async {
+      await writeLegacy('ספר', {'zoom': 3.0});
+
+      final a = PdfBook(title: 'ספר', path: '/a/ספר.pdf');
+      final b = PdfBook(title: 'ספר', path: '/b/ספר.pdf');
+
+      // שניהם יורשים את ה-legacy (copy, לא rename)
+      expect((await PdfBookPerBookSettings.load(a))?.zoom, 3.0);
+      expect((await PdfBookPerBookSettings.load(b))?.zoom, 3.0);
+
+      // איפוס a — b עדיין שומר את ההגדרה הישנה (ה-legacy לא נמחק)
+      await PdfBookPerBookSettings.delete(a);
+      expect((await PdfBookPerBookSettings.load(a))?.zoom, isNull);
+      expect((await PdfBookPerBookSettings.load(b))?.zoom, 3.0);
+    });
+
+    test('איפוס אינו "מתחייה" בפתיחה הבאה (tombstone)', () async {
+      await writeLegacy('ספר', {'zoom': 4.0});
+      final a = PdfBook(title: 'ספר', path: '/a/ספר.pdf');
+
+      expect((await PdfBookPerBookSettings.load(a))?.zoom, 4.0);
+      await PdfBookPerBookSettings.delete(a);
+      // טעינה חוזרת לא משחזרת מ-legacy
+      expect((await PdfBookPerBookSettings.load(a))?.zoom, isNull);
     });
   });
 }

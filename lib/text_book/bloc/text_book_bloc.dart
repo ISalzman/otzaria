@@ -980,7 +980,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         // בכל פתיחה. ספרים אישיים אינם נשמרים פר-ספר.
         if (!currentState.book.isUserBook) {
           unawaited(_saveActiveCommentatorsPerBook(
-            currentState.book.title,
+            currentState.book,
             event.commentators,
           ));
         }
@@ -2335,9 +2335,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       // בחירה שמורה פר-ספר גוברת על ברירת המחדל: אם המשתמש בחר בעבר (כולל
       // בחירה ריקה) — משחזרים אותה; אחרת בוחרים את מפרשי ברירת המחדל.
-      final saved = book.isUserBook
-          ? null
-          : await TextBookPerBookSettings.load(book.title);
+      final saved =
+          book.isUserBook ? null : await TextBookPerBookSettings.load(book);
       if (isClosed) return;
 
       if (saved?.activeCommentators != null) {
@@ -2364,12 +2363,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   /// שומר את בחירת המפרשים פר-ספר (תמיד, ללא תלות ב-enablePerBookSettings),
   /// כדי שתיטען בכל פתיחה. בחירה ריקה נשמרת אף היא (המשתמש ביטל את הכל).
   Future<void> _saveActiveCommentatorsPerBook(
-    String bookTitle,
+    Book book,
     List<String> commentators,
   ) async {
     try {
       await TextBookPerBookSettings.mutate(
-        bookTitle,
+        book,
         (existing) => (existing ?? TextBookPerBookSettings())
             .copyWith(activeCommentators: List<String>.from(commentators)),
       );

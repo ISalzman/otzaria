@@ -150,13 +150,17 @@ String removePunctuation(String text) {
       (match) {
         final index = match.start;
         final letter = RegExp(r'[א-תa-zA-Z]');
-        final hasBefore = index > 0 && letter.hasMatch(processed[index - 1]);
         // ראשי תיבות: הגרשיים לפני האות האחרונה, כלומר אות אחת בלבד אחריו
         // ואז גבול מילה. שתי אותיות אחריו = מירכאות ציטוט (כמו ב"כי יותן).
-        final hasSingleLetterAfter = index < processed.length - 1 &&
-            letter.hasMatch(processed[index + 1]) &&
-            (index + 2 >= processed.length ||
-                !letter.hasMatch(processed[index + 2]));
+        // מנקים ניקוד משני הצדדים כדי שאות מנוקדת (רַשִׁ"י, ב"כִּי) לא תיחשב
+        // בטעות כסימן ניקוד או כאות בודדת.
+        final before = removeVolwels(processed.substring(0, index));
+        final hasBefore =
+            before.isNotEmpty && letter.hasMatch(before[before.length - 1]);
+        final rest = removeVolwels(processed.substring(index + 1));
+        final hasSingleLetterAfter = rest.isNotEmpty &&
+            letter.hasMatch(rest[0]) &&
+            (rest.length == 1 || !letter.hasMatch(rest[1]));
         if (hasBefore && hasSingleLetterAfter) {
           return match.group(0)!;
         }

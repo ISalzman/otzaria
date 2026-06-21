@@ -2521,7 +2521,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final settings = PdfBookPerBookSettings(
       activeCommentators: List.from(widget.tab.activeCommentators),
     );
-    await settings.save(widget.tab.book.title);
+    await settings.save(widget.tab.book);
   }
 
   /// קאש של הגדרות לפי-ספר לאורך חיי המסך. נטען פעם אחת ומשותף לכל
@@ -2531,7 +2531,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   Future<PdfBookPerBookSettings?> _loadPerBookSettings() {
     return _perBookSettingsFuture ??=
-        PdfBookPerBookSettings.load(widget.tab.book.title);
+        PdfBookPerBookSettings.load(widget.tab.book);
   }
 
   /// טוען את בחירת המפרשים השמורה פר-ספר (תמיד, ללא תלות ב-enablePerBookSettings).
@@ -2801,10 +2801,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       // טעינת links
       final library = await DataRepository.instance.library;
 
-      // ניסיון חיפוש מדויק, ואם נכשל — חיפוש גמיש
-      final TextBook? textBook = (library.findBookByTitle(bookTitle, TextBook)
-              as TextBook?) ??
-          (library.findBookByTitleFlexible(bookTitle, TextBook) as TextBook?);
+      final textBook =
+          library.getCompanionBook(widget.tab.book, TextBook) as TextBook?;
 
       if (textBook != null) {
         final loadedLinks = await textBook.links
@@ -4006,7 +4004,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final currentOutline = widget.tab.outline.value ?? [];
 
     final library = await DataRepository.instance.library;
-    final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
+    final textBook = library.getCompanionBook(widget.tab.book, TextBook);
     if (textBook == null) return;
 
     if (!context.mounted) return;
@@ -4178,7 +4176,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return FutureBuilder(
       future: DataRepository.instance.library
-          .then((library) => library.findBookByTitle(book.title, TextBook)),
+          .then((library) => library.getCompanionBook(book, TextBook)),
       builder: (context, snapshot) => snapshot.hasData
           ? ToolbarActionButton(
               tooltip: 'פתח ספר במהדורת טקסט',

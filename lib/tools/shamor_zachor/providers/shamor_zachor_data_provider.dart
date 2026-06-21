@@ -604,8 +604,9 @@ class ShamorZachorDataProvider with ChangeNotifier {
           failed++;
           continue;
         }
-        _trackedBookIds.add(existing.id);
-        added++;
+        if (_trackedBookIds.add(existing.id)) {
+          added++;
+        }
       } catch (e) {
         _logger.warning("Failed to add book '${book.bookName}' to tracking", e);
         failed++;

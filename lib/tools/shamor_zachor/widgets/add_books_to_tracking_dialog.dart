@@ -74,20 +74,26 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
 
     setState(() => _isAdding = true);
 
-    final result = await widget.dataProvider.addCustomBooks(
-      _selectedBooks.values
-          .map((b) => (bookName: b.title, categoryId: b.categoryId))
-          .toList(),
-    );
+    try {
+      final result = await widget.dataProvider.addCustomBooks(
+        _selectedBooks.values
+            .map((b) => (bookName: b.title, categoryId: b.categoryId))
+            .toList(),
+      );
 
-    if (!mounted) return;
-    Navigator.of(context).pop();
+      if (!mounted) return;
+      Navigator.of(context).pop();
 
-    if (result.added > 0) {
-      UiSnack.show('${result.added} ספרים נוספו למעקב');
-    }
-    if (result.failed > 0) {
-      UiSnack.showError('${result.failed} ספרים לא נוספו');
+      if (result.added > 0) {
+        UiSnack.show('${result.added} ספרים נוספו למעקב');
+      }
+      if (result.failed > 0) {
+        UiSnack.showError('${result.failed} ספרים לא נוספו');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isAdding = false);
+      UiSnack.showError('שגיאה בהוספת ספרים: $e');
     }
   }
 

@@ -373,6 +373,10 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
     double maxWidth,
     Map<AppContextMenuEntry, MenuController> submenuControllers,
   ) {
+    // ה-MenuItemButton מוסיף itemPadding משלו (buildAppSubmenuItemStyle) על גבי
+    // ה-padding של buildAppMenuRowContent — מחסירים אותו מרוחב התוכן כדי ש-cap
+    // התווית לא יגלוש (כמו submenuContentMaxWidth בתת-התפריט).
+    final contentMaxWidth = maxWidth - metrics.itemPadding.horizontal;
     return entries.map<Widget>((entry) {
       if (entry.isDivider) {
         return SizedBox(
@@ -391,7 +395,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
             child: buildAppMenuRowContent(
               context,
               metrics,
-              maxWidth: maxWidth,
+              maxWidth: contentMaxWidth,
               label: entry.label ?? '',
               labelWidget: entry.labelWidget,
               icon: entry.icon,
@@ -440,7 +444,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
             child: buildAppMenuRowContent(
               context,
               metrics,
-              maxWidth: maxWidth,
+              maxWidth: contentMaxWidth,
               label: entry.label ?? '',
               labelWidget: entry.labelWidget,
               icon: entry.icon,
@@ -506,7 +510,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
           child: buildAppMenuRowContent(
             context,
             metrics,
-            maxWidth: maxWidth,
+            maxWidth: contentMaxWidth,
             label: entry.label ?? '',
             labelWidget: entry.labelWidget,
             icon: entry.icon,
@@ -874,7 +878,7 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton>
         child: buildAppMenuRowContent(
           context,
           widget.metrics,
-          maxWidth: widget.maxWidth,
+          maxWidth: widget.maxWidth - widget.metrics.itemPadding.horizontal,
           label: widget.entry.label ?? '',
           labelWidget: widget.entry.labelWidget,
           icon: widget.entry.icon,
@@ -913,7 +917,7 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton>
             child: buildAppMenuRowContent(
               context,
               widget.metrics,
-              maxWidth: widget.maxWidth,
+              maxWidth: widget.maxWidth - widget.metrics.itemPadding.horizontal,
               label: widget.entry.label ?? '',
               labelWidget: widget.entry.labelWidget,
               icon: widget.entry.icon,
