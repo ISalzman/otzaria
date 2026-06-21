@@ -142,6 +142,18 @@ class ErrorReportHelper {
   static const String _otzariaDirectReportTarget = 'אוצריא';
   static const String _sefariaDirectReportTarget = 'ספריא';
 
+  /// עמוד העריכה העצמית של ספרי דיקטה.
+  static const String dictaEditUrl = 'https://otzaria.org/library/dicta-edit';
+
+  /// בונה את קישור עמוד העריכה עם שם הספר בפרמטר `q`, כדי שעמוד האתר ייפתח
+  /// כשהספר כבר מסונן בשדה החיפוש.
+  static String dictaEditUrlFor(String bookTitle) {
+    final trimmed = bookTitle.trim();
+    if (trimmed.isEmpty) return dictaEditUrl;
+    return Uri.parse(dictaEditUrl)
+        .replace(queryParameters: {'q': trimmed}).toString();
+  }
+
   static List<String> resolveReportContent({
     required TextBookLoaded state,
     List<String>? reportContent,
@@ -179,6 +191,46 @@ class ErrorReportHelper {
     final normalizedSource = sourceFolder?.trim().toLowerCase() ?? '';
     return normalizedSource.contains('sefariatootzaria') ||
         normalizedSource.contains('sefaria');
+  }
+
+  static bool isDictaSourceFolder(String? sourceFolder) {
+    final normalizedSource = sourceFolder?.trim().toLowerCase() ?? '';
+    return normalizedSource.contains('dicta');
+  }
+
+  /// בספר שמקורו בדיקטה ובמצב מחובר — מציע למשתמש לתקן את הטעות בעצמו דרך עמוד
+  /// העריכה של דיקטה, לפני פתיחת טופס הדיווח.
+  /// מחזיר true אם יש להמשיך לטופס הדיווח, false אם בחר לתקן בעצמו / ביטל.
+  static Future<bool> maybeOfferDictaSelfEdit(
+    BuildContext context, {
+    required bool isDictaSource,
+    required String bookTitle,
+  }) async {
+    final isOfflineMode =
+        Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ?? false;
+    if (!isDictaSource || isOfflineMode) return true;
+
+    final openEdit = await showTwoActionsDialog(
+      context: context,
+      title: 'ניתן לתקן בעצמך',
+      content: '',
+      customContent: _DictaSelfEditNotice(bookTitle: bookTitle),
+      cancelText: 'המשך בדיווח רגיל',
+      confirmText: 'פתח עמוד עריכה',
+    );
+
+    if (openEdit == true) {
+      if (await launchDictaEditPage(bookTitle)) {
+        return false; // נפתח עמוד העריכה — לא ממשיכים לטופס הדיווח
+      }
+      // הפתיחה נכשלה — ממשיכים אוטומטית לטופס הדיווח הרגיל במקום לאלץ התחלה מחדש
+      if (context.mounted) {
+        UiSnack.showError('לא ניתן לפתוח את עמוד העריכה. ממשיכים לדיווח רגיל.');
+      }
+      return true;
+    }
+    // 'המשך בדיווח' → ממשיכים; סגירה ללא בחירה → מבטלים.
+    return openEdit == false;
   }
 
   static String resolveDirectReportTargetLabel(String? sourceFolder) {
@@ -809,8 +861,19 @@ $detailsSection
     final directReportTargetLabel = resolveDirectReportTargetLabel(
       bookDetails['תיקיית המקור'],
     );
+    final isDictaSource = isDictaSourceFolder(bookDetails['תיקיית המקור']);
 
     if (!context.mounted) return;
+
+    // בספר דיקטה ובמצב מחובר — מציעים תיקון עצמי לפני הזנת הטעות.
+    if (!await maybeOfferDictaSelfEdit(
+          context,
+          isDictaSource: isDictaSource,
+          bookTitle: bookTitle,
+        ) ||
+        !context.mounted) {
+      return;
+    }
 
     // פתיחת הדיאלוג
     final ReportDialogResult? result = await showDialog<ReportDialogResult>(
@@ -1322,6 +1385,57 @@ class _RegularReportTabState extends State<RegularReportTab> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// מנסה לפתוח את עמוד העריכה של דיקטה עם שם הספר בשדה החיפוש. מחזיר אם הפתיחה
+/// הצליחה (כדי שהקורא יוכל להציג הודעת שגיאה כשהדפדפן לא נפתח).
+Future<bool> launchDictaEditPage(String bookTitle) async {
+  try {
+    final uri = Uri.parse(ErrorReportHelper.dictaEditUrlFor(bookTitle));
+    if (await canLaunchUrl(uri)) {
+      return await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  } catch (e) {
+    debugPrint('פתיחת עמוד עריכת דיקטה נכשלה: $e');
+  }
+  return false;
+}
+
+/// תוכן הדיאלוג המוצע לספרי דיקטה — הסבר וקישור לחיץ לעמוד העריכה העצמית.
+class _DictaSelfEditNotice extends StatelessWidget {
+  final String bookTitle;
+
+  const _DictaSelfEditNotice({required this.bookTitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'ספר זה מקורו בספריית דיקטה. ניתן לתקן את הטעות בעצמך, '
+          'באופן מיידי, דרך עמוד העריכה של דיקטה:',
+        ),
+        const SizedBox(height: 12),
+        InkWell(
+          onTap: () async {
+            if (!await launchDictaEditPage(bookTitle)) {
+              UiSnack.showError('לא ניתן לפתוח את עמוד העריכה.');
+            }
+          },
+          child: Text(
+            ErrorReportHelper.dictaEditUrl,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              decoration: TextDecoration.underline,
+            ),
+            textDirection: TextDirection.ltr,
+          ),
+        ),
+      ],
     );
   }
 }
