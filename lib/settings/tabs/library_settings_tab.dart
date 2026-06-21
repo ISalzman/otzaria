@@ -224,7 +224,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     ];
 
     return SettingsActionTile.path(
-      icon: FluentIcons.folder_24_regular,
+      icon: Icon(FluentIcons.folder_24_regular),
       title: 'מיקום ספריית אוצריא',
       path: hasPath ? pathStr : null,
       placeholder: 'בחר מיקום עבור מאגר הספרים',
@@ -277,7 +277,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     ];
 
     return SettingsActionTile.path(
-      icon: FluentIcons.folder_24_regular,
+      icon: Icon(FluentIcons.folder_24_regular),
       title: 'מיקום ספרי היברובוקס',
       path: hasPath ? pathStr : null,
       placeholder: 'במידה וקיימים ברשותך ספרים ממאגר זה',

@@ -210,8 +210,6 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                     title: 'עיר נבחרת',
                     subtitle: 'בחירת עיר לחישובי זמני היום והלוח',
                     value: state.selectedCity,
-                    minFieldWidth: 220,
-                    maxFieldWidth: 320,
                     enableSearch: true,
                     entries: _cityNames
                         .map(
@@ -261,8 +259,6 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                     title: 'זמן תזכורת לפני האירוע',
                     subtitle: 'כמה זמן לפני תחילת האירוע תופיע התראה',
                     value: state.calendarNotificationTime,
-                    minFieldWidth: 180,
-                    maxFieldWidth: 240,
                     entries: const [
                       AppMenuEntry(value: 60, label: 'שעה'),
                       AppMenuEntry(value: 720, label: '12 שעות'),

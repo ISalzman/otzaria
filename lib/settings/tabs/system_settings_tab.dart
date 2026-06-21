@@ -946,7 +946,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       subtitle: 'שליחה ישירה לצוות אוצריא, כולל תור אוטומטי במצב אופליין.',
       children: [
         SettingsActionTile.text(
-          icon: FluentIcons.mail_24_regular,
+          icon: Icon(FluentIcons.mail_24_regular),
           title: 'כתובת מייל לזיהוי',
           subtitle:
               senderEmail.isEmpty ? 'עדיין לא הוגדרה כתובת זיהוי' : senderEmail,
@@ -1258,7 +1258,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       title: 'מערכת אוצריא',
       children: [
         SettingsActionTile.text(
-          icon: FluentIcons.info_24_regular,
+          icon: Icon(FluentIcons.info_24_regular),
           title: 'גרסת תוכנה',
           subtitle: _appVersion ?? 'טוען...',
           subtitleLtr: _appVersion != null,
@@ -1271,7 +1271,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           ],
         ),
         SettingsActionTile.text(
-          icon: FluentIcons.library_24_regular,
+          icon: Icon(FluentIcons.library_24_regular),
           title: 'גרסת ספרייה',
           subtitle: _libraryVersion ?? 'טוען...',
           subtitleLtr: _libraryVersion != null && _libraryVersion != 'לא ידוע',
@@ -1503,7 +1503,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           isExpanded: _isBackupExpanded,
           children: [
             DropdownSettingsTile<String>(
-              icon: const Icon(FluentIcons.calendar_clock_24_regular),
+              icon: Icon(FluentIcons.calendar_clock_24_regular),
               title: 'גיבוי אוטומטי',
               subtitle: switch (autoFrequency) {
                 'daily' => 'יתבצע גיבוי בכל יום',

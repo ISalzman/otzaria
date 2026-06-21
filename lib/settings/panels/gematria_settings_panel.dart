@@ -143,8 +143,6 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
                 title: 'מספר תוצאות מקסימלי',
                 subtitle: 'כמות התוצאות המקסימלית להצגה',
                 value: maxResults,
-                minFieldWidth: 120,
-                maxFieldWidth: 160,
                 entries: [50, 100, 200, 500, 1000]
                     .map((value) => AppMenuEntry(value: value, label: '$value'))
                     .toList(),

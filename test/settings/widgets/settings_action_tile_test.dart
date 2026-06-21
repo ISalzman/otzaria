@@ -20,7 +20,7 @@ void main() {
           child: SizedBox(
             width: width,
             child: SettingsActionTile.text(
-              icon: FluentIcons.folder_24_regular,
+              icon: Icon(FluentIcons.folder_24_regular),
               title: 'מיקום ספריית אוצריא',
               subtitle: longPath,
               actions: [
@@ -105,7 +105,7 @@ void main() {
             child: SizedBox(
               width: 360,
               child: SettingsActionTile.text(
-                icon: FluentIcons.folder_24_regular,
+                icon: Icon(FluentIcons.folder_24_regular),
                 title: 'כותרת',
                 subtitle: 'תת-כותרת',
                 actions: [
@@ -132,7 +132,7 @@ void main() {
             body: SizedBox(
               width: 800,
               child: SettingsActionTile.path(
-                icon: FluentIcons.folder_24_regular,
+                icon: Icon(FluentIcons.folder_24_regular),
                 title: 'מיקום',
                 path: path,
                 placeholder: 'בחר מיקום',
