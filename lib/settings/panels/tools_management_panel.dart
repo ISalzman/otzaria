@@ -247,16 +247,21 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                               SettingsActionTile.text(
                                 icon: FluentIcons.puzzle_piece_24_regular,
                                 title: 'רשימת התוספים',
-                                subtitle:
-                                    'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
+                                subtitle: _isSelectionMode
+                                    ? '${_selectedIds.length} נבחרו'
+                                    : 'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
                                 actions: _isSelectionMode
                                     ? [
                                         NeutralActionButton(
                                           icon: FluentIcons
                                               .checkbox_checked_24_regular,
                                           text: 'בחר הכל',
-                                          onPressed: () =>
-                                              _selectAllPlugins(plugins),
+                                          onPressed:
+                                              _selectedIds.length ==
+                                                      plugins.length
+                                                  ? null
+                                                  : () =>
+                                                      _selectAllPlugins(plugins),
                                         ),
                                         NeutralActionButton(
                                           icon: FluentIcons
@@ -285,7 +290,6 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                             child: _ActionBar(
                               selectedIds: _selectedIds.toSet(),
                               plugins: plugins,
-                              onClear: _exitSelectionMode,
                             ),
                           ),
                         ),
@@ -453,12 +457,10 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
 class _ActionBar extends StatelessWidget {
   final Set<String> selectedIds;
   final List<InstalledPlugin> plugins;
-  final VoidCallback onClear;
 
   const _ActionBar({
     required this.selectedIds,
     required this.plugins,
-    required this.onClear,
   });
 
   Iterable<InstalledPlugin> get _selectedPlugins =>
@@ -482,7 +484,6 @@ class _ActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final count = selectedIds.length;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -497,18 +498,6 @@ class _ActionBar extends StatelessWidget {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  '$count נבחרו',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-              ),
-              TextButton.icon(
-                onPressed: onClear,
-                icon: const Icon(FluentIcons.dismiss_circle_24_regular),
-                label: const Text('נקה בחירה'),
-              ),
               _ActionChip(
                 icon: _allSelectedAreHidden
                     ? FluentIcons.eye_24_regular
