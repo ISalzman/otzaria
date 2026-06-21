@@ -332,6 +332,39 @@ class ShortcutsSettingsTab extends StatelessWidget {
       cardId: 'shortcuts.main',
       keywords: ['ראשי תיבות', 'מילון', 'כלים', 'פתיחה', 'מקלדת'],
     ),
+    // ── העתקת קישורים ──
+    SettingsSearchEntry(
+      id: 'shortcuts.copy_link.book',
+      title: 'קיצור להעתקת קישור ישיר לספר',
+      subtitle: 'העתקת קישור ישיר לספר המוצג',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['קישור', 'העתק', 'ספר', 'deep link', 'מקלדת'],
+    ),
+    SettingsSearchEntry(
+      id: 'shortcuts.copy_link.section',
+      title: 'קיצור להעתקת קישור למקטע / לעמוד',
+      subtitle: 'בטקסט — קישור למקטע הנוכחי; ב-PDF — קישור לעמוד הנוכחי',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['קישור', 'העתק', 'מקטע', 'עמוד', 'מקלדת'],
+    ),
+    SettingsSearchEntry(
+      id: 'shortcuts.copy_link.section_mark',
+      title: 'קיצור להעתקת קישור עם הדגשת המקטע',
+      subtitle: 'קישור שמדגיש את המקטע הנוכחי בעת הפתיחה',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['קישור', 'העתק', 'הדגשה', 'מקטע', 'מקלדת'],
+    ),
+    SettingsSearchEntry(
+      id: 'shortcuts.copy_link.text_mark',
+      title: 'קיצור להעתקת קישור עם הדגשת הטקסט',
+      subtitle: 'קישור שמדגיש את הטקסט המסומן בעת הפתיחה',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['קישור', 'העתק', 'הדגשה', 'טקסט', 'מקלדת'],
+    ),
   ];
 
   /// אוסף הקיצורים הזמינים לבחירה ב-dropdown. התווית נגזרת דינמית כדי
@@ -481,6 +514,36 @@ class ShortcutsSettingsTab extends StatelessWidget {
               FluentIcons.puzzle_piece_24_regular,
           allShortcuts: _shortcutsList,
         ),
+    ]);
+
+    // קיצורי "העתקת קישור" אופציונליים, ללא ברירת מחדל. כמו פתיחת כלים,
+    // הכרטיס מוצג רק אם הוגדר קיצור לפעולה אחת לפחות.
+    final copyLinkTiles = _onlyConfigured([
+      _ShortcutTile(
+        settingKey: ShortcutValidator.copyBookLinkKey,
+        label: 'העתק קישור ישיר לספר',
+        icon: FluentIcons.link_24_regular,
+        allShortcuts: _shortcutsList,
+      ),
+      _ShortcutTile(
+        settingKey: ShortcutValidator.copySectionLinkKey,
+        label: 'העתק קישור למקטע / לעמוד',
+        subtitle: 'בטקסט — מקטע; ב-PDF — עמוד',
+        icon: FluentIcons.link_multiple_24_regular,
+        allShortcuts: _shortcutsList,
+      ),
+      _ShortcutTile(
+        settingKey: ShortcutValidator.copySectionMarkLinkKey,
+        label: 'העתק קישור עם הדגשת המקטע',
+        icon: FluentIcons.document_one_page_24_regular,
+        allShortcuts: _shortcutsList,
+      ),
+      _ShortcutTile(
+        settingKey: ShortcutValidator.copyTextMarkLinkKey,
+        label: 'העתק קישור עם הדגשת הטקסט',
+        icon: FluentIcons.highlight_24_regular,
+        allShortcuts: _shortcutsList,
+      ),
     ]);
 
     return Column(
@@ -735,6 +798,16 @@ class ShortcutsSettingsTab extends StatelessWidget {
           ),
         ],
 
+        // ── העתקת קישורים (אופציונלי) — מוצג רק כשהוגדר קיצור אחד לפחות ──
+        if (copyLinkTiles.isNotEmpty) ...[
+          kSettingsCardSpacing,
+          SettingsCard(
+            title: 'העתקת קישורים',
+            subtitle: 'קיצורים להעתקת קישור ישיר לספר, למקטע/לעמוד ולהדגשות',
+            children: copyLinkTiles,
+          ),
+        ],
+
         // ── פעולות זמינות להגדרת קיצור ────────────────────────────────
         if (unconfiguredKeys.isNotEmpty) ...[
           kSettingsCardSpacing,
@@ -785,7 +858,9 @@ class ShortcutsSettingsTab extends StatelessWidget {
 
     final shortcut = await showDialog<String>(
       context: context,
-      builder: (_) => const CustomShortcutDialog(),
+      builder: (_) => CustomShortcutDialog(
+        actionName: ShortcutValidator.shortcutNames[selectedKey],
+      ),
     );
     if (shortcut == null || shortcut.isEmpty) return;
 

@@ -177,6 +177,7 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
         context: context,
         builder: (context) => CustomShortcutDialog(
           initialShortcut: currentValue,
+          actionName: widget.title,
         ),
       );
 

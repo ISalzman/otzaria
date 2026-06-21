@@ -2732,6 +2732,18 @@ bool _handleGlobalKeyEvent(
       Settings.getValue<String>('key-shortcut-toggle-pdf-view') ??
           ShortcutValidator.defaultShortcuts['key-shortcut-toggle-pdf-view'] ??
           'ctrl+shift+p';
+  final copyBookLinkShortcut =
+      ShortcutValidator.getShortcutValue(ShortcutValidator.copyBookLinkKey) ??
+          '';
+  final copySectionLinkShortcut = ShortcutValidator.getShortcutValue(
+          ShortcutValidator.copySectionLinkKey) ??
+      '';
+  final copySectionMarkLinkShortcut = ShortcutValidator.getShortcutValue(
+          ShortcutValidator.copySectionMarkLinkKey) ??
+      '';
+  final copyTextMarkLinkShortcut = ShortcutValidator.getShortcutValue(
+          ShortcutValidator.copyTextMarkLinkKey) ??
+      '';
 
   // [EDITING DISABLED]
   // // עריכת קטע
@@ -2801,6 +2813,55 @@ bool _handleGlobalKeyEvent(
   if (ShortcutHelper.matchesShortcut(event, togglePdfShortcut)) {
     _togglePdfView(context, state, tab);
     return true;
+  }
+
+  // העתקת קישורים — קיצורים אופציונליים. האינדקס נלקח מהשורה המסומנת, ואם אין
+  // בחירה — מהמקטע הראשון הנראה (משחזר את מה שתפריט ההקשר היה מייצר).
+  if (copyBookLinkShortcut.isNotEmpty ||
+      copySectionLinkShortcut.isNotEmpty ||
+      copySectionMarkLinkShortcut.isNotEmpty ||
+      copyTextMarkLinkShortcut.isNotEmpty) {
+    final bookId = state.book.id;
+    final index = selectedLineForNote ??
+        (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
+
+    if (ShortcutHelper.matchesShortcut(event, copyBookLinkShortcut)) {
+      if (bookId == null) {
+        UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+      } else {
+        copyLinkToClipboard(buildBookLink(bookId));
+      }
+      return true;
+    }
+    if (ShortcutHelper.matchesShortcut(event, copySectionLinkShortcut)) {
+      if (bookId == null) {
+        UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+      } else {
+        copyLinkToClipboard(buildSectionLink(bookId, index));
+      }
+      return true;
+    }
+    if (ShortcutHelper.matchesShortcut(event, copySectionMarkLinkShortcut)) {
+      if (bookId == null) {
+        UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+      } else {
+        copyLinkToClipboard(buildSectionMarkLink(bookId, index));
+      }
+      return true;
+    }
+    if (ShortcutHelper.matchesShortcut(event, copyTextMarkLinkShortcut)) {
+      final link = bookId == null
+          ? null
+          : buildTextMarkLink(bookId, index, selectedTextForNote ?? '');
+      if (bookId == null) {
+        UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+      } else if (link == null) {
+        UiSnack.showError('יש לבחור טקסט כדי להעתיק קישור עם הדגשה');
+      } else {
+        copyLinkToClipboard(link);
+      }
+      return true;
+    }
   }
 
   // קיצורים קבועים (לא ניתנים להתאמה אישית).
