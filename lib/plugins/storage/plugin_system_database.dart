@@ -134,7 +134,14 @@ class PluginSystemDatabase {
 
   Future<List<InstalledPlugin>> getAllInstalledPlugins() async {
     final db = await database;
-    final maps = db.select('SELECT * FROM plugin_installation').toMapList();
+    final maps = db.select('''
+      SELECT p.*,
+        COALESCE((
+          SELECT granted FROM plugin_permission_grant
+          WHERE plugin_id = p.plugin_id AND permission = 'network.access'
+        ), 0) AS network_access_granted
+      FROM plugin_installation p
+    ''').toMapList();
     return maps.map((map) => InstalledPlugin.fromDbMap(map)).toList();
   }
 

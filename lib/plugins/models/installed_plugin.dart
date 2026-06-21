@@ -23,6 +23,10 @@ class InstalledPlugin {
   /// במניפסט, המשתמש יכול לכבות אותה. אם המניפסט לא ביקש את היכולת, הערך
   /// הזה לבדו לא מספיק כדי להפעיל אותה.
   final bool allowOrderBeforeBuiltInsGranted;
+
+  /// האם הרשאת גישה לרשת (`network.access`) הוענקה בפועל על-ידי המשתמש.
+  /// שונה מ-[requiresNetwork] שמשקף את ההצהרה במניפסט בלבד.
+  final bool networkAccessGranted;
   final PluginManifest manifest;
   final DateTime installedAt;
   final DateTime updatedAt;
@@ -76,6 +80,7 @@ class InstalledPlugin {
     this.pinnedToNavRail = false,
     this.hiddenFromTools = false,
     bool? allowOrderBeforeBuiltInsGranted,
+    this.networkAccessGranted = false,
     required this.manifest,
     required this.installedAt,
     required this.updatedAt,
@@ -103,6 +108,8 @@ class InstalledPlugin {
           ((map['allow_order_before_built_ins_granted'] as int?) ??
                   (manifest.allowOrderBeforeBuiltIns ? 1 : 0)) !=
               0,
+      networkAccessGranted:
+          ((map['network_access_granted'] as int?) ?? 0) != 0,
       manifest: manifest,
       installedAt: DateTime.parse(map['installed_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
@@ -147,6 +154,7 @@ class InstalledPlugin {
     bool? pinnedToNavRail,
     bool? hiddenFromTools,
     bool? allowOrderBeforeBuiltInsGranted,
+    bool? networkAccessGranted,
     PluginManifest? manifest,
     DateTime? installedAt,
     DateTime? updatedAt,
@@ -169,6 +177,7 @@ class InstalledPlugin {
       hiddenFromTools: hiddenFromTools ?? this.hiddenFromTools,
       allowOrderBeforeBuiltInsGranted: allowOrderBeforeBuiltInsGranted ??
           this.allowOrderBeforeBuiltInsGranted,
+      networkAccessGranted: networkAccessGranted ?? this.networkAccessGranted,
       manifest: manifest ?? this.manifest,
       installedAt: installedAt ?? this.installedAt,
       updatedAt: updatedAt ?? this.updatedAt,
