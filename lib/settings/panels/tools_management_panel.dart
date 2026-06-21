@@ -842,6 +842,8 @@ class _PluginRow extends StatelessWidget {
           pinnedToNavRail: plugin.pinnedToNavRail,
           disabled: !plugin.enabled,
           networkDeclared: plugin.manifest.networkEnabled,
+          networkRevoked:
+              plugin.manifest.networkEnabled && !plugin.networkAccessGranted,
         ),
       ),
       trailing: Row(
@@ -944,14 +946,18 @@ class _StatusBadges extends StatelessWidget {
   final bool disabled;
   final bool networkDeclared;
 
+  final bool networkRevoked;
+
   const _StatusBadges({
     this.hidden = false,
     this.pinnedToNavRail = false,
     this.disabled = false,
     this.networkDeclared = false,
+    this.networkRevoked = false,
   });
 
-  bool get hasAny => hidden || pinnedToNavRail || disabled || networkDeclared;
+  bool get hasAny =>
+      hidden || pinnedToNavRail || disabled || networkDeclared || networkRevoked;
 
   @override
   Widget build(BuildContext context) {
@@ -972,6 +978,10 @@ class _StatusBadges extends StatelessWidget {
     if (networkDeclared) {
       badges.add(_badge(context, 'משתמש ברשת', cs.tertiaryContainer,
           cs.onTertiaryContainer, FluentIcons.globe_24_regular));
+    }
+    if (networkRevoked) {
+      badges.add(_badge(context, 'מנותק מהרשת', cs.errorContainer,
+          cs.onErrorContainer, FluentIcons.globe_prohibited_24_regular));
     }
     if (badges.isEmpty) return const SizedBox.shrink();
     return Row(
