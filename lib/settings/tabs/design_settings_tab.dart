@@ -9,10 +9,9 @@ import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
-import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 enum _SidebarMode { pinned, openOnBook, closed }
@@ -145,8 +144,8 @@ class DesignSettingsTab extends StatelessWidget {
                   child: SettingsCard(
                     title: 'ערכת נושא',
                     children: [
-                      SegmentedSettingsTile<_ThemeMode>(
-                        icon: Icon(FluentIcons.weather_sunny_24_regular),
+                      SettingsActionTile.segmentedTile<_ThemeMode>(
+                        icon: FluentIcons.weather_sunny_24_regular,
                         title: 'מצב ערכת נושא',
                         subtitle: state.followSystemTheme
                             ? 'התוכנה תתאים את המראה באופן אוטומטי להגדרות מערכת ההפעלה'
@@ -215,8 +214,8 @@ class DesignSettingsTab extends StatelessWidget {
                     child: SettingsCard(
                       title: 'תצוגה',
                       children: [
-                        SegmentedSettingsTile<bool>(
-                          icon: Icon(FluentIcons.column_triple_24_regular),
+                        SettingsActionTile.segmentedTile<bool>(
+                          icon: FluentIcons.column_triple_24_regular,
                           title: 'צפיפות ממשק',
                           subtitle: state.compactMenuMode
                               ? 'הצג יותר תוכן על ידי הקטנת המרווחים'
@@ -243,7 +242,7 @@ class DesignSettingsTab extends StatelessWidget {
                   child: SettingsCard(
                     title: 'תצוגת PDF',
                     children: [
-                      SwitchSettingsTile.text(
+                      SettingsActionTile.switchTile(
                         icon: FluentIcons.book_open_24_regular,
                         title: 'תצוגת ספר בPDF',
                         subtitle: state.enablePerBookSettings
@@ -272,14 +271,14 @@ class DesignSettingsTab extends StatelessWidget {
                   child: SettingsCard(
                     title: 'חלוניות עזר',
                     children: [
-                      SegmentedSettingsTile<_SidebarMode>(
+                      SettingsActionTile.segmentedTile<_SidebarMode>(
                         title: 'חלונית ניווט בין כותרות',
                         subtitle: state.pinSidebar
                             ? 'החלונית תוצג באופן קבוע'
                             : state.defaultSidebarOpen
                                 ? 'החלונית תוצג בפתיחת ספר ותיסגר בעת גלילה'
                                 : 'החלונית לא תוצג אוטומטית עם פתיחת הספר',
-                        icon: RtlIcon(FluentIcons.panel_left_24_regular),
+                        rtlIcon: FluentIcons.panel_left_24_regular,
                         options: const [
                           SegmentOption(
                               value: _SidebarMode.pinned, label: 'הצגה'),
@@ -318,7 +317,7 @@ class DesignSettingsTab extends StatelessWidget {
                           }
                         },
                       ),
-                      SwitchSettingsTile.text(
+                      SettingsActionTile.switchTile(
                         icon: FluentIcons.panel_right_24_regular,
                         title: 'פתיחת פאנל המפרשים בפתיחת ספר',
                         subtitle: state.defaultCommentaryOpen
@@ -332,7 +331,7 @@ class DesignSettingsTab extends StatelessWidget {
                               .add(UpdateDefaultCommentaryOpen(value));
                         },
                       ),
-                      SwitchSettingsTile.text(
+                      SettingsActionTile.switchTile(
                         title: 'פתיחת הערות אישיות במצב סגור',
                         subtitle: state.personalNotesCollapsedByDefault
                             ? 'רשימות ההערות יוצגו כשהן סגורות'
@@ -348,7 +347,7 @@ class DesignSettingsTab extends StatelessWidget {
                           final splitedView =
                               Settings.getValue<bool>('key-splited-view') ??
                                   true;
-                          return SwitchSettingsTile.text(
+                          return SettingsActionTile.switchTile(
                             title: 'הצגת המפרשים בחלונית בצד',
                             subtitle: splitedView
                                 ? 'המפרשים יוצגו בחלונית מפוצלת'

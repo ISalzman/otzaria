@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/settings/widgets/segmented_settings_tile.dart';
+import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/widgets/controls/segmented_control.dart';
 
 void main() {
@@ -20,8 +20,9 @@ void main() {
             textDirection: TextDirection.rtl,
             child: Scaffold(
               body: StatefulBuilder(
-                builder: (context, setState) => SegmentedSettingsTile<String>(
-                  icon: Icon(FluentIcons.panel_left_24_regular),
+                builder: (context, setState) =>
+                    SettingsActionTile.segmentedTile<String>(
+                  rtlIcon: FluentIcons.panel_left_24_regular,
                   title: 'הצגת חלונית ניווט בכותרות ופרקים',
                   subtitle: 'בדיקת יציבות פריסה',
                   options: const [
@@ -60,8 +61,9 @@ void main() {
             textDirection: TextDirection.rtl,
             child: Scaffold(
               body: StatefulBuilder(
-                builder: (context, setState) => SegmentedSettingsTile<String>(
-                  icon: Icon(FluentIcons.panel_left_24_regular),
+                builder: (context, setState) =>
+                    SettingsActionTile.segmentedTile<String>(
+                  rtlIcon: FluentIcons.panel_left_24_regular,
                   title: 'כותרת',
                   subtitle: 'תיאור',
                   options: const [
@@ -79,16 +81,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final focusWidget = tester
-          .widgetList<Focus>(
-            find.descendant(
-              of: find.byType(SegmentedSettingsTile<String>),
-              matching: find.byType(Focus),
-            ),
-          )
-          .firstWhere((widget) => widget.focusNode != null);
+      // מאתר את ה-FocusNode הפנימי של _SegmentedTile לפי debugLabel
+      final focusNode = tester
+          .widgetList<Focus>(find.byType(Focus))
+          .firstWhere((w) => w.focusNode?.debugLabel == 'segmented_tile')
+          .focusNode!;
 
-      focusWidget.focusNode!.requestFocus();
+      focusNode.requestFocus();
       await tester.pump();
 
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);

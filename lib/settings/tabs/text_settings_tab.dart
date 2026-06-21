@@ -5,8 +5,8 @@ import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
-import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
@@ -482,8 +482,8 @@ class TextSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'כתרי אותיות',
       children: [
-        SegmentedSettingsTile<String>(
-          icon: Icon(FluentIcons.text_font_info_24_regular),
+        SettingsActionTile.segmentedTile<String>(
+          icon: FluentIcons.text_font_info_24_regular,
           title: 'הצגת הניקוד',
           subtitle: nikudSubtitle,
           options: const [
@@ -518,7 +518,7 @@ class TextSettingsTab extends StatelessWidget {
             }
           },
         ),
-        SwitchSettingsTile.text(
+        SettingsActionTile.switchTile(
           icon: FluentIcons.shield_keyhole_24_regular,
           title: 'הצגת שם הקודש',
           subtitle: !state.replaceHolyNames
@@ -529,7 +529,7 @@ class TextSettingsTab extends StatelessWidget {
             context.read<SettingsBloc>().add(UpdateReplaceHolyNames(!value));
           },
         ),
-        SwitchSettingsTile.text(
+        SettingsActionTile.switchTile(
           icon: FluentIcons.text_more_24_regular,
           title: 'הצגת טעמי המקרא',
           subtitle:
@@ -588,8 +588,8 @@ class TextSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'העתקת כותרות ופרקים',
       children: [
-        SegmentedSettingsTile<String>(
-          icon: Icon(FluentIcons.copy_24_regular),
+        SettingsActionTile.segmentedTile<String>(
+          icon: FluentIcons.copy_24_regular,
           title: 'העתקת הכותרת',
           subtitle: copySubtitle,
           options: const [
@@ -603,8 +603,8 @@ class TextSettingsTab extends StatelessWidget {
           },
         ),
         if (state.copyWithHeaders != 'none')
-          DropdownSettingsTile<String>(
-            icon: RtlIcon(FluentIcons.text_align_right_24_regular),
+          SettingsActionTile.dropdownTile<String>(
+            rtlIcon: FluentIcons.text_align_right_24_regular,
             title: 'עיצוב כותרות',
             subtitle: formatSubtitle,
             value: state.copyHeaderFormat,
@@ -648,7 +648,7 @@ class TextSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'הגדרות לפי ספר',
       children: [
-        SwitchSettingsTile.text(
+        SettingsActionTile.switchTile(
           icon: FluentIcons.book_open_24_regular,
           title: 'שמירת התאמות לכל ספר בנפרד',
           subtitle: state.enablePerBookSettings
@@ -663,7 +663,7 @@ class TextSettingsTab extends StatelessWidget {
         ),
         if (state.enablePerBookSettings)
           SettingsActionTile.text(
-            icon: Icon(FluentIcons.delete_24_regular),
+            icon: FluentIcons.delete_24_regular,
             title: 'איפוס הגדרות לפי ספר',
             subtitle: 'מחיקת כל ההתאמות שנשמרו לכל ספר בנפרד',
             actions: [

@@ -6,9 +6,9 @@ import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
-import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
@@ -152,8 +152,8 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                 title: 'לוח שנה',
                 children: [
                   // סוג לוח
-                  SegmentedSettingsTile<CalendarType>(
-                    icon: Icon(FluentIcons.calendar_24_regular),
+                  SettingsActionTile.segmentedTile<CalendarType>(
+                    icon: FluentIcons.calendar_24_regular,
                     title: 'סוג לוח שנה',
                     subtitle: state.calendarType == CalendarType.hebrew
                         ? 'יוצג לוח השנה היהודי בלבד'
@@ -172,8 +172,8 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                       context.read<CalendarCubit>().changeCalendarType(value);
                     },
                   ),
-                  DropdownSettingsTile<CalendarDayTransition>(
-                    icon: Icon(FluentIcons.weather_sunny_low_24_regular),
+                  SettingsActionTile.dropdownTile<CalendarDayTransition>(
+                    icon: FluentIcons.weather_sunny_low_24_regular,
                     title: 'מעבר יום',
                     subtitle:
                         _calendarDayTransitionSubtitle(state.dayTransition),
@@ -205,8 +205,8 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                     },
                   ),
                   // עיר
-                  DropdownSettingsTile<String>(
-                    icon: Icon(FluentIcons.location_24_regular),
+                  SettingsActionTile.dropdownTile<String>(
+                    icon: FluentIcons.location_24_regular,
                     title: 'עיר נבחרת',
                     subtitle: 'בחירת עיר לחישובי זמני היום והלוח',
                     value: state.selectedCity,
@@ -233,7 +233,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
               title: 'אירועים ותזכורות',
               children: [
                 // הפעל התראות
-                SwitchSettingsTile.text(
+                SettingsActionTile.switchTile(
                   icon: FluentIcons.alert_24_regular,
                   title: 'הפעל התראות על אירועים',
                   value: state.calendarNotificationsEnabled,
@@ -244,7 +244,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                   },
                 ),
                 if (state.calendarNotificationsEnabled) ...[
-                  SwitchSettingsTile.text(
+                  SettingsActionTile.switchTile(
                     icon: FluentIcons.speaker_2_24_regular,
                     title: 'השמע צליל בהתראה',
                     value: state.calendarNotificationSound,
@@ -254,8 +254,8 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                           .changeCalendarNotificationSound(value);
                     },
                   ),
-                  DropdownSettingsTile<int>(
-                    icon: Icon(FluentIcons.alert_snooze_24_regular),
+                  SettingsActionTile.dropdownTile<int>(
+                    icon: FluentIcons.alert_snooze_24_regular,
                     title: 'זמן תזכורת לפני האירוע',
                     subtitle: 'כמה זמן לפני תחילת האירוע תופיע התראה',
                     value: state.calendarNotificationTime,
@@ -276,7 +276,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                 ],
 
                 // ── לוח שנה גוגל ──
-                SwitchSettingsTile.text(
+                SettingsActionTile.switchTile(
                   icon: FluentIcons.arrow_sync_24_regular,
                   title: 'לוח שנה של Google',
                   subtitle: isOfflineMode

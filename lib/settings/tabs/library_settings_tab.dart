@@ -10,7 +10,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
-import 'package:otzaria/settings/widgets/settings_action_tile.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
@@ -19,9 +18,9 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/settings/panels/library_settings_panel.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folders_tile.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/dialogs/zip_extraction_progress_dialog.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
-import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
@@ -224,7 +223,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     ];
 
     return SettingsActionTile.path(
-      icon: Icon(FluentIcons.folder_24_regular),
+      icon: FluentIcons.folder_24_regular,
       title: 'מיקום ספריית אוצריא',
       path: hasPath ? pathStr : null,
       placeholder: 'בחר מיקום עבור מאגר הספרים',
@@ -277,7 +276,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     ];
 
     return SettingsActionTile.path(
-      icon: Icon(FluentIcons.folder_24_regular),
+      icon: FluentIcons.folder_24_regular,
       title: 'מיקום ספרי היברובוקס',
       path: hasPath ? pathStr : null,
       placeholder: 'במידה וקיימים ברשותך ספרים ממאגר זה',
@@ -354,7 +353,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                           title: 'תיקיות מותאמות אישית',
                           children: [
                             const CustomFoldersTile(),
-                            SwitchSettingsTile.text(
+                            SettingsActionTile.switchTile(
                               icon: FluentIcons.person_24_regular,
                               title: 'מיזוג ספרים אישיים לעץ הספרייה',
                               subtitle: state.mergeUserBooksIntoLibrary
@@ -398,7 +397,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     return SettingsCard(
       title: 'חיפוש ואינדקס',
       children: [
-        SwitchSettingsTile.text(
+        SettingsActionTile.switchTile(
           icon: FluentIcons.arrow_clockwise_24_regular,
           title: 'עדכון אינדקס אוטומטי',
           subtitle: state.autoUpdateIndex

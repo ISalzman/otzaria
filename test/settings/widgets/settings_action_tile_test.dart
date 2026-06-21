@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/settings/widgets/settings_action_tile.dart';
+import 'package:otzaria/settings/widgets/settings_card.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -20,7 +20,7 @@ void main() {
           child: SizedBox(
             width: width,
             child: SettingsActionTile.text(
-              icon: Icon(FluentIcons.folder_24_regular),
+              icon: FluentIcons.folder_24_regular,
               title: 'מיקום ספריית אוצריא',
               subtitle: longPath,
               actions: [
@@ -105,7 +105,7 @@ void main() {
             child: SizedBox(
               width: 360,
               child: SettingsActionTile.text(
-                icon: Icon(FluentIcons.folder_24_regular),
+                icon: FluentIcons.folder_24_regular,
                 title: 'כותרת',
                 subtitle: 'תת-כותרת',
                 actions: [
@@ -132,7 +132,7 @@ void main() {
             body: SizedBox(
               width: 800,
               child: SettingsActionTile.path(
-                icon: Icon(FluentIcons.folder_24_regular),
+                icon: FluentIcons.folder_24_regular,
                 title: 'מיקום',
                 path: path,
                 placeholder: 'בחר מיקום',

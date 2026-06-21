@@ -848,8 +848,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       children: [
         KeyedSubtree(
           key: _networkModeTileKey,
-          child: SegmentedSettingsTile<bool>(
-            icon: Icon(FluentIcons.globe_24_regular),
+          child: SettingsActionTile.segmentedTile<bool>(
+            icon: FluentIcons.globe_24_regular,
             title: 'סינכרון ומצב רשת',
             subtitle: state.isOfflineMode
                 ? 'התוכנה מנותקת לגמרי מהרשת'
@@ -881,7 +881,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             },
           ),
         ),
-        SwitchSettingsTile.text(
+        SettingsActionTile.switchTile(
           icon: FluentIcons.arrow_download_24_regular,
           title: 'עדכוני תוכנה וספרים',
           subtitle: state.isOfflineMode
@@ -901,7 +901,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
         if (!(Platform.isAndroid || Platform.isIOS) &&
             state.canUseSoftwareAndBookUpdates) ...[
-          SwitchSettingsTile.text(
+          SettingsActionTile.switchTile(
             icon: FluentIcons.arrow_sync_24_regular,
             title: 'סינכרון הספרייה באופן אוטומטי',
             subtitle: (Settings.getValue<bool>(
@@ -916,7 +916,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               setState(() {});
             },
           ),
-          SwitchSettingsTile.text(
+          SettingsActionTile.switchTile(
             icon: FluentIcons.beaker_24_regular,
             title: 'עדכון לגרסאות מפתחים',
             subtitle:
@@ -946,7 +946,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       subtitle: 'שליחה ישירה לצוות אוצריא, כולל תור אוטומטי במצב אופליין.',
       children: [
         SettingsActionTile.text(
-          icon: Icon(FluentIcons.mail_24_regular),
+          icon: FluentIcons.mail_24_regular,
           title: 'כתובת מייל לזיהוי',
           subtitle:
               senderEmail.isEmpty ? 'עדיין לא הוגדרה כתובת זיהוי' : senderEmail,
@@ -963,7 +963,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             ),
           ],
         ),
-        SwitchSettingsTile.text(
+        SettingsActionTile.switchTile(
           icon: FluentIcons.cloud_arrow_up_24_regular,
           title: 'שמירת דיווחים אוטומטית כשאין חיבור',
           subtitle: queueWhenOffline
@@ -984,7 +984,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             final hasReports = pendingCount > 0;
 
             return ExpandableSection(
-              icon: const Icon(FluentIcons.task_list_ltr_24_regular),
+              icon: FluentIcons.task_list_ltr_24_regular,
               title: const Text('ניהול דיווחים שמורים'),
               subtitle: Text(
                 pendingCount == 0
@@ -1092,7 +1092,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             final sentReports = snapshot.data ?? const <DirectErrorReport>[];
 
             return ExpandableSection(
-              icon: const Icon(FluentIcons.checkmark_circle_24_regular),
+              icon: FluentIcons.checkmark_circle_24_regular,
               title: const Text('דיווחים שנשלחו'),
               hasContent: sentReports.isNotEmpty,
               subtitle: Text(
@@ -1258,7 +1258,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       title: 'מערכת אוצריא',
       children: [
         SettingsActionTile.text(
-          icon: Icon(FluentIcons.info_24_regular),
+          icon: FluentIcons.info_24_regular,
           title: 'גרסת תוכנה',
           subtitle: _appVersion ?? 'טוען...',
           subtitleLtr: _appVersion != null,
@@ -1271,7 +1271,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           ],
         ),
         SettingsActionTile.text(
-          icon: Icon(FluentIcons.library_24_regular),
+          icon: FluentIcons.library_24_regular,
           title: 'גרסת ספרייה',
           subtitle: _libraryVersion ?? 'טוען...',
           subtitleLtr: _libraryVersion != null && _libraryVersion != 'לא ידוע',
@@ -1496,14 +1496,14 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         // ── גיבוי אוטומטי ──
         ExpandableSection(
           headerKey: tourBackupSettingsTargetKey,
-          icon: const Icon(FluentIcons.calendar_clock_24_regular),
+          icon: FluentIcons.calendar_clock_24_regular,
           title: const Text('גיבוי הגדרות ונתונים אישיים'),
           subtitle: _buildBackupSubtitle(),
           onTap: () => setState(() => _isBackupExpanded = !_isBackupExpanded),
           isExpanded: _isBackupExpanded,
           children: [
-            DropdownSettingsTile<String>(
-              icon: Icon(FluentIcons.calendar_clock_24_regular),
+            SettingsActionTile.dropdownTile<String>(
+              icon: FluentIcons.calendar_clock_24_regular,
               title: 'גיבוי אוטומטי',
               subtitle: switch (autoFrequency) {
                 'daily' => 'יתבצע גיבוי בכל יום',
@@ -1524,8 +1524,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 setState(() {});
               },
             ),
-            SegmentedSettingsTile<_BackupMode>(
-              icon: Icon(FluentIcons.options_24_regular),
+            SettingsActionTile.segmentedTile<_BackupMode>(
+              icon: FluentIcons.options_24_regular,
               title: 'מצב גיבוי',
               options: const [
                 SegmentOption<_BackupMode>(
@@ -1629,35 +1629,26 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
         // ── מצב סייפר ──
         ExpandableSection(
-          icon: Icon(
-            state.protectedModeEnabled
-                ? FluentIcons.shield_lock_24_filled
-                : FluentIcons.shield_lock_24_regular,
-            color: state.protectedModeEnabled
-                ? Theme.of(context).colorScheme.primary
-                : null,
-          ),
+          icon: state.protectedModeEnabled
+              ? FluentIcons.shield_lock_24_filled
+              : FluentIcons.shield_lock_24_regular,
+          iconColor: state.protectedModeEnabled
+              ? Theme.of(context).colorScheme.primary
+              : null,
           title: const Text('מצב סייפר'),
           subtitle: const Text('נעילת הגדרות'),
           onTap: () => setState(() => _isCypherExpanded = !_isCypherExpanded),
           isExpanded: _isCypherExpanded,
           children: [
-            SwitchSettingsTile(
-              leading: Icon(
-                state.protectedModeEnabled
-                    ? FluentIcons.lock_closed_24_filled
-                    : FluentIcons.lock_open_24_regular,
-              ),
-              title: const Text('הפעל מצב סייפר', style: kSettingsTitleStyle),
-              subtitle: Text(
-                hasPassword ? 'סיסמה הוגדרה' : 'יש להגדיר סיסמה תחילה',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: hasPassword
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.error,
-                ),
-              ),
+            SettingsActionTile.switchTile(
+              icon: state.protectedModeEnabled
+                  ? FluentIcons.lock_closed_24_filled
+                  : FluentIcons.lock_open_24_regular,
+              title: 'הפעל מצב סייפר',
+              subtitle: hasPassword ? 'סיסמה הוגדרה' : 'יש להגדיר סיסמה תחילה',
+              subtitleColor: hasPassword
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.error,
               value: state.protectedModeEnabled,
               onChanged: hasPassword
                   ? (value) =>
@@ -1996,7 +1987,7 @@ class _BackupOptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchSettingsTile.text(
+    return SettingsActionTile.switchTile(
       icon: icon,
       title: title,
       subtitle: subtitle,

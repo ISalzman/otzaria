@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:otzaria/widgets/misc/expanding_chevron.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 /// שורת כותרת מורחבת עם תוכן המוסתר/מוצג בלחיצה, לשימוש ב-[AppCard.section].
 ///
@@ -10,7 +11,16 @@ import 'package:otzaria/widgets/misc/expanding_chevron.dart';
 class ExpandableSection extends StatelessWidget {
   /// key אופציונלי עבור ווידג'ט הכותרת (לדוגמה: מפתח סיור מודרך).
   final Key? headerKey;
-  final Widget icon;
+
+  /// אייקון סטטי — לא מתהפך ב-RTL.
+  final IconData? icon;
+
+  /// אייקון כיווני — מתהפך ב-RTL אוטומטית.
+  final IconData? rtlIcon;
+
+  /// צבע אופציונלי לאייקון.
+  final Color? iconColor;
+
   final Widget title;
   final Widget? subtitle;
 
@@ -27,7 +37,9 @@ class ExpandableSection extends StatelessWidget {
   const ExpandableSection({
     super.key,
     this.headerKey,
-    required this.icon,
+    this.icon,
+    this.rtlIcon,
+    this.iconColor,
     required this.title,
     this.subtitle,
     this.trailing,
@@ -35,13 +47,20 @@ class ExpandableSection extends StatelessWidget {
     required this.isExpanded,
     required this.children,
     this.hasContent = true,
-  });
+  }) : assert(icon == null || rtlIcon == null,
+            'העבר icon או rtlIcon — לא שניהם יחד');
+
+  Widget? _buildIcon() {
+    if (rtlIcon != null) return RtlIcon(rtlIcon!, color: iconColor);
+    if (icon != null) return Icon(icon!, color: iconColor);
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final header = ListTile(
       key: headerKey,
-      leading: icon,
+      leading: _buildIcon(),
       title: DefaultTextStyle.merge(
         style: AppTextStyles.settingTitle,
         child: title,
