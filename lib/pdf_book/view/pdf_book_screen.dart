@@ -1000,6 +1000,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
+        label: 'הוסף סימניה לעמוד זה',
+        icon: FluentIcons.bookmark_add_24_regular,
+        onTap: () => _handleBookmarkPress(menuContext),
+      ),
+      AppContextMenuEntry(
         label: 'הוסף הערה אישית',
         icon: FluentIcons.note_add_24_regular,
         onTap: () => _handleAddNotePress(menuContext),
@@ -3725,7 +3730,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             widget.enableTourTargets ? pdfBookOverflowTourTargetKey : null,
         menuItemKeysByTooltip: widget.enableTourTargets
             ? {
-                'הוסף סימניה': pdfBookOverflowBookmarkTourTargetKey,
+                'סימניות בספר זה': pdfBookOverflowBookmarkTourTargetKey,
                 'חיפוש': pdfBookOverflowSearchTourTargetKey,
                 'הדפס': pdfBookOverflowPrintTourTargetKey,
               }
@@ -3814,20 +3819,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onPressed: () => _handleAddNotePress(context),
         compact: isCompact,
       ),
+      // הצגת סימניות הספר (הוספת סימניה עברה לתפריט ההקשר בעמוד)
       ActionButtonData(
         widget: ToolbarActionButton(
           key: widget.enableTourTargets ? pdfBookBookmarkTourTargetKey : null,
-          tooltip: 'הוסף סימניה',
-          icon: FluentIcons.bookmark_add_24_regular,
-          compact: isCompact,
-          onPressed: () => _handleBookmarkPress(context),
-        ),
-        icon: FluentIcons.bookmark_add_24_regular,
-        tooltip: 'הוסף סימניה',
-        onPressed: () => _handleBookmarkPress(context),
-      ),
-      ActionButtonData(
-        widget: ToolbarActionButton(
           tooltip: 'סימניות בספר זה',
           icon: FluentIcons.bookmark_multiple_24_regular,
           compact: isCompact,

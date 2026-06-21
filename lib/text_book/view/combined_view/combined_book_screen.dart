@@ -28,6 +28,7 @@ import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
+import 'package:otzaria/bookmarks/utils/section_bookmark.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:super_clipboard/super_clipboard.dart';
@@ -813,6 +814,11 @@ class _CombinedViewState extends State<CombinedView> {
         ];
       })(),
       const AppContextMenuEntry.divider(),
+      AppContextMenuEntry(
+        label: 'הוסף סימניה לקטע זה',
+        icon: FluentIcons.bookmark_add_24_regular,
+        onTap: () => addTextSectionBookmark(context, state, paragraphIndex),
+      ),
       AppContextMenuEntry(
         label: 'הוסף הערה אישית',
         icon: FluentIcons.note_add_24_regular,

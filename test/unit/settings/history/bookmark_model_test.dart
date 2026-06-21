@@ -13,6 +13,39 @@ void main() {
     expect(bookmark.commentatorsToShow, isEmpty);
   });
 
+  test('Bookmark preserves label in json roundtrip', () {
+    final bookmark = Bookmark(
+      ref: 'בראשית א',
+      index: 0,
+      book: Bookmark.fromJson({
+        'ref': 'inner',
+        'index': 1,
+        'book': {'title': 'Book A', 'type': 'TextBook'}
+      }).book,
+      label: 'בראשית ברא אלהים את',
+    );
+
+    final restored = Bookmark.fromJson(bookmark.toJson());
+
+    expect(restored.label, 'בראשית ברא אלהים את');
+  });
+
+  test('Bookmark.copyWith with clearLabel resets label to null', () {
+    final bookmark = Bookmark(
+      ref: 'בראשית א',
+      index: 0,
+      book: Bookmark.fromJson({
+        'ref': 'inner',
+        'index': 1,
+        'book': {'title': 'Book A', 'type': 'TextBook'}
+      }).book,
+      label: 'תיאור',
+    );
+
+    expect(bookmark.copyWith(label: 'חדש').label, 'חדש');
+    expect(bookmark.copyWith(clearLabel: true).label, isNull);
+  });
+
   test('Bookmark preserves search scope facets in json roundtrip', () {
     final bookmark = Bookmark(
       ref: 'query',

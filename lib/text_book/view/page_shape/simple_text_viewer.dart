@@ -12,6 +12,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/bookmarks/utils/section_bookmark.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
@@ -1274,6 +1275,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     entries.add(const AppContextMenuEntry.divider());
     final reportTargetBook = widget.reportBook ?? state.book;
     entries.addAll([
+      if (widget.isMainText)
+        AppContextMenuEntry(
+          label: 'הוסף סימניה לקטע זה',
+          icon: FluentIcons.bookmark_add_24_regular,
+          onTap: () => addTextSectionBookmark(context, state, index),
+        ),
       AppContextMenuEntry(
         label: 'הוסף הערה אישית ',
         icon: FluentIcons.note_add_24_regular,

@@ -21,6 +21,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/lists/items_list_view.dart';
+import 'package:otzaria/widgets/dialogs/input_dialog.dart';
 
 class BookmarksDialog extends StatelessWidget {
   /// אם מסופק, יוצגו רק סימניות של ספר זה (הדיאלוג הופך לתצוגת
@@ -156,6 +157,26 @@ class _BookmarkViewState extends State<BookmarkView> {
     }
   }
 
+  /// עריכת טקסט התיאור המוצג של סימניה. ערך ריק מאפס לברירת המחדל (המיקום).
+  Future<void> _editBookmarkLabel(
+    BuildContext context,
+    Bookmark bookmark,
+    int originalIndex,
+  ) async {
+    final bloc = context.read<BookmarkBloc>();
+    final current = bookmark.label?.trim().isNotEmpty == true
+        ? bookmark.label!.trim()
+        : (ItemsListView.locationSubtitle(bookmark) ?? '');
+    final result = await showInputDialog(
+      context: context,
+      title: 'עריכת תיאור הסימניה',
+      labelText: 'תיאור',
+      initialValue: current,
+    );
+    if (result == null) return;
+    bloc.updateBookmarkLabel(originalIndex, result);
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookFilter = widget.bookFilter;
@@ -202,6 +223,9 @@ class _BookmarkViewState extends State<BookmarkView> {
             item,
             targetTitle: item.ref,
           ),
+          actionsInContextMenu: true,
+          onEdit: (ctx, item, originalIndex) =>
+              _editBookmarkLabel(ctx, item as Bookmark, originalIndex),
           onDelete: (ctx, originalIndex) {
             ctx.read<BookmarkBloc>().removeBookmark(originalIndex);
             UiSnack.show('הסימניה נמחקה');
@@ -229,7 +253,17 @@ class _BookmarkViewState extends State<BookmarkView> {
           leadingIconBuilder: (item) => item.book is PdfBook
               ? const Icon(FluentIcons.document_pdf_24_regular)
               : null,
-          subtitleBuilder: (item) => ItemsListView.locationSubtitle(item),
+          subtitleBuilder: (item) {
+            final label = (item as Bookmark).label?.trim();
+            if (label != null && label.isNotEmpty) return label;
+            return ItemsListView.locationSubtitle(item);
+          },
+          // כשמוצג ה-label, המיקום (פרק/עמוד) זמין בריחוף כדי לא לאבד אותו.
+          subtitleTooltipBuilder: (item) {
+            final label = (item as Bookmark).label?.trim();
+            if (label == null || label.isEmpty) return null;
+            return ItemsListView.locationSubtitle(item);
+          },
         );
       },
     );

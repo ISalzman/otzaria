@@ -159,6 +159,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     final matchingIndex = await _findMatchingTopLevelTabIndex(
       event.tab,
       targetTitle,
+      // כשמבקשים לנווט למיקום (סימניה/deep link עם מיקום מפורש), ההתאמה
+      // לפי זהות הספר בלבד - הכותרת מקודדת מיקום ולכן תיכשל בכוונה כשהמיקום
+      // שונה, ואז היה נפתח טאב חדש במקום לנווט בטאב הקיים.
+      ignoreLocation: event.navigateToPositionIfReused,
     );
 
     if (matchingIndex != null) {
@@ -350,12 +354,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   Future<int?> _findMatchingTopLevelTabIndex(
     OpenedTab targetTab,
-    String? normalizedTargetTitle,
-  ) async {
+    String? normalizedTargetTitle, {
+    bool ignoreLocation = false,
+  }) async {
     for (var index = 0; index < state.tabs.length; index++) {
       final openTab = state.tabs[index];
       if (await _topLevelTabMatches(
-          openTab, targetTab, normalizedTargetTitle)) {
+          openTab, targetTab, normalizedTargetTitle, ignoreLocation)) {
         return index;
       }
     }
@@ -366,8 +371,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     OpenedTab openTab,
     OpenedTab targetTab,
     String? normalizedTargetTitle,
+    bool ignoreLocation,
   ) async {
-    if (await _singleTabMatches(openTab, targetTab, normalizedTargetTitle)) {
+    if (await _singleTabMatches(
+        openTab, targetTab, normalizedTargetTitle, ignoreLocation)) {
       return true;
     }
 
@@ -376,11 +383,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             openTab.rightTab,
             targetTab,
             normalizedTargetTitle,
+            ignoreLocation,
           ) ||
           await _singleTabMatches(
             openTab.leftTab,
             targetTab,
             normalizedTargetTitle,
+            ignoreLocation,
           );
     }
 
@@ -391,6 +400,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     OpenedTab openTab,
     OpenedTab targetTab,
     String? normalizedTargetTitle,
+    bool ignoreLocation,
   ) async {
     if (_hasMatchingDedupeKey(openTab, targetTab)) {
       return true;
@@ -398,6 +408,11 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
     if (!_isSameBook(openTab, targetTab)) {
       return false;
+    }
+
+    // ניווט למיקום בספר פתוח: זהות הספר מספיקה, אין צורך בהתאמת כותרת/מיקום.
+    if (ignoreLocation) {
+      return true;
     }
 
     final normalizedOpenTitle = await _resolveTabLocationTitle(openTab);
