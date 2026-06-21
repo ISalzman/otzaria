@@ -95,6 +95,61 @@ void main() {
               'במסך צר ל-subtitle (הנתיב) צריך להיות רוחב סביר ולא להתקפל לתו-לשורה');
     });
 
+    testWidgets('title מוגבל לשורה אחת עם ellipsis', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 800,
+            child: SettingsActionTile.text(
+              title: 'כותרת ארוכה מאוד שאמורה לגלוש לשורה שנייה אבל לא תוכל',
+              actions: [
+                ElevatedButton(onPressed: () {}, child: const Text('כפתור')),
+              ],
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      final titleWidget = tester.widget<Text>(
+        find.text('כותרת ארוכה מאוד שאמורה לגלוש לשורה שנייה אבל לא תוכל'),
+      );
+      expect(titleWidget.maxLines, 1);
+      expect(titleWidget.overflow, TextOverflow.ellipsis);
+    });
+
+    testWidgets('כשהכותרת לא מסתדרת עם ה-action — action עובר מתחת ל-subtitle',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(350, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            child: SettingsActionTile.text(
+              title: 'כותרת הגדרה',
+              subtitle: 'תיאור ההגדרה',
+              actions: [
+                ElevatedButton(onPressed: () {}, child: const Text('כפתור')),
+              ],
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      // כשהaction לא מסתדר עם הtitle, עוברים ל-Column — אין ListTile
+      expect(find.byType(ListTile), findsNothing);
+
+      // הכפתור מתחת לtitle ולsubtitle
+      final subtitleBottom =
+          tester.getBottomLeft(find.text('תיאור ההגדרה')).dy;
+      final buttonTop = tester.getTopLeft(find.byType(ElevatedButton)).dy;
+      expect(buttonTop, greaterThanOrEqualTo(subtitleBottom),
+          reason: 'ה-action צריך להיות מתחת ל-subtitle כשאין מקום בשורה');
+    });
+
     testWidgets('מספר כפתורים מוצגים יחדיו', (tester) async {
       await tester.binding.setSurfaceSize(const Size(400, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));

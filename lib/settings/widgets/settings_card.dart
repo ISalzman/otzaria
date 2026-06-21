@@ -99,6 +99,8 @@ class SettingsCardBody extends StatelessWidget {
 Widget _settingTitle(String text) => Text(
       text,
       style: AppTextStyles.settingTitle,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
 
 Widget _settingSubtitle(String text, {Color? color, bool ltr = false}) => Text(
@@ -170,7 +172,6 @@ class SettingsActionTile extends StatelessWidget {
   final bool responsiveActions;
   // טקסט גולמי לבדיקת גלישה עם TextPainter — מאוכלס רק ב-.text() ו-.path()
   final String? _rawTitle;
-  final String? _rawSubtitle;
 
   const SettingsActionTile({
     super.key,
@@ -183,9 +184,8 @@ class SettingsActionTile extends StatelessWidget {
     this.onTap,
     this.focusNode,
     this.enabled = true,
-    this.responsiveActions = false,
+    this.responsiveActions = true,
   })  : _rawTitle = null,
-        _rawSubtitle = null,
         assert(icon == null || rtlIcon == null,
             'העבר icon או rtlIcon — לא שניהם יחד');
 
@@ -202,11 +202,10 @@ class SettingsActionTile extends StatelessWidget {
     this.onTap,
     this.focusNode,
     this.enabled = true,
-    this.responsiveActions = false,
+    this.responsiveActions = true,
   })  : assert(icon == null || rtlIcon == null,
             'העבר icon או rtlIcon — לא שניהם יחד'),
         _rawTitle = title,
-        _rawSubtitle = subtitle,
         title = _settingTitle(title),
         subtitle = subtitle != null
             ? _settingSubtitle(subtitle, color: subtitleColor, ltr: subtitleLtr)
@@ -230,7 +229,6 @@ class SettingsActionTile extends StatelessWidget {
   })  : assert(icon == null || rtlIcon == null,
             'העבר icon או rtlIcon — לא שניהם יחד'),
         _rawTitle = title,
-        _rawSubtitle = (path != null && path.isNotEmpty) ? path : placeholder,
         title = _settingTitle(title),
         subtitle = _settingSubtitle(
               (path != null && path.isNotEmpty) ? _formatPath(path) : placeholder,
@@ -361,15 +359,6 @@ class SettingsActionTile extends StatelessWidget {
       maxLines: 1,
     )..layout(maxWidth: textWidth);
     if (titlePainter.didExceedMaxLines) return true;
-
-    if (_rawSubtitle != null) {
-      final subtitlePainter = TextPainter(
-        text: TextSpan(text: _rawSubtitle, style: AppTextStyles.settingSubtitle),
-        textDirection: TextDirection.rtl,
-        maxLines: 2,
-      )..layout(maxWidth: textWidth);
-      if (subtitlePainter.didExceedMaxLines) return true;
-    }
 
     return false;
   }
@@ -510,6 +499,7 @@ class __SwitchTileState extends State<_SwitchTile> {
         subtitleColor: widget.subtitleColor,
         enabled: widget.enabled,
         focusNode: _focusNode,
+        responsiveActions: false,
         onTap: widget.enabled && widget.onChanged != null ? () => _toggle() : null,
         actions: [
           ExcludeFocus(
