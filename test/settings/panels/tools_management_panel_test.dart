@@ -127,9 +127,15 @@ Future<void> _expandBuiltIn(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// פותח/סוגר את אזור "תוספים מותקנים" דרך שורת הסיכום בכרטיס הלבן.
-Future<void> _expandPlugins(WidgetTester tester) async {
-  await tester.tap(find.text('רשימת התוספים'));
+/// נכנס למצב בחירה מרובה של תוספים על-ידי לחיצה על "בחירה".
+Future<void> _enterSelectionMode(WidgetTester tester) async {
+  await tester.tap(find.text('בחירה'));
+  await tester.pumpAndSettle();
+}
+
+/// בוחר תוסף על-פי שמו (מניח שמצב בחירה כבר פעיל).
+Future<void> _selectPlugin(WidgetTester tester, String name) async {
+  await tester.tap(find.textContaining(name));
   await tester.pumpAndSettle();
 }
 
@@ -184,7 +190,7 @@ void main() {
   );
 
   testWidgets(
-    'plugins section header is shown (collapsed) when plugins are installed',
+    'plugins section shows header and plugin rows when plugins are installed',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -197,11 +203,8 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // הכותרת מופיעה, אבל התוסף עצמו סגור עד שפותחים.
+      // הכותרת והשורה גלויים מיד — אין קיפול באזור התוספים.
       expect(find.text('תוספים מותקנים'), findsOneWidget);
-      expect(find.textContaining('תוסף-A'), findsNothing);
-
-      await _expandPlugins(tester);
       expect(find.textContaining('תוסף-A'), findsOneWidget);
     },
   );
@@ -324,12 +327,11 @@ void main() {
         ]),
       ));
       await tester.pumpAndSettle();
-      await _expandPlugins(tester);
 
       expect(find.textContaining('נבחרו'), findsNothing);
 
-      await tester.tap(find.textContaining('תוסף-A'));
-      await tester.pumpAndSettle();
+      await _enterSelectionMode(tester);
+      await _selectPlugin(tester, 'תוסף-A');
 
       expect(find.text('1 נבחרו'), findsOneWidget);
       expect(find.text('מחק'), findsOneWidget);
@@ -338,7 +340,7 @@ void main() {
   );
 
   testWidgets(
-    '"בחר הכל" row is always visible when expanded and toggles all plugins',
+    '"בחר הכל" מופיע במצב בחירה ובוחר את כל התוספים',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1200, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -351,9 +353,9 @@ void main() {
         ]),
       ));
       await tester.pumpAndSettle();
-      await _expandPlugins(tester);
+      await _enterSelectionMode(tester);
 
-      // "בחר הכל" גלוי גם ללא בחירה מוקדמת.
+      // "בחר הכל" גלוי מיד עם כניסה למצב בחירה, ללא צורך לבחור תוסף קודם.
       expect(find.text('בחר הכל'), findsOneWidget);
       expect(find.textContaining('נבחרו'), findsNothing);
 
@@ -362,15 +364,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('2 נבחרו'), findsOneWidget);
 
-      // לחיצה חוזרת — מנקה את הבחירה.
+      // לחיצה חוזרת — נשאר עם כל הבחירות (addAll לא מבטל).
       await tester.tap(find.text('בחר הכל'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('נבחרו'), findsNothing);
+      expect(find.text('2 נבחרו'), findsOneWidget);
     },
   );
 
   testWidgets(
-    'collapsing the plugins section clears the selection',
+    'pressing "ביטול" exits selection mode and clears the selection',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -382,19 +384,17 @@ void main() {
         ]),
       ));
       await tester.pumpAndSettle();
-      await _expandPlugins(tester);
-
-      await tester.tap(find.textContaining('תוסף-A'));
-      await tester.pumpAndSettle();
+      await _enterSelectionMode(tester);
+      await _selectPlugin(tester, 'תוסף-A');
       expect(find.text('1 נבחרו'), findsOneWidget);
 
-      // סגירה — מנקה את הבחירה; פתיחה מחדש מראה שאין סרגל פעולות.
-      await _expandPlugins(tester); // toggle -> collapse
-      await tester.pumpAndSettle();
-      await _expandPlugins(tester); // toggle -> expand again
+      // לחיצה על "ביטול" — יוצאת ממצב בחירה ומנקה את הבחירה.
+      await tester.tap(find.text('ביטול'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('נבחרו'), findsNothing);
+      // חזרנו למצב רגיל — כפתור "בחירה" מופיע שוב.
+      expect(find.text('בחירה'), findsOneWidget);
     },
   );
 
@@ -413,10 +413,8 @@ void main() {
         pluginBloc: pluginBloc,
       ));
       await tester.pumpAndSettle();
-      await _expandPlugins(tester);
-
-      await tester.tap(find.textContaining('תוסף-A'));
-      await tester.pumpAndSettle();
+      await _enterSelectionMode(tester);
+      await _selectPlugin(tester, 'תוסף-A');
 
       await tester.tap(find.text('השבת'));
       await tester.pumpAndSettle();
@@ -443,10 +441,8 @@ void main() {
         pluginBloc: pluginBloc,
       ));
       await tester.pumpAndSettle();
-      await _expandPlugins(tester);
-
-      await tester.tap(find.textContaining('תוסף-A'));
-      await tester.pumpAndSettle();
+      await _enterSelectionMode(tester);
+      await _selectPlugin(tester, 'תוסף-A');
 
       await tester.tap(find.text('הסתר'));
       await tester.pumpAndSettle();
@@ -478,10 +474,8 @@ void main() {
         pluginBloc: pluginBloc,
       ));
       await tester.pumpAndSettle();
-      await _expandPlugins(tester);
-
-      await tester.tap(find.textContaining('תוסף-A'));
-      await tester.pumpAndSettle();
+      await _enterSelectionMode(tester);
+      await _selectPlugin(tester, 'תוסף-A');
 
       // פתיחת התפריט (יש שני "גישה לרשת" — אחד בסרגל ואחד בתפריט)
       await tester.tap(find.text('גישה לרשת').first);
@@ -518,10 +512,8 @@ void main() {
         pluginBloc: pluginBloc,
       ));
       await tester.pumpAndSettle();
-      await _expandPlugins(tester);
-
-      await tester.tap(find.textContaining('תוסף-A'));
-      await tester.pumpAndSettle();
+      await _enterSelectionMode(tester);
+      await _selectPlugin(tester, 'תוסף-A');
 
       await tester.tap(find.text('גישה לרשת').first);
       await tester.pumpAndSettle();
@@ -556,7 +548,6 @@ void main() {
         pluginBloc: pluginBloc,
       ));
       await tester.pumpAndSettle();
-      await _expandPlugins(tester);
 
       final handles =
           find.byIcon(FluentIcons.re_order_dots_vertical_24_regular);
@@ -599,10 +590,8 @@ void main() {
         pluginBloc: pluginBloc,
       ));
       await tester.pumpAndSettle();
-      await _expandPlugins(tester);
-
-      await tester.tap(find.textContaining('תוסף-A'));
-      await tester.pumpAndSettle();
+      await _enterSelectionMode(tester);
+      await _selectPlugin(tester, 'תוסף-A');
 
       await tester.tap(find.text('טעינה אוטומטית בעלייה').first);
       await tester.pumpAndSettle();

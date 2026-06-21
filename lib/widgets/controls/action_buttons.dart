@@ -89,7 +89,7 @@ class RecommendedActionButton extends StatelessWidget {
 /// כפתור פעולה ניטרלית — Tonal/SecondaryContainer FilledButton
 class NeutralActionButton extends StatelessWidget {
   final String text;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool isLoading;
   final IconData? icon;
   final Widget? iconWidget;
