@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 // קידומת ל-Link של dart:io כי models/links.dart מגדיר Link משלו שמסתיר אותו.
 import 'dart:io' as io show Link;
@@ -27,6 +28,7 @@ import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
+import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -71,6 +73,9 @@ class _StubPluginRegistryRepository extends PluginRegistryRepository {
   List<PluginPermissionGrant> permissions = [];
   bool? permissionGrant;
 
+  // KV in-memory (מפתח: "namespace/key") — מחליף את ה-DB בבדיקות.
+  final Map<String, String> kv = {};
+
   @override
   Future<List<PluginPermissionGrant>> getPluginPermissions(
       String pluginId) async {
@@ -80,6 +85,22 @@ class _StubPluginRegistryRepository extends PluginRegistryRepository {
   @override
   Future<bool?> getPermission(String pluginId, String permission) async {
     return permissionGrant;
+  }
+
+  @override
+  Future<void> setKV(
+      String pluginId, String namespace, String key, String valueJson) async {
+    kv['$namespace/$key'] = valueJson;
+  }
+
+  @override
+  Future<String?> getKV(String pluginId, String namespace, String key) async {
+    return kv['$namespace/$key'];
+  }
+
+  @override
+  Future<void> removeKV(String pluginId, String namespace, String key) async {
+    kv.remove('$namespace/$key');
   }
 }
 
@@ -1183,6 +1204,164 @@ void main() {
             .having((e) => e.toString(), 'message', contains('forbidden'))),
       );
       expect(secret.existsSync(), isTrue); // הקובץ החיצוני לא נמחק
+    });
+  });
+
+  group('PluginBridgeAdapter fs user files (pick/resolve/read/revoke)', () {
+    late Directory tempDir;
+    late _StubPluginRegistryRepository registry;
+    late PluginFileServer fileServer;
+    late HttpClient client;
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('adapter_userfile_test_');
+      registry = _StubPluginRegistryRepository()..permissionGrant = true;
+      fileServer = PluginFileServer();
+      client = HttpClient();
+    });
+
+    tearDown(() async {
+      client.close(force: true);
+      await fileServer.close();
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    PluginBridgeAdapter buildAdapter({
+      required Future<String?> Function({
+        List<String>? allowedExtensions,
+        String? title,
+      }) pickFile,
+    }) {
+      return PluginBridgeAdapter(
+        _buildInstalledPlugin(permissions: const ['fs.user_files.read']),
+        dependencies: PluginBridgeDependencies(
+          historyBloc: _MockHistoryBloc(),
+          tabsBloc: _StubTabsBloc(),
+          navigationBloc: _MockNavigationBloc(),
+          calendarCubit: _StubCalendarCubit(
+            _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+          ),
+          workspaceBloc: _MockWorkspaceBloc(),
+          searchRepository: _MockSearchRepository(),
+          personalNotesRepository: _MockPersonalNotesRepository(),
+          bookOpenCoordinator: _MockBookOpenCoordinator(),
+          themePayloadBuilder: () => <String, dynamic>{},
+          showConfirmDialog: ({required title, required content}) async => true,
+          showWarningDialog: ({
+            required title,
+            required content,
+            required subtitle,
+          }) async =>
+              true,
+          pickFile: pickFile,
+        ),
+        pluginRepository: registry,
+        fileServer: fileServer,
+      );
+    }
+
+    Future<String> fetch(String url) async {
+      final request = await client.getUrl(Uri.parse(url));
+      final response = await request.close();
+      expect(response.statusCode, 200);
+      return utf8.decode(await response.expand((chunk) => chunk).toList());
+    }
+
+    test('pickUserFile רושם token, מתמיד אותו ב-KV וה-URL מגיש את הקובץ',
+        () async {
+      final pdf = File(p.join(tempDir.path, 'book.pdf'))
+        ..writeAsStringSync('%PDF content');
+      final adapter = buildAdapter(
+          pickFile: ({allowedExtensions, title}) async => pdf.path);
+
+      final res = await adapter.execute('fs', 'pickUserFile', {}) as Map;
+
+      expect(res['cancelled'], isFalse);
+      expect(res['name'], 'book.pdf');
+      expect(res['size'], '%PDF content'.length);
+      final token = res['token'] as String;
+      expect(token, isNotEmpty);
+      // ה-grant הותמד ב-KV תחת namespace פנימי.
+      expect(registry.kv['_internal/user_file_grants'], contains(token));
+      // ה-URL מגיש את תוכן הקובץ בפועל.
+      expect(await fetch(res['url'] as String), '%PDF content');
+    });
+
+    test('ביטול pickUserFile מחזיר {cancelled:true} בלי להתמיד grant',
+        () async {
+      final adapter =
+          buildAdapter(pickFile: ({allowedExtensions, title}) async => null);
+
+      final res = await adapter.execute('fs', 'pickUserFile', {}) as Map;
+
+      expect(res['cancelled'], isTrue);
+      expect(registry.kv['_internal/user_file_grants'], isNull);
+    });
+
+    test('resolveFileUrl בונה URL חדש מ-token שהותמד (סימולציית reload)',
+        () async {
+      final file = File(p.join(tempDir.path, 'notes.txt'))
+        ..writeAsStringSync('שלום עולם');
+      final adapter = buildAdapter(
+          pickFile: ({allowedExtensions, title}) async => file.path);
+
+      final picked = await adapter.execute('fs', 'pickUserFile', {}) as Map;
+      final token = picked['token'] as String;
+
+      // reload: רישום הזיכרון של השרת אבד, אך ה-grant נשמר ב-KV.
+      await fileServer.close();
+
+      final resolved = await adapter
+          .execute('fs', 'resolveFileUrl', {'token': token}) as Map;
+      expect(resolved['token'], token);
+      expect(resolved['name'], 'notes.txt');
+      expect(await fetch(resolved['url'] as String), 'שלום עולם');
+    });
+
+    test('resolveFileUrl על token לא מוכר זורק error.not_found', () async {
+      final adapter =
+          buildAdapter(pickFile: ({allowedExtensions, title}) async => null);
+
+      await expectLater(
+        adapter.execute('fs', 'resolveFileUrl', {'token': 'nope'}),
+        throwsA(isA<Exception>()
+            .having((e) => e.toString(), 'message', contains('not_found'))),
+      );
+    });
+
+    test('readTextFile מחזיר את תוכן הקובץ המאושר', () async {
+      final file = File(p.join(tempDir.path, 'a.txt'))
+        ..writeAsStringSync('תוכן טקסטואלי');
+      final adapter = buildAdapter(
+          pickFile: ({allowedExtensions, title}) async => file.path);
+
+      final picked = await adapter.execute('fs', 'pickUserFile', {}) as Map;
+      final content = await adapter
+          .execute('fs', 'readTextFile', {'token': picked['token']});
+
+      expect(content, 'תוכן טקסטואלי');
+    });
+
+    test('revokeFile מסיר את ה-grant — resolveFileUrl לאחריו נכשל', () async {
+      final file = File(p.join(tempDir.path, 'x.txt'))..writeAsStringSync('x');
+      final adapter = buildAdapter(
+          pickFile: ({allowedExtensions, title}) async => file.path);
+
+      final picked = await adapter.execute('fs', 'pickUserFile', {}) as Map;
+      final token = picked['token'] as String;
+
+      final revoked =
+          await adapter.execute('fs', 'revokeFile', {'token': token});
+      expect(revoked, isTrue);
+      expect(registry.kv['_internal/user_file_grants'], isNot(contains(token)));
+
+      await expectLater(
+        adapter.execute('fs', 'resolveFileUrl', {'token': token}),
+        throwsA(isA<Exception>()
+            .having((e) => e.toString(), 'message', contains('not_found'))),
+      );
     });
   });
 }

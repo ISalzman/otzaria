@@ -584,6 +584,78 @@ await Otzaria.call('fs.deleteFile', {
 
 ---
 
+## fs.* - קבצים אישיים של המשתמש
+
+> פעולות אלו מאפשרות לתוסף לפתוח קובץ אישי (PDF / טקסט וכו') שהמשתמש בוחר
+> במפורש בדיאלוג. הגישה מוגבלת לקובץ שנבחר — לא לנתיב חופשי בדיסק — ודורשת
+> את הרשאת ה-manifest `fs.user_files.read`.
+>
+> **PDF/בינארי גדול:** הקובץ מוגש דרך שרת `localhost` פנימי (`http://127.0.0.1`)
+> עם תמיכת `Range`. הבייטים **אינם** עוברים דרך גשר ה-JS. מציבים את ה-`url`
+> שמתקבל ב-`<iframe>`/PDF.js (או `fetch`). שימו לב: רינדור PDF ב-`<iframe>`
+> מובנה עובד רק ב-Windows/macOS — לתאימות מלאה (Android/Linux) יש לרנדר עם
+> PDF.js, ש-`fetch` מה-`url` בעצמו.
+
+### `fs.pickUserFile`
+**הרשאה:** `fs.user_files.read`
+
+פותח דיאלוג בחירת קובץ, רושם את הקובץ הנבחר ומחזיר `token` ו-`url` לטעינה.
+ה-`token` הוא מזהה אטום שכדאי לשמור ב-`storage` — בטעינה מחדש בונים ממנו URL
+טרי דרך [`fs.resolveFileUrl`](#fsresolvefileurl). פרמטר `extensions` אופציונלי
+מסנן את סוגי הקבצים בדיאלוג.
+
+```javascript
+const res = await Otzaria.call('fs.pickUserFile', {
+  title: 'בחר קובץ PDF',
+  extensions: ['pdf'] // אופציונלי
+});
+// res.data = { cancelled: false, token, url, name, size }  — או { cancelled: true }
+if (res.success && !res.data.cancelled) {
+  await Otzaria.call('storage.set', { key: 'lastFile', value: res.data.token });
+  document.querySelector('iframe').src = res.data.url;
+}
+```
+
+### `fs.resolveFileUrl`
+**הרשאה:** `fs.user_files.read`
+
+בונה URL טרי לקובץ שכבר אושר, לפי ה-`token` שנשמר. נצרך אחרי טעינה מחדש של
+התוסף (הפורט של השרת משתנה בכל הפעלה). מחזיר `error.not_found` אם ה-`token`
+לא מוכר או שהקובץ נמחק.
+
+```javascript
+const { data: token } = await Otzaria.call('storage.get', { key: 'lastFile' });
+const { data } = await Otzaria.call('fs.resolveFileUrl', { token });
+// data = { token, url, name, size }
+```
+
+### `fs.readTextFile`
+**הרשאה:** `fs.user_files.read`
+
+מחזיר את תוכן הקובץ המאושר כמחרוזת (לקבצי טקסט קטנים, עד 10MB). לקבצים
+גדולים יש להשתמש ב-`url` מ-`pickUserFile`/`resolveFileUrl`.
+
+```javascript
+const { data } = await Otzaria.call('fs.readTextFile', { token });
+// "תוכן הקובץ..."
+```
+
+### `fs.revokeFile`
+**הרשאה:** `fs.user_files.read`
+
+מבטל את האישור ל-`token` ומסיר אותו מהאחסון. פעולה idempotent.
+
+```javascript
+await Otzaria.call('fs.revokeFile', { token });
+// { success: true, data: true }
+```
+
+שגיאות אפשריות: `error.not_found` (token לא מוכר / קובץ נמחק),
+`error.invalid_params` (token חסר), `error.too_large` (קובץ טקסט מעל 10MB),
+`error.internal`.
+
+---
+
 ## feedback.* - משוב ומיילים
 
 ### `feedback.sendEmail`
