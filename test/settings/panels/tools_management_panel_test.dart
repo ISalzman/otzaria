@@ -106,7 +106,6 @@ Widget _wrap({
   required SettingsBloc settingsBloc,
   required PluginSystemBloc pluginBloc,
 }) {
-  // הפאנל מחזיר sliver ולכן חייב להיות בתוך CustomScrollView.
   return MaterialApp(
     home: Directionality(
       textDirection: TextDirection.rtl,
@@ -116,8 +115,8 @@ Widget _wrap({
             BlocProvider<SettingsBloc>.value(value: settingsBloc),
             BlocProvider<PluginSystemBloc>.value(value: pluginBloc),
           ],
-          child: const CustomScrollView(
-            slivers: [ToolsManagementPanel()],
+          child: const SingleChildScrollView(
+            child: ToolsManagementPanel(),
           ),
         ),
       ),

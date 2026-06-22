@@ -20,28 +20,18 @@ import 'package:otzaria/settings/search/settings_search_registry.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
-import 'package:otzaria/widgets/controls/action_buttons.dart';
-import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
 import 'package:otzaria/widgets/misc/animated_pin_button.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
-import 'package:otzaria/widgets/misc/tool_ui_helpers.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 
 const String _networkAccessPermission = 'network.access';
 
 /// פאנל ניהול כלים (מובנים + תוספים) במסך "הגדרות › כלים".
 ///
 /// מבנה:
-/// - שני אזורים מתקפלים (סגורים כברירת מחדל, נפתחים בלחיצה על חץ): "כלים
-///   מובנים" ו"תוספים מותקנים".
-/// - **כלים מובנים** — לכל שורה שני לחצני פעולה ישירים: הסתרה/הצגה מהממשק
-///   והצמדה/הסרה מסרגל הניווט הראשי. אין בחירה מרובה.
-/// - **תוספים** — בחירה מרובה עם סרגל פעולות. כאשר נבחר תוסף, סרגל הפעולות
-///   מוצמד לראש המסך בגלילה כל עוד אזור התוספים גלוי (PinnedHeaderSliver בתוך
-///   SliverMainAxisGroup), ונעלם רק כשגוללים מעבר לכל אזור התוספים.
-///
-/// הפאנל מחזיר **sliver** ולכן חייב להיות מוצב בתוך CustomScrollView.
+/// - כלים מובנים — שורה מתקפלת; לכל שורה הסתרה/הצגה והצמדה לסרגל הניווט.
+/// - תוספים מותקנים — בחירה מרובה עם סרגל פעולות (הסתרה, הצמדה, השבתה, הרשאות, מחיקה).
 class ToolsManagementPanel extends StatefulWidget {
   const ToolsManagementPanel({super.key});
 
@@ -211,112 +201,102 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
             final plugins = pluginState is PluginSystemLoaded
                 ? pluginState.plugins
                 : const <InstalledPlugin>[];
-            // ניקוי מזהי תוספים נבחרים שהוסרו:
             _pruneStaleSelection(plugins);
-            return SliverMainAxisGroup(
-              slivers: [
-                // אזור הכלים המובנים — ללא סרגל פעולות מוצמד.
-                ..._collapsibleSectionSlivers(
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SettingsAnchor(
                   cardId: _builtInCardId,
-                  title: 'כלים מובנים',
-                  summaryLabel: 'רשימת הכלים',
-                  summarySubtitle: 'הסתר כלים מהממשק או הצמד אותם לסרגל הניווט הראשי.',
-                  summaryIcon: FluentIcons.apps_24_regular,
-                  expanded: _builtInExpanded,
-                  onToggle: () =>
-                      setState(() => _builtInExpanded = !_builtInExpanded),
-                  children: _builtInToolRows(settingsState),
-                ),
-                if (plugins.isNotEmpty) ...[
-                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
-                  SliverMainAxisGroup(
-                    slivers: [
-                      SliverToBoxAdapter(
-                        child: ToolPanelWrapper(
-                          child: SettingsAnchor(
-                            cardId: _pluginsCardId,
-                            child: const SettingsCardHeader(
-                                title: 'תוספים מותקנים'),
-                          ),
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: ToolPanelWrapper(
-                          child: SettingsCardBody(
-                            children: [
-                              // כותרת + סרגל פעולות כילד אחד — כמו ב-ExpandableSection,
-                              // כך שה-divider מופיע בתוך הפתוח בלבד, ללא כפילות.
-                              Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  SettingsActionTile.text(
-                                    icon: FluentIcons.puzzle_piece_24_regular,
-                                    title: 'רשימת התוספים',
-                                    subtitle: _isSelectionMode
-                                        ? '${_selectedIds.length} נבחרו'
-                                        : 'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
-                                    // LayoutBuilder inside SettingsActionTile crashes when
-                                    // plugin rows with Tooltip (OverlayPortal) re-activate
-                                    // during drag reorder — disable responsive layout.
-                                    responsiveActions: false,
-                                    actions: _isSelectionMode
-                                        ? [
-                                            ActionButton.ghost(
-                                              icon: FluentIcons
-                                                  .checkbox_checked_24_regular,
-                                              text: 'בחר הכל',
-                                              onPressed:
-                                                  _selectedIds.length ==
-                                                          plugins.length
-                                                      ? null
-                                                      : () =>
-                                                          _selectAllPlugins(
-                                                              plugins),
-                                            ),
-                                            ActionButton.neutral(
-                                              icon: FluentIcons
-                                                  .dismiss_circle_24_regular,
-                                              text: 'ביטול',
-                                              onPressed: _exitSelectionMode,
-                                            ),
-                                          ]
-                                        : [
-                                            ActionButton.neutral(
-                                              icon: FluentIcons
-                                                  .multiselect_rtl_24_regular,
-                                              text: 'בחירה',
-                                              onPressed: _enterSelectionMode,
-                                            ),
-                                          ],
-                                  ),
-                                  AnimatedSize(
-                                    duration: AppTokens.animNormal,
-                                    curve: Curves.easeInOut,
-                                    child: _isSelectionMode
-                                        ? Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Builder(
-                                                builder: (ctx) =>
-                                                    AppCard.sectionDivider(ctx),
-                                              ),
-                                              _ActionBar(
-                                                selectedIds:
-                                                    _selectedIds.toSet(),
-                                                plugins: plugins,
-                                              ),
-                                            ],
-                                          )
-                                        : const SizedBox.shrink(),
-                                  ),
-                                ],
-                              ),
-                              ..._pluginRows(plugins),
-                            ],
-                          ),
-                        ),
+                  child: SettingsCard(
+                    title: 'כלים מובנים',
+                    children: [
+                      ExpandableSection(
+                        icon: FluentIcons.apps_24_regular,
+                        title: const Text('רשימת הכלים'),
+                        subtitle: const Text(
+                            'הסתר כלים מהממשק או הצמד אותם לסרגל הניווט הראשי.'),
+                        isExpanded: _builtInExpanded,
+                        onTap: () => setState(
+                            () => _builtInExpanded = !_builtInExpanded),
+                        children: _builtInToolRows(settingsState),
                       ),
                     ],
+                  ),
+                ),
+                if (plugins.isNotEmpty) ...[
+                  kSettingsCardSpacing,
+                  SettingsAnchor(
+                    cardId: _pluginsCardId,
+                    child: SettingsCard(
+                      title: 'תוספים מותקנים',
+                      children: [
+                        // כותרת + סרגל פעולות כילד אחד כדי ש-divider יופיע רק בין הכותרת לשורות.
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SettingsActionTile.text(
+                              icon: FluentIcons.puzzle_piece_24_regular,
+                              title: 'רשימת התוספים',
+                              subtitle: _isSelectionMode
+                                  ? '${_selectedIds.length} נבחרו'
+                                  : 'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
+                              // LayoutBuilder inside SettingsActionTile crashes when
+                              // plugin rows with Tooltip (OverlayPortal) re-activate
+                              // during drag reorder — disable responsive layout.
+                              responsiveActions: false,
+                              actions: _isSelectionMode
+                                  ? [
+                                      ActionButton.ghost(
+                                        icon: FluentIcons
+                                            .checkbox_checked_24_regular,
+                                        text: 'בחר הכל',
+                                        onPressed:
+                                            _selectedIds.length == plugins.length
+                                                ? null
+                                                : () =>
+                                                    _selectAllPlugins(plugins),
+                                      ),
+                                      ActionButton.neutral(
+                                        icon: FluentIcons
+                                            .dismiss_circle_24_regular,
+                                        text: 'ביטול',
+                                        onPressed: _exitSelectionMode,
+                                      ),
+                                    ]
+                                  : [
+                                      ActionButton.neutral(
+                                        icon: FluentIcons
+                                            .multiselect_rtl_24_regular,
+                                        text: 'בחירה',
+                                        onPressed: _enterSelectionMode,
+                                      ),
+                                    ],
+                            ),
+                            AnimatedSize(
+                              duration: AppTokens.animNormal,
+                              curve: Curves.easeInOut,
+                              child: _isSelectionMode
+                                  ? Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Builder(
+                                          builder: (ctx) =>
+                                              AppCard.sectionDivider(ctx),
+                                        ),
+                                        _ActionBar(
+                                          selectedIds: _selectedIds.toSet(),
+                                          plugins: plugins,
+                                        ),
+                                      ],
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ],
+                        ),
+                        ..._pluginRows(plugins),
+                      ],
+                    ),
                   ),
                 ],
               ],
@@ -325,60 +305,6 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
         );
       },
     );
-  }
-
-  /// בונה את הסליברים של אזור מתקפל, בסדר: כותרת → (סרגל מוצמד אופציונלי) → גוף.
-  ///
-  /// [pinnedBar] — אם ניתן, מוצמד לראש המסך *אחרי הכותרת* (PinnedHeaderSliver).
-  /// כדי שההצמדה תהיה מוגבלת לאזור זה בלבד, יש למקם את הסליברים בתוך
-  /// SliverMainAxisGroup ייעודי.
-  List<Widget> _collapsibleSectionSlivers({
-    required String cardId,
-    required String title,
-    String? subtitle,
-    required String summaryLabel,
-    String? summarySubtitle,
-    required IconData summaryIcon,
-    required bool expanded,
-    required VoidCallback onToggle,
-    required List<Widget> children,
-    Widget? pinnedBar,
-  }) {
-    return [
-      // כותרת-קטגוריה (גוללת רגיל, מעל הסרגל המוצמד).
-      SliverToBoxAdapter(
-        child: ToolPanelWrapper(
-          child: SettingsAnchor(
-            cardId: cardId,
-            child: SettingsCardHeader(title: title, subtitle: subtitle),
-          ),
-        ),
-      ),
-      if (pinnedBar != null)
-        PinnedHeaderSliver(
-          child: ColoredBox(
-            color: AppSurfaces.panelBackground(context),
-            child: ToolPanelWrapper(child: pinnedBar),
-          ),
-        ),
-      // גוף הכרטיס — שורה מתקפלת עם אנימציה.
-      SliverToBoxAdapter(
-        child: ToolPanelWrapper(
-          child: SettingsCardBody(
-            children: [
-              ExpandableSection(
-                icon: summaryIcon,
-                title: Text(summaryLabel),
-                subtitle: summarySubtitle != null ? Text(summarySubtitle) : null,
-                isExpanded: expanded,
-                onTap: onToggle,
-                children: children,
-              ),
-            ],
-          ),
-        ),
-      ),
-    ];
   }
 
   List<Widget> _builtInToolRows(SettingsState state) {
@@ -1092,32 +1018,6 @@ class _SettingsDragFeedback extends StatelessWidget {
   }
 }
 
-/// כותרת שורה: שם הכלי/התוסף ולצדו תגיות הסטטוס (אייקונים בלבד). התגיות מוצגות
-/// רק כשרוחב השורה מאפשר, אחרת השם מקבל את כל המקום.
-class _RowTitle extends StatelessWidget {
-  final String label;
-  final _StatusBadges badges;
-
-  const _RowTitle({required this.label, required this.badges});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final showBadges = badges.hasAny && constraints.maxWidth > 220;
-        return Row(
-          children: [
-            Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
-            if (showBadges) ...[
-              const SizedBox(width: 8),
-              badges,
-            ],
-          ],
-        );
-      },
-    );
-  }
-}
 
 /// תגיות סטטוס לשורת כלי/תוסף — אייקונים בלבד; ההסבר מופיע ב-tooltip בריחוף.
 class _StatusBadges extends StatelessWidget {

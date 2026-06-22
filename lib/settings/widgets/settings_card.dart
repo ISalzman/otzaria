@@ -24,38 +24,13 @@ class SettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SettingsCardHeader(title: title, subtitle: subtitle),
-        AppCard.section(children: children),
-      ],
-    );
-  }
-}
-
-// ── SettingsCardHeader ────────────────────────────────────────────────────────
-
-/// כותרת-קטגוריה ותת-כותרת המוצגות מעל גוף כרטיס ההגדרות (ללא רקע).
-class SettingsCardHeader extends StatelessWidget {
-  final dynamic title; // String או Widget
-  final String? subtitle;
-
-  const SettingsCardHeader({
-    super.key,
-    required this.title,
-    this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final titleStyle = theme.textTheme.titleMedium?.copyWith(
       fontWeight: FontWeight.bold,
       color: theme.colorScheme.primary,
     );
 
-    return Container(
+    final header = Container(
       width: double.infinity,
       padding: const EdgeInsets.only(right: 16, left: 16, top: 24, bottom: 12),
       child: Column(
@@ -79,19 +54,15 @@ class SettingsCardHeader extends StatelessWidget {
         ],
       ),
     );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        header,
+        AppCard.section(children: children),
+      ],
+    );
   }
-}
-
-// ── SettingsCardBody ──────────────────────────────────────────────────────────
-
-/// גוף כרטיס הגדרות — מעטפת ל-[AppCard.section] לשימוש נפרד מהכותרת.
-class SettingsCardBody extends StatelessWidget {
-  final List<Widget> children;
-
-  const SettingsCardBody({super.key, required this.children});
-
-  @override
-  Widget build(BuildContext context) => AppCard.section(children: children);
 }
 
 // ── Helpers לטיפוגרפיה אחידה ──────────────────────────────────────────────────
