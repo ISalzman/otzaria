@@ -255,6 +255,10 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                                     subtitle: _isSelectionMode
                                         ? '${_selectedIds.length} נבחרו'
                                         : 'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
+                                    // LayoutBuilder inside SettingsActionTile crashes when
+                                    // plugin rows with Tooltip (OverlayPortal) re-activate
+                                    // during drag reorder — disable responsive layout.
+                                    responsiveActions: false,
                                     actions: _isSelectionMode
                                         ? [
                                             GhostActionButton(
@@ -425,13 +429,23 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
 
   void _handleMove(List<InstalledPlugin> plugins, int from, int to) {
     final movedId = plugins[from].pluginId;
-    _moveWrapperKeys[movedId]?.currentState?.playAnimation(movedUp: to < from);
+    final movedUp = to < from;
     final reordered = List.of(plugins);
     final item = reordered.removeAt(from);
     reordered.insert(to, item);
-    context.read<PluginSystemBloc>().add(
-          ReorderPluginsRequested(reordered.map((p) => p.pluginId).toList()),
-        );
+    final ids = reordered.map((p) => p.pluginId).toList();
+    // Defer dispatch so the BlocBuilder rebuilds during the normal build phase
+    // of the next frame, not inside a LayoutBuilder's _rebuildWithConstraints.
+    // Without deferral, GlobalKey reactivation of rows with Tooltip/OverlayPortal
+    // happens during the LayoutBuilder's buildScope → Flutter rendering crash.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<PluginSystemBloc>().add(ReorderPluginsRequested(ids));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _moveWrapperKeys[movedId]?.currentState?.playAnimation(movedUp: movedUp);
+      });
+    });
   }
 
   void _handleReorder({
@@ -448,9 +462,13 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
     final reordered = List.of(allPlugins);
     final src = reordered.removeAt(sourceIdx);
     reordered.insert(targetIdx, src);
-    context.read<PluginSystemBloc>().add(
-          ReorderPluginsRequested(reordered.map((p) => p.pluginId).toList()),
-        );
+    final ids = reordered.map((p) => p.pluginId).toList();
+    // Same deferral as _handleMove: prevents LayoutBuilder + BlocBuilder
+    // dirty collision that causes OverlayPortal reactivation crash.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      this.context.read<PluginSystemBloc>().add(ReorderPluginsRequested(ids));
+    });
   }
 
   /// מנקה מזהי תוספים נבחרים שאינם רלוונטיים עוד (תוסף שהוסר). חייב לקרות
@@ -711,35 +729,17 @@ class _BuiltInToolRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // SettingsActionTile תומך רק ב-IconData; כלים עם imageIcon נשמרים ב-ListTile.
-    if (meta.imageIcon != null) {
-      return ListTile(
-        hoverColor: Colors.transparent,
-        leading: ImageIcon(AssetImage(meta.imageIcon!), size: 24),
-        title: Text(meta.label, style: AppTextStyles.settingTitle),
-        subtitle: _StatusBadges(hidden: hidden, pinnedToNavRail: pinnedToNavRail),
-        trailing: _buildTrailing(),
-      );
-    }
-    return SettingsActionTile(
-      icon: meta.icon,
+    // SettingsActionTile uses LayoutBuilder internally, which conflicts with
+    // Tooltip's OverlayPortal when elements re-activate during layout. Use
+    // ListTile directly for all cases.
+    return ListTile(
+      hoverColor: Colors.transparent,
+      leading: meta.imageIcon != null
+          ? ImageIcon(AssetImage(meta.imageIcon!), size: 24)
+          : Icon(meta.icon),
       title: Text(meta.label, style: AppTextStyles.settingTitle),
       subtitle: _StatusBadges(hidden: hidden, pinnedToNavRail: pinnedToNavRail),
-      actions: [
-        IconButton(
-          tooltip: hidden ? 'הצג בממשק' : 'הסתר מהממשק',
-          isSelected: !hidden,
-          icon: Icon(FluentIcons.eye_off_24_regular),
-          selectedIcon: Icon(FluentIcons.eye_24_regular),
-          onPressed: onToggleHide,
-        ),
-        AnimatedPinButton(
-          tooltip:
-              pinnedToNavRail ? 'הסר מסרגל הניווט' : 'הצמד לסרגל הניווט',
-          isPinned: pinnedToNavRail,
-          onPressed: onTogglePin,
-        ),
-      ],
+      trailing: _buildTrailing(),
     );
   }
 

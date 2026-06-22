@@ -12,7 +12,6 @@ import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/panels/tools_management_panel.dart';
-import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
 
 // ─── Test doubles ─────────────────────────────────────────────────────────────
@@ -630,7 +629,7 @@ void main() {
       // בודקים שיש לפחות שניים בשורת לוח-שנה (placeholder + badge אמיתי).
       final calendarRow = find.ancestor(
         of: find.text('לוח שנה'),
-        matching: find.byType(SettingsActionTile),
+        matching: find.byType(ListTile),
       );
       expect(
         find.descendant(of: calendarRow, matching: find.text('בסרגל ניווט')),
