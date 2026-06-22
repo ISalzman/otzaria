@@ -8,6 +8,7 @@ import 'package:otzaria/find_ref/bloc/find_ref_event.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_state.dart';
 import 'package:otzaria/find_ref/repository/db_reference_result.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/external_uri_router.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
@@ -15,6 +16,11 @@ import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/search/view/search_dialog.dart';
+import 'package:otzaria/navigation/view/main_window_screen.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 class FindRefDialog extends StatefulWidget {
   const FindRefDialog({super.key});
@@ -417,6 +423,119 @@ class _FindRefDialogState extends State<FindRefDialog> {
         preferTextBook: preferTextBook);
   }
 
+  /// בודק אם מחרוזת היא קישור otzaria:// או zayit:// תקין וניתן לפענוח.
+  static bool _isDeepLinkText(String text) {
+    final trimmed = text.trim().toLowerCase();
+    if (!trimmed.startsWith('otzaria://') && !trimmed.startsWith('zayit://')) {
+      return false;
+    }
+    final uri = Uri.tryParse(text.trim());
+    if (uri == null) return false;
+    return ExternalUriRouter.parseUri(uri) != null;
+  }
+
+  /// מנסה לטפל בקישור ישיר — מחזיר true אם הטיפול הצליח.
+  /// השדה מנוקה ודיאלוג נסגר רק לאחר אימות הצלחת הטיפול.
+  Future<bool> _tryHandleDeepLink(String text) async {
+    final uri = Uri.tryParse(text.trim());
+    if (uri == null) return false;
+    final normalized = ExternalUriRouter.normalizeUri(uri);
+    if (normalized == null) return false;
+    if (ExternalUriRouter.parseUri(normalized) == null) return false;
+
+    final handled = await mainWindowScreenKey.currentState
+        ?.handleInternalDeepLink(normalized.toString());
+
+    if (handled == true && mounted) {
+      final focusRepository = context.read<FocusRepository>();
+      focusRepository.findRefSearchController.clear();
+      BlocProvider.of<FindRefBloc>(context).add(const SearchRefRequested(''));
+      BlocProvider.of<FindRefBloc>(context).add(ClearSearchRequested());
+      Navigator.of(context).pop();
+    }
+    return handled == true;
+  }
+
+  /// פותח את דיאלוג החיפוש עם [query] מוכן בשדה — ללא הרצת חיפוש.
+  void _openTextSearch(String query) {
+    Navigator.of(context).pop();
+    final tab = SearchingTab('חיפוש', query);
+    showDialog(
+      context: context,
+      builder: (context) => SearchDialog(existingTab: tab),
+    );
+  }
+
+  /// מצב ריק מעוצב: אייקון, הודעה ממוקדת וכפתור לפתיחת חיפוש טקסט.
+  Widget _buildEmptyState(BuildContext context, String query) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDeepLink = _isDeepLinkText(query);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RtlIcon(
+              isDeepLink
+                  ? FluentIcons.link_24_regular
+                  : FluentIcons.document_search_24_regular,
+              size: 64,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              isDeepLink
+                  ? 'נראה שהכנסתם קישור ישיר'
+                  : 'לא הצלחנו לאתר את הספר "$query"',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.onSurface,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isDeepLink
+                  ? 'לחצו על הכפתור לפתיחת הקישור'
+                  : 'נסו טקסט אחר לאיתור הספר המבוקש במאגר',
+              style: TextStyle(
+                fontSize: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            if (isDeepLink) ...[
+              RecommendedActionButton(
+                text: 'פתיחת קישור',
+                onPressed: () => _tryHandleDeepLink(query),
+                icon: FluentIcons.link_24_regular,
+              ),
+            ] else ...[
+              Text(
+                'ניתן לאתר גם טקסט ספציפי במאגר',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              RecommendedActionButton(
+                text: 'פתח חיפוש טקסט',
+                onPressed: () => _openTextSearch(query),
+                icon: FluentIcons.search_24_regular,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final focusRepository = context.read<FocusRepository>();
@@ -501,6 +620,11 @@ class _FindRefDialogState extends State<FindRefDialog> {
                       );
                     },
                     onSubmitted: (value) {
+                      // ניסיון לטפל בקישור ישיר — אם זה קישור, ייפתח ישירות
+                      if (_isDeepLinkText(value)) {
+                        _tryHandleDeepLink(value);
+                        return;
+                      }
                       // פתיחת המקור הנבחר בלחיצה על אנטר
                       if (refs.isNotEmpty) {
                         _openRef(refs[_selectedIndex]);
@@ -562,18 +686,13 @@ class _FindRefDialogState extends State<FindRefDialog> {
                 },
                 builder: (context, state) {
                   if (state is FindRefLoading) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const _DelayedLoader();
                   } else if (state is FindRefError) {
                     return Text('Error: ${state.message}');
                   } else if (state is FindRefSuccess && state.refs.isEmpty) {
-                    if (focusRepository.findRefSearchController.text.length >=
-                        3) {
-                      return const Center(
-                        child: Text(
-                          'אין תוצאות',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                      );
+                    final query = focusRepository.findRefSearchController.text;
+                    if (query.length >= 3) {
+                      return _buildEmptyState(context, query);
                     } else {
                       return const SizedBox.shrink();
                     }
@@ -697,5 +816,31 @@ class _FindRefDialogState extends State<FindRefDialog> {
         ),
       ],
     );
+  }
+}
+
+/// מציג spinner רק אחרי עיכוב קצר — מונע הבהוב על חיפושים מהירים.
+class _DelayedLoader extends StatefulWidget {
+  const _DelayedLoader();
+
+  @override
+  State<_DelayedLoader> createState() => _DelayedLoaderState();
+}
+
+class _DelayedLoaderState extends State<_DelayedLoader> {
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_visible) return const SizedBox.shrink();
+    return const Center(child: CircularProgressIndicator());
   }
 }

@@ -243,6 +243,16 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               ),
               textAlign: TextAlign.center,
             ),
+            const SizedBox(height: 16),
+            NeutralActionButton(
+              text: 'ערוך חיפוש',
+              onPressed: () {
+                setState(() {
+                  _showEditPanel = true;
+                });
+              },
+              icon: FluentIcons.edit_24_regular,
+            ),
           ],
         ),
       ),
@@ -415,7 +425,14 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                       Container(
                         clipBehavior: Clip.hardEdge,
                         decoration: const BoxDecoration(),
-                        child: TantivySearchResults(tab: widget.tab),
+                        child: TantivySearchResults(
+                          tab: widget.tab,
+                          onEditSearch: () {
+                            setState(() {
+                              _showEditPanel = true;
+                            });
+                          },
+                        ),
                       ),
                     ValueListenableBuilder(
                       valueListenable: widget.tab.isLeftPaneOpen,
@@ -626,6 +643,11 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                       decoration: const BoxDecoration(),
                                       child: TantivySearchResults(
                                         tab: widget.tab,
+                                        onEditSearch: () {
+                                          setState(() {
+                                            _showEditPanel = true;
+                                          });
+                                        },
                                       ),
                                     );
                                   },

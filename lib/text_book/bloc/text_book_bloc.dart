@@ -126,6 +126,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             SqliteDataProvider.instance.getBookQuickPreview,
         super(initialState) {
     on<LoadContent>(_onLoadContent);
+    on<UpdateResolvedBookId>(_onUpdateResolvedBookId);
     on<UpdateFontSize>(_onUpdateFontSize);
     on<ToggleLeftPane>(_onToggleLeftPane);
     on<ToggleSplitView>(_onToggleSplitView);
@@ -2285,6 +2286,56 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   Future<void> _enrichHeCategoriesInBackground(TextBook book) async {
-    await enrichHeCategories(book);
+    final enriched = await enrichHeCategories(book);
+    final heCategoriesChanged = enriched.heCategories != null &&
+        enriched.heCategories != book.heCategories;
+    final authorChanged =
+        enriched.author != null && enriched.author != book.author;
+    final heEraChanged = enriched.heEra != null && enriched.heEra != book.heEra;
+
+    if ((book.id == null && enriched.resolvedId != null) ||
+        heCategoriesChanged ||
+        authorChanged ||
+        heEraChanged) {
+      add(UpdateResolvedBookId(
+        bookTitle: book.title,
+        resolvedId: enriched.resolvedId,
+        heCategories: heCategoriesChanged ? enriched.heCategories : null,
+        author: authorChanged ? enriched.author : null,
+        heEra: heEraChanged ? enriched.heEra : null,
+      ));
+    }
+  }
+
+  void _onUpdateResolvedBookId(
+    UpdateResolvedBookId event,
+    Emitter<TextBookState> emit,
+  ) {
+    final current = state;
+    if (current is! TextBookLoaded) return;
+    if (current.book.title != event.bookTitle) return;
+
+    final needsIdUpdate = current.book.id == null && event.resolvedId != null;
+    final needsCategoriesUpdate = event.heCategories != null &&
+        event.heCategories != current.book.heCategories;
+    final needsAuthorUpdate =
+        event.author != null && event.author != current.book.author;
+    final needsHeEraUpdate =
+        event.heEra != null && event.heEra != current.book.heEra;
+
+    if (!needsIdUpdate &&
+        !needsCategoriesUpdate &&
+        !needsAuthorUpdate &&
+        !needsHeEraUpdate) {
+      return;
+    }
+
+    final updatedBook = current.book.copyWith(
+      id: needsIdUpdate ? event.resolvedId : null,
+      heCategories: needsCategoriesUpdate ? event.heCategories : null,
+      author: needsAuthorUpdate ? event.author : null,
+      heEra: needsHeEraUpdate ? event.heEra : null,
+    );
+    emit(current.copyWith(book: updatedBook));
   }
 }

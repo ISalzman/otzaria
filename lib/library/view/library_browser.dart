@@ -616,21 +616,26 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   // ── Deep link from search bar ─────────────────────────────────────────────
 
-  /// בודק אם מחרוזת היא קישור otzaria:// תקין וניתן לפענוח.
+  /// בודק אם מחרוזת היא קישור otzaria:// או zayit:// תקין וניתן לפענוח.
   static bool _isDeepLinkText(String text) {
-    final trimmed = text.trim();
-    if (!trimmed.toLowerCase().startsWith('otzaria://')) return false;
-    final uri = Uri.tryParse(trimmed);
+    final trimmed = text.trim().toLowerCase();
+    if (!trimmed.startsWith('otzaria://') && !trimmed.startsWith('zayit://')) {
+      return false;
+    }
+    final uri = Uri.tryParse(text.trim());
     if (uri == null) return false;
     return ExternalUriRouter.parseUri(uri) != null;
   }
 
-  /// בודק אם הטקסט שהוגש הוא קישור otzaria:// ומנתב אותו.
+  /// בודק אם הטקסט שהוגש הוא קישור otzaria:// או zayit:// ומנתב אותו.
   /// מחזיר true אם הטקסט טופל כקישור (ואז שדה החיפוש מנוקה).
   /// השדה מנוקה רק לאחר אימות הצלחת הטיפול — אם הקישור תקין תחבירית אך
   /// ה-bookId לא קיים בספרייה, השדה נשאר עם הטקסט שהמשתמש הדביק.
   Future<bool> _tryHandleDeepLink(BuildContext context, String text) async {
     if (!_isDeepLinkText(text)) return false;
+
+    final uri = Uri.tryParse(text.trim())!;
+    final normalized = ExternalUriRouter.normalizeUri(uri) ?? uri;
 
     // מעבירים את הטיפול ל-MainWindowScreenState שמכיל את כל הלוגיקה. רק אם
     // ההחזרה היא true (הספר אומת ונפתח) ננקה את שדה החיפוש.
@@ -638,7 +643,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     final focusRepository = context.read<FocusRepository>();
 
     final handled = await mainWindowScreenKey.currentState
-            ?.handleInternalDeepLink(text.trim()) ??
+            ?.handleInternalDeepLink(normalized.toString()) ??
         false;
 
     if (handled) {

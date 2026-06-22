@@ -21,9 +21,11 @@ import 'package:otzaria/widgets/controls/action_buttons.dart';
 
 class TantivySearchResults extends StatefulWidget {
   final SearchingTab tab;
+  final VoidCallback? onEditSearch;
   const TantivySearchResults({
     super.key,
     required this.tab,
+    this.onEditSearch,
   });
 
   @override
@@ -46,6 +48,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     required IconData icon,
     required String title,
     required String message,
+    bool showEditButton = false,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return Center(
@@ -77,6 +80,14 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
               ),
               textAlign: TextAlign.center,
             ),
+            if (showEditButton && widget.onEditSearch != null) ...[
+              const SizedBox(height: 16),
+              NeutralActionButton(
+                text: 'ערוך חיפוש',
+                onPressed: widget.onEditSearch!,
+                icon: FluentIcons.edit_24_regular,
+              ),
+            ],
           ],
         ),
       ),
@@ -251,6 +262,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         title: 'אין תוצאות',
         message:
             'נסה להרחיב קטגוריות, לשנות מצב חיפוש או לעדכן את מילות החיפוש.',
+        showEditButton: true,
       );
     }
 

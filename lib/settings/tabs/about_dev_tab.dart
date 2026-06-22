@@ -132,6 +132,7 @@ class AboutDevTab extends StatelessWidget {
       'url': 'https://github.com/NHLOCAL/Shamor-Zachor',
       'description': "מפתח 'שמור וזכור'",
     },
+    {'name': 'michaelush', 'url': 'https://github.com/mmichaelush'},
   ];
 
   static const _essentialPeople = <Map<String, String>>[
@@ -164,17 +165,6 @@ class AboutDevTab extends StatelessWidget {
       'url':
           'https://forum.otzaria.org/user/%D7%99%D7%94%D7%95%D7%93%D7%99-%D7%A6%D7%A2%D7%99%D7%A8',
     },
-    // {
-    //   'name': 'דורש טוב',  // כרגע לא רוצה
-    //   'url':
-    //       'https://forum.otzaria.org/user/%D7%93%D7%95%D7%A8%D7%A9-%D7%98%D7%95%D7%91',
-    // },
-    // {
-    //   'name': 'מ. פינק', // כרגע לא רוצה
-    // },
-    // {
-    //   'name': 'זקצ',
-    // },
     {
       'name': 'קטנטן', // ד. בנדל
       'url': 'https://forum.otzaria.org/user/%D7%A7%D7%98%D7%A0%D7%98%D7%9F',
@@ -183,9 +173,6 @@ class AboutDevTab extends StatelessWidget {
       'name': 'ד.', // דאנציג
       'url':
           'https://forum.otzaria.org/user/%D7%93%D7%90%D7%A0%D7%A6%D7%99%D7%92',
-    },
-    {
-      'name': 'י. א.', // ישי אשכנזי
     },
     {
       'name': '333',
@@ -210,6 +197,42 @@ class AboutDevTab extends StatelessWidget {
       'url':
           'https://otzaria.org/forum/user/%D7%9E%D7%99%D7%9B%D7%90%D7%9C%D7%95%D7%A9',
     },
+    {
+      'name': 'דורש טוב', // דורש טוב
+      'url':
+          'https://forum.otzaria.org/user/%D7%93%D7%95%D7%A8%D7%A9-%D7%98%D7%95%D7%91',
+    },
+    {
+      'name': 'משה הכהן', // משה הכהן
+      'url':
+          'https://otzaria.org/forum/user/%D7%9E%D7%A9%D7%94-%D7%94%D7%9B%D7%94%D7%9F',
+    },
+    {
+      'name': 'מ.ש.', // מ.ש.
+      'url': 'https://otzaria.org/forum/user/%D7%9E.%D7%A9.',
+    },
+    {
+      'name': 'D9', // מ.ש.
+      'url': 'https://otzaria.org/forum/user/d9',
+    },
+    {
+      'name': 'י. א.', // ישי אשכנזי
+    },
+    {
+      'name': 'שמח', // שמח
+    },
+    {
+      'name': 'שלום לעולם', // shalomlaolam?
+    },
+    {
+      'name': 'א.ט.פ.', // O.T.P.
+    },
+    // {
+    //   'name': 'מ. פינק', // כרגע לא רוצה
+    // },
+    // {
+    //   'name': 'זקצ',
+    // },
   ];
 
   // מהדירים שההדירו בין 5 ל-10 ספרים
@@ -237,6 +260,11 @@ class AboutDevTab extends StatelessWidget {
       'name': 'י. ד.', // יאיר דניאל
       'url':
           'https://forum.otzaria.org/user/%D7%99%D7%90%D7%99%D7%A8-%D7%93%D7%A0%D7%99%D7%90%D7%9C',
+    },
+    {
+      'name': 'פלמנמוני', // פלמנמוני
+      'url':
+          'https://otzaria.org/forum/user/%D7%A4%D7%9C%D7%9E%D7%A0%D7%9E%D7%95%D7%A0%D7%99',
     },
     {
       'name': 'ש. נ.', // שילה נוי
