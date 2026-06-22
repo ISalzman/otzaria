@@ -57,7 +57,6 @@ Future<EnrichedBookData?> _tryLoadFromDatabase(TextBook book) async {
     resolvedBook.repository,
     resolvedBook.book.categoryId,
   );
-  debugPrint('📚 Background: נטען heCategories מה-DB: "$heCategories"');
   return (
     resolvedId: resolvedBook.book.id,
     heCategories: heCategories,
@@ -101,7 +100,6 @@ Future<EnrichedBookData?> _tryLoadFromMetadata(TextBook book) async {
   final heEra = bookMetadata['heEra'] as String?;
 
   if (heCategories != null && heCategories.isNotEmpty) {
-    debugPrint('📚 Background: נטען heCategories מ-metadata: "$heCategories"');
     return (
       resolvedId: null,
       heCategories: heCategories,
@@ -124,7 +122,6 @@ Future<EnrichedBookData?> _tryLoadFromPath(TextBook book) async {
     if (otzariaIndex >= 0 && otzariaIndex < pathParts.length - 2) {
       heCategories =
           pathParts.sublist(otzariaIndex + 1, pathParts.length - 1).join(', ');
-      debugPrint('📚 Background: נטען heCategories מהנתיב: "$heCategories"');
     }
   } else {
     final normalized = bookPath
@@ -134,8 +131,6 @@ Future<EnrichedBookData?> _tryLoadFromPath(TextBook book) async {
         .join(', ');
     if (normalized.isNotEmpty) {
       heCategories = normalized;
-      debugPrint(
-          '📚 Background: נטען heCategories מנתיב קטגוריה: "$heCategories"');
     }
   }
 
