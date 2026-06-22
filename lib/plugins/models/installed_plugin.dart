@@ -55,8 +55,10 @@ class InstalledPlugin {
   bool get allowsOrderBeforeBuiltIns =>
       manifest.allowOrderBeforeBuiltIns && allowOrderBeforeBuiltInsGranted;
 
-  bool get isDevelopment => sourceType == 'development';
-  String get resolvedRootPath => isDevelopment ? devRootPath! : installPath;
+  bool get isLocalhostDev => sourceType == 'localhost_dev';
+  bool get isDevelopment => sourceType == 'development' || isLocalhostDev;
+  String get resolvedRootPath =>
+      sourceType == 'development' ? devRootPath! : installPath;
 
   /// האם התוסף מצהיר על שימוש ברשת. תוסף כזה מוסתר מהממשק כאשר אוצריא נמצאת
   /// במצב 'מנותק' (`SettingsState.isOfflineMode`).

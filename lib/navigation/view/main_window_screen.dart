@@ -2495,6 +2495,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           BlocListener<PluginSystemBloc, PluginSystemState>(
             listenWhen: (_, current) =>
                 current is PluginSystemInstallRequiresPermissions ||
+                current is PluginSystemDevInstallRequiresPermissions ||
                 current is PluginSystemOverwriteRequired,
             listener: (context, state) {
               if (state is PluginSystemInstallRequiresPermissions) {
@@ -2510,6 +2511,29 @@ class MainWindowScreenState extends State<MainWindowScreen>
                       previousAllowOrderBeforeBuiltInsGranted:
                           state.previousAllowOrderBeforeBuiltInsGranted,
                     ),
+                  ),
+                );
+              } else if (state is PluginSystemDevInstallRequiresPermissions) {
+                final bloc = context.read<PluginSystemBloc>();
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => PluginInstallScreen(
+                    manifest: state.manifest,
+                    tempDirPath: '',
+                    previousVersion: state.previousVersion,
+                    previousAllowOrderBeforeBuiltInsGranted:
+                        state.previousAllowOrderBeforeBuiltInsGranted,
+                    onConfirm: (perms, allowOrder) => bloc.add(
+                      ConfirmDevPluginInstall(
+                        manifest: state.manifest,
+                        sourcePath: state.sourcePath,
+                        sourceType: state.sourceType,
+                        grantedPermissions: perms,
+                        allowOrderBeforeBuiltInsGranted: allowOrder,
+                      ),
+                    ),
+                    onCancel: () => bloc.add(LoadPlugins()),
                   ),
                 );
               } else if (state is PluginSystemOverwriteRequired) {

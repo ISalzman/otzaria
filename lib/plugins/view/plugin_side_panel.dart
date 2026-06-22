@@ -13,6 +13,8 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 class PluginSidePanel extends StatelessWidget {
   final Function(InstalledPlugin)? onPluginSelected;
@@ -49,6 +51,22 @@ class PluginSidePanel extends StatelessWidget {
             .read<PluginSystemBloc>()
             .add(LoadDevelopmentPluginRequested(rootPath));
       }
+    }
+  }
+
+  Future<void> _loadLocalhostPlugin(BuildContext context) async {
+    final bloc = context.read<PluginSystemBloc>();
+    final url = await showInputDialog(
+      context: context,
+      title: 'טעינת תוסף מ-localhost',
+      labelText: 'Base URL',
+      hintText: 'http://localhost:3000',
+      initialValue: 'http://localhost:3000',
+      cancelText: 'ביטול',
+      confirmText: 'טען',
+    );
+    if (url != null && url.isNotEmpty) {
+      bloc.add(LoadLocalhostPluginRequested(url));
     }
   }
 
@@ -97,7 +115,7 @@ class PluginSidePanel extends StatelessWidget {
             children: [
               if (onClose != null)
                 IconButton(
-                  icon: const Icon(FluentIcons.dismiss_24_regular),
+                  icon: RtlIcon(FluentIcons.dismiss_24_regular),
                   tooltip: 'סגור',
                   onPressed: onClose,
                   iconSize: 20,
@@ -109,19 +127,25 @@ class PluginSidePanel extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: const Icon(FluentIcons.add_24_regular),
+                icon: RtlIcon(FluentIcons.add_24_regular),
                 tooltip: 'התקן תוסף חדש',
                 onPressed: () => _installPlugin(context),
               ),
               if (showDevTools)
                 IconButton(
-                  icon: const Icon(FluentIcons.folder_add_24_regular),
+                  icon: RtlIcon(FluentIcons.folder_add_24_regular),
                   tooltip: 'טען תיקיית תוסף',
                   onPressed: () => _loadDevPlugin(context),
                 ),
               if (showDevTools)
                 IconButton(
-                  icon: const Icon(FluentIcons.arrow_sync_24_regular),
+                  icon: RtlIcon(FluentIcons.globe_add_24_regular),
+                  tooltip: 'טען תוסף מ-localhost',
+                  onPressed: () => _loadLocalhostPlugin(context),
+                ),
+              if (showDevTools)
+                IconButton(
+                  icon: RtlIcon(FluentIcons.arrow_sync_24_regular),
                   tooltip: 'רענן תוספים',
                   onPressed: () =>
                       context.read<PluginSystemBloc>().add(RefreshPlugins()),
@@ -265,7 +289,7 @@ class _PluginListTile extends StatelessWidget {
       leading: Stack(
         clipBehavior: Clip.none,
         children: [
-          Icon(fluentIconFromName(plugin.manifest.toolTabIconName) ??
+          RtlIcon(fluentIconFromName(plugin.manifest.toolTabIconName) ??
               FluentIcons.puzzle_piece_24_regular),
           if (plugin.isDevelopment)
             Positioned(
@@ -299,7 +323,7 @@ class _PluginListTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: const Icon(FluentIcons.settings_24_regular),
+            icon: RtlIcon(FluentIcons.settings_24_regular),
             tooltip: 'הגדרות תוסף',
             onPressed: () async {
               final result = await showDialog<bool>(
@@ -321,7 +345,7 @@ class _PluginListTile extends StatelessWidget {
             },
           ),
           IconButton(
-            icon: Icon(
+            icon: RtlIcon(
               plugin.pinned
                   ? FluentIcons.pin_24_filled
                   : FluentIcons.pin_24_regular,
@@ -349,9 +373,9 @@ class _PluginListTile extends StatelessWidget {
               cursor: SystemMouseCursors.grab,
               child: Tooltip(
                 message: 'גרור ושחרר לסידור מחדש',
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4.0),
-                  child: Icon(FluentIcons.re_order_dots_vertical_24_regular),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: RtlIcon(FluentIcons.re_order_dots_vertical_24_regular),
                 ),
               ),
             ),
@@ -395,7 +419,7 @@ class _DragFeedback extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(FluentIcons.puzzle_piece_24_regular),
+            RtlIcon(FluentIcons.puzzle_piece_24_regular),
             const SizedBox(width: 8),
             Text(
               plugin.name,
