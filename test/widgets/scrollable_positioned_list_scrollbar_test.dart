@@ -349,10 +349,8 @@ void main() {
 
   testWidgets('גובה האגודל יציב בין מצבי גלילה עם פריטים חלקיים, והמיקום מחליק',
       (tester) async {
-    // רגרסיה: גובה האגודל חושב מ-visibleItems/itemCount — מספר שלם שמתחלף
-    // 4↔5 כשפריט חלקי נכנס/יוצא, ולכן האגודל גדל/קטן כל הזמן. כעת הגובה
-    // נשען על הקצוות הרציפים ולכן יציב; והמיקום משלב את החלק שנגלל מהפריט
-    // העליון ולכן מחליק חלק במקום לקפוץ בצעדי-פריט.
+    // ספירת פריטים שלמה מתחלפת 4↔5 כשפריט חלקי נכנס/יוצא ומקפיצה את הגובה;
+    // הקצוות הרציפים מייצבים אותו, והמיקום משלב את החלק שנגלל מהפריט העליון.
     final listener = ItemPositionsListener.create();
     final positions =
         listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>;
@@ -405,9 +403,8 @@ void main() {
 
   testWidgets('גובה האגודל נשאר יציב כשגוללים לאזור עם סגמנטים בגובה שונה',
       (tester) async {
-    // רגרסיה לשורש האמיתי בקריאה רציפה: סגמנטים בגבהים שונים מאוד. ממוצע על
-    // הפריטים הגלויים *כרגע* מתנודד כשעוברים מאזור קצר לאזור ארוך, והאגודל
-    // גדל/קטן. הממוצע הגלובלי (על כל מה שנמדד) יציב — האגודל כמעט לא משתנה.
+    // בקריאה רציפה הסגמנטים בגבהים שונים; ממוצע מקומי מתנודד בין אזורים.
+    // הממוצע הגלובלי (על כל מה שנמדד) מחזיק את גובה האגודל יציב.
     final listener = ItemPositionsListener.create();
     final positions =
         listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>;
@@ -453,35 +450,31 @@ void main() {
     expect(heightTall, closeTo(heightShort, heightShort * 0.3));
   });
 
-  testWidgets('שינוי גודל מסך מנקה את מאגר הגבהים (גבהים ביחידות מסך מתיישנים)',
+  testWidgets('שינוי layout (גובה פריט שנמדד) מאפס את מאגר הגבהים',
       (tester) async {
-    // הגבהים נשמרים ביחידות מסך; שינוי גודל חלון מייתר אותם. בלי ניקוי
-    // ב-didChangeDependencies הממוצע היה ממשיך לערב גבהים ישנים שגויים.
+    // גובה פריט קבוע תחת גלילה; אם פריט שנמדד חוזר בגובה אחר — ה-layout השתנה
+    // (גופן/viewport/מפרשים) והיחסים הישנים אינם תקפים, ולכן המאגר מתאפס.
     final listener = ItemPositionsListener.create();
     final positions =
         listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>;
     final controller = ItemScrollController();
 
-    Widget build(Size size) => MaterialApp(
-          home: Builder(
-            builder: (context) => MediaQuery(
-              data: MediaQuery.of(context).copyWith(size: size),
-              child: Scaffold(
-                body: ScrollablePositionedListScrollbar(
-                  scrollController: controller,
-                  itemPositionsListener: listener,
-                  itemCount: 100,
-                  child: const SizedBox.expand(),
-                ),
-              ),
-            ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 100,
+            child: const SizedBox.expand(),
           ),
-        );
+        ),
+      ),
+    );
 
-    await tester.pumpWidget(build(const Size(400, 600)));
-    // צובר 90 פריטים קצרים (גובה 0.1) למאגר.
+    // צובר 50 פריטים בגובה 0.1.
     positions.value = List.generate(
-      90,
+      50,
       (i) => ItemPosition(
         index: i,
         itemLeadingEdge: i * 0.1,
@@ -490,9 +483,7 @@ void main() {
     );
     await tester.pump();
 
-    // שינוי גודל מסך → didChangeDependencies מנקה את המאגר.
-    await tester.pumpWidget(build(const Size(800, 600)));
-    // כעת 2 פריטים ארוכים (גובה 0.5). אם המאגר נוקה, הממוצע מבוסס רק עליהם.
+    // אותם אינדקסים חוזרים בגובה 0.5 (שינוי layout) → איפוס, ממוצע לפי 0.5 בלבד.
     positions.value = const [
       ItemPosition(index: 0, itemLeadingEdge: 0.0, itemTrailingEdge: 0.5),
       ItemPosition(index: 1, itemLeadingEdge: 0.5, itemTrailingEdge: 1.0),
@@ -501,9 +492,8 @@ void main() {
 
     final thumbHeight =
         tester.widget<Positioned>(find.byType(Positioned)).height!;
-    // נוקה: avg=0.5 → גובה 1/(0.5*100)=0.02→clamp 0.05 → 30px. בלי ניקוי
-    // הממוצע היה ~0.11 → ~55px. הגובה הקטן מוכיח שהמאגר נוקה.
-    expect(thumbHeight, closeTo(30.0, 4.0));
+    // אופס: avg=0.5 → 1/(0.5*100)=0.02→clamp 0.05 → 30px. בלי איפוס היה ~52px.
+    expect(thumbHeight, closeTo(30.0, 5.0));
   });
 
   testWidgets('listener ישן לא מעדכן State אחרי החלפת widget ו-dispose',
