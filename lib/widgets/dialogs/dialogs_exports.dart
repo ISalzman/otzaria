@@ -3,14 +3,14 @@
 // Barrel export לכל דיאלוגי האפליקציה.
 //
 // ─── דיאלוגי אישור/ביטול ─────────────────────────────────────────────────────
-// [ConfirmationDialog] / [showConfirmationDialog]     → confirmation_dialog.dart
-//   שימוש: דיאלוג עם [isDangerous], [confirmColor], הדגשת פוקוס.
+// [AppDialog.singleAction] / [showSingleActionDialog] → app_dialogs.dart
+// [AppDialog.twoActions]   / [showTwoActionsDialog]   → app_dialogs.dart
+// [AppDialog.warning]      / [showWarningDialog]      → app_dialogs.dart
+// [showDbCopyRequiredDialog]                           → app_dialogs.dart
+//   שימוש: דיאלוגים M3 עם ניווט מקלדת והדגשת פוקוס.
 //
-// [SingleActionDialog] / [showSingleActionDialog]     → dialogs/app_dialogs.dart
-// [TwoActionsDialog]   / [showTwoActionsDialog]       → dialogs/app_dialogs.dart
-// [WarningDialog]      / [showWarningDialog]          → dialogs/app_dialogs.dart
-// [showDbCopyRequiredDialog]                           → dialogs/app_dialogs.dart
-//   שימוש: דיאלוגים M3 FilledButton לפעולות כלליות.
+// [ConfirmationDialog] / [showConfirmationDialog]     → confirmation_dialog.dart
+//   wrapper דק מעל AppDialog — תומך ב-[isDangerous].
 //
 // ─── דיאלוגי קלט ─────────────────────────────────────────────────────────────
 // [InputDialog] / [showInputDialog]                   → input_dialog.dart
