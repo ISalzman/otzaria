@@ -46,6 +46,7 @@ import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
+import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_shortcut_service.dart';
 import 'package:otzaria/plugins/services/plugin_path_safety.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
@@ -93,8 +94,16 @@ const _settingsBlocklist = {
 // ===================================================================
 Map<String, dynamic> buildThemePayload(BuildContext context) {
   final theme = Theme.of(context);
-  final cs = theme.colorScheme;
-  final isDark = theme.brightness == Brightness.dark;
+  return buildThemePayloadFromScheme(theme.colorScheme,
+      isDark: theme.brightness == Brightness.dark);
+}
+
+/// בונה את ה-payload מ-[ColorScheme] מפורש במקום מ-`Theme.of(context)`.
+/// נצרך כשמדווחים על שינוי theme בזמן אמת: ה-`MaterialApp` מתעדכן רק ב-frame
+/// הבא, כך ש-`Theme.of(context)` עדיין מחזיר את הצבעים הישנים. בנייה מ-scheme
+/// שמחושב ישירות מההגדרות מבטיחה שהתוסף יקבל את הצבעים הנכונים.
+Map<String, dynamic> buildThemePayloadFromScheme(ColorScheme cs,
+    {required bool isDark}) {
   String hex(Color c) =>
       '#${c.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
 
@@ -229,6 +238,14 @@ class PluginBridgeDependencies {
   /// קיים בעיקר כדי לאפשר הזרקה בבדיקות (בחירת תיקייה אמיתית אינה זמינה בהן).
   final Future<String?> Function({String? title})? pickFolder;
 
+  /// פותח דיאלוג בחירת קובץ ומחזיר את הנתיב שנבחר, או `null` אם המשתמש ביטל.
+  /// אופציונלי — אם לא סופק, האדפטר משתמש ב-[FilePicker.pickFiles].
+  /// קיים בעיקר כדי לאפשר הזרקה בבדיקות (בחירת קובץ אמיתית אינה זמינה בהן).
+  final Future<String?> Function({
+    List<String>? allowedExtensions,
+    String? title,
+  })? pickFile;
+
   const PluginBridgeDependencies({
     required this.historyBloc,
     required this.tabsBloc,
@@ -243,6 +260,7 @@ class PluginBridgeDependencies {
     required this.showWarningDialog,
     this.requestPluginInstall,
     this.pickFolder,
+    this.pickFile,
   });
 }
 
@@ -266,6 +284,7 @@ class PluginBridgeAdapter {
     PluginFileDownloadService? fileDownloadService,
     PluginFsService? fsService,
     PluginShortcutService? shortcutService,
+    PluginFileServer? fileServer,
   })  : _dependencies = dependencies,
         _pluginRepo = pluginRepository ?? PluginRegistryRepository(),
         _notificationService = notificationService ?? NotificationService(),
@@ -273,7 +292,12 @@ class PluginBridgeAdapter {
         _networkFetchService = networkFetchService,
         _fileDownloadService = fileDownloadService,
         _pluginFsService = fsService,
-        _pluginShortcutService = shortcutService;
+        _pluginShortcutService = shortcutService,
+        _fileServer = fileServer ?? PluginFileServer.instance;
+
+  // שרת הקבצים הפנימי שמגיש קבצים אישיים ל-WebView (מופע יחיד לכל האפליקציה
+  // כברירת מחדל; ניתן להזרקה לבדיקות).
+  final PluginFileServer _fileServer;
 
   // שירות הורדת קבצים — מופע יחיד לכל adapter, נוצר עם השימוש הראשון
   // ומשוחרר ב-dispose (אחרת כל הורדה תדליף client ורישום ב-registry).
@@ -973,8 +997,158 @@ class PluginBridgeAdapter {
         }
         await _fsService.deleteFile(path);
         return true;
+      case 'pickUserFile':
+        return await _pickUserFile(args);
+      case 'resolveFileUrl':
+        return await _resolveUserFileUrl(args);
+      case 'readTextFile':
+        return await _readUserTextFile(args);
+      case 'revokeFile':
+        final token = args['token'] as String?;
+        if (token == null) {
+          throw Exception('error.invalid_params: token required');
+        }
+        _fileServer.revoke(token);
+        await _removeUserFileGrant(token);
+        return true;
       default:
         throw Exception('Unknown action in fs: $action');
+    }
+  }
+
+  /// בורר הקבצים המוגדר כברירת מחדל — דיאלוג המערכת דרך [FilePicker].
+  Future<String?> _defaultPickFile({
+    List<String>? allowedExtensions,
+    String? title,
+  }) async {
+    final hasExtensions =
+        allowedExtensions != null && allowedExtensions.isNotEmpty;
+    final result = await FilePicker.pickFiles(
+      dialogTitle: title,
+      lockParentWindow: true,
+      type: hasExtensions ? FileType.custom : FileType.any,
+      allowedExtensions: hasExtensions ? allowedExtensions : null,
+    );
+    return result?.files.single.path;
+  }
+
+  /// `fs.pickUserFile` — פותח דיאלוג בחירת קובץ, רושם אותו כקובץ מאושר ומחזיר
+  /// token ו-URL ש-WebView התוסף מורשה לטעון (PDF ב-`<iframe>`/PDF.js, טקסט
+  /// כ-`fetch`). הבייטים אינם חוצים את גשר ה-JS. ביטול מחזיר `{cancelled: true}`.
+  Future<Map<String, dynamic>> _pickUserFile(Map<String, dynamic> args) async {
+    final picker = _dependencies.pickFile ?? _defaultPickFile;
+    final rawExt = args['extensions'];
+    final extensions = rawExt is List
+        ? rawExt
+            .map((e) => e.toString().replaceAll('.', '').toLowerCase())
+            .where((e) => e.isNotEmpty)
+            .toList()
+        : null;
+    final path = await picker(
+        allowedExtensions: extensions, title: args['title'] as String?);
+    if (path == null || path.isEmpty) {
+      return {'cancelled': true};
+    }
+    final canonical = canonicalizeNearestExisting(path);
+    if (canonical == null || !File(canonical).existsSync()) {
+      throw Exception('error.not_found: selected file does not exist');
+    }
+    final registration = await _fileServer.register(
+      pluginId: plugin.pluginId,
+      canonicalPath: canonical,
+    );
+    await _saveUserFileGrant(registration.token, canonical);
+    return {
+      'cancelled': false,
+      'token': registration.token,
+      'url': registration.url,
+      'name': p.basename(canonical),
+      'size': await File(canonical).length(),
+    };
+  }
+
+  /// `fs.resolveFileUrl` — בונה מחדש URL טרי לקובץ שכבר אושר (לפי token שהתוסף
+  /// שמר). נצרך אחרי reload, כשהפורט של השרת השתנה ורישום הזיכרון אבד.
+  Future<Map<String, dynamic>> _resolveUserFileUrl(
+      Map<String, dynamic> args) async {
+    final token = args['token'] as String?;
+    if (token == null) throw Exception('error.invalid_params: token required');
+    final canonical = await _resolveGrantedFilePath(token);
+    final url = await _fileServer.registerWithToken(
+      pluginId: plugin.pluginId,
+      canonicalPath: canonical,
+      token: token,
+    );
+    return {
+      'token': token,
+      'url': url,
+      'name': p.basename(canonical),
+      'size': await File(canonical).length(),
+    };
+  }
+
+  /// `fs.readTextFile` — מחזיר את תוכן הקובץ המאושר כמחרוזת (לקבצי טקסט קטנים).
+  /// מוגבל ל-10MB כדי לא לתקוע את הגשר; לקבצים גדולים יש להשתמש ב-`resolveFileUrl`.
+  Future<String> _readUserTextFile(Map<String, dynamic> args) async {
+    final token = args['token'] as String?;
+    if (token == null) throw Exception('error.invalid_params: token required');
+    final canonical = await _resolveGrantedFilePath(token);
+    final file = File(canonical);
+    const maxTextBytes = 10 * 1024 * 1024;
+    if (await file.length() > maxTextBytes) {
+      throw Exception('error.too_large: file exceeds 10MB text limit');
+    }
+    return file.readAsString();
+  }
+
+  /// פותר את הנתיב הקנוני של קובץ מאושר לפי [token], או זורק `error.not_found`
+  /// אם ה-token לא מוכר או שהקובץ נמחק (ומנקה אז את ה-grant).
+  Future<String> _resolveGrantedFilePath(String token) async {
+    final stored = await _loadUserFileGrant(token);
+    if (stored == null) {
+      throw Exception('error.not_found: unknown file token');
+    }
+    final canonical = canonicalizeNearestExisting(stored);
+    if (canonical == null || !File(canonical).existsSync()) {
+      await _removeUserFileGrant(token);
+      throw Exception('error.not_found: file no longer exists');
+    }
+    return canonical;
+  }
+
+  // רישומי הקבצים המאושרים נשמרים ב-KV (`_internal/user_file_grants`) כמיפוי
+  // token→נתיב, כך שהתוסף שומר אצלו רק token אטום וה-grant שורד reload.
+  static const String _userFileGrantsKey = 'user_file_grants';
+
+  Future<Map<String, dynamic>> _readUserFileGrants() async {
+    final raw = await _pluginRepo.getKV(
+        plugin.pluginId, '_internal', _userFileGrantsKey);
+    if (raw == null) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map<String, dynamic> ? decoded : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> _saveUserFileGrant(String token, String path) async {
+    final grants = await _readUserFileGrants();
+    grants[token] = path;
+    await _pluginRepo.setKV(
+        plugin.pluginId, '_internal', _userFileGrantsKey, jsonEncode(grants));
+  }
+
+  Future<String?> _loadUserFileGrant(String token) async {
+    final value = (await _readUserFileGrants())[token];
+    return value is String ? value : null;
+  }
+
+  Future<void> _removeUserFileGrant(String token) async {
+    final grants = await _readUserFileGrants();
+    if (grants.remove(token) != null) {
+      await _pluginRepo.setKV(
+          plugin.pluginId, '_internal', _userFileGrantsKey, jsonEncode(grants));
     }
   }
 

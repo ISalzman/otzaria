@@ -89,6 +89,12 @@ void main() {
         expect(bloc.state.bookmarks.first.ref, 'בראשית א');
       });
 
+      test('מגדיר createdAt בסימנייה חדשה', () async {
+        final bloc = await _makeBloc();
+        bloc.addBookmark(ref: 'בראשית א', book: _book(), index: 0);
+        expect(bloc.state.bookmarks.first.createdAt, isNotNull);
+      });
+
       test('לא מוסיף סימנייה כפולה (אותו ספר + אותו index) ומחזיר false',
           () async {
         final bloc = await _makeBloc(initial: [_bookmark(ref: 'בראשית א')]);
@@ -180,6 +186,17 @@ void main() {
         bloc.addBookmark(ref: 'בראשית א', book: _book(), index: 0);
         bloc.addBookmark(ref: 'שמות א', book: _book(title: 'ספר ב'), index: 5);
         expect(bloc.state.bookmarks.length, 2);
+      });
+
+      test('שומר label בסימנייה חדשה', () async {
+        final bloc = await _makeBloc();
+        bloc.addBookmark(
+          ref: 'בראשית א',
+          book: _book(),
+          index: 0,
+          label: 'בראשית ברא אלהים',
+        );
+        expect(bloc.state.bookmarks.first.label, 'בראשית ברא אלהים');
       });
 
       test('אותו ספר + אותו index אבל targetKind שונה — מותר (לא כפולה)',
@@ -277,6 +294,33 @@ void main() {
         ]);
         bloc.removeBookmark(2);
         expect(bloc.state.bookmarks.map((b) => b.ref).toList(), ['א', 'ב']);
+      });
+    });
+
+    group('updateBookmarkLabel', () {
+      test('מעדכן את ה-label של סימנייה קיימת', () async {
+        final bloc = await _makeBloc(initial: [_bookmark(ref: 'בראשית א')]);
+        bloc.updateBookmarkLabel(0, 'תיאור חדש');
+        expect(bloc.state.bookmarks.first.label, 'תיאור חדש');
+      });
+
+      test('label ריק מאפס לברירת המחדל (null)', () async {
+        final bloc = await _makeBloc(initial: [
+          Bookmark(
+            ref: 'בראשית א',
+            book: _book(),
+            index: 0,
+            label: 'תיאור קיים',
+          ),
+        ]);
+        bloc.updateBookmarkLabel(0, '   ');
+        expect(bloc.state.bookmarks.first.label, isNull);
+      });
+
+      test('אינדקס מחוץ לתחום לא משנה דבר', () async {
+        final bloc = await _makeBloc(initial: [_bookmark(ref: 'בראשית א')]);
+        bloc.updateBookmarkLabel(5, 'תיאור');
+        expect(bloc.state.bookmarks.first.label, isNull);
       });
     });
 
@@ -468,6 +512,28 @@ void main() {
       };
       final bm = Bookmark.fromJson(json);
       expect(bm.targetKind, BookmarkTargetKind.book);
+    });
+
+    test('toJson/fromJson שומרים createdAt', () {
+      final created = DateTime(2026, 6, 21, 10, 30);
+      final original = Bookmark(
+        ref: 'א',
+        book: _book(),
+        index: 0,
+        createdAt: created,
+      );
+      final restored = Bookmark.fromJson(original.toJson());
+      expect(restored.createdAt, created);
+    });
+
+    test('fromJson מטפל ב-createdAt חסר (ברירת מחדל null)', () {
+      final json = {
+        'ref': 'א',
+        'index': 0,
+        'book': _book().toJson(),
+      };
+      final bm = Bookmark.fromJson(json);
+      expect(bm.createdAt, isNull);
     });
   });
 }

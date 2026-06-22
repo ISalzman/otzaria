@@ -68,6 +68,37 @@ const Set<String> _githubReleaseCdnHosts = <String>{
   'release-assets.githubusercontent.com',
 };
 
+/// כתובות loopback מקומיות — שירותי AI מקומיים (Ollama / LM Studio) ועוד.
+const Set<String> _loopbackHosts = <String>{'localhost', '127.0.0.1', '::1'};
+
+/// בודקת האם [host] הוא כתובת loopback מקומית.
+bool isLoopbackHost(String host) => _loopbackHosts.contains(host.toLowerCase());
+
+/// מחזירה את הצהרת ה-loopback מתוך [allowlist] שמתירה את [uri], או `null`.
+///
+/// מתאימה רק כאשר [uri] עצמו הוא loopback מקומי (http/https). כל ערך הצהרה:
+/// - host בלבד (`127.0.0.1` / `localhost`) — מתיר כל פורט/נתיב על אותו host.
+/// - URL מלא (`http://127.0.0.1:11434`) — מתיר רק את אותו origin ונתיביו
+///   (התאמת prefix רגילה, כולל פורט), כך שפורט אחר על אותו host נחסם.
+String? matchingLoopbackPrefix(Uri uri, Iterable<String> allowlist) {
+  if (uri.scheme != 'http' && uri.scheme != 'https') return null;
+  if (!isLoopbackHost(uri.host)) return null;
+
+  final requestHost = uri.host.toLowerCase();
+  for (final raw in allowlist) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) continue;
+    if (isLoopbackHost(trimmed)) {
+      if (trimmed.toLowerCase() == requestHost) return raw;
+      continue;
+    }
+    if (matchingNetworkAllowlistPrefix(uri, <String>[trimmed]) != null) {
+      return raw;
+    }
+  }
+  return null;
+}
+
 /// מחלץ מתוך קובץ Dart את הערכים של `pluginNetworkAllowlist`.
 ///
 /// משמש לקריאת קובץ ה-allowlist הרשמי מהריפו של אוצריא ב-GitHub, בלי

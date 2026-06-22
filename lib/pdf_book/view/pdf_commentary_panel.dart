@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -25,6 +26,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
+import 'package:otzaria/widgets/text/selection_copy_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
@@ -33,12 +35,24 @@ import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/printing/commentary_print_builder.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
-import 'package:pdfrx/pdfrx.dart';
 import 'dart:async'; // Added for Timer
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 /// Type alias לתאימות - משתמש ב-LinkGroup מה-Service
 typedef CommentaryGroup = LinkGroup;
+
+/// האם קישור (לפי [linkIndex1]) בתחום המוצג: בטווח הראשי [startLine]–[endLine]
+/// או באחת השורות הנוספות של ריבוי-הבחירה ([extraLineIndices], Ctrl+לחיצה).
+@visibleForTesting
+bool pdfLinkInVisibleScope(
+  int linkIndex1,
+  int startLine,
+  int endLine,
+  Set<int>? extraLineIndices,
+) {
+  if (linkIndex1 >= startLine && linkIndex1 <= endLine) return true;
+  return extraLineIndices?.contains(linkIndex1) ?? false;
+}
 
 /// מקבץ רשימת קישורים לקבוצות לפי שם הספר (רק קטעים רצופים)
 /// משתמש ב-CommentaryService
@@ -74,6 +88,10 @@ class PdfCommentaryPanel extends StatefulWidget {
   final int? lineStartOverride;
   final int? lineEndOverride;
 
+  /// שורות נוספות (לא רצופות) להצגת מפרשים — ריבוי-בחירה ב'ניווט' (Ctrl+לחיצה).
+  /// כשמסופק, קישור נכלל אם הוא בטווח הראשי או ש-index1 שלו נמצא בקבוצה זו.
+  final Set<int>? extraLineIndices;
+
   /// חיפוש חיצוני — כשמסופק, מסתיר שורת חיפוש פנימית
   final TextEditingController? externalSearchController;
   final ValueNotifier<int>? externalTotalResultsNotifier;
@@ -103,6 +121,7 @@ class PdfCommentaryPanel extends StatefulWidget {
     this.onSelectCommentatorsRequested,
     this.lineStartOverride,
     this.lineEndOverride,
+    this.extraLineIndices,
     this.externalSearchController,
     this.externalTotalResultsNotifier,
     this.externalCurrentIndexNotifier,
@@ -499,20 +518,24 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   /// עוטף תוכן ב-SelectionArea (לבחירת טקסט) + מעקב כיוון גרירה ל-RTL.
+  /// יירוט Ctrl+C ממוקם *מעל* ה-SelectionArea — שם מנגנון ה-override של
+  /// CopySelectionTextIntent מאתר אותו (מתחתיו הוא נשאר בלתי-נראה).
   Widget _wrapWithSelection(Widget child) {
-    return RtlSelectionShortcuts(
-      child: SelectionArea(
-        contextMenuBuilder: (context, _) => const SizedBox.shrink(),
-        onSelectionChanged: (selection) {
-          trackRtlSelection(selection?.plainText);
-          if (rtlSelectionPriming) return;
-          if (selection != null && selection.plainText.isNotEmpty) {
+    return SelectionCopyShortcuts(
+      onCopy: _copyFormattedText,
+      child: RtlSelectionShortcuts(
+        child: SelectionArea(
+          contextMenuBuilder: (context, _) => const SizedBox.shrink(),
+          onSelectionChanged: (selection) {
+            trackRtlSelection(selection?.plainText);
+            if (rtlSelectionPriming) return;
+            final text = selection?.plainText ?? '';
             setState(() {
-              _savedSelectedText = selection.plainText;
+              _savedSelectedText = text.isNotEmpty ? text : null;
             });
-          }
-        },
-        child: child,
+          },
+          child: child,
+        ),
       ),
     );
   }
@@ -626,13 +649,12 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) setState(() {});
           });
-          final settingsBloc = context.read<SettingsBloc>();
-          if (settingsBloc.state.enablePerBookSettings) {
-            final settings = PdfBookPerBookSettings(
-              activeCommentators: List.from(widget.tab.activeCommentators),
-            );
-            await settings.save(widget.tab.book.title);
-          }
+          // שמירה פר-ספר תמיד (לא תלוי ב-enablePerBookSettings) כדי שהבחירה
+          // תיטען בכל פתיחה.
+          final settings = PdfBookPerBookSettings(
+            activeCommentators: List.from(widget.tab.activeCommentators),
+          );
+          await settings.save(widget.tab.book);
         },
       ),
     );
@@ -1294,11 +1316,16 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                         return BlocBuilder<SettingsBloc, SettingsState>(
                           builder: (context, settingsState) {
                             return Text(
-                              utils.stripHtmlIfNeeded(snapshot.data ?? ''),
+                              utils.stripHtmlPreservingBreaks(
+                                  snapshot.data ?? ''),
+                              textAlign: TextAlign.justify,
                               style: TextStyle(
                                 fontSize: settingsState.commentatorsFontSize,
                                 fontFamily:
                                     settingsState.commentatorsFontFamily,
+                                fontWeight: settingsState.commentatorsFontBold
+                                    ? FontWeight.bold
+                                    : null,
                               ),
                             );
                           },
@@ -1322,8 +1349,11 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       bookId: bookId,
       categoryId: widget.tab.book.categoryId,
       isPdf: true,
+      pdfOutline: widget.tab.outline,
       visibleLineIndices: _getVisibleLineIndicesForCurrentPage(),
       onNavigateToLine: (lineNumber) {
+        // lineNumber הוא מספר שורה לוגי — ממירים אותו לעמוד דרך ה-heading
+        // הקרוב לפניו, ונופלים לפרשנות-עמוד-ישירה בספרים ללא headings.
         if (widget.tab.pdfHeadings != null) {
           final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
 
@@ -1333,8 +1363,6 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
               final targetPage = _findPageForHeading(headingTitle);
 
               if (targetPage != null) {
-                debugPrint(
-                    'Navigating from line $lineNumber to page: $targetPage');
                 if (widget.tab.pdfViewerController.isReady) {
                   widget.tab.pdfViewerController
                       .goToPage(pageNumber: targetPage);
@@ -1346,7 +1374,6 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           }
         }
 
-        debugPrint('Navigating to page: $lineNumber');
         if (widget.tab.pdfViewerController.isReady) {
           widget.tab.pdfViewerController.goToPage(pageNumber: lineNumber);
         }
@@ -1365,8 +1392,11 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     final range = _getCurrentRange(currentLine);
     final commentatorsKey =
         (widget.tab.activeCommentators.toList()..sort()).join('|');
+    final extraKey = widget.extraLineIndices == null
+        ? ''
+        : (widget.extraLineIndices!.toList()..sort()).join(',');
     final cacheKey =
-        '${range.startLine}:${range.endLine}:$commentatorsKey:${widget.tab.links.length}';
+        '${range.startLine}:${range.endLine}:$extraKey:$commentatorsKey:${widget.tab.links.length}';
 
     final existingCache = _visibleContentCache;
     if (existingCache != null && existingCache.cacheKey == cacheKey) {
@@ -1383,11 +1413,10 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     final showAllWhenEmpty =
         !widget.enableInternalFilter && widget.tab.activeCommentators.isEmpty;
 
+    final extraLines = widget.extraLineIndices;
     for (final link in widget.tab.links) {
-      if (link.index1 < range.startLine) {
-        continue;
-      }
-      if (link.index1 > range.endLine) {
+      if (!pdfLinkInVisibleScope(
+          link.index1, range.startLine, range.endLine, extraLines)) {
         continue;
       }
 

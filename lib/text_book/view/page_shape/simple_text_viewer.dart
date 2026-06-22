@@ -12,6 +12,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/bookmarks/utils/section_bookmark.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
@@ -24,6 +25,11 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
+import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -215,13 +221,22 @@ int resolvePageShapeNavigationBaseIndex({
     }
   }
 
-  if (sortedLiveVisibleIndices.isNotEmpty) {
-    return sortedLiveVisibleIndices.first;
+  // הקטע הנבחר אינו על המסך. נמשיך מקצה החלון הנראה שבכיוון הקטע: אם הקטע
+  // מתחת לחלון (השהיית גלילה בלחיצה רציפה על חץ-למטה, או גלילה ידנית מעלה) —
+  // נמשיך מהקצה התחתון כדי שהניווט ימשיך למטה ולא יקפוץ לראש החלון.
+  int? edgeTowardSelected(List<int> sortedVisible) {
+    if (sortedVisible.isEmpty) return null;
+    if (selectedIndex != null && selectedIndex > sortedVisible.last) {
+      return sortedVisible.last;
+    }
+    return sortedVisible.first;
   }
 
-  if (sortedStateVisibleIndices.isNotEmpty) {
-    return sortedStateVisibleIndices.first;
-  }
+  final liveEdge = edgeTowardSelected(sortedLiveVisibleIndices);
+  if (liveEdge != null) return liveEdge;
+
+  final stateEdge = edgeTowardSelected(sortedStateVisibleIndices);
+  if (stateEdge != null) return stateEdge;
 
   return selectedIndex ?? 0;
 }
@@ -272,6 +287,10 @@ class SimpleTextViewer extends StatefulWidget {
   final TextBook? reportBook;
   final SelectionSyncController? selectionSyncController;
 
+  /// הטאב שאליו שייכת תצוגה זו. משמש לזיהוי האם הטאב פעיל כרגע — כדי שטאב
+  /// צורת-הדף שנשמר חי ברקע לא יחטוף פוקוס מקלדת וישבור בחירת טקסט בטאב הפעיל.
+  final OpenedTab? tab;
+
   /// מחזירה את כתובת היעד עבור אינדקס פריט בסרגל הגלילה. כשהיא מסופקת,
   /// ריחוף/גרירה על הסרגל הפנימי מציגים תווית צפה עם הכתובת. כשהיא null
   /// אין תווית. רלוונטי רק כש-[useInternalScroll] = true.
@@ -297,6 +316,7 @@ class SimpleTextViewer extends StatefulWidget {
     this.onOpenSearch,
     this.reportBook,
     this.selectionSyncController,
+    this.tab,
     this.labelForIndex,
     this.notesRepository,
   });
@@ -429,9 +449,34 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       });
   }
 
+  /// האם הטאב של תצוגה זו הוא הטאב הפעיל (כולל היותו צד בתצוגה משולבת).
+  /// טאבים נשמרים חיים (KeepAlive); טאב רקע אסור לו לחטוף פוקוס מקלדת, אחרת
+  /// בחירת טקסט בטאב הפעיל נשברת מיד (issue #472).
+  bool _isTabInForeground() {
+    final tab = widget.tab;
+    if (tab == null || !mounted) return tab == null;
+    // מסך הקריאה נשמר חי ב-PageView גם כשהמשתמש במסך אחר (כלים/תוספים/הגדרות);
+    // בלי הבדיקה הזו צורת-הדף תחטוף פוקוס משדות קלט של תוספים (issue #472).
+    if (context.read<NavigationBloc>().state.currentScreen != Screen.reading) {
+      return false;
+    }
+    final current = context.read<TabsBloc>().state.currentTab;
+    if (current == null) return false;
+    if (identical(current, tab)) return true;
+    if (current is CombinedTab) {
+      return identical(current.rightTab, tab) ||
+          identical(current.leftTab, tab);
+    }
+    return false;
+  }
+
   void _requestKeyboardFocus(String reason) {
     final focusNode = _resolvedKeyboardFocusNode;
     if (!widget.isMainText || !focusNode.canRequestFocus) {
+      return;
+    }
+
+    if (!_isTabInForeground()) {
       return;
     }
 
@@ -479,6 +524,15 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
       FocusManager.instance.addListener(_handleGlobalFocusChange);
+      // רישום למנגנון הפוקוס הפר-טאבי כדי שמעבר *חזרה* לטאב צורת-הדף ימקד את
+      // אזור הקריאה דרך reading_screen (גלילה בחצים עובדת מיד).
+      final tab = widget.tab;
+      if (tab != null) {
+        FocusRepository().registerTabContentFocusRequester(
+          tab,
+          () => _requestKeyboardFocus('tab-content-focus'),
+        );
+      }
       _scheduleInitialScrollRestore();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -547,6 +601,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         ?.removeListener(_handleExternalSelectionChange);
     if (widget.isMainText) {
       FocusManager.instance.removeListener(_handleGlobalFocusChange);
+      final tab = widget.tab;
+      if (tab != null) {
+        FocusRepository().unregisterTabContentFocusRequester(tab);
+      }
     }
     if (!widget.isMainText) {
       HardwareKeyboard.instance.removeHandler(_handleCommentaryKeyEvent);
@@ -808,6 +866,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       searchDistance: widget.isMainText ? state.searchDistance : 0,
       fontSize: widget.fontSize,
       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
+      fontWeight: settingsState.fontBold ? FontWeight.bold : null,
       lineHeight: settingsState.lineHeight,
     );
   }
@@ -1216,6 +1275,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     entries.add(const AppContextMenuEntry.divider());
     final reportTargetBook = widget.reportBook ?? state.book;
     entries.addAll([
+      if (widget.isMainText)
+        AppContextMenuEntry(
+          label: 'הוסף סימניה לקטע זה',
+          icon: FluentIcons.bookmark_add_24_regular,
+          onTap: () => addTextSectionBookmark(context, state, index),
+        ),
       AppContextMenuEntry(
         label: 'הוסף הערה אישית ',
         icon: FluentIcons.note_add_24_regular,
@@ -1719,7 +1784,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                         },
                         child: Focus(
                           focusNode: _resolvedKeyboardFocusNode,
-                          autofocus: widget.isMainText,
+                          autofocus: widget.isMainText && _isTabInForeground(),
                           canRequestFocus: widget.isMainText,
                           onFocusChange: (hasFocus) {
                             if (!hasFocus) {
@@ -1817,10 +1882,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         segment != null &&
         !segment.isHeader &&
         segment.sourceLineIndices.length > 1;
+    // ריבוי-בחירה: הקטע נחשב נבחר אם שורת מקור כלשהי שבו נמצאת ב-selectedIndices.
     final isSelected = widget.isMainText &&
-        state.selectedIndex != null &&
-        (segment?.containsLine(state.selectedIndex!) ??
-            state.selectedIndex == primaryLineIndex);
+        state.selectedIndices.any(
+            (sel) => segment?.containsLine(sel) ?? (sel == primaryLineIndex));
     final isHighlighted = widget.isMainText &&
         state.highlightedLine != null &&
         (segment?.containsLine(state.highlightedLine!) ??
@@ -1886,6 +1951,15 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                     .read<TextBookBloc>()
                     .add(UpdateSelectedIndex(primaryLineIndex));
               }
+            }
+          : null,
+      onCtrlClick: widget.isMainText && !isContinuousParagraph
+          ? () {
+              // Ctrl+Click → הוספה/הסרה של הקטע מבחירה מרובה
+              _requestKeyboardFocus('line-tap-$primaryLineIndex');
+              context
+                  .read<TextBookBloc>()
+                  .add(UpdateSelectedIndex(primaryLineIndex, additive: true));
             }
           : null,
       onDoubleTap: !widget.isMainText && widget.bookTitle != null
@@ -2032,6 +2106,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                           widget.isMainText ? state.searchDistance : 0,
                       fontSize: widget.fontSize,
                       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
+                      fontWeight:
+                          settingsState.fontBold ? FontWeight.bold : null,
                       lineHeight: settingsState.lineHeight,
                     ),
                     onOpenBook: widget.openBookCallback,
@@ -2086,7 +2162,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         return true;
       },
       onLineTap: (lineIndex) {
-        final isLineSelected = state.selectedIndex == lineIndex;
+        final isCtrl = HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed;
         _requestKeyboardFocus('line-tap-$lineIndex');
         setState(() {
           _savedSelectedText = null;
@@ -2095,7 +2172,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           _selectionLineEnd = null;
           _selectionStartColumn = null;
         });
-        if (isLineSelected) {
+        if (isCtrl) {
+          context
+              .read<TextBookBloc>()
+              .add(UpdateSelectedIndex(lineIndex, additive: true));
+        } else if (state.selectedIndex == lineIndex) {
           context.read<TextBookBloc>().add(const UpdateSelectedIndex(null));
         } else {
           context.read<TextBookBloc>().add(UpdateSelectedIndex(lineIndex));
@@ -2123,7 +2204,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       }
       final backgroundColor = state.highlightedLine == lineIndex
           ? colorScheme.secondaryContainer.withAlpha((0.4 * 255).round())
-          : state.selectedIndex == lineIndex
+          : state.selectedIndices.contains(lineIndex)
               ? colorScheme.primary.withAlpha((0.08 * 255).round())
               : null;
       final style = backgroundColor == null
@@ -2185,6 +2266,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         searchDistance: useStateSearchSettings ? state.searchDistance : 0,
         fontSize: widget.fontSize,
         fontFamily: widget.fontFamily ?? settingsState.fontFamily,
+        fontWeight: settingsState.fontBold ? FontWeight.bold : null,
         lineHeight: settingsState.lineHeight,
       ),
     );

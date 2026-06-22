@@ -82,6 +82,24 @@ class UpdateCommentatorsFontFamily extends SettingsEvent {
   List<Object?> get props => [commentatorsFontFamily];
 }
 
+class UpdateFontBold extends SettingsEvent {
+  final bool fontBold;
+
+  const UpdateFontBold(this.fontBold);
+
+  @override
+  List<Object?> get props => [fontBold];
+}
+
+class UpdateCommentatorsFontBold extends SettingsEvent {
+  final bool commentatorsFontBold;
+
+  const UpdateCommentatorsFontBold(this.commentatorsFontBold);
+
+  @override
+  List<Object?> get props => [commentatorsFontBold];
+}
+
 class UpdateCommentatorsFontSize extends SettingsEvent {
   final double commentatorsFontSize;
 
@@ -179,6 +197,15 @@ class UpdateDefaultSidebarOpen extends SettingsEvent {
 
   @override
   List<Object?> get props => [defaultSidebarOpen];
+}
+
+class UpdateDefaultCommentaryOpen extends SettingsEvent {
+  final bool defaultCommentaryOpen;
+
+  const UpdateDefaultCommentaryOpen(this.defaultCommentaryOpen);
+
+  @override
+  List<Object?> get props => [defaultCommentaryOpen];
 }
 
 class UpdatePinSidebar extends SettingsEvent {

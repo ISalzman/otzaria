@@ -28,6 +28,7 @@ import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
+import 'package:otzaria/bookmarks/utils/section_bookmark.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:super_clipboard/super_clipboard.dart';
@@ -814,6 +815,11 @@ class _CombinedViewState extends State<CombinedView> {
       })(),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
+        label: 'הוסף סימניה לקטע זה',
+        icon: FluentIcons.bookmark_add_24_regular,
+        onTap: () => addTextSectionBookmark(context, state, paragraphIndex),
+      ),
+      AppContextMenuEntry(
         label: 'הוסף הערה אישית',
         icon: FluentIcons.note_add_24_regular,
         onTap: () => _showNoteEditor(selectedText),
@@ -1188,6 +1194,7 @@ class _CombinedViewState extends State<CombinedView> {
       searchDistance: state.searchDistance,
       fontSize: widget.textSize,
       fontFamily: settingsState.fontFamily,
+      fontWeight: settingsState.fontBold ? FontWeight.bold : null,
       lineHeight: settingsState.lineHeight,
     );
   }
@@ -1387,11 +1394,14 @@ class _CombinedViewState extends State<CombinedView> {
                   child: widget.isPreviewMode
                       ? Scrollbar(
                           controller: _previewScrollController,
-                          thumbVisibility: true,
                           thickness: 8.0,
                           radius: const Radius.circular(4.0),
                           child: ListView.builder(
                             controller: _previewScrollController,
+                            // מרווח אופקי סימטרי שמשאיר תעלה לפס הגלילה (8px)
+                            // בצד שמאל ב-RTL, כך שלא יכסה את הטקסט.
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 12.0),
                             itemCount: state.readingSegments.isNotEmpty
                                 ? state.readingSegments.length
                                 : widget.data.length,
@@ -1522,12 +1532,18 @@ class _CombinedViewState extends State<CombinedView> {
         !segment.isHeader &&
         segment.sourceLineIndices.length > 1;
 
-    final isSelected = state.selectedIndex != null &&
-        (segment?.containsLine(state.selectedIndex!) ??
-            state.selectedIndex == primaryLineIndex);
-    final selectedLineIndex = isSelected && state.selectedIndex != null
-        ? state.selectedIndex!
-        : primaryLineIndex;
+    // ריבוי-בחירה: הקטע נחשב נבחר אם שורת מקור כלשהי שבו נמצאת ב-selectedIndices.
+    int? selectedLineInSegment;
+    for (final selected in state.selectedIndices) {
+      final inSegment =
+          segment?.containsLine(selected) ?? (selected == primaryLineIndex);
+      if (inSegment) {
+        selectedLineInSegment = selected;
+        break;
+      }
+    }
+    final isSelected = selectedLineInSegment != null;
+    final selectedLineIndex = selectedLineInSegment ?? primaryLineIndex;
     int actionLineIndex() {
       final currentIndex = _currentSelectedIndex.value;
       if (isContinuousParagraph &&
@@ -1655,6 +1671,16 @@ class _CombinedViewState extends State<CombinedView> {
               }
               // SelectionArea יטפל בבחירת הטווח
             },
+            onCtrlClick: () {
+              // Ctrl+Click → הוספה/הסרה של הקטע מבחירה מרובה (ללא גלילה אוטומטית)
+              if (isContinuousParagraph) {
+                return;
+              }
+              _focusNode.requestFocus();
+              _addTextBookEventIfOpen(
+                UpdateSelectedIndex(primaryLineIndex, additive: true),
+              );
+            },
             onSecondaryTapDown: (details) {
               // שומר את האינדקס הנוכחי לשימוש בתפריט ההקשר
               if (mounted) {
@@ -1761,6 +1787,8 @@ class _CombinedViewState extends State<CombinedView> {
                             searchDistance: state.searchDistance,
                             fontSize: widget.textSize,
                             fontFamily: settingsState.fontFamily,
+                            fontWeight:
+                                settingsState.fontBold ? FontWeight.bold : null,
                             lineHeight: settingsState.lineHeight,
                           ),
                           onOpenBook: widget.openBookCallback,
@@ -1863,7 +1891,8 @@ class _CombinedViewState extends State<CombinedView> {
         return true;
       },
       onLineTap: (lineIndex) {
-        final isLineSelected = state.selectedIndex == lineIndex;
+        final isCtrl = HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed;
         _focusNode.requestFocus();
         _savedSelectedText.value = null;
         _savedSelectedIndex.value = null;
@@ -1872,7 +1901,11 @@ class _CombinedViewState extends State<CombinedView> {
         _selectionLineEnd = null;
         _selectionStartColumn = null;
         widget.onSelectedTextChanged?.call(null, null, null);
-        if (isLineSelected) {
+        if (isCtrl) {
+          _addTextBookEventIfOpen(
+            UpdateSelectedIndex(lineIndex, additive: true),
+          );
+        } else if (state.selectedIndex == lineIndex) {
           _addTextBookEventIfOpen(const UpdateSelectedIndex(null));
         } else {
           _addTextBookEventIfOpen(UpdateSelectedIndex(lineIndex));
@@ -1898,7 +1931,7 @@ class _CombinedViewState extends State<CombinedView> {
       }
       final backgroundColor = state.highlightedLine == lineIndex
           ? colorScheme.secondaryContainer.withValues(alpha: 0.4)
-          : state.selectedIndex == lineIndex
+          : state.selectedIndices.contains(lineIndex)
               ? colorScheme.primary.withValues(alpha: 0.08)
               : null;
       final style = backgroundColor == null
@@ -1980,6 +2013,7 @@ class _CombinedViewState extends State<CombinedView> {
         searchDistance: effectiveSearchDistance,
         fontSize: widget.textSize,
         fontFamily: settingsState.fontFamily,
+        fontWeight: settingsState.fontBold ? FontWeight.bold : null,
         lineHeight: settingsState.lineHeight,
       ),
     );

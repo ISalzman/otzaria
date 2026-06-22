@@ -110,10 +110,22 @@ class TogglePageShapeView extends TextBookEvent {
 class UpdateCommentators extends TextBookEvent {
   final List<String> commentators;
 
-  const UpdateCommentators(this.commentators);
+  /// אמת = פעולת משתמש (בחירה ידנית). שקר = בחירה אוטומטית של ברירת מחדל,
+  /// שמוחלת רק כל עוד המשתמש לא נגע בבחירה ואין מפרשים פעילים.
+  final bool isUserAction;
+
+  /// שחזור בחירה שמורה פר-ספר. מוחל כל עוד המשתמש לא בחר ידנית בסשן הנוכחי,
+  /// וגובר על בחירה אוטומטית (כגון 'הערות') כי זו בחירה אמיתית קודמת.
+  final bool isRestore;
+
+  const UpdateCommentators(
+    this.commentators, {
+    this.isUserAction = true,
+    this.isRestore = false,
+  });
 
   @override
-  List<Object?> get props => [commentators];
+  List<Object?> get props => [commentators, isUserAction, isRestore];
 }
 
 class ToggleNikud extends TextBookEvent {
@@ -146,10 +158,13 @@ class UpdateVisibleIndecies extends TextBookEvent {
 class UpdateSelectedIndex extends TextBookEvent {
   final int? index;
 
-  const UpdateSelectedIndex(this.index);
+  /// Ctrl+לחיצה: מוסיף/מסיר את [index] מהבחירה הקיימת במקום להחליפה.
+  final bool additive;
+
+  const UpdateSelectedIndex(this.index, {this.additive = false});
 
   @override
-  List<Object?> get props => [index];
+  List<Object?> get props => [index, additive];
 }
 
 class HighlightLine extends TextBookEvent {

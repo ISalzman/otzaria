@@ -38,13 +38,16 @@ class BookmarkBloc extends Cubit<BookmarkState> {
       required Book book,
       required int index,
       List<String>? commentatorsToShow,
-      BookmarkTargetKind targetKind = BookmarkTargetKind.book}) {
+      BookmarkTargetKind targetKind = BookmarkTargetKind.book,
+      String? label}) {
     final bookmark = Bookmark(
         ref: ref,
         book: book,
         index: index,
         commentatorsToShow: commentatorsToShow ?? [],
-        targetKind: targetKind);
+        targetKind: targetKind,
+        label: label,
+        createdAt: DateTime.now());
     // כפילות נמדדת לפי זיהוי הספר + המיקום (index), כדי לאפשר מספר סימניות
     // באותו ספר במיקומים שונים. ref לבדו לא מספיק - ב-PDF כל הסימניות באותו
     // פרק יקבלו ref זהה (כותרת הפרק), וב-TextBook מספר מיקומים באותו סעיף.
@@ -62,6 +65,21 @@ class BookmarkBloc extends Cubit<BookmarkState> {
     _persistBookmarks(newBookmarks);
     emit(state.copyWith(bookmarks: newBookmarks));
     return true;
+  }
+
+  /// מעדכן את טקסט התיאור המוצג של סימניה. [label] ריק מאפס לברירת המחדל
+  /// (הצגת המיקום).
+  void updateBookmarkLabel(int index, String? label) {
+    if (index < 0 || index >= state.bookmarks.length) return;
+    final trimmed = label?.trim();
+    final hasLabel = trimmed != null && trimmed.isNotEmpty;
+    final updated = [...state.bookmarks];
+    updated[index] = updated[index].copyWith(
+      label: hasLabel ? trimmed : null,
+      clearLabel: !hasLabel,
+    );
+    _persistBookmarks(updated);
+    emit(state.copyWith(bookmarks: updated));
   }
 
   void removeBookmark(int index) {

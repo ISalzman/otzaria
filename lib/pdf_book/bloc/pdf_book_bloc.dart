@@ -790,7 +790,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
 
     if (enablePerBookSettings) {
       // נסה לטעון הגדרות פר-ספר
-      final settings = await PdfBookPerBookSettings.load(current.book.title);
+      final settings = await PdfBookPerBookSettings.load(current.book);
       if (settings?.zoom != null) {
         zoomToApply = settings!.zoom;
       }
@@ -874,7 +874,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       layoutMode: current.layoutMode,
     );
 
-    await settings.save(current.book.title);
+    await settings.save(current.book);
   }
 
   Future<void> _onResetPerBookSettings(
@@ -884,7 +884,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     final current = state;
     if (current is! PdfBookLoaded) return;
 
-    await PdfBookPerBookSettings.delete(current.book.title);
+    await PdfBookPerBookSettings.delete(current.book);
 
     // Reset zoom and layout mode to default
     if (pdfController.isReady) {

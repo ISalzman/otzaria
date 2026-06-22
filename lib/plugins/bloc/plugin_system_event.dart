@@ -187,3 +187,36 @@ class DevelopmentPluginManifestChanged extends PluginSystemEvent {
   @override
   List<Object?> get props => [pluginId];
 }
+
+class ConfirmDevPluginInstall extends PluginSystemEvent {
+  final PluginManifest manifest;
+  final String sourcePath;
+  final String sourceType;
+  final Map<String, bool> grantedPermissions;
+  final bool allowOrderBeforeBuiltInsGranted;
+
+  const ConfirmDevPluginInstall({
+    required this.manifest,
+    required this.sourcePath,
+    required this.sourceType,
+    required this.grantedPermissions,
+    required this.allowOrderBeforeBuiltInsGranted,
+  });
+
+  @override
+  List<Object?> get props => [
+        manifest,
+        sourcePath,
+        sourceType,
+        grantedPermissions,
+        allowOrderBeforeBuiltInsGranted,
+      ];
+}
+
+class LoadLocalhostPluginRequested extends PluginSystemEvent {
+  final String baseUrl;
+  const LoadLocalhostPluginRequested(this.baseUrl);
+
+  @override
+  List<Object?> get props => [baseUrl];
+}

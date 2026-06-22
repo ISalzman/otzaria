@@ -20,6 +20,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateFontSize>(_onUpdateFontSize);
     on<UpdateFontFamily>(_onUpdateFontFamily);
     on<UpdateCommentatorsFontFamily>(_onUpdateCommentatorsFontFamily);
+    on<UpdateFontBold>(_onUpdateFontBold);
+    on<UpdateCommentatorsFontBold>(_onUpdateCommentatorsFontBold);
     on<UpdateCommentatorsFontSize>(_onUpdateCommentatorsFontSize);
     on<UpdateLineHeight>(_onUpdateLineHeight);
     on<UpdateShowOtzarHachochma>(_onUpdateShowOtzarHachochma);
@@ -31,6 +33,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateDefaultRemoveNikud>(_onUpdateDefaultRemoveNikud);
     on<UpdateRemoveNikudFromTanach>(_onUpdateRemoveNikudFromTanach);
     on<UpdateDefaultSidebarOpen>(_onUpdateDefaultSidebarOpen);
+    on<UpdateDefaultCommentaryOpen>(_onUpdateDefaultCommentaryOpen);
     on<UpdatePinSidebar>(_onUpdatePinSidebar);
     on<UpdateSidebarWidth>(_onUpdateSidebarWidth);
     on<UpdateFacetFilteringWidth>(_onUpdateFacetFilteringWidth);
@@ -81,6 +84,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       fontSize: settings['fontSize'],
       fontFamily: settings['fontFamily'],
       commentatorsFontFamily: settings['commentatorsFontFamily'],
+      fontBold: settings['fontBold'] ?? false,
+      commentatorsFontBold: settings['commentatorsFontBold'] ?? false,
       commentatorsFontSize: settings['commentatorsFontSize'],
       lineHeight: settings['lineHeight'],
       showOtzarHachochma: settings['showOtzarHachochma'],
@@ -92,6 +97,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       defaultRemoveNikud: settings['defaultRemoveNikud'],
       removeNikudFromTanach: settings['removeNikudFromTanach'],
       defaultSidebarOpen: settings['defaultSidebarOpen'],
+      defaultCommentaryOpen: settings['defaultCommentaryOpen'],
       pinSidebar: settings['pinSidebar'],
       sidebarWidth: settings['sidebarWidth'],
       facetFilteringWidth: settings['facetFilteringWidth'],
@@ -114,8 +120,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       personalNotesCollapsedByDefault:
           settings['personalNotesCollapsedByDefault'] ?? true,
       compactMenuMode: settings['compactMenuMode'] ?? false,
-      mergeUserBooksIntoLibrary:
-          settings['mergeUserBooksIntoLibrary'] ?? false,
+      mergeUserBooksIntoLibrary: settings['mergeUserBooksIntoLibrary'] ?? false,
       protectedModeEnabled: settings['protectedModeEnabled'] ?? false,
       hiddenBuiltInToolIds:
           (settings['hiddenBuiltInToolIds'] as Set<String>?) ?? <String>{},
@@ -304,6 +309,22 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     emit(state.copyWith(commentatorsFontFamily: event.commentatorsFontFamily));
   }
 
+  Future<void> _onUpdateFontBold(
+    UpdateFontBold event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateFontBold(event.fontBold);
+    emit(state.copyWith(fontBold: event.fontBold));
+  }
+
+  Future<void> _onUpdateCommentatorsFontBold(
+    UpdateCommentatorsFontBold event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateCommentatorsFontBold(event.commentatorsFontBold);
+    emit(state.copyWith(commentatorsFontBold: event.commentatorsFontBold));
+  }
+
   Future<void> _onUpdateCommentatorsFontSize(
     UpdateCommentatorsFontSize event,
     Emitter<SettingsState> emit,
@@ -393,6 +414,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateDefaultSidebarOpen(event.defaultSidebarOpen);
     emit(state.copyWith(defaultSidebarOpen: event.defaultSidebarOpen));
+  }
+
+  Future<void> _onUpdateDefaultCommentaryOpen(
+    UpdateDefaultCommentaryOpen event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateDefaultCommentaryOpen(event.defaultCommentaryOpen);
+    emit(state.copyWith(defaultCommentaryOpen: event.defaultCommentaryOpen));
   }
 
   Future<void> _onUpdatePinSidebar(

@@ -803,6 +803,45 @@ void main() {
     );
   });
 
+  testWidgets(
+      'תפריט ארוך שאין לו מקום מתחת ללחיצה עולה כלפי מעלה ואינו נחתך בתחתית',
+      (tester) async {
+    final key = GlobalKey<AppContextMenuRegionState>();
+    // 12 פריטים (~448px) — גבוה מהמרחב שמתחת ללחיצה אך נכנס בגובה המסך (600).
+    final entries = [
+      for (var i = 0; i < 12; i++)
+        AppContextMenuEntry(label: 'פריט $i', onTap: () {}),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppContextMenuRegion(
+            key: key,
+            menuBuilder: (_, __) => entries,
+            child:
+                const SizedBox.expand(child: ColoredBox(color: Colors.amber)),
+          ),
+        ),
+      ),
+    );
+
+    // לחיצה בחצי העליון (y=200): אין מקום מספיק מתחת והמרחב מעל קטן מהמרחב מתחת,
+    // כך שהתפריט נפתח כלפי מטה — לפני התיקון נחתך/נגלל ופריטיו האחרונים נסתרו.
+    await key.currentState!.openMenuAt(const Offset(400, 200));
+    await tester.pumpAndSettle();
+
+    final overlaySize = tester.view.physicalSize / tester.view.devicePixelRatio;
+    final lastItem = find.text('פריט 11');
+    expect(lastItem, findsOneWidget);
+    expect(
+      tester.getRect(lastItem).bottom,
+      lessThanOrEqualTo(overlaySize.height),
+      reason: 'הפריט האחרון חייב להישאר בגבולות המסך — '
+          'כשאין מקום מתחת ללחיצה התפריט עולה מעלה ולא נחתך',
+    );
+  });
+
   // ───────────────────────────────────────────────────────────────────────
   // hoverPreviewBuilder — חלונית תצוגה מקדימה צפה ברפרוף על פריט
   //
@@ -1025,6 +1064,62 @@ void main() {
           reason: 'התפריט נסגר לאחר בחירת הפריט');
       expect(find.text(previewText), findsNothing,
           reason: 'החלונית הצפה מוסרת יחד עם סגירת התפריט');
+    });
+
+    group('מגע — לחיצה ארוכה במקום רפרוף', () {
+      Future<void> pumpTouchMenu(WidgetTester tester) async {
+        final key = GlobalKey<AppContextMenuRegionState>();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: AppContextMenuRegion(
+                key: key,
+                menuBuilder: (_, __) => [
+                  AppContextMenuEntry(
+                    label: 'קישור א',
+                    onTap: () {},
+                    hoverPreviewBuilder: (_) => const Text(previewText),
+                  ),
+                ],
+                child: const SizedBox(
+                  width: 400,
+                  height: 400,
+                  child: ColoredBox(color: Colors.amber),
+                ),
+              ),
+            ),
+          ),
+        );
+        await key.currentState!.openMenuAt(const Offset(100, 100));
+        await tester.pumpAndSettle();
+      }
+
+      testWidgets('לחיצה ארוכה על הפריט פותחת את החלונית הצפה', (tester) async {
+        await pumpTouchMenu(tester);
+
+        await tester.longPress(find.text('קישור א'));
+        await tester.pumpAndSettle();
+
+        expect(find.text(previewText), findsOneWidget,
+            reason: 'לחיצה ארוכה מחליפה את הרפרוף ופותחת את התצוגה');
+      });
+
+      testWidgets('הקשה מחוץ לחלונית סוגרת אותה ומשאירה את התפריט פתוח',
+          (tester) async {
+        await pumpTouchMenu(tester);
+
+        await tester.longPress(find.text('קישור א'));
+        await tester.pumpAndSettle();
+        expect(find.text(previewText), findsOneWidget);
+
+        await tester.tapAt(const Offset(10, 590));
+        await tester.pumpAndSettle();
+
+        expect(find.text(previewText), findsNothing,
+            reason: 'הקשה על המחסום מחוץ לחלונית סוגרת את התצוגה');
+        expect(find.text('קישור א'), findsOneWidget,
+            reason: 'התפריט עצמו נשאר פתוח להמשך בחירה');
+      });
     });
   });
 }

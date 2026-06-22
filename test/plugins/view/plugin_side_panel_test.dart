@@ -247,7 +247,6 @@ void main() {
     }));
     File(p.join(tempDir.path, 'index.html')).createSync();
 
-    // Use our custom Fake FilePicker instead of method channels
     FilePickerPlatform.instance = FakeFilePickerPlatform(tempDir.path);
 
     await tester.pumpWidget(_wrap(
@@ -257,28 +256,46 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // Register the stream expectation BEFORE the action that triggers it.
-    // emitsThrough allows intermediate states (e.g. PluginSystemLoading) before the target.
-    final loadedExpectation = expectLater(
+    // Step 1: Tapping folder_add → expects PluginSystemDevInstallRequiresPermissions
+    // (first install always shows the permissions dialog; PluginSystemLoaded
+    // is only emitted after the user confirms).
+    final permExpectation = expectLater(
       bloc.stream,
-      emitsThrough(isA<PluginSystemLoaded>()),
+      emitsThrough(isA<PluginSystemDevInstallRequiresPermissions>()),
     );
 
     await tester.tap(find.byIcon(FluentIcons.folder_add_24_regular));
     await tester.pump();
 
-    // The DevLoader uses real dart:io which needs real async — runAsync lets
-    // the Dart event loop run freely while we wait for the stream to emit.
+    await tester.runAsync(() => permExpectation);
+
+    // Step 2: Simulate dialog confirmation — dispatch ConfirmDevPluginInstall
+    // with the manifest the BLoC already fetched and stored in the state.
+    final permState =
+        bloc.state as PluginSystemDevInstallRequiresPermissions;
+
+    final loadedExpectation = expectLater(
+      bloc.stream,
+      emitsThrough(isA<PluginSystemLoaded>()),
+    );
+
+    bloc.add(ConfirmDevPluginInstall(
+      manifest: permState.manifest,
+      sourcePath: permState.sourcePath,
+      sourceType: permState.sourceType,
+      grantedPermissions: const {},
+      allowOrderBeforeBuiltInsGranted: false,
+    ));
+
     await tester.runAsync(() => loadedExpectation);
 
     // Flush the UiSnack overlay timer so the test teardown doesn't complain.
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 5));
 
-    // Verify UI is still intact
     expect(find.byIcon(FluentIcons.folder_add_24_regular), findsOneWidget);
 
-    // Deep verification: the repository received the correct plugin data
+    // Deep verification: the repository received the correct plugin data.
     expect(mockRepo.plugins.isNotEmpty, isTrue);
     expect(mockRepo.plugins.first.pluginId, 'test.ui.plugin');
     expect(mockRepo.plugins.first.name, 'UI Dev Plugin');

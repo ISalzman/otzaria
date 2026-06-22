@@ -1,10 +1,17 @@
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/core/external_uri_router.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
+import 'package:otzaria/tools/built_in_tools_catalog.dart';
 
 void main() {
   setUp(() async {
     await Settings.init(cacheProvider: _MemoryCacheProvider());
+  });
+
+  tearDown(() {
+    // מנקה רישום קיצורי תוספים כדי שלא יזלוג בין טסטים.
+    ShortcutValidator.registerPluginShortcutKeys(const {});
   });
 
   group('getShortcutValue', () {
@@ -126,6 +133,88 @@ void main() {
         ShortcutValidator.hasConflict('key-shortcut-open-commentators-tab'),
         isFalse,
       );
+    });
+  });
+
+  group('openToolShortcutKeys', () {
+    test('כל מפתח רשום ב-shortcutKeys, defaultShortcuts (ריק) ו-shortcutNames',
+        () {
+      for (final key in ShortcutValidator.openToolShortcutKeys.keys) {
+        expect(ShortcutValidator.shortcutKeys, contains(key));
+        expect(ShortcutValidator.defaultShortcuts[key], '');
+        expect(ShortcutValidator.shortcutNames[key], isNotNull);
+      }
+    });
+
+    test('כל מזהה כלי קיים בקטלוג הכלים המובנים', () {
+      final catalogIds = kBuiltInToolsCatalog.map((m) => m.toolId).toSet();
+      for (final toolId in ShortcutValidator.openToolShortcutKeys.values) {
+        expect(catalogIds, contains(toolId),
+            reason: 'הכלי "$toolId" אינו קיים בקטלוג');
+      }
+    });
+
+    test('ה-deep-link שהקיצור מפעיל מתפענח ל-OpenToolAction של אותו כלי', () {
+      for (final toolId in ShortcutValidator.openToolShortcutKeys.values) {
+        final action = ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/tool/$toolId'));
+        expect(action, isA<OpenToolAction>());
+        expect((action as OpenToolAction).toolId, toolId);
+      }
+    });
+  });
+
+  group('copyLinkShortcutKeys', () {
+    test('כל מפתח רשום ב-shortcutKeys, defaultShortcuts (ריק) ו-shortcutNames',
+        () {
+      for (final key in ShortcutValidator.copyLinkShortcutKeys) {
+        expect(ShortcutValidator.shortcutKeys, contains(key));
+        expect(ShortcutValidator.defaultShortcuts[key], '');
+        expect(ShortcutValidator.shortcutNames[key], isNotNull);
+      }
+    });
+
+    test('ללא ברירת מחדל — getShortcutValue מחזיר ערך ריק כל עוד לא הוגדר', () {
+      for (final key in ShortcutValidator.copyLinkShortcutKeys) {
+        expect(ShortcutValidator.getShortcutValue(key), '');
+      }
+    });
+  });
+
+  group('קיצורי תוספים (registerPluginShortcutKeys)', () {
+    const pluginId = 'com.example.my_plugin';
+    final key = ShortcutValidator.openPluginShortcutKey(pluginId);
+
+    test('openPluginShortcutKey בונה מפתח עם הקידומת', () {
+      expect(key, 'key-shortcut-open-plugin-$pluginId');
+    });
+
+    test('רישום מוסיף את המפתח ל-shortcutKeys ו-shortcutNames', () {
+      expect(ShortcutValidator.shortcutKeys, isNot(contains(key)));
+      ShortcutValidator.registerPluginShortcutKeys({key: 'פתיחת התוסף שלי'});
+      expect(ShortcutValidator.shortcutKeys, contains(key));
+      expect(ShortcutValidator.shortcutNames[key], 'פתיחת התוסף שלי');
+    });
+
+    test('רישום ריק מסיר מפתחות תוספים קודמים', () {
+      ShortcutValidator.registerPluginShortcutKeys({key: 'פתיחת התוסף שלי'});
+      ShortcutValidator.registerPluginShortcutKeys(const {});
+      expect(ShortcutValidator.shortcutKeys, isNot(contains(key)));
+      expect(ShortcutValidator.shortcutNames[key], isNull);
+    });
+
+    test('קיצור תוסף נכלל בזיהוי קונפליקטים מול פעולה מובנית', () async {
+      ShortcutValidator.registerPluginShortcutKeys({key: 'פתיחת התוסף שלי'});
+      await Settings.setValue<String>(key, 'ctrl+l');
+      // ctrl+l הוא ברירת המחדל של פתיחת הספרייה — צפוי קונפליקט.
+      expect(ShortcutValidator.hasConflict(key), isTrue);
+    });
+
+    test('ה-deep-link שהקיצור מפעיל מתפענח ל-OpenPluginAction', () {
+      final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/plugin/$pluginId'));
+      expect(action, isA<OpenPluginAction>());
+      expect((action as OpenPluginAction).pluginId, pluginId);
     });
   });
 

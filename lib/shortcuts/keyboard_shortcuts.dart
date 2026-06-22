@@ -4,6 +4,7 @@ import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/navigation/view/main_window_screen.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
@@ -114,6 +115,10 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
         shortcutOf('key-shortcut-toggle-commentators-pane');
     final openCommentatorsTabShortcut =
         shortcutOf('key-shortcut-open-commentators-tab');
+    final prevSegmentShortcut = shortcutOf('key-shortcut-prev-segment');
+    final nextSegmentShortcut = shortcutOf('key-shortcut-next-segment');
+    final prevTocShortcut = shortcutOf('key-shortcut-prev-toc');
+    final nextTocShortcut = shortcutOf('key-shortcut-next-toc');
 
     // פתח/סגור חלונית ניווט. אם הטאב הפעיל אינו ספר — מחזירים `ignored`
     // כדי לא לבלוע את הקיצור (כך מנוע ה-shortcut יכול להמשיך הלאה במקום
@@ -167,6 +172,27 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;
+    }
+
+    // ניווט קטע/דף-פרק בספר טקסט — מגלגל את ה-notifier המתאים בטאב, שהמסך
+    // מאזין לו ומבצע בדיוק את אותו ניווט כמו לחיצה על הכפתור. רלוונטי רק
+    // ל-TextBookTab; במסכים אחרים מחזירים `ignored` כדי לא לבלוע את הקיצור.
+    final navTab = context.read<TabsBloc>().state.currentTab;
+    if (navTab is TextBookTab) {
+      ValueNotifier<int>? navNotifier;
+      if (ShortcutHelper.matchesShortcut(event, prevSegmentShortcut)) {
+        navNotifier = navTab.navPreviousSegmentNotifier;
+      } else if (ShortcutHelper.matchesShortcut(event, nextSegmentShortcut)) {
+        navNotifier = navTab.navNextSegmentNotifier;
+      } else if (ShortcutHelper.matchesShortcut(event, prevTocShortcut)) {
+        navNotifier = navTab.navPreviousTocNotifier;
+      } else if (ShortcutHelper.matchesShortcut(event, nextTocShortcut)) {
+        navNotifier = navTab.navNextTocNotifier;
+      }
+      if (navNotifier != null) {
+        navNotifier.value++;
+        return KeyEventResult.handled;
+      }
     }
 
     if (ShortcutHelper.matchesShortcut(event, libraryShortcut)) {
@@ -273,6 +299,31 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       return KeyEventResult.handled;
     }
 
+    // פתיחת כלי לפי קיצור אופציונלי (ללא ברירת מחדל) — דרך deep-link פנימי.
+    for (final entry in ShortcutValidator.openToolShortcutKeys.entries) {
+      final toolShortcut = shortcutOf(entry.key);
+      if (toolShortcut.isNotEmpty &&
+          ShortcutHelper.matchesShortcut(event, toolShortcut)) {
+        mainWindowScreenKey.currentState
+            ?.handleInternalDeepLink('otzaria://open/tool/${entry.value}');
+        return KeyEventResult.handled;
+      }
+    }
+
+    // פתיחת תוסף פעיל לפי קיצור אופציונלי — דרך deep-link `otzaria://open/plugin/<id>`.
+    // מסתמכים על המפתחות הרשומים (תוספים פעילים בלבד) ולא על PluginSystemBloc,
+    // כדי לא לדרוש Provider בכל אירוע מקש.
+    for (final pluginKey in ShortcutValidator.pluginShortcutKeys) {
+      final pluginShortcut = shortcutOf(pluginKey);
+      if (pluginShortcut.isNotEmpty &&
+          ShortcutHelper.matchesShortcut(event, pluginShortcut)) {
+        final pluginId = ShortcutValidator.pluginIdFromShortcutKey(pluginKey);
+        mainWindowScreenKey.currentState
+            ?.handleInternalDeepLink('otzaria://open/plugin/$pluginId');
+        return KeyEventResult.handled;
+      }
+    }
+
     // Ctrl+Tab / Ctrl+Shift+Tab - מעבר בין טאבים.
     // לא משתמשים ב-matchesShortcut כדי לא להפוך ל-Cmd ב-Mac: Cmd+Tab
     // שמור למערכת ההפעלה, ולכן ב-Mac נשארים עם Ctrl פיזי (זמין שם).
@@ -288,8 +339,11 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       return KeyEventResult.handled;
     }
 
-    // F11 - מסך מלא
+    // F11 - מסך מלא (רק בעיון/כלים)
     if (ShortcutHelper.matchesShortcut(event, 'f11')) {
+      if (!FullscreenHelper.isAllowedInContext(context)) {
+        return KeyEventResult.ignored;
+      }
       final settingsBloc = context.read<SettingsBloc>();
       final newFullscreenState = !settingsBloc.state.isFullscreen;
       FullscreenHelper.toggleFullscreen(context, newFullscreenState);

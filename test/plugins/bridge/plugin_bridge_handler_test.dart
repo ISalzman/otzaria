@@ -353,4 +353,67 @@ void main() {
       expect(resp['error']['code'], 'error.internal');
     });
   });
+
+  // פעולות הקבצים האישיים (pickUserFile וכו') דורשות הרשאת manifest
+  // 'fs.user_files.read', בניגוד ל-extractZip/deleteFile שמגודרות בתיקייה
+  // שהמשתמש בחר ולכן אינן דורשות הרשאה.
+  group('PluginBridgeHandler._handleRpc — אכיפת fs.user_files.read', () {
+    List<dynamic> pickUserFileRequest() => [
+          {'method': 'fs.pickUserFile', 'payload': const <String, dynamic>{}}
+        ];
+
+    test('pickUserFile ללא ההרשאה במניפסט → permission_denied, execute לא נקרא',
+        () async {
+      final adapter = _FakeAdapter();
+      final handler = PluginBridgeHandler(
+        _buildInstalledPlugin(permissions: const []),
+        adapter: adapter,
+        registry: _StubRegistry(true), // גם אם ה-DB מאשר — ההצהרה חסרה
+      );
+
+      final resp =
+          await handler.handleRpcForTesting(pickUserFileRequest()) as Map;
+
+      expect(resp['success'], isFalse);
+      expect(resp['error']['code'], 'permission_denied');
+      expect(adapter.executeCalls, 0);
+    });
+
+    test('pickUserFile עם הרשאה מוצהרת ומוענקת → execute נקרא', () async {
+      final adapter = _FakeAdapter(result: {'cancelled': true});
+      final handler = PluginBridgeHandler(
+        _buildInstalledPlugin(permissions: const ['fs.user_files.read']),
+        adapter: adapter,
+        registry: _StubRegistry(true),
+      );
+
+      final resp =
+          await handler.handleRpcForTesting(pickUserFileRequest()) as Map;
+
+      expect(resp['success'], isTrue);
+      expect(adapter.executeCalls, 1);
+      expect(adapter.lastDomain, 'fs');
+      expect(adapter.lastAction, 'pickUserFile');
+    });
+
+    test('deleteFile נשאר ללא הרשאת manifest (execute נקרא גם בלי הרשאה)',
+        () async {
+      final adapter = _FakeAdapter(result: true);
+      final handler = PluginBridgeHandler(
+        _buildInstalledPlugin(permissions: const []),
+        adapter: adapter,
+        registry: _StubRegistry(null),
+      );
+
+      final resp = await handler.handleRpcForTesting([
+        {
+          'method': 'fs.deleteFile',
+          'payload': {'path': '/tmp/x'},
+        }
+      ]) as Map;
+
+      expect(resp['success'], isTrue);
+      expect(adapter.executeCalls, 1);
+    });
+  });
 }

@@ -67,6 +67,8 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_event.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
+import 'package:otzaria/utils/ui/fullscreen_helper.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
 import 'package:otzaria/widgets/navigation/nav_rail_item.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
@@ -83,7 +85,8 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart'
-    show buildThemePayload;
+    show buildThemePayloadFromScheme;
+import 'package:otzaria/theme/app_theme_data.dart' show AppThemeData;
 import 'package:otzaria/core/external_activation_queue.dart';
 import 'package:otzaria/core/external_activation_channel.dart';
 import 'package:otzaria/core/external_uri_router.dart';
@@ -1301,6 +1304,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
   ) async {
     if (!mounted || !context.mounted) return;
 
+    // מסך מלא זמין רק בעיון (עם טאב פתוח) או בכלים — יציאה אוטומטית בניווט החוצה.
+    final fullscreenAllowed = FullscreenHelper.isContextAllowed(
+      state.currentScreen,
+      context.read<TabsBloc>().state.hasOpenTabs,
+    );
+    if (!fullscreenAllowed && context.read<SettingsBloc>().state.isFullscreen) {
+      FullscreenHelper.toggleFullscreen(context, false);
+    }
+
     if (state.currentScreen != _lastScreen) {
       if (_lastScreen == Screen.library) {
         final libraryState = libraryBrowserKey.currentState;
@@ -1310,6 +1322,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
       } else if (_lastScreen == Screen.more) {
         moreScreenKey.currentState?.closeTransientPanels();
       }
+      // יציאה ממסך הכלים משהה את התוסף הפעיל (חוסך CPU/RAM ברקע); חזרה מחדשת.
+      PluginRuntimeDispatcher.instance
+          .setToolsScreenVisible(state.currentScreen == Screen.more);
       _lastScreen = state.currentScreen;
     }
 
@@ -2256,6 +2271,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
                   previous.fontFamily != current.fontFamily ||
                   previous.commentatorsFontFamily !=
                       current.commentatorsFontFamily ||
+                  previous.fontBold != current.fontBold ||
+                  previous.commentatorsFontBold !=
+                      current.commentatorsFontBold ||
                   previous.commentatorsFontSize !=
                       current.commentatorsFontSize ||
                   previous.lineHeight != current.lineHeight ||
@@ -2354,7 +2372,19 @@ class MainWindowScreenState extends State<MainWindowScreen>
                       current.commentatorsFontFamily ||
                   previous.commentatorsFontSize != current.commentatorsFontSize;
               if (isThemeChange) {
-                final themePayload = buildThemePayload(context);
+                // ה-MaterialApp מתעדכן רק ב-frame הבא, כך ש-Theme.of(context)
+                // כאן עדיין מחזיר את הצבעים הישנים. לכן בונים את ה-payload
+                // דטרמיניסטית מתוך ה-state (שכבר עדכני) ולא מ-Theme.
+                final brightness = current.followSystemTheme
+                    ? WidgetsBinding
+                        .instance.platformDispatcher.platformBrightness
+                    : (current.isDarkMode ? Brightness.dark : Brightness.light);
+                final isDark = brightness == Brightness.dark;
+                final seed = isDark ? current.darkSeedColor : current.seedColor;
+                final colorScheme =
+                    AppThemeData.createColorScheme(seed, brightness);
+                final themePayload =
+                    buildThemePayloadFromScheme(colorScheme, isDark: isDark);
                 PluginRuntimeDispatcher.instance
                     .dispatchEvent('theme.changed', themePayload);
               }
@@ -2466,6 +2496,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           BlocListener<PluginSystemBloc, PluginSystemState>(
             listenWhen: (_, current) =>
                 current is PluginSystemInstallRequiresPermissions ||
+                current is PluginSystemDevInstallRequiresPermissions ||
                 current is PluginSystemOverwriteRequired,
             listener: (context, state) {
               if (state is PluginSystemInstallRequiresPermissions) {
@@ -2481,6 +2512,29 @@ class MainWindowScreenState extends State<MainWindowScreen>
                       previousAllowOrderBeforeBuiltInsGranted:
                           state.previousAllowOrderBeforeBuiltInsGranted,
                     ),
+                  ),
+                );
+              } else if (state is PluginSystemDevInstallRequiresPermissions) {
+                final bloc = context.read<PluginSystemBloc>();
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => PluginInstallScreen(
+                    manifest: state.manifest,
+                    tempDirPath: '',
+                    previousVersion: state.previousVersion,
+                    previousAllowOrderBeforeBuiltInsGranted:
+                        state.previousAllowOrderBeforeBuiltInsGranted,
+                    onConfirm: (perms, allowOrder) => bloc.add(
+                      ConfirmDevPluginInstall(
+                        manifest: state.manifest,
+                        sourcePath: state.sourcePath,
+                        sourceType: state.sourceType,
+                        grantedPermissions: perms,
+                        allowOrderBeforeBuiltInsGranted: allowOrder,
+                      ),
+                    ),
+                    onCancel: () => bloc.add(LoadPlugins()),
                   ),
                 );
               } else if (state is PluginSystemOverwriteRequired) {
@@ -2605,9 +2659,16 @@ class MainWindowScreenState extends State<MainWindowScreen>
             // אליו וקובע את ניגודיות אייקוני המערכת. שורת הסטטוס נצבעת כצבע
             // ה-CustomTitleBar (reader/panel לפי המסך — ראה custom_title_bar)
             // ואזור הניווט התחתון כצבע ה-NavigationBar, כדי שלא ייווצר תפר.
+            final hasOpenTabs =
+                context.select((TabsBloc bloc) => bloc.state.hasOpenTabs);
             final useReaderStyle = state.currentScreen == Screen.search ||
-                (state.currentScreen == Screen.reading &&
-                    context.select((TabsBloc bloc) => bloc.state.hasOpenTabs));
+                (state.currentScreen == Screen.reading && hasOpenTabs);
+            // מצב מסך מלא אימרסיבי: מסתיר את שורת הטאבים וסרגל הניווט ומשאיר
+            // את הספר/הכלי על כל המסך. רק בהקשר שמתיר מסך מלא (עיון/כלים).
+            final isImmersive =
+                context.select((SettingsBloc b) => b.state.isFullscreen) &&
+                    FullscreenHelper.isContextAllowed(
+                        state.currentScreen, hasOpenTabs);
             return _EdgeToEdgeShell(
               topColor: useReaderStyle
                   ? AppSurfaces.readerBackground(context)
@@ -2622,12 +2683,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
                       children: [
                         Column(
                           children: [
-                            CustomTitleBar(
-                              onReadingSettingsPressed:
-                                  _toggleReadingSettingsPanel,
-                              isReadingSettingsPanelOpen:
-                                  _isReadingSettingsPanelOpen,
-                            ),
+                            if (!isImmersive)
+                              CustomTitleBar(
+                                onReadingSettingsPressed:
+                                    _toggleReadingSettingsPanel,
+                                isReadingSettingsPanelOpen:
+                                    _isReadingSettingsPanelOpen,
+                              ),
                             Expanded(
                               child: OrientationBuilder(
                                 builder: (context, orientation) {
@@ -2648,174 +2710,176 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                   if (orientation == Orientation.landscape) {
                                     return Row(
                                       children: [
-                                        ColoredBox(
-                                          color: AppSurfaces.panelBackground(
-                                            context,
-                                          ),
-                                          child: SizedBox.fromSize(
-                                            size: const Size.fromWidth(74),
-                                            child: Column(
-                                              children: [
-                                                Expanded(
-                                                  child: Material(
-                                                    color: AppSurfaces
-                                                        .panelBackground(
-                                                      context,
-                                                    ),
-                                                    surfaceTintColor:
-                                                        Colors.transparent,
-                                                    child: BlocBuilder<
-                                                        PluginSystemBloc,
-                                                        PluginSystemState>(
-                                                      buildWhen:
-                                                          _pinnedNavRailIdsChanged,
-                                                      builder: (context,
-                                                          pluginState) {
-                                                        final settingsState =
-                                                            context.select<
-                                                                    SettingsBloc,
-                                                                    SettingsState>(
-                                                                (b) => b.state);
-                                                        final pinnedItems =
-                                                            _resolvePinnedItems(
-                                                          pluginState:
-                                                              pluginState,
-                                                          pinnedBuiltInIds:
-                                                              settingsState
-                                                                  .builtInToolsPinnedToNavRail,
-                                                          hiddenBuiltInIds:
-                                                              settingsState
-                                                                  .hiddenBuiltInToolIds,
-                                                          isOfflineMode:
-                                                              settingsState
-                                                                  .isOfflineMode,
-                                                        );
-                                                        return ValueListenableBuilder<
-                                                            String?>(
-                                                          valueListenable:
-                                                              activeToolIdNotifier,
-                                                          builder: (context,
-                                                              activeToolId, _) {
-                                                            final hideTools =
-                                                                _isAllToolsHidden(
-                                                                    settingsState,
-                                                                    pluginState);
-                                                            final activePinnedIndex = state
-                                                                            .currentScreen ==
-                                                                        Screen
-                                                                            .more &&
-                                                                    activeToolId !=
-                                                                        null
-                                                                ? pinnedItems
-                                                                    .indexWhere((it) =>
-                                                                        it.toolId ==
-                                                                        activeToolId)
-                                                                : -1;
-                                                            // "כלים" מודגש רק כשאין פריט-מוצמד-לסרגל פעיל
-                                                            final isToolsSelected =
-                                                                !hideTools &&
-                                                                    state.currentScreen ==
-                                                                        Screen
-                                                                            .more &&
-                                                                    activePinnedIndex ==
-                                                                        -1;
-                                                            return LayoutBuilder(
-                                                              builder: (context,
-                                                                  constraints) {
-                                                                const buttonHeight =
-                                                                    60.0;
-                                                                const minSpacerHeight =
-                                                                    20.0;
-                                                                final totalItems = (_navData
-                                                                            .length -
-                                                                        (hideTools
-                                                                            ? 1
-                                                                            : 0)) +
-                                                                    pinnedItems
-                                                                        .length;
-                                                                final needsScroll = totalItems *
-                                                                            buttonHeight +
-                                                                        minSpacerHeight >
-                                                                    constraints
-                                                                        .maxHeight;
+                                        if (!isImmersive)
+                                          ColoredBox(
+                                            color: AppSurfaces.panelBackground(
+                                              context,
+                                            ),
+                                            child: SizedBox.fromSize(
+                                              size: const Size.fromWidth(74),
+                                              child: Column(
+                                                children: [
+                                                  Expanded(
+                                                    child: Material(
+                                                      color: AppSurfaces
+                                                          .panelBackground(
+                                                        context,
+                                                      ),
+                                                      surfaceTintColor:
+                                                          Colors.transparent,
+                                                      child: BlocBuilder<
+                                                          PluginSystemBloc,
+                                                          PluginSystemState>(
+                                                        buildWhen:
+                                                            _pinnedNavRailIdsChanged,
+                                                        builder: (context,
+                                                            pluginState) {
+                                                          final settingsState =
+                                                              context.select<
+                                                                      SettingsBloc,
+                                                                      SettingsState>(
+                                                                  (b) =>
+                                                                      b.state);
+                                                          final pinnedItems =
+                                                              _resolvePinnedItems(
+                                                            pluginState:
+                                                                pluginState,
+                                                            pinnedBuiltInIds:
+                                                                settingsState
+                                                                    .builtInToolsPinnedToNavRail,
+                                                            hiddenBuiltInIds:
+                                                                settingsState
+                                                                    .hiddenBuiltInToolIds,
+                                                            isOfflineMode:
+                                                                settingsState
+                                                                    .isOfflineMode,
+                                                          );
+                                                          return ValueListenableBuilder<
+                                                              String?>(
+                                                            valueListenable:
+                                                                activeToolIdNotifier,
+                                                            builder: (context,
+                                                                activeToolId,
+                                                                _) {
+                                                              final hideTools =
+                                                                  _isAllToolsHidden(
+                                                                      settingsState,
+                                                                      pluginState);
+                                                              final activePinnedIndex = state
+                                                                              .currentScreen ==
+                                                                          Screen
+                                                                              .more &&
+                                                                      activeToolId !=
+                                                                          null
+                                                                  ? pinnedItems
+                                                                      .indexWhere((it) =>
+                                                                          it.toolId ==
+                                                                          activeToolId)
+                                                                  : -1;
+                                                              // "כלים" מודגש רק כשאין פריט-מוצמד-לסרגל פעיל
+                                                              final isToolsSelected =
+                                                                  !hideTools &&
+                                                                      state.currentScreen ==
+                                                                          Screen
+                                                                              .more &&
+                                                                      activePinnedIndex ==
+                                                                          -1;
+                                                              return LayoutBuilder(
+                                                                builder: (context,
+                                                                    constraints) {
+                                                                  const buttonHeight =
+                                                                      60.0;
+                                                                  const minSpacerHeight =
+                                                                      20.0;
+                                                                  final totalItems = (_navData
+                                                                              .length -
+                                                                          (hideTools
+                                                                              ? 1
+                                                                              : 0)) +
+                                                                      pinnedItems
+                                                                          .length;
+                                                                  final needsScroll = totalItems *
+                                                                              buttonHeight +
+                                                                          minSpacerHeight >
+                                                                      constraints
+                                                                          .maxHeight;
 
-                                                                final topItems =
-                                                                    <Widget>[
-                                                                  for (int i =
-                                                                          0;
-                                                                      i < _toolsNavIndex;
-                                                                      i++)
-                                                                    _buildNavRailItem(
-                                                                      context,
-                                                                      i,
-                                                                      state
-                                                                          .currentScreen,
-                                                                    ),
-                                                                  if (!hideTools)
-                                                                    _buildNavRailItem(
-                                                                      context,
-                                                                      _toolsNavIndex,
-                                                                      state
-                                                                          .currentScreen,
-                                                                      selectedOverride:
-                                                                          isToolsSelected,
-                                                                    ),
-                                                                  for (int i =
-                                                                          0;
-                                                                      i <
-                                                                          pinnedItems
-                                                                              .length;
-                                                                      i++)
-                                                                    _buildPinnedItemNavRailItem(
-                                                                      context,
-                                                                      pinnedItems[
-                                                                          i],
-                                                                      isSelected:
-                                                                          activePinnedIndex ==
-                                                                              i,
-                                                                    ),
-                                                                ];
-                                                                final settingsItem =
-                                                                    _buildNavRailItem(
-                                                                  context,
-                                                                  _settingsNavIndex,
-                                                                  state
-                                                                      .currentScreen,
-                                                                );
-
-                                                                if (needsScroll) {
-                                                                  return SingleChildScrollView(
-                                                                    child:
-                                                                        Column(
-                                                                      children: [
-                                                                        ...topItems,
-                                                                        settingsItem,
-                                                                      ],
-                                                                    ),
+                                                                  final topItems =
+                                                                      <Widget>[
+                                                                    for (int i =
+                                                                            0;
+                                                                        i < _toolsNavIndex;
+                                                                        i++)
+                                                                      _buildNavRailItem(
+                                                                        context,
+                                                                        i,
+                                                                        state
+                                                                            .currentScreen,
+                                                                      ),
+                                                                    if (!hideTools)
+                                                                      _buildNavRailItem(
+                                                                        context,
+                                                                        _toolsNavIndex,
+                                                                        state
+                                                                            .currentScreen,
+                                                                        selectedOverride:
+                                                                            isToolsSelected,
+                                                                      ),
+                                                                    for (int i =
+                                                                            0;
+                                                                        i < pinnedItems.length;
+                                                                        i++)
+                                                                      _buildPinnedItemNavRailItem(
+                                                                        context,
+                                                                        pinnedItems[
+                                                                            i],
+                                                                        isSelected:
+                                                                            activePinnedIndex ==
+                                                                                i,
+                                                                      ),
+                                                                  ];
+                                                                  final settingsItem =
+                                                                      _buildNavRailItem(
+                                                                    context,
+                                                                    _settingsNavIndex,
+                                                                    state
+                                                                        .currentScreen,
                                                                   );
-                                                                }
 
-                                                                return Column(
-                                                                  children: [
-                                                                    ...topItems,
-                                                                    const Spacer(),
-                                                                    settingsItem,
-                                                                  ],
-                                                                );
-                                                              },
-                                                            );
-                                                          },
-                                                        );
-                                                      },
+                                                                  if (needsScroll) {
+                                                                    return SingleChildScrollView(
+                                                                      child:
+                                                                          Column(
+                                                                        children: [
+                                                                          ...topItems,
+                                                                          settingsItem,
+                                                                        ],
+                                                                      ),
+                                                                    );
+                                                                  }
+
+                                                                  return Column(
+                                                                    children: [
+                                                                      ...topItems,
+                                                                      const Spacer(),
+                                                                      settingsItem,
+                                                                    ],
+                                                                  );
+                                                                },
+                                                              );
+                                                            },
+                                                          );
+                                                        },
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
-                                              ],
+                                                ],
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        const VerticalDivider(
-                                            thickness: 1, width: 1),
+                                        if (!isImmersive)
+                                          const VerticalDivider(
+                                              thickness: 1, width: 1),
                                         Expanded(child: pageView),
                                       ],
                                     );
@@ -2823,66 +2887,69 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                     return Column(
                                       children: [
                                         Expanded(child: pageView),
-                                        BlocBuilder<PluginSystemBloc,
-                                            PluginSystemState>(
-                                          buildWhen: _pinnedNavRailIdsChanged,
-                                          builder: (context, pluginState) {
-                                            final settingsState =
-                                                context.select<SettingsBloc,
-                                                        SettingsState>(
-                                                    (b) => b.state);
-                                            final pinnedItems =
-                                                _resolvePinnedItems(
-                                              pluginState: pluginState,
-                                              pinnedBuiltInIds: settingsState
-                                                  .builtInToolsPinnedToNavRail,
-                                              hiddenBuiltInIds: settingsState
-                                                  .hiddenBuiltInToolIds,
-                                              isOfflineMode:
-                                                  settingsState.isOfflineMode,
-                                            );
-                                            final hideTools = _isAllToolsHidden(
-                                                settingsState, pluginState);
-                                            return ValueListenableBuilder<
-                                                String?>(
-                                              valueListenable:
-                                                  activeToolIdNotifier,
-                                              builder:
-                                                  (context, activeToolId, _) {
-                                                return NavigationBar(
-                                                  backgroundColor: AppSurfaces
-                                                      .panelBackground(
-                                                    context,
-                                                  ),
-                                                  surfaceTintColor:
-                                                      Colors.transparent,
-                                                  destinations:
-                                                      _buildBarDestinations(
-                                                    pinnedItems,
-                                                    hideTools: hideTools,
-                                                  ),
-                                                  selectedIndex:
-                                                      _getBarSelectedIndex(
-                                                    state.currentScreen,
-                                                    pinnedItems,
-                                                    activeToolId,
-                                                    hideTools: hideTools,
-                                                  ),
-                                                  onDestinationSelected:
-                                                      (index) async {
-                                                    await _onBarNavTap(
+                                        if (!isImmersive)
+                                          BlocBuilder<PluginSystemBloc,
+                                              PluginSystemState>(
+                                            buildWhen: _pinnedNavRailIdsChanged,
+                                            builder: (context, pluginState) {
+                                              final settingsState =
+                                                  context.select<SettingsBloc,
+                                                          SettingsState>(
+                                                      (b) => b.state);
+                                              final pinnedItems =
+                                                  _resolvePinnedItems(
+                                                pluginState: pluginState,
+                                                pinnedBuiltInIds: settingsState
+                                                    .builtInToolsPinnedToNavRail,
+                                                hiddenBuiltInIds: settingsState
+                                                    .hiddenBuiltInToolIds,
+                                                isOfflineMode:
+                                                    settingsState.isOfflineMode,
+                                              );
+                                              final hideTools =
+                                                  _isAllToolsHidden(
+                                                      settingsState,
+                                                      pluginState);
+                                              return ValueListenableBuilder<
+                                                  String?>(
+                                                valueListenable:
+                                                    activeToolIdNotifier,
+                                                builder:
+                                                    (context, activeToolId, _) {
+                                                  return NavigationBar(
+                                                    backgroundColor: AppSurfaces
+                                                        .panelBackground(
                                                       context,
-                                                      index,
-                                                      state.currentScreen,
+                                                    ),
+                                                    surfaceTintColor:
+                                                        Colors.transparent,
+                                                    destinations:
+                                                        _buildBarDestinations(
                                                       pinnedItems,
                                                       hideTools: hideTools,
-                                                    );
-                                                  },
-                                                );
-                                              },
-                                            );
-                                          },
-                                        ),
+                                                    ),
+                                                    selectedIndex:
+                                                        _getBarSelectedIndex(
+                                                      state.currentScreen,
+                                                      pinnedItems,
+                                                      activeToolId,
+                                                      hideTools: hideTools,
+                                                    ),
+                                                    onDestinationSelected:
+                                                        (index) async {
+                                                      await _onBarNavTap(
+                                                        context,
+                                                        index,
+                                                        state.currentScreen,
+                                                        pinnedItems,
+                                                        hideTools: hideTools,
+                                                      );
+                                                    },
+                                                  );
+                                                },
+                                              );
+                                            },
+                                          ),
                                       ],
                                     );
                                   }
@@ -2898,6 +2965,27 @@ class MainWindowScreenState extends State<MainWindowScreen>
                         // האפליקציה. הוא חי כל זמן שה-MainWindowScreen קיים,
                         // ולא תלוי במסך "כלים".
                         const PluginBackgroundHost(),
+                        if (isImmersive)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: IconButton(
+                              tooltip: 'צא ממסך מלא',
+                              icon: RtlIcon(
+                                  FluentIcons.full_screen_minimize_24_regular),
+                              onPressed: () async {
+                                await FullscreenHelper.toggleFullscreen(
+                                    context, false);
+                              },
+                              style: IconButton.styleFrom(
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                                foregroundColor:
+                                    Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
                         ContextOverlayPanel(
                           isOpen: _isReadingSettingsPanelOpen &&
                               (state.currentScreen == Screen.reading ||

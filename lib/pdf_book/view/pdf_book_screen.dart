@@ -15,6 +15,8 @@ import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
+import 'package:otzaria/utils/ui/commentary_pane_policy.dart';
 import 'package:otzaria/models/links.dart' as otz_links;
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/services/commentary_service.dart';
@@ -63,6 +65,7 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/utils/link_helpers.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -997,6 +1000,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
+        label: 'הוסף סימניה לעמוד זה',
+        icon: FluentIcons.bookmark_add_24_regular,
+        onTap: () => _handleBookmarkPress(menuContext),
+      ),
+      AppContextMenuEntry(
         label: 'הוסף הערה אישית',
         icon: FluentIcons.note_add_24_regular,
         onTap: () => _handleAddNotePress(menuContext),
@@ -1131,7 +1139,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         }
       },
       backgroundColor: _pdfViewerBgColor(),
-      sizeDelegateProvider: PdfViewerSizeDelegateProviderLegacy(maxScale: 10),
+      sizeDelegateProvider: PdfViewerSizeDelegateProviderLegacy(maxScale: 20),
       // חסימת הזיכרון של ה-renderer: ברירת המחדל של pdfrx 2.4.3 היא
       // 100MB; מהודק ל-48MB כדי לצמצם לחץ זיכרון במחשבים עם 8GB RAM
       // (תרחיש ה-OOM ב-Microsoft Store).
@@ -1288,15 +1296,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         final hasSavedZoom = savedZoom != null && savedZoom != 1.0;
         bool shouldFitToWidth =
             layoutMode != PdfLayoutMode.bookView && !hasSavedZoom;
-        if (enablePerBookSettings) {
-          final settings = await _loadPerBookSettings();
-          shouldFitToWidth = shouldFitToWidth && settings?.zoom == null;
 
-          // טעינת המפרשים הפעילים
-          if (settings?.activeCommentators != null) {
-            widget.tab.activeCommentators.clear();
-            widget.tab.activeCommentators.addAll(settings!.activeCommentators!);
-          }
+        // בחירת המפרשים נטענת תמיד (לא תלוי ב-enablePerBookSettings); זום ופריסה
+        // נשארים כפופים להגדרה.
+        final settings = await _loadPerBookSettings();
+        if (settings?.activeCommentators != null) {
+          widget.tab.activeCommentators.clear();
+          widget.tab.activeCommentators.addAll(settings!.activeCommentators!);
+        }
+        if (enablePerBookSettings) {
+          shouldFitToWidth = shouldFitToWidth && settings?.zoom == null;
         }
 
         final currentReadyPage = resolveReadyPdfPageNumber(
@@ -1417,6 +1426,36 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   Settings.getValue<String>('key-shortcut-print') ?? 'ctrl+p';
               if (ShortcutHelper.matchesShortcut(event, printShortcut)) {
                 _handlePrintPress(context);
+                return KeyEventResult.handled;
+              }
+              // העתקת קישורים — קיצורים אופציונליים. ב-PDF "קישור למקטע" מעתיק
+              // קישור לעמוד הנוכחי (אותו מפתח כמו קישור-למקטע בספר טקסט).
+              final copyBookLinkShortcut = ShortcutValidator.getShortcutValue(
+                      ShortcutValidator.copyBookLinkKey) ??
+                  '';
+              final copyPageLinkShortcut = ShortcutValidator.getShortcutValue(
+                      ShortcutValidator.copySectionLinkKey) ??
+                  '';
+              if (copyBookLinkShortcut.isNotEmpty &&
+                  ShortcutHelper.matchesShortcut(event, copyBookLinkShortcut)) {
+                final bookId = widget.tab.book.id;
+                if (bookId == null) {
+                  UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+                } else {
+                  copyLinkToClipboard(buildPdfBookLink(bookId));
+                }
+                return KeyEventResult.handled;
+              }
+              if (copyPageLinkShortcut.isNotEmpty &&
+                  ShortcutHelper.matchesShortcut(event, copyPageLinkShortcut)) {
+                final bookId = widget.tab.book.id;
+                if (bookId == null) {
+                  UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+                } else {
+                  final page = widget.tab.pdfViewerController.pageNumber ??
+                      widget.tab.pageNumber;
+                  copyLinkToClipboard(buildPdfPageLink(bookId, page));
+                }
                 return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
@@ -2476,14 +2515,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
   }
 
+  /// שומר את בחירת המפרשים פר-ספר (תמיד, ללא תלות ב-enablePerBookSettings),
+  /// כדי שתיטען בכל פתיחה. בחירה ריקה נשמרת אף היא (המשתמש ביטל את הכל).
   Future<void> _saveActiveCommentators() async {
-    final settingsBloc = context.read<SettingsBloc>();
-    if (!settingsBloc.state.enablePerBookSettings) return;
-
     final settings = PdfBookPerBookSettings(
       activeCommentators: List.from(widget.tab.activeCommentators),
     );
-    await settings.save(widget.tab.book.title);
+    await settings.save(widget.tab.book);
   }
 
   /// קאש של הגדרות לפי-ספר לאורך חיי המסך. נטען פעם אחת ומשותף לכל
@@ -2493,18 +2531,59 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   Future<PdfBookPerBookSettings?> _loadPerBookSettings() {
     return _perBookSettingsFuture ??=
-        PdfBookPerBookSettings.load(widget.tab.book.title);
+        PdfBookPerBookSettings.load(widget.tab.book);
   }
 
+  /// טוען את בחירת המפרשים השמורה פר-ספר (תמיד, ללא תלות ב-enablePerBookSettings).
   Future<void> _loadActiveCommentators() async {
-    final settingsBloc = context.read<SettingsBloc>();
-    if (!settingsBloc.state.enablePerBookSettings) return;
-
     final settings = await _loadPerBookSettings();
     if (settings?.activeCommentators != null && mounted) {
       widget.tab.activeCommentators.clear();
       widget.tab.activeCommentators.addAll(settings!.activeCommentators!);
     }
+  }
+
+  /// בוחר אוטומטית את מפרשי ברירת המחדל של הספר בפתיחה (כמו בכרטיסיית הטקסט),
+  /// כל עוד אין בחירה פר-ספר שמורה ואין מפרשים פעילים. [available] = המפרשים
+  /// הזמינים מתוך ה-links של הספר.
+  Future<void> _applyDefaultCommentatorsIfNeeded(List<String> available) async {
+    if (available.isEmpty) return;
+
+    final settings = await _loadPerBookSettings();
+    final selection = await DefaultCommentators.resolveAutoSelection(
+      widget.tab.book,
+      availableCommentators: available,
+      savedSelection: settings?.activeCommentators,
+    );
+    if (!mounted ||
+        selection == null ||
+        widget.tab.activeCommentators.isNotEmpty) {
+      return;
+    }
+    setState(() => widget.tab.activeCommentators.addAll(selection));
+  }
+
+  // פתיחה אוטומטית של פאנל המפרשים מתבצעת פעם אחת בלבד לכל טעינת מסך.
+  bool _didAutoOpenCommentary = false;
+
+  /// פותח אוטומטית את פאנל המפרשים (right pane) בפתיחת ספר, אם ההגדרה דולקת
+  /// ויש מפרשים נבחרים. פעם אחת בלבד, כדי לא להיאבק עם סגירה ידנית של המשתמש.
+  void _maybeAutoOpenCommentaryPane() {
+    if (!mounted) return;
+    final pdfState = _bloc.state;
+    if (!shouldAutoOpenCommentaryPane(
+      settingEnabled: context.read<SettingsBloc>().state.defaultCommentaryOpen,
+      isSupportedMode: true,
+      hasSelectedCommentators: widget.tab.activeCommentators.isNotEmpty,
+      alreadyAutoOpened: _didAutoOpenCommentary,
+      paneAlreadyOpen: pdfState is PdfBookLoaded && pdfState.showRightPane,
+    )) {
+      return;
+    }
+    _didAutoOpenCommentary = true;
+    _bloc.add(const pdf_events.ToggleRightPane(show: true, initialTabIndex: 0));
+    // פתיחה אוטומטית נחשבת כ"שימוש במפרשים" — מדכאת את טיפ "כדאי לפתוח מפרשים".
+    _recordCommentaryOpenedIfNeeded();
   }
 
   Future<void> _loadCommentatorGroups() async {
@@ -2515,6 +2594,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         commentatorsSet.add(utils.getTitleFromPath(link.path2));
       }
     }
+    // ודא שבחירה שמורה הוחלה לפני קביעת ברירת מחדל והפתיחה האוטומטית.
+    await _loadActiveCommentators();
+    await _applyDefaultCommentatorsIfNeeded(commentatorsSet.toList());
+    _maybeAutoOpenCommentaryPane();
     final eras = await utils.splitByEra(commentatorsSet.toList());
     final known = <String>{
       ...?eras['תורה שבכתב'],
@@ -2718,10 +2801,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       // טעינת links
       final library = await DataRepository.instance.library;
 
-      // ניסיון חיפוש מדויק, ואם נכשל — חיפוש גמיש
-      final TextBook? textBook = (library.findBookByTitle(bookTitle, TextBook)
-              as TextBook?) ??
-          (library.findBookByTitleFlexible(bookTitle, TextBook) as TextBook?);
+      final textBook =
+          library.getCompanionBook(widget.tab.book, TextBook) as TextBook?;
 
       if (textBook != null) {
         final loadedLinks = await textBook.links
@@ -3028,7 +3109,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   return DualAdaptiveReaderPane(
                     mainContent: _buildReaderMainContent(),
                     showLeftPane: showLeftPane,
-                    leftPaneContent: _buildLeftPaneContent(),
+                    leftPaneContent: _buildLeftPaneContent(showLeftPane),
                     leftPaneWidth: leftPaneWidth,
                     leftMinPaneWidth: 200,
                     leftMaxPaneWidth: 600,
@@ -3255,7 +3336,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           BlocBuilder<PdfBookBloc, PdfBookState>(
             buildWhen: (prev, curr) {
               if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-                return prev.showZoomBar != curr.showZoomBar;
+                return prev.showZoomBar != curr.showZoomBar ||
+                    prev.zoom != curr.zoom;
               }
               return true;
             },
@@ -3270,7 +3352,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 right: 0,
                 child: Center(
                   child: PdfZoomBar(
-                    currentZoom: widget.tab.pdfViewerController.value.zoom,
+                    currentZoom: state.zoom,
                     onZoomIn: _zoomIn,
                     onZoomOut: _zoomOut,
                     onResetZoom: _resetZoom,
@@ -3284,7 +3366,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     );
   }
 
-  Widget _buildLeftPaneContent() {
+  Widget _buildLeftPaneContent(bool showLeftPane) {
     return Column(
       children: [
         ValueListenableBuilder(
@@ -3327,6 +3409,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   outline: outline,
                   controller: widget.tab.pdfViewerController,
                   focusNode: _navigationFieldFocusNode,
+                  isPaneOpen: showLeftPane,
                   onNavigateToPage: _goToPageWithSpreadLock,
                 ),
               ),
@@ -3634,23 +3717,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   List<Widget> _buildPdfActions(BuildContext context, bool wideScreen) {
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    int maxButtons;
-
-    if (screenWidth < 400) {
-      maxButtons = 2;
-    } else if (screenWidth < 500) {
-      maxButtons = 4;
-    } else if (screenWidth < 600) {
-      maxButtons = 6;
-    } else if (screenWidth < 700) {
-      maxButtons = 8;
-    } else if (screenWidth < 900) {
-      maxButtons = 10;
-    } else {
-      maxButtons = 999;
-    }
+    final maxButtons =
+        maxToolbarButtonsForWidth(MediaQuery.of(context).size.width);
 
     return [
       ResponsiveActionBar(
@@ -3660,7 +3728,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             widget.enableTourTargets ? pdfBookOverflowTourTargetKey : null,
         menuItemKeysByTooltip: widget.enableTourTargets
             ? {
-                'הוסף סימניה': pdfBookOverflowBookmarkTourTargetKey,
+                'סימניות בספר זה': pdfBookOverflowBookmarkTourTargetKey,
                 'חיפוש': pdfBookOverflowSearchTourTargetKey,
                 'הדפס': pdfBookOverflowPrintTourTargetKey,
               }
@@ -3749,20 +3817,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onPressed: () => _handleAddNotePress(context),
         compact: isCompact,
       ),
+      // הצגת סימניות הספר (הוספת סימניה עברה לתפריט ההקשר בעמוד)
       ActionButtonData(
         widget: ToolbarActionButton(
           key: widget.enableTourTargets ? pdfBookBookmarkTourTargetKey : null,
-          tooltip: 'הוסף סימניה',
-          icon: FluentIcons.bookmark_add_24_regular,
-          compact: isCompact,
-          onPressed: () => _handleBookmarkPress(context),
-        ),
-        icon: FluentIcons.bookmark_add_24_regular,
-        tooltip: 'הוסף סימניה',
-        onPressed: () => _handleBookmarkPress(context),
-      ),
-      ActionButtonData(
-        widget: ToolbarActionButton(
           tooltip: 'סימניות בספר זה',
           icon: FluentIcons.bookmark_multiple_24_regular,
           compact: isCompact,
@@ -3946,7 +4004,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final currentOutline = widget.tab.outline.value ?? [];
 
     final library = await DataRepository.instance.library;
-    final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
+    final textBook = library.getCompanionBook(widget.tab.book, TextBook);
     if (textBook == null) return;
 
     if (!context.mounted) return;
@@ -4036,20 +4094,24 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final currentPage = widget.tab.pdfViewerController.isReady
         ? (widget.tab.pdfViewerController.pageNumber ?? 1)
         : 1;
+    // עיגון למספר השורה הלוגי בטקסט המקביל (כמו מפרשים/קישורים), כדי שכותרת
+    // ההערה והסינון לפי עמוד נוכחי יתאימו. בספרים ללא טקסט מקביל
+    // currentTextLineNumber שווה ממילא לעמוד הפיזי.
+    final anchorLine = widget.tab.currentTextLineNumber ?? currentPage;
 
     final notesBloc = context.read<PersonalNotesBloc>();
 
     final draftService = PersonalNoteDraftService();
     final draft = await draftService.loadDraft(
       bookId: widget.tab.book.title,
-      lineNumber: currentPage,
+      lineNumber: anchorLine,
     );
 
     if (!mounted) return;
 
     notesBloc.add(StartCreatingPersonalNote(
       bookId: widget.tab.book.title,
-      lineNumber: currentPage,
+      lineNumber: anchorLine,
       referenceText: 'עמוד $currentPage',
       initialContent: draft?.content ?? '',
       initialFormat: draft?.contentFormat ?? PersonalNoteContentFormat.plain,
@@ -4114,7 +4176,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return FutureBuilder(
       future: DataRepository.instance.library
-          .then((library) => library.findBookByTitle(book.title, TextBook)),
+          .then((library) => library.getCompanionBook(book, TextBook)),
       builder: (context, snapshot) => snapshot.hasData
           ? ToolbarActionButton(
               tooltip: 'פתח ספר במהדורת טקסט',

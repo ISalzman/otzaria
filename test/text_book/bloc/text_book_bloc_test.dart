@@ -208,27 +208,33 @@ void main() {
         int currentLine,
         int? categoryId,
         String? fileType,
+        bool preferUserBooks,
       })>[];
 
       final bloc = _createBloc(
         repository: repository,
         showPageShapeView: false,
+        // ספר אישי בשם זהה לספר רשמי: בלי preferUserBooks ה-quick preview
+        // היה מאתר את הספר הרשמי לפי שם בלבד מ-seforim.db.
         book: TextBook(
           title: 'ספר כפול',
           categoryId: 42,
           fileType: 'txt',
+          isUserBook: true,
         ),
         quickPreviewLoader: (
           String title,
           int currentLine, {
           int? categoryId,
           String? fileType,
+          bool preferUserBooks = false,
         }) async {
           quickPreviewCalls.add((
             title: title,
             currentLine: currentLine,
             categoryId: categoryId,
             fileType: fileType,
+            preferUserBooks: preferUserBooks,
           ));
 
           if (categoryId == 42 && fileType == 'txt') {
@@ -255,6 +261,7 @@ void main() {
       expect(quickPreviewCalls.single.currentLine, 10);
       expect(quickPreviewCalls.single.categoryId, 42);
       expect(quickPreviewCalls.single.fileType, 'txt');
+      expect(quickPreviewCalls.single.preferUserBooks, isTrue);
 
       final state = bloc.state;
       expect(state, isA<TextBookLoaded>());
@@ -554,6 +561,58 @@ void main() {
     );
 
     test(
+      'Ctrl+בחירה (additive) צובר ומסיר קטעים מ-selectedIndices',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: false,
+          commentators: const ['רש"י על בראשית'],
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+        await _waitFor(() => bloc.state is TextBookLoaded,
+            description: 'initial load');
+        TextBookLoaded loaded() => bloc.state as TextBookLoaded;
+
+        bloc.add(const UpdateSelectedIndex(12));
+        await _waitFor(
+            () => bloc.state is TextBookLoaded && loaded().selectedIndex == 12,
+            description: 'select 12');
+        expect(loaded().selectedIndices, {12});
+
+        // הוספת קטע שני בלחיצת Ctrl
+        bloc.add(const UpdateSelectedIndex(20, additive: true));
+        await _waitFor(() => loaded().selectedIndices.contains(20),
+            description: 'add 20');
+        expect(loaded().selectedIndices, {12, 20});
+        expect(loaded().selectedIndex, 20);
+
+        // Ctrl על קטע שכבר נבחר → מסיר אותו, העוגן עובר לקטע שנותר
+        bloc.add(const UpdateSelectedIndex(20, additive: true));
+        await _waitFor(() => !loaded().selectedIndices.contains(20),
+            description: 'remove 20');
+        expect(loaded().selectedIndices, {12});
+        expect(loaded().selectedIndex, 12);
+
+        // לחיצה רגילה (לא additive) מאפסת לקטע יחיד
+        bloc.add(const UpdateSelectedIndex(5));
+        await _waitFor(() => loaded().selectedIndices.contains(5),
+            description: 'reset to 5');
+        expect(loaded().selectedIndices, {5});
+
+        await bloc.close();
+      },
+    );
+
+    test(
       'במפרשים למטה שינוי מפרשים טוען את הטווח הנוכחי בלי force מיותר',
       () async {
         final repository = _FakeTextBookRepository();
@@ -803,6 +862,7 @@ void main() {
           int currentLine, {
           int? categoryId,
           String? fileType,
+          bool preferUserBooks = false,
         }) async {
           return 'שורת preview 10\nשורת preview 11';
         },
@@ -817,7 +877,12 @@ void main() {
         ),
       );
 
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await _waitFor(
+        () =>
+            bloc.state is TextBookLoaded &&
+            (bloc.state as TextBookLoaded).content.contains('שורת preview 10'),
+        description: 'preview content loaded',
+      );
 
       var state = bloc.state;
       expect(state, isA<TextBookLoaded>());
@@ -830,7 +895,12 @@ void main() {
       repository.completeFullContent(
         List.generate(30, (index) => 'שורה מלאה $index').join('\n'),
       );
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await _waitFor(
+        () =>
+            bloc.state is TextBookLoaded &&
+            (bloc.state as TextBookLoaded).content.length == 30,
+        description: 'full content loaded',
+      );
 
       state = bloc.state;
       expect((state as TextBookLoaded).content.length, 30);
@@ -854,6 +924,7 @@ void main() {
             int currentLine, {
             int? categoryId,
             String? fileType,
+            bool preferUserBooks = false,
           }) async =>
               null, // ללא preview – הבלוק נשאר ב-Loading עד getBookContent
         );
@@ -1016,6 +1087,7 @@ TextBookBloc _createBloc({
     int currentLine, {
     int? categoryId,
     String? fileType,
+    bool preferUserBooks,
   })? quickPreviewLoader,
 }) {
   return TextBookBloc(

@@ -34,6 +34,7 @@ import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/view/plugin_crashed_view.dart';
 import 'package:otzaria/plugins/view/plugin_webview2_missing_view.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
+import 'package:otzaria/plugins/services/plugin_file_server.dart';
 
 // ---------------------------------------------------------------------------
 // Stub SDK — injected at AT_DOCUMENT_START before any page JS runs.
@@ -115,8 +116,11 @@ class _PluginTabPageState extends State<PluginTabPage> {
   void initState() {
     super.initState();
     _pluginSystemBloc = context.read<PluginSystemBloc>();
-    localHtmlPath =
-        '${widget.plugin.resolvedRootPath}/${widget.plugin.entrypointPath}';
+    // For localhost_dev the dev server root IS the entrypoint (e.g. http://localhost:5173/).
+    // The manifest entrypoint (e.g. dist/index.html) is the production-build path only.
+    localHtmlPath = widget.plugin.isLocalhostDev
+        ? widget.plugin.devRootPath!.replaceAll(RegExp(r'/+$'), '')
+        : '${widget.plugin.resolvedRootPath}/${widget.plugin.entrypointPath}';
     final historyBloc = context.read<HistoryBloc>();
     final tabsBloc = context.read<TabsBloc>();
     final navigationBloc = context.read<NavigationBloc>();
@@ -208,6 +212,16 @@ class _PluginTabPageState extends State<PluginTabPage> {
     if (!mounted) return;
     if (!widget.plugin.isDevelopment) return;
 
+    // localhost_dev: HMR handles JS/CSS changes automatically.
+    // A manual reload clears the cache and reloads the page.
+    if (widget.plugin.isLocalhostDev) {
+      try {
+        await InAppWebViewController.clearAllCache();
+      } catch (_) {}
+      await webViewController?.reload();
+      return;
+    }
+
     try {
       await _ensurePackageInfo();
       final manifestFile =
@@ -296,7 +310,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
       return Center(child: Text('שגיאה בטעינת הקובץ: $localHtmlPath'));
     }
 
-    if (!File(localHtmlPath).existsSync()) {
+    if (!widget.plugin.isLocalhostDev && !File(localHtmlPath).existsSync()) {
       return const SizedBox.shrink(); // התוסף כבר הוסר — הטאב ייסגר בקרוב
     }
 
@@ -349,17 +363,37 @@ class _PluginTabPageState extends State<PluginTabPage> {
     return _buildWebView();
   }
 
+  // Allows only the exact dev server origin (host + scheme + port) to prevent
+  // unintended access to other localhost services running on different ports.
+  bool _isDevServerUri(Uri uri) {
+    final devUri = Uri.tryParse(widget.plugin.devRootPath ?? '');
+    if (devUri == null) return false;
+    final reqHost = uri.host.toLowerCase();
+    final devHost = devUri.host.toLowerCase();
+    const localhosts = {'localhost', '127.0.0.1', '::1'};
+    if (!localhosts.contains(reqHost) || reqHost != devHost) return false;
+    if (uri.scheme != devUri.scheme) return false;
+    final devPort =
+        devUri.hasPort ? devUri.port : (devUri.scheme == 'https' ? 443 : 80);
+    final reqPort = uri.hasPort ? uri.port : (uri.scheme == 'https' ? 443 : 80);
+    return reqPort == devPort;
+  }
+
   Widget _buildWebView() {
+    final initialUrl = widget.plugin.isLocalhostDev
+        ? WebUri(localHtmlPath)
+        : WebUri.uri(Uri.file(localHtmlPath));
+
     final webView = InAppWebView(
       webViewEnvironment: WebViewEnvironmentHolder.environment,
-      initialUrlRequest: URLRequest(url: WebUri.uri(Uri.file(localHtmlPath))),
+      initialUrlRequest: URLRequest(url: initialUrl),
       initialSettings: InAppWebViewSettings(
         allowFileAccessFromFileURLs: false,
         allowUniversalAccessFromFileURLs: false,
         useShouldOverrideUrlLoading: true,
         useShouldInterceptRequest: true,
         cacheEnabled: !widget.plugin.isDevelopment,
-        isInspectable: kDebugMode,
+        isInspectable: widget.plugin.isDevelopment || kDebugMode,
       ),
       // Stub SDK — injected BEFORE any page JS runs
       initialUserScripts: UnmodifiableListView<UserScript>([
@@ -422,6 +456,18 @@ class _PluginTabPageState extends State<PluginTabPage> {
             return NavigationActionPolicy.ALLOW;
           }
 
+          if ((uri.scheme == 'http' || uri.scheme == 'https') &&
+              widget.plugin.isLocalhostDev &&
+              _isDevServerUri(uri)) {
+            return NavigationActionPolicy.ALLOW;
+          }
+
+          // שרת הקבצים הפנימי (loopback) שמגיש קבצים אישיים שהמשתמש בחר.
+          if (uri.scheme == 'http' &&
+              PluginFileServer.instance.isServerUri(uri)) {
+            return NavigationActionPolicy.ALLOW;
+          }
+
           if (uri.scheme == 'http' || uri.scheme == 'https') {
             if (widget.plugin.manifest.networkEnabled) {
               final granted = await _pluginRegistryRepository.getPermission(
@@ -456,6 +502,16 @@ class _PluginTabPageState extends State<PluginTabPage> {
               return WebResourceResponse(
                   statusCode: 403, reasonPhrase: 'Forbidden');
             }
+          }
+          if ((uri.scheme == 'http' || uri.scheme == 'https') &&
+              widget.plugin.isLocalhostDev &&
+              _isDevServerUri(uri)) {
+            return null; // allow all localhost requests for localhost_dev
+          }
+          // שרת הקבצים הפנימי (loopback) שמגיש קבצים אישיים שהמשתמש בחר.
+          if (uri.scheme == 'http' &&
+              PluginFileServer.instance.isServerUri(uri)) {
+            return null;
           }
           if (uri.scheme == 'http' || uri.scheme == 'https') {
             if (widget.plugin.manifest.networkEnabled) {
@@ -571,6 +627,11 @@ class _PluginTabPageState extends State<PluginTabPage> {
           // הטעינה הצליחה עד הסוף (גם ה-stub וגם ה-boot payload הוזרקו).
           // מסירים את התוסף מ-quarantine כדי שהפעלה הבאה תאפשר טעינה רגילה.
           unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
+          // אם התוסף נטען בזמן שאינו ה-foreground הפעיל — להשהותו מיד, כדי
+          // שלא ירוץ ברקע. ההשהיה כאן (אחרי load) ולא ב-registerController
+          // כי pause על WebView שעוד לא נטען עלול לקטוע את הטעינה עצמה.
+          unawaited(PluginRuntimeDispatcher.instance
+              .onForegroundInstanceReady(widget.plugin.pluginId));
         } catch (e, st) {
           // Boot ב-Dart נכשל — התהליך חי, לא קריסה native. מנקים את ה-canary
           // כדי שלא נחסום בהפעלה הבאה תוסף שפשוט החזיר שגיאת אתחול רגילה.

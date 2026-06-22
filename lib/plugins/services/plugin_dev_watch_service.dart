@@ -25,7 +25,11 @@ class PluginDevWatchService {
   Stream<PluginDevFsChange> get events => _eventsController.stream;
 
   void syncWatchers(List<InstalledPlugin> devPlugins) {
-    final newIds = devPlugins.map((e) => e.pluginId).toSet();
+    // localhost_dev plugins reload via HMR — no filesystem to watch.
+    final newIds = devPlugins
+        .where((p) => !p.isLocalhostDev)
+        .map((e) => e.pluginId)
+        .toSet();
     final currentIds = _watchers.keys.toSet();
 
     for (final currId in currentIds) {
@@ -35,6 +39,7 @@ class PluginDevWatchService {
     }
 
     for (final plugin in devPlugins) {
+      if (plugin.isLocalhostDev) continue;
       if (!_watchers.containsKey(plugin.pluginId) ||
           _watchedPaths[plugin.pluginId] != plugin.devRootPath) {
         if (_watchers.containsKey(plugin.pluginId)) {

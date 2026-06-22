@@ -21,8 +21,61 @@ class ShortcutValidator {
     currentWindowSearchKey: [legacySearchInBookKey],
   };
 
-  /// List of all shortcut setting keys
-  static const List<String> shortcutKeys = [
+  /// קיצורי "פתיחת כלי" אופציונליים (deep-link `otzaria://open/tool/<id>`).
+  /// כל מפתח חייב להופיע גם ב-[shortcutKeys], [defaultShortcuts] (ריק), [shortcutNames].
+  static const Map<String, String> openToolShortcutKeys = {
+    'key-shortcut-open-tool-calendar': 'builtin.calendar',
+    'key-shortcut-open-tool-shamor-zachor': 'builtin.shamor_zachor',
+    'key-shortcut-open-tool-measurements': 'builtin.measurements',
+    'key-shortcut-open-tool-notes': 'builtin.notes',
+    'key-shortcut-open-tool-gematria': 'builtin.gematria',
+    'key-shortcut-open-tool-aramaic-dictionary': 'builtin.aramaic_dictionary',
+    'key-shortcut-open-tool-acronyms-dictionary': 'builtin.acronyms_dictionary',
+  };
+
+  /// קיצורי "העתק קישור" אופציונליים. הקיצור פועל לפי הטאב הפעיל: קישור למקטע
+  /// בספר טקסט, וקישור לעמוד ב-PDF — שניהם תחת אותו מפתח. שני האחרונים רלוונטיים
+  /// לספר טקסט בלבד (PDF אינו תומך בהדגשת מקטע/טקסט).
+  static const String copyBookLinkKey = 'key-shortcut-copy-book-link';
+  static const String copySectionLinkKey = 'key-shortcut-copy-section-link';
+  static const String copySectionMarkLinkKey =
+      'key-shortcut-copy-section-mark-link';
+  static const String copyTextMarkLinkKey = 'key-shortcut-copy-text-mark-link';
+
+  static const List<String> copyLinkShortcutKeys = [
+    copyBookLinkKey,
+    copySectionLinkKey,
+    copySectionMarkLinkKey,
+    copyTextMarkLinkKey,
+  ];
+
+  static const String _openPluginKeyPrefix = 'key-shortcut-open-plugin-';
+
+  /// מפתח הגדרת הקיצור לפתיחת תוסף לפי מזההו (deep-link
+  /// `otzaria://open/plugin/<id>`). אופציונלי, ללא ברירת מחדל.
+  static String openPluginShortcutKey(String pluginId) =>
+      '$_openPluginKeyPrefix$pluginId';
+
+  /// קיצורי "פתיחת תוסף" נרשמים דינמית לפי התוספים המותקנים הפעילים (מפתח →
+  /// שם תצוגה), כדי שזיהוי הקונפליקטים והתצוגה יכירו בהם. נדחף מ-PluginSystemBloc.
+  static Map<String, String> _pluginShortcutNames = const {};
+
+  static void registerPluginShortcutKeys(Map<String, String> keyToName) {
+    _pluginShortcutNames = Map.unmodifiable(keyToName);
+  }
+
+  /// המפתחות של קיצורי "פתיחת תוסף" הרשומים כעת (תוספים פעילים בלבד).
+  static Iterable<String> get pluginShortcutKeys => _pluginShortcutNames.keys;
+
+  /// מחלץ את מזהה התוסף ממפתח קיצור "פתיחת תוסף".
+  static String pluginIdFromShortcutKey(String key) =>
+      key.substring(_openPluginKeyPrefix.length);
+
+  /// List of all shortcut setting keys (סטטיים + מפתחות תוספים רשומים)
+  static List<String> get shortcutKeys =>
+      [..._baseShortcutKeys, ..._pluginShortcutNames.keys];
+
+  static const List<String> _baseShortcutKeys = [
     'key-shortcut-open-library-browser',
     currentWindowSearchKey,
     'key-shortcut-open-find-ref',
@@ -49,6 +102,23 @@ class ShortcutValidator {
     'key-shortcut-toggle-nav-pane',
     'key-shortcut-toggle-commentators-pane',
     'key-shortcut-open-commentators-tab',
+    'key-shortcut-prev-segment',
+    'key-shortcut-next-segment',
+    'key-shortcut-prev-toc',
+    'key-shortcut-next-toc',
+    // פתיחת כלים — אופציונלי, ללא ברירת מחדל (ראה openToolShortcutKeys).
+    'key-shortcut-open-tool-calendar',
+    'key-shortcut-open-tool-shamor-zachor',
+    'key-shortcut-open-tool-measurements',
+    'key-shortcut-open-tool-notes',
+    'key-shortcut-open-tool-gematria',
+    'key-shortcut-open-tool-aramaic-dictionary',
+    'key-shortcut-open-tool-acronyms-dictionary',
+    // העתקת קישורים — אופציונלי, ללא ברירת מחדל (ראה copyLinkShortcutKeys).
+    copyBookLinkKey,
+    copySectionLinkKey,
+    copySectionMarkLinkKey,
+    copyTextMarkLinkKey,
   ];
 
   /// Default values for shortcuts
@@ -79,10 +149,28 @@ class ShortcutValidator {
     'key-shortcut-toggle-nav-pane': 'ctrl+shift+l',
     'key-shortcut-toggle-commentators-pane': 'ctrl+shift+c',
     'key-shortcut-open-commentators-tab': '',
+    'key-shortcut-prev-segment': 'alt+arrowup',
+    'key-shortcut-next-segment': 'alt+arrowdown',
+    'key-shortcut-prev-toc': 'alt+pageup',
+    'key-shortcut-next-toc': 'alt+pagedown',
+    'key-shortcut-open-tool-calendar': '',
+    'key-shortcut-open-tool-shamor-zachor': '',
+    'key-shortcut-open-tool-measurements': '',
+    'key-shortcut-open-tool-notes': '',
+    'key-shortcut-open-tool-gematria': '',
+    'key-shortcut-open-tool-aramaic-dictionary': '',
+    'key-shortcut-open-tool-acronyms-dictionary': '',
+    copyBookLinkKey: '',
+    copySectionLinkKey: '',
+    copySectionMarkLinkKey: '',
+    copyTextMarkLinkKey: '',
   };
 
-  /// Shortcut names for display
-  static const Map<String, String> shortcutNames = {
+  /// Shortcut names for display (סטטיים + שמות תוספים רשומים)
+  static Map<String, String> get shortcutNames =>
+      {..._baseShortcutNames, ..._pluginShortcutNames};
+
+  static const Map<String, String> _baseShortcutNames = {
     'key-shortcut-open-library-browser': 'ספרייה',
     currentWindowSearchKey: 'חיפוש בספר הפתוח',
     'key-shortcut-open-find-ref': 'איתור',
@@ -109,6 +197,21 @@ class ShortcutValidator {
     'key-shortcut-toggle-nav-pane': 'פתח/סגור חלונית ניווט',
     'key-shortcut-toggle-commentators-pane': 'פתח/סגור חלונית מפרשים',
     'key-shortcut-open-commentators-tab': 'פתח כרטיסיית מפרשים',
+    'key-shortcut-prev-segment': 'הקטע הקודם',
+    'key-shortcut-next-segment': 'הקטע הבא',
+    'key-shortcut-prev-toc': 'הדף/פרק הקודם',
+    'key-shortcut-next-toc': 'הדף/פרק הבא',
+    'key-shortcut-open-tool-calendar': 'פתיחת לוח שנה',
+    'key-shortcut-open-tool-shamor-zachor': 'פתיחת שמור וזכור',
+    'key-shortcut-open-tool-measurements': 'פתיחת מדות ושיעורים',
+    'key-shortcut-open-tool-notes': 'פתיחת הערות אישיות',
+    'key-shortcut-open-tool-gematria': 'פתיחת גימטריה',
+    'key-shortcut-open-tool-aramaic-dictionary': 'פתיחת מילון ארמי-עברי',
+    'key-shortcut-open-tool-acronyms-dictionary': 'פתיחת ראשי תיבות',
+    copyBookLinkKey: 'העתק קישור ישיר לספר',
+    copySectionLinkKey: 'העתק קישור למקטע / לעמוד',
+    copySectionMarkLinkKey: 'העתק קישור עם הדגשת המקטע',
+    copyTextMarkLinkKey: 'העתק קישור עם הדגשת הטקסט',
   };
 
   /// Check for conflicts in current shortcuts
