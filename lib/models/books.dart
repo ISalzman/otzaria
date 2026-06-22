@@ -193,14 +193,16 @@ class TextBook extends Book {
   TextBook copyWith({
     int? id,
     String? heCategories,
+    String? author,
+    String? heEra,
   }) {
     return TextBook(
       id: id ?? this.id,
       title: title,
       category: category,
-      author: author,
+      author: author ?? this.author,
       heCategories: heCategories ?? this.heCategories,
-      heEra: heEra,
+      heEra: heEra ?? this.heEra,
       compDateStringHe: compDateStringHe,
       compPlaceStringHe: compPlaceStringHe,
       pubDateStringHe: pubDateStringHe,
