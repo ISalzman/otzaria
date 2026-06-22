@@ -21,6 +21,7 @@ import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
 import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
+import 'package:otzaria/widgets/misc/animated_pin_button.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/misc/tool_ui_helpers.dart';
 
@@ -427,7 +428,7 @@ class _ActionBar extends StatelessWidget {
               ),
               _ActionChip(
                 icon: _allSelectedArePinnedToNav
-                    ? FluentIcons.pin_off_24_regular
+                    ? FluentIcons.pin_24_filled
                     : FluentIcons.pin_24_regular,
                 label: _allSelectedArePinnedToNav
                     ? 'הסר מסרגל הניווט'
@@ -737,11 +738,9 @@ class _BuiltInToolRow extends StatelessWidget {
             selectedIcon: const Icon(FluentIcons.eye_24_regular),
             onPressed: onToggleHide,
           ),
-          IconButton(
+          AnimatedPinButton(
             tooltip: pinnedToNavRail ? 'הסר מסרגל הניווט' : 'הצמד לסרגל הניווט',
-            isSelected: pinnedToNavRail,
-            icon: const Icon(FluentIcons.pin_24_regular),
-            selectedIcon: const Icon(FluentIcons.pin_off_24_regular),
+            isPinned: pinnedToNavRail,
             onPressed: onTogglePin,
           ),
         ],

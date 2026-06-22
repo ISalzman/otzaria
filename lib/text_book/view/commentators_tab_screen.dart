@@ -32,6 +32,7 @@ import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/search/utils/snippet_builder.dart';
+import 'package:otzaria/widgets/misc/animated_pin_button.dart';
 import 'package:otzaria/widgets/navigation/reader_nav_center.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -1201,19 +1202,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     splashBorderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                IconButton(
-                  onPressed: () => setState(() => _pinLeftPane = !_pinLeftPane),
-                  icon: AnimatedRotation(
-                    turns: _pinLeftPane ? -0.125 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Icon(
-                      _pinLeftPane
-                          ? FluentIcons.pin_24_filled
-                          : FluentIcons.pin_24_regular,
-                    ),
-                  ),
-                  color: _pinLeftPane ? colorScheme.primary : null,
+                AnimatedPinButton(
+                  isPinned: _pinLeftPane,
                   tooltip: _pinLeftPane ? 'בטל נעיצה' : 'נעץ את הפאנל',
+                  onPressed: () => setState(() => _pinLeftPane = !_pinLeftPane),
                 ),
               ],
             ),
