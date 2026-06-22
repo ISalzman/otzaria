@@ -10,6 +10,7 @@ class PluginManifestValidator {
     required String directoryPath,
     String? currentAppVersion,
     bool skipAppVersionValidation = false,
+    bool skipFileValidation = false,
   }) async {
     if (manifest.schemaVersion != 1) {
       throw Exception(
@@ -93,14 +94,16 @@ class PluginManifestValidator {
           '(למשל "book_24_regular" או "calendar_24_filled")');
     }
 
-    final entrypointPath =
-        p.normalize(p.join(directoryPath, manifest.entrypoint));
-    if (!p.isWithin(directoryPath, entrypointPath)) {
-      throw Exception(
-          'נתיב קובץ הכניסה ${manifest.entrypoint} חורג מגבולות תיקיית התוסף');
-    }
-    if (!File(entrypointPath).existsSync()) {
-      throw Exception('קובץ הכניסה ${manifest.entrypoint} לא נמצא בתיקייה');
+    if (!skipFileValidation) {
+      final entrypointPath =
+          p.normalize(p.join(directoryPath, manifest.entrypoint));
+      if (!p.isWithin(directoryPath, entrypointPath)) {
+        throw Exception(
+            'נתיב קובץ הכניסה ${manifest.entrypoint} חורג מגבולות תיקיית התוסף');
+      }
+      if (!File(entrypointPath).existsSync()) {
+        throw Exception('קובץ הכניסה ${manifest.entrypoint} לא נמצא בתיקייה');
+      }
     }
   }
 }
