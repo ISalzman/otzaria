@@ -1,6 +1,7 @@
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/plugins/models/plugin_store_install_request.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
+import 'package:otzaria/settings/view/settings_screen.dart' show SettingsTab;
 
 /// פעולה הנגזרת מקישור `otzaria://...` חיצוני.
 sealed class ExternalUriAction {
@@ -81,6 +82,24 @@ class InstallLocalPluginAction extends ExternalUriAction {
   const InstallLocalPluginAction(this.archivePath);
 }
 
+/// פתיחת דיאלוג ההיסטוריה.
+class OpenHistoryAction extends ExternalUriAction {
+  const OpenHistoryAction();
+}
+
+/// פתיחת דיאלוג הסימניות.
+class OpenBookmarksAction extends ExternalUriAction {
+  const OpenBookmarksAction();
+}
+
+/// פתיחת מסך ההגדרות בלשונית מסוימת.
+///
+/// [tab] — הלשונית הרצויה. אם null, נפתח מסך ההגדרות בלשונית הנוכחית/ראשונה.
+class OpenSettingsTabAction extends ExternalUriAction {
+  final SettingsTab? tab;
+  const OpenSettingsTabAction({this.tab});
+}
+
 /// פתיחת חיפוש כללי בלשונית חדשה והפעלת החיפוש מיידית עם ברירות המחדל
 /// (כל הקטגוריות, מצב מתקדם).
 class RunSearchAction extends ExternalUriAction {
@@ -88,17 +107,40 @@ class RunSearchAction extends ExternalUriAction {
   const RunSearchAction(this.query);
 }
 
+/// פתיחת דיאלוג איתור מקורות (FindRefDialog) עם טקסט מילוי-מראש.
+///
+/// [query] — הטקסט שייכתב בשדה החיפוש של הדיאלוג ויפעיל חיפוש מיידית.
+class RunDetectionAction extends ExternalUriAction {
+  final String query;
+  const RunDetectionAction(this.query);
+}
+
 /// מפענח קישורי `otzaria://...` לפעולה דומיין.
 ///
 /// סכמות וכתובות נתמכות:
 /// * `otzaria://open/calendar`              – לוח שנה
+/// * `otzaria://open/daily`                 – לוח שנה (alias)
 /// * `otzaria://open/gematria`              – גימטריה
 /// * `otzaria://open/notes`                 – הערות אישיות
+/// * `otzaria://open/shamor_zachor`         – שמור וזכור
+/// * `otzaria://open/measurements`          – מדות ושיעורים
+/// * `otzaria://open/aramaic_dictionary`    – מילון ארמי-עברי
+/// * `otzaria://open/acronyms_dictionary`   – ראשי תיבות
 /// * `otzaria://open/library`               – ספרייה
 /// * `otzaria://open/search`                – פותח את מסך החיפוש (ללא הפעלת חיפוש)
 /// * `otzaria://open/search?q=<text>`        – פותח לשונית חיפוש חדשה ומפעיל חיפוש
-/// * `otzaria://open/settings`              – הגדרות
+/// * `otzaria://open/settings`              – הגדרות (הלשונית הנוכחית)
+/// * `otzaria://open/settings/design`       – הגדרות › מראה
+/// * `otzaria://open/settings/text`         – הגדרות › כתב
+/// * `otzaria://open/settings/library`      – הגדרות › ספרייה
+/// * `otzaria://open/settings/tools`        – הגדרות › כלים
+/// * `otzaria://open/settings/shortcuts`    – הגדרות › קיצורים
+/// * `otzaria://open/settings/system`       – הגדרות › מערכת
+/// * `otzaria://open/settings/about`        – הגדרות › אודות
 /// * `otzaria://open/tools`                 – מסך הכלים
+/// * `otzaria://open/history`               – פותח את דיאלוג ההיסטוריה
+/// * `otzaria://open/bookmarks`             – פותח את דיאלוג הסימניות
+/// * `otzaria://open/detection?q=<text>`    – פותח דיאלוג איתור מקורות עם טקסט מילוי-מראש
 /// * `otzaria://open/tool/<tool-id>`        – לשונית כלי לפי מזהה מלא
 /// * `otzaria://open/plugin/<plugin-id>`    – פתיחת תוסף ישירות לפי מזהה (גם לא-מוצמד)
 /// * `otzaria://open/book/<id>`             – פתיחת ספר טקסט בעיון לפי מזהה DB
@@ -118,18 +160,72 @@ class RunSearchAction extends ExternalUriAction {
 class ExternalUriRouter {
   static const Map<String, String> _toolAliases = {
     'calendar': 'builtin.calendar',
+    'daily': 'builtin.calendar',
     'gematria': 'builtin.gematria',
     'notes': 'builtin.notes',
+    'shamor_zachor': 'builtin.shamor_zachor',
+    'measurements': 'builtin.measurements',
+    'aramaic_dictionary': 'builtin.aramaic_dictionary',
+    'acronyms_dictionary': 'builtin.acronyms_dictionary',
   };
 
   static const Map<String, Screen> _screenAliases = {
     'library': Screen.library,
     'search': Screen.search,
-    'settings': Screen.settings,
     'tools': Screen.more,
   };
 
+  /// מיפוי מחרוזת לשונית (מנתיב URL) ל-[SettingsTab].
+  static const Map<String, SettingsTab> _settingsTabAliases = {
+    'design': SettingsTab.design,
+    'text': SettingsTab.text,
+    'library': SettingsTab.library,
+    'tools': SettingsTab.tools,
+    'shortcuts': SettingsTab.shortcuts,
+    'system': SettingsTab.system,
+    'about': SettingsTab.about,
+  };
+
+  /// ממיר קישור `zayit://` לפורמט `otzaria://` המקביל.
+  /// מחזיר את ה-Uri המקורי אם הוא כבר `otzaria://`, ו-null אם הסכמה לא מוכרת.
+  ///
+  /// נתמך:
+  ///   `zayit://book/{id}`              → `otzaria://open/book/{id}`
+  ///   `zayit://book/{id}/line/{index}` → `otzaria://open/book/{id}?index={index}`
+  static Uri? normalizeUri(Uri uri) {
+    if (uri.scheme.toLowerCase() == 'otzaria') return uri;
+    if (uri.scheme.toLowerCase() != 'zayit') return null;
+
+    if (uri.host.toLowerCase() == 'book') {
+      final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+      if (segments.isEmpty) return null;
+      final bookId = int.tryParse(segments[0]);
+      if (bookId == null || bookId <= 0) return null;
+
+      int? lineIndex;
+      if (segments.length >= 3 && segments[1].toLowerCase() == 'line') {
+        lineIndex = int.tryParse(segments[2]);
+      }
+
+      final queryParams = <String, String>{};
+      if (lineIndex != null && lineIndex >= 0) {
+        queryParams['index'] = lineIndex.toString();
+      }
+
+      return Uri(
+        scheme: 'otzaria',
+        host: 'open',
+        pathSegments: ['book', bookId.toString()],
+        queryParameters: queryParams.isEmpty ? null : queryParams,
+      );
+    }
+    return null;
+  }
+
   static ExternalUriAction? parseUri(Uri uri) {
+    final normalized = normalizeUri(uri);
+    if (normalized == null) return null;
+    if (normalized != uri) return parseUri(normalized);
     if (uri.scheme.toLowerCase() != 'otzaria') {
       return null;
     }
@@ -183,6 +279,31 @@ class ExternalUriRouter {
         }
       }
 
+      // detection?q=<text> — פותח דיאלוג איתור מקורות עם טקסט מילוי-מראש.
+      if (firstLower == 'detection') {
+        final rawQuery = uri.queryParameters['q']?.trim();
+        if (rawQuery != null && rawQuery.isNotEmpty) {
+          return RunDetectionAction(rawQuery);
+        }
+        // ללא q — מתעלמים (אין טעם לפתוח דיאלוג ריק דרך deep link)
+        return null;
+      }
+
+      // settings בלי sub-tab — פותח הגדרות ללא ניווט לטאב ספציפי.
+      if (firstLower == 'settings') {
+        return const OpenSettingsTabAction();
+      }
+
+      // history — פותח דיאלוג היסטוריה.
+      if (firstLower == 'history') {
+        return const OpenHistoryAction();
+      }
+
+      // bookmarks — פותח דיאלוג סימניות.
+      if (firstLower == 'bookmarks') {
+        return const OpenBookmarksAction();
+      }
+
       final toolId = _toolAliases[firstLower];
       if (toolId != null) {
         return OpenToolAction(toolId);
@@ -192,6 +313,15 @@ class ExternalUriRouter {
         return OpenScreenAction(screen);
       }
       return null;
+    }
+
+    // settings/<tab> — פותח הגדרות ומנווט ללשונית הרצויה.
+    if (segments.length == 2 && firstLower == 'settings') {
+      final tabKey = segments[1].toLowerCase();
+      final tab = _settingsTabAliases[tabKey];
+      // לשונית לא מוכרת — מתעלמים (מחזירים null, לא OpenSettingsTabAction ריק)
+      if (tab == null) return null;
+      return OpenSettingsTabAction(tab: tab);
     }
 
     if (segments.length == 2 && firstLower == 'tool') {

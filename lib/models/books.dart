@@ -189,6 +189,40 @@ class TextBook extends Book {
     return bookText ?? '';
   }
 
+  /// יוצר עותק של הספר עם שדות מעודכנים לפי הצורך.
+  TextBook copyWith({
+    int? id,
+    String? heCategories,
+    String? author,
+    String? heEra,
+  }) {
+    return TextBook(
+      id: id ?? this.id,
+      title: title,
+      category: category,
+      author: author ?? this.author,
+      heCategories: heCategories ?? this.heCategories,
+      heEra: heEra ?? this.heEra,
+      compDateStringHe: compDateStringHe,
+      compPlaceStringHe: compPlaceStringHe,
+      pubDateStringHe: pubDateStringHe,
+      pubPlaceStringHe: pubPlaceStringHe,
+      heShortDesc: heShortDesc,
+      heDesc: heDesc,
+      pubDate: pubDate,
+      pubPlace: pubPlace,
+      order: order,
+      topics: topics,
+      filePath: filePath,
+      fileType: fileType,
+      categoryPath: categoryPath,
+      categoryId: categoryId,
+      extraTitles: extraTitles,
+      isUserBook: isUserBook,
+      externalLibraryId: externalLibraryId,
+    );
+  }
+
   /// Creates a new `Book` instance from a JSON object.
   ///
   /// The JSON object should have a 'title' key.
