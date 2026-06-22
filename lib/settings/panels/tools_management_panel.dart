@@ -734,9 +734,9 @@ class _BuiltInToolRow extends StatelessWidget {
       actions: [
         IconButton(
           tooltip: hidden ? 'הצג בממשק' : 'הסתר מהממשק',
-          isSelected: hidden,
-          icon: const Icon(FluentIcons.eye_off_24_regular),
-          selectedIcon: const Icon(FluentIcons.eye_24_regular),
+          isSelected: !hidden,
+          icon: Icon(FluentIcons.eye_off_24_regular),
+          selectedIcon: Icon(FluentIcons.eye_24_regular),
           onPressed: onToggleHide,
         ),
         AnimatedPinButton(
@@ -754,9 +754,9 @@ class _BuiltInToolRow extends StatelessWidget {
         children: [
           IconButton(
             tooltip: hidden ? 'הצג בממשק' : 'הסתר מהממשק',
-            isSelected: hidden,
-            icon: const Icon(FluentIcons.eye_off_24_regular),
-            selectedIcon: const Icon(FluentIcons.eye_24_regular),
+            isSelected: !hidden,
+            icon: Icon(FluentIcons.eye_off_24_regular),
+            selectedIcon: Icon(FluentIcons.eye_24_regular),
             onPressed: onToggleHide,
           ),
           AnimatedPinButton(
@@ -959,9 +959,9 @@ class _PluginRow extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: plugin.hiddenFromTools ? 'הצג בממשק' : 'הסתר מהממשק',
-                  isSelected: plugin.hiddenFromTools,
-                  icon: const Icon(FluentIcons.eye_off_24_regular),
-                  selectedIcon: const Icon(FluentIcons.eye_24_regular),
+                  isSelected: !plugin.hiddenFromTools,
+                  icon: Icon(FluentIcons.eye_off_24_regular),
+                  selectedIcon: Icon(FluentIcons.eye_24_regular),
                   onPressed: onToggleHide,
                 ),
                 IconButton(
