@@ -142,6 +142,64 @@ class NeutralActionButton extends StatelessWidget {
   }
 }
 
+// ── GhostActionButton ─────────────────────────────────────────────────────────
+
+/// כפתור פעולה שקוף — TextButton ללא רקע
+class GhostActionButton extends StatelessWidget {
+  final String text;
+  final VoidCallback? onPressed;
+  final bool isLoading;
+  final IconData? icon;
+  final Widget? iconWidget;
+  final TextAlign textAlign;
+
+  const GhostActionButton({
+    super.key,
+    required this.text,
+    required this.onPressed,
+    this.isLoading = false,
+    this.icon,
+    this.iconWidget,
+    this.textAlign = TextAlign.start,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final leading = iconWidget ?? (icon != null ? RtlIcon(icon!) : null);
+
+    if (isLoading) {
+      return TextButton(
+          onPressed: null,
+          child: SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: cs.primary)));
+    }
+    if (leading != null) {
+      if (textAlign == TextAlign.center) {
+        return TextButton(
+          onPressed: onPressed,
+          child: _CenteredButtonContent(
+            text: text,
+            leading: leading,
+          ),
+        );
+      }
+      return TextButton.icon(
+        onPressed: onPressed,
+        icon: leading,
+        label: Text(text, textAlign: textAlign),
+      );
+    }
+    return TextButton(
+      onPressed: onPressed,
+      child: Text(text, textAlign: textAlign),
+    );
+  }
+}
+
 class _CenteredButtonContent extends StatelessWidget {
   final String text;
   final Widget leading;

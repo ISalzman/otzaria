@@ -491,7 +491,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                               },
                             )
                           : indexingState is IndexingComplete
-                              ? NeutralActionButton(
+                              ? GhostActionButton(
                                   text: 'איפוס',
                                   onPressed: () async {
                                     final result = await showWarningDialog(

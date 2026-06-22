@@ -1263,9 +1263,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           subtitle: _appVersion ?? 'טוען...',
           subtitleLtr: _appVersion != null,
           actions: [
-            TextButton.icon(
-              icon: const Icon(FluentIcons.history_24_regular, size: 16),
-              label: const Text('יומן שינויים'),
+            GhostActionButton(
+              icon: FluentIcons.history_24_regular,
+              text: 'יומן שינויים',
               onPressed: () => _showChangelogDialog(context),
             ),
           ],
@@ -1295,9 +1295,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           ),
           trailing: _bookCount == null
               ? null
-              : TextButton.icon(
-                  icon: const Icon(FluentIcons.list_24_regular, size: 16),
-                  label: const Text('הצג רשימה'),
+              : GhostActionButton(
+                  icon: FluentIcons.list_24_regular,
+                  text: 'הצג רשימה',
                   onPressed: () => _openBooksListDialog(context),
                 ),
         ),
@@ -1725,7 +1725,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             'מחיקת כל ההגדרות וחזרה למצב ההתחלתי',
             style: kSettingsSubtitleStyle,
           ),
-          trailing: NeutralActionButton(
+          trailing: GhostActionButton(
             icon: FluentIcons.arrow_reset_24_regular,
             text: 'אפס הגדרות',
             onPressed: () async {

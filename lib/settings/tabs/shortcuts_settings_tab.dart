@@ -560,7 +560,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
                 title: 'איפוס קיצורי מקשים',
                 subtitle: 'החזר את כל קיצורי המקשים לברירת המחדל',
                 actions: [
-                  NeutralActionButton(
+                  GhostActionButton(
                     text: 'איפוס',
                     onPressed: () => _resetShortcuts(context),
                   ),
