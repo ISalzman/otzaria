@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -68,12 +67,8 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
   Offset? _currentMenuOffset;
   double? _menuAnchorX;
 
-  bool get _supportsLongPressContextMenu {
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.android || TargetPlatform.iOS => true,
-      _ => false,
-    };
-  }
+  // long-press פותח תפריט הקשר בכל הפלטפורמות — גם במגע וגם בעכבר/trackpad
+  bool get _supportsLongPressContextMenu => true;
 
   @override
   void dispose() {
