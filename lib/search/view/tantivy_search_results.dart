@@ -82,16 +82,10 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             ),
             if (showEditButton && widget.onEditSearch != null) ...[
               const SizedBox(height: 16),
-              FilledButton.tonal(
-                onPressed: widget.onEditSearch,
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(FluentIcons.edit_24_regular, size: 18),
-                    SizedBox(width: 8),
-                    Text('ערוך חיפוש'),
-                  ],
-                ),
+              NeutralActionButton(
+                text: 'ערוך חיפוש',
+                onPressed: widget.onEditSearch!,
+                icon: FluentIcons.edit_24_regular,
               ),
             ],
           ],

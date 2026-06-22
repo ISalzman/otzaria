@@ -19,6 +19,8 @@ import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/navigation/view/main_window_screen.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 class FindRefDialog extends StatefulWidget {
   const FindRefDialog({super.key});
@@ -433,7 +435,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
   }
 
   /// מנסה לטפל בקישור ישיר — מחזיר true אם הטיפול הצליח.
-  /// השדה מנוקה רק אחרי אימות הצלחת הטיפול.
+  /// השדה מנוקה ודיאלוג נסגר רק לאחר אימות הצלחת הטיפול.
   Future<bool> _tryHandleDeepLink(String text) async {
     final uri = Uri.tryParse(text.trim());
     if (uri == null) return false;
@@ -441,19 +443,17 @@ class _FindRefDialogState extends State<FindRefDialog> {
     if (normalized == null) return false;
     if (ExternalUriRouter.parseUri(normalized) == null) return false;
 
-    // סוגרים את הדיאלוג *לפני* הניווט — כך ה-context של MainWindowScreen
-    // פנוי לבצע את הניווט בלי שהדיאלוג מסנן אירועים.
-    if (mounted) {
+    final handled = await mainWindowScreenKey.currentState
+        ?.handleInternalDeepLink(normalized.toString());
+
+    if (handled == true && mounted) {
       final focusRepository = context.read<FocusRepository>();
       focusRepository.findRefSearchController.clear();
       BlocProvider.of<FindRefBloc>(context).add(const SearchRefRequested(''));
       BlocProvider.of<FindRefBloc>(context).add(ClearSearchRequested());
       Navigator.of(context).pop();
     }
-
-    await mainWindowScreenKey.currentState
-        ?.handleInternalDeepLink(normalized.toString());
-    return true;
+    return handled == true;
   }
 
   /// פותח את דיאלוג החיפוש עם [query] מוכן בשדה — ללא הרצת חיפוש.
@@ -477,12 +477,12 @@ class _FindRefDialogState extends State<FindRefDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            RtlIcon(
               isDeepLink
                   ? FluentIcons.link_24_regular
                   : FluentIcons.document_search_24_regular,
               size: 64,
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+              color: colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: 16),
             Text(
@@ -509,10 +509,10 @@ class _FindRefDialogState extends State<FindRefDialog> {
             ),
             const SizedBox(height: 20),
             if (isDeepLink) ...[
-              FilledButton.icon(
+              RecommendedActionButton(
+                text: 'פתיחת קישור',
                 onPressed: () => _tryHandleDeepLink(query),
-                icon: const Icon(FluentIcons.link_24_regular, size: 18),
-                label: const Text('פתיחת קישור'),
+                icon: FluentIcons.link_24_regular,
               ),
             ] else ...[
               Text(
@@ -524,10 +524,10 @@ class _FindRefDialogState extends State<FindRefDialog> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
-              FilledButton.icon(
+              RecommendedActionButton(
+                text: 'פתח חיפוש טקסט',
                 onPressed: () => _openTextSearch(query),
-                icon: const Icon(FluentIcons.search_24_regular, size: 18),
-                label: const Text('פתח חיפוש טקסט'),
+                icon: FluentIcons.search_24_regular,
               ),
             ],
           ],

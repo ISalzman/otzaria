@@ -2288,13 +2288,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   Future<void> _enrichHeCategoriesInBackground(TextBook book) async {
     final prevHeCategories = book.heCategories;
     final resolvedId = await enrichHeCategories(book);
-    final heCategoriesChanged = book.heCategories != prevHeCategories;
+    // משתמשים ב-book.heCategories לאחר ה-enrichment, אך משווים מול
+    // ה-snapshot שנלקח לפני — כדי לא להיות מושפעים מהמוטציה של האובייקט.
+    final newHeCategories = book.heCategories;
+    final heCategoriesChanged = newHeCategories != prevHeCategories;
 
     if ((book.id == null && resolvedId != null) || heCategoriesChanged) {
       add(UpdateResolvedBookId(
         bookTitle: book.title,
         resolvedId: resolvedId,
-        heCategories: heCategoriesChanged ? book.heCategories : null,
+        heCategories: heCategoriesChanged ? newHeCategories : null,
       ));
     }
   }
