@@ -226,11 +226,19 @@ class PluginBridgeHandler {
       case 'database':
         return 'database.read';
       case 'fs':
-        // פעולות הקבצים (extractZip/deleteFile) אינן דורשות הרשאת manifest:
-        // הן מגודרות בכך שהנתיב חייב להיות בתוך תיקייה שהמשתמש בחר במפורש
-        // דרך ui.pickFolder (הדורשת ui.feedback). הסכמת המשתמש בדיאלוג היא
-        // גבול האבטחה, לא הצהרת הרשאה.
-        return null;
+        switch (action) {
+          // פעולות על קובץ שהמשתמש בוחר במפורש — דורשות הרשאת manifest.
+          case 'pickUserFile':
+          case 'resolveFileUrl':
+          case 'readTextFile':
+          case 'revokeFile':
+            return 'fs.user_files.read';
+          // extractZip/deleteFile אינן דורשות הרשאת manifest: הן מגודרות בכך
+          // שהנתיב חייב להיות בתוך תיקייה שהמשתמש בחר דרך ui.pickFolder
+          // (הדורשת ui.feedback). הסכמת המשתמש בדיאלוג היא גבול האבטחה.
+          default:
+            return null;
+        }
       case 'shortcut':
         return 'ui.create_shortcut';
       default:

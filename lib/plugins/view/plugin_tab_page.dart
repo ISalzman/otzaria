@@ -34,6 +34,7 @@ import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/view/plugin_crashed_view.dart';
 import 'package:otzaria/plugins/view/plugin_webview2_missing_view.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
+import 'package:otzaria/plugins/services/plugin_file_server.dart';
 
 // ---------------------------------------------------------------------------
 // Stub SDK — injected at AT_DOCUMENT_START before any page JS runs.
@@ -461,6 +462,12 @@ class _PluginTabPageState extends State<PluginTabPage> {
             return NavigationActionPolicy.ALLOW;
           }
 
+          // שרת הקבצים הפנימי (loopback) שמגיש קבצים אישיים שהמשתמש בחר.
+          if (uri.scheme == 'http' &&
+              PluginFileServer.instance.isServerUri(uri)) {
+            return NavigationActionPolicy.ALLOW;
+          }
+
           if (uri.scheme == 'http' || uri.scheme == 'https') {
             if (widget.plugin.manifest.networkEnabled) {
               final granted = await _pluginRegistryRepository.getPermission(
@@ -500,6 +507,11 @@ class _PluginTabPageState extends State<PluginTabPage> {
               widget.plugin.isLocalhostDev &&
               _isDevServerUri(uri)) {
             return null; // allow all localhost requests for localhost_dev
+          }
+          // שרת הקבצים הפנימי (loopback) שמגיש קבצים אישיים שהמשתמש בחר.
+          if (uri.scheme == 'http' &&
+              PluginFileServer.instance.isServerUri(uri)) {
+            return null;
           }
           if (uri.scheme == 'http' || uri.scheme == 'https') {
             if (widget.plugin.manifest.networkEnabled) {

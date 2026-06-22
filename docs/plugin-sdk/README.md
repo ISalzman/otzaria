@@ -492,6 +492,7 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `ui.feedback` | הצגת הודעות ודיאלוגים |
 | `ui.create_shortcut` | יצירת קיצור דרך (deep-link) בשולחן העבודה / תפריט ההתחל — דורש אישור משתמש |
 | `network.access` | גישה לרשת (דורש `network.enabled: true` במניפסט + שה-URL מופיע ב-allowlist הגלובלי של אוצריא בקוד) |
+| `fs.user_files.read` | בחירה וקריאה של קובץ אישי (PDF/טקסט) שהמשתמש בוחר בדיאלוג — מוגבל לקובץ שנבחר בלבד |
 | `notifications.send` | הצגת הודעות בתוך האפליקציה (UiSnack) |
 | `notifications.system` | התראות מערכת הפעלה (Native notifications) |
 | `app.run_on_startup` | **הרשאה רגישה** — טעינת התוסף ברקע עם כל עליית אוצריא, גם ללא כניסה למסך "כלים". ברירת מחדל: **כבויה**. ראה §ריצת רקע. |
