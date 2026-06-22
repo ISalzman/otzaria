@@ -549,7 +549,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     // ReorderableListView מטפל במלוא הגרירה-לסידור: הרמת הטאב, ה-placeholder
     // היחיד שזז, סידור שאר הטאבים לתצוגת התוצאה, והאנימציה — ללא לולאת ה-shift
     // של hit-test ידני. הבחירה היא ב-onPointerDown (ב-_buildTab), כך שכל
-    // אינטראקציה בוחרת את הטאב; הגרירה היא מיידית דרך ReorderableDragStartListener.
+    // אינטראקציה בוחרת את הטאב; גרירה רגילה גוללת את שורת הטאבים, לחיצה ארוכה ואז גרירה מסדרת מחדש.
     final reorderList = ReorderableListView.builder(
       scrollController: _tabsScrollController,
       scrollDirection: Axis.horizontal,
@@ -568,7 +568,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       },
       itemBuilder: (context, index) {
         final tab = state.tabs[index];
-        return ReorderableDragStartListener(
+        return ReorderableDelayedDragStartListener(
           key: ObjectKey(tab),
           index: index,
           // סימון שטח הטאב ל-hit-test, כדי שה-double-tap-to-maximize שבמסגרת
@@ -589,7 +589,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     // ו-maximize/restore (onDoubleTap) פעילים על האזור הריק שבשורת הטאבים, אך
     // לחיצה כפולה *על טאב* מדלגת על ה-maximize. הזיהוי הוא ע"י hit-test מפורש
     // (onDoubleTapDown) ולא ע"י arena/בליעה — שאינם אמינים ל-double-tap מקונן.
-    // זהו ה-מקבילה לאופן שבו ReorderableDragStartListener בולע את הגרירה על טאב:
+    // זהו ה-מקבילה לאופן שבו ReorderableDelayedDragStartListener בולע את הגרירה על טאב:
     // אזור ריק → גרירה/maximize של החלון; טאב → לא.
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
