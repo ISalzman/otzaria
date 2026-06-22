@@ -712,25 +712,20 @@ class _BuiltInToolRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasBadges = hidden || pinnedToNavRail;
     // SettingsActionTile תומך רק ב-IconData; כלים עם imageIcon נשמרים ב-ListTile.
     if (meta.imageIcon != null) {
       return ListTile(
         hoverColor: Colors.transparent,
         leading: ImageIcon(AssetImage(meta.imageIcon!), size: 24),
         title: Text(meta.label, style: AppTextStyles.settingTitle),
-        subtitle: hasBadges
-            ? _StatusBadges(hidden: hidden, pinnedToNavRail: pinnedToNavRail)
-            : null,
+        subtitle: _StatusBadges(hidden: hidden, pinnedToNavRail: pinnedToNavRail),
         trailing: _buildTrailing(),
       );
     }
     return SettingsActionTile(
       icon: meta.icon,
       title: Text(meta.label, style: AppTextStyles.settingTitle),
-      subtitle: hasBadges
-          ? _StatusBadges(hidden: hidden, pinnedToNavRail: pinnedToNavRail)
-          : null,
+      subtitle: _StatusBadges(hidden: hidden, pinnedToNavRail: pinnedToNavRail),
       actions: [
         IconButton(
           tooltip: hidden ? 'הצג בממשק' : 'הסתר מהממשק',
@@ -1174,10 +1169,30 @@ class _StatusBadges extends StatelessWidget {
       chips.add(_badge(context, 'מנותק מהרשת', cs.errorContainer,
           cs.onErrorContainer, FluentIcons.globe_prohibited_24_regular));
     }
-    if (chips.isEmpty) return const SizedBox.shrink();
+    // ה-Stack מגדיר גובה קבוע: placeholder בלתי-נראה מרנדר תמיד (badge הגבוה ביותר
+    // האפשרי) ומחזיק את הגובה; ה-chips האמיתיים מונחים מעליו.
+    // כך גובה ה-subtitle קבוע בכל מצב — גם כשאין תגים וגם כשיש אחד או שניים.
     return Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: Wrap(spacing: 6, runSpacing: 4, children: chips),
+      child: Stack(
+        children: [
+          Opacity(
+            opacity: 0,
+            child: _badge(context, 'בסרגל ניווט', cs.primaryContainer,
+                cs.onPrimaryContainer, FluentIcons.pin_24_regular),
+          ),
+          if (chips.isNotEmpty)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (int i = 0; i < chips.length; i++) ...[
+                  chips[i],
+                  if (i < chips.length - 1) const SizedBox(width: 6),
+                ],
+              ],
+            ),
+        ],
+      ),
     );
   }
 
