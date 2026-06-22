@@ -51,18 +51,10 @@ class _ScrollablePositionedListScrollbarState
   // להחלקת הקפיצות במיקום
   int _lastFirstIndex = 0;
 
-  // גובהי הפריטים שנמדדו עד כה (אינדקס → גובה ביחידות מסך). בקריאה רציפה
-  // הסגמנטים בגבהים שונים מאוד, ולכן ממוצע על הפריטים הגלויים *כרגע* מתנודד
-  // וגורם לאגודל לגדול/לקטון תוך כדי גלילה. ממוצע גלובלי על כל מה שנמדד יציב
-  // ומתכנס. שינוי גודל חלון/textScaler מנקה את המאגר (didChangeDependencies);
-  // שינוי גודל גופן פנימי נרפא-עצמית ע"י דריסת הערכים תוך כדי גלילה.
+  // גובהי הפריטים שנמדדו (אינדקס → גובה ביחידות מסך). ממוצע גלובלי עליהם נותן
+  // אומדן תוכן יציב, במקום ממוצע מקומי מתנודד על הגלויים כרגע.
   final Map<int, double> _itemHeights = {};
   double _itemHeightSum = 0.0;
-
-  // המצב האחרון של גודל המסך/scale — לזיהוי שינוי תצוגה שמייתר את הגבהים
-  // השמורים (שנמדדים ביחידות מסך). הניקוי עצמו ב-didChangeDependencies.
-  Size? _lastScreenSize;
-  TextScaler? _lastTextScaler;
 
   // תווית היעד הצפה (כתובת המקום שאליו נקפוץ בלחיצה). מבודדת מעץ הסרגל דרך
   // Overlay כדי שלא תגרום ל-rebuild של הרשימה. _labelIndex/_labelText
@@ -82,9 +74,8 @@ class _ScrollablePositionedListScrollbarState
   @override
   void didUpdateWidget(covariant ScrollablePositionedListScrollbar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // החלפת ספר מסומנת ע"י שינוי itemCount, ה-listener או ה-scrollController.
-    // בכל אחד מהם גבהי הפריטים הישנים אינם רלוונטיים — שני ספרים שונים עלולים
-    // לחלוק בדיוק אותו itemCount, וה-scrollController כמעט תמיד מוחלף ביניהם.
+    // החלפת ספר (itemCount/listener/scrollController) מייתרת את הגבהים הישנים.
+    // שני ספרים עלולים לחלוק itemCount, ולכן בודקים גם את ה-scrollController.
     if (oldWidget.itemCount != widget.itemCount ||
         oldWidget.itemPositionsListener != widget.itemPositionsListener ||
         oldWidget.scrollController != widget.scrollController) {
@@ -97,23 +88,6 @@ class _ScrollablePositionedListScrollbarState
       widget.itemPositionsListener.itemPositions
           .addListener(_updateScrollPosition);
     }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // הגבהים נשמרים ביחידות מסך, ולכן שינוי גודל החלון או textScaler מייתר
-    // אותם. didChangeDependencies הוא המקום האידיומטי להגיב לשינויי MediaQuery
-    // (נקרא גם בבנייה הראשונה, ולכן השמירה לבד מספיקה בלי ניקוי מיותר).
-    final mediaQuery = MediaQuery.of(context);
-    if (_lastScreenSize != null &&
-        (_lastScreenSize != mediaQuery.size ||
-            _lastTextScaler != mediaQuery.textScaler)) {
-      _itemHeights.clear();
-      _itemHeightSum = 0.0;
-    }
-    _lastScreenSize = mediaQuery.size;
-    _lastTextScaler = mediaQuery.textScaler;
   }
 
   @override
@@ -201,13 +175,23 @@ class _ScrollablePositionedListScrollbarState
       _lastFirstIndex = minIndex;
     }
 
-    // מדידת גובה כל פריט נראה (ביחידות מסך) וצבירה לממוצע גלובלי. דריסת ערך
-    // קיים מאפשרת ריפוי-עצמי כששינוי גופן/גודל חלון משנה גבהים.
+    // גובה פריט קבוע תחת גלילה; אם פריט שכבר נמדד מופיע בגובה שונה, ה-layout
+    // השתנה (גופן/גודל viewport/מפרשים/split) וכל היחסים השמורים אינם תקפים.
+    final layoutChanged = positions.any((position) {
+      final cached = _itemHeights[position.index];
+      if (cached == null) return false;
+      final height = position.itemTrailingEdge - position.itemLeadingEdge;
+      return height > 0 && (cached - height).abs() > cached * 0.02;
+    });
+    if (layoutChanged) {
+      _itemHeights.clear();
+      _itemHeightSum = 0.0;
+    }
+
+    // צבירת גבהים לממוצע גלובלי. max(0) מגן מפני סחיפת נקודה-צפה לשלילי זעיר.
     for (final position in positions) {
       final height = position.itemTrailingEdge - position.itemLeadingEdge;
       if (height > 0) {
-        // max(0): חיבור/חיסור חוזרים עלולים לצבור סחיפת נקודה-צפה זעירה
-        // ולהפוך את הסכום לשלילי קטן במקרי קצה. הסכום תמיד אי-שלילי בפועל.
         _itemHeightSum = max(
           0.0,
           _itemHeightSum + height - (_itemHeights[position.index] ?? 0.0),
@@ -218,10 +202,8 @@ class _ScrollablePositionedListScrollbarState
 
     final visibleItems = maxIndex - minIndex + 1;
 
-    // גובה האגודל = יחס התוכן הנראה לכלל התוכן. אומדן התוכן הכולל מבוסס על
-    // ממוצע *גלובלי* של גבהי הפריטים שנמדדו עד כה — יציב ומתכנס, כך שהאגודל
-    // לא גדל/קטן כשגוללים בין סגמנטים בגדלים שונים. ענף ה-fallback מגן רק
-    // מפני 0/0: המדידה למעלה כבר מילאה את המפה, אלא אם כל הפריטים בגובה ≤ 0.
+    // גובה האגודל = יחס התוכן הנראה לכלל, לפי ממוצע גלובלי יציב. ה-fallback
+    // מגן רק מפני 0/0 במקרה המנוון שאף פריט לא נמדד (כל הגבהים ≤ 0).
     final visibleSpan = trailingAtMax - leadingAtMin;
     final avgItemHeight = _itemHeights.isNotEmpty
         ? _itemHeightSum / _itemHeights.length
