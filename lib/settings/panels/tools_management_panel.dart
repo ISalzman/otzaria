@@ -257,7 +257,7 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                                         : 'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
                                     actions: _isSelectionMode
                                         ? [
-                                            NeutralActionButton(
+                                            GhostActionButton(
                                               icon: FluentIcons
                                                   .checkbox_checked_24_regular,
                                               text: 'בחר הכל',
@@ -572,7 +572,7 @@ class _ActionBar extends StatelessWidget {
               onPressed: hasSelection ? controller.open : null,
             ),
           ),
-          NeutralActionButton(
+          GhostActionButton(
             icon: FluentIcons.delete_24_regular,
             text: 'מחק',
             onPressed: hasSelection ? () => _onDelete(context) : null,
@@ -920,13 +920,13 @@ class _PluginRow extends StatelessWidget {
           ? Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                NeutralActionButton(
+                GhostActionButton(
                   icon: FluentIcons.arrow_up_24_regular,
                   text: 'הזז למעלה',
                   onPressed: isFirst ? null : onMoveUp,
                 ),
                 const SizedBox(width: 8),
-                NeutralActionButton(
+                GhostActionButton(
                   icon: FluentIcons.arrow_down_24_regular,
                   text: 'הזז למטה',
                   onPressed: isLast ? null : onMoveDown,

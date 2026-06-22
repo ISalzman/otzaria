@@ -667,7 +667,7 @@ class TextSettingsTab extends StatelessWidget {
             title: 'איפוס הגדרות לפי ספר',
             subtitle: 'מחיקת כל ההתאמות שנשמרו לכל ספר בנפרד',
             actions: [
-              NeutralActionButton(
+              GhostActionButton(
                 onPressed: () => _resetPerBookSettings(context),
                 text: 'איפוס',
               ),
