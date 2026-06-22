@@ -77,8 +77,8 @@ class CalendarSettingsTab extends StatefulWidget {
     ),
     SettingsSearchEntry(
       id: 'tools.calendar.notifications',
-      title: 'הפעל התראות על אירועים',
-      subtitle: 'התראות לפני אירועים בלוח השנה',
+      title: 'מצב התראות על אירועים',
+      subtitle: 'צליל / שקט / כבוי',
       tab: SettingsTab.tools,
       cardId: 'tools.calendar',
       keywords: [
@@ -86,17 +86,12 @@ class CalendarSettingsTab extends StatefulWidget {
         'התראות',
         'אירועים',
         'תזכורת',
+        'צליל',
+        'שקט',
+        'כבוי',
         'מופעל',
         'לא מופעל',
       ],
-    ),
-    SettingsSearchEntry(
-      id: 'tools.calendar.notification_sound',
-      title: 'השמע צליל בהתראה',
-      subtitle: 'השמעת צליל כאשר מופיעה התראה',
-      tab: SettingsTab.tools,
-      cardId: 'tools.calendar',
-      keywords: ['התראה', 'צליל', 'שמע', 'מופעל', 'לא מופעל'],
     ),
     SettingsSearchEntry(
       id: 'tools.calendar.reminder_offset',
@@ -232,39 +227,45 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
             SettingsCard(
               title: 'אירועים ותזכורות',
               children: [
-                // הפעל התראות
-                SettingsActionTile.switchTile(
-                  icon: FluentIcons.alert_24_regular,
-                  title: 'הפעל התראות על אירועים',
-                  value: state.calendarNotificationsEnabled,
-                  onChanged: (value) {
+                SettingsActionTile.segmentedTile<CalendarNotificationMode>(
+                  icon: _notificationModeIcon(state.notificationMode),
+                  title: 'התראות',
+                  subtitle: _notificationModeSubtitle(state.notificationMode),
+                  options: const [
+                    SegmentOption(
+                      value: CalendarNotificationMode.sound,
+                      label: 'צליל',
+                      icon: FluentIcons.alert_urgent_24_regular,
+                    ),
+                    SegmentOption(
+                      value: CalendarNotificationMode.silent,
+                      label: 'שקט',
+                      icon: FluentIcons.alert_24_regular,
+                    ),
+                    SegmentOption(
+                      value: CalendarNotificationMode.off,
+                      label: 'כבוי',
+                      icon: FluentIcons.alert_off_24_regular,
+                    ),
+                  ],
+                  currentValue: state.notificationMode,
+                  onChanged: (mode) {
                     context
                         .read<CalendarCubit>()
-                        .changeCalendarNotificationsEnabled(value);
+                        .changeCalendarNotificationMode(mode);
                   },
                 ),
-                if (state.calendarNotificationsEnabled) ...[
-                  SettingsActionTile.switchTile(
-                    icon: FluentIcons.speaker_2_24_regular,
-                    title: 'השמע צליל בהתראה',
-                    value: state.calendarNotificationSound,
-                    onChanged: (value) {
-                      context
-                          .read<CalendarCubit>()
-                          .changeCalendarNotificationSound(value);
-                    },
-                  ),
+                if (state.notificationMode != CalendarNotificationMode.off) ...[
                   SettingsActionTile.dropdownTile<int>(
-                    icon: FluentIcons.alert_snooze_24_regular,
-                    title: 'זמן תזכורת לפני האירוע',
-                    subtitle: 'כמה זמן לפני תחילת האירוע תופיע התראה',
+                    icon: FluentIcons.timer_24_regular,
+                    title: 'מועד ההתראה',
+                    subtitle: _calendarNotificationTimeSubtitle(
+                        state.calendarNotificationTime),
                     value: state.calendarNotificationTime,
-                    entries: const [
-                      AppMenuEntry(value: 60, label: 'שעה'),
-                      AppMenuEntry(value: 720, label: '12 שעות'),
-                      AppMenuEntry(value: 1440, label: 'יום'),
-                      AppMenuEntry(value: 2880, label: 'יומיים'),
-                    ],
+                    entries: _notificationTimeLabels.entries
+                        .map((e) =>
+                            AppMenuEntry<int>(value: e.key, label: e.value))
+                        .toList(),
                     onSelected: (value) {
                       if (value != null) {
                         context
@@ -448,6 +449,43 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
         );
       },
     );
+  }
+}
+
+const Map<int, String> _notificationTimeLabels = {
+  0: 'בזמן האירוע',
+  60: 'שעה',
+  720: '12 שעות',
+  1440: 'יום',
+  2880: 'יומיים',
+};
+
+String _calendarNotificationTimeSubtitle(int minutes) {
+  if (minutes == 0) return 'התראה תישלח בדיוק בזמן האירוע';
+  final label = _notificationTimeLabels[minutes];
+  if (label != null) return 'ההתראה תופיע $label לפני מועד האירוע';
+  return 'ההתראה תופיע לפני מועד האירוע';
+}
+
+IconData _notificationModeIcon(CalendarNotificationMode mode) {
+  switch (mode) {
+    case CalendarNotificationMode.sound:
+      return FluentIcons.alert_urgent_24_regular;
+    case CalendarNotificationMode.silent:
+      return FluentIcons.alert_24_regular;
+    case CalendarNotificationMode.off:
+      return FluentIcons.alert_off_24_regular;
+  }
+}
+
+String _notificationModeSubtitle(CalendarNotificationMode mode) {
+  switch (mode) {
+    case CalendarNotificationMode.sound:
+      return 'הצג התראות על המסך והשמע את צליל המערכת';
+    case CalendarNotificationMode.silent:
+      return 'הצג התראות על המסך ללא השמעת צליל';
+    case CalendarNotificationMode.off:
+      return 'אל תציג התראות עבור אירועים בלוח השנה';
   }
 }
 
