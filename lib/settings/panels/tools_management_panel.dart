@@ -453,6 +453,9 @@ class _ActionBar extends StatelessWidget {
     return eligible.isNotEmpty && eligible.every((p) => p.networkAccessGranted);
   }
 
+  bool get _anySelectedHasNetworkPermission => _selectedPlugins
+      .any((p) => p.manifest.permissions.contains(_networkAccessPermission));
+
   bool get _allSelectedHaveStartupEnabled {
     final eligible = _selectedPlugins
         .where((p) =>
@@ -460,6 +463,9 @@ class _ActionBar extends StatelessWidget {
         .toList();
     return eligible.isNotEmpty && eligible.every((p) => p.runOnStartupGranted);
   }
+
+  bool get _anySelectedHasStartupPermission => _selectedPlugins.any(
+      (p) => p.manifest.permissions.contains(pluginRunOnStartupPermission));
 
   @override
   Widget build(BuildContext context) {
@@ -500,7 +506,7 @@ class _ActionBar extends StatelessWidget {
                 ? FluentIcons.globe_prohibited_24_regular
                 : FluentIcons.globe_24_regular,
             text: _allSelectedHaveNetworkAccess ? 'דחיה מהרשת' : 'גישה לרשת',
-            onPressed: hasSelection
+            onPressed: hasSelection && _anySelectedHasNetworkPermission
                 ? () => _setNetworkAccess(context,
                     granted: !_allSelectedHaveNetworkAccess)
                 : null,
@@ -510,7 +516,7 @@ class _ActionBar extends StatelessWidget {
                 ? FluentIcons.power_24_filled
                 : FluentIcons.power_24_regular,
             text: _allSelectedHaveStartupEnabled ? 'טעינה רגילה' : 'טעינה בעליה',
-            onPressed: hasSelection
+            onPressed: hasSelection && _anySelectedHasStartupPermission
                 ? () => _setRunOnStartup(context,
                     granted: !_allSelectedHaveStartupEnabled)
                 : null,
