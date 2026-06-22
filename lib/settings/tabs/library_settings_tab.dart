@@ -192,7 +192,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
 
     final actions = <Widget>[
       if (hasPath)
-        NeutralActionButton(
+        ActionButton.neutral(
           text: 'העתק נתיב',
           icon: FluentIcons.copy_24_regular,
           onPressed: () async {
@@ -208,7 +208,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             }
           },
         ),
-      RecommendedActionButton(
+      ActionButton.recommended(
         text: hasPath ? 'שנה מיקום' : 'בחר מיקום',
         icon: FluentIcons.folder_24_regular,
         onPressed: () async {
@@ -239,7 +239,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
 
     final actions = <Widget>[
       if (hasPath)
-        NeutralActionButton(
+        ActionButton.neutral(
           text: 'העתק נתיב',
           icon: FluentIcons.copy_24_regular,
           onPressed: () async {
@@ -255,7 +255,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             }
           },
         ),
-      RecommendedActionButton(
+      ActionButton.recommended(
         text: hasPath ? 'שנה מיקום' : 'בחר מיקום',
         icon: FluentIcons.folder_24_regular,
         onPressed: () async {
@@ -447,7 +447,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                 style: kSettingsSubtitleStyle,
               ),
               trailing: isActive
-                  ? NeutralActionButton(
+                  ? ActionButton.neutral(
                       text: 'עצור',
                       onPressed: () async {
                         final result = await showWarningDialog(
@@ -469,7 +469,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : _requiresManualReindex == true
-                          ? RecommendedActionButton(
+                          ? ActionButton.recommended(
                               text: 'אפס ועדכן',
                               onPressed: () async {
                                 if (library == null) {
@@ -491,7 +491,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                               },
                             )
                           : indexingState is IndexingComplete
-                              ? GhostActionButton(
+                              ? ActionButton.ghost(
                                   text: 'איפוס',
                                   onPressed: () async {
                                     final result = await showWarningDialog(
@@ -509,7 +509,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                                     }
                                   },
                                 )
-                              : RecommendedActionButton(
+                              : ActionButton.recommended(
                                   text: 'עדכן',
                                   onPressed: () {
                                     final library = context

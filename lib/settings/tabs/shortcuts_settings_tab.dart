@@ -560,7 +560,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
                 title: 'איפוס קיצורי מקשים',
                 subtitle: 'החזר את כל קיצורי המקשים לברירת המחדל',
                 actions: [
-                  GhostActionButton(
+                  ActionButton.ghost(
                     text: 'איפוס',
                     onPressed: () => _resetShortcuts(context),
                   ),
@@ -821,7 +821,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
                 title: 'הוסף קיצור לפעולה זמינה',
                 subtitle: '${unconfiguredKeys.length} פעולות זמינות',
                 actions: [
-                  RecommendedActionButton(
+                  ActionButton.recommended(
                     text: 'הוסף קיצור',
                     onPressed: () => _addShortcut(context, unconfiguredKeys),
                   ),

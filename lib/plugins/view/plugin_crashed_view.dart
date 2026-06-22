@@ -104,7 +104,7 @@ class _PluginCrashedViewState extends State<PluginCrashedView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  RecommendedActionButton(
+                  ActionButton.recommended(
                     text: 'נסה שוב',
                     icon: FluentIcons.arrow_clockwise_24_regular,
                     isLoading: _retrying,

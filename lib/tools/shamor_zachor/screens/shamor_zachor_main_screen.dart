@@ -444,7 +444,7 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                       const Text('שגיאה בטעינת הנתונים'),
-                      RecommendedActionButton(
+                      ActionButton.recommended(
                         text: 'נסה שוב',
                         onPressed: () async {
                           if (dataProvider.error != null) {

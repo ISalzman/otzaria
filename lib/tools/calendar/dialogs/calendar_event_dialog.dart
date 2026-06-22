@@ -289,11 +289,11 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
         ),
       ),
       actions: [
-        NeutralActionButton(
+        ActionButton.neutral(
           text: 'ביטול',
           onPressed: () => Navigator.of(context).pop(),
         ),
-        RecommendedActionButton(
+        ActionButton.recommended(
           text: isEditMode ? 'שמור שינויים' : 'צור',
           onPressed: _submit,
         ),

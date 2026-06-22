@@ -144,12 +144,12 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
                       style: TextStyle(color: colorScheme.onSurfaceVariant),
                     ),
                   const Spacer(),
-                  NeutralActionButton(
+                  ActionButton.neutral(
                     text: 'ביטול',
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                   const SizedBox(width: 12),
-                  RecommendedActionButton(
+                  ActionButton.recommended(
                     text: _selectedBooks.isEmpty
                         ? 'הוסף'
                         : 'הוסף (${_selectedBooks.length})',

@@ -104,12 +104,12 @@ class _JumpToDatePanelState extends State<JumpToDatePanel> {
         const SizedBox(height: 12),
         Row(
           children: [
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'ביטול',
               onPressed: widget.onCancel,
             ),
             const SizedBox(width: 8),
-            RecommendedActionButton(
+            ActionButton.recommended(
               text: 'פתח',
               onPressed: widget.onConfirm,
             ),

@@ -3,8 +3,8 @@
 // דיאלוגים M3:
 //   → lib/widgets/dialogs/app_dialogs.dart
 //
-// כפתורי פעולה (RecommendedActionButton, NeutralActionButton,
-// SecondaryIconButton, PrimaryIconButton):
+// כפתורי פעולה (ActionButton.recommended / .neutral / .ghost,
+// SecondaryIconButton, PrimaryIconButton, ToolbarActionButton):
 //   → lib/widgets/controls/action_buttons.dart
 //
 // Segmented control (AppSegmentedControl, SegmentOption):

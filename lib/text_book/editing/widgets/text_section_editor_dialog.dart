@@ -745,11 +745,11 @@ class _SearchDialogState extends State<_SearchDialog> {
         ],
       ),
       actions: [
-        NeutralActionButton(
+        ActionButton.neutral(
           text: 'סגור',
           onPressed: () => Navigator.of(context).pop(),
         ),
-        RecommendedActionButton(
+        ActionButton.recommended(
           text: 'חפש',
           onPressed: _performSearch,
         ),
@@ -819,11 +819,11 @@ class _LinkInsertDialogState extends State<_LinkInsertDialog> {
           ],
         ),
         actions: [
-          NeutralActionButton(
+          ActionButton.neutral(
             text: 'ביטול',
             onPressed: () => Navigator.of(context).pop(),
           ),
-          RecommendedActionButton(
+          ActionButton.recommended(
             text: 'הוסף',
             onPressed: () {
               widget.onInsert(_textController.text, _urlController.text);

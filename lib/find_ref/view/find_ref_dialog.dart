@@ -509,7 +509,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
             ),
             const SizedBox(height: 20),
             if (isDeepLink) ...[
-              RecommendedActionButton(
+              ActionButton.recommended(
                 text: 'פתיחת קישור',
                 onPressed: () => _tryHandleDeepLink(query),
                 icon: FluentIcons.link_24_regular,
@@ -524,7 +524,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
-              RecommendedActionButton(
+              ActionButton.recommended(
                 text: 'פתח חיפוש טקסט',
                 onPressed: () => _openTextSearch(query),
                 icon: FluentIcons.search_24_regular,

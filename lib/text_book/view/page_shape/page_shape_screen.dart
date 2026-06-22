@@ -501,13 +501,13 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            RecommendedActionButton(
+            ActionButton.recommended(
               onPressed: onSelectCommentator,
               icon: FluentIcons.book_24_regular,
               text: 'בחר מפרש',
             ),
             const SizedBox(height: 12),
-            NeutralActionButton(
+            ActionButton.neutral(
               onPressed: onHideColumn,
               icon: FluentIcons.eye_off_24_regular,
               text: 'הסתר טור זה',

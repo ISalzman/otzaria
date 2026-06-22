@@ -96,17 +96,17 @@ class _ZmanAlertDialogState extends State<ZmanAlertDialog> {
       ),
       actions: [
         if (widget.isEnabled)
-          NeutralActionButton(
+          ActionButton.neutral(
             text: 'בטל התראה',
             onPressed: () => Navigator.of(context).pop(
               const ZmanAlertDialogResult(minutesBefore: 0, cancelAlert: true),
             ),
           ),
-        NeutralActionButton(
+        ActionButton.neutral(
           text: 'ביטול',
           onPressed: () => Navigator.of(context).pop(),
         ),
-        RecommendedActionButton(
+        ActionButton.recommended(
           text: widget.isEnabled ? 'עדכן' : 'הפעל',
           onPressed: () => Navigator.of(context).pop(
             ZmanAlertDialogResult(

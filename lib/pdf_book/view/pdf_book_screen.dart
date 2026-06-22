@@ -3268,7 +3268,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                   ),
                                 ),
                                 const SizedBox(height: 16),
-                                RecommendedActionButton(
+                                ActionButton.recommended(
                                   text: 'נסה שוב',
                                   icon: FluentIcons.arrow_clockwise_24_regular,
                                   onPressed: () {

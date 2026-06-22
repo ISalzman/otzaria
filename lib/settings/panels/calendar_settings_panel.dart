@@ -302,7 +302,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                         if (!state.googleCalendarConnected) ...[
                           SizedBox(
                             width: double.infinity,
-                            child: RecommendedActionButton(
+                            child: ActionButton.recommended(
                               text: 'התחברות לחשבון',
                               icon: FluentIcons.person_accounts_24_regular,
                               isLoading: state.googleCalendarSyncInProgress,
@@ -348,7 +348,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                           Row(
                             children: [
                               Expanded(
-                                child: NeutralActionButton(
+                                child: ActionButton.neutral(
                                   text:
                                       'לוחות שנה (${state.googleCalendarSelectedIds.length})',
                                   icon: FluentIcons.calendar_24_regular,
@@ -394,7 +394,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              RecommendedActionButton(
+                              ActionButton.recommended(
                                 text: 'סנכרן',
                                 icon: FluentIcons.arrow_sync_24_regular,
                                 isLoading: state.googleCalendarSyncInProgress,
@@ -403,7 +403,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                                     .syncGoogleCalendar(interactive: true),
                               ),
                               const SizedBox(width: 8),
-                              NeutralActionButton(
+                              ActionButton.neutral(
                                 text: 'התנתק',
                                 onPressed: () => context
                                     .read<CalendarCubit>()
@@ -644,11 +644,11 @@ class _CalendarMultiSelectionDialogState<T>
         ),
       ),
       actions: [
-        NeutralActionButton(
+        ActionButton.neutral(
           text: 'ביטול',
           onPressed: () => Navigator.of(context).pop(),
         ),
-        RecommendedActionButton(
+        ActionButton.recommended(
           text: 'אישור',
           onPressed: selectedValues.isEmpty
               ? () {}
