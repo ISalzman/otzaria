@@ -18,6 +18,8 @@ import 'package:timezone/timezone.dart' as tz;
 
 enum CalendarType { hebrew, gregorian, combined }
 
+enum CalendarNotificationMode { sound, silent, off }
+
 enum CalendarView { month, week, day }
 
 enum CalendarDayTransition { sunset, tzais, rabbeinuTam, midnight }
@@ -74,6 +76,13 @@ class CalendarState extends Equatable {
   final CalendarDayTransition dayTransition;
   final int? _calendarClockTick;
   int get calendarClockTick => _calendarClockTick ?? 0;
+
+  CalendarNotificationMode get notificationMode {
+    if (!calendarNotificationsEnabled) return CalendarNotificationMode.off;
+    return calendarNotificationSound
+        ? CalendarNotificationMode.sound
+        : CalendarNotificationMode.silent;
+  }
   final List<CustomEvent> events;
   final String eventSearchQuery;
   final bool searchInDescriptions;
@@ -1760,6 +1769,24 @@ class CalendarCubit extends Cubit<CalendarState> {
     emit(state.copyWith(calendarNotificationSound: enabled));
     await _settingsRepository.updateCalendarNotificationSound(enabled);
     // No need to reschedule for sound changes - it only affects new notifications
+  }
+
+  Future<void> changeCalendarNotificationMode(
+      CalendarNotificationMode mode) async {
+    switch (mode) {
+      case CalendarNotificationMode.sound:
+        await changeCalendarNotificationsEnabled(true);
+        if (state.calendarNotificationsEnabled) {
+          await changeCalendarNotificationSound(true);
+        }
+      case CalendarNotificationMode.silent:
+        await changeCalendarNotificationsEnabled(true);
+        if (state.calendarNotificationsEnabled) {
+          await changeCalendarNotificationSound(false);
+        }
+      case CalendarNotificationMode.off:
+        await changeCalendarNotificationsEnabled(false);
+    }
   }
 
   Future<void> _rescheduleNotifications() async {
