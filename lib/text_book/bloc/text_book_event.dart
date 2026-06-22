@@ -413,17 +413,19 @@ class LoadAllLinksForIndices extends TextBookEvent {
   List<Object?> get props => [indices];
 }
 
-/// מעדכן את ה-ID של הספר הנוכחי לאחר רזולוציה אסינכרונית מה-DB.
-/// נשלח מ-_enrichHeCategoriesInBackground כאשר ה-ID חסר בספר.
+/// מעדכן את ה-ID וה-heCategories של הספר הנוכחי לאחר העשרה אסינכרונית.
+/// נשלח מ-_enrichHeCategoriesInBackground כאשר נמצאו ערכים חדשים.
 class UpdateResolvedBookId extends TextBookEvent {
   final String bookTitle;
-  final int resolvedId;
+  final int? resolvedId;
+  final String? heCategories;
 
   const UpdateResolvedBookId({
     required this.bookTitle,
-    required this.resolvedId,
+    this.resolvedId,
+    this.heCategories,
   });
 
   @override
-  List<Object?> get props => [bookTitle, resolvedId];
+  List<Object?> get props => [bookTitle, resolvedId, heCategories];
 }

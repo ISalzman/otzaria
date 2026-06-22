@@ -2286,11 +2286,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   Future<void> _enrichHeCategoriesInBackground(TextBook book) async {
+    final prevHeCategories = book.heCategories;
     final resolvedId = await enrichHeCategories(book);
-    if (book.id == null && resolvedId != null) {
+    final heCategoriesChanged = book.heCategories != prevHeCategories;
+
+    if ((book.id == null && resolvedId != null) || heCategoriesChanged) {
       add(UpdateResolvedBookId(
         bookTitle: book.title,
         resolvedId: resolvedId,
+        heCategories: heCategoriesChanged ? book.heCategories : null,
       ));
     }
   }
@@ -2302,33 +2306,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     final current = state;
     if (current is! TextBookLoaded) return;
     if (current.book.title != event.bookTitle) return;
-    if (current.book.id != null) return;
 
-    // id הוא final — יוצרים TextBook חדש עם כל השדות + id מעודכן
-    final updatedBook = TextBook(
-      id: event.resolvedId,
-      title: current.book.title,
-      category: current.book.category,
-      author: current.book.author,
-      heCategories: current.book.heCategories,
-      heEra: current.book.heEra,
-      compDateStringHe: current.book.compDateStringHe,
-      compPlaceStringHe: current.book.compPlaceStringHe,
-      pubDateStringHe: current.book.pubDateStringHe,
-      pubPlaceStringHe: current.book.pubPlaceStringHe,
-      heShortDesc: current.book.heShortDesc,
-      heDesc: current.book.heDesc,
-      pubDate: current.book.pubDate,
-      pubPlace: current.book.pubPlace,
-      order: current.book.order,
-      topics: current.book.topics,
-      filePath: current.book.filePath,
-      fileType: current.book.fileType,
-      categoryPath: current.book.categoryPath,
-      categoryId: current.book.categoryId,
-      extraTitles: current.book.extraTitles,
-      isUserBook: current.book.isUserBook,
-      externalLibraryId: current.book.externalLibraryId,
+    final needsIdUpdate = current.book.id == null && event.resolvedId != null;
+    final needsCategoriesUpdate = event.heCategories != null &&
+        event.heCategories != current.book.heCategories;
+
+    if (!needsIdUpdate && !needsCategoriesUpdate) return;
+
+    final updatedBook = current.book.copyWith(
+      id: needsIdUpdate ? event.resolvedId : null,
+      heCategories: needsCategoriesUpdate ? event.heCategories : null,
     );
     emit(current.copyWith(book: updatedBook));
   }
