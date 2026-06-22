@@ -51,6 +51,11 @@ class _ScrollablePositionedListScrollbarState
   // להחלקת הקפיצות במיקום
   int _lastFirstIndex = 0;
 
+  // גובהי הפריטים שנמדדו (אינדקס → גובה ביחידות מסך). ממוצע גלובלי עליהם נותן
+  // אומדן תוכן יציב, במקום ממוצע מקומי מתנודד על הגלויים כרגע.
+  final Map<int, double> _itemHeights = {};
+  double _itemHeightSum = 0.0;
+
   // תווית היעד הצפה (כתובת המקום שאליו נקפוץ בלחיצה). מבודדת מעץ הסרגל דרך
   // Overlay כדי שלא תגרום ל-rebuild של הרשימה. _labelIndex/_labelText
   // ממזערים חישוב: refFromTocList רץ רק כשהאינדקס שמתחתיו העכבר משתנה.
@@ -69,6 +74,14 @@ class _ScrollablePositionedListScrollbarState
   @override
   void didUpdateWidget(covariant ScrollablePositionedListScrollbar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // החלפת ספר (itemCount/listener/scrollController) מייתרת את הגבהים הישנים.
+    // שני ספרים עלולים לחלוק itemCount, ולכן בודקים גם את ה-scrollController.
+    if (oldWidget.itemCount != widget.itemCount ||
+        oldWidget.itemPositionsListener != widget.itemPositionsListener ||
+        oldWidget.scrollController != widget.scrollController) {
+      _itemHeights.clear();
+      _itemHeightSum = 0.0;
+    }
     if (oldWidget.itemPositionsListener != widget.itemPositionsListener) {
       oldWidget.itemPositionsListener.itemPositions
           .removeListener(_updateScrollPosition);
@@ -140,12 +153,14 @@ class _ScrollablePositionedListScrollbarState
     int minIndex = positions.first.index;
     int maxIndex = positions.first.index;
     double leadingAtMin = positions.first.itemLeadingEdge;
+    double trailingAtMin = positions.first.itemTrailingEdge;
     double trailingAtMax = positions.first.itemTrailingEdge;
 
     for (var position in positions) {
       if (position.index < minIndex) {
         minIndex = position.index;
         leadingAtMin = position.itemLeadingEdge;
+        trailingAtMin = position.itemTrailingEdge;
       }
       if (position.index > maxIndex) {
         maxIndex = position.index;
@@ -160,30 +175,59 @@ class _ScrollablePositionedListScrollbarState
       _lastFirstIndex = minIndex;
     }
 
-    // חישוב גובה הפס ביחס לכמות הפריטים
-    // מוסיפים 1 כדי למנוע חילוק ב-0
-    final visibleItems = (maxIndex - minIndex + 1);
-    final proportion = visibleItems / max(widget.itemCount, 1);
+    // גובה פריט קבוע תחת גלילה; אם פריט שכבר נמדד מופיע בגובה שונה, ה-layout
+    // השתנה (גופן/גודל viewport/מפרשים/split) וכל היחסים השמורים אינם תקפים.
+    final layoutChanged = positions.any((position) {
+      final cached = _itemHeights[position.index];
+      if (cached == null) return false;
+      final height = position.itemTrailingEdge - position.itemLeadingEdge;
+      return height > 0 && (cached - height).abs() > cached * 0.02;
+    });
+    if (layoutChanged) {
+      _itemHeights.clear();
+      _itemHeightSum = 0.0;
+    }
 
-    // גובה מינימלי בפיקסלים ל"אגודל" הגלילה הוא בדרך כלל סביב 40-50 פיקסלים במסכים רגילים
-    // אבל כאן אנחנו עובדים באחוזים (0.0 עד 1.0)
-    // נניח שגובה המסך הוא H, גובה מינימלי h_min. אחוז מינימלי הוא h_min/H
-    // נניח באופן שמרני שרצוי לפחות 5%
-    final newHeight = proportion.clamp(0.05, 1.0);
+    // צבירת גבהים לממוצע גלובלי. max(0) מגן מפני סחיפת נקודה-צפה לשלילי זעיר.
+    for (final position in positions) {
+      final height = position.itemTrailingEdge - position.itemLeadingEdge;
+      if (height > 0) {
+        _itemHeightSum = max(
+          0.0,
+          _itemHeightSum + height - (_itemHeights[position.index] ?? 0.0),
+        );
+        _itemHeights[position.index] = height;
+      }
+    }
 
-    // חישוב המיקום היחסי (0.0 למעלה, 1.0 למטה)
-    // האינדקסים הם 0-based.
-    // אם minIndex הוא 0 -> top 0.
-    // אם maxIndex הוא itemCount-1 -> bottom 1.0 (בערך)
+    final visibleItems = maxIndex - minIndex + 1;
+
+    // גובה האגודל = יחס התוכן הנראה לכלל, לפי ממוצע גלובלי יציב. ה-fallback
+    // מגן רק מפני 0/0 במקרה המנוון שאף פריט לא נמדד (כל הגבהים ≤ 0).
+    final visibleSpan = trailingAtMax - leadingAtMin;
+    final avgItemHeight = _itemHeights.isNotEmpty
+        ? _itemHeightSum / _itemHeights.length
+        : (visibleItems > 0 ? visibleSpan / visibleItems : 0.0);
+    final totalContent = avgItemHeight * widget.itemCount;
+    final newHeight =
+        totalContent > 0 ? (1.0 / totalContent).clamp(0.05, 1.0) : 1.0;
+
+    // minIndex לבדו זז בקפיצות של פריט שלם והאגודל "לא מחליק". מוסיפים את
+    // החלק של הפריט העליון שכבר נגלל מעבר לקצה (-leadingAtMin חלקי גובהו)
+    // כדי שהאגודל יחליק חלק בין אינדקסים סמוכים.
+    final topItemHeight = trailingAtMin - leadingAtMin;
+    final fractionIntoTop = topItemHeight > 0
+        ? (-leadingAtMin / topItemHeight).clamp(0.0, 1.0)
+        : 0.0;
+    final continuousIndex = minIndex + fractionIntoTop;
 
     final maxScrollableIndex = max(widget.itemCount - visibleItems, 1);
-    // המיפוי ההפוך (אינדקס → מיקום אגודל) חייב להכפיל ב-(1 - newHeight) כדי
-    // להיות עקבי עם המיפוי הקדים ב-_indexFromThumbPosition (שמחלק ב-
-    // (1 - _thumbHeight)). בלי ההכפלה, אחרי לחיצה/גרירה שקפצה ליעד, העדכון
-    // הזה דרס את מיקום האגודל לערך גבוה ב-1/(1-thumbHeight) — והאגודל "ירד"
-    // ביחס למקום שנלחץ, בעוצמה שגדלה ככל שמתקדמים בספר.
-    final newPosition = ((minIndex / maxScrollableIndex) * (1.0 - newHeight))
-        .clamp(0.0, 1.0 - newHeight);
+    // הכפלה ב-(1 - newHeight) שומרת עקביות עם המיפוי ההפוך
+    // ב-_indexFromThumbPosition (שמחלק ב-(1 - _thumbHeight)); בלעדיה האגודל
+    // "ירד" אחרי קפיצה ליעד, בעוצמה שגדלה ככל שמתקדמים בספר.
+    final newPosition =
+        ((continuousIndex / maxScrollableIndex) * (1.0 - newHeight))
+            .clamp(0.0, 1.0 - newHeight);
 
     // כל התוכן נראה אם הפריט הראשון מתחיל בתוך המסך, האחרון מסתיים בתוכו,
     // וכל הפריטים בטווח הזה מיוצגים — במצב כזה אין מה לגלול ואין טעם
