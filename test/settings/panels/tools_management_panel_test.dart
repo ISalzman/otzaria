@@ -12,6 +12,7 @@ import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/panels/tools_management_panel.dart';
+import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
 
 // ─── Test doubles ─────────────────────────────────────────────────────────────
@@ -605,6 +606,86 @@ void main() {
           .toList();
       expect(events, hasLength(1));
       expect(events.single.granted, isFalse);
+    },
+  );
+
+  testWidgets(
+    'a pinned built-in tool shows "בסרגל ניווט" badge and "הסר מסרגל הניווט" button',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final settingsBloc = _FakeSettingsBloc(
+        pinnedToNav: const {'builtin.calendar'},
+      );
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: settingsBloc,
+        pluginBloc: _FakePluginSystemBloc(const []),
+      ));
+      await tester.pumpAndSettle();
+      await _expandBuiltIn(tester);
+
+      expect(find.text('לוח שנה'), findsOneWidget);
+      // Stack מרנדר placeholder בלתי-נראה + badge נראה — שניהם מכילים את הטקסט.
+      // בודקים שיש לפחות שניים בשורת לוח-שנה (placeholder + badge אמיתי).
+      final calendarRow = find.ancestor(
+        of: find.text('לוח שנה'),
+        matching: find.byType(SettingsActionTile),
+      );
+      expect(
+        find.descendant(of: calendarRow, matching: find.text('בסרגל ניווט')),
+        findsNWidgets(2),
+      );
+      expect(_rowButton('לוח שנה', 'הסר מסרגל הניווט'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'built-in tool row height stays constant across all badge states',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      Future<double> measureCalendarRowHeight(_FakeSettingsBloc bloc) async {
+        await tester.pumpWidget(_wrap(
+          settingsBloc: bloc,
+          pluginBloc: _FakePluginSystemBloc(const []),
+        ));
+        await tester.pumpAndSettle();
+        await _expandBuiltIn(tester);
+        // flash notifier עשוי לפתוח את הסעיף אוטומטית לפני ה-tap ואז ה-tap סוגר אותו
+        if (find.text(kBuiltInToolsCatalog[0].label).evaluate().isEmpty) {
+          await _expandBuiltIn(tester);
+        }
+        // גובה שורת לוח-שנה = מרחק בין top של title שלה ל-top של title של הכלי הבא
+        final calendarTop =
+            tester.getTopLeft(find.text(kBuiltInToolsCatalog[0].label)).dy;
+        final nextToolTop =
+            tester.getTopLeft(find.text(kBuiltInToolsCatalog[1].label)).dy;
+        return nextToolTop - calendarTop;
+      }
+
+      final noBadges = await measureCalendarRowHeight(_FakeSettingsBloc());
+      final hiddenOnly = await measureCalendarRowHeight(
+        _FakeSettingsBloc(hidden: const {'builtin.calendar'}),
+      );
+      final pinnedOnly = await measureCalendarRowHeight(
+        _FakeSettingsBloc(pinnedToNav: const {'builtin.calendar'}),
+      );
+      final both = await measureCalendarRowHeight(
+        _FakeSettingsBloc(
+          hidden: const {'builtin.calendar'},
+          pinnedToNav: const {'builtin.calendar'},
+        ),
+      );
+
+      expect(hiddenOnly, noBadges,
+          reason: '"מוסתר" badge must not change row height');
+      expect(pinnedOnly, noBadges,
+          reason: '"בסרגל ניווט" badge must not change row height');
+      expect(both, noBadges,
+          reason: 'both badges together must not change row height');
     },
   );
 }
