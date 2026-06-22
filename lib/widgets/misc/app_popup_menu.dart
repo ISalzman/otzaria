@@ -5,6 +5,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
@@ -25,6 +26,13 @@ class AppMenuEntry<T> {
   /// תוכן מותאם להצגה במקום [label] (החיפוש עדיין מתבצע לפי [label]).
   final Widget? labelWidget;
 
+  /// שמור מקום ריק בעמודת סימן ה-✓ גם כשהשורה אינה נבחרת.
+  final bool reserveTrailingGap;
+
+  /// רוחב בפיקסלים המוקצה ל-[trailing] בחישוב [labelMaxWidth].
+  /// 0 = ברירת מחדל (iconSize + 8).
+  final double trailingReservedWidth;
+
   const AppMenuEntry({
     required this.value,
     required this.label,
@@ -33,6 +41,8 @@ class AppMenuEntry<T> {
     this.isDestructive = false,
     this.trailing,
     this.labelWidget,
+    this.reserveTrailingGap = false,
+    this.trailingReservedWidth = 0,
   });
 }
 
@@ -232,7 +242,8 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
         !_hasCompactConstraints) {
       trigger = TextButton.icon(
         onPressed: widget.enabled ? _showAdaptiveMenu : null,
-        icon: widget.icon ?? const Icon(FluentIcons.more_vertical_24_regular),
+        icon:
+            widget.icon ?? const RtlIcon(FluentIcons.more_vertical_24_regular),
         label: Text(
           widget.tooltip!,
         ),
@@ -260,7 +271,8 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
         padding: widget.padding ?? EdgeInsets.zero,
         constraints: widget.constraints,
         tooltip: widget.tooltip,
-        icon: widget.icon ?? const Icon(FluentIcons.more_vertical_24_regular),
+        icon:
+            widget.icon ?? const RtlIcon(FluentIcons.more_vertical_24_regular),
       );
     }
 
@@ -354,6 +366,9 @@ Future<T?> showAnchoredAppSearchMenu<T>({
   String searchHint = 'חיפוש',
   PopupMenuPosition position = PopupMenuPosition.under,
   Offset offset = const Offset(0, 4),
+  List<String>? filterLabels,
+  List<bool Function(AppMenuEntry<T>)?>? filterPredicates,
+  double? menuMinWidth,
 }) async {
   if (entries.isEmpty) return null;
 
@@ -367,10 +382,13 @@ Future<T?> showAnchoredAppSearchMenu<T>({
     Offset.zero & renderBox.size,
   );
 
-  // גובה מקסימלי: שדה חיפוש + עד 8 פריטים + ריפוד
+  // גובה מקסימלי: שדה חיפוש + שורת סינון (אם יש) + עד 8 פריטים + ריפוד
   const double searchBarHeight = 56.0;
+  const double filterRowHeight = 40.0;
   const int maxItemsVisible = 8;
+  final hasFilters = filterLabels != null && filterLabels.isNotEmpty;
   final maxMenuHeight = searchBarHeight +
+      (hasFilters ? filterRowHeight : 0.0) +
       (metrics.itemHeight * maxItemsVisible) +
       metrics.menuPadding.vertical +
       8;
@@ -391,18 +409,27 @@ Future<T?> showAnchoredAppSearchMenu<T>({
       ? targetRect.bottom + offset.dy
       : targetRect.top - menuHeight - offset.dy;
 
+  // menuMinWidth מאפשר לתפריט להיות רחב מהשדה המפעיל.
+  // מוגבל לרוחב ה-overlay כדי שה-clamp לא יקבל גבול עליון שלילי.
+  final effectiveWidth =
+      max(menuMinWidth ?? 0.0, targetRect.width).clamp(0.0, overlay.size.width);
+  final rawMenuLeft = targetRect.right - effectiveWidth;
+  final menuLeft = rawMenuLeft.clamp(0.0, overlay.size.width - effectiveWidth);
+
   return Navigator.of(context).push<T>(
     _AnchoredSearchMenuRoute<T>(
       anchorRect: Rect.fromLTWH(
-        targetRect.left,
+        menuLeft,
         menuTop,
-        targetRect.width,
+        effectiveWidth,
         menuHeight,
       ),
       entries: entries,
       initialValue: initialValue,
       searchHint: searchHint,
       metrics: metrics,
+      filterLabels: filterLabels,
+      filterPredicates: filterPredicates,
     ),
   );
 }
@@ -413,6 +440,8 @@ class _AnchoredSearchMenuRoute<T> extends PopupRoute<T> {
   final T? initialValue;
   final String searchHint;
   final AppMenuMetrics metrics;
+  final List<String>? filterLabels;
+  final List<bool Function(AppMenuEntry<T>)?>? filterPredicates;
 
   _AnchoredSearchMenuRoute({
     required this.anchorRect,
@@ -420,6 +449,8 @@ class _AnchoredSearchMenuRoute<T> extends PopupRoute<T> {
     required this.initialValue,
     required this.searchHint,
     required this.metrics,
+    this.filterLabels,
+    this.filterPredicates,
   });
 
   @override
@@ -447,6 +478,8 @@ class _AnchoredSearchMenuRoute<T> extends PopupRoute<T> {
       searchHint: searchHint,
       metrics: metrics,
       animation: animation,
+      filterLabels: filterLabels,
+      filterPredicates: filterPredicates,
     );
   }
 }
@@ -458,6 +491,8 @@ class _AnchoredSearchMenuContent<T> extends StatefulWidget {
   final String searchHint;
   final AppMenuMetrics metrics;
   final Animation<double> animation;
+  final List<String>? filterLabels;
+  final List<bool Function(AppMenuEntry<T>)?>? filterPredicates;
 
   const _AnchoredSearchMenuContent({
     required this.anchorRect,
@@ -466,6 +501,8 @@ class _AnchoredSearchMenuContent<T> extends StatefulWidget {
     required this.searchHint,
     required this.metrics,
     required this.animation,
+    this.filterLabels,
+    this.filterPredicates,
   });
 
   @override
@@ -479,6 +516,7 @@ class _AnchoredSearchMenuContentState<T>
   late final FocusNode _searchFocus;
   late final ScrollController _scrollController;
   String _query = '';
+  int _activeFilter = 0;
 
   @override
   void initState() {
@@ -524,9 +562,19 @@ class _AnchoredSearchMenuContentState<T>
   }
 
   List<AppMenuEntry<T>> get _filteredEntries {
-    if (_query.isEmpty) return widget.entries;
+    var entries = widget.entries;
+
+    final predicates = widget.filterPredicates;
+    if (predicates != null &&
+        _activeFilter < predicates.length &&
+        predicates[_activeFilter] != null) {
+      final predicate = predicates[_activeFilter]!;
+      entries = entries.where(predicate).toList();
+    }
+
+    if (_query.isEmpty) return entries;
     final lowerQuery = _query.toLowerCase();
-    return widget.entries
+    return entries
         .where((e) => e.label.toLowerCase().contains(lowerQuery))
         .toList();
   }
@@ -589,6 +637,51 @@ class _AnchoredSearchMenuContentState<T>
                       ),
                     ),
                   ),
+                  // שורת סינון (chip-ים) — מוצגת רק אם הועברו filterLabels
+                  if (widget.filterLabels != null &&
+                      widget.filterLabels!.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (int i = 0;
+                                i < widget.filterLabels!.length;
+                                i++) ...[
+                              if (i > 0) const SizedBox(width: 6),
+                              FilterChip(
+                                label: Text(
+                                  widget.filterLabels![i],
+                                  style: TextStyle(
+                                    fontSize: widget.metrics.fontSize - 1,
+                                    fontFamily: 'Roboto',
+                                  ),
+                                ),
+                                selected: _activeFilter == i,
+                                onSelected: (_) {
+                                  setState(() => _activeFilter = i);
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) {
+                                    if (mounted &&
+                                        _scrollController.hasClients) {
+                                      _scrollController.jumpTo(0);
+                                    }
+                                  });
+                                },
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 2),
+                                showCheckmark: false,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   // רשימה נגללת
                   Expanded(
                     child: filtered.isEmpty
@@ -634,6 +727,10 @@ class _AnchoredSearchMenuContentState<T>
                                       isSelected: isSelected,
                                       isDestructive: entry.isDestructive,
                                       enabled: entry.enabled,
+                                      reserveTrailingGap:
+                                          entry.reserveTrailingGap,
+                                      trailingReservedWidth:
+                                          entry.trailingReservedWidth,
                                     ),
                                   ),
                                 ),
@@ -670,6 +767,8 @@ Widget buildAppMenuRowContent(
   bool isSelected = false,
   bool isDestructive = false,
   bool enabled = true,
+  bool reserveTrailingGap = false,
+  double trailingReservedWidth = 0,
 }) {
   final colorScheme = Theme.of(context).colorScheme;
   final foregroundColor = !enabled
@@ -681,11 +780,17 @@ Widget buildAppMenuRowContent(
               : colorScheme.onSurface;
 
   final hasTrailingWidget = isSelected || trailing != null;
+  // selected+trailing מציג גם trailing וגם checkmark → slot נוסף.
+  // non-selected+trailing+reserve מציג trailing + SizedBox ריק → slot נוסף.
+  final hasExtraSlot = (isSelected && trailing != null) ||
+      (!isSelected && reserveTrailingGap && trailing != null);
   final labelMaxWidth = calculateAppMenuLabelMaxWidth(
     metrics,
     maxWidth: maxWidth,
     hasLeadingIcon: icon != null,
     hasTrailingWidget: hasTrailingWidget,
+    trailingWidth: trailingReservedWidth,
+    hasExtraSlot: hasExtraSlot,
   );
   final labelTextStyle = TextStyle(
     fontFamily: 'Roboto',
@@ -705,7 +810,7 @@ Widget buildAppMenuRowContent(
         (isSelected || trailing != null) ? MainAxisSize.max : MainAxisSize.min,
     children: [
       if (icon != null) ...[
-        Icon(icon, size: metrics.iconSize, color: foregroundColor),
+        RtlIcon(icon, size: metrics.iconSize, color: foregroundColor),
         const SizedBox(width: 8),
       ],
       DefaultTextStyle.merge(
@@ -717,10 +822,28 @@ Widget buildAppMenuRowContent(
                 child: labelChild,
               ),
       ),
-      if (isSelected) ...[
+      if (isSelected && trailing != null) ...[
+        const Spacer(),
+        IconTheme.merge(
+          data: IconThemeData(
+            size: metrics.iconSize,
+            color: foregroundColor,
+          ),
+          child: DefaultTextStyle.merge(
+            style: TextStyle(color: foregroundColor),
+            child: trailing,
+          ),
+        ),
+        const SizedBox(width: 8),
+        RtlIcon(
+          FluentIcons.checkmark_circle_24_filled,
+          size: metrics.iconSize,
+          color: foregroundColor,
+        ),
+      ] else if (isSelected) ...[
         const Spacer(),
         const SizedBox(width: 6),
-        Icon(
+        RtlIcon(
           FluentIcons.checkmark_circle_24_filled,
           size: metrics.iconSize,
           color: foregroundColor,
@@ -737,6 +860,7 @@ Widget buildAppMenuRowContent(
             child: trailing,
           ),
         ),
+        if (reserveTrailingGap) SizedBox(width: metrics.iconSize + 8),
       ],
     ],
   );
@@ -757,12 +881,18 @@ double? calculateAppMenuLabelMaxWidth(
   required double? maxWidth,
   required bool hasLeadingIcon,
   required bool hasTrailingWidget,
+  double trailingWidth = 0,
+  bool hasExtraSlot = false,
 }) {
   if (maxWidth == null) return null;
 
+  final trailingSlot = hasTrailingWidget
+      ? (trailingWidth > 0 ? trailingWidth : metrics.iconSize + 8)
+      : 0.0;
   final occupiedWidth = metrics.itemPadding.horizontal +
       (hasLeadingIcon ? metrics.iconSize + 8 : 0) +
-      (hasTrailingWidget ? metrics.iconSize + 8 : 0);
+      trailingSlot +
+      (hasExtraSlot ? metrics.iconSize + 8 : 0);
   final availableWidth = maxWidth - occupiedWidth;
   if (availableWidth <= 0) return null;
 
