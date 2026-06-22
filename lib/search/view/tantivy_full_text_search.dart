@@ -244,20 +244,14 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            FilledButton.tonal(
+            NeutralActionButton(
+              text: 'ערוך חיפוש',
               onPressed: () {
                 setState(() {
                   _showEditPanel = true;
                 });
               },
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(FluentIcons.edit_24_regular, size: 18),
-                  SizedBox(width: 8),
-                  Text('ערוך חיפוש'),
-                ],
-              ),
+              icon: FluentIcons.edit_24_regular,
             ),
           ],
         ),
