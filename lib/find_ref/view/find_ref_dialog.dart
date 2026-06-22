@@ -15,6 +15,8 @@ import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/search/view/search_dialog.dart';
 
 class FindRefDialog extends StatefulWidget {
   const FindRefDialog({super.key});
@@ -417,6 +419,70 @@ class _FindRefDialogState extends State<FindRefDialog> {
         preferTextBook: preferTextBook);
   }
 
+  /// פותח את דיאלוג החיפוש עם [query] מוכן בשדה — ללא הרצת חיפוש.
+  void _openTextSearch(String query) {
+    Navigator.of(context).pop();
+    final tab = SearchingTab('חיפוש', query);
+    showDialog(
+      context: context,
+      builder: (context) => SearchDialog(existingTab: tab),
+    );
+  }
+
+  /// מצב ריק מעוצב: אייקון, הודעה ממוקדת וכפתור לפתיחת חיפוש טקסט.
+  Widget _buildEmptyState(BuildContext context, String query) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              FluentIcons.document_search_24_regular,
+              size: 64,
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'לא הצלחנו לאתר את הספר "$query"',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.onSurface,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'נסו טקסט אחר לאיתור הספר המבוקש במאגר',
+              style: TextStyle(
+                fontSize: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'ניתן לאתר גם טקסט ספציפי במאגר',
+              style: TextStyle(
+                fontSize: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: () => _openTextSearch(query),
+              icon: const Icon(FluentIcons.search_24_regular, size: 18),
+              label: const Text('פתח חיפוש טקסט'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final focusRepository = context.read<FocusRepository>();
@@ -562,18 +628,13 @@ class _FindRefDialogState extends State<FindRefDialog> {
                 },
                 builder: (context, state) {
                   if (state is FindRefLoading) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const _DelayedLoader();
                   } else if (state is FindRefError) {
                     return Text('Error: ${state.message}');
                   } else if (state is FindRefSuccess && state.refs.isEmpty) {
-                    if (focusRepository.findRefSearchController.text.length >=
-                        3) {
-                      return const Center(
-                        child: Text(
-                          'אין תוצאות',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                      );
+                    final query = focusRepository.findRefSearchController.text;
+                    if (query.length >= 3) {
+                      return _buildEmptyState(context, query);
                     } else {
                       return const SizedBox.shrink();
                     }
@@ -697,5 +758,31 @@ class _FindRefDialogState extends State<FindRefDialog> {
         ),
       ],
     );
+  }
+}
+
+/// מציג spinner רק אחרי עיכוב קצר — מונע הבהוב על חיפושים מהירים.
+class _DelayedLoader extends StatefulWidget {
+  const _DelayedLoader();
+
+  @override
+  State<_DelayedLoader> createState() => _DelayedLoaderState();
+}
+
+class _DelayedLoaderState extends State<_DelayedLoader> {
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_visible) return const SizedBox.shrink();
+    return const Center(child: CircularProgressIndicator());
   }
 }
