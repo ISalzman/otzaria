@@ -5,26 +5,37 @@ import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 
+/// תוצאת העשרה — ערכים חדשים בלבד, ללא מוטציה ב-TextBook.
+typedef EnrichedBookData = ({
+  int? resolvedId,
+  String? heCategories,
+  String? author,
+  String? heEra,
+});
+
 /// מעשיר מידע קטגוריה לספר ברקע משלוש מקורות: DB, metadata, ונתיב.
-/// מחזיר את ה-id שנמצא ב-DB אם הספר נמצא שם (ללא קשר אם heCategories הועשר).
-Future<int?> enrichHeCategories(TextBook book) async {
+/// מחזיר [EnrichedBookData] עם הערכים החדשים — לא משנה את ה-book.
+Future<EnrichedBookData> enrichHeCategories(TextBook book) async {
   if (book.heCategories != null && book.heCategories!.isNotEmpty) {
-    // heCategories קיים — אבל ייתכן שה-id עדיין חסר, נחפש ב-DB
-    return _tryGetIdFromDatabase(book);
+    // heCategories קיים — רק מנסים לקבל id
+    final id = await _tryGetIdFromDatabase(book);
+    return (resolvedId: id, heCategories: null, author: null, heEra: null);
   }
 
   try {
-    final id = await _tryLoadFromDatabase(book);
-    if (id != null) return id;
-    if (await _tryLoadFromMetadata(book)) return null;
-    await _tryLoadFromPath(book);
+    final fromDb = await _tryLoadFromDatabase(book);
+    if (fromDb != null) return fromDb;
+    final fromMeta = await _tryLoadFromMetadata(book);
+    if (fromMeta != null) return fromMeta;
+    final fromPath = await _tryLoadFromPath(book);
+    if (fromPath != null) return fromPath;
   } catch (e) {
     debugPrint('⚠️ Failed to enrich heCategories in background: $e');
   }
-  return null;
+  return (resolvedId: null, heCategories: null, author: null, heEra: null);
 }
 
-Future<int?> _tryLoadFromDatabase(TextBook book) async {
+Future<EnrichedBookData?> _tryLoadFromDatabase(TextBook book) async {
   final sqliteProvider = SqliteDataProvider.instance;
   if (!await sqliteProvider.databaseExists() && !book.isUserBook) {
     return null;
@@ -42,12 +53,17 @@ Future<int?> _tryLoadFromDatabase(TextBook book) async {
   );
   if (resolvedBook == null) return null;
 
-  book.heCategories = await BookDatabaseResolver.buildCategoryPath(
+  final heCategories = await BookDatabaseResolver.buildCategoryPath(
     resolvedBook.repository,
     resolvedBook.book.categoryId,
   );
-  debugPrint('📚 Background: נטען heCategories מה-DB: "${book.heCategories}"');
-  return resolvedBook.book.id;
+  debugPrint('📚 Background: נטען heCategories מה-DB: "$heCategories"');
+  return (
+    resolvedId: resolvedBook.book.id,
+    heCategories: heCategories,
+    author: null,
+    heEra: null,
+  );
 }
 
 /// מחפש רק את ה-id ב-DB מבלי לשנות heCategories (כשהוא כבר קיים).
@@ -75,37 +91,40 @@ Future<int?> _tryGetIdFromDatabase(TextBook book) async {
   }
 }
 
-Future<bool> _tryLoadFromMetadata(TextBook book) async {
+Future<EnrichedBookData?> _tryLoadFromMetadata(TextBook book) async {
   final metadata = await FileSystemData.instance.metadata;
   final bookMetadata = metadata[book.title];
-  if (bookMetadata == null) return false;
+  if (bookMetadata == null) return null;
 
-  book.heCategories = bookMetadata['heCategories'];
-  book.author ??= bookMetadata['author'];
-  book.heEra ??= bookMetadata['heEra'];
+  final heCategories = bookMetadata['heCategories'] as String?;
+  final author = bookMetadata['author'] as String?;
+  final heEra = bookMetadata['heEra'] as String?;
 
-  if (book.heCategories != null && book.heCategories!.isNotEmpty) {
-    debugPrint(
-        '📚 Background: נטען heCategories מ-metadata: "${book.heCategories}"');
-    return true;
+  if (heCategories != null && heCategories.isNotEmpty) {
+    debugPrint('📚 Background: נטען heCategories מ-metadata: "$heCategories"');
+    return (
+      resolvedId: null,
+      heCategories: heCategories,
+      author: author,
+      heEra: heEra,
+    );
   }
-  return false;
+  return null;
 }
 
-Future<void> _tryLoadFromPath(TextBook book) async {
+Future<EnrichedBookData?> _tryLoadFromPath(TextBook book) async {
   final titleToPath = await FileSystemData.instance.titleToPath;
   final bookPath = titleToPath[book.title];
-  if (bookPath == null) return;
+  if (bookPath == null) return null;
 
+  String? heCategories;
   if (bookPath.contains(Platform.pathSeparator)) {
     final pathParts = bookPath.split(Platform.pathSeparator);
     final otzariaIndex = pathParts.indexOf('אוצריא');
     if (otzariaIndex >= 0 && otzariaIndex < pathParts.length - 2) {
-      final categories =
-          pathParts.sublist(otzariaIndex + 1, pathParts.length - 1);
-      book.heCategories = categories.join(', ');
-      debugPrint(
-          '📚 Background: נטען heCategories מהנתיב: "${book.heCategories}"');
+      heCategories =
+          pathParts.sublist(otzariaIndex + 1, pathParts.length - 1).join(', ');
+      debugPrint('📚 Background: נטען heCategories מהנתיב: "$heCategories"');
     }
   } else {
     final normalized = bookPath
@@ -114,9 +133,17 @@ Future<void> _tryLoadFromPath(TextBook book) async {
         .where((p) => p.isNotEmpty)
         .join(', ');
     if (normalized.isNotEmpty) {
-      book.heCategories = normalized;
+      heCategories = normalized;
       debugPrint(
-          '📚 Background: נטען heCategories מנתיב קטגוריה: "${book.heCategories}"');
+          '📚 Background: נטען heCategories מנתיב קטגוריה: "$heCategories"');
     }
   }
+
+  if (heCategories == null) return null;
+  return (
+    resolvedId: null,
+    heCategories: heCategories,
+    author: null,
+    heEra: null,
+  );
 }
