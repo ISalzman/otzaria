@@ -21,6 +21,7 @@ import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
 import 'package:otzaria/widgets/misc/animated_pin_button.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
@@ -97,14 +98,14 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
   /// מזהי התוספים שנבחרו כרגע (בחירה מרובה — תוספים בלבד).
   final Set<String> _selectedIds = <String>{};
 
-  /// מצב פתיחה/סגירה של האזורים המתקפלים — סגורים כברירת מחדל.
-  bool _builtInExpanded = false;
-  bool _pluginsExpanded = false;
+  /// האם מצב הבחירה הרב-שורתית פעיל.
+  bool _isSelectionMode = false;
 
-  // הרחבה אוטומטית בניווט מחיפוש: כשמסך ההגדרות מבזיק על עוגן של אזור, נפתח
-  // אותו כדי שהמשתמש יראה את הבקרה שחיפש (ולא כותרת של אזור סגור).
+  /// מצב פתיחה/סגירה של אזור הכלים המובנים — סגור כברירת מחדל.
+  bool _builtInExpanded = false;
+
+  // הרחבה אוטומטית בניווט מחיפוש לכלים המובנים.
   late final ValueListenable<bool> _builtInFlash;
-  late final ValueListenable<bool> _pluginsFlash;
 
   bool get _anySelected => _selectedIds.isNotEmpty;
 
@@ -113,27 +114,18 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
     super.initState();
     final registry = SettingsSearchRegistry.instance;
     _builtInFlash = registry.flashNotifierFor(_builtInCardId);
-    _pluginsFlash = registry.flashNotifierFor(_pluginsCardId);
     _builtInFlash.addListener(_onBuiltInFlash);
-    _pluginsFlash.addListener(_onPluginsFlash);
   }
 
   @override
   void dispose() {
     _builtInFlash.removeListener(_onBuiltInFlash);
-    _pluginsFlash.removeListener(_onPluginsFlash);
     super.dispose();
   }
 
   void _onBuiltInFlash() {
     if (_builtInFlash.value && !_builtInExpanded && mounted) {
       setState(() => _builtInExpanded = true);
-    }
-  }
-
-  void _onPluginsFlash() {
-    if (_pluginsFlash.value && !_pluginsExpanded && mounted) {
-      setState(() => _pluginsExpanded = true);
     }
   }
 
@@ -147,8 +139,15 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
     });
   }
 
-  void _clearSelection() {
-    setState(_selectedIds.clear);
+  void _enterSelectionMode() {
+    setState(() => _isSelectionMode = true);
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _isSelectionMode = false;
+      _selectedIds.clear();
+    });
   }
 
   void _selectAllPlugins(List<InstalledPlugin> plugins) {
@@ -167,6 +166,37 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
     final next = Set<String>.from(state.builtInToolsPinnedToNavRail);
     if (!next.add(toolId)) next.remove(toolId);
     context.read<SettingsBloc>().add(UpdateBuiltInToolsPinnedToNavRail(next));
+  }
+
+  // ── פעולות תוסף בודד (לחצן בשורה) ───────────────────────────────────────────
+
+  void _togglePluginHide(InstalledPlugin plugin) {
+    context.read<PluginSystemBloc>().add(SetPluginHiddenRequested(
+          pluginId: plugin.pluginId,
+          hidden: !plugin.hiddenFromTools,
+        ));
+  }
+
+  void _togglePluginPinNavRail(InstalledPlugin plugin) {
+    final bloc = context.read<PluginSystemBloc>();
+    if (plugin.pinnedToNavRail) {
+      bloc.add(UnpinPluginFromNavRailRequested(plugin.pluginId));
+    } else {
+      bloc.add(PinPluginToNavRailRequested(plugin.pluginId));
+    }
+  }
+
+  void _togglePluginEnabled(InstalledPlugin plugin) {
+    final bloc = context.read<PluginSystemBloc>();
+    if (plugin.enabled) {
+      bloc.add(DisablePluginRequested(plugin.pluginId));
+    } else {
+      bloc.add(EnablePluginRequested(plugin.pluginId));
+    }
+  }
+
+  Future<void> _deletePlugin(InstalledPlugin plugin) async {
+    await showDeletePluginDialog(context, plugin);
   }
 
   @override
@@ -196,32 +226,67 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                 ),
                 if (plugins.isNotEmpty) ...[
                   const SliverToBoxAdapter(child: SizedBox(height: 16)),
-                  // קבוצת סליברים נפרדת לאזור התוספים — מאפשרת לסרגל הפעולות
-                  // (PinnedHeaderSliver) להיות מוצמד לראש המסך *אחרי* הכותרת,
-                  // כל עוד אזור התוספים גלוי, ולהיעלם כשגוללים מעבר אליו.
                   SliverMainAxisGroup(
-                    slivers: _collapsibleSectionSlivers(
-                      cardId: _pluginsCardId,
-                      title: 'תוספים מותקנים',
-                      summaryLabel: 'רשימת התוספים',
-                      summarySubtitle:
-                          'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
-                      summaryIcon: FluentIcons.puzzle_piece_24_regular,
-                      expanded: _pluginsExpanded,
-                      onToggle: () => setState(() {
-                        _pluginsExpanded = !_pluginsExpanded;
-                        // בסגירה — נקה בחירה כדי שלא יישאר סרגל פעולות תלוי באוויר.
-                        if (!_pluginsExpanded) _selectedIds.clear();
-                      }),
-                      pinnedBar: (_pluginsExpanded && _anySelected)
-                          ? _ActionBar(
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: ToolPanelWrapper(
+                          child: SettingsAnchor(
+                            cardId: _pluginsCardId,
+                            child: const SettingsCardHeader(
+                                title: 'תוספים מותקנים'),
+                          ),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: ToolPanelWrapper(
+                          child: SettingsCardBody(
+                            children: [
+                              SettingsActionTile.text(
+                                icon: FluentIcons.puzzle_piece_24_regular,
+                                title: 'רשימת התוספים',
+                                subtitle:
+                                    'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
+                                actions: _isSelectionMode
+                                    ? [
+                                        NeutralActionButton(
+                                          icon: FluentIcons
+                                              .checkbox_checked_24_regular,
+                                          text: 'בחר הכל',
+                                          onPressed: () =>
+                                              _selectAllPlugins(plugins),
+                                        ),
+                                        NeutralActionButton(
+                                          icon: FluentIcons
+                                              .dismiss_circle_24_regular,
+                                          text: 'ביטול',
+                                          onPressed: _exitSelectionMode,
+                                        ),
+                                      ]
+                                    : [
+                                        NeutralActionButton(
+                                          icon: FluentIcons
+                                              .multiselect_rtl_24_regular,
+                                          text: 'בחירה',
+                                          onPressed: _enterSelectionMode,
+                                        ),
+                                      ],
+                              ),
+                              ..._pluginRows(plugins),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_isSelectionMode && _anySelected)
+                        SliverToBoxAdapter(
+                          child: ToolPanelWrapper(
+                            child: _ActionBar(
                               selectedIds: _selectedIds.toSet(),
                               plugins: plugins,
-                              onClear: _clearSelection,
-                            )
-                          : null,
-                      children: _pluginRows(plugins),
-                    ),
+                              onClear: _exitSelectionMode,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ],
@@ -302,16 +367,11 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
 
   List<Widget> _pluginRows(List<InstalledPlugin> plugins) {
     return [
-      _SelectAllRow(
-        allSelected: plugins.every((p) => _selectedIds.contains(p.pluginId)),
-        anySelected: plugins.any((p) => _selectedIds.contains(p.pluginId)),
-        onChanged: (selectAll) =>
-            selectAll ? _selectAllPlugins(plugins) : _clearSelection(),
-      ),
       for (final plugin in plugins)
         _DraggableSettingsPluginRow(
           key: ValueKey(plugin.pluginId),
           plugin: plugin,
+          isSelectionMode: _isSelectionMode,
           selected: _selectedIds.contains(plugin.pluginId),
           onSelectChanged: (v) => _toggleSelection(plugin.pluginId, v),
           onAcceptSource: (sourceId) => _handleReorder(
@@ -320,6 +380,10 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
             sourcePluginId: sourceId,
             targetPluginId: plugin.pluginId,
           ),
+          onToggleHide: () => _togglePluginHide(plugin),
+          onTogglePinNavRail: () => _togglePluginPinNavRail(plugin),
+          onToggleEnabled: () => _togglePluginEnabled(plugin),
+          onDelete: () => _deletePlugin(plugin),
         ),
     ];
   }
@@ -667,37 +731,6 @@ class _PermissionMenu extends StatelessWidget {
 // שורות הטבלה
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// שורת "בחר הכל" בראש רשימת התוספים — תיבת בחירה (tristate) שמסמנת/מנקה את כל
-/// התוספים. גלויה תמיד כשהאזור פתוח, גם כשאין בחירה.
-class _SelectAllRow extends StatelessWidget {
-  final bool allSelected;
-  final bool anySelected;
-  final ValueChanged<bool> onChanged;
-
-  const _SelectAllRow({
-    required this.allSelected,
-    required this.anySelected,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // tristate: הכל מסומן → true, חלק → null, ללא → false.
-    final bool? value = allSelected ? true : (anySelected ? null : false);
-    void toggle() => onChanged(!allSelected);
-    return ListTile(
-      hoverColor: Colors.transparent,
-      leading: Checkbox(
-        tristate: true,
-        value: value,
-        onChanged: (_) => toggle(),
-      ),
-      title: const Text('בחר הכל'),
-      onTap: toggle,
-    );
-  }
-}
-
 /// שורת כלי מובנה — ללא תיבת סימון; שני לחצני פעולה ישירים בצד.
 class _BuiltInToolRow extends StatelessWidget {
   final BuiltInToolMeta meta;
@@ -716,22 +749,44 @@ class _BuiltInToolRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Widget? toolIcon = meta.icon != null
-        ? Icon(meta.icon)
-        : (meta.imageIcon != null
-            ? ImageIcon(AssetImage(meta.imageIcon!), size: 24)
-            : null);
-    return ListTile(
-      hoverColor: Colors.transparent,
-      leading: toolIcon,
-      title: _RowTitle(
-        label: meta.label,
-        badges: _StatusBadges(
-          hidden: hidden,
-          pinnedToNavRail: pinnedToNavRail,
+    final hasBadges = hidden || pinnedToNavRail;
+    // SettingsActionTile תומך רק ב-IconData; כלים עם imageIcon נשמרים ב-ListTile.
+    if (meta.imageIcon != null) {
+      return ListTile(
+        hoverColor: Colors.transparent,
+        leading: ImageIcon(AssetImage(meta.imageIcon!), size: 24),
+        title: Text(meta.label, style: AppTextStyles.settingTitle),
+        subtitle: hasBadges
+            ? _StatusBadges(hidden: hidden, pinnedToNavRail: pinnedToNavRail)
+            : null,
+        trailing: _buildTrailing(),
+      );
+    }
+    return SettingsActionTile(
+      icon: meta.icon,
+      title: Text(meta.label, style: AppTextStyles.settingTitle),
+      subtitle: hasBadges
+          ? _StatusBadges(hidden: hidden, pinnedToNavRail: pinnedToNavRail)
+          : null,
+      actions: [
+        IconButton(
+          tooltip: hidden ? 'הצג בממשק' : 'הסתר מהממשק',
+          isSelected: hidden,
+          icon: const Icon(FluentIcons.eye_off_24_regular),
+          selectedIcon: const Icon(FluentIcons.eye_24_regular),
+          onPressed: onToggleHide,
         ),
-      ),
-      trailing: Row(
+        AnimatedPinButton(
+          tooltip:
+              pinnedToNavRail ? 'הסר מסרגל הניווט' : 'הצמד לסרגל הניווט',
+          isPinned: pinnedToNavRail,
+          onPressed: onTogglePin,
+        ),
+      ],
+    );
+  }
+
+  Row _buildTrailing() => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
@@ -742,28 +797,37 @@ class _BuiltInToolRow extends StatelessWidget {
             onPressed: onToggleHide,
           ),
           AnimatedPinButton(
-            tooltip: pinnedToNavRail ? 'הסר מסרגל הניווט' : 'הצמד לסרגל הניווט',
+            tooltip:
+                pinnedToNavRail ? 'הסר מסרגל הניווט' : 'הצמד לסרגל הניווט',
             isPinned: pinnedToNavRail,
             onPressed: onTogglePin,
           ),
         ],
-      ),
-    );
-  }
+      );
 }
 
 class _DraggableSettingsPluginRow extends StatelessWidget {
   final InstalledPlugin plugin;
+  final bool isSelectionMode;
   final bool selected;
   final ValueChanged<bool?> onSelectChanged;
   final ValueChanged<String> onAcceptSource;
+  final VoidCallback onToggleHide;
+  final VoidCallback onTogglePinNavRail;
+  final VoidCallback onToggleEnabled;
+  final VoidCallback onDelete;
 
   const _DraggableSettingsPluginRow({
     super.key,
     required this.plugin,
+    required this.isSelectionMode,
     required this.selected,
     required this.onSelectChanged,
     required this.onAcceptSource,
+    required this.onToggleHide,
+    required this.onTogglePinNavRail,
+    required this.onToggleEnabled,
+    required this.onDelete,
   });
 
   @override
@@ -787,8 +851,13 @@ class _DraggableSettingsPluginRow extends StatelessWidget {
             color: Colors.transparent,
             child: _PluginRow(
               plugin: plugin,
+              isSelectionMode: isSelectionMode,
               selected: selected,
               onSelectChanged: onSelectChanged,
+              onToggleHide: onToggleHide,
+              onTogglePinNavRail: onTogglePinNavRail,
+              onToggleEnabled: onToggleEnabled,
+              onDelete: onDelete,
               dragHandle: Draggable<String>(
                 data: plugin.pluginId,
                 dragAnchorStrategy: pointerDragAnchorStrategy,
@@ -817,14 +886,24 @@ class _DraggableSettingsPluginRow extends StatelessWidget {
 
 class _PluginRow extends StatelessWidget {
   final InstalledPlugin plugin;
+  final bool isSelectionMode;
   final bool selected;
   final ValueChanged<bool?> onSelectChanged;
+  final VoidCallback onToggleHide;
+  final VoidCallback onTogglePinNavRail;
+  final VoidCallback onToggleEnabled;
+  final VoidCallback onDelete;
   final Widget? dragHandle;
 
   const _PluginRow({
     required this.plugin,
+    required this.isSelectionMode,
     required this.selected,
     required this.onSelectChanged,
+    required this.onToggleHide,
+    required this.onTogglePinNavRail,
+    required this.onToggleEnabled,
+    required this.onDelete,
     this.dragHandle,
   });
 
@@ -834,22 +913,30 @@ class _PluginRow extends StatelessWidget {
         FluentIcons.puzzle_piece_24_regular;
     return ListTile(
       hoverColor: Colors.transparent,
-      leading: Checkbox(value: selected, onChanged: onSelectChanged),
-      title: _RowTitle(
-        label: '${plugin.name}  •  v${plugin.version}',
-        badges: _StatusBadges(
-          hidden: plugin.hiddenFromTools,
-          pinnedToNavRail: plugin.pinnedToNavRail,
-          disabled: !plugin.enabled,
-          networkDeclared: plugin.manifest.networkEnabled,
-          networkRevoked:
-              plugin.manifest.networkEnabled && !plugin.networkAccessGranted,
-        ),
+      leading: isSelectionMode
+          ? SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                value: selected,
+                onChanged: onSelectChanged,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            )
+          : Icon(icon),
+      title: Text(plugin.name),
+      subtitle: _StatusBadges(
+        version: plugin.version,
+        hidden: plugin.hiddenFromTools,
+        pinnedToNavRail: plugin.pinnedToNavRail,
+        disabled: !plugin.enabled,
+        networkDeclared: plugin.networkAccessGranted,
+        networkRevoked:
+            plugin.manifest.networkEnabled && !plugin.networkAccessGranted,
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon),
           IconButton(
             icon: const Icon(FluentIcons.settings_24_regular),
             tooltip: 'הגדרות תוסף',
@@ -864,10 +951,36 @@ class _PluginRow extends StatelessWidget {
               );
             },
           ),
+          AnimatedPinButton(
+            isPinned: plugin.pinnedToNavRail,
+            tooltip: plugin.pinnedToNavRail
+                ? 'הסר מסרגל הניווט'
+                : 'הצמד לסרגל הניווט',
+            onPressed: onTogglePinNavRail,
+          ),
+          IconButton(
+            tooltip: plugin.hiddenFromTools ? 'הצג בממשק' : 'הסתר מהממשק',
+            isSelected: plugin.hiddenFromTools,
+            icon: const Icon(FluentIcons.eye_off_24_regular),
+            selectedIcon: const Icon(FluentIcons.eye_24_regular),
+            onPressed: onToggleHide,
+          ),
+          IconButton(
+            tooltip: plugin.enabled ? 'השבת' : 'הפעל',
+            isSelected: !plugin.enabled,
+            icon: const Icon(FluentIcons.pause_circle_24_regular),
+            selectedIcon: const Icon(FluentIcons.play_circle_24_regular),
+            onPressed: onToggleEnabled,
+          ),
+          IconButton(
+            tooltip: 'מחק תוסף',
+            icon: const Icon(FluentIcons.delete_24_regular),
+            onPressed: onDelete,
+          ),
           if (dragHandle != null) dragHandle!,
         ],
       ),
-      onTap: () => onSelectChanged(!selected),
+      onTap: isSelectionMode ? () => onSelectChanged(!selected) : null,
     );
   }
 }
@@ -941,6 +1054,7 @@ class _RowTitle extends StatelessWidget {
 
 /// תגיות סטטוס לשורת כלי/תוסף — אייקונים בלבד; ההסבר מופיע ב-tooltip בריחוף.
 class _StatusBadges extends StatelessWidget {
+  final String? version;
   final bool hidden;
   final bool pinnedToNavRail;
   final bool disabled;
@@ -949,6 +1063,7 @@ class _StatusBadges extends StatelessWidget {
   final bool networkRevoked;
 
   const _StatusBadges({
+    this.version,
     this.hidden = false,
     this.pinnedToNavRail = false,
     this.disabled = false,
@@ -962,36 +1077,34 @@ class _StatusBadges extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final badges = <Widget>[];
+    final chips = <Widget>[];
+    if (version != null) {
+      chips.add(Text('v$version', style: AppTextStyles.settingSubtitle));
+    }
     if (disabled) {
-      badges.add(_badge(context, 'מושבת', cs.errorContainer,
+      chips.add(_badge(context, 'מושבת', cs.errorContainer,
           cs.onErrorContainer, FluentIcons.pause_circle_24_regular));
     }
     if (hidden) {
-      badges.add(_badge(context, 'מוסתר', cs.surfaceContainerHighest,
+      chips.add(_badge(context, 'מוסתר', cs.surfaceContainerHighest,
           cs.onSurfaceVariant, FluentIcons.eye_off_24_regular));
     }
     if (pinnedToNavRail) {
-      badges.add(_badge(context, 'בסרגל ניווט', cs.primaryContainer,
+      chips.add(_badge(context, 'בסרגל ניווט', cs.primaryContainer,
           cs.onPrimaryContainer, FluentIcons.pin_24_regular));
     }
     if (networkDeclared) {
-      badges.add(_badge(context, 'משתמש ברשת', cs.tertiaryContainer,
+      chips.add(_badge(context, 'משתמש ברשת', cs.tertiaryContainer,
           cs.onTertiaryContainer, FluentIcons.globe_24_regular));
     }
     if (networkRevoked) {
-      badges.add(_badge(context, 'מנותק מהרשת', cs.errorContainer,
+      chips.add(_badge(context, 'מנותק מהרשת', cs.errorContainer,
           cs.onErrorContainer, FluentIcons.globe_prohibited_24_regular));
     }
-    if (badges.isEmpty) return const SizedBox.shrink();
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < badges.length; i++) ...[
-          if (i > 0) const SizedBox(width: 6),
-          badges[i],
-        ],
-      ],
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(spacing: 6, runSpacing: 4, children: chips),
     );
   }
 
