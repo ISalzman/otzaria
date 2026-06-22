@@ -51,6 +51,63 @@ void main() {
       );
     });
 
+    test('מתיר loopback מקומי כשהמניפסט מצהיר עליו, בלי allowlist גלובלי',
+        () async {
+      final resolver = PluginNetworkAccessResolver();
+      final manifest = _buildManifest(
+        networkAllowlist: const ['127.0.0.1', 'localhost'],
+      );
+
+      expect(
+        await resolver.isUriAllowedForPlugin(
+          Uri.parse('http://127.0.0.1:11434/api/tags'),
+          manifest,
+        ),
+        isTrue,
+      );
+      expect(
+        await resolver.isUriAllowedForPlugin(
+          Uri.parse('http://localhost:1234/v1/models'),
+          manifest,
+        ),
+        isTrue,
+      );
+    });
+
+    test('חוסם loopback אם המניפסט לא מצהיר עליו', () async {
+      final resolver = PluginNetworkAccessResolver();
+
+      expect(
+        await resolver.isUriAllowedForPlugin(
+          Uri.parse('http://127.0.0.1:11434/api/tags'),
+          _buildManifest(),
+        ),
+        isFalse,
+      );
+    });
+
+    test('הצהרת loopback עם פורט מתירה רק את אותו פורט', () async {
+      final resolver = PluginNetworkAccessResolver();
+      final manifest = _buildManifest(
+        networkAllowlist: const ['http://127.0.0.1:11434'],
+      );
+
+      expect(
+        await resolver.isUriAllowedForPlugin(
+          Uri.parse('http://127.0.0.1:11434/api/tags'),
+          manifest,
+        ),
+        isTrue,
+      );
+      expect(
+        await resolver.isUriAllowedForPlugin(
+          Uri.parse('http://127.0.0.1:1234/v1/models'),
+          manifest,
+        ),
+        isFalse,
+      );
+    });
+
     test('מתיר URL מהרשימה הרשמית ב-GitHub אם הוא הוצהר במניפסט', () async {
       final client = MockClient((request) async {
         expect(
