@@ -173,6 +173,9 @@ class AppDropdownField<T> extends StatefulWidget {
   final bool enableSearch;
   final Widget Function(BuildContext context, T? value)? selectedBuilder;
   final String Function(T value)? labelBuilder;
+  final List<String>? filterLabels;
+  final List<bool Function(AppMenuEntry<T>)?>? filterPredicates;
+  final double? menuMinWidth;
 
   const AppDropdownField({
     super.key,
@@ -185,6 +188,9 @@ class AppDropdownField<T> extends StatefulWidget {
     this.enableSearch = false,
     this.selectedBuilder,
     this.labelBuilder,
+    this.filterLabels,
+    this.filterPredicates,
+    this.menuMinWidth,
   });
 
   @override
@@ -324,6 +330,9 @@ class _AppDropdownFieldState<T> extends State<AppDropdownField<T>> {
             searchHint: widget.decoration?.hintText ??
                 widget.decoration?.labelText ??
                 'חיפוש',
+            filterLabels: widget.filterLabels,
+            filterPredicates: widget.filterPredicates,
+            menuMinWidth: widget.menuMinWidth,
           )
         : showAnchoredAppMenu<T>(
             context: context,

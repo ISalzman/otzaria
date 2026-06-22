@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
+import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_installer_service.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
@@ -8,6 +9,7 @@ import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_dev_loader_service.dart';
 import 'package:otzaria/plugins/services/plugin_dev_watch_service.dart';
 import 'package:otzaria/plugins/services/plugin_download_service.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -52,6 +54,8 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     on<DetachDevelopmentPluginRequested>(_onDetachDevelopmentPluginRequested);
     on<ReloadDevelopmentPluginRequested>(_onReloadDevelopmentPluginRequested);
     on<DevelopmentPluginManifestChanged>(_onDevelopmentPluginManifestChanged);
+    on<LoadLocalhostPluginRequested>(_onLoadLocalhostPluginRequested);
+    on<ConfirmDevPluginInstall>(_onConfirmDevPluginInstall);
 
     _devWatchSub = this.devWatchService.events.listen((change) {
       if (change.manifestChanged) {
@@ -81,11 +85,23 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     try {
       final plugins = await repository.getAllPlugins();
       devWatchService.syncWatchers(await repository.getDevelopmentPlugins());
+      _registerPluginShortcuts(plugins);
       emit(PluginSystemLoaded(plugins));
     } catch (e) {
       emit(PluginSystemError(e.toString()));
       UiSnack.showError('שגיאה בטעינת תוספים: ${e.toString()}');
     }
+  }
+
+  /// רושם מפתחות קיצור לפתיחת התוספים הפעילים — רק פעילים, כי תוסף מושבת
+  /// אינו נפתח דרך ה-deep-link ולכן אין טעם לזהות לו קונפליקט.
+  void _registerPluginShortcuts(List<InstalledPlugin> plugins) {
+    ShortcutValidator.registerPluginShortcutKeys({
+      for (final p in plugins)
+        if (p.enabled)
+          ShortcutValidator.openPluginShortcutKey(p.pluginId):
+              'פתיחת ${p.name}',
+    });
   }
 
   Future<void> _onPinPluginRequested(
@@ -322,14 +338,31 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       LoadDevelopmentPluginRequested event,
       Emitter<PluginSystemState> emit) async {
     try {
-      await devLoader.loadDevelopmentPlugin(event.directoryPath);
-      add(LoadPlugins());
-      UiSnack.showSuccess('תוסף פיתוח נטען בהצלחה');
+      final manifest =
+          await devLoader.fetchDevelopmentManifest(event.directoryPath);
+      final existing = await repository.getPlugin(manifest.id);
+      if (existing != null && !existing.isDevelopment) {
+        UiSnack.showError(
+            'כבר קיים תוסף מותקן (רגיל) עם אותו מזהה. מחק או שנה id.');
+        return;
+      }
+      if (existing != null) {
+        await devLoader.loadDevelopmentPlugin(event.directoryPath,
+            preValidatedManifest: manifest);
+        add(LoadPlugins());
+        UiSnack.showSuccess('תוסף פיתוח נטען מחדש');
+      } else {
+        emit(PluginSystemDevInstallRequiresPermissions(
+          manifest: manifest,
+          sourcePath: event.directoryPath,
+          sourceType: 'development',
+        ));
+      }
     } catch (e, stackTrace) {
       debugPrint(
           '[PluginDevLoader] Failed to load plugin from "${event.directoryPath}": $e');
       debugPrint('$stackTrace');
-      UiSnack.showError('שגיאה בטעינת תוסף פתוח: ${e.toString()}');
+      UiSnack.showError('שגיאה בטעינת תוסף פיתוח: ${e.toString()}');
     }
   }
 
@@ -366,6 +399,71 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       }
     } catch (e) {
       PluginRuntimeDispatcher.instance.reloadPlugin(event.pluginId);
+    }
+  }
+
+  Future<void> _onLoadLocalhostPluginRequested(
+      LoadLocalhostPluginRequested event,
+      Emitter<PluginSystemState> emit) async {
+    try {
+      final manifest = await devLoader.fetchLocalhostManifest(event.baseUrl);
+      final existing = await repository.getPlugin(manifest.id);
+      if (existing != null && !existing.isDevelopment) {
+        UiSnack.showError(
+            'כבר קיים תוסף מותקן (רגיל) עם אותו מזהה. מחק או שנה id.');
+        return;
+      }
+      if (existing != null) {
+        await devLoader.loadLocalhostPlugin(event.baseUrl,
+            preValidatedManifest: manifest);
+        add(LoadPlugins());
+        UiSnack.showSuccess('תוסף localhost נטען מחדש');
+      } else {
+        emit(PluginSystemDevInstallRequiresPermissions(
+          manifest: manifest,
+          sourcePath: event.baseUrl,
+          sourceType: 'localhost_dev',
+        ));
+      }
+    } catch (e, stackTrace) {
+      debugPrint(
+          '[PluginLocalhostLoader] Failed to load plugin from "${event.baseUrl}": $e');
+      debugPrint('$stackTrace');
+      UiSnack.showError('שגיאה בטעינת תוסף localhost: ${e.toString()}');
+    }
+  }
+
+  Future<void> _onConfirmDevPluginInstall(
+      ConfirmDevPluginInstall event, Emitter<PluginSystemState> emit) async {
+    try {
+      // מעביר את המניפסט שהוצג למשתמש — מונע re-fetch שעלול להכניס הרשאות
+      // חדשות שלא אושרו בדיאלוג.
+      if (event.sourceType == 'localhost_dev') {
+        await devLoader.loadLocalhostPlugin(event.sourcePath,
+            preValidatedManifest: event.manifest);
+      } else {
+        await devLoader.loadDevelopmentPlugin(event.sourcePath,
+            preValidatedManifest: event.manifest);
+      }
+      // דרוס הרשאות ו-allowOrderBeforeBuiltInsGranted בבחירות המשתמש המפורשות
+      for (final entry in event.grantedPermissions.entries) {
+        await repository.setPermission(
+            event.manifest.id, entry.key, entry.value);
+      }
+      final saved = await repository.getPlugin(event.manifest.id);
+      if (saved != null &&
+          saved.allowOrderBeforeBuiltInsGranted !=
+              event.allowOrderBeforeBuiltInsGranted) {
+        await repository.savePlugin(saved.copyWith(
+          allowOrderBeforeBuiltInsGranted:
+              event.allowOrderBeforeBuiltInsGranted,
+        ));
+      }
+      add(LoadPlugins());
+      UiSnack.showSuccess('תוסף פיתוח הותקן בהצלחה');
+    } catch (e) {
+      UiSnack.showError('שגיאה בהתקנת תוסף פיתוח: ${e.toString()}');
+      add(LoadPlugins());
     }
   }
 }

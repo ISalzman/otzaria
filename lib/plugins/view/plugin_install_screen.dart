@@ -21,12 +21,23 @@ class PluginInstallScreen extends StatefulWidget {
   /// `null` = אין החלטה קודמת (התקנה ראשונה או תוסף ישן לפני הפיצ'ר).
   final bool? previousAllowOrderBeforeBuiltInsGranted;
 
+  /// כאשר מסופק, נקרא במקום שליחת ConfirmPluginInstall לבלוק (למשל בתוסף פיתוח).
+  final void Function(
+    Map<String, bool> grantedPermissions,
+    bool allowOrderBeforeBuiltInsGranted,
+  )? onConfirm;
+
+  /// כאשר מסופק, נקרא במקום שליחת CancelPluginInstall לבלוק.
+  final VoidCallback? onCancel;
+
   const PluginInstallScreen({
     super.key,
     required this.manifest,
     required this.tempDirPath,
     this.previousVersion,
     this.previousAllowOrderBeforeBuiltInsGranted,
+    this.onConfirm,
+    this.onCancel,
   });
 
   bool get isUpdate => previousVersion != null;
@@ -60,21 +71,32 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
       widget.manifest.allowOrderBeforeBuiltIns;
 
   void _onInstall() {
-    context.read<PluginSystemBloc>().add(
-          ConfirmPluginInstall(
-            widget.tempDirPath,
-            widget.manifest,
-            Map.unmodifiable(_permissionToggles),
-            _allowOrderBeforeBuiltInsGranted,
-          ),
-        );
+    if (widget.onConfirm != null) {
+      widget.onConfirm!(
+        Map.unmodifiable(_permissionToggles),
+        _allowOrderBeforeBuiltInsGranted,
+      );
+    } else {
+      context.read<PluginSystemBloc>().add(
+            ConfirmPluginInstall(
+              widget.tempDirPath,
+              widget.manifest,
+              Map.unmodifiable(_permissionToggles),
+              _allowOrderBeforeBuiltInsGranted,
+            ),
+          );
+    }
     Navigator.of(context).pop();
   }
 
   void _onCancel() {
-    context
-        .read<PluginSystemBloc>()
-        .add(CancelPluginInstall(widget.tempDirPath));
+    if (widget.onCancel != null) {
+      widget.onCancel!();
+    } else {
+      context
+          .read<PluginSystemBloc>()
+          .add(CancelPluginInstall(widget.tempDirPath));
+    }
     Navigator.of(context).pop();
   }
 
@@ -133,7 +155,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                         'עדכון גרסה',
                       ),
                       subtitle: Text(
-                        '${widget.previousVersion}  →  ${widget.manifest.version}',
+                        '${widget.previousVersion}  ←  ${widget.manifest.version}',
                       ),
                       hoverColor: Colors.transparent,
                     )

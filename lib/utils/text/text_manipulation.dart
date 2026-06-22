@@ -12,6 +12,12 @@ final RegExp _htmlStripper = RegExp(r'<[^>]*>|&[^;]+;');
 /// רגקס להסרת ניקוד וטעמים.
 final RegExp _vowelsAndCantillation = RegExp(r'[֑-ׇ]');
 
+/// מחלקת-תווים של ניקוד וטעמים *הצמודים לאות* — ללא מקף (U+05BE) ופסק (U+05C0),
+/// שהם מפרידי מילים. אילו נכללו, ה-`*` היה בולע מקף בין מילים ושובר את
+/// זיהוי גבול המילה (וכך את הדגשת ביטוי כמו "אשר־שמע").
+const String _attachedNikudClass = '֑-ֽֿׁ-ׇ';
+final RegExp _attachedNikud = RegExp('[$_attachedNikudClass]');
+
 /// רגקס להסרת טעמים בלבד.
 final RegExp _cantillationOnly = RegExp(r'[֑-֯]');
 
@@ -35,6 +41,14 @@ String stripHtmlIfNeeded(String text) {
   return withSpaces.replaceAll(_htmlStripper, '');
 }
 
+/// כמו [stripHtmlIfNeeded], אך ממיר תגי <br> למעבר שורה אמיתי לפני הסרת התגים,
+/// כדי שטקסט המוצג ב-Text רגיל ישמור על מבנה השורות במקום להידחס לרצף.
+String stripHtmlPreservingBreaks(String text) {
+  final withBreaks =
+      text.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+  return stripHtmlIfNeeded(withBreaks);
+}
+
 String truncate(String text, int length) {
   return text.length > length ? '${text.substring(0, length)}...' : text;
 }
@@ -46,7 +60,7 @@ String removeVolwels(String s) {
 
 /// הסרת סימני פיסוק מטקסט
 /// מסיר !:;.,?-— חוץ מ . או : בסוף הקטע
-/// מסיר " ״ כשזה לא באמצע מילה
+/// מסיר " ״ אלא כשזה ראשי תיבות (אות אחת אחרי הגרשיים עד גבול מילה)
 /// מסיר מעבר שורה אם אין . או : בסוף השורה המקורית
 String removePunctuation(String text) {
   if (text.isEmpty) return text;
@@ -135,11 +149,19 @@ String removePunctuation(String text) {
       RegExp(r'["״]'),
       (match) {
         final index = match.start;
+        final letter = RegExp(r'[א-תa-zA-Z]');
+        // ראשי תיבות: הגרשיים לפני האות האחרונה, כלומר אות אחת בלבד אחריו
+        // ואז גבול מילה. שתי אותיות אחריו = מירכאות ציטוט (כמו ב"כי יותן).
+        // מנקים ניקוד משני הצדדים כדי שאות מנוקדת (רַשִׁ"י, ב"כִּי) לא תיחשב
+        // בטעות כסימן ניקוד או כאות בודדת.
+        final before = removeVolwels(processed.substring(0, index));
         final hasBefore =
-            index > 0 && RegExp(r'[א-תa-zA-Z]').hasMatch(processed[index - 1]);
-        final hasAfter = index < processed.length - 1 &&
-            RegExp(r'[א-תa-zA-Z]').hasMatch(processed[index + 1]);
-        if (hasBefore && hasAfter) {
+            before.isNotEmpty && letter.hasMatch(before[before.length - 1]);
+        final rest = removeVolwels(processed.substring(index + 1));
+        final hasSingleLetterAfter = rest.isNotEmpty &&
+            letter.hasMatch(rest[0]) &&
+            (rest.length == 1 || !letter.hasMatch(rest[1]));
+        if (hasBefore && hasSingleLetterAfter) {
           return match.group(0)!;
         }
         return '';
@@ -299,7 +321,7 @@ class _HighlightRange {
 }
 
 bool _isHebrewMark(String char) {
-  return _vowelsAndCantillation.hasMatch(char);
+  return _attachedNikud.hasMatch(char);
 }
 
 bool _isSearchTokenChar(String char) {
@@ -477,7 +499,7 @@ String highLight(
       final cleanTerm = removeVolwels(term);
       return cleanTerm.split('').map((char) {
         if (RegExp(r'[א-ת]').hasMatch(char)) {
-          return '${RegExp.escape(char)}[\u0591-\u05C7]*';
+          return '${RegExp.escape(char)}[$_attachedNikudClass]*';
         }
         if (char == '"') return '["״]';
         if (char == "'") return "['׳]";

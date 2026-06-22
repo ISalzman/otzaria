@@ -6,7 +6,36 @@ import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+// ignore: depend_on_referenced_packages
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+// ignore: depend_on_referenced_packages
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
+// ignore: depend_on_referenced_packages
+import 'package:url_launcher_platform_interface/link.dart';
 import '../../test_helpers/memory_cache_provider.dart';
+
+/// משבית פתיחת קישורים — canLaunch מחזיר false כדי לדמות כשל בפתיחת הדפדפן.
+class _FailingUrlLauncher extends UrlLauncherPlatform
+    with MockPlatformInterfaceMixin {
+  @override
+  Future<bool> canLaunch(String url) async => false;
+
+  @override
+  LinkDelegate? get linkDelegate => null;
+}
+
+/// מדמה פתיחת קישור מוצלחת.
+class _SucceedingUrlLauncher extends UrlLauncherPlatform
+    with MockPlatformInterfaceMixin {
+  @override
+  Future<bool> canLaunch(String url) async => true;
+
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async => true;
+
+  @override
+  LinkDelegate? get linkDelegate => null;
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -97,6 +126,28 @@ void main() {
       final result = ErrorReportHelper.resolveDirectReportTargetLabel('local');
 
       expect(result, equals('אוצריא'));
+    });
+
+    test('identifies dicta source folder', () {
+      expect(ErrorReportHelper.isDictaSourceFolder('DictaToOtzaria'), isTrue);
+      expect(ErrorReportHelper.isDictaSourceFolder('dicta'), isTrue);
+      expect(ErrorReportHelper.isDictaSourceFolder('sefaria'), isFalse);
+      expect(ErrorReportHelper.isDictaSourceFolder(null), isFalse);
+    });
+
+    test('builds dicta edit url with book title in q parameter', () {
+      final url = ErrorReportHelper.dictaEditUrlFor('ספר הזוהר');
+
+      final uri = Uri.parse(url);
+      expect(uri.path, equals('/library/dicta-edit'));
+      expect(uri.queryParameters['q'], equals('ספר הזוהר'));
+    });
+
+    test('builds plain dicta edit url for empty title', () {
+      expect(
+        ErrorReportHelper.dictaEditUrlFor('   '),
+        equals(ErrorReportHelper.dictaEditUrl),
+      );
     });
   });
 
@@ -640,6 +691,114 @@ void main() {
 
       final textField = tester.widget<TextField>(find.byType(TextField));
       expect(textField.focusNode?.hasFocus ?? textField.autofocus, isTrue);
+    });
+  });
+
+  group('ErrorReportHelper.maybeOfferDictaSelfEdit', () {
+    Future<bool?> runOffer(
+      WidgetTester tester, {
+      required bool isDictaSource,
+      String? tapText,
+    }) async {
+      bool? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => ElevatedButton(
+                onPressed: () async {
+                  result = await ErrorReportHelper.maybeOfferDictaSelfEdit(
+                    ctx,
+                    isDictaSource: isDictaSource,
+                    bookTitle: 'ספר בדיקה',
+                  );
+                },
+                child: const Text('פתח'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('פתח'));
+      await tester.pumpAndSettle();
+
+      if (tapText != null) {
+        await tester.tap(find.text(tapText));
+        await tester.pumpAndSettle();
+      }
+      return result;
+    }
+
+    testWidgets('proceeds without offering when source is not dicta',
+        (tester) async {
+      final result = await runOffer(tester, isDictaSource: false);
+
+      expect(find.text('ניתן לתקן בעצמך'), findsNothing);
+      expect(result, isTrue);
+    });
+
+    testWidgets('offers self-edit for dicta and proceeds on "continue"',
+        (tester) async {
+      final result = await runOffer(
+        tester,
+        isDictaSource: true,
+        tapText: 'המשך בדיווח רגיל',
+      );
+
+      expect(result, isTrue);
+    });
+
+    testWidgets('shows the dicta edit link inside the offer', (tester) async {
+      await runOffer(tester, isDictaSource: true);
+
+      expect(find.text('ניתן לתקן בעצמך'), findsOneWidget);
+      expect(find.text(ErrorReportHelper.dictaEditUrl), findsOneWidget);
+    });
+
+    testWidgets('does not proceed to report when edit page opens',
+        (tester) async {
+      final previousLauncher = UrlLauncherPlatform.instance;
+      UrlLauncherPlatform.instance = _SucceedingUrlLauncher();
+      addTearDown(() => UrlLauncherPlatform.instance = previousLauncher);
+
+      final result = await runOffer(
+        tester,
+        isDictaSource: true,
+        tapText: 'פתח עמוד עריכה',
+      );
+
+      // נפתח עמוד העריכה — לא ממשיכים לטופס הדיווח
+      expect(result, isFalse);
+      expect(find.text('ניתן לתקן בעצמך'), findsNothing);
+    });
+
+    testWidgets('falls back to report when edit page fails to open',
+        (tester) async {
+      final previousLauncher = UrlLauncherPlatform.instance;
+      UrlLauncherPlatform.instance = _FailingUrlLauncher();
+      addTearDown(() => UrlLauncherPlatform.instance = previousLauncher);
+
+      final result = await runOffer(
+        tester,
+        isDictaSource: true,
+        tapText: 'פתח עמוד עריכה',
+      );
+
+      // הפתיחה נכשלה — ממשיכים אוטומטית לטופס הדיווח (UiSnack מודיע למשתמש)
+      expect(result, isTrue);
+      expect(find.text('ניתן לתקן בעצמך'), findsNothing);
+    });
+
+    testWidgets('skips the offer in offline mode', (tester) async {
+      await Settings.setValue<bool>(SettingsRepository.keyOfflineMode, true);
+      addTearDown(() =>
+          Settings.setValue<bool>(SettingsRepository.keyOfflineMode, false));
+
+      final result = await runOffer(tester, isDictaSource: true);
+
+      expect(find.text('ניתן לתקן בעצמך'), findsNothing);
+      expect(result, isTrue);
     });
   });
 

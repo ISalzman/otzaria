@@ -506,6 +506,7 @@ class _TestBookmarkBloc extends Cubit<BookmarkState> implements BookmarkBloc {
     required int index,
     List<String>? commentatorsToShow,
     BookmarkTargetKind targetKind = BookmarkTargetKind.book,
+    String? label,
   }) {
     return true;
   }

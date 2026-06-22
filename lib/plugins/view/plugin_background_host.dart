@@ -35,6 +35,22 @@ import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 
 const String _backgroundInstanceId = 'background';
 
+// Restricts localhost access to the exact dev server origin (host + scheme + port).
+bool _isDevServerUri(Uri uri, String? devRootPath) {
+  if (devRootPath == null) return false;
+  final devUri = Uri.tryParse(devRootPath);
+  if (devUri == null) return false;
+  final reqHost = uri.host.toLowerCase();
+  final devHost = devUri.host.toLowerCase();
+  const localhosts = {'localhost', '127.0.0.1', '::1'};
+  if (!localhosts.contains(reqHost) || reqHost != devHost) return false;
+  if (uri.scheme != devUri.scheme) return false;
+  final devPort =
+      devUri.hasPort ? devUri.port : (devUri.scheme == 'https' ? 443 : 80);
+  final reqPort = uri.hasPort ? uri.port : (uri.scheme == 'https' ? 443 : 80);
+  return reqPort == devPort;
+}
+
 /// Stub SDK זהה ל-plugin_tab_page — מבטיח שכל קריאת `Otzaria.on()` שמופעלת
 /// לפני שה-SDK האמיתי מוזרק נשמרת בתור עד ל-_boot.
 const String _sdkStub = r'''
@@ -268,8 +284,9 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
   void initState() {
     super.initState();
     _pluginSystemBloc = context.read<PluginSystemBloc>();
-    _localHtmlPath =
-        '${widget.plugin.resolvedRootPath}/${widget.plugin.entrypointPath}';
+    _localHtmlPath = widget.plugin.isLocalhostDev
+        ? widget.plugin.devRootPath!
+        : '${widget.plugin.resolvedRootPath}/${widget.plugin.entrypointPath}';
 
     final historyBloc = context.read<HistoryBloc>();
     final tabsBloc = context.read<TabsBloc>();
@@ -369,9 +386,14 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
   Future<void> _reloadFromDisk() async {
     if (!mounted) return;
     try {
-      await _controller?.loadUrl(
-        urlRequest: URLRequest(url: WebUri.uri(Uri.file(_localHtmlPath))),
-      );
+      if (widget.plugin.isLocalhostDev) {
+        await InAppWebViewController.clearAllCache();
+        await _controller?.reload();
+      } else {
+        await _controller?.loadUrl(
+          urlRequest: URLRequest(url: WebUri.uri(Uri.file(_localHtmlPath))),
+        );
+      }
     } catch (e) {
       debugPrint(
           'Background plugin [${widget.plugin.pluginId}] reload error: $e');
@@ -394,13 +416,17 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
 
   @override
   Widget build(BuildContext context) {
-    if (!File(_localHtmlPath).existsSync()) {
+    if (!widget.plugin.isLocalhostDev && !File(_localHtmlPath).existsSync()) {
       return const SizedBox.shrink();
     }
 
     return InAppWebView(
       webViewEnvironment: WebViewEnvironmentHolder.environment,
-      initialUrlRequest: URLRequest(url: WebUri.uri(Uri.file(_localHtmlPath))),
+      initialUrlRequest: URLRequest(
+        url: widget.plugin.isLocalhostDev
+            ? WebUri(_localHtmlPath)
+            : WebUri.uri(Uri.file(_localHtmlPath)),
+      ),
       initialSettings: InAppWebViewSettings(
         allowFileAccessFromFileURLs: false,
         allowUniversalAccessFromFileURLs: false,
@@ -450,6 +476,11 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
               uri.scheme == 'about') {
             return NavigationActionPolicy.ALLOW;
           }
+          if ((uri.scheme == 'http' || uri.scheme == 'https') &&
+              widget.plugin.isLocalhostDev &&
+              _isDevServerUri(uri, widget.plugin.devRootPath)) {
+            return NavigationActionPolicy.ALLOW;
+          }
           if (uri.scheme == 'http' || uri.scheme == 'https') {
             if (widget.plugin.manifest.networkEnabled) {
               final granted = await _pluginRegistryRepository.getPermission(
@@ -483,6 +514,11 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
               return WebResourceResponse(
                   statusCode: 403, reasonPhrase: 'Forbidden');
             }
+          }
+          if ((uri.scheme == 'http' || uri.scheme == 'https') &&
+              widget.plugin.isLocalhostDev &&
+              _isDevServerUri(uri, widget.plugin.devRootPath)) {
+            return null; // allow dev server + HMR requests
           }
           if (uri.scheme == 'http' || uri.scheme == 'https') {
             if (widget.plugin.manifest.networkEnabled) {

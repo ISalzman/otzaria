@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:isolate';
+
+import 'package:path/path.dart' as path;
 
 import '../../data/data_providers/database_library_provider.dart';
 import '../database/daos/database.dart';
@@ -71,10 +74,19 @@ Future<FileSyncResult> runCustomFoldersDbSyncInIsolate({
     return _resultFromMap(resultMap);
   });
 
-  // שלב 2 — עיבוד ה-links → seforim.db (RW). *רק כאן* סוגרים את ה-RO הראשי
-  // (prepareForWrite) ופותחים מחדש (restoreAfterWrite), לזמן הקצר של כתיבת
-  // ה-links בלבד.
+  // שלב 2 — עיבוד ה-links → seforim.db (RW). רץ *רק* כשיש קבצי links שטרם
+  // עובדו: קבצי links מעובדים פעם אחת ונמחקים (ראה
+  // [LinkProcessor.processLinksDirectory]), ולכן בפתיחה רגילה אין מה לעבד.
+  // דילוג מונע סגירת ה-RO ופתיחת seforim.db RW לחינם — מקור לחסימת פתיחת
+  // ספרים בעלייה ולסגירה תקועה כשסוגרים את התוכנה תוך כדי הסנכרון.
+  // הבדיקה רצה *בתוך* יחידת התור כדי שתהיה סריאלית: אם קריאת סנכרון אחרת
+  // עיבדה ומחקה את ה-links לפנינו, נראה זאת ולא נסגור את ה-RO לחינם.
   final links = await DatabaseLibraryProvider.operationQueue.enqueue(() async {
+    if (!await _hasPendingLinkFiles(libraryPath)) {
+      return const FileSyncResult();
+    }
+    // *רק כאן* סוגרים את ה-RO הראשי (prepareForWrite) ופותחים מחדש
+    // (restoreAfterWrite), לזמן הקצר של כתיבת ה-links בלבד.
     await QueryLoader.initialize();
     final payload = buildPayload(syncFolders: false, syncLinks: true);
     if (prepareForWrite != null) await prepareForWrite();
@@ -95,6 +107,28 @@ Future<FileSyncResult> runCustomFoldersDbSyncInIsolate({
     errors: [...folders.errors, ...links.errors],
     duration: folders.duration + links.duration,
   );
+}
+
+/// בודק אם תיקיית ה-`links` תחת [libraryPath] מכילה קובץ links שטרם עובד.
+/// קבצי links מעובדים פעם אחת ונמחקים, והתיקייה נמחקת כשהיא מתרוקנת — כך
+/// שדילוג כאן מונע את שלב הכתיבה היקר (סגירת RO + פתיחת seforim.db RW) כשאין בו צורך.
+Future<bool> _hasPendingLinkFiles(String libraryPath) async {
+  final linksDir = Directory(path.join(libraryPath, 'links'));
+  try {
+    if (!await linksDir.exists()) return false;
+    await for (final entity in linksDir.list()) {
+      if (entity is File &&
+          path.extension(entity.path) == '.json' &&
+          !path.basename(entity.path).endsWith('_headings.json')) {
+        return true;
+      }
+    }
+  } on FileSystemException {
+    // תיקייה לא נגישה (הרשאות/מחיקה תוך כדי) — מדלגים על שלב ה-links; אם
+    // באמת יש links הם ייתפסו בפתיחה הבאה, ואין סיבה להפיל את כל הסנכרון.
+    return false;
+  }
+  return false;
 }
 
 FileSyncResult _resultFromMap(Map<String, Object?> resultMap) => FileSyncResult(

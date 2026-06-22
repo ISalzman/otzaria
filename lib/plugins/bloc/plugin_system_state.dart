@@ -59,6 +59,37 @@ class PluginSystemOverwriteRequired extends PluginSystemState {
   List<Object?> get props => [archivePath, pluginName, version];
 }
 
+/// מצב המופעל כאשר תוסף פיתוח (תיקייה או localhost) מותקן לראשונה —
+/// מציג דיאלוג הרשאות זהה לתוסף ארוז, ללא tempDir.
+class PluginSystemDevInstallRequiresPermissions extends PluginSystemState {
+  final PluginManifest manifest;
+
+  /// נתיב תיקייה (sourceType='development') או URL (sourceType='localhost_dev').
+  final String sourcePath;
+  final String sourceType;
+  final String? previousVersion;
+  final bool? previousAllowOrderBeforeBuiltInsGranted;
+
+  const PluginSystemDevInstallRequiresPermissions({
+    required this.manifest,
+    required this.sourcePath,
+    required this.sourceType,
+    this.previousVersion,
+    this.previousAllowOrderBeforeBuiltInsGranted,
+  });
+
+  bool get isUpdate => previousVersion != null;
+
+  @override
+  List<Object?> get props => [
+        manifest,
+        sourcePath,
+        sourceType,
+        previousVersion,
+        previousAllowOrderBeforeBuiltInsGranted,
+      ];
+}
+
 class PluginSystemInstallRequiresPermissions extends PluginSystemState {
   final PluginManifest manifest;
   final String tempDirPath;

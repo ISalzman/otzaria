@@ -12,7 +12,7 @@ import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
+import 'package:otzaria/bookmarks/utils/section_bookmark.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart' hide UpdateFontSize;
@@ -24,6 +24,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/utils/visible_index.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
@@ -152,6 +153,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   bool _hasPdfBook = false;
   bool _hasResolvedCompanionPdf = false;
   bool _leftPaneAutoCloseQueuedByScroll = false;
+  // מצב חלונית הצד שזוהה לאחרונה, לעיגון-מחדש של הטקסט בעת פתיחה/סגירה.
+  bool _lastShowLeftPaneForReanchor = false;
 
   // Key עבור PageShapeScreen
   final Key _pageShapeKey = UniqueKey();
@@ -537,6 +540,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       });
     });
 
+    // האזנה לקיצורי הניווט הגלובליים (קטע/דף-פרק קודם והבא).
+    widget.tab.navPreviousSegmentNotifier.addListener(_onNavPreviousSegment);
+    widget.tab.navNextSegmentNotifier.addListener(_onNavNextSegment);
+    widget.tab.navPreviousTocNotifier.addListener(_onNavPreviousToc);
+    widget.tab.navNextTocNotifier.addListener(_onNavNextToc);
+
     // רישום ה-FocusNode ב-FocusRepository
     _focusRepository = context.read<FocusRepository>();
     _focusRepository!.registerBookContentFocusNode(_bookContentFocusNode);
@@ -718,7 +727,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       return;
     }
 
-    final settings = await TextBookPerBookSettings.load(widget.tab.book.title);
+    final settings = await TextBookPerBookSettings.load(widget.tab.book);
 
     if (settings == null) {
       return;
@@ -758,7 +767,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// איפוס הגדרות פר-ספר
   Future<void> _resetPerBookSettings() async {
-    await TextBookPerBookSettings.delete(widget.tab.book.title);
+    await TextBookPerBookSettings.delete(widget.tab.book);
 
     // טעינה מחדש של ההגדרות הכלליות
     if (!mounted) return;
@@ -788,6 +797,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   void dispose() {
     // ביטול רישום ה-FocusNode מ-FocusRepository (שימוש בהפניה שנשמרה)
     _focusRepository?.unregisterBookContentFocusNode(_bookContentFocusNode);
+
+    widget.tab.navPreviousSegmentNotifier.removeListener(_onNavPreviousSegment);
+    widget.tab.navNextSegmentNotifier.removeListener(_onNavNextSegment);
+    widget.tab.navPreviousTocNotifier.removeListener(_onNavPreviousToc);
+    widget.tab.navNextTocNotifier.removeListener(_onNavNextToc);
 
     tabController.dispose();
     textSearchFocusNode.dispose();
@@ -951,6 +965,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   _resolveCompanionPdf();
                   if (!state.showLeftPane) {
                     _leftPaneAutoCloseQueuedByScroll = false;
+                  }
+                  // פתיחת/סגירת חלונית הצד משנה את רוחב הטקסט; מעגנים מחדש
+                  // לפריט העליון הנראה כדי שהתצוגה לא תקפוץ בזרימה-מחדש.
+                  if (state.showLeftPane != _lastShowLeftPaneForReanchor) {
+                    _lastShowLeftPaneForReanchor = state.showLeftPane;
+                    _reanchorMainContentToTopmostVisible();
                   }
                   final pendingSidebarTab =
                       Settings.getValue<int>('key-sidebar-tab-index-pending');
@@ -1399,30 +1419,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     TextBookLoaded state,
     bool wideScreen,
   ) {
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    // נקבע כמה כפתורים להציג בהתאם לרוחב המסך
-    // שים לב: הכפתורים יוסתרו בסדר ההצגה (מימין לשמאל, כך שהימני ביותר יעלם אחרון)
-    int maxButtons;
-
-    if (screenWidth < 400) {
-      maxButtons = 2; // 2 כפתורים + "..." במסכים קטנים מאוד
-    } else if (screenWidth < 500) {
-      maxButtons = 4; // 4 כפתורים + "..." במסכים קטנים
-    } else if (screenWidth < 600) {
-      maxButtons = 6; // 6 כפתורים + "..." במסכים בינוניים קטנים
-    } else if (screenWidth < 700) {
-      maxButtons = 8; // 8 כפתורים + "..." במסכים בינוניים
-    } else if (screenWidth < 800) {
-      maxButtons = 10; // 10 כפתורים + "..." במסכים בינוניים גדולים
-    } else if (screenWidth < 900) {
-      maxButtons = 12; // 12 כפתורים + "..." במסכים גדולים
-    } else if (screenWidth < 1100) {
-      maxButtons = 14; // 14 כפתורים + "..." במסכים גדולים יותר
-    } else {
-      maxButtons =
-          999; // כל הכפתורים החיצוניים במסכים רחבים מאוד (ה-5 הקבועים תמיד בתפריט)
-    }
+    final maxButtons =
+        maxToolbarButtonsForWidth(MediaQuery.of(context).size.width);
 
     return [
       Consumer<ShamorZachorDataProvider>(
@@ -1435,7 +1433,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               ? {
                   _getViewModeTooltip(state):
                       textBookOverflowCommentatorsTourTargetKey,
-                  'הוסף סימניה': textBookOverflowBookmarkTourTargetKey,
+                  'סימניות בספר זה': textBookOverflowBookmarkTourTargetKey,
                   'חיפוש': textBookOverflowSearchTourTargetKey,
                   'הדפסה': textBookOverflowPrintTourTargetKey,
                 }
@@ -1573,24 +1571,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // כפתורי ניווט - רק בתצוגה משולבת
       if (widget.isInCombinedView) ...navigationActions,
 
-      // 1) הוספת סימניה
+      // הצגת סימניות הספר הנוכחי (הוספת סימניה עברה לתפריט ההקשר בטקסט)
       ActionButtonData(
         widget: KeyedSubtree(
           key: widget.enableTourTargets ? textBookBookmarkTourTargetKey : null,
-          child: _buildBookmarkButton(context, state),
-        ),
-        icon: FluentIcons.bookmark_add_24_regular,
-        tooltip: 'הוסף סימניה',
-        onPressed: () => _handleBookmarkPress(context, state),
-      ),
-
-      // 1.5) הצגת סימניות הספר הנוכחי
-      ActionButtonData(
-        widget: ToolbarActionButton(
-          tooltip: 'סימניות בספר זה',
-          icon: FluentIcons.bookmark_multiple_24_regular,
-          compact: context.read<SettingsBloc>().state.compactMenuMode,
-          onPressed: () => _showBookmarksForCurrentBook(context, state.book),
+          child: ToolbarActionButton(
+            tooltip: 'סימניות בספר זה',
+            icon: FluentIcons.bookmark_multiple_24_regular,
+            compact: context.read<SettingsBloc>().state.compactMenuMode,
+            onPressed: () => _showBookmarksForCurrentBook(context, state.book),
+          ),
         ),
         icon: FluentIcons.bookmark_multiple_24_regular,
         tooltip: 'סימניות בספר זה',
@@ -1758,8 +1748,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     if (state.showPageShapeView) {
       return FluentIcons.book_open_24_filled;
     }
-    // מפרשים בצד/מתחת - אותו אייקון (הסיבוב מתבצע מחוץ לפונקציה)
-    return FluentIcons.panel_left_24_regular;
+    if (state.showSplitView) {
+      return FluentIcons.panel_left_24_regular;
+    }
+    return FluentIcons.panel_bottom_20_regular;
   }
 
   /// קבלת ה-tooltip למצב התצוגה הנוכחי
@@ -1776,13 +1768,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   /// בניית תפריט נפתח לבחירת מצב תצוגה
   Widget _buildViewModeDropdown(BuildContext context, TextBookLoaded state,
       {Key? key}) {
-    // אייקון מסובב כשמפרשים מתחת
-    final iconWidget = state.showPageShapeView
-        ? Icon(_getViewModeIcon(state))
-        : RotatedBox(
-            quarterTurns: state.showSplitView ? 0 : 3,
-            child: Icon(_getViewModeIcon(state)),
-          );
+    final iconWidget = Icon(_getViewModeIcon(state));
 
     final isSplit = !state.showPageShapeView && state.showSplitView;
     final isBelow = !state.showPageShapeView && !state.showSplitView;
@@ -1849,8 +1835,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           value: _viewModeBelow,
           label: 'מפרשים מתחת',
           icon: isBelow
-              ? FluentIcons.panel_left_24_filled
-              : FluentIcons.panel_left_24_regular,
+              ? FluentIcons.panel_bottom_20_filled
+              : FluentIcons.panel_bottom_20_regular,
         ),
         AppMenuEntry(
           value: _viewModePage,
@@ -1927,34 +1913,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-  Widget _buildBookmarkButton(BuildContext context, TextBookLoaded state) {
-    final shortcut =
-        Settings.getValue<String>('key-shortcut-add-bookmark') ?? 'ctrl+b';
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    return ToolbarActionButton(
-      tooltip: 'הוסף סימניה (${shortcut.toUpperCase()})',
-      icon: FluentIcons.bookmark_add_24_regular,
-      compact: isCompact,
-      onPressed: () async {
-        int index = _topmostVisibleSourceLine(state);
-        final toc = state.book.tableOfContents;
-        String ref = await refFromIndex(index, toc);
-        // הוספת שם הספר לכותרת
-        ref = addBookTitleToRef(ref, state.book.title);
-        if (!mounted || !context.mounted) return;
-
-        bool bookmarkAdded = context.read<BookmarkBloc>().addBookmark(
-              ref: ref,
-              book: state.book,
-              index: index,
-              commentatorsToShow: state.activeCommentators,
-            );
-        UiSnack.showQuick(
-            bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
-      },
-    );
-  }
-
   void _showBookmarksForCurrentBook(BuildContext context, Book book) {
     showDialog(
       context: context,
@@ -2018,6 +1976,18 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       onPressed: () => _scrollToPreviousSegment(state),
     );
   }
+
+  /// מריץ פעולת ניווט מקיצור מקלדת מול ה-state הנוכחי, אם הספר כבר נטען.
+  void _runNavigation(void Function(TextBookLoaded) action) {
+    if (!mounted) return;
+    final state = context.read<TextBookBloc>().state;
+    if (state is TextBookLoaded) action(state);
+  }
+
+  void _onNavPreviousSegment() => _runNavigation(_scrollToPreviousSegment);
+  void _onNavNextSegment() => _runNavigation(_scrollToNextSegment);
+  void _onNavPreviousToc() => _runNavigation(_navigateToPreviousToc);
+  void _onNavNextToc() => _runNavigation(_navigateToNextToc);
 
   void _scrollToPreviousSegment(TextBookLoaded state) {
     final positions = state.positionsListener.itemPositions.value;
@@ -2348,24 +2318,28 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-  void _handleBookmarkPress(BuildContext context, TextBookLoaded state) async {
-    final index = _topmostVisibleSourceLine(state);
-    final toc = state.book.tableOfContents;
-    final bookmarkBloc = context.read<BookmarkBloc>();
-    String ref = await refFromIndex(index, toc);
-    // הוספת שם הספר לכותרת
-    ref = addBookTitleToRef(ref, state.book.title);
-    if (!mounted || !context.mounted) return;
+  /// עיגון מחדש לפריט העליון הנראה לפני שינוי רוחב התוכן: SPL שומר היסט בפיקסלים
+  /// מול שורת הפתיחה, כך שבלעדי זה זרימה-מחדש ברוחב אחר מקפיצה את התצוגה.
+  void _reanchorMainContentToTopmostVisible() {
+    final controller = widget.tab.scrollController;
+    if (!controller.isAttached) return;
 
-    final bookmarkAdded = bookmarkBloc.addBookmark(
-      ref: ref,
-      book: state.book,
-      index: index,
-      commentatorsToShow: state.activeCommentators,
+    final visible = widget.tab.positionsListener.itemPositions.value
+        .where((p) => p.itemLeadingEdge < 1 && p.itemTrailingEdge > 0);
+    if (visible.isEmpty) return;
+
+    ItemPosition pickByMinLeadingEdge(Iterable<ItemPosition> items) =>
+        items.reduce((a, b) => a.itemLeadingEdge <= b.itemLeadingEdge ? a : b);
+
+    final atOrBelowFold = visible.where((p) => p.itemLeadingEdge >= 0);
+    final anchor = atOrBelowFold.isNotEmpty
+        ? pickByMinLeadingEdge(atOrBelowFold)
+        : pickByMinLeadingEdge(visible);
+
+    controller.jumpTo(
+      index: anchor.index,
+      alignment: anchor.itemLeadingEdge.clamp(0.0, 1.0),
     );
-
-    UiSnack.showQuick(
-        bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
   }
 
   Widget _buildBody(
@@ -2702,6 +2676,18 @@ bool _handleGlobalKeyEvent(
       Settings.getValue<String>('key-shortcut-toggle-pdf-view') ??
           ShortcutValidator.defaultShortcuts['key-shortcut-toggle-pdf-view'] ??
           'ctrl+shift+p';
+  final copyBookLinkShortcut =
+      ShortcutValidator.getShortcutValue(ShortcutValidator.copyBookLinkKey) ??
+          '';
+  final copySectionLinkShortcut = ShortcutValidator.getShortcutValue(
+          ShortcutValidator.copySectionLinkKey) ??
+      '';
+  final copySectionMarkLinkShortcut = ShortcutValidator.getShortcutValue(
+          ShortcutValidator.copySectionMarkLinkKey) ??
+      '';
+  final copyTextMarkLinkShortcut = ShortcutValidator.getShortcutValue(
+          ShortcutValidator.copyTextMarkLinkKey) ??
+      '';
 
   // [EDITING DISABLED]
   // // עריכת קטע
@@ -2771,6 +2757,55 @@ bool _handleGlobalKeyEvent(
   if (ShortcutHelper.matchesShortcut(event, togglePdfShortcut)) {
     _togglePdfView(context, state, tab);
     return true;
+  }
+
+  // העתקת קישורים — קיצורים אופציונליים. האינדקס נלקח מהשורה המסומנת, ואם אין
+  // בחירה — מהמקטע הראשון הנראה (משחזר את מה שתפריט ההקשר היה מייצר).
+  if (copyBookLinkShortcut.isNotEmpty ||
+      copySectionLinkShortcut.isNotEmpty ||
+      copySectionMarkLinkShortcut.isNotEmpty ||
+      copyTextMarkLinkShortcut.isNotEmpty) {
+    final bookId = state.book.id;
+    final index = selectedLineForNote ??
+        (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
+
+    if (ShortcutHelper.matchesShortcut(event, copyBookLinkShortcut)) {
+      if (bookId == null) {
+        UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+      } else {
+        copyLinkToClipboard(buildBookLink(bookId));
+      }
+      return true;
+    }
+    if (ShortcutHelper.matchesShortcut(event, copySectionLinkShortcut)) {
+      if (bookId == null) {
+        UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+      } else {
+        copyLinkToClipboard(buildSectionLink(bookId, index));
+      }
+      return true;
+    }
+    if (ShortcutHelper.matchesShortcut(event, copySectionMarkLinkShortcut)) {
+      if (bookId == null) {
+        UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+      } else {
+        copyLinkToClipboard(buildSectionMarkLink(bookId, index));
+      }
+      return true;
+    }
+    if (ShortcutHelper.matchesShortcut(event, copyTextMarkLinkShortcut)) {
+      final link = bookId == null
+          ? null
+          : buildTextMarkLink(bookId, index, selectedTextForNote ?? '');
+      if (bookId == null) {
+        UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+      } else if (link == null) {
+        UiSnack.showError('יש לבחור טקסט כדי להעתיק קישור עם הדגשה');
+      } else {
+        copyLinkToClipboard(link);
+      }
+      return true;
+    }
   }
 
   // קיצורים קבועים (לא ניתנים להתאמה אישית).
@@ -2876,7 +2911,7 @@ Future<void> _savePerBookSettingsDirectly(
 
   // עדכון אטומי: ה-load וה-merge מבוצעים בתוך תור הכתיבה כדי למנוע דריסה
   // הדדית עם שמירת רוחבי הטורים (_saveSizes) על אותו קובץ.
-  await TextBookPerBookSettings.mutate(state.book.title, (existingSettings) {
+  await TextBookPerBookSettings.mutate(state.book, (existingSettings) {
     // בניית הגדרות חדשות - רק שדות ששונו מברירת המחדל
     double? newFontSize = existingSettings?.fontSize;
     bool? newCommentatorsBelow = existingSettings?.commentatorsBelow;
@@ -2920,6 +2955,7 @@ Future<void> _savePerBookSettingsDirectly(
       removeNikud: newRemoveNikud,
       removePunctuation: newRemovePunctuation,
       continuousReadingMode: newContinuousReadingMode,
+      activeCommentators: existingSettings?.activeCommentators,
       pageShapeLeftWidth: existingSettings?.pageShapeLeftWidth,
       pageShapeRightWidth: existingSettings?.pageShapeRightWidth,
       pageShapeBottomHeight: existingSettings?.pageShapeBottomHeight,
@@ -2932,23 +2968,7 @@ Future<void> _savePerBookSettingsDirectly(
 void _addBookmarkFromKeyboard(
     BuildContext context, TextBookLoaded state) async {
   final index = _topmostVisibleSourceLine(state);
-  final toc = state.book.tableOfContents;
-  final bookmarkBloc = context.read<BookmarkBloc>();
-  String ref = await refFromIndex(index, toc);
-  // הוספת שם הספר לכותרת
-  ref = addBookTitleToRef(ref, state.book.title);
-
-  if (!context.mounted) return;
-
-  final bookmarkAdded = bookmarkBloc.addBookmark(
-    ref: ref,
-    book: state.book,
-    index: index,
-    commentatorsToShow: state.activeCommentators,
-  );
-
-  UiSnack.showQuick(
-      bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
+  await addTextSectionBookmark(context, state, index);
 }
 
 /// Helper function to add note from keyboard shortcut

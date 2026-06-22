@@ -27,6 +27,12 @@ const Map<String, String> apiCallToPermissionHint = {
   // shortcut.*
   'shortcut.create': 'ui.create_shortcut',
 
+  // fs.* (user-selected files)
+  'fs.pickUserFile': 'fs.user_files.read',
+  'fs.resolveFileUrl': 'fs.user_files.read',
+  'fs.readTextFile': 'fs.user_files.read',
+  'fs.revokeFile': 'fs.user_files.read',
+
   // history.*
   'history.list': 'history.read',
   'history.listSearches': 'history.read',
@@ -120,6 +126,11 @@ const pluginValidPermissions = <String>[
 
   /// יצירת קיצור דרך (deep-link) בשולחן העבודה / תפריט ההתחל
   'ui.create_shortcut',
+
+  // ===== קבצים אישיים =====
+  /// בחירה וקריאה של קבצים אישיים שהמשתמש בוחר במפורש (PDF/טקסט וכו').
+  /// הגישה מוגבלת לקבצים שהמשתמש בחר בדיאלוג — לא לנתיב חופשי בדיסק.
+  'fs.user_files.read',
 
   // ===== אחסון תוסף =====
   /// קריאה מאחסון מפתח-ערך של התוסף

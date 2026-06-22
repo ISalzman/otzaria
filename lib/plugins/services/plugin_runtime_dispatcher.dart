@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -17,17 +18,37 @@ class PluginRuntimeDispatcher {
   /// ב-PluginBackgroundHost כשהוענקה ההרשאה `app.run_on_startup`.
   final Map<String, Map<PluginInstanceId, InAppWebViewController>>
       _controllersByPlugin = {};
-  final PluginRegistryRepository _repository = PluginRegistryRepository();
+  PluginRegistryRepository _repository = PluginRegistryRepository();
+
+  @visibleForTesting
+  set repositoryForTesting(PluginRegistryRepository repo) => _repository = repo;
   _PluginRuntimeShutdownMode _shutdownMode = _PluginRuntimeShutdownMode.idle;
 
   // Cache in-memory למניעת שאילתות SQLite חוזרות במסלול החם
   final Map<String, bool> _enabledCache = {};
   final Map<String, Map<String, bool?>> _permissionCache = {};
 
+  // ה-payload האחרון של theme.changed — תוסף מושהה לא מקבל את האירוע
+  // (ה-WebView מוקפא), ולכן מסנכרנים אותו מחדש בהתעוררות.
+  Map<String, dynamic>? _lastThemePayload;
+
   /// callback לטעינה מחדש של תוסף — מופעל פר instance כדי שכל
   /// host יוכל לרענן את ה-webview שלו בנפרד.
   final Map<String, Map<PluginInstanceId, Future<void> Function()>>
       _reloadCallbacks = {};
+
+  // ── מחזור חיים של ה-instance ה-foreground (PluginTabPage) ────────────────
+  // משהים את ה-WebView של תוסף שעזבו כדי לא לצרוך CPU/RAM ברקע. pause נייטיב =
+  // TrySuspend ב-WebView2 (Windows) / onPause (Android) — מקפיא בלי reload.
+  // לא נוגעים ב-instance הרקע ('background') — תוספי run_on_startup אמורים לרוץ.
+  String? _selectedToolPluginId;
+  bool _toolsScreenVisible = true;
+  String? _runningForegroundPluginId;
+
+  // מסדר את כל פעולות מחזור-החיים בשרשרת אחת. בלי זה, שני reconciles
+  // חופפים (מעבר מהיר בין תוספים/מסכים) מ-await בו-זמנית את pause/resume,
+  // ועלולים להשאיר את התוסף הלא-נכון מושהה או לשלוח resumed אחרי suspended.
+  Future<void> _lifecycleLock = Future.value();
 
   void registerController(
     String pluginId,
@@ -62,6 +83,118 @@ class PluginRuntimeDispatcher {
       _enabledCache.remove(pluginId);
       _permissionCache.remove(pluginId);
     }
+    // ה-controller ה-foreground נסגר (טאב נסגר) — לא נחזיק מצביע מת.
+    if (instanceId == 'default' && _runningForegroundPluginId == pluginId) {
+      _runningForegroundPluginId = null;
+    }
+  }
+
+  /// מעדכן איזה תוסף foreground נבחר כעת במסך הכלים
+  /// (null = אין תוסף foreground פעיל, למשל כלי מובנה).
+  void setSelectedToolPlugin(String? pluginId) {
+    if (_selectedToolPluginId == pluginId) return;
+    _selectedToolPluginId = pluginId;
+    unawaited(_serializeLifecycle(_reconcileForeground));
+  }
+
+  /// מעדכן אם מסך הכלים גלוי. ביציאה משהים את התוסף הפעיל, בחזרה מחדשים.
+  void setToolsScreenVisible(bool visible) {
+    if (_toolsScreenVisible == visible) return;
+    _toolsScreenVisible = visible;
+    unawaited(_serializeLifecycle(_reconcileForeground));
+  }
+
+  /// נקרא ע"י [PluginTabPage] כשה-WebView שלו סיים להיטען (אחרי boot).
+  /// אם התוסף נטען בזמן שאינו ה-foreground הפעיל (נבנה "לרקע" בתוך
+  /// IndexedStack, למשל המשתמש עבר לתוסף אחר לפני שזה נטען) — משהים אותו
+  /// מיד; אחרת ה-boot מתחיל את עבודתו כרגיל ואין צורך לגעת בו.
+  Future<void> onForegroundInstanceReady(String pluginId) {
+    return _serializeLifecycle(() async {
+      final desired = _toolsScreenVisible ? _selectedToolPluginId : null;
+      if (desired != pluginId) {
+        await _suspendForeground(pluginId);
+      }
+    });
+  }
+
+  Future<void> _serializeLifecycle(Future<void> Function() action) {
+    final next = _lifecycleLock.then((_) => action());
+    // catchError כדי ששגיאה בלינק אחד לא תשבור את השרשרת כולה.
+    _lifecycleLock = next.catchError((_) {});
+    return next;
+  }
+
+  /// משווה בין התוסף הרצוי-להרצה לרץ-בפועל ומשהה/מחדש בהתאם.
+  /// הרצוי = התוסף הנבחר כשמסך הכלים גלוי, אחרת אף אחד.
+  Future<void> _reconcileForeground() async {
+    if (_shutdownMode != _PluginRuntimeShutdownMode.idle) return;
+    final desired = _toolsScreenVisible ? _selectedToolPluginId : null;
+    if (desired == _runningForegroundPluginId) return;
+    final previous = _runningForegroundPluginId;
+    _runningForegroundPluginId = desired;
+    if (previous != null) await _suspendForeground(previous);
+    if (desired != null) await _resumeForeground(desired);
+  }
+
+  Future<void> _suspendForeground(String pluginId) async {
+    final controller = _controllersByPlugin[pluginId]?['default'];
+    if (controller == null) return;
+    // מודיעים ל-JS לפני ההקפאה כדי שיעצור timers בעצמו — זו ההגנה היחידה
+    // בפלטפורמות שבהן pause נייטיב אינו נתמך (macOS/iOS/Linux).
+    await _dispatchLifecycleEvent(controller, pluginId, 'plugin.suspended');
+    try {
+      await controller.pause();
+    } catch (e) {
+      debugPrint('PluginRuntimeDispatcher: pause failed for $pluginId: $e');
+    }
+  }
+
+  Future<void> _resumeForeground(String pluginId) async {
+    final controller = _controllersByPlugin[pluginId]?['default'];
+    if (controller == null) return;
+    try {
+      await controller.resume();
+    } catch (e) {
+      debugPrint('PluginRuntimeDispatcher: resume failed for $pluginId: $e');
+    }
+    await _dispatchLifecycleEvent(controller, pluginId, 'plugin.resumed');
+    await _resyncThemeOnResume(controller, pluginId);
+  }
+
+  /// שולח מחדש את ה-theme העדכני לתוסף שזה עתה התעורר — בזמן שהיה הוא לא
+  /// קיבל את theme.changed (ה-WebView היה מוקפא), והיה נשאר בצבעים ישנים.
+  /// מכבד enabled+permission כמו dispatchEvent, כדי שתוסף שהרשאתו נשללה
+  /// בזמן ההשהיה לא יקבל את האירוע בהתעוררות.
+  Future<void> _resyncThemeOnResume(
+    InAppWebViewController controller,
+    String pluginId,
+  ) async {
+    final payload = _lastThemePayload;
+    if (payload == null) return;
+    if (!await _canReceiveEvent(pluginId, 'theme.changed')) return;
+    try {
+      await controller.evaluateJavascript(
+        source:
+            "window.dispatchEvent(new CustomEvent('theme.changed', { detail: ${jsonEncode(payload)} }));",
+      );
+    } catch (e) {
+      debugPrint('Failed to resync theme to plugin $pluginId: $e');
+    }
+  }
+
+  Future<void> _dispatchLifecycleEvent(
+    InAppWebViewController controller,
+    String pluginId,
+    String topic,
+  ) async {
+    try {
+      await controller.evaluateJavascript(
+        source:
+            "window.dispatchEvent(new CustomEvent('$topic', { detail: null }));",
+      );
+    } catch (e) {
+      debugPrint('Failed to dispatch $topic to plugin $pluginId: $e');
+    }
   }
 
   /// מנקה את ה-cache של תוסף ספציפי - יש לקרוא כשמשתמש משנה enabled/permissions
@@ -91,6 +224,11 @@ class PluginRuntimeDispatcher {
     _enabledCache.clear();
     _permissionCache.clear();
     _reloadCallbacks.clear();
+    _selectedToolPluginId = null;
+    _runningForegroundPluginId = null;
+    _toolsScreenVisible = true;
+    _lastThemePayload = null;
+    _lifecycleLock = Future.value();
 
     for (final controller in allControllers) {
       try {
@@ -140,8 +278,26 @@ class PluginRuntimeDispatcher {
     }
   }
 
+  /// בודק אם מותר לשלוח [topic] ל-[pluginId]: התוסף מופעל ויש לו הרשאת
+  /// events.subscribe לנושא. משתמש ב-cache למניעת שאילתות SQLite חוזרות.
+  Future<bool> _canReceiveEvent(String pluginId, String topic) async {
+    final isEnabled =
+        _enabledCache[pluginId] ?? await _repository.getIsEnabled(pluginId);
+    _enabledCache[pluginId] = isEnabled;
+    if (!isEnabled) return false;
+
+    _permissionCache[pluginId] ??= {};
+    final permKey = 'events.subscribe:$topic';
+    if (!_permissionCache[pluginId]!.containsKey(permKey)) {
+      _permissionCache[pluginId]![permKey] =
+          await _repository.getPermission(pluginId, permKey);
+    }
+    return _permissionCache[pluginId]![permKey] == true;
+  }
+
   Future<void> dispatchEvent(String topic, Map<String, dynamic> payload) async {
     if (_shutdownMode != _PluginRuntimeShutdownMode.idle) return;
+    if (topic == 'theme.changed') _lastThemePayload = payload;
     final jsonPayload = jsonEncode(payload);
     debugPrint('PluginRuntimeDispatcher: Dispatching $topic');
 
@@ -151,20 +307,7 @@ class PluginRuntimeDispatcher {
       if (instances.isEmpty) continue;
 
       try {
-        // בדוק שהתוסף מופעל - עם cache למניעת שאילתות SQLite חוזרות
-        final isEnabled =
-            _enabledCache[pluginId] ?? await _repository.getIsEnabled(pluginId);
-        _enabledCache[pluginId] = isEnabled;
-        if (!isEnabled) continue;
-
-        // בדוק הרשאה - עם cache
-        _permissionCache[pluginId] ??= {};
-        final permKey = 'events.subscribe:$topic';
-        if (!_permissionCache[pluginId]!.containsKey(permKey)) {
-          _permissionCache[pluginId]![permKey] =
-              await _repository.getPermission(pluginId, permKey);
-        }
-        if (_permissionCache[pluginId]![permKey] != true) continue;
+        if (!await _canReceiveEvent(pluginId, topic)) continue;
 
         // כשקיים instance foreground ('default') ו-instance background במקביל,
         // שולחים רק ל-foreground — מונע כפילות של handlers גלובליים.

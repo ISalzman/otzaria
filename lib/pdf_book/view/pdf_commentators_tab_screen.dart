@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
@@ -18,8 +19,11 @@ import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
+import 'package:otzaria/pdf_book/utils/pdf_spread_layout.dart';
 import 'package:otzaria/models/pdf_headings.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
@@ -58,6 +62,10 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   int _selectedParagraphIdx = 0;
   List<String>? _textLines;
 
+  // ריבוי-בחירה ב'ניווט' (Ctrl+לחיצה): מספרי שורות נוספים להצגת מפרשים מעבר
+  // לטווח הראשי. ריק = בחירה יחידה רגילה. מתאפס בכל ניווט רגיל.
+  final Set<int> _extraLines = <int>{};
+
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
   final _navSearchController = TextEditingController();
@@ -65,6 +73,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   final _currentIdxNotifier = ValueNotifier<int>(0);
   final _panelKey = GlobalKey<PdfCommentaryPanelState>();
   final Set<int> _expandedHeadings = {};
+
+  // גלילת רשימת הניווט לכותרת הנבחרת בעת פתיחת הפאנל/מעבר ללשונית הניווט.
+  final ItemScrollController _navScrollController = ItemScrollController();
 
   /// סרגל 3 הלשוניות בפאנל הצד (זהה לכרטיסיית הטקסט): ניווט / מפרשים / חיפוש
   late final TabController _navTabController;
@@ -115,7 +126,37 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _searchFocusNode.requestFocus();
       });
+    } else if (_navTabController.index == 0) {
+      // לשונית הניווט: גלילה לכותרת הנבחרת.
+      _scrollNavToSelectedHeading();
     }
+  }
+
+  /// אינדקסי הכותרות המוצגות בלשונית הניווט, מסוננים לפי שאילתת החיפוש.
+  List<int> _navFilteredIndices(String query) {
+    final headings = _sortedHeadings;
+    if (headings == null) return const [];
+    final q = query.trim();
+    final all = List<int>.generate(headings.length, (i) => i);
+    if (q.isEmpty) return all;
+    return all.where((i) => headings[i].key.contains(q)).toList();
+  }
+
+  /// גוללת את רשימת הניווט לכותרת הנבחרת. ה-BlocListener/פתיחת הפאנל לא
+  /// מבצעים זאת לבדם, ולכן יש לקרוא לכך בעת פתיחה ומעבר ללשונית.
+  void _scrollNavToSelectedHeading() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_navScrollController.isAttached) return;
+      final listIdx = _navFilteredIndices(_navSearchController.text)
+          .indexOf(_selectedHeadingIdx);
+      if (listIdx < 0) return;
+      _navScrollController.scrollTo(
+        index: listIdx,
+        alignment: 0.4,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    });
   }
 
   @override
@@ -133,9 +174,12 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     if (headings == null || headings.isEmpty) return;
     _sortedHeadings = headings;
     final currentTitle = widget.tab.sourceTab.currentTitle.value;
-    final idx = headings.indexWhere((e) => e.key == currentTitle);
-    _selectedHeadingIdx = idx >= 0 ? idx : 0;
+    final selection = _resolveTitleSelection(headings, currentTitle);
+    _selectedHeadingIdx = selection.firstIdx >= 0 ? selection.firstIdx : 0;
     _selectedParagraphIdx = _kAllPara;
+    _extraLines
+      ..clear()
+      ..addAll(_spreadExtraLines(selection));
   }
 
   void _syncWithSourceTab() {
@@ -144,19 +188,53 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     final headings = widget.tab.sourceTab.pdfHeadings?.getSortedHeadings();
     final currentTitle = widget.tab.sourceTab.currentTitle.value;
     var nextSelectedHeadingIdx = _selectedHeadingIdx;
+    var selection = (firstIdx: nextSelectedHeadingIdx, secondIdx: -1);
 
     if (headings != null && headings.isNotEmpty) {
       _sortedHeadings = headings;
-      final matchedIndex = headings.indexWhere((e) => e.key == currentTitle);
-      if (matchedIndex >= 0) {
-        nextSelectedHeadingIdx = matchedIndex;
+      selection = _resolveTitleSelection(headings, currentTitle);
+      if (selection.firstIdx >= 0) {
+        nextSelectedHeadingIdx = selection.firstIdx;
       }
     }
 
     setState(() {
       _selectedHeadingIdx = nextSelectedHeadingIdx;
       _selectedParagraphIdx = _kAllPara;
+      _extraLines
+        ..clear()
+        ..addAll(_spreadExtraLines(selection));
     });
+  }
+
+  /// מזהה את בחירת הכותרת עבור [title]. מנסה תחילה התאמה מלאה (כדי לא לפצל
+  /// בטעות כותרת חוקית שמכילה מקף ארוך), ורק אחריה מזהה ספירייד — פיצול לשתי
+  /// כותרות קיימות. [secondIdx] >= 0 רק בספירייד אמיתי. [firstIdx] = -1 כשאין
+  /// התאמה כלל.
+  ({int firstIdx, int secondIdx}) _resolveTitleSelection(
+      List<MapEntry<String, int>> headings, String title) {
+    final full = headings.indexWhere((e) => e.key == title);
+    if (full >= 0) return (firstIdx: full, secondIdx: -1);
+    final known = headings.map((e) => e.key).toSet();
+    final split = pdfSplitSpreadTitleByKnown(title, known);
+    if (split == null) return (firstIdx: -1, secondIdx: -1);
+    return (
+      firstIdx: headings.indexWhere((e) => e.key == split.first),
+      secondIdx: headings.indexWhere((e) => e.key == split.second),
+    );
+  }
+
+  /// בתצוגת ספר — שורות העמוד השני בספירייד (עד [secondIdx]), כדי שמפרשי שני
+  /// העמודים יוצגו יחד עם הטווח הראשי. בעמוד יחיד מחזיר רשימה ריקה.
+  List<int> _spreadExtraLines(({int firstIdx, int secondIdx}) selection) {
+    if (selection.firstIdx < 0 || selection.secondIdx <= selection.firstIdx) {
+      return const [];
+    }
+    final lines = <int>[];
+    for (int i = selection.firstIdx; i <= selection.secondIdx; i++) {
+      lines.addAll(_linesForNavItem(i, _kAllPara));
+    }
+    return lines;
   }
 
   void _openSearchPanel() {
@@ -188,6 +266,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       _selectedHeadingIdx--;
       _selectedParagraphIdx = _kAllPara;
       _expandedHeadings.add(_selectedHeadingIdx);
+      _extraLines.clear();
     });
   }
 
@@ -203,6 +282,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       _selectedHeadingIdx++;
       _selectedParagraphIdx = _kAllPara;
       _expandedHeadings.add(_selectedHeadingIdx);
+      _extraLines.clear();
     });
   }
 
@@ -210,10 +290,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     final tab = widget.tab.sourceTab;
     try {
       final library = await DataRepository.instance.library;
-      TextBook? textBook =
-          library.findBookByTitle(tab.book.title, TextBook) as TextBook?;
-      textBook ??= library.findBookByTitleFlexible(tab.book.title, TextBook)
-          as TextBook?;
+      final textBook =
+          library.getCompanionBook(tab.book, TextBook) as TextBook?;
       if (textBook == null || !mounted) return;
       final text = await textBook.text;
       if (!mounted) return;
@@ -250,10 +328,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     if (tab.links.isEmpty) {
       try {
         final library = await DataRepository.instance.library;
-        TextBook? textBook =
-            library.findBookByTitle(tab.book.title, TextBook) as TextBook?;
-        textBook ??= library.findBookByTitleFlexible(tab.book.title, TextBook)
-            as TextBook?;
+        final textBook =
+            library.getCompanionBook(tab.book, TextBook) as TextBook?;
         if (textBook != null) {
           final loaded = await textBook.links
             ..sort((a, b) => a.index1.compareTo(b.index1));
@@ -284,10 +360,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     if (headings == null || headings.isEmpty) return;
     try {
       final library = await DataRepository.instance.library;
-      var textBook = library.findBookByTitle(
-          widget.tab.sourceTab.book.title, TextBook) as TextBook?;
-      textBook ??= library.findBookByTitleFlexible(
-          widget.tab.sourceTab.book.title, TextBook) as TextBook?;
+      final textBook = library.getCompanionBook(
+          widget.tab.sourceTab.book, TextBook) as TextBook?;
       if (textBook == null) return;
 
       int lo = 0;
@@ -325,6 +399,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       }
     }
     final available = commentatorsSet.toList();
+    await _applyDefaultCommentatorsIfNeeded(available);
     final eras = await utils.splitByEra(available);
     final known = <String>{
       ...?eras['תורה שבכתב'],
@@ -353,6 +428,27 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
         CommentatorGroup(title: 'שאר מפרשים', commentators: others),
       ];
     });
+  }
+
+  /// בוחר אוטומטית את מפרשי ברירת המחדל של הספר (כמו בכרטיסיית הטקסט), כל עוד
+  /// אין בחירה פר-ספר שמורה ואין מפרשים פעילים. [available] = המפרשים הזמינים
+  /// מתוך ה-links של הספר.
+  Future<void> _applyDefaultCommentatorsIfNeeded(List<String> available) async {
+    final sourceTab = widget.tab.sourceTab;
+    if (available.isEmpty || sourceTab.activeCommentators.isNotEmpty) return;
+
+    final saved = await PdfBookPerBookSettings.load(sourceTab.book);
+    final selection = await DefaultCommentators.resolveAutoSelection(
+      sourceTab.book,
+      availableCommentators: available,
+      savedSelection: saved?.activeCommentators,
+    );
+    if (!mounted ||
+        selection == null ||
+        sourceTab.activeCommentators.isNotEmpty) {
+      return;
+    }
+    setState(() => sourceTab.activeCommentators.addAll(selection));
   }
 
   @override
@@ -423,6 +519,46 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     return (start: start, end: end);
   }
 
+  /// Ctrl (או Cmd ב-macOS) לחוץ כרגע — לזיהוי ריבוי-בחירה בלחיצת ניווט.
+  bool _isCtrlPressed() =>
+      HardwareKeyboard.instance.isControlPressed ||
+      HardwareKeyboard.instance.isMetaPressed;
+
+  /// מספרי השורות של טווח כותרת/פסקה (מוגבל למניעת קבוצות ענק).
+  List<int> _linesForNavItem(int headingIdx, int paraIdx) {
+    final paras = _getParagraphs(headingIdx);
+    final safe = paraIdx == _kAllPara || paras.isEmpty
+        ? _kAllPara
+        : paraIdx.clamp(0, paras.length - 1);
+    final range = _getLineRangeForPara(headingIdx, paras, safe);
+    if (range.end < range.start || range.end - range.start > 3000) {
+      return [range.start];
+    }
+    return [for (int l = range.start; l <= range.end; l++) l];
+  }
+
+  /// Ctrl+לחיצה על פריט ניווט: מוסיף/מסיר את שורותיו מריבוי-הבחירה (toggle).
+  void _ctrlToggleNavItem(int headingIdx, int paraIdx) {
+    final lines = _linesForNavItem(headingIdx, paraIdx);
+    if (lines.isEmpty) return;
+    setState(() {
+      if (lines.every(_extraLines.contains)) {
+        _extraLines.removeAll(lines);
+      } else {
+        // שמירת הטווח הראשי הנוכחי כחלק מהאיחוד לפני הוספת הקטע החדש.
+        _extraLines.addAll(
+            _linesForNavItem(_selectedHeadingIdx, _selectedParagraphIdx));
+        _extraLines.addAll(lines);
+      }
+    });
+  }
+
+  /// האם שורות פריט הניווט נמצאות בריבוי-הבחירה (להדגשה).
+  bool _isNavItemInMulti(int headingIdx, int paraIdx) {
+    if (_extraLines.isEmpty) return false;
+    return _linesForNavItem(headingIdx, paraIdx).any(_extraLines.contains);
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context); // נדרש ע"י AutomaticKeepAliveClientMixin
@@ -462,6 +598,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                     onSelectCommentatorsRequested: _openCommentatorsTab,
                     lineStartOverride: range.start,
                     lineEndOverride: range.end,
+                    extraLineIndices: _extraLines.isEmpty ? null : _extraLines,
                     removeNikud: _removeNikud,
                     removePunctuation: _removePunctuation,
                     openBookCallback: (tab) {
@@ -498,6 +635,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
 
   void _navigateToPrevParagraph() {
     if (!_isNavigationReady) return;
+    _extraLines.clear();
     final paragraphs = _getParagraphs(_selectedHeadingIdx);
     if (_selectedParagraphIdx > 0 && paragraphs.isNotEmpty) {
       setState(() => _selectedParagraphIdx--);
@@ -520,6 +658,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
 
   void _navigateToNextParagraph() {
     if (!_isNavigationReady) return;
+    _extraLines.clear();
     final paragraphs = _getParagraphs(_selectedHeadingIdx);
     // מ"כל הכותרת" (-1) → פסקה ראשונה (0); אחרת לפסקה הבאה
     if (_selectedParagraphIdx + 1 < paragraphs.length) {
@@ -567,10 +706,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     if (hasSelectedHeading) {
       try {
         final library = await DataRepository.instance.library;
-        var textBook = library.findBookByTitle(sourceTab.book.title, TextBook)
-            as TextBook?;
-        textBook ??= library.findBookByTitleFlexible(
-            sourceTab.book.title, TextBook) as TextBook?;
+        final textBook =
+            library.getCompanionBook(sourceTab.book, TextBook) as TextBook?;
         if (textBook != null) {
           final mapped = await textToPdfPage(
               textBook, headings[_selectedHeadingIdx].value);
@@ -604,7 +741,12 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
             tooltip: 'ניווט',
             icon: FluentIcons.navigation_24_regular,
             compact: isCompact,
-            onPressed: () => setState(() => _navPaneOpen = !_navPaneOpen),
+            onPressed: () {
+              setState(() => _navPaneOpen = !_navPaneOpen);
+              if (_navPaneOpen && _navTabController.index == 0) {
+                _scrollNavToSelectedHeading();
+              }
+            },
           ),
         ),
       ],
@@ -889,14 +1031,13 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) setState(() {});
         });
-        final settingsBloc = context.read<SettingsBloc>();
-        if (settingsBloc.state.enablePerBookSettings) {
-          final settings = PdfBookPerBookSettings(
-            activeCommentators:
-                List.from(widget.tab.sourceTab.activeCommentators),
-          );
-          await settings.save(widget.tab.sourceTab.book.title);
-        }
+        // שמירה פר-ספר תמיד (לא תלוי ב-enablePerBookSettings) כדי שהבחירה
+        // תיטען בכל פתיחה.
+        final settings = PdfBookPerBookSettings(
+          activeCommentators:
+              List.from(widget.tab.sourceTab.activeCommentators),
+        );
+        await settings.save(widget.tab.sourceTab.book);
       },
     );
   }
@@ -912,12 +1053,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: _navSearchController,
       builder: (context, val, _) {
-        final query = val.text.trim();
-        final filteredIdx = query.isEmpty
-            ? List<int>.generate(headings.length, (i) => i)
-            : List<int>.generate(headings.length, (i) => i)
-                .where((i) => headings[i].key.contains(query))
-                .toList();
+        final filteredIdx = _navFilteredIndices(val.text);
 
         return Column(
           children: [
@@ -928,7 +1064,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 decoration: InputDecoration(
                   hintText: 'איתור כותרת...',
                   prefixIcon: const Icon(FluentIcons.search_24_regular),
-                  suffixIcon: query.isNotEmpty
+                  suffixIcon: val.text.trim().isNotEmpty
                       ? IconButton(
                           icon: const Icon(FluentIcons.dismiss_24_regular),
                           onPressed: () => _navSearchController.clear(),
@@ -942,7 +1078,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
               ),
             ),
             Expanded(
-              child: ListView.builder(
+              child: ScrollablePositionedList.builder(
+                itemScrollController: _navScrollController,
                 itemCount: filteredIdx.length,
                 itemBuilder: (context, listIdx) {
                   final idx = filteredIdx[listIdx];
@@ -953,18 +1090,24 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                   final headingRow = _buildHeadingRow(
                     context: context,
                     headingText: headings[idx].key,
-                    // מודגש רק כשנבחרה "כל הכותרת" (לא פסקה ספציפית)
-                    isSelected:
-                        isActiveHeading && _selectedParagraphIdx == _kAllPara,
+                    // מודגש כשנבחרה "כל הכותרת", או כשהיא בריבוי-הבחירה.
+                    isSelected: (isActiveHeading &&
+                            _selectedParagraphIdx == _kAllPara) ||
+                        _isNavItemInMulti(idx, _kAllPara),
                     isExpanded: isExpanded,
                     hasChildren: paras.isNotEmpty,
                     // לחיצה על גוף הכותרת = בחירת כל הכותרת (כל המפרשים) + הרחבה
                     onTap: () {
+                      if (_isCtrlPressed()) {
+                        _ctrlToggleNavItem(idx, _kAllPara);
+                        return;
+                      }
                       setState(() {
                         _selectedHeadingIdx = idx;
                         _selectedParagraphIdx = _kAllPara;
                         if (paras.isNotEmpty) _expandedHeadings.add(idx);
                         _searchController.clear();
+                        _extraLines.clear();
                       });
                     },
                     // לחיצה על החץ = הרחבה/כיווץ בלבד, בלי לשנות את הבחירה
@@ -997,16 +1140,22 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                             .take(4)
                             .join(' ');
                         final isParaSelected =
-                            isActiveHeading && _selectedParagraphIdx == pi;
+                            (isActiveHeading && _selectedParagraphIdx == pi) ||
+                                _isNavItemInMulti(idx, pi);
                         return _buildParagraphRow(
                           context: context,
                           text: words,
                           isSelected: isParaSelected,
                           onTap: () {
+                            if (_isCtrlPressed()) {
+                              _ctrlToggleNavItem(idx, pi);
+                              return;
+                            }
                             setState(() {
                               _selectedHeadingIdx = idx;
                               _selectedParagraphIdx = pi;
                               _searchController.clear();
+                              _extraLines.clear();
                             });
                           },
                         );

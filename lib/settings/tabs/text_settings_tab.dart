@@ -253,6 +253,10 @@ class TextSettingsTab extends StatelessWidget {
                               .add(UpdateFontFamily(value));
                         }
                       },
+                      bold: state.fontBold,
+                      onBoldChanged: (value) {
+                        context.read<SettingsBloc>().add(UpdateFontBold(value));
+                      },
                     ),
                   ],
                 ),
@@ -287,6 +291,10 @@ class TextSettingsTab extends StatelessWidget {
                               .read<SettingsBloc>()
                               .add(UpdateFontFamily(value));
                         }
+                      },
+                      bold: state.fontBold,
+                      onBoldChanged: (value) {
+                        context.read<SettingsBloc>().add(UpdateFontBold(value));
                       },
                     ),
                   ),
@@ -332,6 +340,12 @@ class TextSettingsTab extends StatelessWidget {
                               .add(UpdateCommentatorsFontFamily(value));
                         }
                       },
+                      bold: state.commentatorsFontBold,
+                      onBoldChanged: (value) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateCommentatorsFontBold(value));
+                      },
                     ),
                   ],
                 ),
@@ -370,6 +384,12 @@ class TextSettingsTab extends StatelessWidget {
                               .read<SettingsBloc>()
                               .add(UpdateCommentatorsFontFamily(value));
                         }
+                      },
+                      bold: state.commentatorsFontBold,
+                      onBoldChanged: (value) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateCommentatorsFontBold(value));
                       },
                     ),
                   ),
@@ -762,6 +782,21 @@ class _FontSizeSliderState extends State<_FontSizeSlider> {
   }
 }
 
+/// מחרוזת הדוגמה המוצגת בכל גופן ברשימה (כמו תצוגת גופנים בוורד).
+const String _kFontSampleText = 'אבגד הוזח';
+
+/// אייקון המבחין בין גופן עם תגיות (serif) לגופן חלק (sans-serif).
+IconData? _fontCategoryIcon(FontCategory category) {
+  switch (category) {
+    case FontCategory.serif:
+      return FluentIcons.text_font_24_regular;
+    case FontCategory.sansSerif:
+      return FluentIcons.text_t_24_regular;
+    case FontCategory.unknown:
+      return null;
+  }
+}
+
 // Widget עזר לדרופדאון גופן
 class _FontDropdown extends StatelessWidget {
   final IconData icon;
@@ -769,18 +804,62 @@ class _FontDropdown extends StatelessWidget {
   final String value;
   final ValueChanged<String?> onChanged;
 
+  /// האם הגופן מוצג כעת במשקל מודגש (בולד).
+  final bool bold;
+  final ValueChanged<bool> onBoldChanged;
+
   const _FontDropdown({
     required this.icon,
     required this.label,
     required this.value,
     required this.onChanged,
+    required this.bold,
+    required this.onBoldChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final fontEntries = AppFonts.availableFonts
-        .map((font) => AppMenuEntry(value: font.value, label: font.label))
+    final all = AppFonts.availableFonts;
+
+    // O(n) lookup במקום O(n²) — מחושב פעם אחת לכל build.
+    final serifValues = {
+      for (final f in all)
+        if (f.category == FontCategory.serif) f.value,
+    };
+    final sansValues = {
+      for (final f in all)
+        if (f.category == FontCategory.sansSerif) f.value,
+    };
+
+    final fontEntries = all
+        .map(
+          (font) => AppMenuEntry<String>(
+            value: font.value,
+            label: font.label,
+            icon: _fontCategoryIcon(font.category),
+            reserveTrailingGap: true,
+            trailingReservedWidth: 72,
+            labelWidget: _FontPreviewText(
+              fontFamily: font.value,
+              name: font.label,
+              isBundled: AppFonts.fontPaths.containsKey(font.value),
+            ),
+            trailing: SizedBox(
+              width: 72,
+              child: Opacity(
+                opacity: 0.6,
+                child: _FontPreviewText(
+                  fontFamily: font.value,
+                  name: _kFontSampleText,
+                  isBundled: AppFonts.fontPaths.containsKey(font.value),
+                ),
+              ),
+            ),
+          ),
+        )
         .toList();
+
+    // גופן נבחר שאינו מותקן כלל במחשב — מסומן בתווית מיוחדת.
     final hasSelectedFont =
         value.isEmpty || fontEntries.any((entry) => entry.value == value);
     if (!hasSelectedFont) {
@@ -810,29 +889,99 @@ class _FontDropdown extends StatelessWidget {
               border: OutlineInputBorder(),
             ),
             entries: fontEntries,
+            filterLabels: const ['הכל', 'Serif', 'Sans'],
+            filterPredicates: [
+              null,
+              (e) => serifValues.contains(e.value),
+              (e) => sansValues.contains(e.value),
+            ],
+            menuMinWidth: 260,
             selectedBuilder: (context, selectedValue) {
-              final matchingFont = AppFonts.availableFonts.firstWhere(
-                (font) => font.value == selectedValue,
-                orElse: () => FontInfo(
-                  value: selectedValue ?? '',
-                  label: selectedValue ?? '',
-                ),
+              final v = selectedValue ?? '';
+              final matchingFont = all.firstWhere(
+                (font) => font.value == v,
+                orElse: () => FontInfo(value: v, label: v),
               );
-              return Text(
-                matchingFont.label,
-                style: TextStyle(
-                  fontFamily: AppFonts.fontPaths.containsKey(matchingFont.value)
-                      ? matchingFont.value
-                      : null,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              // בשדה הסגור מציגים את שם הגופן (מרונדר בגופן עצמו לזיהוי).
+              return _FontPreviewText(
+                fontFamily: v,
+                name: matchingFont.label,
+                isBundled: AppFonts.fontPaths.containsKey(v),
               );
             },
             onSelected: onChanged,
           ),
         ),
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: bold ? 'הצגה במשקל רגיל' : 'הדגשת הגופן (בולד)',
+          isSelected: bold,
+          onPressed: () => onBoldChanged(!bold),
+          icon: const RtlIcon(FluentIcons.text_bold_24_regular),
+          selectedIcon: const RtlIcon(FluentIcons.text_bold_24_filled),
+        ),
       ],
+    );
+  }
+}
+
+/// מציג את שם הגופן (ובאופן אופציונלי מחרוזת דוגמה) מרונדרים בגופן עצמו.
+/// עבור גופני מערכת טוען את הגופן ל-engine ברקע, ומציג ברירת-מחדל עד הטעינה.
+class _FontPreviewText extends StatefulWidget {
+  final String fontFamily;
+  final String name;
+  final bool isBundled;
+
+  const _FontPreviewText({
+    required this.fontFamily,
+    required this.name,
+    required this.isBundled,
+  });
+
+  @override
+  State<_FontPreviewText> createState() => _FontPreviewTextState();
+}
+
+class _FontPreviewTextState extends State<_FontPreviewText> {
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveFont();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FontPreviewText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.fontFamily != widget.fontFamily ||
+        oldWidget.isBundled != widget.isBundled) {
+      _resolveFont();
+    }
+  }
+
+  void _resolveFont() {
+    if (widget.isBundled) {
+      _loaded = true;
+      return;
+    }
+    _loaded = false;
+    final family = widget.fontFamily;
+    AppFonts.ensureFontLoaded(family).then((_) {
+      if (mounted && widget.fontFamily == family) {
+        setState(() => _loaded = true);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final family = _loaded ? widget.fontFamily : null;
+    return Text(
+      widget.name,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontFamily: family),
     );
   }
 }

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -68,12 +67,8 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
   Offset? _currentMenuOffset;
   double? _menuAnchorX;
 
-  bool get _supportsLongPressContextMenu {
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.android || TargetPlatform.iOS => true,
-      _ => false,
-    };
-  }
+  // long-press פותח תפריט הקשר בכל הפלטפורמות — גם במגע וגם בעכבר/trackpad
+  bool get _supportsLongPressContextMenu => true;
 
   @override
   void dispose() {
@@ -232,11 +227,12 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
       overlayRenderObject.size.width,
       metrics,
     );
-    final maxMenuHeight = (overlayRenderObject.size.height -
-            menuOffset.dy -
-            _contextMenuScreenPadding)
-        .clamp(metrics.itemHeight, double.infinity)
-        .toDouble();
+    // גובה זמין מלא בחלון (לא רק המרחב שמתחת ללחיצה) — כך הפאנל נמדד לפי גובהו
+    // הטבעי, ו-_repositionContextMenuWithinOverlay מושך אותו מעלה כדי שייכנס.
+    final maxMenuHeight =
+        (overlayRenderObject.size.height - _contextMenuScreenPadding * 2)
+            .clamp(metrics.itemHeight, double.infinity)
+            .toDouble();
 
     // Create controllers once per menu open — stable across overlay rebuilds
     final submenuControllers = <AppContextMenuEntry, MenuController>{
@@ -373,6 +369,10 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
     double maxWidth,
     Map<AppContextMenuEntry, MenuController> submenuControllers,
   ) {
+    // ה-MenuItemButton מוסיף itemPadding משלו (buildAppSubmenuItemStyle) על גבי
+    // ה-padding של buildAppMenuRowContent — מחסירים אותו מרוחב התוכן כדי ש-cap
+    // התווית לא יגלוש (כמו submenuContentMaxWidth בתת-התפריט).
+    final contentMaxWidth = maxWidth - metrics.itemPadding.horizontal;
     return entries.map<Widget>((entry) {
       if (entry.isDivider) {
         return SizedBox(
@@ -391,7 +391,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
             child: buildAppMenuRowContent(
               context,
               metrics,
-              maxWidth: maxWidth,
+              maxWidth: contentMaxWidth,
               label: entry.label ?? '',
               labelWidget: entry.labelWidget,
               icon: entry.icon,
@@ -440,7 +440,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
             child: buildAppMenuRowContent(
               context,
               metrics,
-              maxWidth: maxWidth,
+              maxWidth: contentMaxWidth,
               label: entry.label ?? '',
               labelWidget: entry.labelWidget,
               icon: entry.icon,
@@ -506,7 +506,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
           child: buildAppMenuRowContent(
             context,
             metrics,
-            maxWidth: maxWidth,
+            maxWidth: contentMaxWidth,
             label: entry.label ?? '',
             labelWidget: entry.labelWidget,
             icon: entry.icon,
@@ -874,7 +874,7 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton>
         child: buildAppMenuRowContent(
           context,
           widget.metrics,
-          maxWidth: widget.maxWidth,
+          maxWidth: widget.maxWidth - widget.metrics.itemPadding.horizontal,
           label: widget.entry.label ?? '',
           labelWidget: widget.entry.labelWidget,
           icon: widget.entry.icon,
@@ -913,7 +913,7 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton>
             child: buildAppMenuRowContent(
               context,
               widget.metrics,
-              maxWidth: widget.maxWidth,
+              maxWidth: widget.maxWidth - widget.metrics.itemPadding.horizontal,
               label: widget.entry.label ?? '',
               labelWidget: widget.entry.labelWidget,
               icon: widget.entry.icon,
@@ -1070,6 +1070,8 @@ class _MenuItemHoverPreviewState extends State<_MenuItemHoverPreview> {
   final GlobalKey _panelKey = GlobalKey();
   Offset? _panelOffset;
   bool _panelVisible = false;
+  // נפתח בלחיצה ארוכה (מגע) ולא ברפרוף — נסגר בהקשה מחוץ לחלונית.
+  bool _touchTriggered = false;
 
   @override
   void dispose() {
@@ -1084,6 +1086,7 @@ class _MenuItemHoverPreviewState extends State<_MenuItemHoverPreview> {
     _previewEntry = null;
     _panelOffset = null;
     _panelVisible = false;
+    _touchTriggered = false;
   }
 
   void _scheduleShow() {
@@ -1152,7 +1155,7 @@ class _MenuItemHoverPreviewState extends State<_MenuItemHoverPreview> {
       builder: (overlayContext) {
         final offset =
             _panelOffset ?? const Offset(_screenPadding, _screenPadding);
-        return Positioned(
+        final panel = Positioned(
           left: offset.dx,
           top: offset.dy,
           child: Visibility(
@@ -1181,6 +1184,19 @@ class _MenuItemHoverPreviewState extends State<_MenuItemHoverPreview> {
               ),
             ),
           ),
+        );
+        if (!_touchTriggered) return panel;
+        // במגע אין onExit לסגירה — מחסום שקוף מאחורי החלונית סוגר בהקשה בחוץ.
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _removePreview,
+              ),
+            ),
+            panel,
+          ],
         );
       },
     );
@@ -1259,12 +1275,26 @@ class _MenuItemHoverPreviewState extends State<_MenuItemHoverPreview> {
     );
   }
 
+  // במגע אין רפרוף עכבר (גם במסכי מגע של דסקטופ); לחיצה ארוכה מחליפה אותו
+  // כטריגר. בעכבר הריחוף כבר הציג, ולכן הקריאה כאן חוזרת מוקדם.
+  void _handleLongPress() {
+    if (_previewEntry != null) return;
+    _showTimer?.cancel();
+    _showTimer = null;
+    _touchTriggered = true;
+    _showPreview();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => _scheduleShow(),
-      onExit: (_) => _scheduleHide(),
-      child: widget.child,
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onLongPress: _handleLongPress,
+      child: MouseRegion(
+        onEnter: (_) => _scheduleShow(),
+        onExit: (_) => _scheduleHide(),
+        child: widget.child,
+      ),
     );
   }
 }

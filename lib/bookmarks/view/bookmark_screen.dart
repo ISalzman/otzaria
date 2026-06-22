@@ -5,6 +5,8 @@ import 'package:otzaria/widgets/dialogs/reusable_items_dialog.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_state.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
+import 'package:otzaria/bookmarks/models/bookmark_sort_mode.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -19,6 +21,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/lists/items_list_view.dart';
+import 'package:otzaria/widgets/dialogs/input_dialog.dart';
 
 class BookmarksDialog extends StatelessWidget {
   /// אם מסופק, יוצגו רק סימניות של ספר זה (הדיאלוג הופך לתצוגת
@@ -47,10 +50,24 @@ class BookmarkView extends StatefulWidget {
 }
 
 class _BookmarkViewState extends State<BookmarkView> {
+  late BookmarkSortMode _sortMode;
+
   /// קאש לספירת הסימניות לפי ספר — נמנע מחישוב בכל קריאה ל-build
   /// כשרשימת הסימניות לא משתנה.
   List<Bookmark>? _cachedBookmarks;
   Map<String, int>? _cachedCountPerBook;
+
+  @override
+  void initState() {
+    super.initState();
+    _sortMode = loadBookmarkSortMode();
+  }
+
+  void _onSortModeChanged(BookmarkSortMode mode) {
+    if (mode == _sortMode) return;
+    setState(() => _sortMode = mode);
+    saveBookmarkSortMode(mode);
+  }
 
   Map<String, int> _getCountPerBook(List<Bookmark> bookmarks) {
     if (identical(_cachedBookmarks, bookmarks)) return _cachedCountPerBook!;
@@ -72,6 +89,17 @@ class _BookmarkViewState extends State<BookmarkView> {
     final aCmp = bookIdentity(a.book).compareTo(bookIdentity(b.book));
     if (aCmp != 0) return aCmp;
     return a.index.compareTo(b.index);
+  }
+
+  /// מיון לפי מועד הוספה — החדש למעלה. סימניות ישנות ללא [createdAt]
+  /// נדחקות לתחתית.
+  static int _compareByDateAdded(Bookmark a, Bookmark b) {
+    final aDate = a.createdAt;
+    final bDate = b.createdAt;
+    if (aDate == null && bDate == null) return 0;
+    if (aDate == null) return 1;
+    if (bDate == null) return -1;
+    return bDate.compareTo(aDate);
   }
 
   /// בונה את ה-Tab המתאים לסימניה. עבור [BookmarkTargetKind.commentators]
@@ -129,6 +157,26 @@ class _BookmarkViewState extends State<BookmarkView> {
     }
   }
 
+  /// עריכת טקסט התיאור המוצג של סימניה. ערך ריק מאפס לברירת המחדל (המיקום).
+  Future<void> _editBookmarkLabel(
+    BuildContext context,
+    Bookmark bookmark,
+    int originalIndex,
+  ) async {
+    final bloc = context.read<BookmarkBloc>();
+    final current = bookmark.label?.trim().isNotEmpty == true
+        ? bookmark.label!.trim()
+        : (ItemsListView.locationSubtitle(bookmark) ?? '');
+    final result = await showInputDialog(
+      context: context,
+      title: 'עריכת תיאור הסימניה',
+      labelText: 'תיאור',
+      initialValue: current,
+    );
+    if (result == null) return;
+    bloc.updateBookmarkLabel(originalIndex, result);
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookFilter = widget.bookFilter;
@@ -153,20 +201,31 @@ class _BookmarkViewState extends State<BookmarkView> {
           return segments.isNotEmpty ? segments.last : bm.book.title;
         }
 
+        final byDate = _sortMode == BookmarkSortMode.dateAdded;
+
         return ItemsListView(
           items: state.bookmarks,
-          itemSortComparator: (a, b) =>
-              _compareBookmarks(b as Bookmark, a as Bookmark),
+          searchFieldTrailing: _buildSortButton(context),
+          itemSortComparator: byDate
+              ? (a, b) => _compareByDateAdded(a as Bookmark, b as Bookmark)
+              : (a, b) => _compareBookmarks(b as Bookmark, a as Bookmark),
           additionalFilter: filterIdentity == null
               ? null
               : (item) => bookIdentity(item.book) == filterIdentity,
-          groupKeyBuilder: (item) => bookmarkGroupKey(item as Bookmark),
-          groupTitleBuilder: (item) => bookmarkGroupTitle(item as Bookmark),
+          // במיון לפי תאריך מציגים רשימה כרונולוגית שטוחה — הקיבוץ
+          // לפי ספר היה מערבב את הסדר.
+          groupKeyBuilder:
+              byDate ? null : (item) => bookmarkGroupKey(item as Bookmark),
+          groupTitleBuilder:
+              byDate ? null : (item) => bookmarkGroupTitle(item as Bookmark),
           onItemTap: (ctx, item, originalIndex) => _openBook(
             ctx,
             item,
             targetTitle: item.ref,
           ),
+          actionsInContextMenu: true,
+          onEdit: (ctx, item, originalIndex) =>
+              _editBookmarkLabel(ctx, item as Bookmark, originalIndex),
           onDelete: (ctx, originalIndex) {
             ctx.read<BookmarkBloc>().removeBookmark(originalIndex);
             UiSnack.show('הסימניה נמחקה');
@@ -194,9 +253,53 @@ class _BookmarkViewState extends State<BookmarkView> {
           leadingIconBuilder: (item) => item.book is PdfBook
               ? const Icon(FluentIcons.document_pdf_24_regular)
               : null,
-          subtitleBuilder: (item) => ItemsListView.locationSubtitle(item),
+          subtitleBuilder: (item) {
+            final label = (item as Bookmark).label?.trim();
+            if (label != null && label.isNotEmpty) return label;
+            return ItemsListView.locationSubtitle(item);
+          },
+          // כשמוצג ה-label, המיקום (פרק/עמוד) זמין בריחוף כדי לא לאבד אותו.
+          subtitleTooltipBuilder: (item) {
+            final label = (item as Bookmark).label?.trim();
+            if (label == null || label.isEmpty) return null;
+            return ItemsListView.locationSubtitle(item);
+          },
         );
       },
+    );
+  }
+
+  Widget _buildSortButton(BuildContext context) {
+    return PopupMenuButton<BookmarkSortMode>(
+      icon: const RtlIcon(FluentIcons.arrow_sort_24_regular),
+      tooltip: 'מיון',
+      initialValue: _sortMode,
+      onSelected: _onSortModeChanged,
+      itemBuilder: (context) => [
+        _sortMenuItem(BookmarkSortMode.category, 'לפי קטגוריה'),
+        _sortMenuItem(BookmarkSortMode.dateAdded, 'לפי תאריך הוספה'),
+      ],
+    );
+  }
+
+  PopupMenuItem<BookmarkSortMode> _sortMenuItem(
+    BookmarkSortMode mode,
+    String label,
+  ) {
+    final selected = _sortMode == mode;
+    return PopupMenuItem<BookmarkSortMode>(
+      value: mode,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 28,
+            child: selected
+                ? const RtlIcon(FluentIcons.checkmark_24_regular)
+                : null,
+          ),
+          Text(label),
+        ],
+      ),
     );
   }
 }

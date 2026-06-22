@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
+import 'package:otzaria/data/cache/generation_cache.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
@@ -170,20 +171,17 @@ class DataRepository {
       allBooks.addAll(await localHebrewBooks);
     }
 
-    // no-op אם הקאש כבר חומם בעליית האפליקציה
+    // no-op אם הקאשים כבר חוממו בעליית האפליקציה
     await AcronymsCache.instance.warmUp();
+    await GenerationCache.instance.warmUp();
 
     final searchEntries = <BookSearchEntry>[
       for (var i = 0; i < allBooks.length; i++)
-        BookSearchEntry(
-          index: i,
-          title: allBooks[i].title,
-          author: allBooks[i].author ?? '',
-          topics: allBooks[i].topics,
-          acronyms: allBooks[i].id == null
-              ? const []
-              : AcronymsCache.instance.getAcronymsForBook(allBooks[i].id!) ??
-                  const [],
+        buildBookSearchEntry(
+          i,
+          allBooks[i],
+          acronymsForId: AcronymsCache.instance.getAcronymsForBook,
+          eraOrderForId: GenerationCache.instance.getOrderForBook,
         ),
     ];
 
@@ -211,6 +209,30 @@ class DataRepository {
   }
 }
 
+/// בונה [BookSearchEntry] לספר בודד. ה-lookups מוזרקים כדי לאפשר בדיקה
+/// בלי DB. עבור ספר אישי מדלגים על כינויים ודור — ל-id שלו אין משמעות
+/// במאגרים הרשמיים (מרחבי id נפרדים), אחרת הוא יורש נתון של ספר רשמי זר.
+@visibleForTesting
+BookSearchEntry buildBookSearchEntry(
+  int index,
+  Book book, {
+  required List<String>? Function(int bookId) acronymsForId,
+  required int Function(int? bookId) eraOrderForId,
+}) {
+  final id = book.id;
+  return BookSearchEntry(
+    index: index,
+    title: book.title,
+    author: book.author ?? '',
+    topics: book.topics,
+    acronyms: id == null || book.isUserBook
+        ? const []
+        : acronymsForId(id) ?? const [],
+    eraOrder: eraOrderForId(book.isUserBook ? null : id),
+    isUserBook: book.isUserBook,
+  );
+}
+
 @visibleForTesting
 class BookSearchEntry {
   final int index;
@@ -221,12 +243,20 @@ class BookSearchEntry {
   /// כינויים מנורמלים מראש מטבלת book_acronym (ראה [AcronymsCache]).
   final List<String> acronyms;
 
+  /// סדר הדור של הספר (נמוך = מוקדם). ראה [GenerationCache]; ברירת מחדל = סוף.
+  final int eraOrder;
+
+  /// ספר אישי של המשתמש — תמיד אחרון בתוך תת-המיון של הדורות.
+  final bool isUserBook;
+
   const BookSearchEntry({
     required this.index,
     required this.title,
     required this.author,
     required this.topics,
     this.acronyms = const [],
+    this.eraOrder = 5,
+    this.isUserBook = false,
   });
 }
 
@@ -260,6 +290,8 @@ List<int> filterBookSearchEntries({
       searchWords: searchWords,
       topics: topics,
       acronyms: entry.acronyms,
+      eraOrder: entry.eraOrder,
+      isUserBook: entry.isUserBook,
     );
   });
 
@@ -293,15 +325,28 @@ List<int> filterBookSearchEntries({
       for (final entry in filtered)
         _ScoredBookSearchEntry(
           index: entry.index,
-          // שלוש שכבות עדיפות שאינן חופפות (כותרת > כינוי > fuzzy), ובתוך כל
-          // שכבה ה-ratio מכריע — כך כותרת קצרה/מדויקת ('סוטה') צפה מעל ארוכה.
-          score: entry.normalizedTitle.contains(normalizedQuery)
-              ? 200 + ratio(normalizedQuery, entry.normalizedTitle)
-              : entry.acronyms.any((a) => a.contains(normalizedQuery))
-                  ? 100 + ratio(normalizedQuery, entry.normalizedTitle)
-                  : ratio(normalizedQuery, entry.normalizedTitle),
+          // שכבות עדיפות שאינן חופפות (כותרת מדויקת > מכילה > כינוי > fuzzy).
+          // התאמה מדויקת קודמת לדור כדי שספר יסוד נטול-דור ('קידושין') לא ייקבר
+          // מתחת לפירושים מתוארכים. בתוך כל שכבה: דור ואז ratio.
+          tier: entry.normalizedTitle == normalizedQuery
+              ? 3
+              : entry.normalizedTitle.contains(normalizedQuery)
+                  ? 2
+                  : entry.acronyms.any((a) => a.contains(normalizedQuery))
+                      ? 1
+                      : 0,
+          eraOrder: entry.eraOrder,
+          isUserBook: entry.isUserBook,
+          ratio: ratio(normalizedQuery, entry.normalizedTitle),
         ),
-    ]..sort((a, b) => b.score.compareTo(a.score));
+    ]..sort((a, b) {
+        if (a.tier != b.tier) return b.tier.compareTo(a.tier);
+        if (a.eraOrder != b.eraOrder) return a.eraOrder.compareTo(b.eraOrder);
+        // בתוך אותו דור — ספרים אישיים תמיד אחרונים.
+        if (a.isUserBook != b.isUserBook) return a.isUserBook ? 1 : -1;
+        if (a.ratio != b.ratio) return b.ratio.compareTo(a.ratio);
+        return a.index.compareTo(b.index);
+      });
 
     return [
       for (final entry in scored) entry.index,
@@ -321,6 +366,8 @@ class _PreparedBookSearchEntry {
   final Set<String> searchWords;
   final Set<String> topics;
   final List<String> acronyms;
+  final int eraOrder;
+  final bool isUserBook;
 
   const _PreparedBookSearchEntry({
     required this.index,
@@ -328,16 +375,24 @@ class _PreparedBookSearchEntry {
     required this.searchWords,
     required this.topics,
     required this.acronyms,
+    required this.eraOrder,
+    required this.isUserBook,
   });
 }
 
 class _ScoredBookSearchEntry {
   final int index;
-  final int score;
+  final int tier;
+  final int eraOrder;
+  final bool isUserBook;
+  final int ratio;
 
   const _ScoredBookSearchEntry({
     required this.index,
-    required this.score,
+    required this.tier,
+    required this.eraOrder,
+    required this.isUserBook,
+    required this.ratio,
   });
 }
 

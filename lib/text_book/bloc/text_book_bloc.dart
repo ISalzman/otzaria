@@ -17,6 +17,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
+import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
@@ -50,6 +51,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     int currentLine, {
     int? categoryId,
     String? fileType,
+    bool preferUserBooks,
   }) _quickPreviewLoader;
   final ItemScrollController scrollController;
   final ItemPositionsListener positionsListener;
@@ -117,6 +119,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       int currentLine, {
       int? categoryId,
       String? fileType,
+      bool preferUserBooks,
     })? quickPreviewLoader,
     required TextBookInitial initialState,
     required this.scrollController,
@@ -560,6 +563,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             visibleIndices.first,
             categoryId: book.categoryId,
             fileType: book.fileType,
+            preferUserBooks: book.isUserBook,
           );
 
           if (preview != null && preview.isNotEmpty) {
@@ -865,7 +869,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             ? computeVisibleLinks(
                 links: currentState.links,
                 visibleIndices: currentState.visibleIndices,
-                selectedIndex: currentState.selectedIndex,
+                selectedIndices: currentState.selectedIndices,
                 linksByLine: currentState.linksByLine,
               )
             : currentState.visibleLinks,
@@ -962,7 +966,25 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
-      _userTouchedCommentators = true;
+
+      // בחירה אוטומטית (ברירת מחדל) ושחזור שמור גוברים על בחירה אוטומטית
+      // קודמת (כגון אוטו-בחירת 'הערות'), כל עוד המשתמש לא בחר ידנית בסשן זה.
+      if (!event.isUserAction) {
+        if (_userTouchedCommentators) return;
+        // שחזור בחירה שמורה הוא בחירת המשתמש האמיתית — נועלים אותה מפני
+        // אוטו-בחירה מאוחרת (כולל הוספת 'הערות' אוטומטית), גם כשהיא ריקה.
+        if (event.isRestore) _userTouchedCommentators = true;
+      } else {
+        _userTouchedCommentators = true;
+        // שמירה פר-ספר של בחירת המשתמש (כולל בחירה ריקה) — תמיד, כדי שתיטען
+        // בכל פתיחה. ספרים אישיים אינם נשמרים פר-ספר.
+        if (!currentState.book.isUserBook) {
+          unawaited(_saveActiveCommentatorsPerBook(
+            currentState.book,
+            event.commentators,
+          ));
+        }
+      }
 
       final updatedState = currentState.copyWith(
         activeCommentators: event.commentators,
@@ -1076,24 +1098,30 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       }
 
       int? index = currentState.selectedIndex;
-      if (index != null && !event.visibleIndecies.contains(index)) {
-        final oldFirst = currentState.visibleIndices.isNotEmpty
-            ? currentState.visibleIndices.first
-            : 0;
-        final newFirst =
-            event.visibleIndecies.isNotEmpty ? event.visibleIndecies.first : 0;
-
-        if ((oldFirst - newFirst).abs() > 3) {
+      if (index != null &&
+          !event.visibleIndecies.contains(index) &&
+          event.visibleIndecies.isNotEmpty) {
+        // כמה שורות הקטע הנבחר יצא מעבר לקצה הקרוב של החלון הנראה. נמדד מול
+        // הקטע עצמו (עוגן יציב) ולא מהשורה הקודמת, אחרת בגלילה רציפה כל אירוע
+        // זז מעט והבחירה לא משתחררת. מול הקצה הקרוב כדי שיהיה סימטרי בשני הכיוונים.
+        final distance = index < event.visibleIndecies.first
+            ? event.visibleIndecies.first - index
+            : index - event.visibleIndecies.last;
+        if (distance > 3) {
           index = null;
         }
       }
+
+      // גלילה רחוקה אִפסה את העוגן הראשי — מנקים גם את ריבוי-הבחירה.
+      final newIndices =
+          index == null ? const <int>{} : currentState.selectedIndices;
 
       final List<Link> visibleLinks;
       if (currentState.showLeftPane || index != null) {
         visibleLinks = computeVisibleLinks(
           links: currentState.links,
           visibleIndices: event.visibleIndecies,
-          selectedIndex: index,
+          selectedIndices: newIndices,
           linksByLine: currentState.linksByLine,
         );
       } else {
@@ -1105,6 +1133,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         currentTitle: newTitle,
         selectedIndex: index,
         clearSelectedIndex: index == null && currentState.selectedIndex != null,
+        selectedIndices: newIndices,
+        clearSelectedIndices: newIndices.isEmpty,
         visibleLinks: visibleLinks,
       ));
 
@@ -1395,24 +1425,46 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     UpdateSelectedIndex event,
     Emitter<TextBookState> emit,
   ) {
-    if (state is TextBookLoaded) {
-      final currentState = state as TextBookLoaded;
-      final visibleLinks = computeVisibleLinks(
-        links: currentState.links,
-        visibleIndices: currentState.visibleIndices,
-        selectedIndex: event.index,
-        linksByLine: currentState.linksByLine,
-      );
-      emit(currentState.copyWith(
-        selectedIndex: event.index,
-        clearSelectedIndex: event.index == null,
-        visibleLinks: visibleLinks,
-      ));
-      if (_isCommentariesBelowMode(currentState) &&
-          !currentState.showPageShapeView &&
-          event.index != null) {
-        _loadLinksInBackground(currentState.book, [event.index!]);
+    if (state is! TextBookLoaded) return;
+    final currentState = state as TextBookLoaded;
+
+    final Set<int> newIndices;
+    final int? newPrimary;
+    if (event.index == null) {
+      newIndices = const {};
+      newPrimary = null;
+    } else if (event.additive) {
+      final updated = Set<int>.from(currentState.selectedIndices);
+      if (updated.remove(event.index)) {
+        newPrimary = updated.isEmpty ? null : updated.last;
+      } else {
+        updated.add(event.index!);
+        newPrimary = event.index;
       }
+      newIndices = updated;
+    } else {
+      newIndices = {event.index!};
+      newPrimary = event.index;
+    }
+
+    final visibleLinks = computeVisibleLinks(
+      links: currentState.links,
+      visibleIndices: currentState.visibleIndices,
+      selectedIndices: newIndices,
+      linksByLine: currentState.linksByLine,
+    );
+    emit(currentState.copyWith(
+      selectedIndex: newPrimary,
+      clearSelectedIndex: newPrimary == null,
+      selectedIndices: newIndices,
+      clearSelectedIndices: newIndices.isEmpty,
+      visibleLinks: visibleLinks,
+    ));
+    if (_isCommentariesBelowMode(currentState) &&
+        !currentState.showPageShapeView &&
+        event.index != null &&
+        newIndices.contains(event.index)) {
+      _loadLinksInBackground(currentState.book, [event.index!]);
     }
   }
 
@@ -2163,7 +2215,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       incomingLinks: event.links.cast<Link>(),
       replaceExisting: event.replaceExisting,
       visibleIndices: stateBeforeAwait.visibleIndices,
-      selectedIndex: stateBeforeAwait.selectedIndex,
+      selectedIndices: stateBeforeAwait.selectedIndices,
     );
 
     if (state is! TextBookLoaded) return;
@@ -2280,8 +2332,48 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       // הזיהוי של 'הערות' כמפרש וירטואלי נעשה בנפרד דרך
       // _withInlineNotesCommentator שמופעל בכל עדכון של ה-content.
       add(UpdateAvailableCommentators(availableCommentators, groups));
+
+      // בחירה שמורה פר-ספר גוברת על ברירת המחדל: אם המשתמש בחר בעבר (כולל
+      // בחירה ריקה) — משחזרים אותה; אחרת בוחרים את מפרשי ברירת המחדל.
+      final saved =
+          book.isUserBook ? null : await TextBookPerBookSettings.load(book);
+      if (isClosed) return;
+
+      if (saved?.activeCommentators != null) {
+        add(UpdateCommentators(saved!.activeCommentators!,
+            isUserAction: false, isRestore: true));
+        return;
+      }
+
+      // בחירה אוטומטית של מפרשי ברירת המחדל בפתיחה — מוחלת רק אם המשתמש
+      // עוד לא בחר ידנית ואין מפרשים פעילים (נאכף ב-_onUpdateCommentators).
+      final initialSelection = await DefaultCommentators.getInitialSelection(
+        book,
+        availableCommentators: availableCommentators,
+        baseCommentators: baseCommentators,
+      );
+      if (initialSelection.isNotEmpty && !isClosed) {
+        add(UpdateCommentators(initialSelection, isUserAction: false));
+      }
     } catch (e) {
       debugPrint('⚠️ Failed to load commentators in background: $e');
+    }
+  }
+
+  /// שומר את בחירת המפרשים פר-ספר (תמיד, ללא תלות ב-enablePerBookSettings),
+  /// כדי שתיטען בכל פתיחה. בחירה ריקה נשמרת אף היא (המשתמש ביטל את הכל).
+  Future<void> _saveActiveCommentatorsPerBook(
+    Book book,
+    List<String> commentators,
+  ) async {
+    try {
+      await TextBookPerBookSettings.mutate(
+        book,
+        (existing) => (existing ?? TextBookPerBookSettings())
+            .copyWith(activeCommentators: List<String>.from(commentators)),
+      );
+    } catch (e) {
+      debugPrint('⚠️ Failed to save active commentators per book: $e');
     }
   }
 

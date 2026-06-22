@@ -139,6 +139,17 @@ void main() {
       expect(result, contains('<span style="color: red">נָבוֹן</span>'));
     });
 
+    test('multi-word separated by maqaf - highlights all words', () {
+      // מקף (maqaf) בין מילים בטקסט מנוקד אינו ניקוד הצמוד לאות אלא מפריד —
+      // אסור שייבלע לתוך גבול המילה ויפסול את ההדגשה.
+      const text = 'עֵ֣קֶב אֲשֶׁר־שָׁמַ֣ע אַבְרָהָ֖ם בְּקֹלִ֑י';
+      final result = highLight(text, 'עקב אשר שמע אברהם');
+
+      expect(result, contains('<span style="color: red">אֲשֶׁר</span>'));
+      expect(result, contains('<span style="color: red">שָׁמַ֣ע</span>'));
+      expect(result, contains('<span style="color: red">אַבְרָהָ֖ם</span>'));
+    });
+
     test('yellowBackground - הדגשה רציפה אחת כולל הרווחים בין המילים', () {
       const text = 'אמר רבי יוחנן משום רבי שמעון בן יוחאי';
       final result = highLight(
@@ -219,6 +230,22 @@ void main() {
     });
   });
 
+  group('stripHtmlPreservingBreaks', () {
+    test('ממיר <br> למעבר שורה במקום לדחוס לרצף', () {
+      expect(
+        stripHtmlPreservingBreaks('שורה ראשונה<br>שורה שנייה'),
+        equals('שורה ראשונה\nשורה שנייה'),
+      );
+    });
+
+    test('תומך בגרסאות <br/> ו-<BR> ומסיר שאר תגים', () {
+      expect(
+        stripHtmlPreservingBreaks('א<br/>ב<BR>ג <b>ד</b>'),
+        equals('א\nב\nג ד'),
+      );
+    });
+  });
+
   group('removePunctuation', () {
     test('keeps dot and colon inside nested parentheses', () {
       const input = 'שלום: עולם! (א:ב. (ג:ד.))';
@@ -234,6 +261,32 @@ void main() {
       final result = removePunctuation(input);
 
       expect(result, equals('משפט עם נקודה.'));
+    });
+
+    test('שומר גרשיים בראשי תיבות (אות אחת אחרי הגרשיים)', () {
+      expect(removePunctuation('רש"י'), equals('רש"י'));
+      expect(removePunctuation('שו"ע'), equals('שו"ע'));
+      expect(removePunctuation('ב"ה'), equals('ב"ה'));
+      expect(removePunctuation('רמב"ם'), equals('רמב"ם'));
+    });
+
+    test('מסיר מירכאות ציטוט (שתי אותיות אחרי הגרשיים)', () {
+      expect(removePunctuation('ב"כי יותן'), equals('בכי יותן'));
+      expect(
+          removePunctuation('הרי הן ב"כי יותן.'), equals('הרי הן בכי יותן.'));
+    });
+
+    test('שומר ראשי תיבות גם כשהאותיות מנוקדות', () {
+      // ניקוד אחרי האות לא ייחשב בטעות כאות שנייה, וניקוד לפני הגרשיים לא
+      // יסתיר את האות הקודמת.
+      expect(removePunctuation('רַשִׁ"י'), equals('רַשִׁ"י'));
+      expect(removePunctuation('רַמבַּ"ם'), equals('רַמבַּ"ם'));
+    });
+
+    test('מסיר מירכאות ציטוט גם בטקסט מנוקד', () {
+      // לפני התיקון: ב"כִּי נשמר בטעות כראשי תיבות כי הניקוד הסתיר את האות
+      // השנייה אחרי הגרשיים.
+      expect(removePunctuation('ב"כִּי'), equals('בכִּי'));
     });
   });
 
