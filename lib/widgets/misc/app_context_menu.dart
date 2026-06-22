@@ -232,11 +232,12 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
       overlayRenderObject.size.width,
       metrics,
     );
-    final maxMenuHeight = (overlayRenderObject.size.height -
-            menuOffset.dy -
-            _contextMenuScreenPadding)
-        .clamp(metrics.itemHeight, double.infinity)
-        .toDouble();
+    // גובה זמין מלא בחלון (לא רק המרחב שמתחת ללחיצה) — כך הפאנל נמדד לפי גובהו
+    // הטבעי, ו-_repositionContextMenuWithinOverlay מושך אותו מעלה כדי שייכנס.
+    final maxMenuHeight =
+        (overlayRenderObject.size.height - _contextMenuScreenPadding * 2)
+            .clamp(metrics.itemHeight, double.infinity)
+            .toDouble();
 
     // Create controllers once per menu open — stable across overlay rebuilds
     final submenuControllers = <AppContextMenuEntry, MenuController>{
