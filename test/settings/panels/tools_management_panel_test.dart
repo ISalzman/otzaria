@@ -81,6 +81,8 @@ InstalledPlugin _plugin({
   bool enabled = true,
   bool hidden = false,
   bool pinnedToNavRail = false,
+  bool networkAccessGranted = false,
+  bool runOnStartupGranted = false,
   List<String> permissions = const [],
 }) {
   return InstalledPlugin(
@@ -93,6 +95,8 @@ InstalledPlugin _plugin({
     pinned: true,
     pinnedToNavRail: pinnedToNavRail,
     hiddenFromTools: hidden,
+    networkAccessGranted: networkAccessGranted,
+    runOnStartupGranted: runOnStartupGranted,
     manifest: _manifest(id: id, permissions: permissions),
     installedAt: DateTime.utc(2026, 1, 1),
     updatedAt: DateTime.utc(2026, 1, 1),
@@ -457,7 +461,7 @@ void main() {
   );
 
   testWidgets(
-    'network access menu — selecting "הענק" dispatches granted:true',
+    'network access button — tapping "גישה לרשת" dispatches granted:true',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1200, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -467,6 +471,7 @@ void main() {
           id: 'p1',
           name: 'תוסף-A',
           permissions: const ['network.access'],
+          networkAccessGranted: false,
         ),
       ]);
 
@@ -478,11 +483,8 @@ void main() {
       await _enterSelectionMode(tester);
       await _selectPlugin(tester, 'תוסף-A');
 
-      // פתיחת התפריט (יש שני "גישה לרשת" — אחד בסרגל ואחד בתפריט)
-      await tester.tap(find.text('גישה לרשת').first);
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('הענק'));
+      // הכפתור מציג "גישה לרשת" ולוחץ ישירות — אין תפריט
+      await tester.tap(find.text('גישה לרשת'));
       await tester.pumpAndSettle();
 
       final events = pluginBloc.dispatched
@@ -495,7 +497,7 @@ void main() {
   );
 
   testWidgets(
-    'network access menu — selecting "בטל" dispatches granted:false',
+    'network access button — tapping "דחיה מהרשת" dispatches granted:false',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1200, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -505,6 +507,7 @@ void main() {
           id: 'p1',
           name: 'תוסף-A',
           permissions: const ['network.access'],
+          networkAccessGranted: true,
         ),
       ]);
 
@@ -516,10 +519,8 @@ void main() {
       await _enterSelectionMode(tester);
       await _selectPlugin(tester, 'תוסף-A');
 
-      await tester.tap(find.text('גישה לרשת').first);
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('בטל'));
+      // כשהגישה מוענקת — הכפתור מציג "דחיה מהרשת" ושולח granted:false
+      await tester.tap(find.text('דחיה מהרשת'));
       await tester.pumpAndSettle();
 
       final events = pluginBloc.dispatched
@@ -528,8 +529,7 @@ void main() {
           .toList();
       expect(events, hasLength(1));
       expect(events.single.granted, isFalse,
-          reason: 'revoke must send granted:false — was a P1 bug where panel '
-              'always sent granted:true');
+          reason: 'revoke must send granted:false');
     },
   );
 
@@ -573,7 +573,7 @@ void main() {
   );
 
   testWidgets(
-    'startup permission menu — selecting "בטל" dispatches granted:false',
+    'startup button — tapping "טעינה רגילה" dispatches granted:false',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1200, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -583,6 +583,7 @@ void main() {
           id: 'p1',
           name: 'תוסף-A',
           permissions: const ['app.run_on_startup'],
+          runOnStartupGranted: true,
         ),
       ]);
 
@@ -594,10 +595,8 @@ void main() {
       await _enterSelectionMode(tester);
       await _selectPlugin(tester, 'תוסף-A');
 
-      await tester.tap(find.text('טעינה בעליה').first);
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('בטל'));
+      // כשהטעינה בעלייה מופעלת — הכפתור מציג "טעינה רגילה" ושולח granted:false
+      await tester.tap(find.text('טעינה רגילה'));
       await tester.pumpAndSettle();
 
       final events = pluginBloc.dispatched

@@ -27,6 +27,9 @@ class InstalledPlugin {
   /// האם הרשאת גישה לרשת (`network.access`) הוענקה בפועל על-ידי המשתמש.
   /// שונה מ-[requiresNetwork] שמשקף את ההצהרה במניפסט בלבד.
   final bool networkAccessGranted;
+
+  /// האם הרשאת טעינה בעלייה (`app.run_on_startup`) הוענקה בפועל.
+  final bool runOnStartupGranted;
   final PluginManifest manifest;
   final DateTime installedAt;
   final DateTime updatedAt;
@@ -81,6 +84,7 @@ class InstalledPlugin {
     this.hiddenFromTools = false,
     bool? allowOrderBeforeBuiltInsGranted,
     this.networkAccessGranted = false,
+    this.runOnStartupGranted = false,
     required this.manifest,
     required this.installedAt,
     required this.updatedAt,
@@ -110,6 +114,8 @@ class InstalledPlugin {
               0,
       networkAccessGranted:
           ((map['network_access_granted'] as int?) ?? 0) != 0,
+      runOnStartupGranted:
+          ((map['run_on_startup_granted'] as int?) ?? 0) != 0,
       manifest: manifest,
       installedAt: DateTime.parse(map['installed_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
@@ -155,6 +161,7 @@ class InstalledPlugin {
     bool? hiddenFromTools,
     bool? allowOrderBeforeBuiltInsGranted,
     bool? networkAccessGranted,
+    bool? runOnStartupGranted,
     PluginManifest? manifest,
     DateTime? installedAt,
     DateTime? updatedAt,
@@ -178,6 +185,7 @@ class InstalledPlugin {
       allowOrderBeforeBuiltInsGranted: allowOrderBeforeBuiltInsGranted ??
           this.allowOrderBeforeBuiltInsGranted,
       networkAccessGranted: networkAccessGranted ?? this.networkAccessGranted,
+      runOnStartupGranted: runOnStartupGranted ?? this.runOnStartupGranted,
       manifest: manifest ?? this.manifest,
       installedAt: installedAt ?? this.installedAt,
       updatedAt: updatedAt ?? this.updatedAt,

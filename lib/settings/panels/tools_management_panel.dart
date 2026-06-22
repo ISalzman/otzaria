@@ -457,6 +457,8 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
   /// בתוך build כי הנתונים מגיעים מ-BlocBuilder.
   void _pruneStaleSelection(List<InstalledPlugin> plugins) {
     if (_selectedIds.isEmpty) return;
+    // plugins ריק = מצב טעינה; אל נקה את הבחירה בינתיים, כי ה-IDs עדיין תקינים.
+    if (plugins.isEmpty) return;
     final validIds = <String>{for (final p in plugins) p.pluginId};
     final stale = _selectedIds.difference(validIds);
     if (stale.isNotEmpty) {
@@ -500,6 +502,21 @@ class _ActionBar extends StatelessWidget {
   bool get _allSelectedPluginsEnabled =>
       _selectedPlugins.every((p) => p.enabled);
 
+  bool get _allSelectedHaveNetworkAccess {
+    final eligible = _selectedPlugins
+        .where((p) => p.manifest.permissions.contains(_networkAccessPermission))
+        .toList();
+    return eligible.isNotEmpty && eligible.every((p) => p.networkAccessGranted);
+  }
+
+  bool get _allSelectedHaveStartupEnabled {
+    final eligible = _selectedPlugins
+        .where((p) =>
+            p.manifest.permissions.contains(pluginRunOnStartupPermission))
+        .toList();
+    return eligible.isNotEmpty && eligible.every((p) => p.runOnStartupGranted);
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasSelection = selectedIds.isNotEmpty;
@@ -534,43 +551,25 @@ class _ActionBar extends StatelessWidget {
             text: _allSelectedPluginsEnabled ? 'השבת' : 'הפעל',
             onPressed: hasSelection ? () => _onToggleEnabled(context) : null,
           ),
-          MenuAnchor(
-            menuChildren: [
-              MenuItemButton(
-                leadingIcon: const Icon(FluentIcons.checkmark_24_regular),
-                onPressed: () => _setNetworkAccess(context, granted: true),
-                child: const Text('הענק'),
-              ),
-              MenuItemButton(
-                leadingIcon: const Icon(FluentIcons.dismiss_24_regular),
-                onPressed: () => _setNetworkAccess(context, granted: false),
-                child: const Text('בטל'),
-              ),
-            ],
-            builder: (_, controller, __) => NeutralActionButton(
-              icon: FluentIcons.globe_24_regular,
-              text: 'גישה לרשת',
-              onPressed: hasSelection ? controller.open : null,
-            ),
+          NeutralActionButton(
+            icon: _allSelectedHaveNetworkAccess
+                ? FluentIcons.globe_prohibited_24_regular
+                : FluentIcons.globe_24_regular,
+            text: _allSelectedHaveNetworkAccess ? 'דחיה מהרשת' : 'גישה לרשת',
+            onPressed: hasSelection
+                ? () => _setNetworkAccess(context,
+                    granted: !_allSelectedHaveNetworkAccess)
+                : null,
           ),
-          MenuAnchor(
-            menuChildren: [
-              MenuItemButton(
-                leadingIcon: const Icon(FluentIcons.checkmark_24_regular),
-                onPressed: () => _setRunOnStartup(context, granted: true),
-                child: const Text('הפעל'),
-              ),
-              MenuItemButton(
-                leadingIcon: const Icon(FluentIcons.dismiss_24_regular),
-                onPressed: () => _setRunOnStartup(context, granted: false),
-                child: const Text('בטל'),
-              ),
-            ],
-            builder: (_, controller, __) => NeutralActionButton(
-              icon: FluentIcons.power_24_regular,
-              text: 'טעינה בעליה',
-              onPressed: hasSelection ? controller.open : null,
-            ),
+          NeutralActionButton(
+            icon: _allSelectedHaveStartupEnabled
+                ? FluentIcons.power_24_filled
+                : FluentIcons.power_24_regular,
+            text: _allSelectedHaveStartupEnabled ? 'טעינה רגילה' : 'טעינה בעליה',
+            onPressed: hasSelection
+                ? () => _setRunOnStartup(context,
+                    granted: !_allSelectedHaveStartupEnabled)
+                : null,
           ),
           GhostActionButton(
             icon: FluentIcons.delete_24_regular,

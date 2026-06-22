@@ -139,7 +139,11 @@ class PluginSystemDatabase {
         COALESCE((
           SELECT granted FROM plugin_permission_grant
           WHERE plugin_id = p.plugin_id AND permission = 'network.access'
-        ), 0) AS network_access_granted
+        ), 0) AS network_access_granted,
+        COALESCE((
+          SELECT granted FROM plugin_permission_grant
+          WHERE plugin_id = p.plugin_id AND permission = 'app.run_on_startup'
+        ), 0) AS run_on_startup_granted
       FROM plugin_installation p
     ''').toMapList();
     return maps.map((map) => InstalledPlugin.fromDbMap(map)).toList();
