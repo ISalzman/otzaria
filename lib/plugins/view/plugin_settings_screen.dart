@@ -12,6 +12,31 @@ import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/settings/widgets/settings_card.dart';
 
+/// פונקציה משותפת לדיאלוג אישור מחיקת תוסף — קוראת מ-tools_management_panel
+/// ומ-PluginSettingsScreen.
+///
+/// מחזירה `true` אם המשתמש אישר ומחיקה הופעלה, `false` אם ביטל.
+Future<bool> showDeletePluginDialog(
+    BuildContext context, InstalledPlugin plugin) async {
+  final bloc = context.read<PluginSystemBloc>();
+  if (plugin.isDevelopment) {
+    bloc.add(DetachDevelopmentPluginRequested(plugin.pluginId));
+    return true;
+  }
+  final confirmed = await showWarningDialog(
+    context: context,
+    title: 'מחיקת תוסף סופית',
+    content: 'האם אתה בטוח שברצונך למחוק את התוסף "${plugin.name}"?',
+    subtitle:
+        'המחיקה תכלול את כל נתוני התוסף, המטמון והפעולות שלו. הליך זה סופי.',
+    cancelText: 'ביטול',
+    confirmText: 'מחק',
+  );
+  if (confirmed != true) return false;
+  bloc.add(UninstallPluginRequested(plugin.pluginId));
+  return true;
+}
+
 class PluginSettingsScreen extends StatefulWidget {
   final InstalledPlugin plugin;
 
@@ -230,19 +255,9 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                 NeutralActionButton(
                   text: 'הסרת תוסף',
                   onPressed: () async {
-                    final confirm = await showWarningDialog(
-                      context: context,
-                      title: 'מחיקת תוסף סופית',
-                      content:
-                          'האם אתה בטוח שברצונך למחוק את התוסף "${currentPlugin.name}"?',
-                      subtitle:
-                          'המחיקה תכלול את כל נתוני התוסף, המטמון והפעולות שלו. הליך זה סופי.',
-                      cancelText: 'ביטול',
-                      confirmText: 'מחק',
-                    );
-                    if (confirm == true && context.mounted) {
-                      context.read<PluginSystemBloc>().add(
-                          UninstallPluginRequested(currentPlugin.pluginId));
+                    final deleted =
+                        await showDeletePluginDialog(context, currentPlugin);
+                    if (deleted && context.mounted) {
                       Navigator.of(context).pop();
                     }
                   },
