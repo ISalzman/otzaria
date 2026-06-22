@@ -51,6 +51,49 @@ void main() {
     });
   });
 
+  group('matchingLoopbackPrefix', () {
+    test('host חשוף מתיר כל פורט/נתיב על אותו host', () {
+      const allowlist = ['127.0.0.1', 'localhost'];
+      expect(
+        matchingLoopbackPrefix(
+            Uri.parse('http://127.0.0.1:11434/api/tags'), allowlist),
+        isNotNull,
+      );
+      expect(
+        matchingLoopbackPrefix(
+            Uri.parse('http://localhost:1234/v1/models'), allowlist),
+        isNotNull,
+      );
+    });
+
+    test('URL מלא עם פורט מתיר רק את אותו פורט', () {
+      const allowlist = ['http://127.0.0.1:11434'];
+      expect(
+        matchingLoopbackPrefix(
+            Uri.parse('http://127.0.0.1:11434/api/tags'), allowlist),
+        isNotNull,
+      );
+      expect(
+        matchingLoopbackPrefix(
+            Uri.parse('http://127.0.0.1:1234/api/tags'), allowlist),
+        isNull,
+      );
+    });
+
+    test('חוסם כשאין הצהרת loopback תואמת, או כשהיעד אינו loopback', () {
+      expect(
+        matchingLoopbackPrefix(
+            Uri.parse('http://127.0.0.1:11434/api'), const []),
+        isNull,
+      );
+      expect(
+        matchingLoopbackPrefix(
+            Uri.parse('https://example.com'), const ['127.0.0.1']),
+        isNull,
+      );
+    });
+  });
+
   group('extractPluginNetworkAllowlistFromDartSource', () {
     test('מחלץ את הערכים מתוך קובץ ה-Dart הרשמי', () {
       const source = '''
