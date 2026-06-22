@@ -33,6 +33,7 @@ import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
+import 'package:otzaria/widgets/misc/animated_pin_button.dart';
 import 'package:otzaria/widgets/navigation/reader_nav_center.dart';
 
 /// ערך מיוחד ל-_selectedParagraphIdx שמשמעו "כל הכותרת" (כל המפרשים בקטע),
@@ -973,19 +974,10 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                     splashBorderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                IconButton(
-                  onPressed: () => setState(() => _pinLeftPane = !_pinLeftPane),
-                  icon: AnimatedRotation(
-                    turns: _pinLeftPane ? -0.125 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Icon(
-                      _pinLeftPane
-                          ? FluentIcons.pin_24_filled
-                          : FluentIcons.pin_24_regular,
-                    ),
-                  ),
-                  color: _pinLeftPane ? colorScheme.primary : null,
+                AnimatedPinButton(
+                  isPinned: _pinLeftPane,
                   tooltip: _pinLeftPane ? 'בטל נעיצה' : 'נעץ את הפאנל',
+                  onPressed: () => setState(() => _pinLeftPane = !_pinLeftPane),
                 ),
               ],
             ),
