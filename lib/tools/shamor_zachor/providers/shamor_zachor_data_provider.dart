@@ -429,9 +429,6 @@ class ShamorZachorDataProvider with ChangeNotifier {
     );
   }
 
-  // ... (Keep existing methods: getCategory, getBookDetails, searchBooks etc. but update them to use _allBookData memory cache)
-  // Since we load everything into _allBookData, existing getters usually work fine IF _allBookData structure is compatible.
-
   BookCategory? getCategory(String categoryName) => _allBookData[categoryName];
 
   BookDetails? getBookDetails(String categoryName, String bookName) {

@@ -47,10 +47,6 @@ class FindRefRepository {
   ///
   /// כל row כולל את המפתחות: `bookId`, `bookTitle`, `bookOrderIndex`,
   /// `reference` (נתיב מלא יחסי לספר), `segment`, `level`, `dbLineId`.
-  ///
-  /// מחליף את הזוג הישן (`getAllBooksWithAltToc` + לולאת
-  /// `getAltTocEntriesForReference`) — המעבר ל-fetch יחיד חסך פעם 339
-  /// שאילתות סדרתיות.
   final Future<List<Map<String, dynamic>>> Function()? getAllAltTocFlatEntries;
 
   /// Injection for testing: returns the category path string for a given bookId.
@@ -511,9 +507,6 @@ class FindRefRepository {
       bookHits = [...bookHits, ...secondaryHits];
     }
 
-    debugPrint(
-        '[FindRef] Found ${bookHits.length} books matching leading phrase (memory)');
-
     final results = <DbReferenceResult>[];
 
     // Single-word query: do NOT search TOC at all.
@@ -759,8 +752,6 @@ class FindRefRepository {
     final unique = _dedupeRefs(results);
     final pruned = _suppressDeeperVariants(unique);
     final ranked = _rankResults(pruned, queryTokens);
-
-    debugPrint('[FindRef] Final results: ${ranked.length}');
 
     return await _enrichWithPaths(ranked);
   }
