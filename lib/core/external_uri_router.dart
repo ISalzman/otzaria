@@ -186,7 +186,46 @@ class ExternalUriRouter {
     'about': SettingsTab.about,
   };
 
+  /// ממיר קישור `zayit://` לפורמט `otzaria://` המקביל.
+  /// מחזיר את ה-Uri המקורי אם הוא כבר `otzaria://`, ו-null אם הסכמה לא מוכרת.
+  ///
+  /// נתמך:
+  ///   `zayit://book/{id}`              → `otzaria://open/book/{id}`
+  ///   `zayit://book/{id}/line/{index}` → `otzaria://open/book/{id}?index={index}`
+  static Uri? normalizeUri(Uri uri) {
+    if (uri.scheme.toLowerCase() == 'otzaria') return uri;
+    if (uri.scheme.toLowerCase() != 'zayit') return null;
+
+    if (uri.host.toLowerCase() == 'book') {
+      final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+      if (segments.isEmpty) return null;
+      final bookId = int.tryParse(segments[0]);
+      if (bookId == null || bookId <= 0) return null;
+
+      int? lineIndex;
+      if (segments.length >= 3 && segments[1].toLowerCase() == 'line') {
+        lineIndex = int.tryParse(segments[2]);
+      }
+
+      final queryParams = <String, String>{};
+      if (lineIndex != null && lineIndex >= 0) {
+        queryParams['index'] = lineIndex.toString();
+      }
+
+      return Uri(
+        scheme: 'otzaria',
+        host: 'open',
+        pathSegments: ['book', bookId.toString()],
+        queryParameters: queryParams.isEmpty ? null : queryParams,
+      );
+    }
+    return null;
+  }
+
   static ExternalUriAction? parseUri(Uri uri) {
+    final normalized = normalizeUri(uri);
+    if (normalized == null) return null;
+    if (normalized != uri) return parseUri(normalized);
     if (uri.scheme.toLowerCase() != 'otzaria') {
       return null;
     }

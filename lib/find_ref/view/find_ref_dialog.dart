@@ -8,6 +8,7 @@ import 'package:otzaria/find_ref/bloc/find_ref_event.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_state.dart';
 import 'package:otzaria/find_ref/repository/db_reference_result.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/external_uri_router.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
@@ -17,6 +18,7 @@ import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
+import 'package:otzaria/navigation/view/main_window_screen.dart';
 
 class FindRefDialog extends StatefulWidget {
   const FindRefDialog({super.key});
@@ -419,6 +421,41 @@ class _FindRefDialogState extends State<FindRefDialog> {
         preferTextBook: preferTextBook);
   }
 
+  /// בודק אם מחרוזת היא קישור otzaria:// או zayit:// תקין וניתן לפענוח.
+  static bool _isDeepLinkText(String text) {
+    final trimmed = text.trim().toLowerCase();
+    if (!trimmed.startsWith('otzaria://') && !trimmed.startsWith('zayit://')) {
+      return false;
+    }
+    final uri = Uri.tryParse(text.trim());
+    if (uri == null) return false;
+    return ExternalUriRouter.parseUri(uri) != null;
+  }
+
+  /// מנסה לטפל בקישור ישיר — מחזיר true אם הטיפול הצליח.
+  /// השדה מנוקה רק אחרי אימות הצלחת הטיפול.
+  Future<bool> _tryHandleDeepLink(String text) async {
+    final uri = Uri.tryParse(text.trim());
+    if (uri == null) return false;
+    final normalized = ExternalUriRouter.normalizeUri(uri);
+    if (normalized == null) return false;
+    if (ExternalUriRouter.parseUri(normalized) == null) return false;
+
+    // סוגרים את הדיאלוג *לפני* הניווט — כך ה-context של MainWindowScreen
+    // פנוי לבצע את הניווט בלי שהדיאלוג מסנן אירועים.
+    if (mounted) {
+      final focusRepository = context.read<FocusRepository>();
+      focusRepository.findRefSearchController.clear();
+      BlocProvider.of<FindRefBloc>(context).add(const SearchRefRequested(''));
+      BlocProvider.of<FindRefBloc>(context).add(ClearSearchRequested());
+      Navigator.of(context).pop();
+    }
+
+    await mainWindowScreenKey.currentState
+        ?.handleInternalDeepLink(normalized.toString());
+    return true;
+  }
+
   /// פותח את דיאלוג החיפוש עם [query] מוכן בשדה — ללא הרצת חיפוש.
   void _openTextSearch(String query) {
     Navigator.of(context).pop();
@@ -432,6 +469,8 @@ class _FindRefDialogState extends State<FindRefDialog> {
   /// מצב ריק מעוצב: אייקון, הודעה ממוקדת וכפתור לפתיחת חיפוש טקסט.
   Widget _buildEmptyState(BuildContext context, String query) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDeepLink = _isDeepLinkText(query);
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -439,13 +478,17 @@ class _FindRefDialogState extends State<FindRefDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              FluentIcons.document_search_24_regular,
+              isDeepLink
+                  ? FluentIcons.link_24_regular
+                  : FluentIcons.document_search_24_regular,
               size: 64,
               color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
-              'לא הצלחנו לאתר את הספר "$query"',
+              isDeepLink
+                  ? 'נראה שהכנסתם קישור ישיר'
+                  : 'לא הצלחנו לאתר את הספר "$query"',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -455,16 +498,9 @@ class _FindRefDialogState extends State<FindRefDialog> {
             ),
             const SizedBox(height: 8),
             Text(
-              'נסו טקסט אחר לאיתור הספר המבוקש במאגר',
-              style: TextStyle(
-                fontSize: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'ניתן לאתר גם טקסט ספציפי במאגר',
+              isDeepLink
+                  ? 'לחצו על הכפתור לפתיחת הקישור'
+                  : 'נסו טקסט אחר לאיתור הספר המבוקש במאגר',
               style: TextStyle(
                 fontSize: 14,
                 color: colorScheme.onSurfaceVariant,
@@ -472,11 +508,28 @@ class _FindRefDialogState extends State<FindRefDialog> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: () => _openTextSearch(query),
-              icon: const Icon(FluentIcons.search_24_regular, size: 18),
-              label: const Text('פתח חיפוש טקסט'),
-            ),
+            if (isDeepLink) ...[
+              FilledButton.icon(
+                onPressed: () => _tryHandleDeepLink(query),
+                icon: const Icon(FluentIcons.link_24_regular, size: 18),
+                label: const Text('פתיחת קישור'),
+              ),
+            ] else ...[
+              Text(
+                'ניתן לאתר גם טקסט ספציפי במאגר',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: () => _openTextSearch(query),
+                icon: const Icon(FluentIcons.search_24_regular, size: 18),
+                label: const Text('פתח חיפוש טקסט'),
+              ),
+            ],
           ],
         ),
       ),
@@ -567,6 +620,11 @@ class _FindRefDialogState extends State<FindRefDialog> {
                       );
                     },
                     onSubmitted: (value) {
+                      // ניסיון לטפל בקישור ישיר — אם זה קישור, ייפתח ישירות
+                      if (_isDeepLinkText(value)) {
+                        _tryHandleDeepLink(value);
+                        return;
+                      }
                       // פתיחת המקור הנבחר בלחיצה על אנטר
                       if (refs.isNotEmpty) {
                         _openRef(refs[_selectedIndex]);
