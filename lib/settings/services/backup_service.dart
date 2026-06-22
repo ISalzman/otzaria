@@ -1033,22 +1033,26 @@ class BackupService {
     final backedUpBookmarks = backupData['bookmarks'] as List?;
     if (backedUpBookmarks != null) {
       try {
-        final currentBookmarks =
-            await BookmarkRepository().loadBookmarks();
+        final currentBookmarks = await BookmarkRepository().loadBookmarks();
         final backupCount = backedUpBookmarks.length;
-        final diff = (currentBookmarks.length - backupCount).abs();
-        if (backupCount > 0 && diff > backupCount / 2) return true;
+        final currentCount = currentBookmarks.length;
+        final diff = (currentCount - backupCount).abs();
+        if (backupCount == 0 ? currentCount > 0 : diff > backupCount / 2) {
+          return true;
+        }
       } catch (_) {}
     }
 
     final backedUpHistory = backupData['history'] as List?;
     if (backedUpHistory != null) {
       try {
-        final currentHistory =
-            await HistoryRepository().loadHistory();
+        final currentHistory = await HistoryRepository().loadHistory();
         final backupCount = backedUpHistory.length;
-        final diff = (currentHistory.length - backupCount).abs();
-        if (backupCount > 0 && diff > backupCount / 2) return true;
+        final currentCount = currentHistory.length;
+        final diff = (currentCount - backupCount).abs();
+        if (backupCount == 0 ? currentCount > 0 : diff > backupCount / 2) {
+          return true;
+        }
       } catch (_) {}
     }
 
