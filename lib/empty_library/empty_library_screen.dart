@@ -327,7 +327,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           children: [
             SizedBox(
               width: double.infinity,
-              child: RecommendedActionButton(
+              child: ActionButton.recommended(
                 text: 'בחר תיקיית ספרייה',
                 onPressed: () => _pickDirectory(context),
                 isLoading: state.isLoading,
@@ -338,7 +338,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              child: NeutralActionButton(
+              child: ActionButton.neutral(
                 text: 'חלץ מקובץ דחוס',
                 onPressed: () => _pickArchiveFile(context),
                 isLoading: state.isLoading,

@@ -246,7 +246,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                           .add(const RescanCustomFolders()),
                   tooltip: 'סרוק מחדש תיקיות אישיות',
                 ),
-              RecommendedActionButton(
+              ActionButton.recommended(
                 text: 'הוסף תיקייה',
                 icon: FluentIcons.folder_add_24_regular,
                 onPressed: _addFolder,

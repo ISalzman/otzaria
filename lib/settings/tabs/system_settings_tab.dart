@@ -953,11 +953,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           subtitleLtr: senderEmail.isNotEmpty,
           actions: [
             if (senderEmail.isNotEmpty)
-              NeutralActionButton(
+              ActionButton.neutral(
                 text: 'נקה',
                 onPressed: _clearSenderEmail,
               ),
-            RecommendedActionButton(
+            ActionButton.recommended(
               text: senderEmail.isEmpty ? 'הגדר' : 'ערוך',
               onPressed: _editSenderEmail,
             ),
@@ -1011,7 +1011,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                             constraints.maxWidth < LayoutBreakpoints.compact;
                         final sendButton = _buildManagedActionButton(
                           enabled: !state.isOfflineMode,
-                          child: RecommendedActionButton(
+                          child: ActionButton.recommended(
                             text: 'שלח עכשיו',
                             icon: FluentIcons.arrow_sync_24_regular,
                             onPressed: _flushPendingReports,
@@ -1020,7 +1020,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                         );
                         final clearButton = _buildManagedActionButton(
                           enabled: hasReports,
-                          child: NeutralActionButton(
+                          child: ActionButton.neutral(
                             text: 'נקה דיווחים',
                             icon: FluentIcons.delete_24_regular,
                             onPressed: _clearPendingReports,
@@ -1029,7 +1029,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                         );
                         final exportButton = _buildManagedActionButton(
                           enabled: hasReports,
-                          child: NeutralActionButton(
+                          child: ActionButton.neutral(
                             text: 'הורד לשליחה במחשב מחובר',
                             icon: FluentIcons.arrow_download_24_regular,
                             onPressed: _exportPendingReportsScript,
@@ -1116,7 +1116,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                       Expanded(
                         child: _buildManagedActionButton(
                           enabled: sentReports.isNotEmpty,
-                          child: NeutralActionButton(
+                          child: ActionButton.neutral(
                             text: 'נקה את כל ההיסטוריה',
                             icon: FluentIcons.delete_24_regular,
                             onPressed: _clearSentReports,
@@ -1162,29 +1162,29 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
         _buildReportActions(
           children: [
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'צפה',
               icon: FluentIcons.eye_24_regular,
               onPressed: () => _showReportDetails(report, sent: false),
             ),
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'ערוך',
               icon: FluentIcons.edit_24_regular,
               onPressed: () => _editPendingReport(report),
             ),
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'מחק',
               icon: FluentIcons.delete_24_regular,
               onPressed: () => _deletePendingReport(report),
             ),
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'סמן כנשלח',
               icon: FluentIcons.checkmark_24_regular,
               onPressed: () => _markPendingReportAsSent(report),
             ),
             _buildManagedActionButton(
               enabled: canSend,
-              child: RecommendedActionButton(
+              child: ActionButton.recommended(
                 text: 'שלח',
                 icon: FluentIcons.send_24_regular,
                 isLoading: isSending,
@@ -1215,12 +1215,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
         _buildReportActions(
           children: [
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'צפה',
               icon: FluentIcons.eye_24_regular,
               onPressed: () => _showReportDetails(report, sent: true),
             ),
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'מחק',
               icon: FluentIcons.delete_24_regular,
               onPressed: () => _deleteSentReport(report),
@@ -1263,7 +1263,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           subtitle: _appVersion ?? 'טוען...',
           subtitleLtr: _appVersion != null,
           actions: [
-            GhostActionButton(
+            ActionButton.ghost(
               icon: FluentIcons.history_24_regular,
               text: 'יומן שינויים',
               onPressed: () => _showChangelogDialog(context),
@@ -1295,7 +1295,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           ),
           trailing: _bookCount == null
               ? null
-              : GhostActionButton(
+              : ActionButton.ghost(
                   icon: FluentIcons.list_24_regular,
                   text: 'הצג רשימה',
                   onPressed: () => _openBooksListDialog(context),
@@ -1607,7 +1607,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               child: Row(
                 children: [
                   Expanded(
-                    child: RecommendedActionButton(
+                    child: ActionButton.recommended(
                       icon: FluentIcons.arrow_upload_24_regular,
                       text: 'צור גיבוי עכשיו',
                       onPressed: _createBackup,
@@ -1615,7 +1615,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: NeutralActionButton(
+                    child: ActionButton.neutral(
                       icon: FluentIcons.arrow_download_24_regular,
                       text: 'שחזר מגיבוי',
                       onPressed: _restoreBackup,
@@ -1662,7 +1662,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 'סיסמה',
                 style: kSettingsTitleStyle,
               ),
-              trailing: RecommendedActionButton(
+              trailing: ActionButton.recommended(
                 icon: FluentIcons.key_24_regular,
                 text: hasPassword ? 'שנה סיסמה' : 'בחר סיסמה',
                 onPressed: () =>
@@ -1690,7 +1690,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             'הסיור יוצג מההתחלה וידריך אותך במסכי האפליקציה.',
             style: kSettingsSubtitleStyle,
           ),
-          trailing: RecommendedActionButton(
+          trailing: ActionButton.recommended(
             icon: FluentIcons.play_24_regular,
             text: 'הפעל',
             onPressed: () {
@@ -1725,7 +1725,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             'מחיקת כל ההגדרות וחזרה למצב ההתחלתי',
             style: kSettingsSubtitleStyle,
           ),
-          trailing: GhostActionButton(
+          trailing: ActionButton.ghost(
             icon: FluentIcons.arrow_reset_24_regular,
             text: 'אפס הגדרות',
             onPressed: () async {

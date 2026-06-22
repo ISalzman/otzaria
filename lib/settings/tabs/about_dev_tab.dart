@@ -693,7 +693,7 @@ class _DonationMemorialCard extends StatelessWidget {
                   color: colorScheme.onSurface),
             ),
             const SizedBox(height: 8),
-            RecommendedActionButton(
+            ActionButton.recommended(
               icon: FluentIcons.payment_24_regular,
               text: 'נדרים+',
               onPressed: onTap,
@@ -736,7 +736,7 @@ class _ActionTile extends StatelessWidget {
         subtitle,
         style: kSettingsSubtitleStyle,
       ),
-      trailing: RecommendedActionButton(
+      trailing: ActionButton.recommended(
         text: buttonLabel,
         icon: buttonIcon,
         onPressed: onTap,

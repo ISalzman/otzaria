@@ -245,7 +245,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            RecommendedActionButton(
+            ActionButton.recommended(
               text: 'פתח בעיון',
               icon: FluentIcons.open_24_regular,
               onPressed: () => widget.onOpenInReader?.call(0),

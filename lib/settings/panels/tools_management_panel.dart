@@ -261,7 +261,7 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                                     responsiveActions: false,
                                     actions: _isSelectionMode
                                         ? [
-                                            GhostActionButton(
+                                            ActionButton.ghost(
                                               icon: FluentIcons
                                                   .checkbox_checked_24_regular,
                                               text: 'בחר הכל',
@@ -273,7 +273,7 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                                                           _selectAllPlugins(
                                                               plugins),
                                             ),
-                                            NeutralActionButton(
+                                            ActionButton.neutral(
                                               icon: FluentIcons
                                                   .dismiss_circle_24_regular,
                                               text: 'ביטול',
@@ -281,7 +281,7 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                                             ),
                                           ]
                                         : [
-                                            NeutralActionButton(
+                                            ActionButton.neutral(
                                               icon: FluentIcons
                                                   .multiselect_rtl_24_regular,
                                               text: 'בחירה',
@@ -547,14 +547,14 @@ class _ActionBar extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-          NeutralActionButton(
+          ActionButton.neutral(
             icon: _allSelectedAreHidden
                 ? FluentIcons.eye_24_regular
                 : FluentIcons.eye_off_24_regular,
             text: _allSelectedAreHidden ? 'הצג' : 'הסתר',
             onPressed: hasSelection ? () => _onToggleHide(context) : null,
           ),
-          NeutralActionButton(
+          ActionButton.neutral(
             icon: _allSelectedArePinnedToNav
                 ? FluentIcons.pin_24_filled
                 : FluentIcons.pin_24_regular,
@@ -562,14 +562,14 @@ class _ActionBar extends StatelessWidget {
             onPressed:
                 hasSelection ? () => _onTogglePinNavRail(context) : null,
           ),
-          NeutralActionButton(
+          ActionButton.neutral(
             icon: _allSelectedPluginsEnabled
                 ? FluentIcons.pause_circle_24_regular
                 : FluentIcons.play_circle_24_regular,
             text: _allSelectedPluginsEnabled ? 'השבת' : 'הפעל',
             onPressed: hasSelection ? () => _onToggleEnabled(context) : null,
           ),
-          NeutralActionButton(
+          ActionButton.neutral(
             icon: _allSelectedHaveNetworkAccess
                 ? FluentIcons.globe_prohibited_24_regular
                 : FluentIcons.globe_24_regular,
@@ -579,7 +579,7 @@ class _ActionBar extends StatelessWidget {
                     granted: !_allSelectedHaveNetworkAccess)
                 : null,
           ),
-          NeutralActionButton(
+          ActionButton.neutral(
             icon: _allSelectedHaveStartupEnabled
                 ? FluentIcons.power_24_filled
                 : FluentIcons.power_24_regular,
@@ -589,7 +589,7 @@ class _ActionBar extends StatelessWidget {
                     granted: !_allSelectedHaveStartupEnabled)
                 : null,
           ),
-          GhostActionButton(
+          ActionButton.ghost(
             icon: FluentIcons.delete_24_regular,
             text: 'מחק',
             onPressed: hasSelection ? () => _onDelete(context) : null,
@@ -914,13 +914,13 @@ class _PluginRow extends StatelessWidget {
           ? Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                GhostActionButton(
+                ActionButton.ghost(
                   icon: FluentIcons.arrow_up_24_regular,
                   text: 'הזז למעלה',
                   onPressed: isFirst ? null : onMoveUp,
                 ),
                 const SizedBox(width: 8),
-                GhostActionButton(
+                ActionButton.ghost(
                   icon: FluentIcons.arrow_down_24_regular,
                   text: 'הזז למטה',
                   onPressed: isLast ? null : onMoveDown,

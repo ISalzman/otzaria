@@ -215,33 +215,49 @@ showWarningDialog(
 - Custom dialog widgets without the standard styling
 - Hardcoded colors (Colors.red, Colors.blue, etc.)
 
-### 5. Action Buttons - ONLY from `custom_ui_components`
+### 5. Action Buttons - ONLY `ActionButton` named constructors
 ```dart
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 // Recommended action button (Primary style)
-RecommendedActionButton(
+ActionButton.recommended(
   text: 'שנה מיקום',
   onPressed: () => _changeLocation(),
   isLoading: false,  // optional - shows loading indicator
 );
 
 // Neutral/non-recommended action button (Tonal style)
-NeutralActionButton(
+ActionButton.neutral(
   text: 'איפוס',
   onPressed: () => _resetSettings(),
   isLoading: false,  // optional - shows loading indicator
 );
+
+// Ghost (transparent, neutral)
+ActionButton.ghost(
+  text: 'ביטול',
+  onPressed: () => _cancel(),
+);
+
+// Warning (transparent background, error-color text — for destructive actions)
+ActionButton.warning(
+  text: 'מחק לצמיתות',
+  onPressed: () => _delete(),
+);
 ```
 
 **Button Styling Rules (CRITICAL):**
-- **RecommendedActionButton**: FilledButton (primary background, onPrimary text)
-- **NeutralActionButton**: FilledButton.tonal (surfaceContainerHighest background, onSurface text)
+- **ActionButton.recommended**: FilledButton (primary background, onPrimary text)
+- **ActionButton.neutral**: FilledButton.tonal (surfaceContainerHighest background, onSurface text)
+- **ActionButton.ghost**: TextButton (transparent, neutral color)
+- **ActionButton.warning**: TextButton (transparent, cs.error text — for destructive confirmations)
 - **NEVER use hardcoded colors** - always use `Theme.of(context).colorScheme`
 
 **When to use which button:**
-- `RecommendedActionButton` - recommended actions (change settings, choose location, update, add)
-- `NeutralActionButton` - neutral or dangerous actions (reset, delete, remove, stop)
+- `ActionButton.recommended` - recommended actions (change settings, choose location, update, add)
+- `ActionButton.neutral` - neutral or dangerous actions (reset, delete, remove, stop)
+- `ActionButton.ghost` - secondary inline text actions (cancel, close, skip)
+- `ActionButton.warning` - destructive confirmation (delete, clear, overwrite — matches WarningDialog's confirm button)
 
 **Never use:**
 - `ElevatedButton`, `TextButton`, `OutlinedButton` directly
@@ -683,7 +699,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 4. **Icons** - Only `fluentui_system_icons` wrapped in `RtlIcon` — no bare `Icon()`, no `mirrorIcon`, no manual `Transform` on icons
 5. **User messages** - Only through `UiSnack`, never direct SnackBar
 6. **Dialogs** - Only through `custom_ui_components` (SingleActionDialog, TwoActionsDialog, WarningDialog)
-7. **Action buttons** - Only `RecommendedActionButton` or `NeutralActionButton` from `custom_ui_components`
+7. **Action buttons** - Only `ActionButton.recommended` / `.neutral` / `.ghost` from `widgets_exports.dart`
 8. **Settings cards** - Only `SettingsCard` from `settings_card.dart`
 9. **Color theming** - NEVER use hardcoded colors (Colors.red, Colors.blue, etc.), ALWAYS use `Theme.of(context).colorScheme`
 10. **Hover effects** - Remove from ListTile rows with buttons (`hoverColor: Colors.transparent`)
@@ -708,7 +724,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 - Manual `Transform.scale(scaleX: -1)` or `Transform.flip` on icons — let `RtlIcon` handle it
 - Showing messages without `UiSnack`
 - Using custom dialogs instead of `custom_ui_components` dialogs
-- Using `ElevatedButton`/`TextButton` instead of `RecommendedActionButton`/`NeutralActionButton`
+- Using `ElevatedButton`/`TextButton` directly instead of `ActionButton.recommended`/`.neutral`/`.ghost`
 - Using hardcoded colors instead of `Theme.of(context).colorScheme`
 - Not removing hover effects from ListTile rows with action buttons
 - Adding `hoverColor`, `splashColor`, `overlayColor`, or `.withValues(alpha:...)` outside `lib/theme/` — these belong only in the theme layer

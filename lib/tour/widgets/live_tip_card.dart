@@ -62,7 +62,7 @@ class LiveTipCard extends StatelessWidget {
             const SizedBox(height: 14),
             Align(
               alignment: AlignmentDirectional.centerStart,
-              child: NeutralActionButton(
+              child: ActionButton.neutral(
                 icon: FluentIcons.checkmark_24_regular,
                 text: 'הבנתי',
                 onPressed: onDismiss,

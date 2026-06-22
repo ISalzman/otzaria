@@ -309,12 +309,12 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  NeutralActionButton(
+                  ActionButton.neutral(
                     text: 'ביטול',
                     onPressed: _onCancel,
                   ),
                   const SizedBox(width: 12),
-                  RecommendedActionButton(
+                  ActionButton.recommended(
                     text: isUpdate ? 'עדכן' : 'התקן',
                     onPressed: _onInstall,
                   ),

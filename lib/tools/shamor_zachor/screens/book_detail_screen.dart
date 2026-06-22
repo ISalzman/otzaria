@@ -199,7 +199,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                   ],
                   const SizedBox(height: 16),
                   if (dataProvider.error!.isRecoverable)
-                    RecommendedActionButton(
+                    ActionButton.recommended(
                       text: 'נסה שוב',
                       onPressed: () => dataProvider.retry(),
                     ),

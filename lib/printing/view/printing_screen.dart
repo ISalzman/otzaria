@@ -2939,13 +2939,13 @@ class _PrintingAppBar extends StatelessWidget {
         final printExportButtons = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'ייצא',
               icon: FluentIcons.arrow_export_ltr_24_regular,
               onPressed: onExport,
             ),
             const SizedBox(width: 8),
-            RecommendedActionButton(
+            ActionButton.recommended(
               text: 'הדפסה',
               icon: FluentIcons.print_24_regular,
               onPressed: onPrint,
@@ -2976,7 +2976,7 @@ class _PrintingAppBar extends StatelessWidget {
                   ),
                   Align(
                     alignment: AlignmentDirectional.centerEnd,
-                    child: NeutralActionButton(
+                    child: ActionButton.neutral(
                       text: 'ביטול',
                       onPressed: onClose,
                     ),

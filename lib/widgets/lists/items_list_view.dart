@@ -400,7 +400,7 @@ class _ItemsListViewState extends State<ItemsListView> {
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: NeutralActionButton(
+          child: ActionButton.neutral(
             text: widget.clearAllText,
             onPressed: () => widget.onClearAll(context),
           ),

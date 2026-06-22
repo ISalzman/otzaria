@@ -242,7 +242,7 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                   ),
                 ]),
                 const SizedBox(height: 16),
-                NeutralActionButton(
+                ActionButton.neutral(
                   text: 'נתק תוסף פיתוח',
                   onPressed: () async {
                     context.read<PluginSystemBloc>().add(
@@ -252,7 +252,7 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                   },
                 )
               ] else ...[
-                NeutralActionButton(
+                ActionButton.neutral(
                   text: 'הסרת תוסף',
                   onPressed: () async {
                     final deleted =

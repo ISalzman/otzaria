@@ -1332,12 +1332,12 @@ class _RegularReportTabState extends State<RegularReportTab> {
         alignment: WrapAlignment.end,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          NeutralActionButton(
+          ActionButton.neutral(
             text: 'ביטול',
             onPressed: widget.onCancel,
           ),
           if (_canSubmit)
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'שמור לשליחה מאוחרת',
               icon: FluentIcons.save_24_regular,
               onPressed: () {
@@ -1348,7 +1348,7 @@ class _RegularReportTabState extends State<RegularReportTab> {
               },
             ),
           if (!isOfflineMode && _canSubmit)
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'שלח בדוא"ל',
               icon: FluentIcons.mail_24_regular,
               onPressed: () {
@@ -1359,7 +1359,7 @@ class _RegularReportTabState extends State<RegularReportTab> {
               },
             ),
           if (_canSubmit)
-            RecommendedActionButton(
+            ActionButton.recommended(
               text: isOfflineMode
                   ? 'שמור בתור ל${widget.directReportTargetLabel}'
                   : 'שלח ישירות ל${widget.directReportTargetLabel}',

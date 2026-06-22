@@ -65,7 +65,7 @@ class PluginDevErrorView extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                RecommendedActionButton(
+                ActionButton.recommended(
                   text: 'נסה קריאה מחדש',
                   onPressed: () {
                     context
@@ -74,7 +74,7 @@ class PluginDevErrorView extends StatelessWidget {
                   },
                 ),
                 const SizedBox(width: 16),
-                NeutralActionButton(
+                ActionButton.neutral(
                   text: 'הגדרות תוסף',
                   onPressed: () async {
                     final result = await showDialog<bool>(

@@ -153,7 +153,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
           Row(
             children: [
               const Spacer(),
-              NeutralActionButton(
+              ActionButton.neutral(
                 text: 'הצג הכל',
                 onPressed: () => _setFacet(context, '/'),
               ),
