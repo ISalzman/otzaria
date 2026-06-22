@@ -593,8 +593,8 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
   KeyEventResult _handleKeyEvent(FocusNode _, KeyEvent ev) {
     if (ev is! KeyDownEvent) return KeyEventResult.ignored;
     if (ev.logicalKey == LogicalKeyboardKey.arrowRight) {
-      setState(
-          () => _focusedIndex = (_focusedIndex + 1) % widget.options.length);
+      setState(() => _focusedIndex =
+          (_focusedIndex + 1) % widget.options.length);
       return KeyEventResult.handled;
     }
     if (ev.logicalKey == LogicalKeyboardKey.arrowLeft) {
