@@ -980,7 +980,7 @@ void main() {
           isA<Exception>().having(
             (e) => e.toString(),
             'message',
-            contains('network.enabled required'),
+            contains('error.permission_denied'),
           ),
         ),
       );
