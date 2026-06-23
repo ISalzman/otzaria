@@ -127,6 +127,37 @@ void main() {
       expect(report.errors, isEmpty);
       expect(report.warnings.any((w) => w.contains('network')), isFalse);
     });
+
+    test('host חשוף ל-localhost תקין ב-allowlist (network.localhost)', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['network.localhost'],
+          network: {
+            'enabled': true,
+            'allowlist': ['127.0.0.1', 'localhost'],
+          },
+        ),
+      );
+      expect(report.errors, isEmpty);
+      expect(
+        report.warnings.any((w) => w.contains('כתובת לא תקינה')),
+        isFalse,
+      );
+    });
+
+    test('network.localhost ללא allowlist מקבל אזהרת allowlist ריק', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['network.localhost'],
+        ),
+      );
+      expect(
+        report.warnings.any((w) => w.contains('network.allowlist')),
+        isTrue,
+      );
+    });
   });
 
   group('name vs toolTab.title (allowed to differ — per official docs)', () {
@@ -186,6 +217,29 @@ void main() {
       );
       expect(
         report.warnings.any((w) => w.contains('network.download')),
+        isFalse,
+      );
+    });
+
+    test('network.localhost מספיקה ל-network.fetch ללא network.access', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['network.localhost'],
+          network: const {
+            'enabled': true,
+            'allowlist': ['127.0.0.1'],
+          },
+        ),
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js':
+              "Otzaria.call('network.fetch', {url: 'http://127.0.0.1:11434/api/tags'});",
+        },
+      );
+      expect(
+        report.warnings.any(
+            (w) => w.contains('network.fetch') && w.contains('network.access')),
         isFalse,
       );
     });

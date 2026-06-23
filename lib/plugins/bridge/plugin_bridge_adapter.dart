@@ -1960,17 +1960,23 @@ class PluginBridgeAdapter {
           throw Exception('error.permission_denied: network.enabled required');
         }
 
-        final granted =
-            await _pluginRepo.getPermission(plugin.pluginId, 'network.access');
-        if (granted != true) {
-          throw Exception('error.permission_denied: network.access required');
-        }
-
         final url = args['url'] as String?;
         if (url == null) throw Exception('error.invalid_params: url required');
 
         final uri = Uri.tryParse(url);
         if (uri == null) throw Exception('error.invalid_params: invalid URL');
+
+        final requiredPermission = requiredNetworkPermissionFor(uri);
+        final granted = await _pluginRepo.getPermission(
+            plugin.pluginId, requiredPermission);
+        if (granted != true) {
+          final what = requiredPermission == 'network.localhost'
+              ? 'גישה לשירותים מקומיים (localhost)'
+              : 'גישה לאינטרנט';
+          throw Exception('error.permission_denied: '
+              'לתוסף אין הרשאת $what. '
+              'ניתן להפעיל אותה בהגדרות, תחת ניהול תוספים.');
+        }
 
         final allowed = await PluginNetworkAccessResolver.instance
             .isUriAllowedForPlugin(uri, plugin.manifest);
@@ -2013,15 +2019,9 @@ class PluginBridgeAdapter {
       case 'download':
         // הורדה רגילה של קובץ מ-URL מותר אל תיקיית ההורדות של המערכת.
         // הכל מתבצע בצד Flutter — ה-WebView (origin file://) אינו יכול
-        // לכתוב לדיסק. נדרשת אותה הרשאה network.access.
+        // לכתוב לדיסק. נדרשת הרשאת רשת לפי היעד (אינטרנט או localhost).
         if (!plugin.manifest.networkEnabled) {
           throw Exception('error.permission_denied: network.enabled required');
-        }
-
-        final granted =
-            await _pluginRepo.getPermission(plugin.pluginId, 'network.access');
-        if (granted != true) {
-          throw Exception('error.permission_denied: network.access required');
         }
 
         final url = args['url'] as String?;
@@ -2029,6 +2029,18 @@ class PluginBridgeAdapter {
 
         final uri = Uri.tryParse(url);
         if (uri == null) throw Exception('error.invalid_params: invalid URL');
+
+        final requiredPermission = requiredNetworkPermissionFor(uri);
+        final granted = await _pluginRepo.getPermission(
+            plugin.pluginId, requiredPermission);
+        if (granted != true) {
+          final what = requiredPermission == 'network.localhost'
+              ? 'גישה לשירותים מקומיים (localhost)'
+              : 'גישה לאינטרנט';
+          throw Exception('error.permission_denied: '
+              'לתוסף אין הרשאת $what. '
+              'ניתן להפעיל אותה בהגדרות, תחת ניהול תוספים.');
+        }
 
         final allowed = await PluginNetworkAccessResolver.instance
             .isUriAllowedForPlugin(uri, plugin.manifest);

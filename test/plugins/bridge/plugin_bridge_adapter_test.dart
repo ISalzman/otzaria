@@ -73,6 +73,9 @@ class _StubPluginRegistryRepository extends PluginRegistryRepository {
   List<PluginPermissionGrant> permissions = [];
   bool? permissionGrant;
 
+  /// מיפוי פר-הרשאה; כשמוגדר, גובר על [permissionGrant].
+  Map<String, bool>? permissionGrants;
+
   // KV in-memory (מפתח: "namespace/key") — מחליף את ה-DB בבדיקות.
   final Map<String, String> kv = {};
 
@@ -84,6 +87,7 @@ class _StubPluginRegistryRepository extends PluginRegistryRepository {
 
   @override
   Future<bool?> getPermission(String pluginId, String permission) async {
+    if (permissionGrants != null) return permissionGrants![permission];
     return permissionGrant;
   }
 
@@ -138,6 +142,29 @@ InstalledPlugin _buildInstalledPlugin({
     ),
     installedAt: DateTime(2026),
     updatedAt: DateTime(2026),
+  );
+}
+
+PluginBridgeDependencies _buildNetworkDeps() {
+  return PluginBridgeDependencies(
+    historyBloc: _MockHistoryBloc(),
+    tabsBloc: _StubTabsBloc(),
+    navigationBloc: _MockNavigationBloc(),
+    calendarCubit: _StubCalendarCubit(
+      _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+    ),
+    workspaceBloc: _MockWorkspaceBloc(),
+    searchRepository: _MockSearchRepository(),
+    personalNotesRepository: _MockPersonalNotesRepository(),
+    bookOpenCoordinator: _MockBookOpenCoordinator(),
+    themePayloadBuilder: () => <String, dynamic>{},
+    showConfirmDialog: ({required title, required content}) async => true,
+    showWarningDialog: ({
+      required title,
+      required content,
+      required subtitle,
+    }) async =>
+        true,
   );
 }
 
@@ -849,6 +876,65 @@ void main() {
             (e) => e.toString(),
             'message',
             contains('error.forbidden'),
+          ),
+        ),
+      );
+    });
+
+    test('network.fetch ל-localhost נחסם כשיש רק network.access (לא localhost)',
+        () async {
+      pluginRegistryRepository.permissionGrants = const {
+        'network.access': true,
+        'network.localhost': false,
+      };
+      final loopbackAdapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(
+          permissions: const ['network.localhost'],
+          networkEnabled: true,
+          networkAllowlist: const ['127.0.0.1'],
+        ),
+        dependencies: _buildNetworkDeps(),
+        pluginRepository: pluginRegistryRepository,
+      );
+
+      await expectLater(
+        () => loopbackAdapter.execute('network', 'fetch', const {
+          'url': 'http://127.0.0.1:11434/api/tags',
+        }),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('error.permission_denied'),
+          ),
+        ),
+      );
+    });
+
+    test('network.fetch לאינטרנט נחסם כשיש רק network.localhost', () async {
+      pluginRegistryRepository.permissionGrants = const {
+        'network.access': false,
+        'network.localhost': true,
+      };
+      final internetAdapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(
+          permissions: const ['network.localhost'],
+          networkEnabled: true,
+          networkAllowlist: const ['https://nakdan.dicta.org.il/api'],
+        ),
+        dependencies: _buildNetworkDeps(),
+        pluginRepository: pluginRegistryRepository,
+      );
+
+      await expectLater(
+        () => internetAdapter.execute('network', 'fetch', const {
+          'url': 'https://nakdan.dicta.org.il/api',
+        }),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('error.permission_denied'),
           ),
         ),
       );

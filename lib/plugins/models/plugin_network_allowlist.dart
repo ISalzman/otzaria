@@ -74,6 +74,11 @@ const Set<String> _loopbackHosts = <String>{'localhost', '127.0.0.1', '::1'};
 /// בודקת האם [host] הוא כתובת loopback מקומית.
 bool isLoopbackHost(String host) => _loopbackHosts.contains(host.toLowerCase());
 
+/// מחזירה את שם ההרשאה הנדרשת לגישת רשת אל [uri]:
+/// `network.localhost` ליעד loopback מקומי, אחרת `network.access`.
+String requiredNetworkPermissionFor(Uri uri) =>
+    isLoopbackHost(uri.host) ? 'network.localhost' : 'network.access';
+
 /// מחזירה את הצהרת ה-loopback מתוך [allowlist] שמתירה את [uri], או `null`.
 ///
 /// מתאימה רק כאשר [uri] עצמו הוא loopback מקומי (http/https). כל ערך הצהרה:

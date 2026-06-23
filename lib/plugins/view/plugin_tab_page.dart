@@ -35,6 +35,7 @@ import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/view/plugin_crashed_view.dart';
 import 'package:otzaria/plugins/view/plugin_webview2_missing_view.dart';
+import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 
@@ -497,7 +498,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
             if (widget.plugin.manifest.networkEnabled) {
               final granted = await _pluginRegistryRepository.getPermission(
                 widget.plugin.pluginId,
-                'network.access',
+                requiredNetworkPermissionFor(uri),
               );
               final allowed = granted == true &&
                   await PluginNetworkAccessResolver.instance
@@ -542,7 +543,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
             if (widget.plugin.manifest.networkEnabled) {
               final granted = await _pluginRegistryRepository.getPermission(
                 widget.plugin.pluginId,
-                'network.access',
+                requiredNetworkPermissionFor(uri),
               );
               final allowed = granted == true &&
                   await PluginNetworkAccessResolver.instance
