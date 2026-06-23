@@ -1991,8 +1991,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // During progressive PDF loading, pdfrx may wait indefinitely for the
     // viewport to settle while new tiles keep arriving. Time out the await so
     // page-turn state cannot deadlock the navigation flow.
+    //
+    // goToPage() resets zoom to fit-page when the user has zoomed in beyond
+    // fit-page level. Preserve zoom by computing the target matrix explicitly.
+    final page = controller.layout.pageLayouts[safePage - 1];
+    final halfViewHeight =
+        controller.viewSize.height / 2 / controller.value.zoom;
     await controller
-        .goToPage(pageNumber: safePage)
+        .goTo(controller
+            .calcMatrixFor(page.topCenter.translate(0, halfViewHeight)))
         .timeout(const Duration(seconds: 3), onTimeout: () {});
 
     if (!_pdfViewFocusNode.hasFocus) {
@@ -2909,7 +2916,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _schedulePrerenderForAdjacentSpreads();
 
     final tourCubit = context.read<TourCubit>();
-    widget.tab.savedZoom = widget.tab.pdfViewerController.value.zoom;
+    final newZoom = widget.tab.pdfViewerController.value.zoom;
+    widget.tab.savedZoom = newZoom;
+
+    // Sync wheel/pinch zoom into BLoC so toolbar buttons start from the
+    // current zoom, and show the zoom bar just like the toolbar buttons do.
+    if (!_isJumping) {
+      final currentState = _bloc.state;
+      if (currentState is PdfBookLoaded &&
+          (currentState.zoom - newZoom).abs() > 0.001) {
+        _bloc.add(pdf_events.UpdateZoom(newZoom));
+        _bloc.add(const pdf_events.SetShowZoomBar(true));
+      }
+    }
 
     final newPage = widget.tab.pdfViewerController.pageNumber ?? 1;
 
