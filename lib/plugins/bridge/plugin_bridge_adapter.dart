@@ -1957,8 +1957,10 @@ class PluginBridgeAdapter {
     switch (action) {
       case 'fetch':
         if (!plugin.manifest.networkEnabled) {
-          throw Exception('error.permission_denied: network.enabled required');
+          throw Exception('error.permission_denied: '
+              'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.');
         }
+
 
         final url = args['url'] as String?;
         if (url == null) throw Exception('error.invalid_params: url required');
@@ -2021,8 +2023,10 @@ class PluginBridgeAdapter {
         // הכל מתבצע בצד Flutter — ה-WebView (origin file://) אינו יכול
         // לכתוב לדיסק. נדרשת הרשאת רשת לפי היעד (אינטרנט או localhost).
         if (!plugin.manifest.networkEnabled) {
-          throw Exception('error.permission_denied: network.enabled required');
+          throw Exception('error.permission_denied: '
+              'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.');
         }
+
 
         final url = args['url'] as String?;
         if (url == null) throw Exception('error.invalid_params: url required');
