@@ -450,8 +450,14 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
             onTap: () async {
               final pageNumber = _getPdfPageNumber(result);
               final controller = widget.textSearcher.controller;
-              if (controller != null) {
-                await controller.goToPage(pageNumber: pageNumber);
+              if (controller != null && controller.isReady) {
+                final layout = controller.layout;
+                final safePage = pageNumber.clamp(1, layout.pageLayouts.length);
+                final page = layout.pageLayouts[safePage - 1];
+                final halfViewHeight =
+                    controller.viewSize.height / 2 / controller.value.zoom;
+                await controller.goTo(controller.calcMatrixFor(
+                    page.topCenter.translate(0, halfViewHeight)));
               }
 
               _schedulePdfHighlight(widget.searchController.text);
