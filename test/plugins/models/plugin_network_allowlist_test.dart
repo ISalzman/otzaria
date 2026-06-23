@@ -94,6 +94,22 @@ void main() {
     });
   });
 
+  group('requiredNetworkPermissionFor', () {
+    test('יעד loopback דורש network.localhost', () {
+      expect(requiredNetworkPermissionFor(Uri.parse('http://127.0.0.1:11434')),
+          'network.localhost');
+      expect(requiredNetworkPermissionFor(Uri.parse('http://localhost:1234')),
+          'network.localhost');
+    });
+
+    test('יעד אינטרנט דורש network.access', () {
+      expect(
+          requiredNetworkPermissionFor(
+              Uri.parse('https://nakdan.dicta.org.il')),
+          'network.access');
+    });
+  });
+
   group('extractPluginNetworkAllowlistFromDartSource', () {
     test('מחלץ את הערכים מתוך קובץ ה-Dart הרשמי', () {
       const source = '''

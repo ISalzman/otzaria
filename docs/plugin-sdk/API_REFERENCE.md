@@ -202,7 +202,7 @@ const { data } = await Otzaria.call('library.getBookToc', {
 > כל גישת רשת מוגבלת לרשימת ההיתר של אוצריא — ראו [⚠️ הרשאת `network.access`](#️-הרשאת-networkaccess--דרישה-מיוחדת-pr-לאוצריא).
 
 ### `network.fetch`
-**הרשאה:** `network.access`
+**הרשאה:** `network.access` (או `network.localhost` ליעד מקומי — ראו [שירותים מקומיים](#שירותים-מקומיים-localhost--הרשאת-networklocalhost))
 
 שליפת תוכן מ-URL מותר (ללא מעקב אחר redirects). מחזירה את גוף התשובה כטקסט.
 
@@ -235,7 +235,7 @@ if (res.success && res.data.ok) {
 ```
 
 ### `network.download`
-**הרשאה:** `network.access`
+**הרשאה:** `network.access` (או `network.localhost` ליעד מקומי)
 
 הורדה רגילה של קובץ מ-URL מותר אל **תיקיית ההורדות** של המערכת. ההורדה
 מתבצעת בצד אוצריא (Flutter), כך שאין צורך ב-`showDirectoryPicker` או
@@ -1527,6 +1527,7 @@ Otzaria.on('plugin.boot', async (payload) => {
     "plugin.storage.write",
     "published_data.write",
     "network.access",
+    "network.localhost",
     "feedback.send_email",
     "history.read",
     "history.write",
@@ -1569,6 +1570,20 @@ Otzaria.on('plugin.boot', async (payload) => {
 2. לפתוח Pull Request למאגר אוצריא שמוסיף את ה-URL לקובץ הנ"ל.
 
 ללא שני השלבים יחד — ה-URL ייחסם ב-runtime עם `403 Forbidden`, גם אם המשתמש אישר את הרשאת `network.access`.
+
+### שירותים מקומיים (localhost) — הרשאת `network.localhost`
+
+גישה לשירות מקומי על מחשב המשתמש (loopback: `localhost` / `127.0.0.1` / `::1`) — למשל מודל שפה מקומי כמו **Ollama** או **LM Studio** — מטופלת בנפרד:
+
+- ההרשאה הנדרשת היא **`network.localhost`** (לא `network.access`). השתיים נפרדות: `network.localhost` אינה מתירה גישה לאינטרנט, ו-`network.access` אינה מתירה גישה ל-localhost.
+- היעד חייב להופיע ב-`network.allowlist` של התוסף, אבל **אין צורך ב-PR לאוצריא** — localhost אינו נכלל ב-allowlist הגלובלי.
+- הצהרת host חשוף (`"127.0.0.1"` / `"localhost"`) מתירה כל פורט על אותו host; הצהרת URL מלא (`"http://127.0.0.1:11434"`) נועלת לפורט שהוצהר.
+- כמו כל גישת רשת — חובה גם `network.enabled: true` ב-manifest. הקריאות חייבות לעבור דרך `network.fetch` (לא `fetch()` ישיר מה-WebView, שנחסם ב-CORS מול שרת מקומי שדוחה `Origin: null`).
+
+```json
+"permissions": ["network.localhost"],
+"network": { "enabled": true, "allowlist": ["127.0.0.1", "localhost"] }
+```
 
 ### חובה: כתובות מדויקות בלבד
 

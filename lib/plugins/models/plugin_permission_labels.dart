@@ -118,6 +118,11 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
     label: 'גישה לאינטרנט',
     description: 'שליחה וקבלה של מידע מרשת האינטרנט',
   ),
+  'network.localhost': PluginPermissionInfo(
+    label: 'גישה לשירותים מקומיים',
+    description:
+        'התחברות לשירותים שרצים על המחשב שלך (localhost), כגון מודל שפה מקומי (Ollama / LM Studio). אינה מאפשרת גישה לאינטרנט.',
+  ),
 
   // ===== משוב ומיילים =====
   'feedback.send_email': PluginPermissionInfo(

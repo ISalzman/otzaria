@@ -26,6 +26,13 @@ import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 const String _networkAccessPermission = 'network.access';
+const String _networkLocalhostPermission = 'network.localhost';
+
+/// הרשאות הרשת שפעולת ה-bulk "גישה לרשת" מעניקה/מבטלת לפי הצהרת התוסף.
+const List<String> _networkPermissions = [
+  _networkAccessPermission,
+  _networkLocalhostPermission,
+];
 
 /// פאנל ניהול כלים (מובנים + תוספים) במסך "הגדרות › כלים".
 ///
@@ -571,20 +578,22 @@ class _ActionBar extends StatelessWidget {
   }
 
   void _setNetworkAccess(BuildContext context, {required bool granted}) {
-    final eligible = _selectedPlugins
-        .where((p) => p.manifest.permissions.contains(_networkAccessPermission))
-        .toList();
-    if (eligible.isEmpty) {
+    final bloc = context.read<PluginSystemBloc>();
+    var updated = false;
+    for (final p in _selectedPlugins) {
+      for (final permission in _networkPermissions) {
+        if (!p.manifest.permissions.contains(permission)) continue;
+        bloc.add(SetPluginPermissionRequested(
+          pluginId: p.pluginId,
+          permission: permission,
+          granted: granted,
+        ));
+        updated = true;
+      }
+    }
+    if (!updated) {
       UiSnack.showError('אף תוסף נבחר לא מצהיר על שימוש ברשת — אין מה לעדכן');
       return;
-    }
-    final bloc = context.read<PluginSystemBloc>();
-    for (final p in eligible) {
-      bloc.add(SetPluginPermissionRequested(
-        pluginId: p.pluginId,
-        permission: _networkAccessPermission,
-        granted: granted,
-      ));
     }
     UiSnack.show(granted
         ? 'גישה לרשת הוענקה לתוספים הנבחרים'
