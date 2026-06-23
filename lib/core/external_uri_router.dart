@@ -118,16 +118,31 @@ class RunSearchAction extends ExternalUriAction {
 /// פתיחת דיאלוג איתור מקורות (FindRefDialog) עם טקסט מילוי-מראש.
 ///
 /// [query] — הטקסט שייכתב בשדה החיפוש של הדיאלוג ויפעיל חיפוש מיידית.
+/// כאשר [query] ריק (כתובת ללא `q=`), נפתח הדיאלוג ריק.
 class RunDetectionAction extends ExternalUriAction {
   final String query;
   const RunDetectionAction(this.query);
+}
+
+/// פתיחת מסך העיון בספר האחרון שנפתח.
+class OpenInspectionAction extends ExternalUriAction {
+  const OpenInspectionAction();
+}
+
+/// פתיחת דיאלוג ניהול התוספים (PluginSidePanel).
+class OpenSdkAction extends ExternalUriAction {
+  const OpenSdkAction();
+}
+
+/// פתיחת הדף היומי — פותח את ספר ה-PDF של התלמוד הבבלי בדף הנכון ליום.
+class OpenDailyPageAction extends ExternalUriAction {
+  const OpenDailyPageAction();
 }
 
 /// מפענח קישורי `otzaria://...` לפעולה דומיין.
 ///
 /// סכמות וכתובות נתמכות:
 /// * `otzaria://open/calendar`              – לוח שנה
-/// * `otzaria://open/daily`                 – לוח שנה (alias)
 /// * `otzaria://open/gematria`              – גימטריה
 /// * `otzaria://open/notes`                 – הערות אישיות
 /// * `otzaria://open/shamor_zachor`         – שמור וזכור
@@ -148,7 +163,11 @@ class RunDetectionAction extends ExternalUriAction {
 /// * `otzaria://open/tools`                 – מסך הכלים
 /// * `otzaria://open/history`               – פותח את דיאלוג ההיסטוריה
 /// * `otzaria://open/bookmarks`             – פותח את דיאלוג הסימניות
+/// * `otzaria://open/detection`             – פותח דיאלוג איתור מקורות ריק
 /// * `otzaria://open/detection?q=<text>`    – פותח דיאלוג איתור מקורות עם טקסט מילוי-מראש
+/// * `otzaria://open/inspection`            – פותח מסך עיון בספר האחרון שנפתח
+/// * `otzaria://open/sdk`                   – פותח דיאלוג ניהול התוספים
+/// * `otzaria://open/daily_page`            – פותח את הדף היומי (PDF תלמוד בבלי בדף הנכון)
 /// * `otzaria://open/tool/<tool-id>`        – לשונית כלי לפי מזהה מלא
 /// * `otzaria://open/plugin/<plugin-id>`    – פתיחת תוסף ישירות לפי מזהה (גם לא-מוצמד)
 /// * `otzaria://open/tab/<index>`           – מעבר לטאב פתוח לפי מיקומו (0-based; Jump List)
@@ -169,7 +188,6 @@ class RunDetectionAction extends ExternalUriAction {
 class ExternalUriRouter {
   static const Map<String, String> _toolAliases = {
     'calendar': 'builtin.calendar',
-    'daily': 'builtin.calendar',
     'gematria': 'builtin.gematria',
     'notes': 'builtin.notes',
     'shamor_zachor': 'builtin.shamor_zachor',
@@ -289,13 +307,25 @@ class ExternalUriRouter {
       }
 
       // detection?q=<text> — פותח דיאלוג איתור מקורות עם טקסט מילוי-מראש.
+      // ללא q — פותח דיאלוג איתור ריק.
       if (firstLower == 'detection') {
-        final rawQuery = uri.queryParameters['q']?.trim();
-        if (rawQuery != null && rawQuery.isNotEmpty) {
-          return RunDetectionAction(rawQuery);
-        }
-        // ללא q — מתעלמים (אין טעם לפתוח דיאלוג ריק דרך deep link)
-        return null;
+        final rawQuery = uri.queryParameters['q']?.trim() ?? '';
+        return RunDetectionAction(rawQuery);
+      }
+
+      // inspection — פותח מסך עיון בספר האחרון.
+      if (firstLower == 'inspection') {
+        return const OpenInspectionAction();
+      }
+
+      // sdk — פותח דיאלוג ניהול תוספים.
+      if (firstLower == 'sdk') {
+        return const OpenSdkAction();
+      }
+
+      // daily_page — פותח את ספר ה-PDF של התלמוד בדף הנכון ליום.
+      if (firstLower == 'daily_page') {
+        return const OpenDailyPageAction();
       }
 
       // settings בלי sub-tab — פותח הגדרות ללא ניווט לטאב ספציפי.
