@@ -162,6 +162,8 @@ class MagicDictionaryDownloader {
       }
       await sink.flush();
       await sink.close();
+
+      await _replaceDownloadedFile(outFile, dest);
     } catch (_) {
       try {
         await sink.close();
@@ -169,14 +171,47 @@ class MagicDictionaryDownloader {
       if (await outFile.exists()) await outFile.delete();
       rethrow;
     }
-    // החלפה אטומית של היעד.
-    await outFile.rename(dest);
     onProgress?.call(1.0);
   }
 
   Future<bool> _fileIsUsable(String path) async {
-    final f = File(path);
-    return await f.exists() && (await f.length()) > 0;
+    try {
+      final f = File(path);
+      return await f.exists() && (await f.length()) > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _replaceDownloadedFile(File source, String dest) async {
+    final destFile = File(dest);
+    if (!Platform.isWindows) {
+      await source.rename(dest);
+      return;
+    }
+
+    final backupFile = File('$dest.bak');
+    if (await backupFile.exists()) {
+      await backupFile.delete();
+    }
+    final hadExistingDest = await destFile.exists();
+    if (hadExistingDest) {
+      await destFile.rename(backupFile.path);
+    }
+
+    try {
+      await source.rename(dest);
+      if (await backupFile.exists()) {
+        await backupFile.delete();
+      }
+    } catch (_) {
+      if (hadExistingDest &&
+          !(await destFile.exists()) &&
+          await backupFile.exists()) {
+        await backupFile.rename(dest);
+      }
+      rethrow;
+    }
   }
 
   String _versionPath(String dest) => '$dest.version';

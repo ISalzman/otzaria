@@ -29,6 +29,7 @@ class TantivyDataProvider {
   /// Track if index is being reopened to prevent concurrent reopens
   bool _isReopening = false;
   DateTime? _lastReopenTime;
+  Future<bool>? _magicDictionaryDownload;
 
   static final TantivyDataProvider _singleton = TantivyDataProvider._internal();
   static TantivyDataProvider instance = _singleton;
@@ -147,6 +148,27 @@ class TantivyDataProvider {
   Future<bool> downloadMagicDictionary({
     void Function(double progress)? onProgress,
     bool force = false,
+  }) async {
+    final currentDownload = _magicDictionaryDownload;
+    if (currentDownload != null) return currentDownload;
+
+    final download = _downloadMagicDictionary(
+      onProgress: onProgress,
+      force: force,
+    );
+    _magicDictionaryDownload = download;
+    try {
+      return await download;
+    } finally {
+      if (identical(_magicDictionaryDownload, download)) {
+        _magicDictionaryDownload = null;
+      }
+    }
+  }
+
+  Future<bool> _downloadMagicDictionary({
+    void Function(double progress)? onProgress,
+    required bool force,
   }) async {
     final downloader = MagicDictionaryDownloader();
     try {
