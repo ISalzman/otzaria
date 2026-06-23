@@ -20,10 +20,14 @@
 //
 // ─── דיאלוגי בחירה ───────────────────────────────────────────────────────────
 // [SelectionDialog]                                   → selection_dialog.dart
-// ─── מיכל כללי ───────────────────────────────────────────────────────────────
-// [ReusableItemsDialog]                               → reusable_items_dialog.dart
-
+//
+// ─── מיכל לדיאלוגים מורכבים ──────────────────────────────────────────────────
+// [AppCustomContentDialog]                            → reusable_items_dialog.dart
+//   שימוש: מסכים מורכבים כדיאלוג (לוח שנה, הערות, היסטוריה).
+//          תומך ב-actions, onConfirm, Escape אוטומטי.
+//
 export 'confirmation_dialog.dart';
 export 'app_dialogs.dart';
 export 'input_dialog.dart';
 export 'selection_dialog.dart';
+export 'reusable_items_dialog.dart';

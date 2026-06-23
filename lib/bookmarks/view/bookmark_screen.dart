@@ -32,7 +32,7 @@ class BookmarksDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ReusableItemsDialog(
+    return AppCustomContentDialog(
       title: bookFilter == null ? 'סימניות' : 'סימניות בספר זה',
       child: BookmarkView(bookFilter: bookFilter),
     );
