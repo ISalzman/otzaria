@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart'
     hide SettingsGroup, SwitchSettingsTile;
@@ -12,6 +13,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 // import 'package:path/path.dart' as p;
 // import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
@@ -320,12 +322,20 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   bool _isPendingReportsExpanded = false;
   bool _isSentReportsExpanded = false;
   String? _sendingPendingReportId;
+  String _resolvedBackupPath = '';
 
   @override
   void initState() {
     super.initState();
     _loadVersionInfo();
     _loadBackupStatus();
+    _loadResolvedBackupPath();
+  }
+
+  void _loadResolvedBackupPath() {
+    AppPaths.getBackupPath().then((path) {
+      if (mounted) setState(() => _resolvedBackupPath = path);
+    });
   }
 
   @override
@@ -1502,6 +1512,41 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           onTap: () => setState(() => _isBackupExpanded = !_isBackupExpanded),
           isExpanded: _isBackupExpanded,
           children: [
+            SettingsActionTile.pathTile(
+              icon: FluentIcons.folder_24_regular,
+              title: 'תיקיית גיבוי',
+              currentPath: _resolvedBackupPath,
+              placeholder: 'שימוש בתיקיית ברירת המחדל',
+              simpleButtonWhenEmpty: false,
+              clearPathEnabled: (Settings.getValue<String>(
+                          SettingsRepository.keyBackupPath) ??
+                      '')
+                  .isNotEmpty,
+              onFolderChanged: () {
+                FilePicker.getDirectoryPath(lockParentWindow: true)
+                    .then((path) {
+                  if (path == null || !mounted) return;
+                  Settings.setValue<String>(
+                      SettingsRepository.keyBackupPath, path);
+                  _loadResolvedBackupPath();
+                });
+              },
+              onOpenFolder: () {
+                final path = _resolvedBackupPath;
+                if (path.isEmpty) return;
+                if (Platform.isWindows) {
+                  unawaited(Process.run('explorer', [path]));
+                } else if (Platform.isMacOS) {
+                  unawaited(Process.run('open', [path]));
+                } else if (Platform.isLinux) {
+                  unawaited(Process.run('xdg-open', [path]));
+                }
+              },
+              onClearPath: () {
+                Settings.setValue<String>(SettingsRepository.keyBackupPath, '');
+                _loadResolvedBackupPath();
+              },
+            ),
             SettingsActionTile.dropdownTile<String>(
               icon: FluentIcons.calendar_clock_24_regular,
               title: 'גיבוי אוטומטי',
