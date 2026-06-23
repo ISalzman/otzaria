@@ -102,6 +102,11 @@ import 'package:otzaria/plugins/view/plugin_install_screen.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/navigation/external_action_dispatcher.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
+import 'package:kosher_dart/kosher_dart.dart' show Daf;
+import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart'
+    show getDafYomi, formatAmud;
+import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart'
+    show openDafYomiBook;
 
 /// פריט מאוחד לסרגל הניווט הראשי — מייצג תוסף או כלי-מובנה שהוצמד לסרגל.
 ///
@@ -1037,8 +1042,24 @@ class MainWindowScreenState extends State<MainWindowScreen>
         focusRepository.findRefSearchController.text = query;
         focusRepository.findRefSearchController.selection =
             TextSelection.collapsed(offset: query.length);
-        context.read<FindRefBloc>().add(SearchRefRequested(query));
+        if (query.isNotEmpty) {
+          context.read<FindRefBloc>().add(SearchRefRequested(query));
+        }
         _handleFindRefOpen(context, transparentBarrier: false);
+        return true;
+      case OpenInspectionAction():
+        context
+            .read<NavigationBloc>()
+            .add(const NavigateToScreen(Screen.reading));
+        return true;
+      case OpenSdkAction():
+        context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
+        _openPluginPanelWhenAvailable();
+        return true;
+      case OpenDailyPageAction():
+        final Daf daf = getDafYomi(DateTime.now());
+        openDafYomiBook(
+            context, daf.getMasechta(), ' ${formatAmud(daf.getDaf())}.');
         return true;
       case OpenHistoryAction():
         showDialog(
@@ -1130,6 +1151,22 @@ class MainWindowScreenState extends State<MainWindowScreen>
       Future<void>.delayed(const Duration(milliseconds: 50), () {
         if (!mounted) return;
         _openToolWhenAvailable(toolId, attemptsLeft: attemptsLeft - 1);
+      });
+    });
+  }
+
+  void _openPluginPanelWhenAvailable({int attemptsLeft = 6}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final toolsState = moreScreenKey.currentState;
+      if (toolsState != null) {
+        toolsState.openPluginPanel();
+        return;
+      }
+      if (attemptsLeft <= 0) return;
+      Future<void>.delayed(const Duration(milliseconds: 50), () {
+        if (!mounted) return;
+        _openPluginPanelWhenAvailable(attemptsLeft: attemptsLeft - 1);
       });
     });
   }

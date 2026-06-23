@@ -523,6 +523,11 @@ class ToolsScreenState extends State<ToolsScreen>
     requestActiveTabFocus();
   }
 
+  /// פותח את פאנל ניהול התוספים — משמש ל-deep link `otzaria://open/sdk`.
+  void openPluginPanel() {
+    setState(() => _isPanelOpen = true);
+  }
+
   void openPluginTransiently(InstalledPlugin plugin) {
     final isOfflineMode = context.read<SettingsBloc>().state.isOfflineMode;
     if (isOfflineMode && plugin.requiresNetwork) {
