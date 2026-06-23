@@ -479,6 +479,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
       unawaited(_initializeExternalActivationMonitoring());
 
+      _tourCubit.registerSession();
+
       AdPopupDialog.showIfNeeded(
         context,
         shouldSkip: () => _tourStartedAutomaticallyThisLaunch,

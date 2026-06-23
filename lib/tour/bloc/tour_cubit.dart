@@ -10,7 +10,12 @@ import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/tour/models/tour_steps.dart';
 
 class TourCubit extends Cubit<TourState> {
-  TourCubit() : super(_loadInitialState());
+  TourCubit({
+    Duration delayedTipDelay = const Duration(minutes: 2, seconds: 30),
+    int delayedTipMinimumLaunchCount = 3,
+  })  : _delayedTipDelay = delayedTipDelay,
+        _delayedTipMinimumLaunchCount = delayedTipMinimumLaunchCount,
+        super(_loadInitialState());
 
   static TourState _loadInitialState() {
     final stored = Settings.getValue<String>(LiveTipStorage.resolvedTipsKey);
@@ -21,6 +26,10 @@ class TourCubit extends Cubit<TourState> {
     return const TourState.inactive().copyWith(resolvedTips: resolved);
   }
 
+  final Duration _delayedTipDelay;
+  final int _delayedTipMinimumLaunchCount;
+  bool _sessionRegistered = false;
+  Timer? _delayedTipTimer;
   Timer? _autoPlayTimer;
   final List<TourInteraction> _recentInteractions = <TourInteraction>[];
   int _textSelectionCount = 0;
@@ -60,6 +69,42 @@ class TourCubit extends Cubit<TourState> {
             TourSteps.build(libraryLoaded: libraryLoaded, isRestart: isRestart),
         shownTips: state.shownTips,
         resolvedTips: state.resolvedTips,
+      ),
+    );
+  }
+
+  /// נקרא פעם אחת בעליית החלון. סופר הפעלות ומתזמן את טיפ התיקיות המותאמות;
+  /// סגירה לפני שהטיימר ירה משאירה אותו להפעלה הבאה (כלל "אם השימוש היה קצר").
+  void registerSession() {
+    if (_sessionRegistered) {
+      return;
+    }
+    _sessionRegistered = true;
+
+    final launchCount =
+        (Settings.getValue<int>(LiveTipStorage.launchCountKey) ?? 0) + 1;
+    Settings.setValue<int>(LiveTipStorage.launchCountKey, launchCount);
+
+    if (state.resolvedTips.contains(LiveTipId.customFoldersHint) ||
+        launchCount < _delayedTipMinimumLaunchCount) {
+      return;
+    }
+    _delayedTipTimer = Timer(_delayedTipDelay, _maybeShowDelayedTip);
+  }
+
+  void _maybeShowDelayedTip() {
+    if (state.isActive ||
+        state.hasActiveLiveTip ||
+        !_canShowTip(LiveTipId.customFoldersHint)) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        activeLiveTipId: LiveTipId.customFoldersHint,
+        shownTips: <LiveTipId>{
+          ...state.shownTips,
+          LiveTipId.customFoldersHint,
+        },
       ),
     );
   }
@@ -152,6 +197,7 @@ class TourCubit extends Cubit<TourState> {
   @override
   Future<void> close() {
     _cancelAutoPlay();
+    _delayedTipTimer?.cancel();
     return super.close();
   }
 
