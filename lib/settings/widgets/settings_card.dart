@@ -1,7 +1,10 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/widgets/custom_switch.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/controls/segmented_control.dart';
 import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
@@ -209,6 +212,34 @@ class SettingsActionTile extends StatelessWidget {
   // ── Static factory methods ─────────────────────────────────────────────────
   // נראים כבנאים ב-call site (SettingsActionTile.switchTile(...)) אך מחזירים
   // widget פרטי עצמאי — מאפשר state management ללא שכפול בקוד קורא.
+
+  /// שורת ניהול נתיב תיקייה — כפתור "אפשרויות מיקום" עם תפריט פעולות.
+  /// [clearPathEnabled] — כשfalse, "הסרת מיקום שמור" מוצג בתפריט כפריט לא פעיל.
+  /// [simpleButtonWhenEmpty] — כאשר true (ברירת מחדל) ואין נתיב, מוצג כפתור "הגדר מיקום".
+  static Widget pathTile({
+    Key? key,
+    required IconData icon,
+    required String title,
+    required String currentPath,
+    String placeholder = 'לא נבחר מיקום',
+    required VoidCallback onFolderChanged,
+    required VoidCallback onOpenFolder,
+    VoidCallback? onClearPath,
+    bool simpleButtonWhenEmpty = true,
+    bool clearPathEnabled = true,
+  }) =>
+      _PathTile(
+        key: key,
+        icon: icon,
+        title: title,
+        currentPath: currentPath,
+        placeholder: placeholder,
+        onFolderChanged: onFolderChanged,
+        onOpenFolder: onOpenFolder,
+        onClearPath: onClearPath,
+        simpleButtonWhenEmpty: simpleButtonWhenEmpty,
+        clearPathEnabled: clearPathEnabled,
+      );
 
   /// שורת on/off עם [CustomSwitch].
   /// tap על כל השורה, Enter ו-Space מחליפים מצב.
@@ -676,3 +707,161 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
     );
   }
 }
+
+// ── _PathTile ─────────────────────────────────────────────────────────────────
+
+class _PathTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String currentPath;
+  final String placeholder;
+  final VoidCallback onFolderChanged;
+  final VoidCallback onOpenFolder;
+  final VoidCallback? onClearPath;
+  final bool simpleButtonWhenEmpty;
+  final bool clearPathEnabled;
+
+  const _PathTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.currentPath,
+    required this.placeholder,
+    required this.onFolderChanged,
+    required this.onOpenFolder,
+    this.onClearPath,
+    this.simpleButtonWhenEmpty = true,
+    this.clearPathEnabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsActionTile.path(
+      icon: icon,
+      title: title,
+      path: currentPath.isNotEmpty ? currentPath : null,
+      placeholder: placeholder,
+      actions: [
+        _PathMenuButton(
+          currentPath: currentPath,
+          onFolderChanged: onFolderChanged,
+          onOpenFolder: onOpenFolder,
+          onClearPath: onClearPath,
+          simpleButtonWhenEmpty: simpleButtonWhenEmpty,
+          clearPathEnabled: clearPathEnabled,
+        ),
+      ],
+    );
+  }
+}
+
+// ── _PathMenuButton ───────────────────────────────────────────────────────────
+
+class _PathMenuButton extends StatefulWidget {
+  final String currentPath;
+  final VoidCallback onFolderChanged;
+  final VoidCallback onOpenFolder;
+  final VoidCallback? onClearPath;
+  final bool simpleButtonWhenEmpty;
+  final bool clearPathEnabled;
+
+  const _PathMenuButton({
+    required this.currentPath,
+    required this.onFolderChanged,
+    required this.onOpenFolder,
+    this.onClearPath,
+    this.simpleButtonWhenEmpty = true,
+    this.clearPathEnabled = true,
+  });
+
+  @override
+  State<_PathMenuButton> createState() => _PathMenuButtonState();
+}
+
+class _PathMenuButtonState extends State<_PathMenuButton> {
+  bool _isOpen = false;
+
+  Future<void> _showMenu(BuildContext anchorContext) async {
+    final hasPath = widget.currentPath.isNotEmpty;
+    if (mounted) setState(() => _isOpen = true);
+
+    final entries = <AppMenuEntry<_PathMenuAction>>[
+      AppMenuEntry(
+        value: _PathMenuAction.openFolder,
+        label: 'פתח תיקייה',
+        icon: FluentIcons.folder_open_24_regular,
+        enabled: hasPath,
+      ),
+      const AppMenuEntry(
+        value: _PathMenuAction.changeLocation,
+        label: 'שינוי מיקום...',
+        icon: FluentIcons.folder_arrow_right_24_regular,
+      ),
+      AppMenuEntry(
+        value: _PathMenuAction.copyPath,
+        label: 'העתק נתיב',
+        icon: FluentIcons.copy_24_regular,
+        enabled: hasPath,
+      ),
+      // מוצג תמיד כשיש onClearPath; מושבת אם clearPathEnabled=false
+      if (widget.onClearPath != null)
+        AppMenuEntry(
+          value: _PathMenuAction.clearPath,
+          label: 'הסרת מיקום שמור',
+          icon: FluentIcons.dismiss_24_regular,
+          enabled: widget.clearPathEnabled,
+        ),
+    ];
+
+    final selected = await showAnchoredAppMenu<_PathMenuAction>(
+      context: context,
+      anchorContext: anchorContext,
+      itemsBuilder: (m) => entries
+          .map((e) => buildAppPopupMenuItem<_PathMenuAction>(context, e, m, null))
+          .toList(),
+    );
+
+    if (mounted) setState(() => _isOpen = false);
+    if (selected == null) return;
+
+    switch (selected) {
+      case _PathMenuAction.openFolder:
+        widget.onOpenFolder();
+      case _PathMenuAction.changeLocation:
+        widget.onFolderChanged();
+      case _PathMenuAction.copyPath:
+        await Clipboard.setData(ClipboardData(text: widget.currentPath));
+        UiSnack.showSuccess('הנתיב הועתק ללוח');
+      case _PathMenuAction.clearPath:
+        widget.onClearPath?.call();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.currentPath.isEmpty && widget.simpleButtonWhenEmpty) {
+      return ActionButton.recommended(
+        text: 'הגדר מיקום',
+        onPressed: widget.onFolderChanged,
+        icon: FluentIcons.folder_arrow_right_24_regular,
+      );
+    }
+    final cs = Theme.of(context).colorScheme;
+    return Builder(
+      builder: (buttonContext) => FilledButton.icon(
+        onPressed: () => _showMenu(buttonContext),
+        style: _isOpen
+            ? null
+            : FilledButton.styleFrom(
+                backgroundColor: cs.surfaceContainerHighest,
+                foregroundColor: cs.onSurface,
+              ),
+        icon: const Icon(FluentIcons.folder_arrow_right_24_regular),
+        label: const Text('אפשרויות מיקום'),
+      ),
+    );
+  }
+}
+
+enum _PathMenuAction { openFolder, changeLocation, copyPath, clearPath }
+
