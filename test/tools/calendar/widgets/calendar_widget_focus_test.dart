@@ -11,7 +11,7 @@ import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/tools/calendar/services/google_calendar_service.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/tools/calendar/calendar_screen.dart';
-import 'test_helpers/memory_cache_provider.dart';
+import '../../../test_helpers/memory_cache_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
