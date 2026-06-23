@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 enum InstallMode { systemWide, perUser }
@@ -346,11 +347,9 @@ class AppPaths {
 
   /// נתיב קובץ המילון המורפולוגי (`lexical.db`) של החיפוש המקורב.
   ///
-  /// הקובץ יושב לצד תיקיית האינדקס כך שהוא "נוסע" יחד עם הספרייה/האינדקס.
-  /// אם הקובץ אינו קיים, החיפוש המקורב פשוט פועל ללא הרחבה מורפולוגית
-  /// (המנוע נופל חזרה להתנהגות ה-fuzzy הקיימת).
+  /// יושב לצד `seforim.db`. בהיעדרו החיפוש המקורב נופל חזרה ל-fuzzy רגיל.
   static Future<String> getMagicDictionaryPath() async {
-    return p.join(p.dirname(await getIndexPath()), 'lexical.db');
+    return p.join(DatabaseConstants.getDatabaseDirectoryPath(), 'lexical.db');
   }
 
   /// מחזיר רשימת נתיבי ברירת מחדל לאינדקס שאינם הנתיב הפעיל כעת.
