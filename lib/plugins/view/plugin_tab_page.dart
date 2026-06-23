@@ -241,6 +241,12 @@ class _PluginTabPageState extends State<PluginTabPage> {
     // localhost_dev: HMR handles JS/CSS changes automatically.
     // A manual reload clears the cache and reloads the page.
     if (widget.plugin.isLocalhostDev) {
+      // במסך שגיאת חיבור אין WebView חי (ה-controller מת) — ניקוי השגיאה בונה
+      // WebView חדש שטוען את כתובת השרת מחדש, במקום reload על controller מת.
+      if (_devErrorMessage != null) {
+        setState(() => _devErrorMessage = null);
+        return;
+      }
       try {
         await InAppWebViewController.clearAllCache();
       } catch (_) {}
@@ -680,6 +686,19 @@ class _PluginTabPageState extends State<PluginTabPage> {
           // מנקים את ה-canary כדי שלא נחסום שגיאה רגילה כ"קריסה".
           unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
           if (mounted) setState(() => _hasError = true);
+          return;
+        }
+        // localhost_dev: כשל בטעינת ה-main frame = שרת הפיתוח אינו רץ. מציגים
+        // מסך מותאם במקום דף השגיאה של הדפדפן (ERR_CONNECTION_REFUSED).
+        if (widget.plugin.isLocalhostDev &&
+            request.isForMainFrame == true &&
+            _isDevServerUri(request.url)) {
+          unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
+          if (mounted) {
+            setState(() => _devErrorMessage =
+                'שרת הפיתוח אינו זמין בכתובת ${widget.plugin.devRootPath}.\n'
+                    'ודא ששרת הפיתוח רץ (למשל: npm run dev) ולחץ "נסה קריאה מחדש".');
+          }
         }
       },
       onConsoleMessage: (controller, consoleMessage) {
