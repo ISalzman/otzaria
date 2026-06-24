@@ -159,6 +159,7 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
                     '_${plugin.version}'
                     '_${plugin.installPath}'
                     '_${plugin.entrypointPath}'
+                    '_${plugin.backgroundEntrypointPath}'
                     '_${plugin.devRootPath ?? ""}',
                   ),
                   width: 1,
@@ -245,6 +246,8 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
           if (existing.version != plugin.version ||
               existing.installPath != plugin.installPath ||
               existing.entrypointPath != plugin.entrypointPath ||
+              existing.backgroundEntrypointPath !=
+                  plugin.backgroundEntrypointPath ||
               existing.devRootPath != plugin.devRootPath) {
             setState(() {
               _activeBackgroundPlugins[plugin.pluginId] = plugin;
@@ -287,9 +290,12 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
   void initState() {
     super.initState();
     _pluginSystemBloc = context.read<PluginSystemBloc>();
+    // ברקע טוענים את קובץ הרקע הקליל (אם הוצהר) במקום דף הכלים המלא —
+    // אין UI גלוי, רק רישומים והאזנה לאירועים. ב-localhost dev השרת מגיש
+    // את האפליקציה כולה, ולכן נשארים עם ה-root.
     _localHtmlPath = widget.plugin.isLocalhostDev
         ? widget.plugin.devRootPath!
-        : '${widget.plugin.resolvedRootPath}/${widget.plugin.entrypointPath}';
+        : '${widget.plugin.resolvedRootPath}/${widget.plugin.backgroundEntrypointPath}';
 
     final historyBloc = context.read<HistoryBloc>();
     final tabsBloc = context.read<TabsBloc>();

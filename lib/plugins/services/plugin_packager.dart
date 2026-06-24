@@ -156,6 +156,30 @@ class PluginPackager {
       );
     }
 
+    // אותה בדיקה לקובץ הרקע (אם הוצהר) — אחרת תוסף רקע יישבר בשקט בעלייה.
+    final backgroundEntrypoint = manifest.backgroundEntrypoint;
+    if (backgroundEntrypoint != null) {
+      final backgroundRelativePath = p.relative(
+        p.normalize(p.absolute(p.join(dir.path, backgroundEntrypoint))),
+        from: dir.path,
+      );
+      final blockedBackgroundDir =
+          p.split(backgroundRelativePath).where(skipDirs.contains).firstOrNull;
+      if (blockedBackgroundDir != null) {
+        throw PluginPackagerException(
+          'קובץ הרקע "$backgroundEntrypoint" נמצא בתוך תיקייה מוחרגת מאריזה '
+          '("$blockedBackgroundDir"). העבר אותו מחוץ לתיקיות: '
+          '${skipDirs.join(', ')}',
+        );
+      }
+      if (ignore.ignores(backgroundRelativePath.replaceAll('\\', '/'))) {
+        throw PluginPackagerException(
+          'קובץ הרקע "$backgroundEntrypoint" מוחרג ע"י $kOtzignoreFilename. '
+          'הסר את הכלל שמתאים לו מ-$kOtzignoreFilename כדי שייכלל באריזה.',
+        );
+      }
+    }
+
     final resolvedOutPath = outputPath ??
         p.join(dir.parent.path, '${manifest.id}-${manifest.version}.otzplugin');
     final outFile = File(resolvedOutPath);

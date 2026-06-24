@@ -153,6 +153,7 @@ my-plugin/
 | `contributes.toolTab.defaultPinned` | `true` | האם להצמיד אוטומטית בהתקנה |
 | `contributes.toolTab.iconName` | `null` | שם אייקון FluentUI 24px שיוצג בטאב, למשל `"book_24_regular"` |
 | `contributes.publishedDataTypes` | `[]` | סוגי נתונים שהתוסף מפרסם |
+| `contributes.background.entrypoint` | `null` | נתיב יחסי לקובץ HTML קליל (ללא UI) שייטען ברקע במקום ה-`entrypoint` המלא. רלוונטי רק לתוסף עם `app.run_on_startup`. ראה §ריצת רקע. |
 
 `homepage` הוא שדה אופציונלי, אבל מומלץ מאוד כשמעלים תוסף לחנות. זה המקום לשים קישור לעמוד ה־GitHub של התוסף, לתיעוד, לאתר הפרויקט, או לכל דף רשמי אחר שמסביר על התוסף ונותן למשתמש מקום לקבל מידע נוסף.
 
@@ -554,6 +555,29 @@ Otzaria.on('plugin.boot', async (payload) => {
 **מה שלא מומלץ ברקע:**
 - `navigation.goTo` — יגרום לניווט בלתי צפוי ברגע שהאפליקציה נפתחת
 - קריאות כבדות שיאטו את עליית האפליקציה
+
+### קובץ כניסה ייעודי לרקע (`contributes.background.entrypoint`)
+
+כברירת מחדל, ה-instance הרקע טוען את אותו `entrypoint` של הלשונית הנראית — דף ה-UI המלא, על כל ה-DOM, ה-CSS, הגופנים וה-bundle של ה-framework. ברקע אף אחד לא רואה את הדף הזה, ולכן זה בזבוז: אתה משלם את עלות טעינת ה-UI בכל עליית אוצריא רק כדי לרשום תפריט הקשר או להאזין לאירועים.
+
+כדי לייעל, הצהר על קובץ כניסה **קליל ונפרד** לרקע:
+
+```json
+{
+  "entrypoint": "dist/index.html",
+  "permissions": ["app.run_on_startup", "reader.context_menu"],
+  "contributes": {
+    "background": { "entrypoint": "dist/background.html" }
+  }
+}
+```
+
+- `background.html` צריך להכיל **רק** את לוגיקת ה-headless — רישומים (`reader.addContextMenuItem`), מאזיני אירועים (`Otzaria.on(...)`), תזמון התראות — בלי framework ובלי UI.
+- אם השדה לא מוצהר, הרקע נופל ל-`entrypoint` הרגיל (התנהגות קיימת, ללא שינוי).
+- הקובץ חייב להיכלל באריזה (אל תחריג אותו ב-`.otzignore`) — האריזה תיכשל עם שגיאה ברורה אם הוא חסר או מוחרג.
+- במצב פיתוח מ-localhost, אוצריא ממשיכה לטעון את שורש שרת הפיתוח (האופטימיזציה חלה על תוסף ארוז).
+
+> 💡 זהו אותו רעיון של "service worker" בתוספי דפדפן: דף קליל לרקע, נפרד מדף ה-UI.
 
 ### מחזור החיים של instance הרקע
 

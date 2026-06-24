@@ -175,6 +175,42 @@ void main() {
     });
   });
 
+  group('InstalledPlugin.backgroundEntrypointPath', () {
+    InstalledPlugin pluginWithManifest(PluginManifest manifest) =>
+        InstalledPlugin(
+          pluginId: 'test.plugin',
+          name: 'Test',
+          version: '1.0.0',
+          installPath: '/tmp/test',
+          entrypointPath: 'index.html',
+          enabled: true,
+          pinned: true,
+          manifest: manifest,
+          installedAt: DateTime.utc(2026, 1, 1),
+          updatedAt: DateTime.utc(2026, 1, 1),
+        );
+
+    test('falls back to entrypointPath when manifest has no background', () {
+      final plugin = pluginWithManifest(_manifest());
+      expect(plugin.backgroundEntrypointPath, 'index.html');
+    });
+
+    test('uses manifest.backgroundEntrypoint when declared', () {
+      final manifest = PluginManifest.fromJson({
+        'schemaVersion': 1,
+        'id': 'test.plugin',
+        'name': 'Test',
+        'version': '1.0.0',
+        'entrypoint': 'index.html',
+        'contributes': {
+          'background': {'entrypoint': 'dist/background.html'},
+        },
+      });
+      final plugin = pluginWithManifest(manifest);
+      expect(plugin.backgroundEntrypointPath, 'dist/background.html');
+    });
+  });
+
   group('InstalledPlugin.userOrder + effectiveToolTabOrder', () {
     test('default userOrder is null (no manual ordering yet)', () {
       final plugin = _plugin();
