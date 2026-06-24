@@ -1,4 +1,4 @@
-import 'package:file_picker/file_picker.dart';
+﻿import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
@@ -115,7 +115,7 @@ class PluginSidePanel extends StatelessWidget {
             children: [
               if (onClose != null)
                 IconButton(
-                  icon: RtlIcon(FluentIcons.dismiss_24_regular),
+                  icon: Icon(FluentIcons.dismiss_24_regular),
                   tooltip: 'סגור',
                   onPressed: onClose,
                   iconSize: 20,
@@ -127,25 +127,25 @@ class PluginSidePanel extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: RtlIcon(FluentIcons.add_24_regular),
+                icon: Icon(FluentIcons.add_24_regular),
                 tooltip: 'התקן תוסף חדש',
                 onPressed: () => _installPlugin(context),
               ),
               if (showDevTools)
                 IconButton(
-                  icon: RtlIcon(FluentIcons.folder_add_24_regular),
+                  icon: Icon(FluentIcons.folder_add_24_regular),
                   tooltip: 'טען תיקיית תוסף',
                   onPressed: () => _loadDevPlugin(context),
                 ),
               if (showDevTools)
                 IconButton(
-                  icon: RtlIcon(FluentIcons.globe_add_24_regular),
+                  icon: Icon(FluentIcons.globe_add_24_regular),
                   tooltip: 'טען תוסף מ-localhost',
                   onPressed: () => _loadLocalhostPlugin(context),
                 ),
               if (showDevTools)
                 IconButton(
-                  icon: RtlIcon(FluentIcons.arrow_sync_24_regular),
+                  icon: Icon(FluentIcons.arrow_sync_24_regular),
                   tooltip: 'רענן תוספים',
                   onPressed: () =>
                       context.read<PluginSystemBloc>().add(RefreshPlugins()),
@@ -323,7 +323,7 @@ class _PluginListTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: RtlIcon(FluentIcons.settings_24_regular),
+            icon: Icon(FluentIcons.settings_24_regular),
             tooltip: 'הגדרות תוסף',
             onPressed: () async {
               final result = await showDialog<bool>(
@@ -375,7 +375,7 @@ class _PluginListTile extends StatelessWidget {
                 message: 'גרור ושחרר לסידור מחדש',
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  child: RtlIcon(FluentIcons.re_order_dots_vertical_24_regular),
+                  child: Icon(FluentIcons.re_order_dots_vertical_24_regular),
                 ),
               ),
             ),
@@ -419,7 +419,7 @@ class _DragFeedback extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            RtlIcon(FluentIcons.puzzle_piece_24_regular),
+            Icon(FluentIcons.puzzle_piece_24_regular),
             const SizedBox(width: 8),
             Text(
               plugin.name,

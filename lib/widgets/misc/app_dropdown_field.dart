@@ -120,7 +120,8 @@ class _AppDropdownFieldState<T> extends State<AppDropdownField<T>> {
         widget.entries.isNotEmpty;
 
     final selectedEntry = _selectedEntry;
-    final customLabelWidget = widget.selectedBuilder?.call(context, widget.value);
+    final customLabelWidget =
+        widget.selectedBuilder?.call(context, widget.value);
 
     return KeyedSubtree(
       key: _anchorKey,
@@ -133,8 +134,7 @@ class _AppDropdownFieldState<T> extends State<AppDropdownField<T>> {
               )
             : null,
         child: Row(
-          mainAxisSize:
-              widget.isExpanded ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisSize: widget.isExpanded ? MainAxisSize.max : MainAxisSize.min,
           children: [
             if (selectedEntry?.icon != null) ...[
               RtlIcon(selectedEntry!.icon!),
@@ -149,7 +149,7 @@ class _AppDropdownFieldState<T> extends State<AppDropdownField<T>> {
                   ),
             ),
             const SizedBox(width: 8),
-            RtlIcon(FluentIcons.chevron_down_24_regular),
+            Icon(FluentIcons.chevron_down_24_regular),
           ],
         ),
       ),

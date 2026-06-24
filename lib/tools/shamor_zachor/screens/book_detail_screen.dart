@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:provider/provider.dart';
@@ -16,7 +16,6 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/feedback/tool_empty_state.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 /// Screen for displaying and managing progress for a specific book
 class BookDetailScreen extends StatefulWidget {
@@ -411,7 +410,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                   ? IconButton(
                       tooltip: 'הוסף עמודה',
                       visualDensity: VisualDensity.compact,
-                      icon: const RtlIcon(FluentIcons.add_24_regular),
+                      icon: const Icon(FluentIcons.add_24_regular),
                       onPressed: () => _addColumn(progressProvider),
                     )
                   : const SizedBox.shrink(),
@@ -482,7 +481,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
         const PopupMenuItem<String>(
           value: 'rename',
           child: Row(children: [
-            RtlIcon(FluentIcons.rename_24_regular, size: 18),
+            Icon(FluentIcons.rename_24_regular, size: 18),
             SizedBox(width: 8),
             Text('שנה שם'),
           ]),
@@ -491,7 +490,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
           const PopupMenuItem<String>(
             value: 'remove',
             child: Row(children: [
-              RtlIcon(FluentIcons.delete_24_regular, size: 18),
+              Icon(FluentIcons.delete_24_regular, size: 18),
               SizedBox(width: 8),
               Text('הסר עמודה'),
             ]),
@@ -513,7 +512,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
             ),
           ),
           const SizedBox(width: 2),
-          RtlIcon(FluentIcons.chevron_down_24_regular,
+          Icon(FluentIcons.chevron_down_24_regular,
               size: 11, color: theme.colorScheme.onSurfaceVariant),
         ],
       ),
