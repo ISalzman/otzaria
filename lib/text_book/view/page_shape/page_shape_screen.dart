@@ -168,8 +168,35 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     });
   }
 
+  /// עיגון מחדש לפריט העליון הנראה לפני שינוי רוחב התוכן.
+  void _reanchorMainText() {
+    final blocState = context.read<TextBookBloc>().state;
+    if (blocState is! TextBookLoaded) return;
+
+    final controller = blocState.scrollController;
+    if (!controller.isAttached) return;
+
+    final visible = blocState.positionsListener.itemPositions.value
+        .where((p) => p.itemLeadingEdge < 1 && p.itemTrailingEdge > 0);
+    if (visible.isEmpty) return;
+
+    ItemPosition pickByMin(Iterable<ItemPosition> items) =>
+        items.reduce((a, b) => a.itemLeadingEdge <= b.itemLeadingEdge ? a : b);
+
+    final atOrBelowFold = visible.where((p) => p.itemLeadingEdge >= 0);
+    final anchor = atOrBelowFold.isNotEmpty
+        ? pickByMin(atOrBelowFold)
+        : pickByMin(visible);
+
+    controller.jumpTo(
+      index: anchor.index,
+      alignment: anchor.itemLeadingEdge.clamp(0.0, 1.0),
+    );
+  }
+
   /// שמירת גדלים
   void _saveSizes() {
+    _reanchorMainText();
     // סרגל הצד נשמר תמיד גלובלית (אינו חלק מרוחב הטורים).
     if (_leftSidebarWidth != null) {
       Settings.setValue<double>(
@@ -553,6 +580,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       return;
     }
 
+    if (!_isLeftSidebarOpen) _reanchorMainText();
     setState(() {
       _isLeftSidebarOpen = true;
       _leftSidebarTabIndex = validIndex;
@@ -573,6 +601,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   }
 
   void _toggleLeftSidebar() {
+    _reanchorMainText();
     setState(() {
       _isLeftSidebarOpen = !_isLeftSidebarOpen;
     });
@@ -593,6 +622,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   /// פתוחה על "קישורים" → סגור.
   void _onToggleCommentatorsPaneRequest() {
     if (!mounted) return;
+    _reanchorMainText();
     setState(() {
       if (_isLeftSidebarOpen && _leftSidebarTabIndex == _kLinksTabIndex) {
         _isLeftSidebarOpen = false;

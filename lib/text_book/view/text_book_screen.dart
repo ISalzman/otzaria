@@ -2215,6 +2215,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         _sidebarWidth.value = nextWidth;
       },
       onPaneResizeEnd: () {
+        _reanchorMainContentToTopmostVisible();
         context
             .read<SettingsBloc>()
             .add(UpdateSidebarWidth(_sidebarWidth.value));
