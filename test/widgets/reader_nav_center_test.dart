@@ -104,11 +104,12 @@ void main() {
       expect(tester.getSize(find.byType(FittedBox)).width, 100);
       expect(tester.takeException(), isNull);
 
-      // במרכז צר — מתכווץ למקום שנשאר אחרי הכפתורים (200-168=32) בלי לגלוש.
-      await tester.pumpWidget(harness(200));
+      // במרכז צר (235px) — compact mode עם 4 כפתורים (152px) → נשאר 83px < 100px.
+      // afterTitle מתכווץ ל-83px בלי לגלוש.
+      await tester.pumpWidget(harness(235));
       expect(find.byKey(afterTitleKey), findsOneWidget);
       expect(
-          tester.getSize(find.byType(FittedBox)).width, lessThanOrEqualTo(32));
+          tester.getSize(find.byType(FittedBox)).width, lessThanOrEqualTo(83));
       expect(tester.takeException(), isNull);
     });
   });
