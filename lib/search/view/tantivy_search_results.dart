@@ -16,6 +16,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 
@@ -465,6 +466,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                               alternativeWords: widget.tab.alternativeWords,
                               spacingValues: widget.tab.spacingValues,
                               searchMode: inBookMode,
+                              showPageShapeView: PageShapeSettingsManager
+                                  .getViewModePreference(result.title),
                               openLeftPane:
                                   (Settings.getValue<bool>('key-pin-sidebar') ??
                                           false) ||
