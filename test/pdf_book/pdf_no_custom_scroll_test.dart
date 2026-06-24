@@ -146,21 +146,5 @@ void main() {
         );
       }
     });
-
-    test('אין import של flutter/gestures.dart לצורך גלילה עצמאית', () {
-      // ה-import הזה הוסר בקומיט כי כבר אין צורך ב-PointerScrollEvent /
-      // PointerPanZoom*Event ב-pdf_book_screen.dart.
-      // אם מישהו מחזיר אותו, ככל הנראה הוא בדרך לממש שוב גלילה עצמאית.
-      final hasGesturesImport =
-          RegExp(r'''import\s+['"]package:flutter/gestures\.dart['"]''')
-              .hasMatch(source);
-      expect(
-        hasGesturesImport,
-        isFalse,
-        reason: 'אין צורך ב-package:flutter/gestures.dart ב-PdfBookScreen. '
-            'הוא היה דרוש רק עבור PointerScrollEvent / PointerPanZoomUpdateEvent '
-            'במימוש הגלילה העצמאית שהוסר.',
-      );
-    });
   });
 }

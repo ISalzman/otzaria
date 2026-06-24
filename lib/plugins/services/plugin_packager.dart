@@ -216,7 +216,7 @@ class PluginPackager {
         if (entity is Directory) {
           // גזימת תיקייה מוחרגת בשלמותה. מדלגים על הקיצור כשיש כללי `!`,
           // כי ייתכן שקובץ-צאצא צריך להיכלל בכל זאת.
-          if (!ignore.hasNegation && ignore.ignores(rel)) continue;
+          if (!ignore.hasNegation && ignore.ignores('$rel/')) continue;
           collectFiles(entity);
         } else if (entity is File) {
           // ה-.otzignore עצמו לעולם לא נארז.

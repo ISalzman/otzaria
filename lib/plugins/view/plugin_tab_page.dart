@@ -238,6 +238,13 @@ class _PluginTabPageState extends State<PluginTabPage> {
     if (!mounted) return;
     if (!widget.plugin.isDevelopment) return;
 
+    // במסך שגיאה ה-WebView ירד מהעץ וה-controller מת — ניקוי הדגל בונה
+    // WebView חדש שטוען מחדש את נקודת הכניסה, במקום reload על controller מת.
+    if (_hasError) {
+      setState(() => _hasError = false);
+      return;
+    }
+
     // localhost_dev: HMR handles JS/CSS changes automatically.
     // A manual reload clears the cache and reloads the page.
     if (widget.plugin.isLocalhostDev) {

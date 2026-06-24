@@ -1994,13 +1994,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     //
     // goToPage() resets zoom to fit-page when the user has zoomed in beyond
     // fit-page level. Preserve zoom by computing the target matrix explicitly.
-    final page = controller.layout.pageLayouts[safePage - 1];
-    final halfViewHeight =
-        controller.viewSize.height / 2 / controller.value.zoom;
-    await controller
-        .goTo(controller
-            .calcMatrixFor(page.topCenter.translate(0, halfViewHeight)))
-        .timeout(const Duration(seconds: 3), onTimeout: () {});
+    // safePage נגזר מ-pageCount, וב-טעינה הדרגתית pageLayouts יכול להיות קצר ממנו
+    // (גם ריק) — אז נופלים ל-goToPage הבטוח, אחרת אינדוקס מחוץ-לטווח יקרוס.
+    if (controller.layout.pageLayouts.length < safePage) {
+      await controller
+          .goToPage(pageNumber: safePage)
+          .timeout(const Duration(seconds: 3), onTimeout: () {});
+    } else {
+      final page = controller.layout.pageLayouts[safePage - 1];
+      final halfViewHeight =
+          controller.viewSize.height / 2 / controller.value.zoom;
+      await controller
+          .goTo(controller
+              .calcMatrixFor(page.topCenter.translate(0, halfViewHeight)))
+          .timeout(const Duration(seconds: 3), onTimeout: () {});
+    }
 
     if (!_pdfViewFocusNode.hasFocus) {
       _pdfViewFocusNode.requestFocus();

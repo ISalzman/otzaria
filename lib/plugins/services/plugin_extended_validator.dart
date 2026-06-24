@@ -473,14 +473,15 @@ class PluginExtendedValidator {
             'כתובת לא תקינה ב-network.allowlist: ${jsonEncode(raw)} (מומלץ http(s) URL מלא, או שם host מקומי כמו 127.0.0.1)');
         continue;
       }
+      final trimmed = raw.trim();
       // host חשוף ל-loopback (127.0.0.1 / localhost) תקין — מתיר כל פורט
       // על אותו host עבור שירות מקומי (network.localhost).
-      if (isLoopbackHost(raw.trim())) continue;
-      if (!urlPattern.hasMatch(raw)) {
+      if (isLoopbackHost(trimmed)) continue;
+      if (!urlPattern.hasMatch(trimmed)) {
         warnings.add(
             'כתובת לא תקינה ב-network.allowlist: ${jsonEncode(raw)} (מומלץ http(s) URL מלא, או שם host מקומי כמו 127.0.0.1)');
-      } else if (raw.contains('*')) {
-        warnings.add('network.allowlist אינו תומך ב-wildcard: $raw');
+      } else if (trimmed.contains('*')) {
+        warnings.add('network.allowlist אינו תומך ב-wildcard: $trimmed');
       }
     }
   }

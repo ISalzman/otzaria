@@ -383,19 +383,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // גרירת הטאב השני (אינדקס 1) לכיוון הטאב הראשון. ה-drag listener מיידי
-      // (לא long-press), כך ש-startGesture + moveBy מתחילים reorder.
-      final gesture =
-          await tester.startGesture(tester.getCenter(find.text('ספר ב')));
-      await tester.pump(const Duration(milliseconds: 300));
-      await gesture.moveBy(const Offset(-200, 0));
-      await tester.pump(const Duration(milliseconds: 200));
-      await gesture.moveBy(const Offset(-150, 0));
-      await tester.pump(const Duration(milliseconds: 200));
-      await gesture.up();
+      // הבחירה מתבצעת ב-onPointerDown — תחילת גרירה (כמו לחיצה) בוחרת את הטאב.
+      await tester.tap(find.text('ספר ב'), warnIfMissed: false);
       await tester.pumpAndSettle();
-
-      // onReorderStart בוחר את הטאב הנגרר.
       expect(
         tabsBloc.addedEvents.whereType<SetCurrentTab>().map((e) => e.index),
         contains(1),
@@ -409,12 +399,13 @@ void main() {
         find.byType(ReorderableListView),
       );
       list.onReorderItem!(1, 0);
-      await tester.pumpAndSettle();
+      await tester.pump();
 
       final moves = tabsBloc.addedEvents.whereType<MoveTab>().toList();
-      expect(moves, isNotEmpty, reason: 'שחרור הגרירה צריך לשלוח MoveTab');
+      expect(moves, isNotEmpty, reason: 'reorder צריך לשלוח MoveTab');
       expect(moves.last.tab, same(second),
           reason: 'הטאב שמועבר הוא הטאב שנגרר');
+      expect(moves.last.newIndex, 0, reason: 'היעד הוא אינדקס 0');
     });
 
     testWidgets('בדסקטופ הטאבים עטופים ב-listener מיידי (גרירה מסדרת מיד)',
