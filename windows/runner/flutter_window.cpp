@@ -9,6 +9,7 @@
 #include <thread>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "jump_list_manager.h"
 #include "splash_window.h"
 
 namespace {
@@ -226,6 +227,43 @@ bool FlutterWindow::OnCreate() {
         result->NotImplemented();
       });
 
+  // ערוץ עדכון ה-Jump List: Dart שולח "updateTabs" עם רשימת כותרות הטאבים.
+  // ה-handler רץ על ה-UI thread (אותו STA שאיתחל COM ב-main.cpp), כנדרש
+  // ל-ICustomDestinationList.
+  jumplist_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), "otzaria/jumplist",
+          &flutter::StandardMethodCodec::GetInstance());
+  jumplist_channel_->SetMethodCallHandler(
+      [](const flutter::MethodCall<flutter::EncodableValue>& call,
+         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+             result) {
+        if (call.method_name() != "updateTabs") {
+          result->NotImplemented();
+          return;
+        }
+
+        std::vector<std::string> titles;
+        if (const auto* arguments =
+                std::get_if<flutter::EncodableMap>(call.arguments())) {
+          auto titles_it =
+              arguments->find(flutter::EncodableValue("titles"));
+          if (titles_it != arguments->end()) {
+            if (const auto* list =
+                    std::get_if<flutter::EncodableList>(&titles_it->second)) {
+              for (const auto& entry : *list) {
+                if (const auto* title = std::get_if<std::string>(&entry)) {
+                  titles.push_back(*title);
+                }
+              }
+            }
+          }
+        }
+
+        result->Success(
+            flutter::EncodableValue(jump_list::UpdateOpenTabs(titles)));
+      });
+
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   // NOTE: the main window is intentionally NOT shown here. It stays hidden
@@ -253,6 +291,7 @@ void FlutterWindow::OnDestroy() {
   // "otzaria/splash" channel when Dart reveals the main window (or its 8s
   // failsafe). On process exit the OS tears down the splash thread/window.
   splash_channel_.reset();
+  jumplist_channel_.reset();
   process_control_channel_.reset();
   if (flutter_controller_) {
     // Reset the controller properly - no need to call Shutdown explicitly
