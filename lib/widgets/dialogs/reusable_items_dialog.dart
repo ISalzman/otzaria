@@ -12,6 +12,7 @@
 //    סגירת דיאלוג בלתי מכוונת בלחיצת Enter בתוך שדות קלט
 //  • רספונסיבי: 95% רוחב במובייל (< compact), 50% ב-desktop
 //  • כפתור X לסגירה בפינה
+//  • [scrollable] — ה-Scrollbar ממוקם אוטומטית בתוך ה-16px הקיים (לא מוסיף padding)
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
@@ -41,6 +42,10 @@ class AppCustomContentDialog extends StatefulWidget {
   /// Enter פעיל בפועל רק כש-true **וגם** [onConfirm] אינו null.
   final bool handleEnterKey;
 
+  /// האם לעטוף את [child] ב-[SingleChildScrollView] אוטומטית.
+  /// false כשה-child מנהל scroll פנימי בעצמו (ListView, CustomScrollView וכד').
+  final bool scrollable;
+
   const AppCustomContentDialog({
     super.key,
     required this.title,
@@ -48,6 +53,7 @@ class AppCustomContentDialog extends StatefulWidget {
     this.actions,
     this.onConfirm,
     this.handleEnterKey = false,
+    this.scrollable = true,
   });
 
   @override
@@ -56,6 +62,14 @@ class AppCustomContentDialog extends StatefulWidget {
 
 class _AppCustomContentDialogState extends State<AppCustomContentDialog>
     with DialogNavigationMixin {
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -78,45 +92,73 @@ class _AppCustomContentDialogState extends State<AppCustomContentDialog>
         child: Container(
           width: width,
           height: size.height * 0.8,
-          padding: const EdgeInsets.all(16),
+          // padding אופקי מנוהל בנפרד: כותרת/כפתורים ב-Padding(horizontal:16),
+          // אזור הגלילה מתפרס עד לגבול כדי שה-Scrollbar יישב בתוך ה-16px הקיים.
+          padding: const EdgeInsets.symmetric(vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  const SizedBox(width: 48),
-                  Expanded(
-                    child: Center(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          widget.title,
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 48),
+                    Expanded(
+                      child: Center(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            widget.title,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    icon: Icon(FluentIcons.dismiss_24_regular),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
+                    IconButton(
+                      icon: Icon(FluentIcons.dismiss_24_regular),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 16),
-              Expanded(child: widget.child),
+              Expanded(
+                child: widget.scrollable
+                    // ה-Scrollbar מתפרס עד לגבול ה-Container (אין padding אופקי).
+                    // padding:horizontal 16 מחזיר לתוכן את אותו מרווח — ללא תוספת.
+                    ? ScrollbarTheme(
+                        data: const ScrollbarThemeData(crossAxisMargin: 2),
+                        child: Scrollbar(
+                          controller: _scrollController,
+                          child: SingleChildScrollView(
+                            controller: _scrollController,
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 16),
+                            child: widget.child,
+                          ),
+                        ),
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: widget.child,
+                      ),
+              ),
               if (widget.actions != null && widget.actions!.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: widget.actions!,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: widget.actions!,
+                    ),
                   ),
                 ),
               ],
@@ -127,4 +169,3 @@ class _AppCustomContentDialogState extends State<AppCustomContentDialog>
     );
   }
 }
-

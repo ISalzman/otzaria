@@ -140,8 +140,7 @@ class _ChangeLocationDialogContentState
           onPressed: _selectedPath != null ? _confirm : null,
         ),
       ],
-      child: SingleChildScrollView(
-        child: Column(
+      child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -206,7 +205,6 @@ class _ChangeLocationDialogContentState
           ),
         ],
         ),
-      ),
     );
   }
 }

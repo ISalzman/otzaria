@@ -8,8 +8,7 @@ void main() {
   // AppCustomContentDialog משתמש ב-MediaQuery.of(context).size כדי לחשב את הרוחב.
   // בטסטים `setSurfaceSize` לא תמיד מתפשט ל-MediaQuery של דיאלוגים, לכן עוטפים
   // ידנית ב-MediaQuery עם הגודל הרצוי. הקונטיינר הפנימי של הדיאלוג הוא היחיד
-  // עם padding מפורש של 16 (Dialog/Material עוטפים אותו ב-Containers נוספים
-  // ללא ה-padding הזה).
+  // עם padding אנכי של 16 בלבד (horizontal מנוהל דרך Padding פנימי לכל שורה).
   Container findInnerContainer() {
     return find
         .descendant(
@@ -18,13 +17,16 @@ void main() {
         )
         .evaluate()
         .map((e) => e.widget as Container)
-        .singleWhere((c) => c.padding == const EdgeInsets.all(16));
+        .singleWhere(
+            (c) => c.padding == const EdgeInsets.symmetric(vertical: 16));
   }
 
   Future<void> pumpDialog(
     WidgetTester tester,
     Size mediaSize, {
     String title = 'כותרת',
+    bool scrollable = true,
+    Widget child = const SizedBox.shrink(),
   }) async {
     await tester.pumpWidget(MaterialApp(
       home: MediaQuery(
@@ -32,7 +34,8 @@ void main() {
         child: Material(
           child: AppCustomContentDialog(
             title: title,
-            child: const SizedBox.shrink(),
+            scrollable: scrollable,
+            child: child,
           ),
         ),
       ),
@@ -87,14 +90,120 @@ void main() {
       const longTitle = 'כותרת ארוכה מאוד שעשויה לגלוש בתצוגה רגילה';
       await pumpDialog(tester, const Size(350, 700), title: longTitle);
 
-      // הטקסט חייב להופיע (FittedBox מקטין ולא חוסם)
       expect(find.text(longTitle), findsOneWidget);
 
-      // FittedBox עם scaleDown קיים
       final fittedBox = tester
           .widgetList<FittedBox>(find.byType(FittedBox))
           .firstWhere((fb) => fb.fit == BoxFit.scaleDown);
       expect(fittedBox.fit, BoxFit.scaleDown);
+    });
+  });
+
+  group('AppCustomContentDialog — מיקום Scrollbar בתוך ה-padding הקיים', () {
+    testWidgets(
+        'ה-SingleChildScrollView מכיל padding אופקי של 16px בדיוק — ללא padding נוסף',
+        (tester) async {
+      await pumpDialog(tester, const Size(800, 600), scrollable: true);
+
+      final scrollView = tester.widget<SingleChildScrollView>(
+          find.byType(SingleChildScrollView));
+      expect(
+        scrollView.padding,
+        equals(const EdgeInsets.symmetric(horizontal: 16)),
+        reason:
+            'padding 16px הסטנדרטי בלבד — הScrollbar ממוקם בתוך ה-16px הקיים ולא מוסיף רווח',
+      );
+    });
+
+    testWidgets(
+        'התוכן מוצב בדיוק ב-16px מקצה ה-Scrollbar — הScrollbar לא חופף לתוכן',
+        (tester) async {
+      const childKey = Key('dialog-content');
+      await pumpDialog(
+        tester,
+        const Size(800, 600),
+        scrollable: true,
+        child: const SizedBox(key: childKey, height: 10),
+      );
+
+      final scrollbarRect = tester.getRect(find.byType(Scrollbar));
+      final contentRect = tester.getRect(find.byKey(childKey));
+
+      // התוכן מתחיל ב-16px מקצה ה-Scrollbar widget (padding הסטנדרטי בלבד).
+      // אם היה padding נוסף, המרחק היה גדול מ-16px.
+      expect(
+        contentRect.left - scrollbarRect.left,
+        closeTo(16.0, 0.5),
+        reason:
+            'אין padding נוסף: המרחק מקצה אזור הגלילה לתוכן הוא 16px (ה-Scrollbar יושב בתוך הרווח הזה)',
+      );
+    });
+
+    testWidgets("ה-Scrollbar ממוקם ע\"י הווידג'ט עצמו — קיים ב-scrollable=true",
+        (tester) async {
+      await pumpDialog(tester, const Size(800, 600), scrollable: true);
+
+      expect(find.byType(Scrollbar), findsOneWidget,
+          reason: 'AppCustomContentDialog מגדיר ומציב את ה-Scrollbar');
+      expect(find.byType(ScrollbarTheme), findsOneWidget,
+          reason:
+              'ScrollbarTheme מגדיר crossAxisMargin=2 — זהה ל-adaptive_side_pane, צמוד לגבול');
+    });
+
+    testWidgets('ללא scrollable — אין Scrollbar ואין SingleChildScrollView',
+        (tester) async {
+      await pumpDialog(tester, const Size(800, 600), scrollable: false);
+
+      expect(find.byType(Scrollbar), findsNothing);
+      expect(find.byType(SingleChildScrollView), findsNothing);
+    });
+
+    testWidgets(
+        'ללא scrollable — התוכן מוצב ב-16px בדיוק (אותו מרווח כמו scrollable)',
+        (tester) async {
+      const childKey = Key('dialog-content');
+
+      // scrollable: false — תוכן עם Padding ישיר
+      await tester.pumpWidget(MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(800, 600)),
+          child: Material(
+            child: AppCustomContentDialog(
+              title: 'כותרת',
+              scrollable: false,
+              child: const Padding(
+                // Padding wrapper so getRect returns the inner widget's position
+                padding: EdgeInsets.zero,
+                child: SizedBox(key: childKey, height: 10),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      // Container הפנימי (vertical padding בלבד) — קצהו השמאלי = גבול אזור התוכן
+      final containerFinder = find
+          .descendant(
+            of: find.byType(AppCustomContentDialog),
+            matching: find.byType(Container),
+          )
+          .evaluate()
+          .where((e) =>
+              (e.widget as Container).padding ==
+              const EdgeInsets.symmetric(vertical: 16))
+          .first;
+      final containerRect = tester.getRect(find.byElementPredicate(
+          (el) => el == containerFinder,
+          description: 'inner container'));
+      final contentRect = tester.getRect(find.byKey(childKey));
+
+      expect(
+        contentRect.left - containerRect.left,
+        closeTo(16.0, 0.5),
+        reason:
+            'ב-scrollable=false המרחק מקצה ה-Container לתוכן הוא 16px — זהה לאופן הפעולה עם גלילה',
+      );
     });
   });
 }
