@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
@@ -30,6 +31,10 @@ class ItemsListView extends StatefulWidget {
 
   /// כשמסופק, מוצג בצד שדה החיפוש באותה שורה (למשל כפתור מיון).
   final Widget? searchFieldTrailing;
+
+  /// FocusNode חיצוני לשדה החיפוש — מאפשר למשתמש החיצוני לקרוא
+  /// [requestFocus] לאחר פעולה (סינון, מיון) ולהחזיר את הפוקוס לחיפוש.
+  final FocusNode? searchFocusNode;
 
   /// כשמסופק, מחזיר את הכותרת הראשית של הפריט. ברירת מחדל — `item.book.title`.
   /// תן callback כדי לתמוך בפריטים שאינם בנויים סביב `book`.
@@ -65,6 +70,7 @@ class ItemsListView extends StatefulWidget {
     this.searchKeyBuilder,
     this.additionalFilter,
     this.searchFieldTrailing,
+    this.searchFocusNode,
     this.groupKeyBuilder,
     this.groupTitleBuilder,
     this.itemSortComparator,
@@ -102,8 +108,14 @@ class ItemsListView extends StatefulWidget {
 
 class _ItemsListViewState extends State<ItemsListView> {
   final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
+  final FocusNode _internalSearchFocusNode = FocusNode();
+  FocusNode get _searchFocusNode =>
+      widget.searchFocusNode ?? _internalSearchFocusNode;
   String _searchQuery = '';
+
+  int _focusedOriginalIndex = -1;
+  final Map<int, GlobalKey> _itemKeys = {};
+  List<MapEntry<int, dynamic>> _displayEntries = [];
 
   /// קאש לרשימה הממוינת — חישוב המיון (O(n log n)) רץ רק כשהקלט משתנה,
   /// לא בכל הקלדה בשדה החיפוש (שעושה רק filter על הקאש).
@@ -181,12 +193,14 @@ class _ItemsListViewState extends State<ItemsListView> {
   Widget _buildItemRow(
     BuildContext context,
     dynamic item,
-    int originalIndex,
-  ) {
+    int originalIndex, {
+    bool isKeyboardFocused = false,
+  }) {
+    final itemKey = _itemKeys.putIfAbsent(originalIndex, () => GlobalKey());
     final subtitle = widget.subtitleBuilder?.call(item);
     final subtitleTooltip = widget.subtitleTooltipBuilder?.call(item);
 
-    final row = InkWell(
+    Widget content = InkWell(
       onTap: () => widget.onItemTap(context, item, originalIndex),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -226,24 +240,36 @@ class _ItemsListViewState extends State<ItemsListView> {
       ),
     );
 
-    if (!widget.actionsInContextMenu) return row;
+    if (isKeyboardFocused) {
+      content = ColoredBox(
+        color: Theme.of(context).colorScheme.secondaryContainer,
+        child: content,
+      );
+    }
 
-    return AppContextMenuRegion(
-      menuBuilder: (menuContext, _) => [
-        if (widget.onEdit != null)
+    if (!widget.actionsInContextMenu) {
+      return KeyedSubtree(key: itemKey, child: content);
+    }
+
+    return KeyedSubtree(
+      key: itemKey,
+      child: AppContextMenuRegion(
+        menuBuilder: (menuContext, _) => [
+          if (widget.onEdit != null)
+            AppContextMenuEntry(
+              label: 'ערוך תיאור',
+              icon: FluentIcons.edit_24_regular,
+              onTap: () => widget.onEdit!(menuContext, item, originalIndex),
+            ),
           AppContextMenuEntry(
-            label: 'ערוך תיאור',
-            icon: FluentIcons.edit_24_regular,
-            onTap: () => widget.onEdit!(menuContext, item, originalIndex),
+            label: 'מחק',
+            icon: FluentIcons.delete_24_regular,
+            isDestructive: true,
+            onTap: () => widget.onDelete(menuContext, originalIndex),
           ),
-        AppContextMenuEntry(
-          label: 'מחק',
-          icon: FluentIcons.delete_24_regular,
-          isDestructive: true,
-          onTap: () => widget.onDelete(menuContext, originalIndex),
-        ),
-      ],
-      child: row,
+        ],
+        child: content,
+      ),
     );
   }
 
@@ -254,7 +280,12 @@ class _ItemsListViewState extends State<ItemsListView> {
     return AppCard.section(
       children: [
         for (final entry in entries)
-          _buildItemRow(context, entry.value, entry.key),
+          _buildItemRow(
+            context,
+            entry.value,
+            entry.key,
+            isKeyboardFocused: entry.key == _focusedOriginalIndex,
+          ),
       ],
     );
   }
@@ -317,6 +348,7 @@ class _ItemsListViewState extends State<ItemsListView> {
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text;
+        _focusedOriginalIndex = -1;
       });
     });
 
@@ -325,10 +357,59 @@ class _ItemsListViewState extends State<ItemsListView> {
     });
   }
 
+  void _moveFocusDown() {
+    if (_displayEntries.isEmpty) return;
+    setState(() {
+      if (_focusedOriginalIndex == -1) {
+        _focusedOriginalIndex = _displayEntries.first.key;
+      } else {
+        final idx = _displayEntries.indexWhere(
+          (e) => e.key == _focusedOriginalIndex,
+        );
+        if (idx >= 0 && idx < _displayEntries.length - 1) {
+          _focusedOriginalIndex = _displayEntries[idx + 1].key;
+        }
+      }
+    });
+    _ensureFocusedVisible();
+  }
+
+  void _moveFocusUp() {
+    if (_focusedOriginalIndex == -1) return;
+    final idx = _displayEntries.indexWhere(
+      (e) => e.key == _focusedOriginalIndex,
+    );
+    setState(() {
+      if (idx <= 0) {
+        _focusedOriginalIndex = -1;
+      } else {
+        _focusedOriginalIndex = _displayEntries[idx - 1].key;
+      }
+    });
+    if (idx > 0) _ensureFocusedVisible();
+  }
+
+  void _activateFocusedItem(BuildContext context) {
+    if (_focusedOriginalIndex == -1) return;
+    final matches = _displayEntries.where((e) => e.key == _focusedOriginalIndex);
+    if (matches.isEmpty) return;
+    final entry = matches.first;
+    widget.onItemTap(context, entry.value, entry.key);
+  }
+
+  void _ensureFocusedVisible() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _itemKeys[_focusedOriginalIndex]?.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 150));
+      }
+    });
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
-    _searchFocusNode.dispose();
+    _internalSearchFocusNode.dispose();
     super.dispose();
   }
 
@@ -361,51 +442,79 @@ class _ItemsListViewState extends State<ItemsListView> {
       return searchText.toLowerCase().contains(lowerQuery);
     }).toList();
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Builder(
-            builder: (context) {
-              final searchField = OtzariaSearchField(
-                controller: _searchController,
-                focusNode: _searchFocusNode,
-                hintText: widget.hintText,
-                onClear: () {
-                  setState(() {
-                    _searchQuery = '';
-                  });
-                },
-              );
-              if (widget.searchFieldTrailing == null) return searchField;
-              return Row(
-                children: [
-                  Expanded(child: searchField),
-                  widget.searchFieldTrailing!,
-                ],
-              );
-            },
+    _displayEntries = displayEntries;
+    if (_focusedOriginalIndex != -1 &&
+        !displayEntries.any((e) => e.key == _focusedOriginalIndex)) {
+      _focusedOriginalIndex = -1;
+    }
+
+    return Focus(
+      canRequestFocus: false,
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+          return KeyEventResult.ignored;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+          _moveFocusDown();
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          _moveFocusUp();
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.enter &&
+            _focusedOriginalIndex != -1) {
+          _activateFocusedItem(context);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Builder(
+              builder: (context) {
+                final searchField = OtzariaSearchField(
+                  controller: _searchController,
+                  focusNode: _searchFocusNode,
+                  hintText: widget.hintText,
+                  onClear: () {
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                );
+                if (widget.searchFieldTrailing == null) return searchField;
+                return Row(
+                  children: [
+                    Expanded(child: searchField),
+                    widget.searchFieldTrailing!,
+                  ],
+                );
+              },
+            ),
           ),
-        ),
-        Expanded(
-          child: displayEntries.isEmpty
-              ? Center(
-                  child: Text(
-                    widget.notFoundText,
-                  ),
-                )
-              : widget.groupKeyBuilder != null
-                  ? _buildGroupedList(context, displayEntries)
-                  : _buildFlatList(context, displayEntries),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: ActionButton.neutral(
-            text: widget.clearAllText,
-            onPressed: () => widget.onClearAll(context),
+          Expanded(
+            child: displayEntries.isEmpty
+                ? Center(
+                    child: Text(
+                      widget.notFoundText,
+                    ),
+                  )
+                : widget.groupKeyBuilder != null
+                    ? _buildGroupedList(context, displayEntries)
+                    : _buildFlatList(context, displayEntries),
           ),
-        ),
-      ],
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: ActionButton.neutral(
+              text: widget.clearAllText,
+              onPressed: () => widget.onClearAll(context),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

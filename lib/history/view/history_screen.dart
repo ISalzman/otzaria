@@ -45,11 +45,18 @@ class HistoryView extends StatefulWidget {
 
 class _HistoryViewState extends State<HistoryView> {
   String? _selectedWorkspace;
+  final FocusNode _searchFocusNode = FocusNode();
 
   /// קאש למפתחות הקיבוץ — נמנע מחישוב run-length encoding בכל קריאה ל-build
   /// כשרשימת ההיסטוריה לא משתנה.
   List<dynamic>? _cachedHistoryForRunKeys;
   Map<dynamic, String>? _cachedRunKeys;
+
+  @override
+  void dispose() {
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
 
   Map<dynamic, String> _getRunKeys(List<dynamic> history) {
     if (identical(_cachedHistoryForRunKeys, history)) return _cachedRunKeys!;
@@ -189,9 +196,12 @@ class _HistoryViewState extends State<HistoryView> {
                           ),
                         ),
                         selected: selected,
-                        onSelected: (_) => setState(() {
-                          _selectedWorkspace = selected ? null : name;
-                        }),
+                        onSelected: (_) {
+                          setState(() {
+                            _selectedWorkspace = selected ? null : name;
+                          });
+                          _searchFocusNode.requestFocus();
+                        },
                         selectedColor: cs.primary,
                         backgroundColor: cs.surfaceContainerHighest,
                         checkmarkColor: cs.onPrimary,
@@ -205,6 +215,7 @@ class _HistoryViewState extends State<HistoryView> {
               ),
             Expanded(
               child: ItemsListView(
+                searchFocusNode: _searchFocusNode,
                 items: state.history,
                 additionalFilter: effectiveSelectedWorkspace == null
                     ? null
