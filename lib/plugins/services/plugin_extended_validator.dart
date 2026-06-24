@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
+import 'package:otzaria/plugins/utils/plugin_version_utils.dart';
 import 'package:path/path.dart' as p;
 
 /// תוצאת ולידציה מורחבת לתוסף.
@@ -48,6 +50,7 @@ const Set<String> _knownApiMethods = {
   'library.listRecentBooks',
   'library.getBookContent',
   'library.getBookToc',
+  'library.getTree',
   'search.fullText',
   'reader.openBook',
   'reader.openBookAtRef',
@@ -71,6 +74,13 @@ const Set<String> _knownApiMethods = {
   'ui.showError',
   'ui.showConfirm',
   'ui.showWarning',
+  'ui.pickFolder',
+  'fs.extractZip',
+  'fs.deleteFile',
+  'fs.pickUserFile',
+  'fs.resolveFileUrl',
+  'fs.readTextFile',
+  'fs.revokeFile',
   'feedback.sendEmail',
   'history.list',
   'history.listSearches',
@@ -199,6 +209,95 @@ const Map<String, String> _methodRequiredPermission = {
   'shortcut.create': 'ui.create_shortcut',
 };
 
+/// גרסת האפליקציה המינימלית שבה כל API התווסף (`method -> minVersion`).
+///
+/// מקור-האמת לאכיפה: בעת אריזה, תוסף שקורא ל-API חדש מ-`minAppVersion`
+/// שהצהיר ייכשל (שגיאה חוסמת). הטבלה ב-`docs/plugin-sdk/API_REFERENCE.md`
+/// ("טבלת גרסאות API") נגזרת ממפה זו, ו-`plugin_method_versions_test.dart`
+/// מוודא שהן נשארות זהות. כל API חדש: הוסף שורה כאן + שורה בטבלה במסמך.
+///
+/// תואם METHOD_MIN_VERSION ב-`pluginValidation.js` (Otzaria_Website)
+/// וב-otzaria-plugin-validator — יש לסנכרן את שלושתם יחד.
+const Map<String, String> _methodMinVersion = {
+  // 0.9.89 — מערכת התוספים הראשונה (כל ה-APIs הבסיסיים).
+  'app.getInfo': '0.9.89',
+  'app.getTheme': '0.9.89',
+  'app.getLocale': '0.9.89',
+  'app.getUserEmail': '0.9.89',
+  'app.getGrantedPermissions': '0.9.89',
+  'library.findBooks': '0.9.89',
+  'library.getBookMetadata': '0.9.89',
+  'library.listRecentBooks': '0.9.89',
+  'library.getBookContent': '0.9.89',
+  'library.getBookToc': '0.9.89',
+  'search.fullText': '0.9.89',
+  'reader.openBook': '0.9.89',
+  'reader.openBookAtRef': '0.9.89',
+  'reader.getCurrentState': '0.9.89',
+  'reader.getCurrentRef': '0.9.89',
+  'reader.getSelection': '0.9.89',
+  'reader.addContextMenuItem': '0.9.89',
+  'reader.removeContextMenuItem': '0.9.89',
+  'reader.setHighlight': '0.9.89',
+  'reader.getHighlights': '0.9.89',
+  'reader.clearHighlight': '0.9.89',
+  'reader.clearAllHighlights': '0.9.89',
+  'navigation.goTo': '0.9.89',
+  'notes.list': '0.9.89',
+  'notes.getBookNotesSummary': '0.9.89',
+  'notes.add': '0.9.89',
+  'notes.update': '0.9.89',
+  'notes.delete': '0.9.89',
+  'ui.showMessage': '0.9.89',
+  'ui.showSuccess': '0.9.89',
+  'ui.showError': '0.9.89',
+  'ui.showConfirm': '0.9.89',
+  'ui.showWarning': '0.9.89',
+  'feedback.sendEmail': '0.9.89',
+  'history.list': '0.9.89',
+  'history.listSearches': '0.9.89',
+  'history.clear': '0.9.89',
+  'history.remove': '0.9.89',
+  'notifications.showInApp': '0.9.89',
+  'notifications.sendSystem': '0.9.89',
+  'notifications.scheduleSystem': '0.9.89',
+  'notifications.cancel': '0.9.89',
+  'notifications.cancelAll': '0.9.89',
+  'notifications.checkPermissions': '0.9.89',
+  'notifications.requestPermissions': '0.9.89',
+  'storage.get': '0.9.89',
+  'storage.set': '0.9.89',
+  'storage.remove': '0.9.89',
+  'storage.list': '0.9.89',
+  'settings.get': '0.9.89',
+  'settings.getMany': '0.9.89',
+  'calendar.getSelectedDate': '0.9.89',
+  'calendar.getDailyTimes': '0.9.89',
+  'calendar.getHalachicTimes': '0.9.89',
+  'calendar.getJewishDate': '0.9.89',
+  'calendar.getEvents': '0.9.89',
+  'publishedData.upsert': '0.9.89',
+  'publishedData.remove': '0.9.89',
+  'publishedData.listOwn': '0.9.89',
+  'database.listSources': '0.9.89',
+  'database.describeSource': '0.9.89',
+  'database.query': '0.9.89',
+  'database.batchQuery': '0.9.89',
+  // 0.9.93
+  'library.getTree': '0.9.93',
+  'network.fetch': '0.9.93',
+  'network.download': '0.9.93',
+  'fs.deleteFile': '0.9.93',
+  'fs.extractZip': '0.9.93',
+  'ui.pickFolder': '0.9.93',
+  // 0.9.94
+  'shortcut.create': '0.9.94',
+  'fs.pickUserFile': '0.9.94',
+  'fs.readTextFile': '0.9.94',
+  'fs.resolveFileUrl': '0.9.94',
+  'fs.revokeFile': '0.9.94',
+};
+
 /// שדות שמורים שאינם API methods (כדי שלא ייתפסו ב-shorthand scanner).
 const Set<String> _reservedHolderFields = {
   'call',
@@ -213,6 +312,15 @@ const Set<String> _reservedHolderFields = {
 };
 
 class PluginExtendedValidator {
+  /// חשיפה לבדיקות סנכרון בלבד: מפת `method -> minVersion` ורשימת ה-methods
+  /// המוכרים, כדי לוודא שהמפה, הטבלה במסמך ורשימת ה-known נשארות עקביות.
+  @visibleForTesting
+  static Map<String, String> get methodMinVersions =>
+      Map.unmodifiable(_methodMinVersion);
+
+  @visibleForTesting
+  static Set<String> get knownApiMethods => _knownApiMethods;
+
   /// מבצע ולידציה מורחבת על תיקיית התוסף.
   ///
   /// תואם ללוגיקה ב-`C:\Otzaria_Website\src\lib\pluginValidation.js`.
@@ -284,6 +392,10 @@ class PluginExtendedValidator {
           'התוסף משתמש ב-$method אך לא ביקש את ההרשאה "$required" ב-manifest');
     }
 
+    // Cross-check: method חדש מ-minAppVersion שהוצהר — שגיאה חוסמת. תוסף שקורא
+    // ל-API שלא היה קיים בגרסת המינימום שלו יקרוס אצל משתמש בגרסה כזו.
+    _checkMethodVersions(apiUsage, manifest.minAppVersion, errors);
+
     // Cross-check: event subscription דורש הרשאת events.subscribe:X.
     for (final ev in eventUsage.keys) {
       final eventPerm = 'events.subscribe:$ev';
@@ -301,6 +413,32 @@ class PluginExtendedValidator {
       warnings: warnings,
       design: design,
     );
+  }
+
+  /// מצליב כל method בשימוש מול גרסת המינימום שבה התווסף. כל method חדש
+  /// מ-[minAppVersion] מתווסף כ-error חוסם, עם הנחיה לעדכן את minAppVersion.
+  static void _checkMethodVersions(
+    Map<String, Set<String>> apiUsage,
+    String minAppVersion,
+    List<String> errors,
+  ) {
+    for (final entry in apiUsage.entries) {
+      final method = entry.key;
+      final since = _methodMinVersion[method];
+      if (since == null) continue;
+      final int cmp;
+      try {
+        cmp = PluginVersionUtils.compareCoreVersions(since, minAppVersion);
+      } on PluginVersionFormatException {
+        continue; // minAppVersion לא חוקי — נתפס ב-PluginManifestValidator.
+      }
+      if (cmp > 0) {
+        errors.add(
+            'התוסף משתמש ב-$method הקיים החל מגרסה $since, אך minAppVersion '
+            'שהוצהר הוא $minAppVersion. עדכן את minAppVersion ל-$since לפחות '
+            '(קבצים: ${entry.value.join(', ')})');
+      }
+    }
   }
 
   // ===== Manifest checks =====
@@ -429,11 +567,11 @@ class PluginExtendedValidator {
   ///   1. הערות בלוקיות (HTML `<!-- -->` ו-JS `/* */`) מוסרות.
   ///   2. **string literals** (single/double/backtick) מוחלפים זמנית
   ///      ב-placeholders — כך ש-`//` בתוך URL לא ייחתך.
-  ///   3. **regex literals** (`/.../flags` אחרי הקשר מתאים) מוחלפים גם
-  ///      הם — כך ש-`//` בתוך regex כמו `/https?:\/\/example/` לא יחתוך
-  ///      את שאר השורה ויבליע קריאה אמיתית ל-Otzaria.call שאחריה.
+  ///   3. **regex literals** (`/.../flags` אחרי הקשר מתאים) נמחקים — כך
+  ///      ש-`//` בתוך regex כמו `/https?:\/\/example/` לא יחתוך את שאר
+  ///      השורה, ותוכן ה-regex (כולל הטקסט "Otzaria.call") לא ייספר כקריאה.
   ///   4. הערות שורה (`//`) מוסרות — בתחילת שורה וגם inline.
-  ///   5. ה-placeholders מוחזרים לקדמותם.
+  ///   5. ה-placeholders של ה-strings מוחזרים לקדמותם (regex לא — הוא נמחק).
   ///
   /// זיהוי regex ב-JS הוא קלאסית חצי-החלטה (`/` יכול להיות חלוקה).
   /// אנחנו לא בונים lexer מלא; אנחנו מזהים regex רק כשהוא מופיע אחרי
@@ -451,7 +589,7 @@ class PluginExtendedValidator {
     String replaceLiteral(Match m) {
       final idx = placeholders.length;
       placeholders.add(m.group(0)!);
-      return ' STR$idx ';
+      return '__OTZ_STR_${idx}__';
     }
 
     // (2) string literals — single/double/backtick. `\\.` תופס escape
@@ -467,7 +605,7 @@ class PluginExtendedValidator {
 
     // (3) regex literals — רק אחרי "הקשר רגקס" (תו או מילת מפתח שמרמזים
     // שהבא הוא ביטוי, לא חלוקה). שומרים את ההקשר ב-group(1) וב-group(2),
-    // ואת ה-regex עצמו (group(3)) מחליפים ב-placeholder. ה-character-class
+    // ואת ה-regex עצמו (group(3)) מוחקים (לא נסרק ולא משוחזר). ה-character-class
     // ‎`\[…\]` בתוך הregex מאפשר `/` בלתי בורח בתוך class (למשל `/[a-z\/]/`).
     stripped = stripped.replaceAllMapped(
       RegExp(
@@ -476,9 +614,9 @@ class PluginExtendedValidator {
         r'(/(?:\\.|\[(?:\\.|[^\]\\\n\r])*\]|[^/\\\n\r])+?/[gimsuyd]*)',
       ),
       (m) {
-        final idx = placeholders.length;
-        placeholders.add(m.group(3)!);
-        return '${m.group(1)}${m.group(2)} STR$idx ';
+        // regex literals נמחקים מהסריקה (לא משוחזרים): `//` או הטקסט
+        // "Otzaria.call" בתוכם אינם קריאה אמיתית ואסור שייספרו.
+        return '${m.group(1)}${m.group(2)} ';
       },
     );
 
@@ -488,7 +626,7 @@ class PluginExtendedValidator {
 
     // מחזירים את המחרוזות לקדמותן.
     stripped = stripped.replaceAllMapped(
-      RegExp(r' STR(\d+) '),
+      RegExp(r'__OTZ_STR_(\d+)__'),
       (m) => placeholders[int.parse(m.group(1)!)],
     );
 

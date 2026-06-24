@@ -15,6 +15,93 @@ if (response.success) {
 
 ---
 
+## טבלת גרסאות API
+
+הטבלה מציינת מאיזו גרסת אוצריא כל API זמין. הגדר את `minAppVersion` במניפסט כך שיהיה **לפחות** הגרסה הגבוהה ביותר מבין ה-APIs שבהם התוסף משתמש.
+
+> סקריפט האריזה (`otzaria pack-plugin` / `dart run tool/plugins/package_plugin.dart`) **חוסם אריזה** אם התוסף קורא ל-API חדש מ-`minAppVersion` שהוצהר — כך תוסף לא יישלח עם דרישת גרסה נמוכה מדי שתגרום לו לקרוס אצל משתמשים בגרסה ישנה.
+
+| API | קיים מגרסה |
+|-----|-----------|
+| `app.getInfo` | 0.9.89 |
+| `app.getTheme` | 0.9.89 |
+| `app.getLocale` | 0.9.89 |
+| `app.getUserEmail` | 0.9.89 |
+| `app.getGrantedPermissions` | 0.9.89 |
+| `library.findBooks` | 0.9.89 |
+| `library.getBookMetadata` | 0.9.89 |
+| `library.listRecentBooks` | 0.9.89 |
+| `library.getBookContent` | 0.9.89 |
+| `library.getBookToc` | 0.9.89 |
+| `library.getTree` | 0.9.93 |
+| `network.fetch` | 0.9.93 |
+| `network.download` | 0.9.93 |
+| `search.fullText` | 0.9.89 |
+| `reader.openBook` | 0.9.89 |
+| `reader.openBookAtRef` | 0.9.89 |
+| `reader.getCurrentState` | 0.9.89 |
+| `reader.getCurrentRef` | 0.9.89 |
+| `reader.getSelection` | 0.9.89 |
+| `reader.addContextMenuItem` | 0.9.89 |
+| `reader.removeContextMenuItem` | 0.9.89 |
+| `reader.setHighlight` | 0.9.89 |
+| `reader.getHighlights` | 0.9.89 |
+| `reader.clearHighlight` | 0.9.89 |
+| `reader.clearAllHighlights` | 0.9.89 |
+| `navigation.goTo` | 0.9.89 |
+| `notes.list` | 0.9.89 |
+| `notes.getBookNotesSummary` | 0.9.89 |
+| `notes.add` | 0.9.89 |
+| `notes.update` | 0.9.89 |
+| `notes.delete` | 0.9.89 |
+| `ui.showMessage` | 0.9.89 |
+| `ui.showSuccess` | 0.9.89 |
+| `ui.showError` | 0.9.89 |
+| `ui.showConfirm` | 0.9.89 |
+| `ui.showWarning` | 0.9.89 |
+| `ui.pickFolder` | 0.9.93 |
+| `fs.extractZip` | 0.9.93 |
+| `fs.deleteFile` | 0.9.93 |
+| `fs.pickUserFile` | 0.9.94 |
+| `fs.resolveFileUrl` | 0.9.94 |
+| `fs.readTextFile` | 0.9.94 |
+| `fs.revokeFile` | 0.9.94 |
+| `feedback.sendEmail` | 0.9.89 |
+| `history.list` | 0.9.89 |
+| `history.listSearches` | 0.9.89 |
+| `history.clear` | 0.9.89 |
+| `history.remove` | 0.9.89 |
+| `notifications.showInApp` | 0.9.89 |
+| `notifications.sendSystem` | 0.9.89 |
+| `notifications.scheduleSystem` | 0.9.89 |
+| `notifications.cancel` | 0.9.89 |
+| `notifications.cancelAll` | 0.9.89 |
+| `notifications.checkPermissions` | 0.9.89 |
+| `notifications.requestPermissions` | 0.9.89 |
+| `storage.get` | 0.9.89 |
+| `storage.set` | 0.9.89 |
+| `storage.remove` | 0.9.89 |
+| `storage.list` | 0.9.89 |
+| `settings.get` | 0.9.89 |
+| `settings.getMany` | 0.9.89 |
+| `calendar.getSelectedDate` | 0.9.89 |
+| `calendar.getDailyTimes` | 0.9.89 |
+| `calendar.getHalachicTimes` | 0.9.89 |
+| `calendar.getJewishDate` | 0.9.89 |
+| `calendar.getEvents` | 0.9.89 |
+| `publishedData.upsert` | 0.9.89 |
+| `publishedData.remove` | 0.9.89 |
+| `publishedData.listOwn` | 0.9.89 |
+| `database.listSources` | 0.9.89 |
+| `database.describeSource` | 0.9.89 |
+| `database.query` | 0.9.89 |
+| `database.batchQuery` | 0.9.89 |
+| `shortcut.create` | 0.9.94 |
+
+> מקור-האמת לאכיפה הוא המפה `_methodMinVersion` ב-`lib/plugins/services/plugin_extended_validator.dart`. הטבלה כאן נגזרת ממנה ו-`test/plugins/plugin_method_versions_test.dart` מוודא ששתיהן זהות.
+
+---
+
 ## app.* - מידע על האפליקציה
 
 **הרשאה נדרשת:** `app.info.read` (למעט `app.getUserEmail` שמצריכה `app.user_email.read` - ראה למטה)
@@ -1501,6 +1588,23 @@ Otzaria.on('plugin.boot', async (payload) => {
 - **ברירת מחדל: כבויה** — שונה מכל שאר ההרשאות שמופעלות כברירת מחדל
 - בעת ההתקנה מוצג **באנר כתום בולט** שמסביר שהתוסף מבקש לרוץ ברקע
 - המשתמש יכול להפעיל/לכבות את ההרשאה בכל עת מהגדרות התוסף
+
+### קובץ כניסה ייעודי לרקע (`contributes.background.entrypoint`)
+
+ברירת המחדל היא שהרקע טוען את אותו `entrypoint` של הלשונית הנראית — דף ה-UI המלא. ברקע אין UI גלוי, ולכן מומלץ להצהיר על קובץ כניסה קליל ונפרד שמכיל רק לוגיקת headless (רישומים, מאזיני אירועים), בלי framework/CSS/גופנים:
+
+```json
+{
+  "entrypoint": "dist/index.html",
+  "permissions": ["app.run_on_startup", "reader.context_menu"],
+  "contributes": {
+    "background": { "entrypoint": "dist/background.html" }
+  }
+}
+```
+
+- אם השדה לא מוצהר — הרקע נופל ל-`entrypoint` הרגיל (תאימות לאחור).
+- הקובץ חייב להתקיים ולהיכלל באריזה; אחרת הוולידציה/אריזה נכשלת עם שגיאה ברורה.
 
 ---
 

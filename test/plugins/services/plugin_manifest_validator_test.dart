@@ -43,5 +43,83 @@ void main() {
         completes,
       );
     });
+
+    test('accepts a declared background entrypoint that exists', () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('plugin_validator_bg_');
+      addTearDown(() => tempDir.delete(recursive: true));
+      await File(p.join(tempDir.path, 'index.html'))
+          .writeAsString('<html></html>');
+      await File(p.join(tempDir.path, 'background.html'))
+          .writeAsString('<html></html>');
+
+      final manifest = PluginManifest(
+        schemaVersion: 1,
+        id: 'test.validator.background',
+        name: 'Validator Plugin',
+        version: '1.0.0',
+        description: '',
+        author: '',
+        homepage: '',
+        entrypoint: 'index.html',
+        backgroundEntrypoint: 'background.html',
+        minAppVersion: '1.0.0',
+        sdkVersion: '1.x',
+        permissions: const [],
+        networkEnabled: false,
+        networkAllowlist: const [],
+        toolTabTitle: 'Validator Plugin',
+        toolTabOrder: 900,
+        defaultPinned: false,
+        publishedDataTypes: const [],
+      );
+
+      await expectLater(
+        PluginManifestValidator.validateManifest(
+          manifest: manifest,
+          directoryPath: tempDir.path,
+          currentAppVersion: '1.0.0',
+        ),
+        completes,
+      );
+    });
+
+    test('throws when the declared background entrypoint is missing', () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('plugin_validator_bg_');
+      addTearDown(() => tempDir.delete(recursive: true));
+      await File(p.join(tempDir.path, 'index.html'))
+          .writeAsString('<html></html>');
+
+      final manifest = PluginManifest(
+        schemaVersion: 1,
+        id: 'test.validator.background.missing',
+        name: 'Validator Plugin',
+        version: '1.0.0',
+        description: '',
+        author: '',
+        homepage: '',
+        entrypoint: 'index.html',
+        backgroundEntrypoint: 'background.html',
+        minAppVersion: '1.0.0',
+        sdkVersion: '1.x',
+        permissions: const [],
+        networkEnabled: false,
+        networkAllowlist: const [],
+        toolTabTitle: 'Validator Plugin',
+        toolTabOrder: 900,
+        defaultPinned: false,
+        publishedDataTypes: const [],
+      );
+
+      await expectLater(
+        PluginManifestValidator.validateManifest(
+          manifest: manifest,
+          directoryPath: tempDir.path,
+          currentAppVersion: '1.0.0',
+        ),
+        throwsA(isA<Exception>()),
+      );
+    });
   });
 }
