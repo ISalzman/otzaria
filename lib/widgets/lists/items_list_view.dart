@@ -259,6 +259,16 @@ class _ItemsListViewState extends State<ItemsListView> {
     );
   }
 
+  Widget _buildFlatList(
+    BuildContext context,
+    List<MapEntry<int, dynamic>> entries,
+  ) {
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 8),
+      children: [_buildGroupCard(context, entries)],
+    );
+  }
+
   Widget _buildGroupedList(
     BuildContext context,
     List<MapEntry<int, dynamic>> filteredEntries,
@@ -386,17 +396,7 @@ class _ItemsListViewState extends State<ItemsListView> {
                 )
               : widget.groupKeyBuilder != null
                   ? _buildGroupedList(context, displayEntries)
-                  : ListView.builder(
-                      itemCount: displayEntries.length,
-                      itemBuilder: (context, index) {
-                        final entry = displayEntries[index];
-                        return _buildItemRow(
-                          context,
-                          entry.value,
-                          entry.key,
-                        );
-                      },
-                    ),
+                  : _buildFlatList(context, displayEntries),
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
