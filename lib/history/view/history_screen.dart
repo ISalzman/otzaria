@@ -31,6 +31,7 @@ class HistoryDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return const AppCustomContentDialog(
       title: 'היסטוריה',
+      scrollable: false,
       child: HistoryView(),
     );
   }

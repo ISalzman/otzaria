@@ -121,8 +121,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
           onPressed: _onInstall,
         ),
       ],
-      child: SingleChildScrollView(
-        child: Column(
+      child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -242,7 +241,6 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
             const SizedBox(height: 32),
           ],
         ),
-      ),
     );
   }
 }

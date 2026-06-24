@@ -34,6 +34,7 @@ class BookmarksDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCustomContentDialog(
       title: bookFilter == null ? 'סימניות' : 'סימניות בספר זה',
+      scrollable: false,
       child: BookmarkView(bookFilter: bookFilter),
     );
   }
