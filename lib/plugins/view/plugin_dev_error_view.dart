@@ -79,7 +79,6 @@ class PluginDevErrorView extends StatelessWidget {
                   onPressed: () async {
                     final result = await showDialog<bool>(
                       context: context,
-                      barrierDismissible: false,
                       builder: (_) => BlocProvider<PluginSystemBloc>.value(
                         value: context.read<PluginSystemBloc>(),
                         child: PluginSettingsScreen(plugin: plugin),
