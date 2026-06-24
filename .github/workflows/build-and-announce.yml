@@ -1532,12 +1532,7 @@ jobs:
           >
           > אם אתם צריכים חבילה להפצה או להתקנה לא־מקוונת, בחרו **גרסת ספרייה מלאה (FULL)**.
           >
-          > קובצי הספרייה זמינים גם בנפרד כאן:
-          > [seforim.db.zst](https://github.com/Otzaria/SeforimLibrary/releases/latest/download/seforim.db.zst),
-          > [otzar-HB_catalog.db.zst](https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst)
-          >
-          > קובצי ה־PDF של תלמוד בבלי זמינים גם בנפרד כאן:
-          > [talmud_bavli_latest.tar.zst](https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst)
+          > את הספרייה מורידים מתוך התוכנה עצמה לאחר ההתקנה, או על־ידי הורדת המתקין המלא (FULL) להתקנה במחשב ללא אינטרנט.
 
           EOF
 
