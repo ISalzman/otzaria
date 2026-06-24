@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
@@ -1188,8 +1189,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           child: AppContextMenuRegion(
             key: _pdfContextMenuKey,
             menuBuilder: _buildPdfContextMenuEntries,
-            child: Listener(
-              behavior: HitTestBehavior.translucent,
+            child: _PdfScrollOnlyListener(
               onPointerSignal: (event) {
                 final adjusted = _trackpadAxisLock.apply(
                   event,
@@ -5311,5 +5311,52 @@ class _BookViewTurnButton extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Listener variant that registers with [PointerSignalResolver] only for
+/// [PointerScrollEvent] (mouse wheel / Ctrl+scroll).
+///
+/// [PointerScaleEvent] (trackpad two-finger pinch) deliberately bypasses the
+/// resolver so the underlying pdfrx InteractiveViewer can claim it and zoom
+/// at the correct focal point (cursor position) instead of the viewport center.
+class _PdfScrollOnlyListener extends SingleChildRenderObjectWidget {
+  const _PdfScrollOnlyListener({
+    required this.onPointerSignal,
+    super.child,
+  });
+
+  final void Function(PointerSignalEvent) onPointerSignal;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderPdfScrollOnlyListener(onPointerSignal: onPointerSignal);
+
+  @override
+  void updateRenderObject(
+      BuildContext context, _RenderPdfScrollOnlyListener renderObject) {
+    renderObject.onPointerSignal = onPointerSignal;
+  }
+}
+
+class _RenderPdfScrollOnlyListener extends RenderProxyBoxWithHitTestBehavior {
+  _RenderPdfScrollOnlyListener({
+    required void Function(PointerSignalEvent) onPointerSignal,
+  })  : _onPointerSignal = onPointerSignal,
+        super(behavior: HitTestBehavior.translucent);
+
+  void Function(PointerSignalEvent) _onPointerSignal;
+
+  set onPointerSignal(void Function(PointerSignalEvent) value) {
+    _onPointerSignal = value;
+  }
+
+  @override
+  void handleEvent(PointerEvent event, HitTestEntry entry) {
+    if (event is PointerScrollEvent) {
+      GestureBinding.instance.pointerSignalResolver
+          .register(event, _onPointerSignal);
+    }
+    // PointerScaleEvent is not claimed — pdfrx zooms at the correct focal point
   }
 }
