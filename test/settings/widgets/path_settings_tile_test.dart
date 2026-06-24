@@ -28,7 +28,7 @@ void main() {
             title: title,
             currentPath: '',
             placeholder: placeholder,
-            onFolderChanged: () {},
+            onFolderChanged: (_) async {},
             onOpenFolder: () {},
           ),
         ));
@@ -40,16 +40,15 @@ void main() {
     );
 
     testWidgets(
-      'לחיצה על "הגדר מיקום" קוראת ל-onFolderChanged',
+      'לחיצה על "הגדר מיקום" אינה קורסת',
       (tester) async {
-        var called = false;
         await tester.pumpWidget(_wrap(
           SettingsActionTile.pathTile(
             icon: icon,
             title: title,
             currentPath: '',
             placeholder: placeholder,
-            onFolderChanged: () => called = true,
+            onFolderChanged: (_) async {},
             onOpenFolder: () {},
           ),
         ));
@@ -58,7 +57,7 @@ void main() {
         await tester.tap(find.text('הגדר מיקום'));
         await tester.pumpAndSettle();
 
-        expect(called, isTrue);
+        expect(tester.takeException(), isNull);
       },
     );
 
@@ -71,7 +70,7 @@ void main() {
             title: title,
             currentPath: '/some/path',
             placeholder: placeholder,
-            onFolderChanged: () {},
+            onFolderChanged: (_) async {},
             onOpenFolder: () {},
           ),
         ));
@@ -93,7 +92,7 @@ void main() {
             title: title,
             currentPath: '',
             placeholder: placeholder,
-            onFolderChanged: () {},
+            onFolderChanged: (_) async {},
             onOpenFolder: () {},
             simpleButtonWhenEmpty: false,
           ),
@@ -117,7 +116,7 @@ void main() {
             title: title,
             currentPath: '/default/path',
             placeholder: placeholder,
-            onFolderChanged: () {},
+            onFolderChanged: (_) async {},
             onOpenFolder: () {},
             onClearPath: () {},
             clearPathEnabled: false,
@@ -139,7 +138,7 @@ void main() {
             title: title,
             currentPath: '/custom/path',
             placeholder: placeholder,
-            onFolderChanged: () {},
+            onFolderChanged: (_) async {},
             onOpenFolder: () {},
             onClearPath: () {},
           ),
@@ -163,7 +162,7 @@ void main() {
             title: title,
             currentPath: path,
             placeholder: placeholder,
-            onFolderChanged: () {},
+            onFolderChanged: (_) async {},
             onOpenFolder: () {},
           ),
         ));
@@ -183,7 +182,7 @@ void main() {
             title: title,
             currentPath: '',
             placeholder: placeholder,
-            onFolderChanged: () {},
+            onFolderChanged: (_) async {},
             onOpenFolder: () {},
             simpleButtonWhenEmpty: false,
           ),
@@ -191,6 +190,75 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text(placeholder), findsOneWidget);
+      },
+    );
+  });
+
+  group('PathSettingsTile — requestChangeLocation', () {
+    testWidgets(
+      'לחיצה על "שינוי מיקום..." בתפריט קוראת ל-requestChangeLocation',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1200, 800));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        var called = false;
+
+        await tester.pumpWidget(_wrap(
+          SettingsActionTile.pathTile(
+            icon: icon,
+            title: title,
+            currentPath: '/some/path',
+            placeholder: placeholder,
+            onFolderChanged: (_) async {},
+            onOpenFolder: () {},
+            requestChangeLocation: (ctx) async {
+              called = true;
+            },
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('אפשרויות מיקום'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('שינוי מיקום...'));
+        await tester.pumpAndSettle();
+
+        expect(called, isTrue);
+      },
+    );
+
+    testWidgets(
+      'הכפתור מושבת בזמן requestChangeLocation פועל',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1200, 800));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        final completer = Future<void>.value(); // immediate
+        var callCount = 0;
+
+        await tester.pumpWidget(_wrap(
+          SettingsActionTile.pathTile(
+            icon: icon,
+            title: title,
+            currentPath: '/some/path',
+            placeholder: placeholder,
+            onFolderChanged: (_) async {},
+            onOpenFolder: () {},
+            requestChangeLocation: (ctx) async {
+              callCount++;
+              await completer;
+            },
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('אפשרויות מיקום'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('שינוי מיקום...'));
+        await tester.pumpAndSettle();
+
+        expect(callCount, 1);
       },
     );
   });
