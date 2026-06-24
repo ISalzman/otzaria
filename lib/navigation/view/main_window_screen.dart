@@ -2501,7 +2501,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
               if (state is PluginSystemInstallRequiresPermissions) {
                 showDialog(
                   context: context,
-                  barrierDismissible: false,
                   builder: (_) => BlocProvider.value(
                     value: context.read<PluginSystemBloc>(),
                     child: PluginInstallScreen(
@@ -2517,7 +2516,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 final bloc = context.read<PluginSystemBloc>();
                 showDialog(
                   context: context,
-                  barrierDismissible: false,
                   builder: (_) => PluginInstallScreen(
                     manifest: state.manifest,
                     tempDirPath: '',

@@ -326,14 +326,7 @@ class _PluginListTile extends StatelessWidget {
             icon: Icon(FluentIcons.settings_24_regular),
             tooltip: 'הגדרות תוסף',
             onPressed: () async {
-              final result = await showDialog<bool>(
-                context: context,
-                barrierDismissible: false,
-                builder: (_) => BlocProvider<PluginSystemBloc>.value(
-                  value: context.read<PluginSystemBloc>(),
-                  child: PluginSettingsScreen(plugin: plugin),
-                ),
-              );
+              final result = await showPluginSettingsDialog(context, plugin);
               if (result == true && onPluginSelected != null) {
                 if (context.mounted) {
                   context

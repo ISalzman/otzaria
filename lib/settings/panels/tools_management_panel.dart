@@ -865,16 +865,7 @@ class _PluginRow extends StatelessWidget {
                 IconButton(
                   icon: const Icon(FluentIcons.settings_24_regular),
                   tooltip: 'הגדרות תוסף',
-                  onPressed: () async {
-                    await showDialog<bool>(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (_) => BlocProvider<PluginSystemBloc>.value(
-                        value: context.read<PluginSystemBloc>(),
-                        child: PluginSettingsScreen(plugin: plugin),
-                      ),
-                    );
-                  },
+                  onPressed: () => showPluginSettingsDialog(context, plugin),
                 ),
                 AnimatedPinButton(
                   isPinned: plugin.pinnedToNavRail,
