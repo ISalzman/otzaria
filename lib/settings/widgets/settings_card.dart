@@ -787,7 +787,6 @@ class _PathMenuButton extends StatefulWidget {
 }
 
 class _PathMenuButtonState extends State<_PathMenuButton> {
-  bool _isOpen = false;
   bool _isLoading = false;
 
   Future<void> _pickAndChange() async {
@@ -803,8 +802,6 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
 
   Future<void> _showMenu(BuildContext anchorContext) async {
     final hasPath = widget.currentPath.isNotEmpty;
-    if (mounted) setState(() => _isOpen = true);
-
     final entries = <AppMenuEntry<_PathMenuAction>>[
       AppMenuEntry(
         value: _PathMenuAction.openFolder,
@@ -841,7 +838,6 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
           .toList(),
     );
 
-    if (mounted) setState(() => _isOpen = false);
     if (selected == null) return;
 
     switch (selected) {
@@ -859,12 +855,7 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
 
   Future<void> _handleChangeLocation() async {
     if (widget.requestChangeLocation != null) {
-      setState(() => _isLoading = true);
-      try {
-        await widget.requestChangeLocation!(context);
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
-      }
+      await widget.requestChangeLocation!(context);
     } else {
       await _pickAndChange();
     }
@@ -880,18 +871,12 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
         icon: FluentIcons.folder_arrow_right_24_regular,
       );
     }
-    final cs = Theme.of(context).colorScheme;
     return Builder(
-      builder: (buttonContext) => FilledButton.icon(
+      builder: (buttonContext) => ActionButton.neutral(
+        text: 'אפשרויות מיקום',
+        icon: FluentIcons.folder_arrow_right_24_regular,
+        isLoading: _isLoading,
         onPressed: _isLoading ? null : () => _showMenu(buttonContext),
-        style: _isOpen
-            ? null
-            : FilledButton.styleFrom(
-                backgroundColor: cs.surfaceContainerHighest,
-                foregroundColor: cs.onSurface,
-              ),
-        icon: const Icon(FluentIcons.folder_arrow_right_24_regular),
-        label: const Text('אפשרויות מיקום'),
       ),
     );
   }
