@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_link_dialog.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 // RTL-aware arrow key shortcuts for QuillEditor.
 //
@@ -457,12 +456,12 @@ class _PersonalNoteToolbar extends StatelessWidget {
         ),
         IconButton(
           tooltip: 'הגדל כתב',
-          icon: const RtlIcon(FluentIcons.font_increase_24_regular, size: 18),
+          icon: const Icon(FluentIcons.font_increase_24_regular, size: 18),
           onPressed: () => _adjustFontSize(_fontSizeStep),
         ),
         IconButton(
           tooltip: 'הקטן כתב',
-          icon: const RtlIcon(FluentIcons.font_decrease_24_regular, size: 18),
+          icon: const Icon(FluentIcons.font_decrease_24_regular, size: 18),
           onPressed: () => _adjustFontSize(-_fontSizeStep),
         ),
         IconButton(

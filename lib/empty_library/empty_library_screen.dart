@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -7,7 +7,6 @@ import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 class EmptyLibraryScreen extends StatelessWidget {
@@ -191,7 +190,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          RtlIcon(
+          Icon(
             FluentIcons.arrow_download_24_regular,
             size: 64,
             color: Theme.of(context).colorScheme.primary,
@@ -239,7 +238,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          RtlIcon(
+          Icon(
             FluentIcons.folder_zip_24_regular,
             size: 64,
             color: Theme.of(context).colorScheme.primary,
@@ -285,7 +284,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        RtlIcon(
+        Icon(
           FluentIcons.library_24_regular,
           size: 64,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -331,7 +330,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
                 text: 'בחר תיקיית ספרייה',
                 onPressed: () => _pickDirectory(context),
                 isLoading: state.isLoading,
-                iconWidget: const RtlIcon(FluentIcons.folder_open_24_regular),
+                iconWidget: const Icon(FluentIcons.folder_open_24_regular),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -342,7 +341,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
                 text: 'חלץ מקובץ דחוס',
                 onPressed: () => _pickArchiveFile(context),
                 isLoading: state.isLoading,
-                iconWidget: const RtlIcon(FluentIcons.folder_zip_24_regular),
+                iconWidget: const Icon(FluentIcons.folder_zip_24_regular),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -390,7 +389,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                RtlIcon(
+                Icon(
                   FluentIcons.warning_24_regular,
                   color: Theme.of(context).colorScheme.onErrorContainer,
                   size: 20,

@@ -62,24 +62,13 @@ class AppContextMenuEntry {
   final bool isHighlighted;
   final VoidCallback? onTap;
   final Widget? trailing;
-
-  /// תת-פריטים לתפריט משנה
+  // תת-פריטים לתפריט משנה
   final List<AppContextMenuEntry>? children;
-
-  /// בנייה עצלה של תת-פריטים לתפריט משנה.
+  // בנייה עצלה של תת-פריטים לתפריט משנה.
   final List<AppContextMenuEntry> Function()? childrenBuilder;
-
-  /// סטרים שכאשר הוא פולט, תת-התפריט נבנה מחדש מ-[childrenBuilder].
-  ///
-  /// מאפשר תת-תפריט תגובתי שמתעדכן בזמן אמת (למשל רשימת "כרטיסיות פתוחות"
-  /// שמסירה שורה כשכרטיסייה נסגרת). דורש [childrenBuilder] שקורא מקור נתונים
-  /// טרי בכל קריאה.
+  // תת-תפריט תגובתי שמתעדכן בזמן אמת (למשל רשימת כרטיסיות פתוחות)
   final Stream<Object?>? childrenRefreshStream;
-
-  /// בונה תוכן לחלונית תצוגה מקדימה צפה שנפתחת ברפרוף על הפריט.
-  ///
-  /// החלונית מוצגת לצד הפריט לאחר השהיה קצרה, ונעלמת כשהסמן עוזב גם את
-  /// הפריט וגם את החלונית עצמה. רלוונטי לפריטי עלה בלבד (ללא תת-תפריט).
+  // חלונית תצוגה מקדימה צפה שנפתחת ברפרוף על השורה בתפריט.
   final WidgetBuilder? hoverPreviewBuilder;
 
   const AppContextMenuEntry({
@@ -242,8 +231,7 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
         !_hasCompactConstraints) {
       trigger = TextButton.icon(
         onPressed: widget.enabled ? _showAdaptiveMenu : null,
-        icon:
-            widget.icon ?? const RtlIcon(FluentIcons.more_vertical_24_regular),
+        icon: widget.icon ?? const Icon(FluentIcons.more_vertical_24_regular),
         label: Text(
           widget.tooltip!,
         ),
@@ -271,8 +259,7 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
         padding: widget.padding ?? EdgeInsets.zero,
         constraints: widget.constraints,
         tooltip: widget.tooltip,
-        icon:
-            widget.icon ?? const RtlIcon(FluentIcons.more_vertical_24_regular),
+        icon: widget.icon ?? const Icon(FluentIcons.more_vertical_24_regular),
       );
     }
 
@@ -835,7 +822,7 @@ Widget buildAppMenuRowContent(
           ),
         ),
         const SizedBox(width: 8),
-        RtlIcon(
+        Icon(
           FluentIcons.checkmark_circle_24_filled,
           size: metrics.iconSize,
           color: foregroundColor,
@@ -843,7 +830,7 @@ Widget buildAppMenuRowContent(
       ] else if (isSelected) ...[
         const Spacer(),
         const SizedBox(width: 6),
-        RtlIcon(
+        Icon(
           FluentIcons.checkmark_circle_24_filled,
           size: metrics.iconSize,
           color: foregroundColor,

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
@@ -915,8 +915,8 @@ class _FontDropdown extends StatelessWidget {
           tooltip: bold ? 'הצגה במשקל רגיל' : 'הדגשת הגופן (בולד)',
           isSelected: bold,
           onPressed: () => onBoldChanged(!bold),
-          icon: const RtlIcon(FluentIcons.text_bold_24_regular),
-          selectedIcon: const RtlIcon(FluentIcons.text_bold_24_filled),
+          icon: const Icon(FluentIcons.text_bold_24_regular),
+          selectedIcon: const Icon(FluentIcons.text_bold_24_filled),
         ),
       ],
     );

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
@@ -13,7 +13,6 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 class WorkspaceSwitcherDialog extends StatefulWidget {
   const WorkspaceSwitcherDialog({super.key});
@@ -339,7 +338,7 @@ class _WorkspaceNameFieldState extends State<_WorkspaceNameField> {
           const SizedBox(width: 6),
           IconButton(
             tooltip: 'שמור',
-            icon: const RtlIcon(FluentIcons.checkmark_24_regular),
+            icon: const Icon(FluentIcons.checkmark_24_regular),
             onPressed: _commitRenameAndClose,
           ),
         ],
@@ -356,7 +355,7 @@ class _WorkspaceNameFieldState extends State<_WorkspaceNameField> {
           ),
         ),
         IconButton(
-          icon: const RtlIcon(FluentIcons.edit_24_regular),
+          icon: const Icon(FluentIcons.edit_24_regular),
           onPressed: _startEditing,
         ),
       ],

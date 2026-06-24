@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -132,10 +132,10 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
               controller: _filterQuery,
               decoration: InputDecoration(
                 hintText: 'איתור ספר…',
-                prefixIcon: const RtlIcon(FluentIcons.filter_24_regular),
+                prefixIcon: const Icon(FluentIcons.filter_24_regular),
                 suffixIcon: IconButton(
                   onPressed: _clearFilter,
-                  icon: const RtlIcon(FluentIcons.dismiss_24_regular),
+                  icon: const Icon(FluentIcons.dismiss_24_regular),
                 ),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
