@@ -450,7 +450,9 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
             onTap: () async {
               final pageNumber = _getPdfPageNumber(result);
               final controller = widget.textSearcher.controller;
-              if (controller != null && controller.isReady) {
+              if (controller != null &&
+                  controller.isReady &&
+                  controller.layout.pageLayouts.isNotEmpty) {
                 final layout = controller.layout;
                 final safePage = pageNumber.clamp(1, layout.pageLayouts.length);
                 final page = layout.pageLayouts[safePage - 1];
