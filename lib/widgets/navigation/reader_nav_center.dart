@@ -38,62 +38,71 @@ class ReaderNavCenter extends StatelessWidget {
   Widget build(BuildContext context) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     const gap = 4.0;
-    // כל כפתור ToolbarActionButton (compact=false) הוא לפחות 40px.
-    // 4 כפתורי ניווט + 2 רווחים = ~168px. כשהמרכז קטן מדי, הכותרת
-    // מתכווצת לפי המקום הפנוי כדי למנוע overflow.
-    const navButtonsWidth = 4 * 40.0 + 2 * gap;
     const minTitleWidth = 80.0;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final contentMaxWidth = constraints.hasBoundedWidth
-            ? (constraints.maxWidth - navButtonsWidth).clamp(0.0, 340.0)
-            : 340.0;
-        final titleMaxWidth = contentMaxWidth.clamp(minTitleWidth, 340.0);
+        final available =
+            constraints.hasBoundedWidth ? constraints.maxWidth : 340.0;
+
+        // כשהמרחב צר, עוברים ל-compact (36px לכפתור במקום 40px).
+        final forceCompact = available < 240 || isCompact;
+        final buttonWidth = forceCompact ? 36.0 : 40.0;
+
+        // כפתורי major מוסתרים כשאין מקום ל-4 כפתורים + כותרת מינימלית.
+        final showMajor =
+            available >= 4 * buttonWidth + 2 * gap + minTitleWidth;
+        final visibleButtons = showMajor ? 4 : 2;
+        final navButtonsWidth = visibleButtons * buttonWidth + 2 * gap;
+
+        final remainingForTitle =
+            (available - navButtonsWidth).clamp(0.0, 340.0);
+        // כשהמרחב קטן מ-minTitleWidth, מאפשרים לכותרת להתכווץ עוד יותר.
+        final effectiveMinTitle = remainingForTitle.clamp(0.0, minTitleWidth);
+
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ToolbarActionButton(
-              tooltip: prevMajorTooltip,
-              icon: FluentIcons.arrow_previous_24_filled,
-              compact: isCompact,
-              onPressed: onPrevMajor,
-            ),
+            if (showMajor)
+              ToolbarActionButton(
+                tooltip: prevMajorTooltip,
+                icon: FluentIcons.arrow_previous_24_filled,
+                compact: forceCompact,
+                onPressed: onPrevMajor,
+              ),
             ToolbarActionButton(
               tooltip: prevMinorTooltip,
               icon: FluentIcons.chevron_left_24_regular,
-              compact: isCompact,
+              compact: forceCompact,
               onPressed: onPrevMinor,
             ),
             const SizedBox(width: gap),
-            // Flexible — קו הגנה אחרון: כשהמרכז צר מ-248px הכותרת מוותרת
-            // גם על ה-minWidth במקום לגלוש.
             Flexible(
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                    minWidth: minTitleWidth, maxWidth: titleMaxWidth),
+                    minWidth: effectiveMinTitle, maxWidth: remainingForTitle),
                 child: title,
               ),
             ),
-            // afterTitle נקשח לגודלו הטבעי כל עוד יש מקום אחרי הכפתורים,
-            // ובמרכז צר מתכווץ ויזואלית (scaleDown) במקום לגלוש.
+            // afterTitle מתכווץ ויזואלית (scaleDown) כשהמרחב אוזל.
             if (afterTitle != null)
               ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: contentMaxWidth),
+                constraints: BoxConstraints(maxWidth: remainingForTitle),
                 child: FittedBox(fit: BoxFit.scaleDown, child: afterTitle!),
               ),
             const SizedBox(width: gap),
             ToolbarActionButton(
               tooltip: nextMinorTooltip,
               icon: FluentIcons.chevron_right_24_regular,
-              compact: isCompact,
+              compact: forceCompact,
               onPressed: onNextMinor,
             ),
-            ToolbarActionButton(
-              tooltip: nextMajorTooltip,
-              icon: FluentIcons.arrow_next_24_filled,
-              compact: isCompact,
-              onPressed: onNextMajor,
-            ),
+            if (showMajor)
+              ToolbarActionButton(
+                tooltip: nextMajorTooltip,
+                icon: FluentIcons.arrow_next_24_filled,
+                compact: forceCompact,
+                onPressed: onNextMajor,
+              ),
           ],
         );
       },
