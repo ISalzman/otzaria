@@ -455,6 +455,31 @@ void main() {
     );
   });
 
+  test('Shift+Space מורשה לעבור כדי לאפשר גלילה אחורה', () {
+    final spaceDown = KeyDownEvent(
+      physicalKey: PhysicalKeyboardKey.space,
+      logicalKey: LogicalKeyboardKey.space,
+      timeStamp: Duration.zero,
+    );
+
+    // Shift+Space — חריג: מורשה לעבור (גלילה מסך אחד אחורה)
+    expect(
+      shouldHandlePageShapeNavigationKeyEvent(spaceDown, isShiftPressed: true),
+      isTrue,
+    );
+
+    // Shift+חץ — עדיין חסום
+    final arrowDown = KeyDownEvent(
+      physicalKey: PhysicalKeyboardKey.arrowDown,
+      logicalKey: LogicalKeyboardKey.arrowDown,
+      timeStamp: Duration.zero,
+    );
+    expect(
+      shouldHandlePageShapeNavigationKeyEvent(arrowDown, isShiftPressed: true),
+      isFalse,
+    );
+  });
+
   group('resolveCommentaryKeyAction', () {
     setUp(() => ShortcutHelper.isMacForTesting = false);
     tearDown(() => ShortcutHelper.isMacForTesting = null);
