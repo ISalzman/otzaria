@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -222,9 +223,10 @@ class SettingsActionTile extends StatelessWidget {
     required String title,
     required String currentPath,
     String placeholder = 'לא נבחר מיקום',
-    required VoidCallback onFolderChanged,
+    required Future<void> Function(String newPath) onFolderChanged,
     required VoidCallback onOpenFolder,
     VoidCallback? onClearPath,
+    Future<void> Function(BuildContext)? requestChangeLocation,
     bool simpleButtonWhenEmpty = true,
     bool clearPathEnabled = true,
   }) =>
@@ -237,6 +239,7 @@ class SettingsActionTile extends StatelessWidget {
         onFolderChanged: onFolderChanged,
         onOpenFolder: onOpenFolder,
         onClearPath: onClearPath,
+        requestChangeLocation: requestChangeLocation,
         simpleButtonWhenEmpty: simpleButtonWhenEmpty,
         clearPathEnabled: clearPathEnabled,
       );
@@ -715,9 +718,10 @@ class _PathTile extends StatelessWidget {
   final String title;
   final String currentPath;
   final String placeholder;
-  final VoidCallback onFolderChanged;
+  final Future<void> Function(String newPath) onFolderChanged;
   final VoidCallback onOpenFolder;
   final VoidCallback? onClearPath;
+  final Future<void> Function(BuildContext)? requestChangeLocation;
   final bool simpleButtonWhenEmpty;
   final bool clearPathEnabled;
 
@@ -730,6 +734,7 @@ class _PathTile extends StatelessWidget {
     required this.onFolderChanged,
     required this.onOpenFolder,
     this.onClearPath,
+    this.requestChangeLocation,
     this.simpleButtonWhenEmpty = true,
     this.clearPathEnabled = true,
   });
@@ -747,6 +752,7 @@ class _PathTile extends StatelessWidget {
           onFolderChanged: onFolderChanged,
           onOpenFolder: onOpenFolder,
           onClearPath: onClearPath,
+          requestChangeLocation: requestChangeLocation,
           simpleButtonWhenEmpty: simpleButtonWhenEmpty,
           clearPathEnabled: clearPathEnabled,
         ),
@@ -759,9 +765,10 @@ class _PathTile extends StatelessWidget {
 
 class _PathMenuButton extends StatefulWidget {
   final String currentPath;
-  final VoidCallback onFolderChanged;
+  final Future<void> Function(String newPath) onFolderChanged;
   final VoidCallback onOpenFolder;
   final VoidCallback? onClearPath;
+  final Future<void> Function(BuildContext)? requestChangeLocation;
   final bool simpleButtonWhenEmpty;
   final bool clearPathEnabled;
 
@@ -770,6 +777,7 @@ class _PathMenuButton extends StatefulWidget {
     required this.onFolderChanged,
     required this.onOpenFolder,
     this.onClearPath,
+    this.requestChangeLocation,
     this.simpleButtonWhenEmpty = true,
     this.clearPathEnabled = true,
   });
@@ -780,6 +788,18 @@ class _PathMenuButton extends StatefulWidget {
 
 class _PathMenuButtonState extends State<_PathMenuButton> {
   bool _isOpen = false;
+  bool _isLoading = false;
+
+  Future<void> _pickAndChange() async {
+    final path = await FilePicker.getDirectoryPath(lockParentWindow: true);
+    if (path == null || !mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      await widget.onFolderChanged(path);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   Future<void> _showMenu(BuildContext anchorContext) async {
     final hasPath = widget.currentPath.isNotEmpty;
@@ -828,7 +848,7 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
       case _PathMenuAction.openFolder:
         widget.onOpenFolder();
       case _PathMenuAction.changeLocation:
-        widget.onFolderChanged();
+        await _handleChangeLocation();
       case _PathMenuAction.copyPath:
         await Clipboard.setData(ClipboardData(text: widget.currentPath));
         UiSnack.showSuccess('הנתיב הועתק ללוח');
@@ -837,19 +857,33 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
     }
   }
 
+  Future<void> _handleChangeLocation() async {
+    if (widget.requestChangeLocation != null) {
+      setState(() => _isLoading = true);
+      try {
+        await widget.requestChangeLocation!(context);
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    } else {
+      await _pickAndChange();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.currentPath.isEmpty && widget.simpleButtonWhenEmpty) {
       return ActionButton.recommended(
         text: 'הגדר מיקום',
-        onPressed: widget.onFolderChanged,
+        isLoading: _isLoading,
+        onPressed: _isLoading ? null : _pickAndChange,
         icon: FluentIcons.folder_arrow_right_24_regular,
       );
     }
     final cs = Theme.of(context).colorScheme;
     return Builder(
       builder: (buttonContext) => FilledButton.icon(
-        onPressed: () => _showMenu(buttonContext),
+        onPressed: _isLoading ? null : () => _showMenu(buttonContext),
         style: _isOpen
             ? null
             : FilledButton.styleFrom(

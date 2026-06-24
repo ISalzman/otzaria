@@ -49,6 +49,7 @@ import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:otzaria/settings/dialogs/change_location_dialog.dart';
 
 /// טאב "אוצריא" — גרסאות, נתיב ספרייה, גיבוי, מצב סייפר, איפוס.
 class SystemSettingsTab extends StatefulWidget {
@@ -320,9 +321,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   bool _isExportingPendingReports = false;
   bool _isClearingSentReports = false;
   bool _isPendingReportsExpanded = false;
+  static const _backupFolderName = 'תיקיית גיבוי';
+
   bool _isSentReportsExpanded = false;
   String? _sendingPendingReportId;
   String _resolvedBackupPath = '';
+  String _defaultBackupPath = '';
 
   @override
   void initState() {
@@ -330,6 +334,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     _loadVersionInfo();
     _loadBackupStatus();
     _loadResolvedBackupPath();
+    AppPaths.getDefaultBackupPath().then((p) {
+      if (mounted) setState(() => _defaultBackupPath = p);
+    });
   }
 
   void _loadResolvedBackupPath() {
@@ -1522,15 +1529,30 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                           SettingsRepository.keyBackupPath) ??
                       '')
                   .isNotEmpty,
-              onFolderChanged: () {
-                FilePicker.getDirectoryPath(lockParentWindow: true)
-                    .then((path) {
-                  if (path == null || !mounted) return;
-                  Settings.setValue<String>(
-                      SettingsRepository.keyBackupPath, path);
-                  _loadResolvedBackupPath();
-                });
+              onFolderChanged: (path) async {
+                Settings.setValue<String>(
+                    SettingsRepository.keyBackupPath, path);
+                _loadResolvedBackupPath();
               },
+              requestChangeLocation: makeChangeLocationCallback(
+                currentPath: _resolvedBackupPath,
+                folderName: _backupFolderName,
+                onPathChanged: (newPath) async {
+                  Settings.setValue<String>(
+                      SettingsRepository.keyBackupPath, newPath);
+                  _loadResolvedBackupPath();
+                },
+                onAfterMove: _resolvedBackupPath.isNotEmpty
+                    ? (newPath) async {
+                        Settings.setValue<String>(
+                            SettingsRepository.keyBackupPath, newPath);
+                        _loadResolvedBackupPath();
+                      }
+                    : null,
+                defaultPath: _defaultBackupPath.isNotEmpty
+                    ? _defaultBackupPath
+                    : null,
+              ),
               onOpenFolder: () {
                 final path = _resolvedBackupPath;
                 if (path.isEmpty) return;

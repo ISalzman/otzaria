@@ -5,7 +5,6 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart'
     hide SwitchSettingsTile;
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
@@ -25,7 +24,9 @@ import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/settings/dialogs/change_location_dialog.dart';
 
 /// טאב הגדרות ספרייה
 class LibrarySettingsTab extends StatefulWidget {
@@ -105,14 +106,21 @@ class LibrarySettingsTab extends StatefulWidget {
 }
 
 class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
+  static const _libraryFolderName = 'ספריית אוצריא';
+  static const _hebrewBooksFolderName = 'ספרי היברובוקס';
+
   bool _isRemovingHebrewPath = false;
   final IndexingRepository _indexingRepository =
       IndexingRepository(TantivyDataProvider.instance);
   bool? _requiresManualReindex;
+  String? _defaultLibraryPath;
 
   @override
   void initState() {
     super.initState();
+    AppPaths.getDefaultLibraryPath().then((p) {
+      if (mounted) setState(() => _defaultLibraryPath = p);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -183,6 +191,20 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     context.read<LibraryBloc>().add(const RemoveHebrewBooksPath());
   }
 
+  /// מעדכן BLoC לאחר העברת תיקייה (moveDirectory נקרא על-ידי makeChangeLocationCallback).
+  Future<void> _afterMoveUpdateBloc(
+    String to,
+    LibraryEvent Function(String) makeEvent,
+  ) async {
+    if (!mounted) return;
+    context.read<LibraryBloc>().add(makeEvent(to));
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) {
+      context.read<NavigationBloc>().add(const CheckLibrary());
+      setState(() {});
+    }
+  }
+
   /// שורת מיקום ספריית אוצריא — ללא אפשרות ניקוי (הספרייה חיונית לפעולה)
   Widget _buildLibraryLocationWidget(BuildContext context) {
     final pathStr =
@@ -193,13 +215,24 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
       title: 'מיקום ספריית אוצריא',
       currentPath: pathStr ?? '',
       placeholder: 'בחר מיקום עבור מאגר הספרים',
-      onFolderChanged: () {
-        FilePicker.getDirectoryPath(lockParentWindow: true).then((path) async {
-          if (path == null || !context.mounted) return;
-          await _showExtractionDialog(context, path, isLibraryPath: true);
-          if (mounted) setState(() {});
-        });
+      onFolderChanged: (path) async {
+        if (!context.mounted) return;
+        await _showExtractionDialog(context, path, isLibraryPath: true);
+        if (mounted) setState(() {});
       },
+      requestChangeLocation: makeChangeLocationCallback(
+        currentPath: pathStr ?? '',
+        folderName: _libraryFolderName,
+        onPathChanged: (newPath) async {
+          if (!context.mounted) return;
+          await _showExtractionDialog(context, newPath, isLibraryPath: true);
+          if (mounted) setState(() {});
+        },
+        onAfterMove: pathStr != null && pathStr.isNotEmpty
+            ? (newPath) => _afterMoveUpdateBloc(newPath, UpdateLibraryPath.new)
+            : null,
+        defaultPath: _defaultLibraryPath,
+      ),
       onOpenFolder: () {
         if (pathStr == null || pathStr.isEmpty) return;
         if (Platform.isWindows) {
@@ -224,13 +257,23 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
       title: 'מיקום ספרי היברובוקס',
       currentPath: hasPath ? pathStr : '',
       placeholder: 'במידה וקיימים ברשותך ספרים ממאגר זה',
-      onFolderChanged: () {
-        FilePicker.getDirectoryPath(lockParentWindow: true).then((path) async {
-          if (path == null || !context.mounted) return;
-          await _showExtractionDialog(context, path, isLibraryPath: false);
-          if (mounted) setState(() {});
-        });
+      onFolderChanged: (path) async {
+        if (!context.mounted) return;
+        await _showExtractionDialog(context, path, isLibraryPath: false);
+        if (mounted) setState(() {});
       },
+      requestChangeLocation: makeChangeLocationCallback(
+        currentPath: hasPath ? pathStr : '',
+        folderName: _hebrewBooksFolderName,
+        onPathChanged: (newPath) async {
+          if (!context.mounted) return;
+          await _showExtractionDialog(context, newPath, isLibraryPath: false);
+          if (mounted) setState(() {});
+        },
+        onAfterMove: hasPath
+            ? (newPath) => _afterMoveUpdateBloc(newPath, UpdateHebrewBooksPath.new)
+            : null,
+      ),
       onOpenFolder: () {
         if (!hasPath) return;
         if (Platform.isWindows) {
