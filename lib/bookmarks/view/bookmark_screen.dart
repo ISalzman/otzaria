@@ -51,6 +51,7 @@ class BookmarkView extends StatefulWidget {
 
 class _BookmarkViewState extends State<BookmarkView> {
   late BookmarkSortMode _sortMode;
+  final FocusNode _searchFocusNode = FocusNode();
 
   /// קאש לספירת הסימניות לפי ספר — נמנע מחישוב בכל קריאה ל-build
   /// כשרשימת הסימניות לא משתנה.
@@ -63,10 +64,17 @@ class _BookmarkViewState extends State<BookmarkView> {
     _sortMode = loadBookmarkSortMode();
   }
 
+  @override
+  void dispose() {
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
   void _onSortModeChanged(BookmarkSortMode mode) {
     if (mode == _sortMode) return;
     setState(() => _sortMode = mode);
     saveBookmarkSortMode(mode);
+    _searchFocusNode.requestFocus();
   }
 
   Map<String, int> _getCountPerBook(List<Bookmark> bookmarks) {
@@ -243,6 +251,7 @@ class _BookmarkViewState extends State<BookmarkView> {
         final byDate = _sortMode == BookmarkSortMode.dateAdded;
 
         return ItemsListView(
+          searchFocusNode: _searchFocusNode,
           items: state.bookmarks,
           searchFieldTrailing: _buildSortButton(context),
           itemSortComparator: byDate
