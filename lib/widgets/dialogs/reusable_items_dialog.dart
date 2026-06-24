@@ -17,6 +17,7 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/layout/panel_scrollable_content.dart';
 import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
 
 // ── AppCustomContentDialog ─────────────────────────────────────────────────────
@@ -62,14 +63,6 @@ class AppCustomContentDialog extends StatefulWidget {
 
 class _AppCustomContentDialogState extends State<AppCustomContentDialog>
     with DialogNavigationMixin {
-  final _scrollController = ScrollController();
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -129,20 +122,7 @@ class _AppCustomContentDialogState extends State<AppCustomContentDialog>
               const SizedBox(height: 16),
               Expanded(
                 child: widget.scrollable
-                    // ה-Scrollbar מתפרס עד לגבול ה-Container (אין padding אופקי).
-                    // padding:horizontal 16 מחזיר לתוכן את אותו מרווח — ללא תוספת.
-                    ? ScrollbarTheme(
-                        data: const ScrollbarThemeData(crossAxisMargin: 2),
-                        child: Scrollbar(
-                          controller: _scrollController,
-                          child: SingleChildScrollView(
-                            controller: _scrollController,
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 16),
-                            child: widget.child,
-                          ),
-                        ),
-                      )
+                    ? PanelScrollableContent(child: widget.child)
                     : Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: widget.child,
