@@ -148,7 +148,6 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
                   labelText: hasCustomSpacing
                       ? 'מרווח בין מילים (מושבת)'
                       : 'מרווח בין מילים',
-                  helperText: '0 = צמוד, ערך גבוה יותר מרחיב את ההתאמה',
                   labelStyle: TextStyle(
                     color: hasCustomSpacing
                         ? Theme.of(context).colorScheme.onSurfaceVariant
