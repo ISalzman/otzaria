@@ -6,7 +6,7 @@ import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_state.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/bookmarks/models/bookmark_sort_mode.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
+import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -101,6 +101,45 @@ class _BookmarkViewState extends State<BookmarkView> {
     if (bDate == null) return -1;
     return bDate.compareTo(aDate);
   }
+
+  /// מפתח מיון לפי תקופת זמן — משמש לקיבוץ בתצוגת "לפי תאריך הוספה".
+  /// השבוע מתחיל ביום ראשון (מנהג ישראלי).
+  static String _dateGroupKey(DateTime? date) {
+    if (date == null) return '8_older';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    // ראשון=weekday 7 → 7%7=0, שני=1, ..., שבת=6
+    final startOfThisWeek = today.subtract(Duration(days: today.weekday % 7));
+    final startOfLastWeek = startOfThisWeek.subtract(const Duration(days: 7));
+    final startOfThisMonth = DateTime(now.year, now.month, 1);
+    final startOfPrevMonth = now.month == 1
+        ? DateTime(now.year - 1, 12, 1)
+        : DateTime(now.year, now.month - 1, 1);
+    final startOfThisYear = DateTime(now.year, 1, 1);
+
+    final d = DateTime(date.year, date.month, date.day);
+    if (!d.isBefore(today)) return '1_today';
+    if (!d.isBefore(yesterday)) return '2_yesterday';
+    if (!d.isBefore(startOfThisWeek)) return '3_this_week';
+    if (!d.isBefore(startOfLastWeek)) return '4_last_week';
+    if (!d.isBefore(startOfThisMonth)) return '5_this_month';
+    if (!d.isBefore(startOfPrevMonth)) return '6_prev_month';
+    if (!d.isBefore(startOfThisYear)) return '7_this_year';
+    return '8_older';
+  }
+
+  static String _dateGroupLabel(DateTime? date) =>
+      const {
+        '1_today': 'היום',
+        '2_yesterday': 'אתמול',
+        '3_this_week': 'השבוע',
+        '4_last_week': 'שבוע שעבר',
+        '5_this_month': 'החודש',
+        '6_prev_month': 'חודש קודם',
+        '7_this_year': 'השנה',
+        '8_older': 'ישן יותר',
+      }[_dateGroupKey(date)]!;
 
   /// בונה את ה-Tab המתאים לסימניה. עבור [BookmarkTargetKind.commentators]
   /// יוצרים sourceTab בלתי-תלוי וגורסה אותו ל-PdfCommentatorsTab/CommentatorsTab,
@@ -212,12 +251,12 @@ class _BookmarkViewState extends State<BookmarkView> {
           additionalFilter: filterIdentity == null
               ? null
               : (item) => bookIdentity(item.book) == filterIdentity,
-          // במיון לפי תאריך מציגים רשימה כרונולוגית שטוחה — הקיבוץ
-          // לפי ספר היה מערבב את הסדר.
-          groupKeyBuilder:
-              byDate ? null : (item) => bookmarkGroupKey(item as Bookmark),
-          groupTitleBuilder:
-              byDate ? null : (item) => bookmarkGroupTitle(item as Bookmark),
+          groupKeyBuilder: byDate
+              ? (item) => _dateGroupKey((item as Bookmark).createdAt)
+              : (item) => bookmarkGroupKey(item as Bookmark),
+          groupTitleBuilder: byDate
+              ? (item) => _dateGroupLabel((item as Bookmark).createdAt)
+              : (item) => bookmarkGroupTitle(item as Bookmark),
           onItemTap: (ctx, item, originalIndex) => _openBook(
             ctx,
             item,
@@ -270,36 +309,16 @@ class _BookmarkViewState extends State<BookmarkView> {
   }
 
   Widget _buildSortButton(BuildContext context) {
-    return PopupMenuButton<BookmarkSortMode>(
-      icon: const RtlIcon(FluentIcons.arrow_sort_24_regular),
+    return AppPopupMenuButton<BookmarkSortMode>(
+      icon: const Icon(FluentIcons.arrow_sort_24_regular),
       tooltip: 'מיון',
       initialValue: _sortMode,
       onSelected: _onSortModeChanged,
-      itemBuilder: (context) => [
-        _sortMenuItem(BookmarkSortMode.category, 'לפי קטגוריה'),
-        _sortMenuItem(BookmarkSortMode.dateAdded, 'לפי תאריך הוספה'),
+      entries: const [
+        AppMenuEntry(value: BookmarkSortMode.category, label: 'לפי קטגוריה'),
+        AppMenuEntry(
+            value: BookmarkSortMode.dateAdded, label: 'לפי תאריך הוספה'),
       ],
-    );
-  }
-
-  PopupMenuItem<BookmarkSortMode> _sortMenuItem(
-    BookmarkSortMode mode,
-    String label,
-  ) {
-    final selected = _sortMode == mode;
-    return PopupMenuItem<BookmarkSortMode>(
-      value: mode,
-      child: Row(
-        children: [
-          SizedBox(
-            width: 28,
-            child: selected
-                ? const RtlIcon(FluentIcons.checkmark_24_regular)
-                : null,
-          ),
-          Text(label),
-        ],
-      ),
     );
   }
 }
