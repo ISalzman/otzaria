@@ -13,10 +13,7 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
-import 'package:otzaria/settings/search/settings_search_models.dart';
-import 'package:otzaria/settings/search/settings_search_registry.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
-import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
@@ -81,41 +78,6 @@ class PluginSidePanel extends StatelessWidget {
     if (url != null && url.isNotEmpty) {
       bloc.add(LoadLocalhostPluginRequested(url));
     }
-  }
-
-  void _handleReorder({
-    required BuildContext context,
-    required List<InstalledPlugin> allPlugins,
-    required String sourcePluginId,
-    required String targetPluginId,
-  }) {
-    if (sourcePluginId == targetPluginId) return;
-    // עובדים על *כל* התוספים, לא רק על המסוננים לתצוגה. במצב מנותק חלק
-    // מהתוספים מוסתרים — אם נשלח רק את הסדר של המוצגים, ה-DB יקבל
-    // user_order חדש רק לחלק מהרשומות, ולתוספים המוסתרים יישאר user_order
-    // ישן (או null). אחרי חזרה למצב מקוון זה גורם לערכי סדר כפולים ולמיון
-    // לא דטרמיניסטי. עבודה על הרשימה המלאה משמרת את המיקום היחסי של
-    // המוסתרים סביב התוספים המוצגים.
-    final sourceIdx =
-        allPlugins.indexWhere((p) => p.pluginId == sourcePluginId);
-    final targetIdx =
-        allPlugins.indexWhere((p) => p.pluginId == targetPluginId);
-    if (sourceIdx < 0 || targetIdx < 0) return;
-
-    // semantics: גרירה קדימה (sourceIdx<targetIdx) ⇒ source נכנס *אחרי*
-    // target; גרירה אחורה (sourceIdx>targetIdx) ⇒ source נכנס *לפני* target.
-    // הנוסחה `insert(targetIdx, src)` אחרי `removeAt(sourceIdx)` מטפלת
-    // בשני המקרים: ב-forward, removeAt דוחק את כל מי שאחרי source לאחור,
-    // אז targetIdx הקודם מצביע עכשיו על המיקום שאחרי target.
-    final reordered = List.of(allPlugins);
-    final src = reordered.removeAt(sourceIdx);
-    reordered.insert(targetIdx, src);
-
-    context.read<PluginSystemBloc>().add(
-          ReorderPluginsRequested(
-            reordered.map((p) => p.pluginId).toList(),
-          ),
-        );
   }
 
   @override
@@ -206,29 +168,13 @@ class PluginSidePanel extends StatelessWidget {
                     ),
                   );
                 }
-                // יישום ידני של גרירה במקום ReorderableListView:
-                // ReorderableListView משתמש ב-OverlayPortal פנימי שגורם
-                // לקריסות כשהפאנל יושב בתוך LayoutBuilder (FloatingPanel/
-                // ContextOverlayPanel) — או mutation של LayoutBuilder תוך
-                // performLayout, או _retakeInactiveElement כשה-state
-                // הפנימי של Reorderable לא מסונכרן עם ה-Overlay החיצוני.
-                // Draggable + DragTarget משתמשים ב-OverlayEntry פשוט יותר
-                // ולא דורשים סנכרון state מורכב.
                 return ListView.builder(
                   itemCount: plugins.length,
                   itemBuilder: (context, index) {
                     final plugin = plugins[index];
-                    return _DraggablePluginRow(
+                    return _PluginListTile(
                       key: ValueKey(plugin.pluginId),
                       plugin: plugin,
-                      onAcceptSource: (sourceId) {
-                        _handleReorder(
-                          context: context,
-                          allPlugins: state.plugins,
-                          sourcePluginId: sourceId,
-                          targetPluginId: plugin.pluginId,
-                        );
-                      },
                       onPluginSelected: onPluginSelected,
                     );
                   },
@@ -243,58 +189,12 @@ class PluginSidePanel extends StatelessWidget {
   }
 }
 
-<<<<<<< HEAD
-/// שורת תוסף בודדת עם תמיכה בגרירה: כל השורה היא [DragTarget] שמקבל id
-/// של תוסף אחר, וה-handle מימין הוא [Draggable] שמתחיל גרירה.
-class _DraggablePluginRow extends StatelessWidget {
-  final InstalledPlugin plugin;
-  final ValueChanged<String> onAcceptSource;
-  final Function(InstalledPlugin)? onPluginSelected;
-
-  const _DraggablePluginRow({
-    super.key,
-    required this.plugin,
-    required this.onAcceptSource,
-    required this.onPluginSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return DragTarget<String>(
-      onWillAcceptWithDetails: (details) => details.data != plugin.pluginId,
-      onAcceptWithDetails: (details) => onAcceptSource(details.data),
-      builder: (context, candidateData, rejectedData) {
-        final isHovering = candidateData.isNotEmpty;
-        final cs = Theme.of(context).colorScheme;
-        return Container(
-          decoration: isHovering
-              ? BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.08),
-                  border: Border(
-                    top: BorderSide(color: cs.primary, width: 2),
-                  ),
-                )
-              : null,
-          child: Material(
-            color: Colors.transparent,
-            child: _PluginListTile(
-              plugin: plugin,
-              onPluginSelected: onPluginSelected,
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-=======
->>>>>>> 6bf7044b0 (מצב סייפר: חסום גישה לסייר הקבצים ושאל לפני הפעלה)
 class _PluginListTile extends StatelessWidget {
   final InstalledPlugin plugin;
   final Function(InstalledPlugin)? onPluginSelected;
 
   const _PluginListTile({
+    super.key,
     required this.plugin,
     required this.onPluginSelected,
   });
@@ -399,7 +299,6 @@ class _PluginListTile extends StatelessWidget {
     );
   }
 }
-<<<<<<< HEAD
 
 /// ה-widget שצף מתחת לסמן בזמן הגרירה. מוצג מעל Overlay של ה-Navigator
 /// (לא OverlayPortal) ולכן אין חששות לקונפליקטים עם LayoutBuilders.
@@ -441,5 +340,3 @@ class _DragFeedback extends StatelessWidget {
     );
   }
 }
-=======
->>>>>>> 6bf7044b0 (מצב סייפר: חסום גישה לסייר הקבצים ושאל לפני הפעלה)
