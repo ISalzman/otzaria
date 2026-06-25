@@ -105,10 +105,6 @@ class WebViewEnvironmentHolder {
     _environment = null;
     if (environment == null) return;
 
-    environment.onNewBrowserVersionAvailable = null;
-    environment.onBrowserProcessExited = null;
-    environment.onProcessInfosChanged = null;
-
     try {
       await environment.dispose();
     } catch (_) {}
@@ -122,10 +118,6 @@ class WebViewEnvironmentHolder {
     _environment = null;
 
     if (environment != null) {
-      environment.onNewBrowserVersionAvailable = null;
-      environment.onBrowserProcessExited = null;
-      environment.onProcessInfosChanged = null;
-
       try {
         await environment.dispose();
       } catch (_) {}
