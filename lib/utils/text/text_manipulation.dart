@@ -440,6 +440,7 @@ String highLight(
   bool isFuzzy = false,
   int searchDistance = 0,
   bool yellowBackground = false,
+  bool partialWordMatch = false,
 }) {
   if (searchQuery.isEmpty) return data;
 
@@ -510,7 +511,8 @@ String highLight(
     patternGroups.add(wordPatterns);
     // בהדגשת ציטוט (רקע צהוב) הטקסט הועתק מהמקטע עצמו ועשוי להיקטע
     // באמצע מילה — דרישת גבולות מילה תפסול אז את כל ההדגשה.
-    requireTokenBoundaries.add(!hasWordExpansion && !yellowBackground);
+    requireTokenBoundaries
+        .add(!hasWordExpansion && !yellowBackground && !partialWordMatch);
   }
 
   if (patternGroups.isEmpty) return data;
