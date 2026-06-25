@@ -67,9 +67,6 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
   Offset? _currentMenuOffset;
   double? _menuAnchorX;
 
-  // long-press פותח תפריט הקשר בכל הפלטפורמות — גם במגע וגם בעכבר/trackpad
-  bool get _supportsLongPressContextMenu => true;
-
   @override
   void dispose() {
     _removeContextMenuOverlay();
@@ -321,11 +318,14 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
-      onLongPressStart: (details) {
-        if (_supportsLongPressContextMenu) {
-          _openContextMenu(details.globalPosition);
-        }
+      // לחיצה ארוכה פותחת תפריט הקשר רק במגע/עט; בעכבר/trackpad משתמשים בלחיצה
+      // ימנית (מטופלת ב-Listener למטה), אחרת החזקת הלחיצה הייתה פותחת תפריט.
+      supportedDevices: const {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
       },
+      onLongPressStart: (details) => _openContextMenu(details.globalPosition),
       child: RawGestureDetector(
         behavior: HitTestBehavior.translucent,
         gestures: <Type, GestureRecognizerFactory>{

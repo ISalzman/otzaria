@@ -476,9 +476,15 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     // תחת הסמן; אחרת מתחלקים בשווה במקום הפנוי.
     final tabWidth = _pinnedTabWidth ?? _lastComputedTabWidth!;
 
-    // ReorderableListView מטפל בגרירה-לסידור (לחיצה ארוכה ואז גרירה). כל טאב
-    // ברוחב קבוע מחושב; אין גלילה — physics=Never כדי שגרירה רגילה תיפול
-    // לגרירת חלון ולא תיבלע ע"י ה-Scrollable.
+    // בדסקטופ גרירת-עכבר על טאב מסדרת אותו מיד (כמו כרום); בנייד נדרשת לחיצה
+    // ארוכה כדי שהחלקה/גלילה במגע לא תזיז טאב בטעות.
+    final platform = Theme.of(context).platform;
+    final isDesktop = platform == TargetPlatform.windows ||
+        platform == TargetPlatform.linux ||
+        platform == TargetPlatform.macOS;
+
+    // ReorderableListView מטפל בגרירה-לסידור. כל טאב ברוחב קבוע מחושב; אין גלילה
+    // (physics=Never) — גרירה על האזור הריק נופלת לגרירת החלון שב-GestureDetector.
     final reorderList = ReorderableListView.builder(
       scrollDirection: Axis.horizontal,
       physics: const NeverScrollableScrollPhysics(),
@@ -497,20 +503,27 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       },
       itemBuilder: (context, index) {
         final tab = state.tabs[index];
-        return ReorderableDelayedDragStartListener(
-          key: ObjectKey(tab),
-          index: index,
-          // סימון שטח הטאב ל-hit-test, כדי שה-double-tap-to-maximize שבמסגרת
-          // ידלג עליו (ראה onDoubleTapDown למטה).
-          child: MetaData(
-            metaData: _kTabHitMarker,
-            behavior: HitTestBehavior.opaque,
-            child: SizedBox(
-              width: tabWidth,
-              child: _buildTab(context, tab, state, tabWidth),
-            ),
+        // סימון שטח הטאב ל-hit-test, כדי שה-double-tap-to-maximize שבמסגרת
+        // ידלג עליו (ראה onDoubleTapDown למטה).
+        final tabChild = MetaData(
+          metaData: _kTabHitMarker,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: tabWidth,
+            child: _buildTab(context, tab, state, tabWidth),
           ),
         );
+        return isDesktop
+            ? ReorderableDragStartListener(
+                key: ObjectKey(tab),
+                index: index,
+                child: tabChild,
+              )
+            : ReorderableDelayedDragStartListener(
+                key: ObjectKey(tab),
+                index: index,
+                child: tabChild,
+              );
       },
     );
 
@@ -528,7 +541,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       },
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onPanStart: (_) => windowManager.startDragging(),
+        // גרירה על טאב מסדרת אותו (reorder); רק גרירה על האזור הריק גוררת חלון.
+        onPanStart: (details) {
+          if (_hitTestTab(context, details.globalPosition)) return;
+          windowManager.startDragging();
+        },
         onDoubleTapDown: (details) =>
             _doubleTapOnTab = _hitTestTab(context, details.globalPosition),
         onDoubleTap: _onTabsAreaDoubleTap,

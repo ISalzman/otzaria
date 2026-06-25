@@ -1122,4 +1122,59 @@ void main() {
       });
     });
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // לחיצה ארוכה פותחת תפריט הקשר רק במגע/עט — בעכבר משתמשים בלחיצה ימנית
+  // ───────────────────────────────────────────────────────────────────────
+  group('לחיצה ארוכה פותחת תפריט הקשר רק במגע', () {
+    Future<void> pumpRegion(WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: AppContextMenuRegion(
+                menuBuilder: (_, __) => [
+                  AppContextMenuEntry(label: 'העתק', onTap: () {}),
+                ],
+                child: const SizedBox(
+                  width: 100,
+                  height: 100,
+                  child: ColoredBox(color: Colors.amber),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('לחיצה ארוכה במגע פותחת את התפריט', (tester) async {
+      await pumpRegion(tester);
+
+      final center = tester.getCenter(find.byType(AppContextMenuRegion));
+      final gesture =
+          await tester.startGesture(center, kind: PointerDeviceKind.touch);
+      addTearDown(() async => gesture.up());
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+
+      expect(find.text('העתק'), findsOneWidget,
+          reason: 'לחיצה ארוכה במגע צריכה לפתוח את תפריט ההקשר');
+    });
+
+    testWidgets('החזקת לחיצה שמאלית בעכבר אינה פותחת את התפריט',
+        (tester) async {
+      await pumpRegion(tester);
+
+      final center = tester.getCenter(find.byType(AppContextMenuRegion));
+      final gesture = await tester.startGesture(center,
+          kind: PointerDeviceKind.mouse, buttons: kPrimaryButton);
+      addTearDown(() async => gesture.up());
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+
+      expect(find.text('העתק'), findsNothing,
+          reason: 'החזקת לחיצה שמאלית בעכבר אסור שתפתח תפריט — רק לחיצה ימנית');
+    });
+  });
 }
