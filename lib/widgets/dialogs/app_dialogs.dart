@@ -81,11 +81,42 @@ class AppDialog extends StatefulWidget {
   State<AppDialog> createState() => _AppDialogState();
 }
 
-class _AppDialogState extends State<AppDialog> with DialogNavigationMixin {
+class _AppDialogState extends State<AppDialog> {
+  // 0 = cancel/first, 1 = confirm/second
+  // warning: safer default = cancel (0); others: confirm (1)
+  late int _focusedIndex;
+
+  late final FocusNode _confirmFocusNode;
+  FocusNode? _cancelFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _confirmFocusNode = FocusNode();
+    if (widget._variant != _DialogVariant.singleAction) {
+      _cancelFocusNode = FocusNode();
+    }
+    _focusedIndex = widget._variant == _DialogVariant.warning ? 0 : 1;
+  }
+
+  @override
+  void dispose() {
+    _confirmFocusNode.dispose();
+    _cancelFocusNode?.dispose();
+    super.dispose();
+  }
+
+  void _moveFocus(int newIndex) {
+    setState(() => _focusedIndex = newIndex);
+    (newIndex == 1 ? _confirmFocusNode : _cancelFocusNode)?.requestFocus();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return buildKeyboardNavigator(
+    return DialogKeyboardNavigator(
+      focusedIndex: _focusedIndex,
+      onFocusChange: _moveFocus,
       onConfirm: () => Navigator.of(context).pop(true),
       onCancel: () => Navigator.of(context).pop(false),
       handleEnterKey: widget.handleEnterKey,
@@ -122,89 +153,43 @@ class _AppDialogState extends State<AppDialog> with DialogNavigationMixin {
 
   List<Widget> _buildActions() => switch (widget._variant) {
         _DialogVariant.singleAction => [
-            _withFocus(
-              isFocused: true,
-              child: ActionButton.recommended(
-                text: widget.confirmText,
-                onPressed: () {
-                  if (widget.onConfirm != null && !widget.onConfirm!()) return;
-                  Navigator.of(context).pop(true);
-                },
-              ),
+            ActionButton.recommended(
+              focusNode: _confirmFocusNode,
+              autofocus: true,
+              text: widget.confirmText,
+              onPressed: () {
+                if (widget.onConfirm != null && !widget.onConfirm!()) return;
+                Navigator.of(context).pop(true);
+              },
             ),
           ],
         _DialogVariant.twoActions => [
-            _withFocus(
-              isFocused: focusedButtonIndex == 0,
-              child: ActionButton.neutral(
-                text: widget.cancelText,
-                onPressed: () => Navigator.of(context).pop(false),
-              ),
+            ActionButton.neutral(
+              focusNode: _cancelFocusNode,
+              text: widget.cancelText,
+              onPressed: () => Navigator.of(context).pop(false),
             ),
-            _withFocus(
-              isFocused: focusedButtonIndex == 1,
-              child: ActionButton.recommended(
-                text: widget.confirmText,
-                onPressed: () => Navigator.of(context).pop(true),
-              ),
+            ActionButton.recommended(
+              focusNode: _confirmFocusNode,
+              autofocus: true,
+              text: widget.confirmText,
+              onPressed: () => Navigator.of(context).pop(true),
             ),
           ],
         _DialogVariant.warning => [
-            _withFocus(
-              isFocused: focusedButtonIndex == 0,
-              child: ActionButton.recommended(
-                text: widget.cancelText,
-                onPressed: () => Navigator.of(context).pop(false),
-              ),
+            ActionButton.recommended(
+              focusNode: _cancelFocusNode,
+              autofocus: true,
+              text: widget.cancelText,
+              onPressed: () => Navigator.of(context).pop(false),
             ),
-            _withFocus(
-              isFocused: focusedButtonIndex == 1,
-              child: ActionButton.warning(
-                text: widget.confirmText,
-                onPressed: () => Navigator.of(context).pop(true),
-              ),
+            ActionButton.warning(
+              focusNode: _confirmFocusNode,
+              text: widget.confirmText,
+              onPressed: () => Navigator.of(context).pop(true),
             ),
           ],
       };
-
-  // Border שקוף כשלא ממוקד — שומר על מרחב קבוע למניעת קפיצת layout.
-  Widget _withFocus({required bool isFocused, required Widget child}) =>
-      _KeyboardFocusBorder(
-        isFocused: isFocused,
-        child: AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 150),
-          style: DefaultTextStyle.of(context).style.copyWith(
-                fontWeight:
-                    isFocused ? FontWeight.bold : FontWeight.normal,
-              ),
-          child: child,
-        ),
-      );
-}
-
-// ── _KeyboardFocusBorder ──────────────────────────────────────────────────────
-
-class _KeyboardFocusBorder extends StatelessWidget {
-  final bool isFocused;
-  final Widget child;
-
-  const _KeyboardFocusBorder({required this.isFocused, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isFocused ? cs.outline : Colors.transparent,
-          width: 2.0,
-        ),
-      ),
-      child: child,
-    );
-  }
 }
 
 // ── show* functions ───────────────────────────────────────────────────────────
@@ -263,7 +248,7 @@ Future<bool?> showWarningDialog({
   required String content,
   String? subtitle,
   String cancelText = 'ביטול',
-  String confirmText = 'המשך',
+  String confirmText = 'איפוס',
   TextDirection? textDirection,
   bool barrierDismissible = true,
 }) =>
