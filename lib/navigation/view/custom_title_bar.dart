@@ -651,9 +651,10 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
 
   void closeTab(OpenedTab tab, BuildContext context) {
     // קופאים את רוחב הטאבים כל עוד העכבר מעל השורה, כדי שכפתור ה-X של הטאב הבא
-    // יישאר בדיוק תחת הסמן וסגירות רצופות יפעלו (כמו כרום). השחרור ביציאת העכבר.
+    // יישאר בדיוק תחת הסמן וסגירות רצופות יפעלו (כמו כרום). נועלים רק בסגירה
+    // הראשונה (??=) — אחרת כל סגירה הייתה דורסת בערך הרחב יותר. השחרור ביציאת העכבר.
     if (_pointerInsideTabStrip && _lastComputedTabWidth != null) {
-      _pinnedTabWidth = _lastComputedTabWidth;
+      _pinnedTabWidth ??= _lastComputedTabWidth;
     }
     context.read<HistoryBloc>().add(AddHistory(tab));
     context.read<TabsBloc>().add(RemoveTab(tab));
