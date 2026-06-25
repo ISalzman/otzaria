@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -644,6 +645,82 @@ void main() {
     });
   });
 
+  testWidgets('סגירת טאב כשהעכבר בשורה שומרת על רוחב הטאבים (לא מתרחבים)',
+      (tester) async {
+    // 6 טאבים ברוחב צר (מתחת לתקרה) — סגירה רגילה תרחיב את הנותרים. כל עוד
+    // העכבר בשורה הרוחב אמור להישאר קפוא כדי שה-X של הטאב הבא יישאר תחת הסמן.
+    final tabs = List.generate(6, (i) => _makeTextTab('ספר מספר $i'));
+    final tabsBloc = _ClosingTabsBloc(
+      TabsState(tabs: tabs, currentTabIndex: 0),
+    );
+    final navigationBloc = _TestNavigationBloc(
+      const NavigationState(currentScreen: Screen.reading),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+    final historyBloc = _TestHistoryBloc();
+
+    addTearDown(() async {
+      for (final t in tabs) {
+        t.dispose();
+      }
+      await tabsBloc.close();
+      await navigationBloc.close();
+      await settingsBloc.close();
+      await historyBloc.close();
+    });
+
+    await _setSurfaceSize(tester, const Size(700, 800));
+    await _pumpTitleBar(
+      tester,
+      tabsBloc: tabsBloc,
+      navigationBloc: navigationBloc,
+      settingsBloc: settingsBloc,
+      historyBloc: historyBloc,
+    );
+    await tester.pumpAndSettle();
+
+    List<double> tabWidths() => tester
+        .widgetList<SizedBox>(find.descendant(
+          of: find.byType(ReorderableListView),
+          matching: find.byType(SizedBox),
+        ))
+        .where((b) => b.width != null && b.child is Listener)
+        .map((b) => b.width!)
+        .toList();
+
+    final widthBefore = tabWidths().first;
+
+    // מביאים את העכבר אל מרכז השורה (hover) — כך _pointerInsideTabStrip=true.
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(
+        location: tester.getCenter(find.byType(ReorderableListView)));
+    addTearDown(gesture.removePointer);
+    await tester.pump();
+
+    // סוגרים טאב דרך ה-onPressed של ה-X (סימולציית tap נבלעת ע"י ה-reorder
+    // recognizer בסביבת הטסט, ולכן קוראים ישירות).
+    void closeTabByTitle(String title) {
+      final closeButton = find.descendant(
+        of: find.ancestor(of: find.text(title), matching: find.byType(Tab)),
+        matching: find.byType(IconButton),
+      );
+      tester.widget<IconButton>(closeButton).onPressed!();
+    }
+
+    closeTabByTitle('ספר מספר 2');
+    await tester.pumpAndSettle();
+    expect(tabWidths().first, moreOrLessEquals(widthBefore, epsilon: 1.0),
+        reason: 'סגירה ראשונה: הרוחב נשאר קפוא');
+
+    // סגירה רצופה שנייה — הרוחב חייב להישאר קפוא על אותו ערך, לא להתרחב מחדש.
+    closeTabByTitle('ספר מספר 3');
+    await tester.pumpAndSettle();
+
+    expect(tabWidths().length, 4, reason: 'שני טאבים נסגרו');
+    expect(tabWidths().first, moreOrLessEquals(widthBefore, epsilon: 1.0),
+        reason: 'בסגירות רצופות הרוחב נשאר קפוא על הערך המקורי ולא מתרחב');
+  });
+
   group('פריסת מסך צר (portrait) — טאבים בשורה תחתונה', () {
     testWidgets('landscape: הטאבים באותה שורה של כפתורי הפעולה',
         (tester) async {
@@ -994,6 +1071,20 @@ class _SelectingTabsBloc extends _TestTabsBloc {
     super.add(event);
     if (event is SetCurrentTab) {
       emit(TabsState(tabs: state.tabs, currentTabIndex: event.index));
+    }
+  }
+}
+
+/// מסיר טאב בפועל ב-RemoveTab — לבדיקת קפיאת רוחב הטאבים בסגירה.
+class _ClosingTabsBloc extends _TestTabsBloc {
+  _ClosingTabsBloc(super.initialState);
+
+  @override
+  void add(TabsEvent event) {
+    super.add(event);
+    if (event is RemoveTab) {
+      final newTabs = state.tabs.where((t) => t != event.tab).toList();
+      emit(TabsState(tabs: newTabs, currentTabIndex: 0));
     }
   }
 }
