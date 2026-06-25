@@ -22,7 +22,7 @@ PluginManifest _manifest(String id) {
 
 InstalledPlugin _plugin({
   required String id,
-  bool hiddenFromTools = false,
+  bool showInTools = true,
 }) {
   return InstalledPlugin(
     pluginId: id,
@@ -32,28 +32,26 @@ InstalledPlugin _plugin({
     entrypointPath: 'index.html',
     enabled: true,
     pinned: true,
-    hiddenFromTools: hiddenFromTools,
+    showInTools: showInTools,
     manifest: _manifest(id),
     installedAt: DateTime.utc(2026, 1, 1),
     updatedAt: DateTime.utc(2026, 1, 1),
   );
 }
 
-/// Fake repo: tracks hidden writes and simulates them in subsequent reads.
+/// Fake repo: tracks showInTools writes and simulates them in subsequent reads.
 class _FakeRepo implements PluginRegistryRepository {
   List<InstalledPlugin> plugins;
-  final List<({String pluginId, bool hidden})> hiddenCalls = [];
+  final List<({String pluginId, bool showInTools})> showInToolsCalls = [];
 
   _FakeRepo(this.plugins);
 
   @override
-  Future<void> updateHiddenState(String pluginId, bool hiddenFromTools) async {
-    hiddenCalls.add((pluginId: pluginId, hidden: hiddenFromTools));
-    // הדמיית הזרימה הנכונה: ה-DB מקבל את העדכון וקריאה הבאה ל-getAllPlugins
-    // מחזירה את התוסף עם הדגל החדש.
+  Future<void> updateShowInTools(String pluginId, bool showInTools) async {
+    showInToolsCalls.add((pluginId: pluginId, showInTools: showInTools));
     plugins = plugins
         .map((p) => p.pluginId == pluginId
-            ? p.copyWith(hiddenFromTools: hiddenFromTools)
+            ? p.copyWith(showInTools: showInTools)
             : p)
         .toList();
   }
@@ -79,42 +77,42 @@ class _FakeRepo implements PluginRegistryRepository {
 }
 
 void main() {
-  group('PluginSystemBloc SetPluginHiddenRequested handler', () {
-    test('forwards (pluginId, true) to repository.updateHiddenState', () async {
+  group('PluginSystemBloc SetPluginShowInToolsRequested handler', () {
+    test('forwards (pluginId, false) to repository.updateShowInTools', () async {
       final repo = _FakeRepo([_plugin(id: 'p1'), _plugin(id: 'p2')]);
       final bloc = PluginSystemBloc(repository: repo);
       addTearDown(bloc.close);
 
-      bloc.add(const SetPluginHiddenRequested(
+      bloc.add(const SetPluginShowInToolsRequested(
         pluginId: 'p1',
-        hidden: true,
+        showInTools: false,
       ));
 
       await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
 
-      expect(repo.hiddenCalls, hasLength(1));
-      expect(repo.hiddenCalls.single.pluginId, 'p1');
-      expect(repo.hiddenCalls.single.hidden, isTrue);
+      expect(repo.showInToolsCalls, hasLength(1));
+      expect(repo.showInToolsCalls.single.pluginId, 'p1');
+      expect(repo.showInToolsCalls.single.showInTools, isFalse);
     });
 
-    test('forwards (pluginId, false) — the "show again" direction', () async {
-      final repo = _FakeRepo([_plugin(id: 'p1', hiddenFromTools: true)]);
+    test('forwards (pluginId, true) — the "show again" direction', () async {
+      final repo = _FakeRepo([_plugin(id: 'p1', showInTools: false)]);
       final bloc = PluginSystemBloc(repository: repo);
       addTearDown(bloc.close);
 
-      bloc.add(const SetPluginHiddenRequested(
+      bloc.add(const SetPluginShowInToolsRequested(
         pluginId: 'p1',
-        hidden: false,
+        showInTools: true,
       ));
 
       await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
 
-      expect(repo.hiddenCalls.single.hidden, isFalse);
+      expect(repo.showInToolsCalls.single.showInTools, isTrue);
     });
 
     test(
-        'after the event, the next PluginSystemLoaded reflects hiddenFromTools '
-        'in the visible/pinned/nav-rail getters', () async {
+        'after the event, the next PluginSystemLoaded reflects showInTools '
+        'in the pinnedPlugins getter', () async {
       final repo = _FakeRepo([
         _plugin(id: 'visible'),
         _plugin(id: 'will-hide'),
@@ -122,20 +120,17 @@ void main() {
       final bloc = PluginSystemBloc(repository: repo);
       addTearDown(bloc.close);
 
-      bloc.add(const SetPluginHiddenRequested(
+      bloc.add(const SetPluginShowInToolsRequested(
         pluginId: 'will-hide',
-        hidden: true,
+        showInTools: false,
       ));
 
-      // ה-handler מפעיל LoadPlugins פנימי — אנו ממתינים ל-Loaded הסופי
-      // *אחרי* שהדגל כבר משוקף ב-state.
       PluginSystemLoaded? lastLoaded;
       await for (final s in bloc.stream) {
         if (s is PluginSystemLoaded) {
           lastLoaded = s;
-          // ה-handler גורם לטעינה אחת בלבד אחרי hidden-update
           if (!s.plugins
-              .any((p) => p.pluginId == 'will-hide' && !p.hiddenFromTools)) {
+              .any((p) => p.pluginId == 'will-hide' && p.showInTools)) {
             break;
           }
         }
@@ -143,14 +138,9 @@ void main() {
 
       expect(lastLoaded, isNotNull);
       expect(
-        lastLoaded!.visiblePlugins.map((p) => p.pluginId),
+        lastLoaded!.pinnedPlugins.map((p) => p.pluginId),
         equals(['visible']),
-        reason: 'hidden plugin must drop out of visiblePlugins',
-      );
-      expect(
-        lastLoaded.pinnedPlugins.map((p) => p.pluginId),
-        equals(['visible']),
-        reason: 'hidden plugin must drop out of pinnedPlugins (tools tabs)',
+        reason: 'plugin not shown in tools must drop out of pinnedPlugins',
       );
     });
 
@@ -160,16 +150,16 @@ void main() {
       final bloc = PluginSystemBloc(repository: repo);
       addTearDown(bloc.close);
 
-      bloc.add(const SetPluginHiddenRequested(pluginId: 'p1', hidden: true));
-      bloc.add(const SetPluginHiddenRequested(pluginId: 'p1', hidden: false));
+      bloc.add(
+          const SetPluginShowInToolsRequested(pluginId: 'p1', showInTools: false));
+      bloc.add(
+          const SetPluginShowInToolsRequested(pluginId: 'p1', showInTools: true));
 
-      // מחכים ש-bloc יתעצב — שני events ⇒ שתי טעינות לפחות, אבל אנחנו
-      // רק רוצים לוודא ששתי כתיבות בוצעו לפי הסדר.
       await Future.delayed(const Duration(milliseconds: 50));
 
-      expect(repo.hiddenCalls.length, 2);
-      expect(repo.hiddenCalls[0].hidden, isTrue);
-      expect(repo.hiddenCalls[1].hidden, isFalse);
+      expect(repo.showInToolsCalls.length, 2);
+      expect(repo.showInToolsCalls[0].showInTools, isFalse);
+      expect(repo.showInToolsCalls[1].showInTools, isTrue);
     });
   });
 }

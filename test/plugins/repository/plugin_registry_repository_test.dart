@@ -46,7 +46,7 @@ InstalledPlugin _plugin({
 class _FakeDb implements PluginSystemDatabase {
   final List<InstalledPlugin> plugins;
   final List<Map<String, int>> userOrderCalls = [];
-  final List<({String pluginId, bool hidden})> hiddenCalls = [];
+  final List<({String pluginId, bool showInTools})> showInToolsCalls = [];
 
   _FakeDb(this.plugins);
 
@@ -60,9 +60,9 @@ class _FakeDb implements PluginSystemDatabase {
   }
 
   @override
-  Future<void> updatePluginHiddenState(
-      String pluginId, bool hiddenFromTools) async {
-    hiddenCalls.add((pluginId: pluginId, hidden: hiddenFromTools));
+  Future<void> updatePluginShowInTools(
+      String pluginId, bool showInTools) async {
+    showInToolsCalls.add((pluginId: pluginId, showInTools: showInTools));
   }
 
   @override
@@ -255,27 +255,25 @@ void main() {
     });
   });
 
-  group('PluginRegistryRepository.updateHiddenState', () {
-    test('forwards (pluginId, true) to the DB layer', () async {
+  group('PluginRegistryRepository.updateShowInTools', () {
+    test('forwards (pluginId, false) to the DB layer', () async {
       final fake = _FakeDb([]);
       final repo = PluginRegistryRepository(database: fake);
 
-      await repo.updateHiddenState('plugin.x', true);
+      await repo.updateShowInTools('plugin.x', false);
 
-      expect(fake.hiddenCalls, hasLength(1));
-      expect(fake.hiddenCalls.single.pluginId, 'plugin.x');
-      expect(fake.hiddenCalls.single.hidden, isTrue);
+      expect(fake.showInToolsCalls, hasLength(1));
+      expect(fake.showInToolsCalls.single.pluginId, 'plugin.x');
+      expect(fake.showInToolsCalls.single.showInTools, isFalse);
     });
 
-    test('forwards (pluginId, false) — used for "show again" path', () async {
+    test('forwards (pluginId, true) — used for "show again" path', () async {
       final fake = _FakeDb([]);
       final repo = PluginRegistryRepository(database: fake);
 
-      await repo.updateHiddenState('plugin.x', false);
+      await repo.updateShowInTools('plugin.x', true);
 
-      expect(fake.hiddenCalls.single.hidden, isFalse,
-          reason: 'unhide path must preserve the boolean — was a P1 concern: '
-              'the panel must round-trip both directions');
+      expect(fake.showInToolsCalls.single.showInTools, isTrue);
     });
 
     test('each call appends — repository does not coalesce duplicate writes',
@@ -283,12 +281,13 @@ void main() {
       final fake = _FakeDb([]);
       final repo = PluginRegistryRepository(database: fake);
 
-      await repo.updateHiddenState('a', true);
-      await repo.updateHiddenState('b', true);
-      await repo.updateHiddenState('a', false);
+      await repo.updateShowInTools('a', false);
+      await repo.updateShowInTools('b', false);
+      await repo.updateShowInTools('a', true);
 
-      expect(fake.hiddenCalls, hasLength(3));
-      expect(fake.hiddenCalls.map((c) => c.pluginId).toList(), ['a', 'b', 'a']);
+      expect(fake.showInToolsCalls, hasLength(3));
+      expect(
+          fake.showInToolsCalls.map((c) => c.pluginId).toList(), ['a', 'b', 'a']);
     });
   });
 }

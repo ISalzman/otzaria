@@ -65,7 +65,7 @@ InstalledPlugin _pluginFor({
   required String id,
   required String name,
   bool networkEnabled = false,
-  bool hiddenFromTools = false,
+  bool showInTools = true,
 }) {
   return InstalledPlugin(
     pluginId: id,
@@ -75,7 +75,7 @@ InstalledPlugin _pluginFor({
     entrypointPath: '/tmp/$id/index.html',
     enabled: true,
     pinned: true,
-    hiddenFromTools: hiddenFromTools,
+    showInTools: showInTools,
     manifest: _manifestFor(
       id: id,
       name: name,
@@ -376,14 +376,14 @@ void main() {
     });
   });
 
-  group('סינון "מוסתר מהממשק"', () {
+  group('showInTools — פאנל הצד מציג את כל התוספים הפעילים', () {
     testWidgets(
-        'תוסף עם hiddenFromTools=true לא מופיע בפאנל הצד גם כשהוא enabled',
+        'תוסף עם showInTools=false עדיין מופיע בפאנל הצד כי ה-side panel מציג הכל',
         (tester) async {
       final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
         _pluginFor(id: 'visible.plugin', name: 'תוסף גלוי'),
         _pluginFor(
-            id: 'hidden.plugin', name: 'תוסף מוסתר', hiddenFromTools: true),
+            id: 'hidden.plugin', name: 'תוסף לא בכלים', showInTools: false),
       ]));
       addTearDown(pluginBloc.close);
 
@@ -394,27 +394,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('תוסף גלוי'), findsOneWidget);
-      expect(find.text('תוסף מוסתר'), findsNothing,
-          reason: 'hiddenFromTools must remove the plugin from the side panel '
-              '(P1 bug: previously the panel called state.plugins instead '
-              'of state.visiblePlugins).');
-    });
-
-    testWidgets('כשכל התוספים מוסתרים מציג הודעת empty state ייעודית',
-        (tester) async {
-      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(id: 'h1', name: 'תוסף אחד', hiddenFromTools: true),
-        _pluginFor(id: 'h2', name: 'תוסף שני', hiddenFromTools: true),
-      ]));
-      addTearDown(pluginBloc.close);
-
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(),
-      ));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('הוסתרו מההגדרות'), findsOneWidget);
+      expect(find.text('תוסף לא בכלים'), findsOneWidget,
+          reason: 'showInTools only hides from tools screen, not from side panel');
     });
   });
 

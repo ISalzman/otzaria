@@ -380,12 +380,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
         return true;
       }
     }
-    // גם rebuild כשמשתנה מספר הפלאגינים הגלויים (לטובת _isAllToolsHidden)
+    // גם rebuild כשמשתנה מספר הפלאגינים הגלויים בכלים (לטובת _isAllToolsHidden)
     final prevVisible = prev is PluginSystemLoaded
-        ? prev.plugins.where((p) => p.enabled && !p.hiddenFromTools).length
+        ? prev.plugins.where((p) => p.enabled && p.showInTools).length
         : -1;
     final currVisible = curr is PluginSystemLoaded
-        ? curr.plugins.where((p) => p.enabled && !p.hiddenFromTools).length
+        ? curr.plugins.where((p) => p.enabled && p.showInTools).length
         : -1;
     return prevVisible != currVisible;
   }
@@ -401,8 +401,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 
   /// מחזיר `true` כאשר כל הכלים המובנים מוסתרים וגם אין תוסף מותקן ומופעל
-  /// שאינו מסומן כ-[InstalledPlugin.hiddenFromTools]. במצב זה אין טעם להציג
-  /// את פריט "כלים" בסרגל הניווט / בבר הניווט.
+  /// המוצג במסך הכלים. במצב זה אין טעם להציג את פריט "כלים" בסרגל הניווט.
   static bool _isAllToolsHidden(
     SettingsState settingsState,
     PluginSystemState pluginState,
@@ -410,11 +409,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final allBuiltInsHidden = kBuiltInToolsCatalog
         .every((m) => settingsState.hiddenBuiltInToolIds.contains(m.toolId));
     if (!allBuiltInsHidden) return false;
-    // כל הכלים המובנים מוסתרים; בדיקה אם גם כל הפלאגינים מוסתרים.
-    // אם ה-state עדיין לא נטען — אין פלאגינים גלויים עדיין, מסתירים.
     if (pluginState is! PluginSystemLoaded) return true;
     return pluginState.plugins
-        .where((p) => p.enabled && !p.hiddenFromTools)
+        .where((p) => p.enabled && p.showInTools)
         .isEmpty;
   }
 
