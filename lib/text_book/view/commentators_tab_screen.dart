@@ -545,87 +545,34 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
             return true;
           },
           builder: (context, state) {
-            final colorScheme = Theme.of(context).colorScheme;
-            final appBarDecoration = Border(
-              bottom: BorderSide(
-                color: colorScheme.outlineVariant,
-                width: 0.3,
-              ),
-            );
-
             if (state is! TextBookLoaded) {
+              final isCompact =
+                  context.read<SettingsBloc>().state.compactMenuMode;
               return Scaffold(
-                appBar: AppBar(
-                  backgroundColor: colorScheme.surfaceContainer,
-                  shape: appBarDecoration,
-                  elevation: 0,
-                  scrolledUnderElevation: 0,
-                  centerTitle: false,
-                  leading: const IconButton(
-                    icon: Icon(FluentIcons.navigation_24_regular, size: 20),
-                    tooltip: 'ניווט',
-                    onPressed: null,
-                  ),
-                  title: Text(
-                    'מפרשים על ${widget.tab.sourceTab.book.title}',
-                    style: const TextStyle(fontSize: 16),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  actions: [
-                    ResponsiveActionBar(
-                      overflowMenuOffset: const Offset(0, 8),
-                      maxVisibleButtons: 999,
-                      originalOrder: const [],
-                      actions: [
-                        for (final action in const [
-                          (
-                            icon: FluentIcons.text_font_24_regular,
-                            tooltip: 'ניקוד',
+                body: Column(
+                  children: [
+                    AppTopBar(
+                      leadingItems: [
+                        AppTopBarItem(
+                          widget: ToolbarActionButton(
+                            tooltip: 'ניווט',
+                            icon: FluentIcons.navigation_24_regular,
+                            compact: isCompact,
+                            onPressed: () {},
                           ),
-                          (
-                            icon: FluentIcons.search_24_regular,
-                            tooltip: 'חיפוש',
-                          ),
-                          (
-                            icon: FluentIcons.apps_list_24_regular,
-                            tooltip: 'בחירת מפרשים',
-                          ),
-                          (
-                            icon: FluentIcons.bookmark_add_24_regular,
-                            tooltip: 'הוסף סימניה',
-                          ),
-                          (
-                            icon: FluentIcons.zoom_in_24_regular,
-                            tooltip: 'הגדל את גודל הטקסט',
-                          ),
-                          (
-                            icon: FluentIcons.zoom_out_24_regular,
-                            tooltip: 'הקטן את גודל הטקסט',
-                          ),
-                          (
-                            icon: FluentIcons.chevron_left_24_regular,
-                            tooltip: 'הקטע הקודם',
-                          ),
-                          (
-                            icon: FluentIcons.chevron_right_24_regular,
-                            tooltip: 'הקטע הבא',
-                          ),
-                        ])
-                          ActionButtonData(
-                            widget: IconButton(
-                              icon: Icon(action.icon),
-                              tooltip: action.tooltip,
-                              onPressed: null,
-                            ),
-                            icon: action.icon,
-                            tooltip: action.tooltip,
-                            onPressed: null,
-                          ),
+                        ),
                       ],
+                      center: Text(
+                        'מפרשים על ${widget.tab.sourceTab.book.title}',
+                        style: AppTopBar.titleStyle(context),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
+                    const Expanded(
+                        child: Center(child: CircularProgressIndicator())),
                   ],
                 ),
-                body: const Center(child: CircularProgressIndicator()),
               );
             }
 

@@ -1021,185 +1021,33 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 }
 
                 if (state is TextBookInitial || state is TextBookLoading) {
-                  final screenWidth = MediaQuery.of(context).size.width;
+                  final isCompact =
+                      context.read<SettingsBloc>().state.compactMenuMode;
                   return Scaffold(
-                    appBar: AppBar(
-                      backgroundColor:
-                          Theme.of(context).colorScheme.surfaceContainer,
-                      shape: Border(
-                        bottom: BorderSide(
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                          width: 0.3,
-                        ),
-                      ),
-                      elevation: 0,
-                      scrolledUnderElevation: 0,
-                      centerTitle: false,
-                      title: Text(
-                        widget.tab.book.title,
-                        style: const TextStyle(fontSize: 17),
-                        textAlign: TextAlign.end,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      leading: IconButton(
-                        icon: const Icon(FluentIcons.navigation_24_regular),
-                        tooltip: "ניווט וחיפוש",
-                        onPressed: null,
-                      ),
-                      actions: [
-                        ResponsiveActionBar(
-                          key: const ValueKey('loading_actions'),
-                          overflowMenuOffset: const Offset(0, 8),
-                          actions: [
-                            // NOTE: PDF button intentionally omitted during loading
-                            ActionButtonData(
-                              widget: IconButton(
-                                icon: const Icon(
-                                    FluentIcons.panel_left_24_regular),
-                                tooltip: 'הצגת מפרשים',
-                                onPressed: null,
+                    body: Column(
+                      children: [
+                        AppTopBar(
+                          leadingItems: [
+                            AppTopBarItem(
+                              widget: ToolbarActionButton(
+                                tooltip: 'ניווט וחיפוש',
+                                icon: FluentIcons.navigation_24_regular,
+                                compact: isCompact,
+                                onPressed: () {},
                               ),
-                              icon: FluentIcons.panel_left_24_regular,
-                              tooltip: 'הצגת מפרשים',
-                              onPressed: null,
-                            ),
-                            ActionButtonData(
-                              widget: IconButton(
-                                icon: const Icon(
-                                    FluentIcons.text_font_24_regular),
-                                tooltip: 'הצג או הסתר ניקוד',
-                                onPressed: null,
-                              ),
-                              icon: FluentIcons.text_font_24_regular,
-                              tooltip: 'הצג או הסתר ניקוד',
-                              onPressed: null,
-                            ),
-                            ActionButtonData(
-                              widget: IconButton(
-                                icon: const Icon(FluentIcons
-                                    .text_clear_formatting_24_regular),
-                                tooltip: 'הסתר פיסוק',
-                                onPressed: null,
-                              ),
-                              icon:
-                                  FluentIcons.text_clear_formatting_24_regular,
-                              tooltip: 'הסתר פיסוק',
-                              onPressed: null,
-                            ),
-                            ActionButtonData(
-                              widget: IconButton(
-                                icon: const Icon(FluentIcons.search_24_regular),
-                                tooltip: 'חיפוש',
-                                onPressed: null,
-                              ),
-                              icon: FluentIcons.search_24_regular,
-                              tooltip: 'חיפוש',
-                              onPressed: null,
-                            ),
-                            ActionButtonData(
-                              widget: IconButton(
-                                icon:
-                                    const Icon(FluentIcons.zoom_in_24_regular),
-                                tooltip: 'הגדל את גודל הטקסט',
-                                onPressed: null,
-                              ),
-                              icon: FluentIcons.zoom_in_24_regular,
-                              tooltip: 'הגדל את גודל הטקסט',
-                              onPressed: null,
-                            ),
-                            ActionButtonData(
-                              widget: IconButton(
-                                icon:
-                                    const Icon(FluentIcons.zoom_out_24_regular),
-                                tooltip: 'הקטן את גודל הטקסט',
-                                onPressed: null,
-                              ),
-                              icon: FluentIcons.zoom_out_24_regular,
-                              tooltip: 'הקטן את גודל הטקסט',
-                              onPressed: null,
-                            ),
-                            ActionButtonData(
-                              widget: IconButton(
-                                icon: const Icon(
-                                    FluentIcons.arrow_previous_24_filled),
-                                tooltip: 'תחילת הספר',
-                                onPressed: null,
-                              ),
-                              icon: FluentIcons.arrow_previous_24_filled,
-                              tooltip: 'תחילת הספר',
-                              onPressed: null,
-                            ),
-                            ActionButtonData(
-                              widget: IconButton(
-                                icon: const Icon(
-                                    FluentIcons.chevron_left_24_regular),
-                                tooltip: 'הקטע הקודם',
-                                onPressed: null,
-                              ),
-                              icon: FluentIcons.chevron_left_24_regular,
-                              tooltip: 'הקטע הקודם',
-                              onPressed: null,
-                            ),
-                            ActionButtonData(
-                              widget: IconButton(
-                                icon: const Icon(
-                                    FluentIcons.chevron_right_24_regular),
-                                tooltip: 'הקטע הבא',
-                                onPressed: null,
-                              ),
-                              icon: FluentIcons.chevron_right_24_regular,
-                              tooltip: 'הקטע הבא',
-                              onPressed: null,
-                            ),
-                            ActionButtonData(
-                              widget: IconButton(
-                                icon: const Icon(
-                                    FluentIcons.arrow_next_24_filled),
-                                tooltip: 'סוף הספר',
-                                onPressed: null,
-                              ),
-                              icon: FluentIcons.arrow_next_24_filled,
-                              tooltip: 'סוף הספר',
-                              onPressed: null,
                             ),
                           ],
-                          // כך שהכפתור "..." יוצג גם במצב טעינה
-                          alwaysInMenu: [
-                            ActionButtonData(
-                              widget: const SizedBox.shrink(),
-                              icon: FluentIcons.more_horizontal_24_regular,
-                              tooltip: 'פעולות נוספות',
-                              onPressed: null,
-                              submenuItems: [
-                                ActionButtonData(
-                                  widget: const SizedBox.shrink(),
-                                  icon: FluentIcons.more_horizontal_24_regular,
-                                  tooltip: '',
-                                  onPressed: null,
-                                ),
-                              ],
-                            ),
-                          ],
-                          maxVisibleButtons: screenWidth < 400
-                              ? 2
-                              : screenWidth < 500
-                                  ? 4
-                                  : screenWidth < 600
-                                      ? 6
-                                      : screenWidth < 700
-                                          ? 8
-                                          : screenWidth < 800
-                                              ? 10
-                                              : screenWidth < 900
-                                                  ? 12
-                                                  : screenWidth < 1100
-                                                      ? 14
-                                                      : 999,
+                          center: Text(
+                            widget.tab.book.title,
+                            style: AppTopBar.titleStyle(context),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
+                        const Expanded(
+                            child: Center(child: CircularProgressIndicator())),
                       ],
                     ),
-                    body: const Center(child: CircularProgressIndicator()),
                   );
                 }
 
