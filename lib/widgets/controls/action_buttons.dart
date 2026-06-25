@@ -23,6 +23,8 @@ class ActionButton extends StatelessWidget {
   final Widget? iconWidget;
   final TextAlign textAlign;
   final _Variant _variant;
+  final FocusNode? focusNode;
+  final bool autofocus;
 
   const ActionButton.recommended({
     super.key,
@@ -32,6 +34,8 @@ class ActionButton extends StatelessWidget {
     this.icon,
     this.iconWidget,
     this.textAlign = TextAlign.start,
+    this.focusNode,
+    this.autofocus = false,
   }) : _variant = _Variant.recommended;
 
   const ActionButton.neutral({
@@ -42,6 +46,8 @@ class ActionButton extends StatelessWidget {
     this.icon,
     this.iconWidget,
     this.textAlign = TextAlign.start,
+    this.focusNode,
+    this.autofocus = false,
   }) : _variant = _Variant.neutral;
 
   const ActionButton.ghost({
@@ -52,6 +58,8 @@ class ActionButton extends StatelessWidget {
     this.icon,
     this.iconWidget,
     this.textAlign = TextAlign.start,
+    this.focusNode,
+    this.autofocus = false,
   }) : _variant = _Variant.ghost;
 
   const ActionButton.warning({
@@ -62,6 +70,8 @@ class ActionButton extends StatelessWidget {
     this.icon,
     this.iconWidget,
     this.textAlign = TextAlign.start,
+    this.focusNode,
+    this.autofocus = false,
   }) : _variant = _Variant.warning;
 
   Color _loadingColor(ColorScheme cs) => switch (_variant) {
@@ -71,10 +81,9 @@ class ActionButton extends StatelessWidget {
         _Variant.warning => cs.error,
       };
 
-  ButtonStyle? _buttonStyle(ColorScheme cs) =>
-      _variant == _Variant.warning
-          ? TextButton.styleFrom(foregroundColor: cs.error)
-          : null;
+  ButtonStyle? _buttonStyle(ColorScheme cs) => _variant == _Variant.warning
+      ? TextButton.styleFrom(foregroundColor: cs.error)
+      : null;
 
   Widget _plain({
     required VoidCallback? onPressed,
@@ -82,22 +91,46 @@ class ActionButton extends StatelessWidget {
     required ButtonStyle? style,
   }) =>
       switch (_variant) {
-        _Variant.recommended => FilledButton(onPressed: onPressed, child: child),
-        _Variant.neutral =>
-          FilledButton.tonal(onPressed: onPressed, child: child),
-        _Variant.ghost || _Variant.warning =>
-          TextButton(onPressed: onPressed, style: style, child: child),
+        _Variant.recommended => FilledButton(
+            onPressed: onPressed,
+            focusNode: focusNode,
+            autofocus: autofocus,
+            child: child),
+        _Variant.neutral => FilledButton.tonal(
+            onPressed: onPressed,
+            focusNode: focusNode,
+            autofocus: autofocus,
+            child: child),
+        _Variant.ghost || _Variant.warning => TextButton(
+            onPressed: onPressed,
+            style: style,
+            focusNode: focusNode,
+            autofocus: autofocus,
+            child: child),
       };
 
   Widget _withIcon({required Widget leading, required ButtonStyle? style}) {
     final label = Text(text, textAlign: textAlign);
     return switch (_variant) {
-      _Variant.recommended =>
-        FilledButton.icon(onPressed: onPressed, icon: leading, label: label),
-      _Variant.neutral =>
-        FilledButton.tonalIcon(onPressed: onPressed, icon: leading, label: label),
+      _Variant.recommended => FilledButton.icon(
+          onPressed: onPressed,
+          focusNode: focusNode,
+          autofocus: autofocus,
+          icon: leading,
+          label: label),
+      _Variant.neutral => FilledButton.tonalIcon(
+          onPressed: onPressed,
+          focusNode: focusNode,
+          autofocus: autofocus,
+          icon: leading,
+          label: label),
       _Variant.ghost || _Variant.warning => TextButton.icon(
-          onPressed: onPressed, icon: leading, label: label, style: style),
+          onPressed: onPressed,
+          icon: leading,
+          label: label,
+          style: style,
+          focusNode: focusNode,
+          autofocus: autofocus),
     };
   }
 
