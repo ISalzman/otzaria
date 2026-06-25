@@ -8,6 +8,7 @@ enum LiveTipId {
   dictionaryContextMenuHint,
   commentaryHint,
   customFoldersHint,
+  bookSourceHint,
 }
 
 class LiveTipStorage {
@@ -49,6 +50,7 @@ enum TourInteractionType {
   dictionaryUsed,
   commentaryAvailable,
   commentaryUsed,
+  bookSourceViewed,
 }
 
 class TourInteraction extends Equatable {
@@ -118,6 +120,14 @@ const List<LiveTipSpec> liveTipSpecs = [
         'התיקיה שלכם דרך הגדרות ← ספרייה ← תיקיות מותאמות אישית. כל הקבצים שבתיקיה '
         '(כולל Word ו-TXT) יתווספו ל"ספרים אישיים", והחיפוש יסרוק אותם אוטומטית. '
         'כדי לאתר אותם באיתור — סמנו "כלול ספרים אישיים".',
+  ),
+  LiveTipSpec(
+    id: LiveTipId.bookSourceHint,
+    area: TourSpotlightArea.reading,
+    title: 'הידעת?',
+    description:
+        'בכל ספר פתוח אפשר ללחוץ על "אודות הספר" שבסרגל הכלים ולראות מהיכן הגיע '
+        'הטקסט. כך תדעו למי לפנות אם מצאתם טעות בספר.',
   ),
 ];
 
