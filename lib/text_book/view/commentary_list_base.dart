@@ -100,6 +100,10 @@ class CommentaryListBase extends StatefulWidget {
   /// המפרשים העצמאית, לא לתצוגה בתוך הספר שבה הפוקוס שייך לגוף הטקסט).
   final bool autofocus;
 
+  /// מדגיש מחרוזת חיפוש חיצונית בלי להציג את ממשק החיפוש הפנימי.
+  /// מיועד לתצוגה המשולבת, שבה החיפוש מנוהל ע"י ה-BLoC של הטקסט הראשי.
+  final ValueListenable<String>? highlightQueryListenable;
+
   const CommentaryListBase({
     super.key,
     required this.openBookCallback,
@@ -127,6 +131,7 @@ class CommentaryListBase extends StatefulWidget {
     this.externalAllExpandedNotifier,
     this.onFilterOpenRequested,
     this.autofocus = false,
+    this.highlightQueryListenable,
   });
 
   @override
@@ -309,6 +314,14 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (index < 0 || index >= _totalSearchResultsNotifier.value) return;
     _currentSearchIndexNotifier.value = index;
     _scrollToSearchResult();
+  }
+
+  void _onHighlightQueryChanged() {
+    _searchUpdateDebounce?.cancel();
+    _currentSearchIndexNotifier.value = 0;
+    _totalSearchResultsNotifier.value = 0;
+    _searchResultsPerLink.clear();
+    _pendingCounts.clear();
   }
 
   void _onExternalSearchChanged() {
@@ -525,10 +538,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (query.isNotEmpty && total > 1) ...[
-                                Text(
-                                  '${currentIndex + 1}/$total',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
+                                if (currentIndex >= 0)
+                                  Text(
+                                    '${currentIndex + 1}/$total',
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
                                 const SizedBox(width: 4),
                                 IconButton(
                                   icon: const Icon(
@@ -581,11 +596,15 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                         onChanged: (value) {
                           if (_searchQueryNotifier.value != value) {
                             _searchQueryNotifier.value = value;
-                            _currentSearchIndexNotifier.value = 0;
+                            _currentSearchIndexNotifier.value = -1;
                             _totalSearchResultsNotifier.value = 0;
                             _searchResultsPerLink.clear();
                             _pendingCounts.clear();
                           }
+                        },
+                        onSubmitted: (_) {
+                          navigateSearchNext();
+                          _searchFocusNode.requestFocus();
                         },
                       );
                     },
@@ -616,6 +635,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     _searchFocusNode.addListener(_handleSearchFocusChange);
     // חיפוש חיצוני
     widget.externalSearchController?.addListener(_onExternalSearchChanged);
+    widget.highlightQueryListenable?.addListener(_onHighlightQueryChanged);
     if (widget.externalTotalResultsNotifier != null) {
       _totalSearchResultsNotifier.addListener(() {
         widget.externalTotalResultsNotifier!.value =
@@ -658,6 +678,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (oldWidget.closeFilterNotifier != widget.closeFilterNotifier) {
       oldWidget.closeFilterNotifier?.removeListener(_onCloseFilterRequest);
       widget.closeFilterNotifier?.addListener(_onCloseFilterRequest);
+    }
+    if (oldWidget.highlightQueryListenable != widget.highlightQueryListenable) {
+      oldWidget.highlightQueryListenable
+          ?.removeListener(_onHighlightQueryChanged);
+      widget.highlightQueryListenable?.addListener(_onHighlightQueryChanged);
     }
     // סגירה אוטומטית של מסך הסינון כאשר המפרשים עוברים מריק לא-ריק
     // (קורה כאשר המשתמש בוחר "כל המפרשים" מהתפריט הימני)
@@ -771,6 +796,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     widget.openFilterNotifier?.removeListener(_onOpenFilterRequest);
     widget.closeFilterNotifier?.removeListener(_onCloseFilterRequest);
     widget.externalSearchController?.removeListener(_onExternalSearchChanged);
+    widget.highlightQueryListenable?.removeListener(_onHighlightQueryChanged);
     _searchFocusNode.removeListener(_handleSearchFocusChange);
     _searchController.dispose();
     _savedSelectedText.dispose();
@@ -1065,6 +1091,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       updateSearchSnippets: widget.externalSearchSnippetsNotifier != null
           ? _updateSearchSnippets
           : null,
+      highlightQueryListenable: widget.highlightQueryListenable,
       itemKeys: _itemKeys,
       getLinkKey: _getLinkKey,
       indexesKey: indexesKey,
@@ -1769,6 +1796,9 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   /// משחזר מעברי שורה בטקסט נבחר רב-שורתי (להעתקה מתפריט ההקשר).
   final String? Function(String?)? restoreLineBreaks;
 
+  /// מחרוזת להדגשה מה-BLoC החיצוני, ללא שדה החיפוש הפנימי.
+  final ValueListenable<String>? highlightQueryListenable;
+
   const _CollapsibleCommentaryGroup({
     super.key,
     required this.group,
@@ -1794,6 +1824,7 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     this.onLinkRendered,
     this.onLinkTitleRendered,
     this.restoreLineBreaks,
+    this.highlightQueryListenable,
   });
 
   @override
@@ -1925,12 +1956,15 @@ class _CollapsibleCommentaryGroupState
                         widget.searchQueryListenable,
                         widget.currentSearchIndexListenable,
                         widget.totalSearchResultsListenable,
+                        if (widget.highlightQueryListenable != null)
+                          widget.highlightQueryListenable!,
                       ]),
                       builder: (context, _) {
                         final searchQuery = widget.showSearch
                             ? widget.searchQueryListenable.value
-                            : '';
-                        final currentSearchIndex = widget.showSearch
+                            : (widget.highlightQueryListenable?.value ?? '');
+                        final currentSearchIndex = (widget.showSearch ||
+                                widget.highlightQueryListenable != null)
                             ? widget.getItemSearchIndex(link)
                             : 0;
                         return AppContextMenuRegion(
@@ -1987,7 +2021,8 @@ class _CollapsibleCommentaryGroupState
                             removePunctuation: widget.removePunctuation,
                             searchQuery: searchQuery,
                             currentSearchIndex: currentSearchIndex,
-                            onSearchResultsCountChanged: widget.showSearch
+                            onSearchResultsCountChanged: (widget.showSearch ||
+                                    widget.highlightQueryListenable != null)
                                 ? (count) => widget.updateSearchResultsCount(
                                       link,
                                       count,

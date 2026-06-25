@@ -54,6 +54,7 @@ class TextRendererService {
         isFuzzy: settings.isFuzzySearch,
         searchDistance: settings.searchDistance,
         yellowBackground: settings.highlightYellowBackground,
+        partialWordMatch: settings.partialWordHighlight,
       );
     }
 
