@@ -1099,6 +1099,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               );
             }
           : null,
+      calculateCurrentPageNumber: layoutMode == PdfLayoutMode.bookView
+          ? null
+          : (visibleRect, pageRects, controller) =>
+              pdfTopmostVisiblePage(visibleRect, pageRects),
       normalizeMatrix: layoutMode == PdfLayoutMode.bookView
           ? (matrix, viewSize, layout, controller) {
               if (_isPageTurnInProgress) {
