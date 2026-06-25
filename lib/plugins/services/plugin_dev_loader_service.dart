@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'package:otzaria/plugins/models/installed_plugin.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
@@ -21,6 +20,20 @@ class PluginDevLoaderService {
   PluginDevLoaderService({PluginRegistryRepository? repository})
       : _repository = repository ?? PluginRegistryRepository();
 
+  Future<void> _validateDevelopmentManifest(
+    PluginManifest manifest,
+    String directoryPath, {
+    bool skipFileValidation = false,
+  }) {
+    // תוסף פיתוח פטור מבדיקת תאימות גרסה כדי לאפשר בדיקה מול גרסאות עתידיות.
+    return PluginManifestValidator.validateManifest(
+      manifest: manifest,
+      directoryPath: directoryPath,
+      skipFileValidation: skipFileValidation,
+      skipAppVersionValidation: true,
+    );
+  }
+
   /// קורא את manifest.json מתיקייה ומאמת אותו. לא שומר לDB.
   Future<PluginManifest> fetchDevelopmentManifest(String directoryPath) async {
     final dir = Directory(directoryPath);
@@ -33,12 +46,7 @@ class PluginDevLoaderService {
     }
     final manifestStr = manifestFile.readAsStringSync();
     final manifest = PluginManifest.fromJson(jsonDecode(manifestStr));
-    final packageInfo = await PackageInfo.fromPlatform();
-    await PluginManifestValidator.validateManifest(
-      manifest: manifest,
-      directoryPath: directoryPath,
-      currentAppVersion: packageInfo.version,
-    );
+    await _validateDevelopmentManifest(manifest, directoryPath);
     return manifest;
   }
 
@@ -62,12 +70,7 @@ class PluginDevLoaderService {
       final manifestStr = manifestFile.readAsStringSync();
       final manifestJson = jsonDecode(manifestStr);
       manifest = PluginManifest.fromJson(manifestJson);
-      final packageInfo = await PackageInfo.fromPlatform();
-      await PluginManifestValidator.validateManifest(
-        manifest: manifest,
-        directoryPath: directoryPath,
-        currentAppVersion: packageInfo.version,
-      );
+      await _validateDevelopmentManifest(manifest, directoryPath);
     }
 
     final existingPlugin = await _repository.getPlugin(manifest.id);
@@ -156,11 +159,9 @@ class PluginDevLoaderService {
             '• webpack: תיקיית static/ או CopyWebpackPlugin');
       }
       final manifest = PluginManifest.fromJson(jsonDecode(manifestStr));
-      final packageInfo = await PackageInfo.fromPlatform();
-      await PluginManifestValidator.validateManifest(
-        manifest: manifest,
-        directoryPath: normalizedUrl,
-        currentAppVersion: packageInfo.version,
+      await _validateDevelopmentManifest(
+        manifest,
+        normalizedUrl,
         skipFileValidation: true,
       );
       return manifest;

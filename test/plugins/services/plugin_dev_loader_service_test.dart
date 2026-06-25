@@ -114,6 +114,27 @@ void main() {
           isTrue);
     });
 
+    test(
+        'loadDevelopmentPlugin loads a plugin whose minAppVersion is newer '
+        'than the installed app — dev plugins bypass version compatibility',
+        () async {
+      final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
+      manifestFile.writeAsStringSync(jsonEncode({
+        'schemaVersion': 1,
+        'id': 'test.future.version.plugin',
+        'version': '1.0.0',
+        'name': 'Future Version Plugin',
+        'entrypoint': 'index.html',
+        'minAppVersion': '99.0.0', // גרסה עתידית גבוהה מהמותקנת (1.0.0)
+        'permissions': ['app.info.read'],
+      }));
+
+      await devLoader.loadDevelopmentPlugin(tempDir.path);
+
+      expect(fakeRepo.savedPlugin, isNotNull);
+      expect(fakeRepo.savedPlugin!.pluginId, 'test.future.version.plugin');
+    });
+
     test('loadDevelopmentPlugin throws exception on invalid schema', () async {
       final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
       manifestFile.writeAsStringSync(jsonEncode({
