@@ -44,7 +44,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     on<UnpinPluginRequested>(_onUnpinPluginRequested);
     on<PinPluginToNavRailRequested>(_onPinPluginToNavRailRequested);
     on<UnpinPluginFromNavRailRequested>(_onUnpinPluginFromNavRailRequested);
-    on<SetPluginHiddenRequested>(_onSetPluginHiddenRequested);
+    on<SetPluginShowInToolsRequested>(_onSetPluginShowInToolsRequested);
     on<ReorderPluginsRequested>(_onReorderPluginsRequested);
     on<EnablePluginRequested>(_onEnablePluginRequested);
     on<DisablePluginRequested>(_onDisablePluginRequested);
@@ -146,15 +146,16 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     }
   }
 
-  Future<void> _onSetPluginHiddenRequested(
-      SetPluginHiddenRequested event, Emitter<PluginSystemState> emit) async {
+  Future<void> _onSetPluginShowInToolsRequested(
+      SetPluginShowInToolsRequested event,
+      Emitter<PluginSystemState> emit) async {
     try {
-      await repository.updateHiddenState(event.pluginId, event.hidden);
+      await repository.updateShowInTools(event.pluginId, event.showInTools);
       add(LoadPlugins());
     } catch (e) {
-      UiSnack.showError(event.hidden
-          ? 'שגיאה בהסתרת התוסף: ${e.toString()}'
-          : 'שגיאה בהצגת התוסף: ${e.toString()}');
+      UiSnack.showError(event.showInTools
+          ? 'שגיאה בהצגת התוסף בכלים: ${e.toString()}'
+          : 'שגיאה בהסרת התוסף מהכלים: ${e.toString()}');
     }
   }
 

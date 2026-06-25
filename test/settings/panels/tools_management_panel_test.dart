@@ -93,7 +93,7 @@ InstalledPlugin _plugin({
     enabled: enabled,
     pinned: true,
     pinnedToNavRail: pinnedToNavRail,
-    hiddenFromTools: hidden,
+    showInTools: !hidden,
     networkAccessGranted: networkAccessGranted,
     runOnStartupGranted: runOnStartupGranted,
     manifest: _manifest(id: id, permissions: permissions),
@@ -430,7 +430,7 @@ void main() {
   );
 
   testWidgets(
-    'tapping hide on a plugin dispatches SetPluginHiddenRequested',
+    'tapping "הסתר מכלים" on a plugin dispatches SetPluginShowInToolsRequested(false)',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -447,14 +447,14 @@ void main() {
       await _enterSelectionMode(tester);
       await _selectPlugin(tester, 'תוסף-A');
 
-      await tester.tap(find.text('הסתר'));
+      await tester.tap(find.text('הסתר מכלים'));
       await tester.pumpAndSettle();
 
       final events =
-          pluginBloc.dispatched.whereType<SetPluginHiddenRequested>().toList();
+          pluginBloc.dispatched.whereType<SetPluginShowInToolsRequested>().toList();
       expect(events, hasLength(1));
       expect(events.single.pluginId, 'p1');
-      expect(events.single.hidden, isTrue);
+      expect(events.single.showInTools, isFalse);
     },
   );
 

@@ -194,13 +194,13 @@ class PluginSystemDatabase {
         [pinned ? 1 : 0, DateTime.now().toIso8601String(), pluginId]);
   }
 
-  Future<void> updatePluginHiddenState(
-      String pluginId, bool hiddenFromTools) async {
+  Future<void> updatePluginShowInTools(
+      String pluginId, bool showInTools) async {
     final db = await database;
     db.execute(
         'UPDATE plugin_installation SET hidden_from_tools = ?, updated_at = ? WHERE plugin_id = ?',
         [
-          hiddenFromTools ? 1 : 0,
+          showInTools ? 0 : 1,
           DateTime.now().toIso8601String(),
           pluginId,
         ]);

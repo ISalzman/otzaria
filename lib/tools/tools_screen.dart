@@ -728,7 +728,7 @@ class ToolsScreenState extends State<ToolsScreen>
       return;
     }
 
-    // בדיקה: תוסף מוסתר (hiddenFromTools) או שדורש אינטרנט במצב מנותק
+    // בדיקה: תוסף שאינו מוצג בכלים או שדורש אינטרנט במצב מנותק
     final isOfflineMode = settingsState.isOfflineMode;
     final blocState = context.read<PluginSystemBloc>().state;
     if (blocState is PluginSystemLoaded) {
@@ -740,10 +740,10 @@ class ToolsScreenState extends State<ToolsScreen>
         }
       }
       if (matchedPlugin != null) {
-        if (matchedPlugin.hiddenFromTools) {
+        if (!matchedPlugin.showInTools) {
           _clearPendingTool();
           UiSnack.showError(
-              'התוסף "${matchedPlugin.name}" מוסתר. ניתן להציג אותו דרך הגדרות → ניהול כלים');
+              'התוסף "${matchedPlugin.name}" אינו מוצג בכלים. ניתן להציג אותו דרך הגדרות → ניהול כלים');
           return;
         }
         if (isOfflineMode && matchedPlugin.requiresNetwork) {
@@ -1170,7 +1170,7 @@ class ToolsScreenState extends State<ToolsScreen>
                 final updatedTransient = state.plugins.firstWhere(
                     (p) => p.pluginId == _transientPlugin!.pluginId,
                     orElse: () => _transientPlugin!);
-                if (updatedTransient.hiddenFromTools) {
+                if (!updatedTransient.showInTools) {
                   _transientPlugin = null;
                 } else {
                   _transientPlugin = updatedTransient;

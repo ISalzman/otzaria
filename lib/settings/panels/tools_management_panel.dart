@@ -164,9 +164,9 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
   // ── פעולות תוסף בודד (לחצן בשורה) ───────────────────────────────────────────
 
   void _togglePluginHide(InstalledPlugin plugin) {
-    context.read<PluginSystemBloc>().add(SetPluginHiddenRequested(
+    context.read<PluginSystemBloc>().add(SetPluginShowInToolsRequested(
           pluginId: plugin.pluginId,
-          hidden: !plugin.hiddenFromTools,
+          showInTools: !plugin.showInTools,
         ));
   }
 
@@ -431,10 +431,10 @@ class _ActionBar extends StatelessWidget {
   Iterable<InstalledPlugin> get _selectedPlugins =>
       plugins.where((p) => selectedIds.contains(p.pluginId));
 
-  /// האם כל התוספים שנבחרו כבר מוסתרים?
-  bool get _allSelectedAreHidden {
+  /// האם כל התוספים שנבחרו כבר מוסתרים ממסך הכלים?
+  bool get _allSelectedHiddenFromTools {
     final selected = _selectedPlugins;
-    return selected.isNotEmpty && selected.every((p) => p.hiddenFromTools);
+    return selected.isNotEmpty && selected.every((p) => !p.showInTools);
   }
 
   /// האם כל התוספים שנבחרו כבר מוצמדים ל-nav rail?
@@ -480,11 +480,11 @@ class _ActionBar extends StatelessWidget {
           runSpacing: 8,
           children: [
           ActionButton.neutral(
-            icon: _allSelectedAreHidden
+            icon: _allSelectedHiddenFromTools
                 ? FluentIcons.eye_24_regular
                 : FluentIcons.eye_off_24_regular,
-            text: _allSelectedAreHidden ? 'הצג' : 'הסתר',
-            onPressed: hasSelection ? () => _onToggleHide(context) : null,
+            text: _allSelectedHiddenFromTools ? 'הצג' : 'הסתר',
+            onPressed: hasSelection ? () => _onToggleShowInTools(context) : null,
           ),
           ActionButton.neutral(
             icon: _allSelectedArePinnedToNav
@@ -534,16 +534,16 @@ class _ActionBar extends StatelessWidget {
 
   // ── Actions ─────────────────────────────────────────────────────────────────
 
-  void _onToggleHide(BuildContext context) {
-    final shouldHide = !_allSelectedAreHidden;
+  void _onToggleShowInTools(BuildContext context) {
+    final shouldShow = _allSelectedHiddenFromTools;
     final bloc = context.read<PluginSystemBloc>();
     for (final p in _selectedPlugins) {
-      bloc.add(SetPluginHiddenRequested(
+      bloc.add(SetPluginShowInToolsRequested(
         pluginId: p.pluginId,
-        hidden: shouldHide,
+        showInTools: shouldShow,
       ));
     }
-    UiSnack.show(shouldHide ? 'התוספים הוסתרו' : 'התוספים יוצגו');
+    UiSnack.show(shouldShow ? 'התוספים יוצגו בכלים' : 'התוספים הוסרו מהכלים');
   }
 
   void _onTogglePinNavRail(BuildContext context) {
@@ -835,7 +835,7 @@ class _PluginRow extends StatelessWidget {
       title: Text(plugin.name),
       subtitle: _StatusBadges(
         version: plugin.version,
-        hidden: plugin.hiddenFromTools,
+        hidden: !plugin.showInTools,
         pinnedToNavRail: plugin.pinnedToNavRail,
         disabled: !plugin.enabled,
         networkDeclared: plugin.networkAccessGranted,
@@ -875,8 +875,8 @@ class _PluginRow extends StatelessWidget {
                   onPressed: onTogglePinNavRail,
                 ),
                 IconButton(
-                  tooltip: plugin.hiddenFromTools ? 'הצג בממשק' : 'הסתר מהממשק',
-                  isSelected: !plugin.hiddenFromTools,
+                  tooltip: !plugin.showInTools ? 'הצג בממשק' : 'הסתר מהממשק',
+                  isSelected: !!plugin.showInTools,
                   icon: Icon(FluentIcons.eye_off_24_regular),
                   selectedIcon: Icon(FluentIcons.eye_24_regular),
                   onPressed: onToggleHide,
