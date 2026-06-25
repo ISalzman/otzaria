@@ -1274,14 +1274,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       entries.addAll(commentatorItems);
     }
 
-    if (hasLinkItems) {
-      entries.add(const AppContextMenuEntry.divider());
-      entries.add(AppContextMenuEntry(
-        label: 'קישורים',
-        icon: FluentIcons.link_24_regular,
-        childrenBuilder: buildLinksItems,
-      ));
-    }
+    if (entries.isNotEmpty) entries.add(const AppContextMenuEntry.divider());
+    entries.add(AppContextMenuEntry(
+      label: 'קישורים',
+      icon: FluentIcons.link_24_regular,
+      enabled: hasLinkItems,
+      childrenBuilder: buildLinksItems,
+    ));
 
     final dictionaryText = (capturedText?.trim().isNotEmpty == true)
         ? capturedText
