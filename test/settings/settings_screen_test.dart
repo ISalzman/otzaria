@@ -15,7 +15,7 @@ import 'package:otzaria/settings/search/settings_search_field.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/widgets/navigation/sidebar_nav_item.dart';
 
-import '../../test_helpers/memory_cache_provider.dart';
+import '../test_helpers/memory_cache_provider.dart';
 
 class MockSettingsBloc extends MockBloc<SettingsEvent, SettingsState>
     implements SettingsBloc {}
