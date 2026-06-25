@@ -24,7 +24,7 @@ class AppPaths {
 
   /// שם תיקיית הספרייה בתוך חבילות FULL ל-Linux ו-macOS.
   //static const String _bundledLibraryFolderName = 'אוצריא';
-  static const String _bundledLibraryFolderName = 'otzaria_library'
+  static const String _bundledLibraryFolderName = 'otzaria_library';
 
   /// קובץ marker שמפעיל מצב נייד (portable): כשהוא קיים ליד ה-executable,
   /// כל נתוני האפליקציה נשמרים בתיקיית [_portableDataFolderName] ליד
