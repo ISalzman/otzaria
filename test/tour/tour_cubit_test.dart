@@ -521,6 +521,84 @@ void main() {
     await second.close();
   });
 
+  test('TourCubit מציג טיפ אודות הספר אחרי פתיחת שלושה ספרים שונים', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 3);
+    final cubit = TourCubit();
+
+    for (final title in ['בראשית', 'שמות', 'ויקרא']) {
+      await cubit.recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.openedTextBook,
+          primaryValue: title,
+        ),
+      );
+    }
+
+    expect(cubit.state.activeLiveTipId, LiveTipId.bookSourceHint);
+    await cubit.close();
+  });
+
+  test('TourCubit אינו מציג טיפ אודות הספר בהפעלות הראשונות', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 2);
+    final cubit = TourCubit();
+
+    for (final title in ['בראשית', 'שמות', 'ויקרא']) {
+      await cubit.recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.openedTextBook,
+          primaryValue: title,
+        ),
+      );
+    }
+
+    expect(cubit.state.activeLiveTipId, isNull);
+    await cubit.close();
+  });
+
+  test('TourCubit אינו מציג טיפ אודות הספר על אותו ספר שנפתח שוב ושוב',
+      () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 3);
+    final cubit = TourCubit();
+
+    for (var i = 0; i < 3; i++) {
+      await cubit.recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.openedTextBook,
+          primaryValue: 'בראשית',
+        ),
+      );
+    }
+
+    expect(cubit.state.activeLiveTipId, isNull);
+    await cubit.close();
+  });
+
+  test('TourCubit פותר את טיפ אודות הספר כאשר נצפה מקור הספר', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 3);
+    final cubit = TourCubit();
+
+    await cubit.recordInteraction(
+      TourInteraction(type: TourInteractionType.bookSourceViewed),
+    );
+    expect(cubit.state.resolvedTips, contains(LiveTipId.bookSourceHint));
+
+    for (final title in ['בראשית', 'שמות', 'ויקרא']) {
+      await cubit.recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.openedTextBook,
+          primaryValue: title,
+        ),
+      );
+    }
+
+    expect(cubit.state.activeLiveTipId, isNull);
+    await cubit.close();
+  });
+
   test('Spotlight של הניווט מוצג בצד ימין בממשק RTL', () {
     final rect = tourTargetRectFor(
       TourSpotlightArea.navigation,
