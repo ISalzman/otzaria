@@ -132,6 +132,10 @@ class AppPopupMenuButton<T> extends StatefulWidget {
   /// הערך [icon] (Widget) ישמש כ-iconWidget ב-ToolbarActionButton.
   final IconData? iconData;
 
+  /// כשמוגדר, הכפתור יוצג עם רקע טוני קבוע (secondaryContainer),
+  /// ובריחוף יוצג צבע מוגבר — שימושי לכפתורי מצב פעיל (כמו מיון).
+  final bool highlighted;
+
   const AppPopupMenuButton({
     super.key,
     this.entries,
@@ -147,6 +151,7 @@ class AppPopupMenuButton<T> extends StatefulWidget {
     this.enabled = true,
     this.initialValue,
     this.iconData,
+    this.highlighted = false,
   });
 
   @override
@@ -253,6 +258,19 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
           ),
         ),
       );
+    } else if (widget.highlighted) {
+      final cs = Theme.of(context).colorScheme;
+      trigger = IconButton(
+        onPressed: widget.enabled ? _showAdaptiveMenu : null,
+        padding: widget.padding ?? EdgeInsets.zero,
+        constraints: widget.constraints,
+        tooltip: widget.tooltip,
+        style: IconButton.styleFrom(
+          backgroundColor: cs.secondaryContainer,
+          foregroundColor: cs.onSecondaryContainer,
+        ),
+        icon: widget.icon ?? const Icon(FluentIcons.more_vertical_24_regular),
+      );
     } else {
       trigger = IconButton(
         onPressed: widget.enabled ? _showAdaptiveMenu : null,
@@ -272,9 +290,12 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
       );
     }
 
-    return KeyedSubtree(
-      key: _anchorKey,
-      child: trigger,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: KeyedSubtree(
+        key: _anchorKey,
+        child: trigger,
+      ),
     );
   }
 }

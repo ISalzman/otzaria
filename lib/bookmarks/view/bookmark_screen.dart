@@ -322,6 +322,7 @@ class _BookmarkViewState extends State<BookmarkView> {
     return AppPopupMenuButton<BookmarkSortMode>(
       icon: const Icon(FluentIcons.arrow_sort_24_regular),
       tooltip: 'מיון',
+      highlighted: true,
       initialValue: _sortMode,
       onSelected: _onSortModeChanged,
       entries: const [
