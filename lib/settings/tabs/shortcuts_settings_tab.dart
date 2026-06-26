@@ -892,7 +892,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
       context: context,
       title: 'איפוס קיצורי מקשים?',
       content: 'כל קיצורי המקשים המותאמים אישית יאופסו לברירת המחדל.',
-      subtitle: 'פעולה זו אינה הפיכה',
+      subtitle: 'פעולה זו אינה הפיכה!',
     );
     if (confirmed == true && context.mounted) {
       context.read<SettingsBloc>().add(ResetShortcuts());

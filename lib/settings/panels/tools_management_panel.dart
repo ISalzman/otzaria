@@ -623,7 +623,7 @@ class _ActionBar extends StatelessWidget {
       context: context,
       title: 'מחיקת תוספים',
       content: 'האם למחוק ${plugins.length} תוסף(ים)?\n\n• $names',
-      subtitle: 'פעולה זו אינה הפיכה. נתוני התוסף יימחקו.',
+      subtitle: 'פעולה זו אינה הפיכה! נתוני התוסף יימחקו.',
       confirmText: 'מחק',
     );
     if (confirmed != true) return;
