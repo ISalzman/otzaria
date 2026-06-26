@@ -682,7 +682,7 @@ class TextSettingsTab extends StatelessWidget {
       context: context,
       title: 'אישור איפוס הגדרות לפי ספר',
       content: 'האם אתה בטוח שברצונך לאפס ולמחוק את כל ההגדרות לפי ספר?',
-      subtitle: 'פעולה זו אינה ניתנת לביטול.',
+      subtitle: 'פעולה זו אינה ניתנת לביטול!',
       cancelText: 'ביטול',
       confirmText: 'איפוס',
     );
