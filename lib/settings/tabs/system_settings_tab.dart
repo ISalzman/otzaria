@@ -1487,7 +1487,19 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       ),
     );
     if (result == true && context.mounted && !hasExistingPassword) {
-      context.read<SettingsBloc>().add(const UpdateProtectedModeEnabled(true));
+      final activate = await showTwoActionsDialog(
+        context: context,
+        title: 'הפעלת מצב סייפר',
+        content: 'האם להפעיל כעת את מצב הסייפר?\n'
+            'ניתן להפעיל ולבטל אותו מאוחר יותר דרך ההגדרות.',
+        cancelText: 'לא עכשיו',
+        confirmText: 'הפעל',
+      );
+      if (activate == true && context.mounted) {
+        context
+            .read<SettingsBloc>()
+            .add(const UpdateProtectedModeEnabled(true));
+      }
     }
   }
 
