@@ -106,9 +106,12 @@ const _kSegMaxWidth = 400.0;
 
 double _segGroupWidth(List<SegmentOption<dynamic>> options) {
   final hasIcons = options.any((o) => o.icon != null);
-  final maxLen = options.map((o) => o.label.length).reduce((a, b) => a > b ? a : b);
-  final btnW = (hasIcons ? _kSegBaseWithIcon : _kSegBaseNoIcon) + maxLen * _kSegCharWidth;
-  return (btnW * options.length + _kSegGroupPadding).clamp(_kSegMinWidth, _kSegMaxWidth);
+  final maxLen =
+      options.map((o) => o.label.length).reduce((a, b) => a > b ? a : b);
+  final btnW = (hasIcons ? _kSegBaseWithIcon : _kSegBaseNoIcon) +
+      maxLen * _kSegCharWidth;
+  return (btnW * options.length + _kSegGroupPadding)
+      .clamp(_kSegMinWidth, _kSegMaxWidth);
 }
 
 // ── SettingsActionTile ────────────────────────────────────────────────────────
@@ -206,9 +209,9 @@ class SettingsActionTile extends StatelessWidget {
         _rawTitle = title,
         title = _settingTitle(title),
         subtitle = _settingSubtitle(
-              (path != null && path.isNotEmpty) ? _formatPath(path) : placeholder,
-              ltr: path != null && path.isNotEmpty,
-            );
+          (path != null && path.isNotEmpty) ? _formatPath(path) : placeholder,
+          ltr: path != null && path.isNotEmpty,
+        );
 
   // ── Static factory methods ─────────────────────────────────────────────────
   // נראים כבנאים ב-call site (SettingsActionTile.switchTile(...)) אך מחזירים
@@ -355,7 +358,8 @@ class SettingsActionTile extends StatelessWidget {
     const iconAreaWidth = 56.0;
     const hPadding = 32.0;
     final actionsEst = actions.length * 170.0;
-    final textWidth = containerWidth - iconAreaWidth - hPadding - actionsEst - 8.0;
+    final textWidth =
+        containerWidth - iconAreaWidth - hPadding - actionsEst - 8.0;
     if (textWidth <= 80) return true;
 
     final titlePainter = TextPainter(
@@ -505,7 +509,8 @@ class __SwitchTileState extends State<_SwitchTile> {
         enabled: widget.enabled,
         focusNode: _focusNode,
         responsiveActions: false,
-        onTap: widget.enabled && widget.onChanged != null ? () => _toggle() : null,
+        onTap:
+            widget.enabled && widget.onChanged != null ? () => _toggle() : null,
         actions: [
           ExcludeFocus(
             child: CustomSwitch(
@@ -627,8 +632,8 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
   KeyEventResult _handleKeyEvent(FocusNode _, KeyEvent ev) {
     if (ev is! KeyDownEvent) return KeyEventResult.ignored;
     if (ev.logicalKey == LogicalKeyboardKey.arrowRight) {
-      setState(() => _focusedIndex =
-          (_focusedIndex + 1) % widget.options.length);
+      setState(
+          () => _focusedIndex = (_focusedIndex + 1) % widget.options.length);
       return KeyEventResult.handled;
     }
     if (ev.logicalKey == LogicalKeyboardKey.arrowLeft) {
@@ -692,15 +697,15 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               ListTile(
-                leading: _buildSettingIcon(widget.icon, widget.rtlIcon, widget.iconColor),
+                leading: _buildSettingIcon(
+                    widget.icon, widget.rtlIcon, widget.iconColor),
                 title: _settingTitle(widget.title),
                 subtitle: widget.subtitle != null
                     ? _settingSubtitle(widget.subtitle!)
                     : null,
               ),
               Padding(
-                padding: const EdgeInsets.only(
-                    left: 16, right: 16, bottom: 12),
+                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
                 child: control,
               ),
             ],
@@ -834,7 +839,8 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
       context: context,
       anchorContext: anchorContext,
       itemsBuilder: (m) => entries
-          .map((e) => buildAppPopupMenuItem<_PathMenuAction>(context, e, m, null))
+          .map((e) =>
+              buildAppPopupMenuItem<_PathMenuAction>(context, e, m, null))
           .toList(),
     );
 
@@ -883,4 +889,3 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
 }
 
 enum _PathMenuAction { openFolder, changeLocation, copyPath, clearPath }
-
