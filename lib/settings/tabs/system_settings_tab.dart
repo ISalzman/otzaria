@@ -1299,24 +1299,18 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           //   onPressed: () => _showLibraryChangelogDialog(context),
           // ),
         ),
-        ListTile(
-          hoverColor: Colors.transparent,
-          leading: const Icon(FluentIcons.book_24_regular),
-          title: const Text(
-            'מספר ספרים',
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: Text(
-            _bookCount != null ? '${_bookCount!} ספרים' : 'טוען...',
-            style: kSettingsSubtitleStyle,
-          ),
-          trailing: _bookCount == null
-              ? null
-              : ActionButton.ghost(
-                  icon: FluentIcons.list_24_regular,
-                  text: 'הצג רשימה',
-                  onPressed: () => _openBooksListDialog(context),
-                ),
+        SettingsActionTile.text(
+          icon: FluentIcons.book_24_regular,
+          title: 'מספר ספרים',
+          subtitle: _bookCount != null ? '${_bookCount!} ספרים' : 'טוען...',
+          actions: [
+            if (_bookCount != null)
+              ActionButton.ghost(
+                icon: FluentIcons.list_24_regular,
+                text: 'הצג רשימה',
+                onPressed: () => _openBooksListDialog(context),
+              ),
+          ],
         ),
       ],
     );
