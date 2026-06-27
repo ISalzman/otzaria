@@ -47,7 +47,7 @@ class LibrarySettingsTab extends StatefulWidget {
       title: 'מיקום ספרי היברובוקס',
       subtitle: 'תיקיית ספרי HebrewBooks',
       tab: SettingsTab.library,
-      cardId: 'library.display',
+      cardId: 'library.external',
       keywords: ['hebrewbooks', 'היברובוקס'],
     ),
     SettingsSearchEntry(
@@ -342,11 +342,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                     ],
 
                     // הפאנל המשותף (תצוגה + ספרים נוספים) - כעת כולל את תיקיית היברובוקס בתוכו!
-                    SettingsAnchor(
-                      cardId: 'library.display',
-                      child: LibrarySettingsPanel(
-                          hebrewBooksPathWidget: hebrewPathWidget),
-                    ),
+                    LibrarySettingsPanel(
+                        hebrewBooksPathWidget: hebrewPathWidget),
 
                     // תיקיות מותאמות אישית (רק בדסקטופ)
                     if (!(Platform.isAndroid || Platform.isIOS)) ...[
