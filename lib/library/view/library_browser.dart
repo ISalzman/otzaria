@@ -52,7 +52,7 @@ const int _kScrollDebounceMs = 100;
 /// דיבאונס לחיפוש ספרים — מונע הרצת חיפוש כבד על כל אות.
 const Duration _kLibrarySearchDebounceDuration = Duration(milliseconds: 250);
 
-enum _LibraryListItemStyle { root, groupedRoot, grouped, search }
+enum _LibraryListItemStyle { root, grouped, search }
 
 /// מחשב רוחב תקין לחלונית התצוגה המקדימה לפי הרוחב הפנוי בספרייה.
 @visibleForTesting
@@ -1222,44 +1222,20 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     }
     for (final sub in filteredSubs) {
       final isExpanded = _expandedCategories.contains(sub.path);
-      final isRootItem = level == 0;
-      if (isExpanded) {
-        final children = _buildCategoryTree(sub, level + 1);
-        if (isRootItem && children.isNotEmpty) {
-          widgets.addAll(
-            _buildGroupedListSectionItems([
-              _buildListCategoryItem(
-                sub,
-                level,
-                isExpanded,
-                itemStyle: _LibraryListItemStyle.groupedRoot,
-              ),
-              ...children,
-            ]),
-          );
-        } else {
-          widgets.add(
-            _buildListCategoryItem(
-              sub,
-              level,
-              isExpanded,
-              itemStyle: isRootItem
-                  ? _LibraryListItemStyle.root
-                  : _LibraryListItemStyle.grouped,
-            ),
-          );
-          widgets.addAll(children);
-        }
+      final subChildren = isExpanded ? _buildCategoryTree(sub, level + 1) : <Widget>[];
+      if (level == 0) {
+        widgets.add(
+          ExpandableCard(
+            key: ValueKey(sub.path),
+            header: _buildCategoryHeaderRow(sub, level, isExpanded),
+            isExpanded: isExpanded,
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            children: subChildren,
+          ),
+        );
       } else {
         widgets.add(
-          _buildListCategoryItem(
-            sub,
-            level,
-            isExpanded,
-            itemStyle: isRootItem
-                ? _LibraryListItemStyle.root
-                : _LibraryListItemStyle.grouped,
-          ),
+          _buildNestedCategorySection(sub, level, isExpanded, subChildren),
         );
       }
     }
@@ -1281,7 +1257,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           onTap: () => _showAllBooksDialog(filteredBooks),
           child: Padding(
             padding: EdgeInsets.only(
-              right: 16.0 + level * 24,
+              right: 16.0 + level * 18,
               left: 16,
               top: 10,
               bottom: 10,
@@ -1299,45 +1275,30 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return widgets;
   }
 
-  List<Widget> _buildGroupedListSectionItems(List<Widget> children) {
-    return [
-      AppCard.section(
-        margin: const EdgeInsets.only(top: 2, bottom: 8),
-        children: children,
-      ),
-    ];
-  }
-
-  Widget _buildListCategoryItem(
+  /// שורת כותרת לתיקייה — ללא עטיפת כרטיס (נוסף ע"י [ExpandableCard]).
+  Widget _buildCategoryHeaderRow(
     Category category,
     int level,
-    bool isExpanded, {
-    _LibraryListItemStyle itemStyle = _LibraryListItemStyle.root,
-  }) {
+    bool isExpanded,
+  ) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final isGrouped = itemStyle == _LibraryListItemStyle.grouped;
-    final isGroupedRoot = itemStyle == _LibraryListItemStyle.groupedRoot;
-    final isInGroupedSection = isGrouped || isGroupedRoot;
     const double iconBoxSize = 26.0;
     const double iconSize = 14.0;
     const double horizontalPadding = 12.0;
     const double verticalPadding = 8.0;
-    final indent = isInGroupedSection ? level * 18.0 : level * 24.0;
+    final indent = level * 18.0;
     final titleStyle = theme.textTheme.titleMedium?.merge(
       AppTextStyles.settingTitle.copyWith(
-        fontWeight: isGrouped ? FontWeight.w600 : FontWeight.w700,
+        fontWeight: level == 0 ? FontWeight.w700 : FontWeight.w600,
         color: cs.onSurface,
-        height: isGrouped ? 1.15 : null,
+        height: level > 0 ? 1.15 : null,
       ),
     );
-    final rowBorderRadius = isInGroupedSection
-        ? BorderRadius.zero
-        : BorderRadius.circular(AppTokens.radiusXL);
 
-    final row = InkWell(
+    return InkWell(
       mouseCursor: SystemMouseCursors.click,
-      borderRadius: rowBorderRadius,
+      borderRadius: BorderRadius.zero,
       hoverDuration: Durations.medium1,
       onTap: () => setState(() {
         if (isExpanded) {
@@ -1390,14 +1351,22 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         ),
       ),
     );
+  }
 
-    if (isInGroupedSection) {
-      return row;
-    }
-
-    return AppCard(
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      child: row,
+  /// שורת תיקייה מקוננת — ללא גבול כרטיס, מיועדת לשימוש
+  /// בתוך [ExpandableCard.children] (רמה 1+).
+  Widget _buildNestedCategorySection(
+    Category category,
+    int level,
+    bool isExpanded,
+    List<Widget> children,
+  ) {
+    return ExpandableCard(
+      key: ValueKey(category.path),
+      header: _buildCategoryHeaderRow(category, level, isExpanded),
+      isExpanded: isExpanded,
+      wrapInCard: false,
+      children: children,
     );
   }
 
