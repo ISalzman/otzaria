@@ -111,13 +111,18 @@ class _AppDialogState extends State<AppDialog> {
     (newIndex == 1 ? _confirmFocusNode : _cancelFocusNode)?.requestFocus();
   }
 
+  void _handleConfirm() {
+    if (widget.onConfirm != null && !widget.onConfirm!()) return;
+    Navigator.of(context).pop(true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return DialogKeyboardNavigator(
       focusedIndex: _focusedIndex,
       onFocusChange: _moveFocus,
-      onConfirm: () => Navigator.of(context).pop(true),
+      onConfirm: _handleConfirm,
       onCancel: () => Navigator.of(context).pop(false),
       handleEnterKey: widget.handleEnterKey,
       child: AlertDialog(
@@ -155,12 +160,9 @@ class _AppDialogState extends State<AppDialog> {
         _DialogVariant.singleAction => [
             ActionButton.recommended(
               focusNode: _confirmFocusNode,
-              autofocus: true,
+              autofocus: widget.customContent == null,
               text: widget.confirmText,
-              onPressed: () {
-                if (widget.onConfirm != null && !widget.onConfirm!()) return;
-                Navigator.of(context).pop(true);
-              },
+              onPressed: _handleConfirm,
             ),
           ],
         _DialogVariant.twoActions => [
