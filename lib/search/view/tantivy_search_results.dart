@@ -19,6 +19,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/controls/action_buttons.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 class TantivySearchResults extends StatefulWidget {
   final SearchingTab tab;
@@ -514,38 +515,36 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // נתיב (כותרת + הפניה)
                             Row(
                               children: [
                                 if (result.isPdf)
                                   Padding(
                                     padding: const EdgeInsets.only(left: 8),
-                                    child: Icon(
+                                    child: RtlIcon(
                                       FluentIcons.document_pdf_24_regular,
                                       size: 16,
                                       color: Theme.of(context)
                                           .colorScheme
-                                          .onSurfaceVariant,
+                                          .primary,
                                     ),
                                   ),
                                 Expanded(
                                   child: Text(
-                                    wrappedTitleText,
+                                    result.title,
                                     style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
                                       color: Theme.of(context)
                                           .colorScheme
-                                          .onSurfaceVariant,
+                                          .primary,
                                     ),
                                     textAlign: TextAlign.right,
-                                    softWrap: true,
-                                    maxLines: 2,
+                                    maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 IconButton(
-                                  icon: Icon(
+                                  icon: RtlIcon(
                                     FluentIcons.copy_24_regular,
                                     size: 16,
                                     color: Theme.of(context)
@@ -569,6 +568,23 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                 ),
                               ],
                             ),
+                            if (wrappedTitleText.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  wrappedTitleText,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                                  textAlign: TextAlign.right,
+                                  softWrap: true,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             const SizedBox(height: 8),
                             // הטקסט שנמצא
                             RichText(
