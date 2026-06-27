@@ -13,6 +13,10 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/search/settings_search_models.dart';
+import 'package:otzaria/settings/search/settings_search_registry.dart';
+import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
@@ -29,6 +33,9 @@ class PluginSidePanel extends StatelessWidget {
   });
 
   Future<void> _installPlugin(BuildContext context) async {
+    final verified = await verifyPasswordForAction(context);
+    if (!verified || !context.mounted) return;
+
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['otzplugin'],
@@ -44,6 +51,9 @@ class PluginSidePanel extends StatelessWidget {
   }
 
   Future<void> _loadDevPlugin(BuildContext context) async {
+    final verified = await verifyPasswordForAction(context);
+    if (!verified || !context.mounted) return;
+
     final rootPath = await FilePicker.getDirectoryPath(lockParentWindow: true);
     if (rootPath != null) {
       if (context.mounted) {
@@ -55,6 +65,9 @@ class PluginSidePanel extends StatelessWidget {
   }
 
   Future<void> _loadLocalhostPlugin(BuildContext context) async {
+    final verified = await verifyPasswordForAction(context);
+    if (!verified || !context.mounted) return;
+
     final bloc = context.read<PluginSystemBloc>();
     final url = await showInputDialog(
       context: context,
@@ -230,6 +243,7 @@ class PluginSidePanel extends StatelessWidget {
   }
 }
 
+<<<<<<< HEAD
 /// שורת תוסף בודדת עם תמיכה בגרירה: כל השורה היא [DragTarget] שמקבל id
 /// של תוסף אחר, וה-handle מימין הוא [Draggable] שמתחיל גרירה.
 class _DraggablePluginRow extends StatelessWidget {
@@ -274,6 +288,8 @@ class _DraggablePluginRow extends StatelessWidget {
   }
 }
 
+=======
+>>>>>>> 6bf7044b0 (מצב סייפר: חסום גישה לסייר הקבצים ושאל לפני הפעלה)
 class _PluginListTile extends StatelessWidget {
   final InstalledPlugin plugin;
   final Function(InstalledPlugin)? onPluginSelected;
@@ -383,6 +399,7 @@ class _PluginListTile extends StatelessWidget {
     );
   }
 }
+<<<<<<< HEAD
 
 /// ה-widget שצף מתחת לסמן בזמן הגרירה. מוצג מעל Overlay של ה-Navigator
 /// (לא OverlayPortal) ולכן אין חששות לקונפליקטים עם LayoutBuilders.
@@ -424,3 +441,5 @@ class _DragFeedback extends StatelessWidget {
     );
   }
 }
+=======
+>>>>>>> 6bf7044b0 (מצב סייפר: חסום גישה לסייר הקבצים ושאל לפני הפעלה)
