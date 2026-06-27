@@ -7,7 +7,6 @@ import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
-import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
 
 /// טאב "חכמי לב" — אודות, קהילה, תורמים ומפתחים.
@@ -258,64 +257,25 @@ class AboutDevTab extends StatelessWidget {
               child: _buildHeader(context),
             ),
 
-            // ── תרומה ומידע ──
+            // ── סיוע ──
             SettingsCard(
-              title: 'תרומה ומידע',
+              title: 'סיוע ללומדי תורה',
               children: [
-                _ActionTile(
-                  icon: FluentIcons.payment_24_regular,
-                  title: 'תרום לפרויקט',
-                  subtitle:
-                      'תרומתך תעזור לנו להמשיך לפתח ולשפר את אוצריא עבור כלל ציבור הלומדים',
-                  buttonLabel: 'נדרים+',
-                  buttonIcon: FluentIcons.payment_24_regular,
-                  onTap: () => _openUrl('https://nedar.im/ezOd'),
-                ),
-                _ActionTile(
+                SettingsActionTile.text(
                   icon: FluentIcons.shield_task_24_filled,
                   title: 'אוצריא מתגייסת לעזרת לומדי התורה',
                   subtitle: 'מרכז המידע על ארגוני סיוע ללומדי התורה',
-                  buttonLabel: 'למידע נוסף',
-                  onTap: () => _openAdPopup(context),
+                  actions: [
+                    ActionButton.recommended(
+                      text: 'למידע נוסף',
+                      onPressed: () => _openAdPopup(context),
+                    ),
+                  ],
                 ),
               ],
             ),
 
-            // ── הצטרף ──
-            SettingsCard(
-              title: 'הצטרף',
-              children: [
-                _ActionTile(
-                  icon: FluentIcons.edit_24_regular,
-                  title: 'הצטרף לצוות העריכה ומהדירי הספרים',
-                  subtitle: 'עזור לנו להוסיף ספרים חדשים לספריית אוצריא',
-                  buttonLabel: 'הצטרף לעריכה',
-                  onTap: () => _openUrl('https://www.otzaria.org/library'),
-                ),
-                _ActionTile(
-                  icon: FluentIcons.code_24_regular,
-                  title: 'הצטרף לפיתוח',
-                  subtitle:
-                      'מפתחים מוזמנים לתרום לקהילה התורנית ולשדרג את אוצריא',
-                  buttonLabel: 'הצטרף עכשיו',
-                  onTap: () => _openUrl('https://github.com/otzaria/otzaria'),
-                ),
-              ],
-            ),
-
-            // ── משוב ותמיכה ──
-            SettingsCard(
-              title: 'משוב ותמיכה',
-              children: [
-                _ActionTile(
-                  icon: FluentIcons.chat_24_regular,
-                  title: 'נתקלת בבאג? יש לך שאלה או משוב?',
-                  subtitle: 'מוזמנים לבקר בפורום התמיכה והמשוב של אוצריא',
-                  buttonLabel: 'כניסה לפורום',
-                  onTap: () => _openUrl('https://otzaria.org/forum'),
-                ),
-              ],
-            ),
+            kSettingsCardSpacing,
 
             // ── תורמים ──
             SettingsCard(
@@ -330,19 +290,49 @@ class AboutDevTab extends StatelessWidget {
               ],
             ),
 
+            kSettingsCardSpacing,
+
             // ── מפתחים ──
             SettingsCard(
-              title: 'מפתחים',
+              title: 'אודות פיתוח התוכנה',
               children: [
+                _cardTitle(context, 'מפתחים'),
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: _ContributorWrap(
                     contributors: _developers,
                     icon: FluentIcons.person_24_regular,
+                    alignment: WrapAlignment.center,
                   ),
+                ),
+                SettingsActionTile.text(
+                  icon: FluentIcons.code_24_regular,
+                  title: 'הצטרף לפיתוח',
+                  subtitle:
+                      'מפתחים מוזמנים לתרום לקהילה התורנית ולשדרג את אוצריא',
+                  actions: [
+                    ActionButton.recommended(
+                      text: 'הצטרף עכשיו',
+                      onPressed: () =>
+                          _openUrl('https://github.com/otzaria/otzaria'),
+                    ),
+                  ],
+                ),
+                SettingsActionTile.text(
+                  icon: FluentIcons.chat_24_regular,
+                  title: 'נתקלת בבאג? יש לך שאלה או משוב?',
+                  subtitle: 'מוזמנים לבקר בפורום התמיכה והמשוב של אוצריא',
+                  actions: [
+                    ActionButton.recommended(
+                      text: 'כניסה לפורום',
+                      onPressed: () => _openUrl('https://otzaria.org/forum'),
+                    ),
+                  ],
                 ),
               ],
             ),
+
+            kSettingsCardSpacing,
 
             // ── אנשים חיוניים ──
             SettingsCard(
@@ -353,15 +343,36 @@ class AboutDevTab extends StatelessWidget {
                   child: _ContributorWrap(
                     contributors: _essentialPeople,
                     icon: FluentIcons.people_24_regular,
+                    alignment: WrapAlignment.center,
                   ),
                 ),
               ],
             ),
 
-            // ── מהדירי ספרים ──
+            kSettingsCardSpacing,
+
+            // ── אודות ספריית אוצריא ──
             SettingsCard(
-              title: 'מהדירי ספרים',
+              title: 'אודות ספריית אוצריא',
               children: [
+                _cardTitle(
+                  context,
+                  'מקור הספרים',
+                  subtitle:
+                      'הספרים הותאמו במיוחד עבור אוצריא, וכן נוספו ספרים רבים '
+                      'נוספים בזכות עבודתם המסורה של מהדירי הספרים.',
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _BookSourcesSection(onOpenUrl: _openUrl),
+                ),
+                _cardTitle(
+                  context,
+                  'מהדירי ספרים',
+                  subtitle:
+                      'באם שמכם אינו מופיע ברשימה או שאתם מעוניינים בשינוי, '
+                      'אנא פנו למייל המערכת.',
+                ),
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -370,28 +381,28 @@ class AboutDevTab extends StatelessWidget {
                       _editorCategory('10 ספרים ומעלה', _topEditors),
                       const SizedBox(height: 20),
                       _editorCategory('בין 5 ל-10 ספרים', _regularEditors),
-                      const SizedBox(height: 12),
-                      _editorsNote(context),
                     ],
                   ),
                 ),
-              ],
-            ),
-
-            // ── מקור הספרים ──
-            SettingsCard(
-              title: 'מקור הספרים',
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _BookSourcesSection(onOpenUrl: _openUrl),
+                SettingsActionTile.text(
+                  icon: FluentIcons.edit_24_regular,
+                  title: 'הצטרף לצוות העריכה ומהדירי הספרים',
+                  subtitle: 'עזור לנו להוסיף ספרים חדשים לספריית אוצריא',
+                  actions: [
+                    ActionButton.recommended(
+                      text: 'הצטרף לעריכה',
+                      onPressed: () =>
+                          _openUrl('https://www.otzaria.org/library'),
+                    ),
+                  ],
                 ),
               ],
             ),
 
+            kSettingsCardSpacing,
+
             // ── ציטוט סיום ──
             SettingsCard(
-              title: '',
               children: [_ClosingQuote()],
             ),
           ],
@@ -436,6 +447,38 @@ class AboutDevTab extends StatelessWidget {
     );
   }
 
+  /// כותרת כרטיס המוצגת בתוך ה-children — ממורכזת, צבע primary, מעט גדולה יותר.
+  /// [subtitle] אופציונלי — מוצג ממורכז מתחת לכותרת בעיצוב תת-כותרת רגיל.
+  Widget _cardTitle(BuildContext context, String text, {String? subtitle}) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Column(
+          children: [
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: kSettingsSubtitleStyle,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _editorCategory(String label, List<Map<String, String>> editors) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -448,34 +491,9 @@ class AboutDevTab extends StatelessWidget {
         _ContributorWrap(
           contributors: editors,
           icon: FluentIcons.book_24_regular,
+          alignment: WrapAlignment.center,
         ),
       ],
-    );
-  }
-
-  Widget _editorsNote(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(AppTokens.radiusSM),
-        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(FluentIcons.info_24_regular,
-              size: 18, color: colorScheme.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'באם שמכם אינו מופיע ברשימה או שאתם מעוניינים בשינוי, '
-              'אנא פנו למייל המערכת.',
-              style: kSettingsSubtitleStyle,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -500,10 +518,12 @@ class AboutDevTab extends StatelessWidget {
 class _ContributorWrap extends StatelessWidget {
   final List<Map<String, String>> contributors;
   final IconData icon;
+  final WrapAlignment alignment;
 
   const _ContributorWrap({
     required this.contributors,
     required this.icon,
+    this.alignment = WrapAlignment.start,
   });
 
   @override
@@ -511,6 +531,7 @@ class _ContributorWrap extends StatelessWidget {
     return Wrap(
       spacing: 16,
       runSpacing: 10,
+      alignment: alignment,
       children: contributors
           .map((c) => _ContributorChip(
                 name: c['name']!,
@@ -705,46 +726,6 @@ class _DonationMemorialCard extends StatelessWidget {
   }
 }
 
-// ── _ActionTile ───────────────────────────────────────────────────────────────
-
-class _ActionTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String buttonLabel;
-  final IconData? buttonIcon;
-  final VoidCallback onTap;
-
-  const _ActionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.buttonLabel,
-    this.buttonIcon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(
-        title,
-        style: kSettingsTitleStyle,
-      ),
-      subtitle: Text(
-        subtitle,
-        style: kSettingsSubtitleStyle,
-      ),
-      trailing: ActionButton.recommended(
-        text: buttonLabel,
-        icon: buttonIcon,
-        onPressed: onTap,
-      ),
-    );
-  }
-}
-
 // ── _BookSourcesSection ───────────────────────────────────────────────────────
 
 class _BookSourcesSection extends StatelessWidget {
@@ -821,32 +802,6 @@ class _BookSourcesSection extends StatelessWidget {
                   ))
               .toList(),
         ),
-        const SizedBox(height: 12),
-        Builder(builder: (context) {
-          final colorScheme = Theme.of(context).colorScheme;
-          return Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(AppTokens.radiusSM),
-              border:
-                  Border.all(color: colorScheme.primary.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              children: [
-                Icon(FluentIcons.info_24_regular,
-                    size: 18, color: colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'הספרים הותאמו במיוחד עבור אוצריא, וכן נוספו ספרים רבים נוספים בזכות עבודתם המסורה של מהדירי הספרים.',
-                    style: kSettingsSubtitleStyle,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
       ],
     );
   }

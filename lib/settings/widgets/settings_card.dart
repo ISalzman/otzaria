@@ -21,14 +21,21 @@ class SettingsCard extends StatelessWidget {
 
   const SettingsCard({
     super.key,
-    required this.title,
+    this.title,
     this.subtitle,
     required this.children,
   });
 
+  // כשאין title (null או מחרוזת ריקה) הכותרת מוגדרת בתוך children — בלי כותרת חיצונית.
+  bool get _hasTitle =>
+      title != null && !(title is String && (title as String).isEmpty);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (!_hasTitle) return AppCard.section(children: children);
+
     final titleStyle = theme.textTheme.titleMedium?.copyWith(
       fontWeight: FontWeight.bold,
       color: theme.colorScheme.primary,
