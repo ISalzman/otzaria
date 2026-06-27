@@ -95,10 +95,10 @@ class ExpandableSection extends StatelessWidget {
         AnimatedSize(
           duration: AppTokens.animNormal,
           curve: Curves.easeInOut,
-          child: isExpanded && hasContent
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: isExpanded && hasContent
+                ? [
                     AppCard.sectionDivider(context),
                     for (int i = 0; i < children.length; i++) ...[
                       Material(
@@ -108,9 +108,9 @@ class ExpandableSection extends StatelessWidget {
                       if (i < children.length - 1)
                         AppCard.sectionDivider(context),
                     ],
-                  ],
-                )
-              : const SizedBox.shrink(),
+                  ]
+                : const [],
+          ),
         ),
       ],
     );
