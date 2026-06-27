@@ -1713,9 +1713,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   : FluentIcons.lock_open_24_regular,
               title: 'הפעל מצב סייפר',
               subtitle: hasPassword ? 'סיסמה הוגדרה' : 'יש להגדיר סיסמה תחילה',
-              subtitleColor: hasPassword
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.error,
               value: state.protectedModeEnabled,
               onChanged: hasPassword
                   ? (value) =>
