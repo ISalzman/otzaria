@@ -440,93 +440,76 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             } else {
               subtitleText = 'האינדקס לא מעודכן';
             }
-            return ListTile(
-              leading: const Icon(FluentIcons.table_24_regular),
-              title: const Text(
-                'אינדקס חיפוש',
-                style: kSettingsTitleStyle,
-              ),
-              subtitle: Text(
-                subtitleText,
-                style: kSettingsSubtitleStyle,
-              ),
-              trailing: isActive
-                  ? ActionButton.neutral(
-                      text: 'עצור',
-                      onPressed: () async {
-                        final result = await showWarningDialog(
-                          context: context,
-                          title: 'עצירת עדכון',
-                          content: 'האם לעצור את תהליך עדכון האינדקס?',
-                          confirmText: 'עצור',
-                        );
-                        if (!context.mounted) return;
-                        if (result == true) {
-                          context.read<IndexingBloc>().add(CancelIndexing());
-                        }
-                      },
-                    )
-                  : isCheckingManualReindex
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : _requiresManualReindex == true
-                          ? ActionButton.recommended(
-                              text: 'אפס ועדכן',
-                              onPressed: () async {
-                                if (library == null) {
-                                  return;
-                                }
-
-                                final indexingBloc =
-                                    context.read<IndexingBloc>();
-
-                                await _indexingRepository.clearIndex();
-                                if (!mounted) {
-                                  return;
-                                }
-
-                                setState(() {
-                                  _requiresManualReindex = false;
-                                });
-                                indexingBloc.add(StartIndexing(library));
-                              },
-                            )
-                          : indexingState is IndexingComplete
-                              ? ActionButton.ghost(
-                                  text: 'איפוס',
-                                  onPressed: () async {
-                                    final result = await showWarningDialog(
-                                      context: context,
-                                      title: 'איפוס אינדקס',
-                                      content:
-                                          'האם למחוק את אינדקס החיפוש? תצטרך לבנות אותו מחדש כדי להשתמש בחיפוש.',
-                                      confirmText: 'אפס',
-                                    );
-                                    if (!context.mounted) return;
-                                    if (result == true) {
-                                      context
-                                          .read<IndexingBloc>()
-                                          .add(ClearIndex());
-                                    }
-                                  },
-                                )
-                              : ActionButton.recommended(
-                                  text: 'עדכן',
-                                  onPressed: () {
-                                    final library = context
-                                        .read<LibraryBloc>()
-                                        .state
-                                        .library;
-                                    if (library != null) {
-                                      context
-                                          .read<IndexingBloc>()
-                                          .add(StartIndexing(library));
-                                    }
-                                  },
-                                ),
+            return SettingsActionTile.text(
+              icon: FluentIcons.table_24_regular,
+              title: 'אינדקס חיפוש',
+              subtitle: subtitleText,
+              actions: [
+                if (isActive)
+                  ActionButton.neutral(
+                    text: 'עצור',
+                    onPressed: () async {
+                      final result = await showWarningDialog(
+                        context: context,
+                        title: 'עצירת עדכון',
+                        content: 'האם לעצור את תהליך עדכון האינדקס?',
+                        confirmText: 'עצור',
+                      );
+                      if (!context.mounted) return;
+                      if (result == true) {
+                        context.read<IndexingBloc>().add(CancelIndexing());
+                      }
+                    },
+                  )
+                else if (isCheckingManualReindex)
+                  const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else if (_requiresManualReindex == true)
+                  ActionButton.recommended(
+                    text: 'אפס ועדכן',
+                    onPressed: () async {
+                      if (library == null) return;
+                      final indexingBloc = context.read<IndexingBloc>();
+                      await _indexingRepository.clearIndex();
+                      if (!mounted) return;
+                      setState(() => _requiresManualReindex = false);
+                      indexingBloc.add(StartIndexing(library));
+                    },
+                  )
+                else if (indexingState is IndexingComplete)
+                  ActionButton.ghost(
+                    text: 'איפוס',
+                    onPressed: () async {
+                      final result = await showWarningDialog(
+                        context: context,
+                        title: 'איפוס אינדקס',
+                        content:
+                            'האם למחוק את אינדקס החיפוש? תצטרך לבנות אותו מחדש כדי להשתמש בחיפוש.',
+                        confirmText: 'אפס',
+                      );
+                      if (!context.mounted) return;
+                      if (result == true) {
+                        context.read<IndexingBloc>().add(ClearIndex());
+                      }
+                    },
+                  )
+                else
+                  ActionButton.recommended(
+                    text: 'עדכן',
+                    onPressed: () {
+                      final library =
+                          context.read<LibraryBloc>().state.library;
+                      if (library != null) {
+                        context
+                            .read<IndexingBloc>()
+                            .add(StartIndexing(library));
+                      }
+                    },
+                  ),
+              ],
             );
           },
         ),
