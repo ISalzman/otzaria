@@ -64,8 +64,7 @@ import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/view/history_screen.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/settings/settings_exports.dart';
-import 'package:otzaria/file_sync/bloc/file_sync_bloc.dart';
-import 'package:otzaria/file_sync/bloc/file_sync_event.dart';
+import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
@@ -283,6 +282,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
   Timer? _splashFailsafeTimer;
   bool _isShowingStartupManualReindexDialog = false;
   bool _hasStartedFileSync = false;
+  // מסומן כשעדכון ספרייה הוחל, כדי להפעיל אינדוקס אחרי הטעינה מחדש הבאה
+  // (ה-_checkAndStartIndexing הרגיל רץ פעם אחת בעלייה ולא מכסה עדכון חי).
+  bool _indexAfterLibraryReload = false;
+  // אחרי עדכון DB, StartIndexing מכסה את כל הספרייה; ה-gate מונע מ-listener
+  // ה-newBooksToIndex להריץ מסלול אינדוקס שני על אותו refresh.
+  bool _dbUpdateTriggeredFullIndex = false;
+  bool _isShowingFullDownloadDialog = false;
   bool _isSearchOpen = false;
   bool _isFindRefOpen = false;
   bool _isReadingSettingsPanelOpen = false;
@@ -651,8 +657,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
   }
 
-  /// Trigger FileSyncBloc to start syncing AFTER the library is loaded.
-  /// Runs only once per app session (guard prevents re-triggering on RefreshLibrary).
+  /// מפעיל את עדכון הספרייה אחרי שהספרייה נטענה. רץ פעם אחת בסשן.
   void _startFileSync() {
     if (_hasStartedFileSync) return;
     _hasStartedFileSync = true;
@@ -662,9 +667,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final settingsState = context.read<SettingsBloc>().state;
     if (isAutoSync && settingsState.canUseSoftwareAndBookUpdates) {
       try {
-        context.read<FileSyncBloc>().add(const StartSync());
+        context.read<LibraryUpdateBloc>().add(const StartLibraryUpdate());
       } catch (e) {
-        debugPrint('Could not start file sync: $e');
+        debugPrint('Could not start library update: $e');
       }
     }
   }
@@ -742,6 +747,57 @@ class MainWindowScreenState extends State<MainWindowScreen>
     _hasCheckedAutoIndex = true;
 
     unawaited(_resolveStartupIndexing(context, library));
+  }
+
+  /// מציג דיאלוג אישור לפני הורדה מלאה (~ג'יגות). המשתמש יכול לבחור להישאר
+  /// עם הגרסה הנוכחית — אסור להוריד ספרייה מלאה ללא אישור מפורש.
+  Future<void> _promptFullDownload(
+    BuildContext context,
+    LibraryUpdateState state,
+  ) async {
+    if (_isShowingFullDownloadDialog) return;
+    _isShowingFullDownloadDialog = true;
+    final bloc = context.read<LibraryUpdateBloc>();
+    final sizeMb = ((state.plan?.totalDownloadSize ?? 0) / (1 << 20)).round();
+    final sizeText = sizeMb >= 1024
+        ? '${(sizeMb / 1024).toStringAsFixed(1)} GB'
+        : '$sizeMb MB';
+    try {
+      final confirmed = await showTwoActionsDialog(
+        context: context,
+        title: 'נדרשת הורדה מלאה של הספרייה',
+        content: 'לא נמצא מסלול עדכון מצומצם למצב הנוכחי. כדי לעדכן יש להוריד '
+            'את הספרייה המלאה (כ-$sizeText). אפשר גם להמשיך עם הגרסה הנוכחית '
+            'ללא עדכון.',
+        cancelText: 'המשך עם הנוכחי',
+        confirmText: 'הורד עדכון מלא',
+      );
+      if (!context.mounted) return;
+      bloc.add(confirmed == true
+          ? const ConfirmFullDownload()
+          : const DeclineFullDownload());
+    } finally {
+      _isShowingFullDownloadDialog = false;
+    }
+  }
+
+  /// מפעיל אינדוקס אחרי עדכון DB חי — בנפרד מ-_checkAndStartIndexing שרץ פעם
+  /// אחת בעלייה. מבקש אינדוקס רק אם המשתמש הפעיל עדכון אינדקס אוטומטי.
+  void _indexAfterDbUpdateIfNeeded(
+    BuildContext context,
+    library_model.Library library,
+  ) {
+    if (!_indexAfterLibraryReload) {
+      _dbUpdateTriggeredFullIndex = false;
+      return;
+    }
+    _indexAfterLibraryReload = false;
+    final autoUpdateIndex = context.read<SettingsBloc>().state.autoUpdateIndex;
+    // StartIndexing מאנדקס את כל הספרייה — מסמן ל-newBooksToIndex listener לדלג.
+    _dbUpdateTriggeredFullIndex = autoUpdateIndex;
+    if (autoUpdateIndex) {
+      context.read<IndexingBloc>().add(StartIndexing(library));
+    }
   }
 
   Future<void> _resolveStartupIndexing(
@@ -2184,6 +2240,22 @@ class MainWindowScreenState extends State<MainWindowScreen>
               }
             },
           ),
+          // ריענון הספרייה אחרי עדכון, ואישור הורדה מלאה. מוגדר כאן (לא
+          // ב-LibraryBrowser) כדי שיהיה mounted גם כשנפתחים למסך אחר.
+          BlocListener<LibraryUpdateBloc, LibraryUpdateState>(
+            listenWhen: (previous, current) =>
+                previous.status != current.status,
+            listener: (context, state) {
+              if (state.status == LibraryUpdateStatus.completed &&
+                  state.hasUpdate) {
+                _indexAfterLibraryReload = true;
+                context.read<LibraryBloc>().add(RefreshLibrary());
+              } else if (state.status ==
+                  LibraryUpdateStatus.needsFullConfirmation) {
+                _promptFullDownload(context, state);
+              }
+            },
+          ),
           BlocListener<LibraryBloc, LibraryState>(
             listenWhen: (previous, current) =>
                 previous.isLoading &&
@@ -2196,6 +2268,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
               // עצמאית ל-getLibrary שתתחרה בטעינת הספר הפעיל בעלייה.
               if (state.library != null) {
                 _checkAndStartIndexing(context, state.library!);
+                _indexAfterDbUpdateIfNeeded(context, state.library!);
               }
               final navigationState = context.read<NavigationBloc>().state;
               if (navigationState.hasCheckedLibrary &&
@@ -2211,6 +2284,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 current.newBooksToIndex != null &&
                 current.newBooksToIndex!.isNotEmpty,
             listener: (context, state) {
+              // אחרי עדכון DB, StartIndexing כבר אינדקס את כל הספרייה — מדלגים
+              // על מסלול האינדוקס השני (חד-פעמי לאותו refresh).
+              if (_dbUpdateTriggeredFullIndex) {
+                _dbUpdateTriggeredFullIndex = false;
+                return;
+              }
               if (context.read<SettingsBloc>().state.autoUpdateIndex) {
                 context.read<IndexingBloc>().add(
                     IndexSpecificBooks(state.newBooksToIndex!, state.library!));
