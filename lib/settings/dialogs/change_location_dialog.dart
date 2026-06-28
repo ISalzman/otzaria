@@ -1,11 +1,14 @@
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:path/path.dart' as p;
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
@@ -109,17 +112,26 @@ Future<Set<String>> _libraryMoveIncludeSet(String from) async {
   return include;
 }
 
-/// מעביר את ספריית אוצריא למיקום חדש בסדר בטוח שמתמודד עם נעילת הקבצים ע"י
-/// Windows (seforim.db וקובצי PDF פתוחים):
-/// מעתיק את הקבצים המזוהים בעוד הם פתוחים, מעדכן את ההגדרה, ממפה את נתיבי
-/// הטאבים הפתוחים למיקום החדש, וטוען את התוכנה מחדש (סוגר את הספרים הפתוחים
-/// ומשחרר את הנעילה) — ורק לאחר הרענון מוחק את הקבצים הישנים.
+/// מעביר את ספריית אוצריא למיקום חדש. [to] היא התיקייה שהמשתמש בחר, ותחתיה
+/// נוצרות `<to>/books` (הספרייה) ו-`<to>/index` (אינדקס החיפוש), כך שמבנה
+/// התיקיות נשמר ולא נשפך לתיקיית האב.
+///
+/// סדר בטוח שמתמודד עם נעילת הקבצים ע"י Windows (seforim.db, אינדקס, וקובצי
+/// PDF פתוחים): מעתיק את תיקיית `books` (קבצים מזוהים בלבד) ואת תיקיית `index`
+/// במלואה, מעדכן את ההגדרות, ממפה את נתיבי הטאבים הפתוחים, סוגר את ה-DB ופותח
+/// מחדש את האינדקס בנתיב החדש (משחרר נעילות), וטוען את התוכנה מחדש — ורק לאחר
+/// הרענון מוחק את הקבצים הישנים.
 Future<void> performLibraryMove({
   required BuildContext context,
   required String from,
   required String to,
 }) async {
-  if (p.equals(from, to)) return;
+  final newLibrary = p.join(to, p.basename(from));
+  if (p.equals(from, newLibrary)) return;
+  if (p.isWithin(from, newLibrary)) {
+    UiSnack.showError('לא ניתן להעביר את הספרייה לתוך עצמה');
+    return;
+  }
 
   final navigator = Navigator.of(context, rootNavigator: true);
   _showBlockingProgress(
@@ -128,18 +140,38 @@ Future<void> performLibraryMove({
   );
 
   final include = await _libraryMoveIncludeSet(from);
+  final oldIndex = await AppPaths.getIndexPath();
+  final newIndex = p.join(to, p.basename(oldIndex));
+  final shouldMoveIndex =
+      !p.equals(oldIndex, newIndex) && await Directory(oldIndex).exists();
   try {
-    // 1. העתקת הקבצים המזוהים בלבד למיקום החדש (גם בעוד ה-DB/PDF פתוחים).
-    await copyDirectoryEntries(from, to, includeOnly: include);
-    // 2. עדכון הגדרת מיקום הספרייה בקבצי המשתמש.
-    await Settings.setValue<String>(SettingsRepository.keyLibraryPath, to);
+    // 1. העתקת תיקיית הספרייה (קבצים מזוהים בלבד) לתת-התיקייה החדשה.
+    await copyDirectoryEntries(from, newLibrary, includeOnly: include);
+    // 2. העתקת תיקיית האינדקס במלואה (ללא סינון).
+    if (shouldMoveIndex) {
+      await copyDirectoryEntries(oldIndex, newIndex);
+    }
+    // 3. עדכון הגדרות המיקום בקבצי המשתמש.
+    await Settings.setValue<String>(
+        SettingsRepository.keyLibraryPath, newLibrary);
     await Settings.setValue<String>(
         SettingsRepository.keyLibraryFolderName, '');
     await Settings.setValue<String>(SettingsRepository.keyDbEffectivePath, '');
-    // 3. מיפוי נתיבי הספרים הפתוחים כך שייטענו מהמיקום החדש לאחר הרענון.
-    await TabsRepository().remapBookPaths(from, to);
-    // 4. סגירת חיבורי ה-DB (משחרר את נעילת seforim.db) והפניה למיקום החדש.
+    if (shouldMoveIndex) {
+      await Settings.setValue<String>(
+          SettingsRepository.keyIndexPath, newIndex);
+    }
+    // 4. מיפוי נתיבי הספרים הפתוחים כך שייטענו מהמיקום החדש לאחר הרענון.
+    await TabsRepository().remapBookPaths(from, newLibrary);
+    // 5. סגירת חיבורי ה-DB (משחרר את נעילת seforim.db) והפניה למיקום החדש.
     await resetRuntimeStateForAppRestart();
+    // 6. פתיחה מחדש של האינדקס בנתיב החדש — סוגר את האינדקס הישן ומשחרר אותו.
+    try {
+      await TantivyDataProvider.instance.reopenIndex();
+    } catch (e) {
+      // כשל בפתיחת האינדקס אינו עוצר את ההעברה — הרענון/אינדוקס מחדש יתקן.
+      debugPrint('[performLibraryMove] reopenIndex failed: $e');
+    }
   } catch (e) {
     if (navigator.canPop()) navigator.pop();
     UiSnack.showError('שגיאה בהעברת הספרייה: $e');
@@ -166,7 +198,15 @@ Future<void> performLibraryMove({
       // המתנה קצרה לשחרור מלא של file-handles של הספרים שנסגרו, לפני המחיקה.
       await Future<void>.delayed(const Duration(milliseconds: 800));
       final leftover = await deleteMovedEntries(from, includeOnly: include);
-      if (leftover != null) {
+      var indexDeleteFailed = false;
+      if (shouldMoveIndex && await Directory(oldIndex).exists()) {
+        try {
+          await Directory(oldIndex).delete(recursive: true);
+        } catch (_) {
+          indexDeleteFailed = true;
+        }
+      }
+      if (leftover != null || indexDeleteFailed) {
         UiSnack.showWarning(
           'הספרייה הועברה, אך חלק מהקבצים הישנים לא נמחקו. ניתן למחוק אותם '
           'ידנית מהמיקום הישן.',
