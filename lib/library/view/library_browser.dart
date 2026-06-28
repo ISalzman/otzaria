@@ -13,9 +13,7 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart';
-import 'package:otzaria/file_sync/bloc/file_sync_bloc.dart';
-import 'package:otzaria/file_sync/bloc/file_sync_event.dart';
-import 'package:otzaria/file_sync/bloc/file_sync_state.dart';
+import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 import 'package:otzaria/library/view/library_daf_yomi.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
@@ -823,52 +821,49 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   ActionButtonData _buildSyncActionButton({required bool compact}) {
     return ActionButtonData(
-      widget: BlocConsumer<FileSyncBloc, FileSyncState>(
-        listener: (ctx, s) {
-          if ((s.status == FileSyncStatus.completed ||
-                  s.status == FileSyncStatus.error) &&
-              s.hasNewSync) {
-            ctx.read<LibraryBloc>().add(RefreshLibrary());
-          }
-        },
-        builder: (ctx, syncState) {
-          final isSyncing = syncState.status == FileSyncStatus.syncing;
-          final icon = syncState.status == FileSyncStatus.completed
+      // ריענון הספרייה אחרי עדכון מטופל ב-MainWindowScreen (listener שתמיד
+      // mounted). כאן רק בונים את הכפתור.
+      widget: BlocBuilder<LibraryUpdateBloc, LibraryUpdateState>(
+        builder: (ctx, state) {
+          final isBusy = state.isBusy;
+          final icon = state.status == LibraryUpdateStatus.completed
               ? FluentIcons.checkmark_circle_24_regular
               : FluentIcons.arrow_sync_24_regular;
-          final tooltip = switch (syncState.status) {
-            FileSyncStatus.syncing => 'עצור סינכרון',
-            FileSyncStatus.completed =>
-              syncState.hasNewSync ? 'סנכרון הושלם' : 'אין עדכונים חדשים',
-            FileSyncStatus.error => 'שגיאה בסינכרון - לחץ לנסות שוב',
-            FileSyncStatus.initial => 'סינכרון',
+          final tooltip = switch (state.status) {
+            LibraryUpdateStatus.completed =>
+              state.hasUpdate ? 'העדכון הושלם' : 'הספרייה מעודכנת',
+            LibraryUpdateStatus.error => 'שגיאה בעדכון - לחץ לנסות שוב',
+            LibraryUpdateStatus.needsFullConfirmation => state.message,
+            LibraryUpdateStatus.blocked => state.message,
+            _ when isBusy => state.message,
+            _ => 'עדכון ספרייה',
           };
           return ToolbarActionButton(
             compact: compact,
             tooltip: tooltip,
             icon: icon,
-            selected: isSyncing,
+            selected: isBusy,
             onPressed: () {
-              final b = ctx.read<FileSyncBloc>();
-              switch (syncState.status) {
-                case FileSyncStatus.syncing:
-                  b.add(const StopSync());
-                case FileSyncStatus.completed:
-                case FileSyncStatus.error:
-                  b.add(const ResetState());
-                case FileSyncStatus.initial:
-                  b.add(const StartSync());
+              final b = ctx.read<LibraryUpdateBloc>();
+              if (isBusy) {
+                b.add(const CancelLibraryUpdate());
+              } else if (state.status == LibraryUpdateStatus.completed ||
+                  state.status == LibraryUpdateStatus.error ||
+                  state.status == LibraryUpdateStatus.blocked) {
+                b.add(const ResetLibraryUpdate());
+              } else {
+                b.add(const StartLibraryUpdate());
               }
             },
           );
         },
       ),
       icon: FluentIcons.arrow_sync_24_regular,
-      tooltip: 'סינכרון',
+      tooltip: 'עדכון ספרייה',
       onPressed: () {
-        final b = context.read<FileSyncBloc>();
-        if (b.state.status != FileSyncStatus.syncing) {
-          b.add(const StartSync());
+        final b = context.read<LibraryUpdateBloc>();
+        if (!b.state.isBusy) {
+          b.add(const StartLibraryUpdate());
         }
       },
     );
