@@ -17,7 +17,6 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -2238,8 +2237,7 @@ class _CommentarySearchNavBar extends StatelessWidget {
                     height: 28,
                     child: IconButton(
                       padding: EdgeInsets.zero,
-                      icon: RtlIcon(
-                          FluentIcons.chevron_up_24_regular,
+                      icon: const Icon(FluentIcons.chevron_up_24_regular,
                           size: 16),
                       onPressed: current > 0 ? onPrev : null,
                       tooltip: 'תוצאה קודמת במפרשים',
@@ -2250,8 +2248,7 @@ class _CommentarySearchNavBar extends StatelessWidget {
                     height: 28,
                     child: IconButton(
                       padding: EdgeInsets.zero,
-                      icon: RtlIcon(
-                          FluentIcons.chevron_down_24_regular,
+                      icon: const Icon(FluentIcons.chevron_down_24_regular,
                           size: 16),
                       onPressed: current < total - 1 ? onNext : null,
                       tooltip: 'תוצאה הבאה במפרשים',
