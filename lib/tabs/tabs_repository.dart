@@ -73,6 +73,25 @@ class TabsRepository {
     if (changed) await box.put(_tabsBoxKey, remapped);
   }
 
+  /// ממפה נתיבי קבצים של טאבים פתוחים *בזיכרון* מ-[fromDir] ל-[toDir].
+  /// טאב שהנתיב שלו לא משתנה מוחזר כאובייקט המקורי (ללא בנייה מחדש);
+  /// טאב ששונה נבנה מחדש דרך toJson→fromJson עם הנתיב החדש.
+  /// נדרש בנוסף ל-[remapBookPaths]: שמירה ל-Hive בלבד נדרסת ע"י שמירת
+  /// הטאבים שבזיכרון בעת dispose, ולכן ספר PDF היה נטען מהנתיב הישן.
+  List<OpenedTab> remapTabsInMemory(
+    List<OpenedTab> tabs,
+    String fromDir,
+    String toDir,
+  ) {
+    return tabs.map((tab) {
+      var changed = false;
+      final remappedJson =
+          _remapNode(tab.toJson(), fromDir, toDir, () => changed = true);
+      if (!changed) return tab;
+      return _tabFromJson(castMap(remappedJson)) ?? tab;
+    }).toList();
+  }
+
   dynamic _remapNode(
     dynamic node,
     String fromDir,
