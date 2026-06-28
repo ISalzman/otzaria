@@ -121,18 +121,25 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
+    // ערכים שמורים הם פיקסלים מוחלטים מסשן קודם — יש לחתוך לגבולות
+    // החלון הנוכחי כדי שלא יגלשו כשהחלון קטן ממה שהיה בסשן הקודם.
     _leftSidebarWidth =
-        Settings.getValue<double>('page_shape_left_sidebar_width') ??
-            screenWidth * 0.22;
-    _leftWidth = Settings.getValue<double>('page_shape_left_width') ??
-        screenWidth * 0.17;
-    _rightWidth = Settings.getValue<double>('page_shape_right_width') ??
-        screenWidth * 0.17;
-    _bottomHeight = Settings.getValue<double>('page_shape_bottom_height') ??
-        screenHeight * 0.27;
+        (Settings.getValue<double>('page_shape_left_sidebar_width') ??
+                screenWidth * 0.22)
+            .clamp(0.0, screenWidth * 0.35);
+    _leftWidth = (Settings.getValue<double>('page_shape_left_width') ??
+            screenWidth * 0.17)
+        .clamp(0.0, screenWidth * 0.4);
+    _rightWidth = (Settings.getValue<double>('page_shape_right_width') ??
+            screenWidth * 0.17)
+        .clamp(0.0, screenWidth * 0.4);
+    _bottomHeight = (Settings.getValue<double>('page_shape_bottom_height') ??
+            screenHeight * 0.27)
+        .clamp(0.0, screenHeight * 0.5);
     _bottomLeftWidth =
-        Settings.getValue<double>('page_shape_bottom_left_width') ??
-            screenWidth * 0.5;
+        (Settings.getValue<double>('page_shape_bottom_left_width') ??
+                screenWidth * 0.5)
+            .clamp(0.0, screenWidth * 0.9);
 
     setState(() {});
 
@@ -152,18 +159,23 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final settings = await TextBookPerBookSettings.load(book);
     if (settings == null || !mounted) return;
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
     setState(() {
       if (settings.pageShapeLeftWidth != null) {
-        _leftWidth = settings.pageShapeLeftWidth;
+        _leftWidth = settings.pageShapeLeftWidth!.clamp(0.0, screenWidth * 0.4);
       }
       if (settings.pageShapeRightWidth != null) {
-        _rightWidth = settings.pageShapeRightWidth;
+        _rightWidth =
+            settings.pageShapeRightWidth!.clamp(0.0, screenWidth * 0.4);
       }
       if (settings.pageShapeBottomHeight != null) {
-        _bottomHeight = settings.pageShapeBottomHeight;
+        _bottomHeight =
+            settings.pageShapeBottomHeight!.clamp(0.0, screenHeight * 0.5);
       }
       if (settings.pageShapeBottomLeftWidth != null) {
-        _bottomLeftWidth = settings.pageShapeBottomLeftWidth;
+        _bottomLeftWidth =
+            settings.pageShapeBottomLeftWidth!.clamp(0.0, screenWidth * 0.9);
       }
     });
   }
