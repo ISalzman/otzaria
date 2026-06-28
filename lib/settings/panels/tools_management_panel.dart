@@ -883,8 +883,8 @@ class _PluginRow extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  icon: const Icon(FluentIcons.settings_24_regular),
-                  tooltip: 'הגדרות תוסף',
+                  icon: const Icon(FluentIcons.shield_24_regular),
+                  tooltip: 'ניהול הרשאות',
                   onPressed: () => showPluginSettingsDialog(context, plugin),
                 ),
                 AnimatedPinButton(

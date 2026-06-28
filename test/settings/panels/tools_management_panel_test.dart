@@ -447,7 +447,7 @@ void main() {
       await _enterSelectionMode(tester);
       await _selectPlugin(tester, 'תוסף-A');
 
-      await tester.tap(find.text('הסתר מכלים'));
+      await tester.tap(find.text('הסתר'));
       await tester.pumpAndSettle();
 
       final events =
@@ -624,14 +624,15 @@ void main() {
       await _expandBuiltIn(tester);
 
       expect(find.text('לוח שנה'), findsOneWidget);
-      // Stack מרנדר placeholder בלתי-נראה + badge נראה — שניהם מכילים את הטקסט.
-      // בודקים שיש לפחות שניים בשורת לוח-שנה (placeholder + badge אמיתי).
+      // _badge מציג אייקון בלבד; הטקסט חי כ-Tooltip.message — נחפש byTooltip.
+      // ה-Stack מרנדר placeholder בלתי-נראה + badge נראה — שניהם נושאים את ה-tooltip.
       final calendarRow = find.ancestor(
         of: find.text('לוח שנה'),
         matching: find.byType(ListTile),
       );
       expect(
-        find.descendant(of: calendarRow, matching: find.text('בסרגל ניווט')),
+        find.descendant(
+            of: calendarRow, matching: find.byTooltip('בסרגל ניווט')),
         findsNWidgets(2),
       );
       expect(_rowButton('לוח שנה', 'הסר מסרגל הניווט'), findsOneWidget);
