@@ -234,8 +234,9 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             : null,
         moveContentsWarning:
             'בזמן העברת הספרייה התוכנה תיסגר ותיטען מחדש, ולא תהיה זמינה עד '
-            'לסיום הפעולה. רק קבצי הספרייה יועברו; קבצים אחרים שהוספת לתיקייה '
-            'יישארו במקומם.',
+            'לסיום הפעולה. תחת התיקייה שתבחר ייווצרו "books" (הספרייה) ו-"index" '
+            '(אינדקס החיפוש). רק קבצי הספרייה המזוהים יועברו; קבצים אחרים '
+            'שהוספת לתיקייה יישארו במקומם.',
         defaultPath: _defaultLibraryPath,
       ),
       onOpenFolder: () {
