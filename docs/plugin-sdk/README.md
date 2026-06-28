@@ -491,7 +491,8 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `published_data.write` | פרסום נתונים לאפליקציה |
 | `ui.feedback` | הצגת הודעות ודיאלוגים |
 | `ui.create_shortcut` | יצירת קיצור דרך (deep-link) בשולחן העבודה / תפריט ההתחל — דורש אישור משתמש |
-| `network.access` | גישה לרשת (דורש `network.enabled: true` במניפסט + שה-URL מופיע ב-allowlist הגלובלי של אוצריא בקוד) |
+| `network.access` | גישה לאינטרנט (דורש `network.enabled: true` במניפסט + שה-URL מופיע ב-allowlist הגלובלי של אוצריא בקוד) |
+| `network.localhost` | גישה לשירות מקומי על המחשב (`localhost` / `127.0.0.1`), כמו Ollama / LM Studio. נפרדת מ-`network.access` — אינה מתירה אינטרנט, ואינה דורשת allowlist גלובלי |
 | `fs.user_files.read` | בחירה וקריאה של קובץ אישי (PDF/טקסט) שהמשתמש בוחר בדיאלוג — מוגבל לקובץ שנבחר בלבד |
 | `notifications.send` | הצגת הודעות בתוך האפליקציה (UiSnack) |
 | `notifications.system` | התראות מערכת הפעלה (Native notifications) |
@@ -585,13 +586,15 @@ Otzaria.on('plugin.boot', async (payload) => {
 
 ### רשת
 - חסומה כברירת מחדל
-- כדי שתוסף יוכל לגשת לרשת חייבות להתקיים **שלוש שכבות** במצטבר:
+- כדי שתוסף יוכל לגשת ל**אינטרנט** (לשירות מקומי יש מסלול נפרד — ראו בהמשך) חייבות להתקיים **שלוש שכבות** במצטבר:
   1. **הצהרה במניפסט** — `network.enabled: true`, ההרשאה `network.access`, וגם שה-URL המבוקש יופיע ב-`network.allowlist` של התוסף.
   2. **אישור המשתמש** — המשתמש אישר את הרשאת `network.access` בעת ההתקנה.
   3. **מקור אמון רשמי של אוצריא** — ה-URL חייב להיות תואם קידומת לערך שמופיע או ב-`pluginNetworkAllowlist` המובנה בקובץ [`lib/plugins/models/plugin_network_allowlist.dart`](../../lib/plugins/models/plugin_network_allowlist.dart), או באותו קובץ בריפו הרשמי של אוצריא ב-GitHub. אישור מה-GitHub נטען לזיכרון בלבד עד סגירת האפליקציה.
 - ההתאמה היא **התאמת קידומת מלאה** — אם ברשימה רשום `https://github.com/Otzaria/otzaria-library`, יותרו רק URLs שמתחילים במחרוזת זו (ואחריה `/`, `?`, `#` או סוף המחרוזת). `https://github.com/` או `https://github.com/Otzaria/another-repo` ייחסמו.
 - ה-`network.allowlist` במניפסט הוא **תנאי חובה אך לא תנאי מספיק** — בלי הצהרה במניפסט ה-URL ייחסם, וגם עם הצהרה הוא ייחסם אם אינו מופיע במקור אמון רשמי של אוצריא.
 - אם תוסף מבקש גישה ל-URL שאינו ב-allowlist הגלובלי, יש לפנות למתחזקי אוצריא בבקשה להוסיף אותו.
+
+**שירותים מקומיים (localhost):** גישה ל-`localhost` / `127.0.0.1` / `::1` (למשל מודל שפה מקומי כמו Ollama / LM Studio) משתמשת בהרשאה הנפרדת **`network.localhost`** — לא `network.access`. מסלול זה **אינו** דורש את שכבה 3 (allowlist גלובלי / PR לאוצריא); די בשלושה: `network.enabled: true`, הצהרת היעד ב-`network.allowlist` של התוסף (מותר host חשוף כמו `"127.0.0.1"` שמתיר כל פורט, או URL מלא שנועל לפורט מסוים), ואישור המשתמש להרשאת `network.localhost`. הקריאות חייבות לעבור דרך `network.fetch` (לא `fetch()` ישיר מה-WebView — הוא נחסם ב-CORS מול שרת מקומי שדוחה `Origin: null`).
 
 ### window.open
 חסום לחלוטין מטעמי אבטחה.

@@ -72,6 +72,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
     _applyRequestedTab(widget.controller?.takeRequestedTab());
     FocusRepository().registerSettingsFocusRequester(_requestSettingsFocus);
     SettingsSearchRegistry.instance.addListener(_handleSearchNavigation);
+    _handleSearchNavigation(); // handle a request set before this screen mounted
   }
 
   @override

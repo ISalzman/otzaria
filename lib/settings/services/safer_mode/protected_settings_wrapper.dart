@@ -36,7 +36,7 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
   }
 
   void _checkProtection() {
-    // נבדוק אם מצב מוגן מופעל
+    // נבדוק אם מצב סייפר מופעל
     final state = context.read<SettingsBloc>().state;
     final repository = context.read<SettingsRepository>();
 
@@ -72,7 +72,7 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
       barrierDismissible: true,
       builder: (dialogContext) => PasswordVerificationDialog(
         title: 'הזן סיסמה',
-        hint: 'הנך במצב מוגן.\nהזן את הסיסמה כדי לגשת להגדרות',
+        hint: 'הנך במצב סייפר.\nהזן את הסיסמה כדי לגשת להגדרות',
         onVerify: (password) async {
           return repository.verifyProtectedModePassword(password);
         },
@@ -154,7 +154,7 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'הנך במצב מוגן',
+                  'הנך במצב סייפר',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 12),
@@ -206,7 +206,7 @@ Future<bool> verifyPasswordForAction(BuildContext context) async {
     context: context,
     builder: (context) => PasswordVerificationDialog(
       title: 'אמת סיסמה',
-      hint: 'הנך במצב מוגן.\nהזן את הסיסמה כדי לבצע פעולה זו',
+      hint: 'הנך במצב סייפר.\nהזן את הסיסמה כדי לבצע פעולה זו',
       onVerify: (password) async {
         return repository.verifyProtectedModePassword(password);
       },

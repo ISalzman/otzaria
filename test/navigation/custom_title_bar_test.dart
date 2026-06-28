@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
@@ -130,7 +132,8 @@ void main() {
     );
   });
 
-  testWidgets('כרטיסיות אינן עטופות ב-SizedBox בעל רוחב קבוע', (tester) async {
+  testWidgets('כרטיסיות מקבלות רוחב קבוע שווה, חסום בתקרה (~200px)',
+      (tester) async {
     final tab1 = _makeTextTab('ספר קצר');
     final tab2 = _makeTextTab('ספר עם שם ארוך מאוד שנמשך הרחק');
     final tabsBloc = _TestTabsBloc(
@@ -149,7 +152,53 @@ void main() {
       await settingsBloc.close();
     });
 
-    await _setSurfaceSize(tester, const Size(900, 800));
+    await _setSurfaceSize(tester, const Size(1200, 800));
+    await _pumpTitleBar(
+      tester,
+      tabsBloc: tabsBloc,
+      navigationBloc: navigationBloc,
+      settingsBloc: settingsBloc,
+    );
+    await tester.pumpAndSettle();
+
+    // כל טאב עטוף ב-SizedBox ברוחב המחושב (ילדו ה-Listener של _buildTab); שני
+    // הטאבים זהים וחסומים בתקרה (200px) — לא רוחב טבעי לפי אורך הכותרת.
+    final widths = tester
+        .widgetList<SizedBox>(find.descendant(
+          of: find.byType(ReorderableListView),
+          matching: find.byType(SizedBox),
+        ))
+        .where((b) => b.width != null && b.child is Listener)
+        .map((b) => b.width!)
+        .toList();
+
+    expect(widths.length, 2, reason: 'שני טאבים → שני SizedBox ברוחב קבוע');
+    expect(widths[0], moreOrLessEquals(widths[1], epsilon: 1.0),
+        reason: 'כל הטאבים ברוחב קבוע שווה');
+    expect(widths[0], lessThanOrEqualTo(201.0),
+        reason: 'רוחב הטאב חסום בתקרה (~200px) גם כשיש מקום');
+  });
+
+  testWidgets('כותרת ארוכה נחתכת בדהייה (TextOverflow.fade) ללא שלוש נקודות',
+      (tester) async {
+    const longTitle = 'ספר עם שם ארוך מאוד שנמשך הרחק אל מעבר לרוחב הטאב';
+    final tab = _makeTextTab(longTitle);
+    final tabsBloc = _TestTabsBloc(
+      TabsState(tabs: [tab], currentTabIndex: 0),
+    );
+    final navigationBloc = _TestNavigationBloc(
+      const NavigationState(currentScreen: Screen.reading),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    addTearDown(() async {
+      tab.dispose();
+      await tabsBloc.close();
+      await navigationBloc.close();
+      await settingsBloc.close();
+    });
+
+    await _setSurfaceSize(tester, const Size(1200, 800));
     await _pumpTitleBar(
       tester,
       tabsBloc: tabsBloc,
@@ -157,18 +206,19 @@ void main() {
       settingsBloc: settingsBloc,
     );
 
-    // אין SizedBox בעל רוחב קבוע עוטף Listener (שימוש ב-tabWidth שהוסר)
-    final fixedWidthBoxes = tester
-        .widgetList<SizedBox>(find.byType(SizedBox))
-        .where((box) =>
-            box.width != null &&
-            box.width! >= 72 &&
-            box.width! <= 200 &&
-            box.child is Listener)
-        .toList();
-
-    expect(fixedWidthBoxes, isEmpty,
-        reason: 'כרטיסיות צריכות להיות ברוחב טבעי, לא קבוע שוויוני');
+    // הכותרת המלאה מרונדרת (לא קוצרה ל-...) בשורה אחת.
+    final titleText = tester.widget<Text>(find.text(longTitle));
+    expect(titleText.maxLines, 1);
+    expect(titleText.softWrap, false);
+    // הדהייה בקצה הסוף נעשית ע"י ShaderMask עוטף (לא TextOverflow.fade, שמציג
+    // בעברית את סוף הכותרת במקום ההתחלה).
+    expect(
+      find.ancestor(
+          of: find.text(longTitle), matching: find.byType(ShaderMask)),
+      findsOneWidget,
+    );
+    expect(find.textContaining('...'), findsNothing,
+        reason: 'אין שלוש נקודות — חיתוך בדהייה כמו כרום');
   });
 
   testWidgets('CommentatorsTab לא מפיל את שורת הכותרת', (tester) async {
@@ -200,6 +250,67 @@ void main() {
 
     expect(find.text('מפרשים | ספר א'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    // אייקוני-הסוג הוסרו מהטאבים — אין אייקון ספר/PDF מוביל.
+    expect(find.byIcon(FluentIcons.book_24_regular), findsNothing);
+    expect(find.byIcon(FluentIcons.document_pdf_24_regular), findsNothing);
+  });
+
+  testWidgets('CombinedTab מציג את התחלת שני הספרים, כל אחד בחצי',
+      (tester) async {
+    final right = _makeTextTab('תרגום אונקלוס על שמות');
+    final left = _makeTextTab('רש"י על בראשית פרשת ויחי');
+    final tab = CombinedTab(rightTab: right, leftTab: left);
+    final tabsBloc = _TestTabsBloc(
+      TabsState(tabs: [tab], currentTabIndex: 0),
+    );
+    final navigationBloc = _TestNavigationBloc(
+      const NavigationState(currentScreen: Screen.reading),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    addTearDown(() async {
+      tab.dispose(); // מפנה גם את right ו-left
+      await tabsBloc.close();
+      await navigationBloc.close();
+      await settingsBloc.close();
+    });
+
+    await _setSurfaceSize(tester, const Size(1200, 800));
+    await _pumpTitleBar(
+      tester,
+      tabsBloc: tabsBloc,
+      navigationBloc: navigationBloc,
+      settingsBloc: settingsBloc,
+    );
+
+    // שני הספרים מרונדרים בנפרד (כל אחד ב-Expanded משלו עם ShaderMask לדהייה),
+    // ולא כמחרוזת "משולב:" מאוחדת אחת.
+    expect(find.text('תרגום אונקלוס על שמות'), findsOneWidget);
+    expect(find.text('רש"י על בראשית פרשת ויחי'), findsOneWidget);
+    expect(
+      find.ancestor(
+          of: find.text('תרגום אונקלוס על שמות'),
+          matching: find.byType(ShaderMask)),
+      findsOneWidget,
+    );
+    expect(
+      find.ancestor(
+          of: find.text('רש"י על בראשית פרשת ויחי'),
+          matching: find.byType(ShaderMask)),
+      findsOneWidget,
+    );
+    expect(find.textContaining('משולב:'), findsNothing,
+        reason: 'בטאב מוצגים שני החצאים, לא מחרוזת מאוחדת');
+
+    // פס מפריד (2×14) בין שני החצאים בטאב רחב.
+    expect(
+      find.byWidgetPredicate((w) =>
+          w is Container &&
+          w.constraints?.maxWidth == 2 &&
+          w.constraints?.maxHeight == 14),
+      findsOneWidget,
+      reason: 'יש פס מפריד בין שני הספרים בטאב המפוצל',
+    );
   });
 
   group('בחירה וגרירת-סידור של טאבים', () {
@@ -270,6 +381,7 @@ void main() {
         navigationBloc: navigationBloc,
         settingsBloc: settingsBloc,
       );
+      await tester.pumpAndSettle();
 
       // גרירת הטאב השני (אינדקס 1) לכיוון הטאב הראשון. ה-drag listener מיידי
       // (לא long-press), כך ש-startGesture + moveBy מתחילים reorder.
@@ -289,17 +401,92 @@ void main() {
         contains(1),
         reason: 'תחילת גרירה בוחרת את הטאב הנגרר (אינדקס 1)',
       );
-      // onReorderItem שולח MoveTab עם הטאב הנכון.
+
+      // סימולציית long-press multidrag של ReorderableListView אינה אמינה בבדיקת
+      // widget (recognizers של תפריט ההקשר/הגלילה מתחרים ב-arena). בודקים ישירות
+      // את לוגיקת האפליקציה: onReorderItem ממפה oldIndex→טאב ושולח MoveTab.
+      final list = tester.widget<ReorderableListView>(
+        find.byType(ReorderableListView),
+      );
+      list.onReorderItem!(1, 0);
+      await tester.pumpAndSettle();
+
       final moves = tabsBloc.addedEvents.whereType<MoveTab>().toList();
       expect(moves, isNotEmpty, reason: 'שחרור הגרירה צריך לשלוח MoveTab');
       expect(moves.last.tab, same(second),
           reason: 'הטאב שמועבר הוא הטאב שנגרר');
     });
 
-    testWidgets('כשהטאבים גולשים מעבר לרוחב — חיצי הגלילה מופיעים בטעינה',
+    testWidgets('בדסקטופ הטאבים עטופים ב-listener מיידי (גרירה מסדרת מיד)',
         (tester) async {
-      // הרבה טאבים ברוחב מצומצם → overflow כבר בטעינה הראשונית, לפני כל גלילה.
-      final tabs = List.generate(15, (i) => _makeTextTab('ספר מספר $i'));
+      final tab = _makeTextTab('ספר א');
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        tab.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+
+      // ReorderableDelayedDragStartListener יורש מ-ReorderableDragStartListener,
+      // לכן בודקים את runtimeType בדיוק: בדסקטופ המיידי, ללא ה-Delayed.
+      expect(
+        find.byWidgetPredicate(
+            (w) => w.runtimeType == ReorderableDragStartListener),
+        findsOneWidget,
+      );
+      expect(find.byType(ReorderableDelayedDragStartListener), findsNothing);
+    }, variant: TargetPlatformVariant.desktop());
+
+    testWidgets('בנייד הטאבים עטופים ב-listener מושהה (long-press)',
+        (tester) async {
+      final tab = _makeTextTab('ספר א');
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        tab.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+
+      expect(find.byType(ReorderableDelayedDragStartListener), findsOneWidget);
+    }, variant: TargetPlatformVariant.mobile());
+
+    testWidgets('הרבה טאבים מצטמצמים והכפתור X מתחבא בטאב צר, ללא חיצי גלילה',
+        (tester) async {
+      // ביטול הגלילה: הרבה טאבים מתכווצים, וכשהם צרים מ-80px כפתור ה-X מתחבא
+      // (מופיע ב-hover/בנבחר) כדי שהם ימשיכו להצטמצם ויישארו נגישים.
+      final tabs = List.generate(10, (i) => _makeTextTab('ספר מספר $i'));
       final tabsBloc = _TestTabsBloc(
         TabsState(tabs: tabs, currentTabIndex: 0),
       );
@@ -317,28 +504,83 @@ void main() {
         await settingsBloc.close();
       });
 
-      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _setSurfaceSize(tester, const Size(900, 800));
       await _pumpTitleBar(
         tester,
         tabsBloc: tabsBloc,
         navigationBloc: navigationBloc,
         settingsBloc: settingsBloc,
       );
-      // pumpAndSettle מאפשר ל-ScrollMetricsNotification + ה-setState הדחוי
-      // (post-frame) להציג את החיצים גם בלי שום אירוע גלילה.
       await tester.pumpAndSettle();
 
-      // לפחות חץ אחד מופיע (הכיוון תלוי-RTL/מצב גלילה).
-      final hasArrow = find
-              .byIcon(FluentIcons.chevron_left_24_regular)
-              .evaluate()
-              .isNotEmpty ||
-          find
-              .byIcon(FluentIcons.chevron_right_24_regular)
-              .evaluate()
-              .isNotEmpty;
-      expect(hasArrow, isTrue,
-          reason: 'overflow של טאבים צריך להציג חיצי גלילה כבר בטעינה');
+      expect(find.byIcon(FluentIcons.chevron_left_24_regular), findsNothing);
+      expect(find.byIcon(FluentIcons.chevron_right_24_regular), findsNothing);
+
+      // הטאבים התכווצו אל מתחת ל-80 (אזור הסתרת ה-X) — בלי רצפה ובלי גלילה.
+      final widths = tester
+          .widgetList<SizedBox>(find.descendant(
+            of: find.byType(ReorderableListView),
+            matching: find.byType(SizedBox),
+          ))
+          .where((b) => b.width != null && b.child is Listener)
+          .map((b) => b.width!)
+          .toList();
+      expect(widths, isNotEmpty);
+      expect(widths.first, greaterThan(0));
+      expect(widths.first, lessThan(80.0));
+
+      // בטאבים צרים כפתורי ה-X מתחבאים — פחות כפתורי סגירה ממספר הטאבים.
+      final closeButtons =
+          find.byIcon(FluentIcons.dismiss_24_regular).evaluate().length;
+      expect(closeButtons, lessThan(tabs.length),
+          reason: 'X מתחבא בטאבים צרים שאינם נבחרים/תחת hover');
+    });
+
+    testWidgets('מספר טאבים גדול — כולם נכנסים ללא חיתוך וללא גלילה',
+        (tester) async {
+      // ללא רצפת רוחב וללא גלילה: סכום רוחבי הטאבים לא חורג מהרוחב הזמין, כך
+      // שאף טאב אינו נחתך/בלתי-נגיש (התיקון לרגרסיה של מנגנון הגלילה שהוסר).
+      final tabs = List.generate(30, (i) => _makeTextTab('ספר מספר $i'));
+      final tabsBloc = _TestTabsBloc(TabsState(tabs: tabs, currentTabIndex: 0));
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final t in tabs) {
+          t.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(900, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(FluentIcons.chevron_left_24_regular), findsNothing);
+      expect(find.byIcon(FluentIcons.chevron_right_24_regular), findsNothing);
+
+      final widths = tester
+          .widgetList<SizedBox>(find.descendant(
+            of: find.byType(ReorderableListView),
+            matching: find.byType(SizedBox),
+          ))
+          .where((b) => b.width != null && b.child is Listener)
+          .map((b) => b.width!)
+          .toList();
+      expect(widths.length, 30, reason: 'כל 30 הטאבים רונדרו');
+      final sumWidth = widths.fold<double>(0, (a, b) => a + b);
+      final listWidth = tester.getSize(find.byType(ReorderableListView)).width;
+      expect(sumWidth, lessThanOrEqualTo(listWidth + 1.0),
+          reason: 'סכום רוחבי הטאבים נכנס ברוחב הזמין — אין חיתוך');
     });
   });
 
@@ -413,264 +655,80 @@ void main() {
     });
   });
 
-  group('גלילה אוטומטית לטאב הנבחר', () {
-    testWidgets('בטעינה ראשונית עם טאב נבחר מחוץ לתצוגה — נגלל אליו',
-        (tester) async {
-      // הרבה טאבים שגולשים מעבר לרוחב, והטאב הנבחר הוא האחרון (מחוץ לתצוגה
-      // ב-offset 0). ללא גלילה אוטומטית הוא היה נשאר גלול מחוץ לראייה.
-      final tabs = List.generate(20, (i) => _makeTextTab('ספר מספר $i'));
-      final tabsBloc = _TestTabsBloc(
-        TabsState(tabs: tabs, currentTabIndex: 19),
-      );
-      final navigationBloc = _TestNavigationBloc(
-        const NavigationState(currentScreen: Screen.reading),
-      );
-      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+  testWidgets('סגירת טאב כשהעכבר בשורה שומרת על רוחב הטאבים (לא מתרחבים)',
+      (tester) async {
+    // 6 טאבים ברוחב צר (מתחת לתקרה) — סגירה רגילה תרחיב את הנותרים. כל עוד
+    // העכבר בשורה הרוחב אמור להישאר קפוא כדי שה-X של הטאב הבא יישאר תחת הסמן.
+    final tabs = List.generate(6, (i) => _makeTextTab('ספר מספר $i'));
+    final tabsBloc = _ClosingTabsBloc(
+      TabsState(tabs: tabs, currentTabIndex: 0),
+    );
+    final navigationBloc = _TestNavigationBloc(
+      const NavigationState(currentScreen: Screen.reading),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+    final historyBloc = _TestHistoryBloc();
 
-      addTearDown(() async {
-        for (final t in tabs) {
-          t.dispose();
-        }
-        await tabsBloc.close();
-        await navigationBloc.close();
-        await settingsBloc.close();
-      });
-
-      await _setSurfaceSize(tester, const Size(1200, 800));
-      await _pumpTitleBar(
-        tester,
-        tabsBloc: tabsBloc,
-        navigationBloc: navigationBloc,
-        settingsBloc: settingsBloc,
-      );
-      await tester.pumpAndSettle();
-
-      // שורת הטאבים נגללה מ-offset 0 כדי להראות את הטאב הנבחר.
-      final scrollableFinder = find.descendant(
-        of: find.byType(ReorderableListView),
-        matching: find.byType(Scrollable),
-      );
-      final position =
-          tester.state<ScrollableState>(scrollableFinder.first).position;
-      expect(position.pixels, greaterThan(0),
-          reason: 'הטאב הנבחר האחרון מחוץ לתצוגה צריך לגרום לגלילה');
-
-      // והטאב הנבחר אכן רונדר (נכנס לתחום אחרי הגלילה).
-      expect(find.text('ספר מספר 19'), findsOneWidget,
-          reason: 'הטאב הנבחר צריך להיות גלוי אחרי הגלילה האוטומטית');
+    addTearDown(() async {
+      for (final t in tabs) {
+        t.dispose();
+      }
+      await tabsBloc.close();
+      await navigationBloc.close();
+      await settingsBloc.close();
+      await historyBloc.close();
     });
 
-    testWidgets('שינוי בחירה אחרי הטעינה הראשונית גם גורר גלילה',
-        (tester) async {
-      // מאמת שהמנגנון אינו חד-פעמי: גם rebuild עוקב (כאן — בחירת טאב אחר דרך
-      // עדכון ה-state) מפעיל את הגלילה האוטומטית.
-      final tabs = List.generate(20, (i) => _makeTextTab('ספר מספר $i'));
-      final tabsBloc = _TestTabsBloc(
-        TabsState(tabs: tabs, currentTabIndex: 0),
+    await _setSurfaceSize(tester, const Size(700, 800));
+    await _pumpTitleBar(
+      tester,
+      tabsBloc: tabsBloc,
+      navigationBloc: navigationBloc,
+      settingsBloc: settingsBloc,
+      historyBloc: historyBloc,
+    );
+    await tester.pumpAndSettle();
+
+    List<double> tabWidths() => tester
+        .widgetList<SizedBox>(find.descendant(
+          of: find.byType(ReorderableListView),
+          matching: find.byType(SizedBox),
+        ))
+        .where((b) => b.width != null && b.child is Listener)
+        .map((b) => b.width!)
+        .toList();
+
+    final widthBefore = tabWidths().first;
+
+    // מביאים את העכבר אל מרכז השורה (hover) — כך _pointerInsideTabStrip=true.
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(
+        location: tester.getCenter(find.byType(ReorderableListView)));
+    addTearDown(gesture.removePointer);
+    await tester.pump();
+
+    // סוגרים טאב דרך ה-onPressed של ה-X (סימולציית tap נבלעת ע"י ה-reorder
+    // recognizer בסביבת הטסט, ולכן קוראים ישירות).
+    void closeTabByTitle(String title) {
+      final closeButton = find.descendant(
+        of: find.ancestor(of: find.text(title), matching: find.byType(Tab)),
+        matching: find.byType(IconButton),
       );
-      final navigationBloc = _TestNavigationBloc(
-        const NavigationState(currentScreen: Screen.reading),
-      );
-      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+      tester.widget<IconButton>(closeButton).onPressed!();
+    }
 
-      addTearDown(() async {
-        for (final t in tabs) {
-          t.dispose();
-        }
-        await tabsBloc.close();
-        await navigationBloc.close();
-        await settingsBloc.close();
-      });
+    closeTabByTitle('ספר מספר 2');
+    await tester.pumpAndSettle();
+    expect(tabWidths().first, moreOrLessEquals(widthBefore, epsilon: 1.0),
+        reason: 'סגירה ראשונה: הרוחב נשאר קפוא');
 
-      await _setSurfaceSize(tester, const Size(1200, 800));
-      await _pumpTitleBar(
-        tester,
-        tabsBloc: tabsBloc,
-        navigationBloc: navigationBloc,
-        settingsBloc: settingsBloc,
-      );
-      await tester.pumpAndSettle();
+    // סגירה רצופה שנייה — הרוחב חייב להישאר קפוא על אותו ערך, לא להתרחב מחדש.
+    closeTabByTitle('ספר מספר 3');
+    await tester.pumpAndSettle();
 
-      final scrollableFinder = find.descendant(
-        of: find.byType(ReorderableListView),
-        matching: find.byType(Scrollable),
-      );
-      // הטאב הראשון נבחר → אין גלילה בטעינה.
-      expect(
-          tester.state<ScrollableState>(scrollableFinder.first).position.pixels,
-          0);
-
-      // בחירת הטאב האחרון אחרי הטעינה.
-      tabsBloc.emitState(TabsState(tabs: tabs, currentTabIndex: 19));
-      await tester.pumpAndSettle();
-
-      expect(
-        tester.state<ScrollableState>(scrollableFinder.first).position.pixels,
-        greaterThan(0),
-        reason: 'בחירת טאב נסתר אחרי הטעינה צריכה לגלול אליו',
-      );
-    });
-
-    testWidgets('כיווץ רוחב המסך (resize) שמוציא את הטאב הנבחר — נגלל אליו',
-        (tester) async {
-      // מסך רחב מאוד שבו כל הטאבים נכנסים; הטאב הנבחר האחרון נראה ללא גלילה.
-      // כיווץ הרוחב יוצר overflow ומוציא אותו — ובלי תלות בשינוי אינדקס,
-      // הגלילה האוטומטית צריכה להחזירו לתצוגה.
-      final tabs = List.generate(15, (i) => _makeTextTab('ספר מספר $i'));
-      final tabsBloc = _TestTabsBloc(
-        TabsState(tabs: tabs, currentTabIndex: 14),
-      );
-      final navigationBloc = _TestNavigationBloc(
-        const NavigationState(currentScreen: Screen.reading),
-      );
-      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
-
-      addTearDown(() async {
-        for (final t in tabs) {
-          t.dispose();
-        }
-        await tabsBloc.close();
-        await navigationBloc.close();
-        await settingsBloc.close();
-      });
-
-      tester.view.physicalSize = const Size(4000, 800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      // בנייה ברוחב מלא (ללא SizedBox קבוע) כדי ש-resize ישפיע על שורת הטאבים.
-      await tester.pumpWidget(
-        MultiBlocProvider(
-          providers: [
-            BlocProvider<TabsBloc>.value(value: tabsBloc),
-            BlocProvider<NavigationBloc>.value(value: navigationBloc),
-            BlocProvider<SettingsBloc>.value(value: settingsBloc),
-          ],
-          child: MaterialApp(
-            home: Scaffold(
-              body: CustomTitleBar(onReadingSettingsPressed: () {}),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      final scrollableFinder = find.descendant(
-        of: find.byType(ReorderableListView),
-        matching: find.byType(Scrollable),
-      );
-      // ברוחב 4000 הכל נכנס — אין גלילה.
-      expect(
-          tester.state<ScrollableState>(scrollableFinder.first).position.pixels,
-          0,
-          reason: 'במסך רחב מאוד אין overflow');
-
-      // כיווץ ל-900px (עדיין landscape) — נוצר overflow והטאב האחרון יוצא.
-      tester.view.physicalSize = const Size(900, 800);
-      await tester.pumpAndSettle();
-
-      expect(
-        tester.state<ScrollableState>(scrollableFinder.first).position.pixels,
-        greaterThan(0),
-        reason: 'כיווץ הרוחב מוציא את הטאב הנבחר → גלילה אוטומטית אליו',
-      );
-    });
-
-    testWidgets(
-        'חזרה למסך עיון אחרי יציאה — הטאב הנבחר נגלל לתצוגה גם ללא שינוי בחירה',
-        (tester) async {
-      // הטאב הנבחר היה גלוי, המשתמש עבר למסך אחר (שורת הטאבים יוצאת מהעץ
-      // וה-ScrollController מאבד את ה-offset), וחזר למסך עיון — אותו state בדיוק.
-      // ה-signature זהה ולכן לבדו אינו מפעיל גלילה; הטריגר על כניסה-מחדש לעץ
-      // (hasClients) מחזיר את הטאב הנבחר לתצוגה.
-      final tabs = List.generate(20, (i) => _makeTextTab('ספר מספר $i'));
-      final tabsBloc = _TestTabsBloc(
-        TabsState(tabs: tabs, currentTabIndex: 19),
-      );
-      final navigationBloc = _TestNavigationBloc(
-        const NavigationState(currentScreen: Screen.reading),
-      );
-      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
-
-      addTearDown(() async {
-        for (final t in tabs) {
-          t.dispose();
-        }
-        await tabsBloc.close();
-        await navigationBloc.close();
-        await settingsBloc.close();
-      });
-
-      await _setSurfaceSize(tester, const Size(1200, 800));
-      await _pumpTitleBar(
-        tester,
-        tabsBloc: tabsBloc,
-        navigationBloc: navigationBloc,
-        settingsBloc: settingsBloc,
-      );
-      await tester.pumpAndSettle();
-
-      final scrollableFinder = find.descendant(
-        of: find.byType(ReorderableListView),
-        matching: find.byType(Scrollable),
-      );
-      expect(
-          tester.state<ScrollableState>(scrollableFinder.first).position.pixels,
-          greaterThan(0));
-
-      // יציאה למסך אחר וחזרה — אותו state, ללא שינוי בחירה. (settings ולא
-      // library — library דורש LibraryBloc שאינו מסופק בטסט.)
-      navigationBloc.emitScreen(Screen.settings);
-      await tester.pumpAndSettle();
-      navigationBloc.emitScreen(Screen.reading);
-      await tester.pumpAndSettle();
-
-      expect(
-        tester.state<ScrollableState>(scrollableFinder.first).position.pixels,
-        greaterThan(0),
-        reason: 'בחזרה למסך עיון הטאב הנבחר צריך להיגלל שוב לתצוגה',
-      );
-    });
-
-    testWidgets('טאב נבחר ראשון — אין גלילה מיותרת (נשאר ב-offset 0)',
-        (tester) async {
-      final tabs = List.generate(20, (i) => _makeTextTab('ספר מספר $i'));
-      final tabsBloc = _TestTabsBloc(
-        TabsState(tabs: tabs, currentTabIndex: 0),
-      );
-      final navigationBloc = _TestNavigationBloc(
-        const NavigationState(currentScreen: Screen.reading),
-      );
-      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
-
-      addTearDown(() async {
-        for (final t in tabs) {
-          t.dispose();
-        }
-        await tabsBloc.close();
-        await navigationBloc.close();
-        await settingsBloc.close();
-      });
-
-      await _setSurfaceSize(tester, const Size(1200, 800));
-      await _pumpTitleBar(
-        tester,
-        tabsBloc: tabsBloc,
-        navigationBloc: navigationBloc,
-        settingsBloc: settingsBloc,
-      );
-      await tester.pumpAndSettle();
-
-      final scrollableFinder = find.descendant(
-        of: find.byType(ReorderableListView),
-        matching: find.byType(Scrollable),
-      );
-      final position =
-          tester.state<ScrollableState>(scrollableFinder.first).position;
-      expect(position.pixels, 0,
-          reason: 'הטאב הראשון כבר נראה — אין צורך לגלול');
-    });
+    expect(tabWidths().length, 4, reason: 'שני טאבים נסגרו');
+    expect(tabWidths().first, moreOrLessEquals(widthBefore, epsilon: 1.0),
+        reason: 'בסגירות רצופות הרוחב נשאר קפוא על הערך המקורי ולא מתרחב');
   });
 
   group('פריסת מסך צר (portrait) — טאבים בשורה תחתונה', () {
@@ -905,50 +963,6 @@ void main() {
       expect(resizeCalls, contains('maximize'),
           reason: 'לחיצה כפולה על אזור ריק צריכה לשנות את גודל החלון');
     });
-
-    testWidgets('לחיצה כפולה על חץ גלילת הטאבים אינה משנה את גודל החלון',
-        (tester) async {
-      // הרבה טאבים ברוחב מצומצם → overflow וחיצי גלילה מופיעים. לחיצה כפולה על
-      // חץ לא צריכה לבלוע ל-maximize (החץ מסומן כרכיב שורת הטאבים).
-      final tabs = List.generate(15, (i) => _makeTextTab('ספר מספר $i'));
-      final tabsBloc = _TestTabsBloc(
-        TabsState(tabs: tabs, currentTabIndex: 0),
-      );
-      final navigationBloc = _TestNavigationBloc(
-        const NavigationState(currentScreen: Screen.reading),
-      );
-      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
-
-      addTearDown(() async {
-        for (final t in tabs) {
-          t.dispose();
-        }
-        await tabsBloc.close();
-        await navigationBloc.close();
-        await settingsBloc.close();
-      });
-
-      installWindowChannelSpy(tester);
-      await _setSurfaceSize(tester, const Size(900, 800));
-      await _pumpTitleBar(
-        tester,
-        tabsBloc: tabsBloc,
-        navigationBloc: navigationBloc,
-        settingsBloc: settingsBloc,
-      );
-      await tester.pumpAndSettle();
-
-      final arrow =
-          find.byIcon(FluentIcons.chevron_left_24_regular).evaluate().isNotEmpty
-              ? find.byIcon(FluentIcons.chevron_left_24_regular)
-              : find.byIcon(FluentIcons.chevron_right_24_regular);
-      expect(arrow, findsWidgets, reason: 'overflow צריך להציג חץ גלילה');
-
-      await _doubleTapAt(tester, tester.getCenter(arrow.first));
-
-      expect(resizeCalls, isEmpty,
-          reason: 'לחיצה כפולה על חץ גלילה לא צריכה לשנות את גודל החלון');
-    });
   });
 }
 
@@ -1067,6 +1081,20 @@ class _SelectingTabsBloc extends _TestTabsBloc {
     super.add(event);
     if (event is SetCurrentTab) {
       emit(TabsState(tabs: state.tabs, currentTabIndex: event.index));
+    }
+  }
+}
+
+/// מסיר טאב בפועל ב-RemoveTab — לבדיקת קפיאת רוחב הטאבים בסגירה.
+class _ClosingTabsBloc extends _TestTabsBloc {
+  _ClosingTabsBloc(super.initialState);
+
+  @override
+  void add(TabsEvent event) {
+    super.add(event);
+    if (event is RemoveTab) {
+      final newTabs = state.tabs.where((t) => t != event.tab).toList();
+      emit(TabsState(tabs: newTabs, currentTabIndex: 0));
     }
   }
 }

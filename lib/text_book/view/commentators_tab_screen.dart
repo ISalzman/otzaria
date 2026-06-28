@@ -32,6 +32,7 @@ import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/search/utils/snippet_builder.dart';
+import 'package:otzaria/widgets/misc/animated_pin_button.dart';
 import 'package:otzaria/widgets/navigation/reader_nav_center.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -544,87 +545,34 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
             return true;
           },
           builder: (context, state) {
-            final colorScheme = Theme.of(context).colorScheme;
-            final appBarDecoration = Border(
-              bottom: BorderSide(
-                color: colorScheme.outlineVariant,
-                width: 0.3,
-              ),
-            );
-
             if (state is! TextBookLoaded) {
+              final isCompact =
+                  context.read<SettingsBloc>().state.compactMenuMode;
               return Scaffold(
-                appBar: AppBar(
-                  backgroundColor: colorScheme.surfaceContainer,
-                  shape: appBarDecoration,
-                  elevation: 0,
-                  scrolledUnderElevation: 0,
-                  centerTitle: false,
-                  leading: const IconButton(
-                    icon: Icon(FluentIcons.navigation_24_regular, size: 20),
-                    tooltip: 'ניווט',
-                    onPressed: null,
-                  ),
-                  title: Text(
-                    'מפרשים על ${widget.tab.sourceTab.book.title}',
-                    style: const TextStyle(fontSize: 16),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  actions: [
-                    ResponsiveActionBar(
-                      overflowMenuOffset: const Offset(0, 8),
-                      maxVisibleButtons: 999,
-                      originalOrder: const [],
-                      actions: [
-                        for (final action in const [
-                          (
-                            icon: FluentIcons.text_font_24_regular,
-                            tooltip: 'ניקוד',
+                body: Column(
+                  children: [
+                    AppTopBar(
+                      leadingItems: [
+                        AppTopBarItem(
+                          widget: ToolbarActionButton(
+                            tooltip: 'ניווט',
+                            icon: FluentIcons.navigation_24_regular,
+                            compact: isCompact,
+                            onPressed: () {},
                           ),
-                          (
-                            icon: FluentIcons.search_24_regular,
-                            tooltip: 'חיפוש',
-                          ),
-                          (
-                            icon: FluentIcons.apps_list_24_regular,
-                            tooltip: 'בחירת מפרשים',
-                          ),
-                          (
-                            icon: FluentIcons.bookmark_add_24_regular,
-                            tooltip: 'הוסף סימניה',
-                          ),
-                          (
-                            icon: FluentIcons.zoom_in_24_regular,
-                            tooltip: 'הגדל את גודל הטקסט',
-                          ),
-                          (
-                            icon: FluentIcons.zoom_out_24_regular,
-                            tooltip: 'הקטן את גודל הטקסט',
-                          ),
-                          (
-                            icon: FluentIcons.chevron_left_24_regular,
-                            tooltip: 'הקטע הקודם',
-                          ),
-                          (
-                            icon: FluentIcons.chevron_right_24_regular,
-                            tooltip: 'הקטע הבא',
-                          ),
-                        ])
-                          ActionButtonData(
-                            widget: IconButton(
-                              icon: Icon(action.icon),
-                              tooltip: action.tooltip,
-                              onPressed: null,
-                            ),
-                            icon: action.icon,
-                            tooltip: action.tooltip,
-                            onPressed: null,
-                          ),
+                        ),
                       ],
+                      center: Text(
+                        'מפרשים על ${widget.tab.sourceTab.book.title}',
+                        style: AppTopBar.titleStyle(context),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
+                    const Expanded(
+                        child: Center(child: CircularProgressIndicator())),
                   ],
                 ),
-                body: const Center(child: CircularProgressIndicator()),
               );
             }
 
@@ -1201,19 +1149,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     splashBorderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                IconButton(
-                  onPressed: () => setState(() => _pinLeftPane = !_pinLeftPane),
-                  icon: AnimatedRotation(
-                    turns: _pinLeftPane ? -0.125 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Icon(
-                      _pinLeftPane
-                          ? FluentIcons.pin_24_filled
-                          : FluentIcons.pin_24_regular,
-                    ),
-                  ),
-                  color: _pinLeftPane ? colorScheme.primary : null,
+                AnimatedPinButton(
+                  isPinned: _pinLeftPane,
                   tooltip: _pinLeftPane ? 'בטל נעיצה' : 'נעץ את הפאנל',
+                  onPressed: () => setState(() => _pinLeftPane = !_pinLeftPane),
                 ),
               ],
             ),

@@ -12,10 +12,10 @@ class InstalledPlugin {
   final bool pinned;
   final bool pinnedToNavRail;
 
-  /// האם התוסף מוסתר לחלוטין מהממשק (לשונית כלים + פאנל צד + nav rail).
-  /// בניגוד ל-[enabled] שמשבית את הריצה, [hiddenFromTools] משאיר את התוסף
-  /// פעיל אך לא מציג אותו למשתמש.
-  final bool hiddenFromTools;
+  /// האם התוסף מוצג במסך הכלים. ברירת מחדל: true.
+  /// בניגוד ל-[enabled] שמשבית את הריצה, שדה זה רק שולט בהצגה בלשונית כלים —
+  /// הסרגל וה-side panel אינם מושפעים.
+  final bool showInTools;
 
   /// האם המשתמש אישר בפועל לתוסף להופיע לפני כלים מובנים במסך "כלים".
   ///
@@ -23,6 +23,13 @@ class InstalledPlugin {
   /// במניפסט, המשתמש יכול לכבות אותה. אם המניפסט לא ביקש את היכולת, הערך
   /// הזה לבדו לא מספיק כדי להפעיל אותה.
   final bool allowOrderBeforeBuiltInsGranted;
+
+  /// האם הרשאת גישה לרשת (`network.access`) הוענקה בפועל על-ידי המשתמש.
+  /// שונה מ-[requiresNetwork] שמשקף את ההצהרה במניפסט בלבד.
+  final bool networkAccessGranted;
+
+  /// האם הרשאת טעינה בעלייה (`app.run_on_startup`) הוענקה בפועל.
+  final bool runOnStartupGranted;
   final PluginManifest manifest;
   final DateTime installedAt;
   final DateTime updatedAt;
@@ -74,8 +81,10 @@ class InstalledPlugin {
     required this.enabled,
     required this.pinned,
     this.pinnedToNavRail = false,
-    this.hiddenFromTools = false,
+    this.showInTools = true,
     bool? allowOrderBeforeBuiltInsGranted,
+    this.networkAccessGranted = false,
+    this.runOnStartupGranted = false,
     required this.manifest,
     required this.installedAt,
     required this.updatedAt,
@@ -98,11 +107,15 @@ class InstalledPlugin {
       enabled: (map['enabled'] as int) != 0,
       pinned: (map['pinned'] as int) != 0,
       pinnedToNavRail: ((map['pinned_to_nav_rail'] as int?) ?? 0) != 0,
-      hiddenFromTools: ((map['hidden_from_tools'] as int?) ?? 0) != 0,
+      showInTools: ((map['hidden_from_tools'] as int?) ?? 0) == 0,
       allowOrderBeforeBuiltInsGranted:
           ((map['allow_order_before_built_ins_granted'] as int?) ??
                   (manifest.allowOrderBeforeBuiltIns ? 1 : 0)) !=
               0,
+      networkAccessGranted:
+          ((map['network_access_granted'] as int?) ?? 0) != 0,
+      runOnStartupGranted:
+          ((map['run_on_startup_granted'] as int?) ?? 0) != 0,
       manifest: manifest,
       installedAt: DateTime.parse(map['installed_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
@@ -123,7 +136,7 @@ class InstalledPlugin {
       'enabled': enabled ? 1 : 0,
       'pinned': pinned ? 1 : 0,
       'pinned_to_nav_rail': pinnedToNavRail ? 1 : 0,
-      'hidden_from_tools': hiddenFromTools ? 1 : 0,
+      'hidden_from_tools': showInTools ? 0 : 1,
       'allow_order_before_built_ins_granted':
           allowOrderBeforeBuiltInsGranted ? 1 : 0,
       'manifest_json': jsonEncode(manifest.toJson()),
@@ -145,8 +158,10 @@ class InstalledPlugin {
     bool? enabled,
     bool? pinned,
     bool? pinnedToNavRail,
-    bool? hiddenFromTools,
+    bool? showInTools,
     bool? allowOrderBeforeBuiltInsGranted,
+    bool? networkAccessGranted,
+    bool? runOnStartupGranted,
     PluginManifest? manifest,
     DateTime? installedAt,
     DateTime? updatedAt,
@@ -166,9 +181,11 @@ class InstalledPlugin {
       enabled: enabled ?? this.enabled,
       pinned: pinned ?? this.pinned,
       pinnedToNavRail: pinnedToNavRail ?? this.pinnedToNavRail,
-      hiddenFromTools: hiddenFromTools ?? this.hiddenFromTools,
+      showInTools: showInTools ?? this.showInTools,
       allowOrderBeforeBuiltInsGranted: allowOrderBeforeBuiltInsGranted ??
           this.allowOrderBeforeBuiltInsGranted,
+      networkAccessGranted: networkAccessGranted ?? this.networkAccessGranted,
+      runOnStartupGranted: runOnStartupGranted ?? this.runOnStartupGranted,
       manifest: manifest ?? this.manifest,
       installedAt: installedAt ?? this.installedAt,
       updatedAt: updatedAt ?? this.updatedAt,

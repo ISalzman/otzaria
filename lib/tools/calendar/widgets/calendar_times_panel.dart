@@ -583,7 +583,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
             .replaceAll('׳', '')
         : '';
 
-    return RecommendedActionButton(
+    return ActionButton.recommended(
       text: _buildDafYomiButtonText(bavliTractate, dafLabel),
       icon: FluentIcons.book_24_regular,
       onPressed: bavliTractate == 'לא זמין'
@@ -610,7 +610,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
             colorFilter: ColorFilter.mode(cs.onPrimary, BlendMode.srcIn),
           );
 
-    return RecommendedActionButton(
+    return ActionButton.recommended(
       text: text,
       iconWidget: iconWidget,
       textAlign: TextAlign.center,

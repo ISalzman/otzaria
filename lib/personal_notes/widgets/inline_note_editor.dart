@@ -96,7 +96,7 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
   }
 
   Future<void> _handleSave() async {
-    // במצב מוגן, נדרוש סיסמה לפני שמירה
+    // במצב סייפר, נדרוש סיסמה לפני שמירה
     if (!await verifyPasswordForAction(context) || !mounted) {
       return;
     }

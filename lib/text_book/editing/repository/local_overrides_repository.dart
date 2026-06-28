@@ -3,7 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:path/path.dart' as path;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/core/app_paths.dart';
+// [EDITING DISABLED] import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 import 'overrides_repository.dart';
@@ -32,13 +32,14 @@ class LocalOverridesRepository implements OverridesRepository {
   }
 
   Future<void> _initializeBasePath() async {
-    try {
-      final basePath = await AppPaths.getUserOverridesRootPath();
-      await Directory(basePath).create(recursive: true);
-      _basePathCompleter.complete(basePath);
-    } catch (e) {
-      _basePathCompleter.completeError(e);
-    }
+    // [EDITING DISABLED]
+    // try {
+    //   final basePath = await AppPaths.getUserOverridesRootPath();
+    //   await Directory(basePath).create(recursive: true);
+    //   _basePathCompleter.complete(basePath);
+    // } catch (e) {
+    //   _basePathCompleter.completeError(e);
+    // }
   }
 
   /// Acquires a lock for file operations on a specific file

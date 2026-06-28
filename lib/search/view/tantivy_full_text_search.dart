@@ -244,7 +244,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'ערוך חיפוש',
               onPressed: () {
                 setState(() {

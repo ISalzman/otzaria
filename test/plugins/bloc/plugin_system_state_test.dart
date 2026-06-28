@@ -21,7 +21,7 @@ InstalledPlugin _plugin({
   required bool enabled,
   required bool pinned,
   required bool pinnedToNavRail,
-  bool hiddenFromTools = false,
+  bool showInTools = true,
 }) {
   return InstalledPlugin(
     pluginId: id,
@@ -32,7 +32,7 @@ InstalledPlugin _plugin({
     enabled: enabled,
     pinned: pinned,
     pinnedToNavRail: pinnedToNavRail,
-    hiddenFromTools: hiddenFromTools,
+    showInTools: showInTools,
     manifest: _manifest(id),
     installedAt: DateTime.utc(2026, 1, 1),
     updatedAt: DateTime.utc(2026, 1, 1),
@@ -122,15 +122,15 @@ void main() {
     });
 
     test(
-        'hiddenFromTools excludes plugin from pinnedPlugins / nav rail / visible',
+        'showInTools=false excludes plugin from pinnedPlugins but NOT from nav rail',
         () {
       final state = PluginSystemLoaded([
         _plugin(
-          id: 'hidden',
+          id: 'hidden-from-tools',
           enabled: true,
           pinned: true,
           pinnedToNavRail: true,
-          hiddenFromTools: true,
+          showInTools: false,
         ),
         _plugin(
           id: 'visible',
@@ -142,17 +142,12 @@ void main() {
       expect(
         state.pinnedPlugins.map((p) => p.pluginId),
         equals(['visible']),
-        reason: 'hidden plugins must not appear as tools-tab tabs',
+        reason: 'plugin with showInTools=false must not appear as tools-tab tab',
       );
       expect(
         state.pluginsPinnedToNavRail.map((p) => p.pluginId),
-        equals(['visible']),
-        reason: 'hidden plugins must not appear in the nav rail',
-      );
-      expect(
-        state.visiblePlugins.map((p) => p.pluginId),
-        equals(['visible']),
-        reason: 'hidden plugins must not appear in the side panel list',
+        containsAll(['hidden-from-tools', 'visible']),
+        reason: 'showInTools does not affect the nav rail',
       );
     });
   });

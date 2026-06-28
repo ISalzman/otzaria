@@ -218,7 +218,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog>
   }
 
   void _save() async {
-    // במצב מוגן, נדרוש סיסמה לפני שמירה
+    // במצב סייפר, נדרוש סיסמה לפני שמירה
     if (!await verifyPasswordForAction(context)) {
       return;
     }
@@ -745,11 +745,11 @@ class _SearchDialogState extends State<_SearchDialog> {
         ],
       ),
       actions: [
-        NeutralActionButton(
+        ActionButton.neutral(
           text: 'סגור',
           onPressed: () => Navigator.of(context).pop(),
         ),
-        RecommendedActionButton(
+        ActionButton.recommended(
           text: 'חפש',
           onPressed: _performSearch,
         ),
@@ -819,11 +819,11 @@ class _LinkInsertDialogState extends State<_LinkInsertDialog> {
           ],
         ),
         actions: [
-          NeutralActionButton(
+          ActionButton.neutral(
             text: 'ביטול',
             onPressed: () => Navigator.of(context).pop(),
           ),
-          RecommendedActionButton(
+          ActionButton.recommended(
             text: 'הוסף',
             onPressed: () {
               widget.onInsert(_textController.text, _urlController.text);

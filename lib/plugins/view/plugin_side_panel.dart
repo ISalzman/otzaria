@@ -11,8 +11,8 @@ import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
-import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
@@ -29,6 +29,9 @@ class PluginSidePanel extends StatelessWidget {
   });
 
   Future<void> _installPlugin(BuildContext context) async {
+    final verified = await verifyPasswordForAction(context);
+    if (!verified || !context.mounted) return;
+
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['otzplugin'],
@@ -44,6 +47,9 @@ class PluginSidePanel extends StatelessWidget {
   }
 
   Future<void> _loadDevPlugin(BuildContext context) async {
+    final verified = await verifyPasswordForAction(context);
+    if (!verified || !context.mounted) return;
+
     final rootPath = await FilePicker.getDirectoryPath(lockParentWindow: true);
     if (rootPath != null) {
       if (context.mounted) {
@@ -55,6 +61,9 @@ class PluginSidePanel extends StatelessWidget {
   }
 
   Future<void> _loadLocalhostPlugin(BuildContext context) async {
+    final verified = await verifyPasswordForAction(context);
+    if (!verified || !context.mounted) return;
+
     final bloc = context.read<PluginSystemBloc>();
     final url = await showInputDialog(
       context: context,
@@ -70,41 +79,6 @@ class PluginSidePanel extends StatelessWidget {
     }
   }
 
-  void _handleReorder({
-    required BuildContext context,
-    required List<InstalledPlugin> allPlugins,
-    required String sourcePluginId,
-    required String targetPluginId,
-  }) {
-    if (sourcePluginId == targetPluginId) return;
-    // עובדים על *כל* התוספים, לא רק על המסוננים לתצוגה. במצב מנותק חלק
-    // מהתוספים מוסתרים — אם נשלח רק את הסדר של המוצגים, ה-DB יקבל
-    // user_order חדש רק לחלק מהרשומות, ולתוספים המוסתרים יישאר user_order
-    // ישן (או null). אחרי חזרה למצב מקוון זה גורם לערכי סדר כפולים ולמיון
-    // לא דטרמיניסטי. עבודה על הרשימה המלאה משמרת את המיקום היחסי של
-    // המוסתרים סביב התוספים המוצגים.
-    final sourceIdx =
-        allPlugins.indexWhere((p) => p.pluginId == sourcePluginId);
-    final targetIdx =
-        allPlugins.indexWhere((p) => p.pluginId == targetPluginId);
-    if (sourceIdx < 0 || targetIdx < 0) return;
-
-    // semantics: גרירה קדימה (sourceIdx<targetIdx) ⇒ source נכנס *אחרי*
-    // target; גרירה אחורה (sourceIdx>targetIdx) ⇒ source נכנס *לפני* target.
-    // הנוסחה `insert(targetIdx, src)` אחרי `removeAt(sourceIdx)` מטפלת
-    // בשני המקרים: ב-forward, removeAt דוחק את כל מי שאחרי source לאחור,
-    // אז targetIdx הקודם מצביע עכשיו על המיקום שאחרי target.
-    final reordered = List.of(allPlugins);
-    final src = reordered.removeAt(sourceIdx);
-    reordered.insert(targetIdx, src);
-
-    context.read<PluginSystemBloc>().add(
-          ReorderPluginsRequested(
-            reordered.map((p) => p.pluginId).toList(),
-          ),
-        );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -115,7 +89,7 @@ class PluginSidePanel extends StatelessWidget {
             children: [
               if (onClose != null)
                 IconButton(
-                  icon: RtlIcon(FluentIcons.dismiss_24_regular),
+                  icon: Icon(FluentIcons.dismiss_24_regular),
                   tooltip: 'סגור',
                   onPressed: onClose,
                   iconSize: 20,
@@ -127,25 +101,25 @@ class PluginSidePanel extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: RtlIcon(FluentIcons.add_24_regular),
+                icon: Icon(FluentIcons.add_24_regular),
                 tooltip: 'התקן תוסף חדש',
                 onPressed: () => _installPlugin(context),
               ),
               if (showDevTools)
                 IconButton(
-                  icon: RtlIcon(FluentIcons.folder_add_24_regular),
+                  icon: Icon(FluentIcons.folder_add_24_regular),
                   tooltip: 'טען תיקיית תוסף',
                   onPressed: () => _loadDevPlugin(context),
                 ),
               if (showDevTools)
                 IconButton(
-                  icon: RtlIcon(FluentIcons.globe_add_24_regular),
+                  icon: Icon(FluentIcons.globe_add_24_regular),
                   tooltip: 'טען תוסף מ-localhost',
                   onPressed: () => _loadLocalhostPlugin(context),
                 ),
               if (showDevTools)
                 IconButton(
-                  icon: RtlIcon(FluentIcons.arrow_sync_24_regular),
+                  icon: Icon(FluentIcons.arrow_sync_24_regular),
                   tooltip: 'רענן תוספים',
                   onPressed: () =>
                       context.read<PluginSystemBloc>().add(RefreshPlugins()),
@@ -173,49 +147,25 @@ class PluginSidePanel extends StatelessWidget {
               if (state is PluginSystemLoaded) {
                 final isOfflineMode = context
                     .select<SettingsBloc, bool>((b) => b.state.isOfflineMode);
-                // visiblePlugins מסנן תוספים שהמשתמש סימן כ"מוסתר" במסך
-                // ההגדרות (`hiddenFromTools`); אחריו מסננים גם offline.
                 final plugins =
-                    state.visiblePlugins.filterForOfflineMode(isOfflineMode);
+                    state.activePlugins.filterForOfflineMode(isOfflineMode);
                 if (plugins.isEmpty) {
-                  // ההודעה משתנה לפי הסיבה: אם יש תוספים שמוסתרים ידנית,
-                  // נציין זאת. אחרת — נציין offline או "לא הותקנו".
-                  final allHiddenManually = state.plugins.isNotEmpty &&
-                      state.plugins.every((p) => p.hiddenFromTools);
                   return Center(
                     child: Text(
-                      allHiddenManually
-                          ? 'כל התוספים המותקנים הוסתרו מההגדרות'
-                          : (isOfflineMode && state.plugins.isNotEmpty
-                              ? 'כל התוספים המותקנים דורשים אינטרנט\nוהוסתרו במצב מנותק'
-                              : 'לא הותקנו תוספים'),
+                      isOfflineMode && state.plugins.isNotEmpty
+                          ? 'כל התוספים המותקנים דורשים אינטרנט\nוהוסתרו במצב מנותק'
+                          : 'לא הותקנו תוספים',
                       textAlign: TextAlign.center,
                     ),
                   );
                 }
-                // יישום ידני של גרירה במקום ReorderableListView:
-                // ReorderableListView משתמש ב-OverlayPortal פנימי שגורם
-                // לקריסות כשהפאנל יושב בתוך LayoutBuilder (FloatingPanel/
-                // ContextOverlayPanel) — או mutation של LayoutBuilder תוך
-                // performLayout, או _retakeInactiveElement כשה-state
-                // הפנימי של Reorderable לא מסונכרן עם ה-Overlay החיצוני.
-                // Draggable + DragTarget משתמשים ב-OverlayEntry פשוט יותר
-                // ולא דורשים סנכרון state מורכב.
                 return ListView.builder(
                   itemCount: plugins.length,
                   itemBuilder: (context, index) {
                     final plugin = plugins[index];
-                    return _DraggablePluginRow(
+                    return _PluginListTile(
                       key: ValueKey(plugin.pluginId),
                       plugin: plugin,
-                      onAcceptSource: (sourceId) {
-                        _handleReorder(
-                          context: context,
-                          allPlugins: state.plugins,
-                          sourcePluginId: sourceId,
-                          targetPluginId: plugin.pluginId,
-                        );
-                      },
                       onPluginSelected: onPluginSelected,
                     );
                   },
@@ -230,55 +180,12 @@ class PluginSidePanel extends StatelessWidget {
   }
 }
 
-/// שורת תוסף בודדת עם תמיכה בגרירה: כל השורה היא [DragTarget] שמקבל id
-/// של תוסף אחר, וה-handle מימין הוא [Draggable] שמתחיל גרירה.
-class _DraggablePluginRow extends StatelessWidget {
-  final InstalledPlugin plugin;
-  final ValueChanged<String> onAcceptSource;
-  final Function(InstalledPlugin)? onPluginSelected;
-
-  const _DraggablePluginRow({
-    super.key,
-    required this.plugin,
-    required this.onAcceptSource,
-    required this.onPluginSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return DragTarget<String>(
-      onWillAcceptWithDetails: (details) => details.data != plugin.pluginId,
-      onAcceptWithDetails: (details) => onAcceptSource(details.data),
-      builder: (context, candidateData, rejectedData) {
-        final isHovering = candidateData.isNotEmpty;
-        final cs = Theme.of(context).colorScheme;
-        return Container(
-          decoration: isHovering
-              ? BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.08),
-                  border: Border(
-                    top: BorderSide(color: cs.primary, width: 2),
-                  ),
-                )
-              : null,
-          child: Material(
-            color: Colors.transparent,
-            child: _PluginListTile(
-              plugin: plugin,
-              onPluginSelected: onPluginSelected,
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
 class _PluginListTile extends StatelessWidget {
   final InstalledPlugin plugin;
   final Function(InstalledPlugin)? onPluginSelected;
 
   const _PluginListTile({
+    super.key,
     required this.plugin,
     required this.onPluginSelected,
   });
@@ -319,115 +226,20 @@ class _PluginListTile extends StatelessWidget {
       ),
       title: Text(plugin.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(plugin.version),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: RtlIcon(FluentIcons.settings_24_regular),
-            tooltip: 'הגדרות תוסף',
-            onPressed: () async {
-              final result = await showDialog<bool>(
-                context: context,
-                barrierDismissible: false,
-                builder: (_) => BlocProvider<PluginSystemBloc>.value(
-                  value: context.read<PluginSystemBloc>(),
-                  child: PluginSettingsScreen(plugin: plugin),
-                ),
-              );
-              if (result == true && onPluginSelected != null) {
-                if (context.mounted) {
-                  context
-                      .read<NavigationBloc>()
-                      .add(const NavigateToScreen(Screen.more));
-                  onPluginSelected!(plugin);
-                }
-              }
-            },
-          ),
-          IconButton(
-            icon: RtlIcon(
-              plugin.pinned
-                  ? FluentIcons.pin_24_filled
-                  : FluentIcons.pin_24_regular,
-            ),
-            tooltip: plugin.pinned ? 'בטל הצמדה' : 'הצמד לסרגל',
-            onPressed: () {
-              if (plugin.pinned) {
-                context
-                    .read<PluginSystemBloc>()
-                    .add(UnpinPluginRequested(plugin.pluginId));
-              } else {
-                context
-                    .read<PluginSystemBloc>()
-                    .add(PinPluginRequested(plugin.pluginId));
-              }
-            },
-          ),
-          // ה-Draggable יושב רק על האייקון כדי שגרירה תתחיל ממנו ולא
-          // מכל מקום ברצי (ככה Tap לפתוח את התוסף עדיין עובד טוב).
-          Draggable<String>(
-            data: plugin.pluginId,
-            dragAnchorStrategy: pointerDragAnchorStrategy,
-            feedback: _DragFeedback(plugin: plugin),
-            child: MouseRegion(
-              cursor: SystemMouseCursors.grab,
-              child: Tooltip(
-                message: 'גרור ושחרר לסידור מחדש',
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  child: RtlIcon(FluentIcons.re_order_dots_vertical_24_regular),
-                ),
-              ),
-            ),
-          ),
-        ],
+      trailing: IconButton(
+        icon: Icon(FluentIcons.settings_24_regular),
+        tooltip: 'הגדרות תוסף',
+        onPressed: () {
+          context
+              .read<NavigationBloc>()
+              .add(const NavigateToScreen(Screen.settings));
+        },
       ),
       onTap: () {
         if (onPluginSelected != null) {
           onPluginSelected!(plugin);
         }
       },
-    );
-  }
-}
-
-/// ה-widget שצף מתחת לסמן בזמן הגרירה. מוצג מעל Overlay של ה-Navigator
-/// (לא OverlayPortal) ולכן אין חששות לקונפליקטים עם LayoutBuilders.
-class _DragFeedback extends StatelessWidget {
-  final InstalledPlugin plugin;
-
-  const _DragFeedback({required this.plugin});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: cs.shadow.withValues(alpha: 0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RtlIcon(FluentIcons.puzzle_piece_24_regular),
-            const SizedBox(width: 8),
-            Text(
-              plugin.name,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

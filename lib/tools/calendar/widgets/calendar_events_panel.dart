@@ -115,7 +115,7 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
             runSpacing: 8,
             alignment: WrapAlignment.spaceBetween,
             children: [
-              RecommendedActionButton(
+              ActionButton.recommended(
                 text: 'צור אירוע',
                 icon: FluentIcons.add_24_regular,
                 onPressed: () => widget.onCreateEvent(),
@@ -138,7 +138,7 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
                           }
                         },
                 ),
-              NeutralActionButton(
+              ActionButton.neutral(
                 text: widget.state.showAllEvents ? 'הצג יום נוכחי' : 'הצג הכל',
                 icon: widget.state.showAllEvents
                     ? FluentIcons.calendar_month_24_regular
@@ -357,7 +357,7 @@ class _DeleteEventAction extends StatelessWidget {
       );
     }
 
-    return NeutralActionButton(
+    return ActionButton.neutral(
       text: 'מחק',
       onPressed: onPressed,
     );

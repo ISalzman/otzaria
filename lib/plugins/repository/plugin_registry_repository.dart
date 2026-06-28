@@ -97,8 +97,8 @@ class PluginRegistryRepository {
     await _db.updatePluginNavRailPinState(pluginId, pinnedToNavRail);
   }
 
-  Future<void> updateHiddenState(String pluginId, bool hiddenFromTools) async {
-    await _db.updatePluginHiddenState(pluginId, hiddenFromTools);
+  Future<void> updateShowInTools(String pluginId, bool showInTools) async {
+    await _db.updatePluginShowInTools(pluginId, showInTools);
   }
 
   /// שומר סדר מותאם אישית של תוספים לפי מיקומם ברשימה הנתונה.

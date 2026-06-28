@@ -17,6 +17,17 @@ import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/core/app_paths.dart';
 
+/// Status of the most recent backup and whether a new one is recommended.
+class BackupStatus {
+  final DateTime? lastBackupDate;
+  final bool hasSignificantChanges;
+
+  const BackupStatus({
+    this.lastBackupDate,
+    required this.hasSignificantChanges,
+  });
+}
+
 /// Service for backing up and restoring app data
 class BackupService {
   static final Logger _logger = Logger('BackupService');
@@ -53,7 +64,7 @@ class BackupService {
     required bool includeNotes,
     required bool includeWorkspaces,
     required bool includeShamorZachor,
-    required bool includeUserOverrides,
+    // [EDITING DISABLED] required bool includeUserOverrides,
     required bool includePlugins,
   }) async {
     final skippedSections = <String>[];
@@ -76,7 +87,7 @@ class BackupService {
           'notes': includeNotes,
           'workspaces': includeWorkspaces,
           'shamorZachor': includeShamorZachor,
-          'userOverrides': includeUserOverrides,
+          // [EDITING DISABLED] 'userOverrides': includeUserOverrides,
           'plugins': includePlugins,
         },
       };
@@ -101,10 +112,10 @@ class BackupService {
         backupData['notes'] = await _backupNotes();
       }
 
-      // Backup user overrides
-      if (includeUserOverrides) {
-        backupData['user_overrides'] = await _backupUserOverrides();
-      }
+      // [EDITING DISABLED]
+      // if (includeUserOverrides) {
+      //   backupData['user_overrides'] = await _backupUserOverrides();
+      // }
 
       // Backup plugins
       if (includePlugins) {
@@ -254,42 +265,31 @@ class BackupService {
     };
   }
 
-  /// Backup user overrides
-  static Future<Map<String, dynamic>> _backupUserOverrides() async {
-    final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
+  // [EDITING DISABLED]
+  // /// Backup user overrides
+  // static Future<Map<String, dynamic>> _backupUserOverrides() async {
+  //   final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
+  //   if (!await overridesDir.exists()) return {};
+  //   final overridesData = <String, dynamic>{};
+  //   await for (final entity in overridesDir.list(recursive: true)) {
+  //     if (entity is File &&
+  //         (entity.path.endsWith('.md') ||
+  //             entity.path.endsWith('.tmp') ||
+  //             entity.path.endsWith('.recovery'))) {
+  //       final relativePath = p.relative(entity.path, from: overridesDir.path);
+  //       try {
+  //         overridesData[relativePath] = await entity.readAsString();
+  //       } catch (e) {
+  //         _logger.warning('Failed to backup override file $relativePath: $e');
+  //       }
+  //     }
+  //   }
+  //   return overridesData;
+  // }
 
-    if (!await overridesDir.exists()) {
-      return {};
-    }
-
-    final overridesData = <String, dynamic>{};
-
-    await for (final entity in overridesDir.list(recursive: true)) {
-      if (entity is File &&
-          (entity.path.endsWith('.md') ||
-              entity.path.endsWith('.tmp') ||
-              entity.path.endsWith('.recovery'))) {
-        final relativePath = p.relative(entity.path, from: overridesDir.path);
-        try {
-          overridesData[relativePath] = await entity.readAsString();
-        } catch (e) {
-          _logger.warning('Failed to backup override file $relativePath: $e');
-        }
-      }
-    }
-
-    return overridesData;
-  }
-
-  /// מגבה תוספים מותקנים: קבצי התוסף, רשומות ה-DB (הרשאות, KV, published)
-  /// ותיקיית הנתונים של כל תוסף.
-  ///
-  /// תוספי פיתוח (`development`) מדולגים — הם מצביעים על תיקיית קוד חיצונית
-  /// במחשב המקור (`devRootPath`) שאינה קיימת במחשב היעד.
-  ///
-  /// אם גיבוי קבצי תוסף נכשל (למשל קובץ לא קריא), התוסף **כולו** מדולג
-  /// והסעיף `plugins` מסומן ב-[skippedSections] (גיבוי חלקי) — כדי שלא ייווצר
-  /// גיבוי עם קבצים חסרים שיגרום בשחזור למחיקת התקנה תקינה.
+  //גיבוי תוספים: גיבוי קבצים, תיקיית נתונים, הרשאות ונתוני DB
+  // תוספי פיתוח (`development`) מדולגים, כיון שאינם קיימים במחשב היעד.
+  // גיבוי תוסף שנכשל מתבצע דילוג, ומסומן ב-[skippedSections] למניעת שגיאות בשחזור
   static Future<List<Map<String, dynamic>>> _backupPlugins(
       List<String> skippedSections) async {
     final db = PluginSystemDatabase.instance;
@@ -429,14 +429,14 @@ class BackupService {
       );
     }
 
-    // Restore user_overrides
-    final includeOverrides =
-        includes['userOverrides'] as bool? ?? includes['notes'] == true;
-    if (includeOverrides && backupData.containsKey('user_overrides')) {
-      await _restoreUserOverrides(
-        backupData['user_overrides'] as Map<String, dynamic>,
-      );
-    }
+    // [EDITING DISABLED]
+    // final includeOverrides =
+    //     includes['userOverrides'] as bool? ?? includes['notes'] == true;
+    // if (includeOverrides && backupData.containsKey('user_overrides')) {
+    //   await _restoreUserOverrides(
+    //     backupData['user_overrides'] as Map<String, dynamic>,
+    //   );
+    // }
 
     // Restore workspaces
     if (includes['workspaces'] == true &&
@@ -559,42 +559,30 @@ class BackupService {
     );
   }
 
-  /// Restore user overrides to files
-  static Future<void> _restoreUserOverrides(
-      Map<String, dynamic> overridesData) async {
-    final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
+  // [EDITING DISABLED]
+    /// Restore user overrides to files
+  // static Future<void> _restoreUserOverrides(
+  //     Map<String, dynamic> overridesData) async {
+  //   final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
+  //   for (final entry in overridesData.entries) {
+  //     try {
+  //       final relativePath = entry.key;
+  //       final content = entry.value as String;
+  //       final filePath = p.join(overridesDir.path, relativePath);
+  //       final file = File(filePath);
+            // Ensure parent directory exists
+  //       await file.parent.create(recursive: true);
+            // Only restore if file doesn't exist, to not overwrite user's latest edits,
+            // or overwrite it if wanted. The standard restore overwrites.
+  //       await file.writeAsString(content);
+  //     } catch (e) {
+  //       _logger.warning('Failed to restore override file ${entry.key}: $e');
+  //     }
+  //   }
+  // }
 
-    for (final entry in overridesData.entries) {
-      try {
-        final relativePath = entry.key;
-        final content = entry.value as String;
-
-        final filePath = p.join(overridesDir.path, relativePath);
-        final file = File(filePath);
-
-        // Ensure parent directory exists
-        await file.parent.create(recursive: true);
-
-        // Only restore if file doesn't exist, to not overwrite user's latest edits,
-        // or overwrite it if wanted. The standard restore overwrites.
-        await file.writeAsString(content);
-      } catch (e) {
-        _logger.warning('Failed to restore override file ${entry.key}: $e');
-      }
-    }
-  }
-
-  /// משחזר תוספים מגיבוי: כותב מחדש את קבצי התוסף ונתוניו לדיסק, ומשחזר
-  /// את רשומות ה-DB (התקנה, הרשאות, KV, published records).
-  ///
-  /// נתיב ההתקנה מחושב מחדש למחשב היעד — שם המשתמש או הפלטפורמה עשויים
-  /// להשתנות. הנתיבים `entrypoint_path` ו-`icon_path` יחסיים (מתוך ה-manifest)
-  /// ולכן נשארים תקפים ללא שינוי.
-  ///
-  /// מחזיר `true` אם לפחות תוסף אחד נכשל בשחזור — הקורא משתמש בזה כדי
-  /// לסמן את הסעיף `plugins` כדילוג ולהציג למשתמש שחזור חלקי. זה קריטי
-  /// כי [_restoreDirFromBase64] מוחק את תיקיית ההתקנה הקיימת *לפני* הכתיבה,
-  /// כך שכשל באמצע עלול להשאיר תוסף חצי-משוחזר.
+  // שחזור תוספים: נתיב ההתקנה מותאם לשינויי מערכות ושם משתמש
+  // אם תוסף אחד נכשל - מחזיר `true`, כי [_restoreDirFromBase64] מוחק את תיקיית ההתקנה הקיימת *לפני* הכתיבה,
   static Future<bool> _restorePlugins(
     List<Map<String, dynamic>> pluginsData,
   ) async {
@@ -746,6 +734,7 @@ class BackupService {
     if (lastBackup != null) {
       final daysSince = now.difference(DateTime.parse(lastBackup)).inDays;
       final dueAfterDays = switch (frequency) {
+        'daily' => 1,
         'weekly' => 7,
         'monthly' => 30,
         _ => null,
@@ -778,8 +767,8 @@ class BackupService {
         Settings.getValue<bool>('key-backup-workspaces') ?? true;
     final includeShamorZachor =
         Settings.getValue<bool>('key-backup-shamor-zachor') ?? true;
-    final includeUserOverrides =
-        Settings.getValue<bool>('key-backup-user-overrides') ?? true;
+    // [EDITING DISABLED]
+    // final includeUserOverrides = Settings.getValue<bool>('key-backup-user-overrides') ?? true;
     final includePlugins =
         Settings.getValue<bool>('key-backup-plugins') ?? true;
 
@@ -790,7 +779,7 @@ class BackupService {
       includeNotes: includeNotes,
       includeWorkspaces: includeWorkspaces,
       includeShamorZachor: includeShamorZachor,
-      includeUserOverrides: includeUserOverrides,
+      // [EDITING DISABLED] includeUserOverrides: includeUserOverrides,
       includePlugins: includePlugins,
     );
 
@@ -815,5 +804,258 @@ class BackupService {
     final files = await dir.list().toList();
     return files.where((f) => f is File && f.path.endsWith('.json')).toList()
       ..sort((a, b) => b.path.compareTo(a.path)); // Sort by date (newest first)
+  }
+
+  /// Analyzes the most recent backup and returns whether a new backup is recommended.
+  static Future<BackupStatus> analyzeBackupStatus() async {
+    try {
+      final backups = await getAvailableBackups();
+      if (backups.isEmpty) {
+        return const BackupStatus(
+            lastBackupDate: null, hasSignificantChanges: false);
+      }
+
+      final latestFile = backups.first as File;
+      final stat = await latestFile.stat();
+      final backupDate = stat.modified;
+
+      // Don't recommend again within 24 hours of the last backup
+      if (DateTime.now().difference(backupDate).inHours < 24) {
+        return BackupStatus(
+            lastBackupDate: backupDate, hasSignificantChanges: false);
+      }
+
+      Map<String, dynamic> backupData;
+      try {
+        final content = await latestFile.readAsString();
+        backupData = json.decode(content) as Map<String, dynamic>;
+      } catch (_) {
+        return BackupStatus(
+            lastBackupDate: backupDate, hasSignificantChanges: false);
+      }
+
+      final hasChanges =
+          await _hasSignificantChanges(backupData, backupDate);
+      return BackupStatus(
+          lastBackupDate: backupDate, hasSignificantChanges: hasChanges);
+    } catch (e) {
+      _logger.warning('Failed to analyze backup status: $e');
+      return const BackupStatus(
+          lastBackupDate: null, hasSignificantChanges: false);
+    }
+  }
+
+  static Future<bool> _hasSignificantChanges(
+    Map<String, dynamic> backupData,
+    DateTime backupDate,
+  ) async {
+    // Always recommend: any settings change
+    if (_hasSettingsChanges(backupData)) return true;
+
+    // Always recommend: workspace added
+    if (_hasWorkspaceAdded(backupData)) return true;
+
+    // Always recommend: plugin added
+    if (await _hasPluginAdded(backupData)) return true;
+
+    // Threshold: shamor zachor changes
+    if (_hasShamorZachorChanges(backupData)) return true;
+
+    // Threshold: notes changes
+    if (await _hasNotesChanges(backupData, backupDate)) return true;
+
+    // Threshold: bookmarks/history after 1 week with >50% change
+    if (DateTime.now().difference(backupDate).inDays >= 7 &&
+        await _hasBookmarksHistoryChanges(backupData)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  static bool _hasSettingsChanges(Map<String, dynamic> backupData) {
+    final backedUpSettings =
+        backupData['settings'] as Map<String, dynamic>?;
+    if (backedUpSettings == null) return false;
+    for (final entry in backedUpSettings.entries) {
+      final current = Settings.getValue(entry.key);
+      if (current?.toString() != entry.value?.toString()) return true;
+    }
+    return false;
+  }
+
+  static bool _hasWorkspaceAdded(Map<String, dynamic> backupData) {
+    final backedUpWorkspaces = backupData['workspaces'] as List?;
+    if (backedUpWorkspaces == null) return false;
+    final (workspaces, _) = WorkspaceRepository().loadWorkspaces();
+    return workspaces.length > backedUpWorkspaces.length;
+  }
+
+  static Future<bool> _hasPluginAdded(
+      Map<String, dynamic> backupData) async {
+    final backedUpPlugins = backupData['plugins'] as List?;
+    if (backedUpPlugins == null) return false;
+    try {
+      final db = PluginSystemDatabase.instance;
+      final currentPlugins = await db.getAllInstalledPlugins();
+      final currentCount =
+          currentPlugins.where((p) => !p.isDevelopment).length;
+      return currentCount > backedUpPlugins.length;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Checks if shamor zachor data changed meaningfully since the backup:
+  /// new books added, a book newly marked, or a review cycle crossed 50% for any book.
+  static bool _hasShamorZachorChanges(Map<String, dynamic> backupData) {
+    final szBackup =
+        backupData['shamorZachor'] as Map<String, dynamic>?;
+    if (szBackup == null) return false;
+
+    final backupProgressStr =
+        szBackup['sz:progress_by_id'] as String?;
+    final currentProgressStr =
+        Settings.getValue<String>('sz:progress_by_id');
+    if (backupProgressStr == null ||
+        currentProgressStr == null ||
+        currentProgressStr.isEmpty) {
+      return false;
+    }
+
+    try {
+      final backupProgress =
+          json.decode(backupProgressStr) as Map<String, dynamic>;
+      final currentProgress =
+          json.decode(currentProgressStr) as Map<String, dynamic>;
+
+      final backupBookIds = backupProgress.keys.toSet();
+
+      // New books added
+      if (currentProgress.keys.any((id) => !backupBookIds.contains(id))) {
+        return true;
+      }
+
+      // Existing books: newly marked or 50% review threshold crossed
+      for (final bookId in backupBookIds) {
+        final backupBook =
+            backupProgress[bookId] as Map<String, dynamic>? ?? {};
+        final currentBook =
+            currentProgress[bookId] as Map<String, dynamic>? ?? {};
+
+        int backupLearn = 0, currentLearn = 0;
+        int backupR1 = 0, currentR1 = 0;
+        int backupR2 = 0, currentR2 = 0;
+        int backupR3 = 0, currentR3 = 0;
+
+        for (final page in backupBook.values) {
+          if (page is Map) {
+            if (page['learn'] == true) backupLearn++;
+            if (page['review1'] == true) backupR1++;
+            if (page['review2'] == true) backupR2++;
+            if (page['review3'] == true) backupR3++;
+          }
+        }
+        for (final page in currentBook.values) {
+          if (page is Map) {
+            if (page['learn'] == true) currentLearn++;
+            if (page['review1'] == true) currentR1++;
+            if (page['review2'] == true) currentR2++;
+            if (page['review3'] == true) currentR3++;
+          }
+        }
+
+        // Book newly started (was untouched, now has progress)
+        if (backupLearn == 0 && currentLearn > 0) return true;
+
+        // Any review cycle crossed the 50% threshold since backup
+        final total = currentBook.length;
+        if (total > 0) {
+          final half = total * 0.5;
+          if (backupR1 < half && currentR1 >= half) return true;
+          if (backupR2 < half && currentR2 >= half) return true;
+          if (backupR3 < half && currentR3 >= half) return true;
+        }
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Checks if notes changed significantly since backup:
+  /// 5 or more new notes, or 30%+ of previous notes edited.
+  static Future<bool> _hasNotesChanges(
+    Map<String, dynamic> backupData,
+    DateTime backupDate,
+  ) async {
+    final backedUpNotesList = backupData['notes'] as List?;
+    if (backedUpNotesList == null) return false;
+
+    int backupNoteCount = 0;
+    for (final entry in backedUpNotesList) {
+      final notes = (entry as Map<String, dynamic>)['notes'] as List?;
+      if (notes != null) backupNoteCount += notes.length;
+    }
+
+    try {
+      final database = PersonalNotesDatabase.instance;
+      final booksWithNotes = await database.listBooksWithNotes();
+
+      int currentNoteCount = 0;
+      int editedAfterBackup = 0;
+
+      for (final bookInfo in booksWithNotes) {
+        try {
+          final notes = await database.loadNotes(bookInfo.bookId);
+          currentNoteCount += notes.length;
+          editedAfterBackup +=
+              notes.where((n) => n.updatedAt.isAfter(backupDate)).length;
+        } catch (_) {}
+      }
+
+      // 5+ new notes
+      if (currentNoteCount - backupNoteCount >= 5) return true;
+
+      // 30%+ of previous notes edited
+      if (backupNoteCount > 0 &&
+          editedAfterBackup >= backupNoteCount * 0.3) {
+        return true;
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
+  /// Checks if bookmarks or history changed by more than half since backup (used after 1 week).
+  static Future<bool> _hasBookmarksHistoryChanges(
+      Map<String, dynamic> backupData) async {
+    final backedUpBookmarks = backupData['bookmarks'] as List?;
+    if (backedUpBookmarks != null) {
+      try {
+        final currentBookmarks = await BookmarkRepository().loadBookmarks();
+        final backupCount = backedUpBookmarks.length;
+        final currentCount = currentBookmarks.length;
+        final diff = (currentCount - backupCount).abs();
+        if (backupCount == 0 ? currentCount > 0 : diff > backupCount / 2) {
+          return true;
+        }
+      } catch (_) {}
+    }
+
+    final backedUpHistory = backupData['history'] as List?;
+    if (backedUpHistory != null) {
+      try {
+        final currentHistory = await HistoryRepository().loadHistory();
+        final backupCount = backedUpHistory.length;
+        final currentCount = currentHistory.length;
+        final diff = (currentCount - backupCount).abs();
+        if (backupCount == 0 ? currentCount > 0 : diff > backupCount / 2) {
+          return true;
+        }
+      } catch (_) {}
+    }
+
+    return false;
   }
 }

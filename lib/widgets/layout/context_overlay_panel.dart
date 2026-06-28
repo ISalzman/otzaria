@@ -31,6 +31,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/layout/floating_panel.dart';
+import 'package:otzaria/widgets/layout/panel_scrollable_content.dart';
 import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
 
 class ContextOverlayPanel extends StatefulWidget {
@@ -74,8 +75,16 @@ class ContextOverlayPanel extends StatefulWidget {
 
   /// כותרת אופציונלית שתוצג בראש הפאנל (headlineMedium, מודגש)
   ///
-  /// כשמוגדרת, `child` צריך להיות `Expanded(...)` כדי שהפריסה תעבוד נכון.
+  /// כשמוגדרת עם [scrollable]=false, `child` צריך להיות `Expanded(...)`.
+  /// כשמוגדרת עם [scrollable]=true, `child` הוא ה-content ישירות.
   final String? title;
+
+  /// האם לעטוף את [child] ב-[PanelScrollableContent] אוטומטית.
+  ///
+  /// כש-true: ה-Scrollbar יושב בתוך [contentPadding] הקיים (ללא תוספת),
+  /// והתוכן מקבל את ה-padding האופקי מבפנים.
+  /// כש-false (ברירת מחדל): ה-child אחראי לניהול הגלילה שלו.
+  final bool scrollable;
 
   const ContextOverlayPanel({
     super.key,
@@ -91,6 +100,7 @@ class ContextOverlayPanel extends StatefulWidget {
     this.minWidth = 200,
     this.maxWidth,
     this.title,
+    this.scrollable = false,
   });
 
   @override
@@ -174,11 +184,15 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
     });
   }
 
-  Widget _buildChildWithTitle(BuildContext context) {
+  Widget _buildChildWithTitle(BuildContext context, EdgeInsets horizontal) {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 8),
+          padding: EdgeInsets.only(
+            left: horizontal.left,
+            right: horizontal.right,
+            bottom: 8,
+          ),
           child: Center(
             child: Text(
               widget.title!,
@@ -191,6 +205,50 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
         ),
         widget.child,
       ],
+    );
+  }
+
+  /// בונה את אזור התוכן עם [PanelScrollableContent].
+  /// ה-padding האנכי נשאר בחוץ; האופקי עובר לתוך ה-ScrollView.
+  Widget _buildScrollableContent(BuildContext context) {
+    final resolved =
+        widget.contentPadding.resolve(Directionality.of(context));
+    final verticalPadding =
+        EdgeInsets.only(top: resolved.top, bottom: resolved.bottom);
+    final horizontalPadding =
+        EdgeInsets.only(left: resolved.left, right: resolved.right);
+
+    final scrollableChild = PanelScrollableContent(
+      padding: horizontalPadding,
+      child: widget.child,
+    );
+
+    return Padding(
+      padding: verticalPadding,
+      child: widget.title != null
+          ? Column(
+              children: [
+                // כותרת בלבד (ה-child עצמו יופיע בתוך PanelScrollableContent)
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: horizontalPadding.left,
+                    right: horizontalPadding.right,
+                    bottom: 8,
+                  ),
+                  child: Center(
+                    child: Text(
+                      widget.title!,
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                Expanded(child: scrollableChild),
+              ],
+            )
+          : scrollableChild,
     );
   }
 
@@ -243,14 +301,19 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
                   child: SizedBox(
                     width: _currentWidth,
                     child: SafeArea(
-                      child: Padding(
-                        padding: widget.contentPadding,
-                        child: _shouldBuildChild
-                            ? (widget.title != null
-                                ? _buildChildWithTitle(context)
-                                : widget.child)
-                            : const SizedBox.shrink(),
-                      ),
+                      child: widget.scrollable
+                          ? (_shouldBuildChild
+                              ? _buildScrollableContent(context)
+                              : const SizedBox.shrink())
+                          : Padding(
+                              padding: widget.contentPadding,
+                              child: _shouldBuildChild
+                                  ? (widget.title != null
+                                      ? _buildChildWithTitle(
+                                          context, EdgeInsets.zero)
+                                      : widget.child)
+                                  : const SizedBox.shrink(),
+                            ),
                     ),
                   ),
                 ),

@@ -80,11 +80,11 @@ class _CalendarPrintDialogState extends State<CalendarPrintDialog>
         ),
       ),
       actions: [
-        NeutralActionButton(
+        ActionButton.neutral(
           text: 'ביטול',
           onPressed: () => Navigator.of(context).pop(),
         ),
-        RecommendedActionButton(
+        ActionButton.recommended(
           text: 'הדפס',
           onPressed: () => Navigator.of(context).pop(_count),
         ),

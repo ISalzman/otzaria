@@ -16,13 +16,20 @@ import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
+import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
 import 'package:mockito/mockito.dart';
 // ignore: depend_on_referenced_packages
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+
+class _FakeSettingsRepository extends Fake implements SettingsRepository {
+  @override
+  bool hasProtectedModePassword() => false;
+}
 
 class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
     implements SettingsBloc {
@@ -65,7 +72,7 @@ InstalledPlugin _pluginFor({
   required String id,
   required String name,
   bool networkEnabled = false,
-  bool hiddenFromTools = false,
+  bool showInTools = true,
 }) {
   return InstalledPlugin(
     pluginId: id,
@@ -75,7 +82,7 @@ InstalledPlugin _pluginFor({
     entrypointPath: '/tmp/$id/index.html',
     enabled: true,
     pinned: true,
-    hiddenFromTools: hiddenFromTools,
+    showInTools: showInTools,
     manifest: _manifestFor(
       id: id,
       name: name,
@@ -101,15 +108,18 @@ Widget _wrap({
   required SettingsBloc settingsBloc,
   bool showDevTools = true,
 }) {
-  return MaterialApp(
-    navigatorKey: navigatorKey,
-    home: Scaffold(
-      body: MultiBlocProvider(
-        providers: [
-          BlocProvider<PluginSystemBloc>.value(value: pluginBloc),
-          BlocProvider<SettingsBloc>.value(value: settingsBloc),
-        ],
-        child: PluginSidePanel(showDevTools: showDevTools),
+  return Provider<SettingsRepository>.value(
+    value: _FakeSettingsRepository(),
+    child: MaterialApp(
+      navigatorKey: navigatorKey,
+      home: Scaffold(
+        body: MultiBlocProvider(
+          providers: [
+            BlocProvider<PluginSystemBloc>.value(value: pluginBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: PluginSidePanel(showDevTools: showDevTools),
+        ),
       ),
     ),
   );
@@ -376,14 +386,14 @@ void main() {
     });
   });
 
-  group('סינון "מוסתר מהממשק"', () {
+  group('showInTools — פאנל הצד מציג את כל התוספים הפעילים', () {
     testWidgets(
-        'תוסף עם hiddenFromTools=true לא מופיע בפאנל הצד גם כשהוא enabled',
+        'תוסף עם showInTools=false עדיין מופיע בפאנל הצד כי ה-side panel מציג הכל',
         (tester) async {
       final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
         _pluginFor(id: 'visible.plugin', name: 'תוסף גלוי'),
         _pluginFor(
-            id: 'hidden.plugin', name: 'תוסף מוסתר', hiddenFromTools: true),
+            id: 'hidden.plugin', name: 'תוסף לא בכלים', showInTools: false),
       ]));
       addTearDown(pluginBloc.close);
 
@@ -394,27 +404,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('תוסף גלוי'), findsOneWidget);
-      expect(find.text('תוסף מוסתר'), findsNothing,
-          reason: 'hiddenFromTools must remove the plugin from the side panel '
-              '(P1 bug: previously the panel called state.plugins instead '
-              'of state.visiblePlugins).');
-    });
-
-    testWidgets('כשכל התוספים מוסתרים מציג הודעת empty state ייעודית',
-        (tester) async {
-      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(id: 'h1', name: 'תוסף אחד', hiddenFromTools: true),
-        _pluginFor(id: 'h2', name: 'תוסף שני', hiddenFromTools: true),
-      ]));
-      addTearDown(pluginBloc.close);
-
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(),
-      ));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('הוסתרו מההגדרות'), findsOneWidget);
+      expect(find.text('תוסף לא בכלים'), findsOneWidget,
+          reason: 'showInTools only hides from tools screen, not from side panel');
     });
   });
 
@@ -453,45 +444,6 @@ void main() {
   });
 
   group('Reorder UI', () {
-    testWidgets('drag handle is shown for each plugin row', (tester) async {
-      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(id: 'a', name: 'A'),
-        _pluginFor(id: 'b', name: 'B'),
-      ]));
-      addTearDown(pluginBloc.close);
-
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(),
-      ));
-      await tester.pumpAndSettle();
-
-      // לכל תוסף יש drag handle נפרד.
-      expect(find.byIcon(FluentIcons.re_order_dots_vertical_24_regular),
-          findsNWidgets(2));
-    });
-
-    testWidgets(
-        'drag handle exposes a "גרור ושחרר" tooltip so the user knows '
-        'what the icon does', (tester) async {
-      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(id: 'a', name: 'A'),
-      ]));
-      addTearDown(pluginBloc.close);
-
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(),
-      ));
-      await tester.pumpAndSettle();
-
-      // ה-Tooltip נטען בעץ — אנחנו מחפשים את ההודעה שלו ישירות.
-      final tooltipFinder = find.byWidgetPredicate(
-        (w) => w is Tooltip && w.message == 'גרור ושחרר לסידור מחדש',
-      );
-      expect(tooltipFinder, findsAtLeastNWidgets(1));
-    });
-
     testWidgets(
         'mounting inside a LayoutBuilder ancestor does not crash — '
         'regression for the _RenderLayoutBuilder mutation assert and the '
@@ -538,171 +490,5 @@ void main() {
       expect(find.text('C'), findsOneWidget);
     });
 
-    testWidgets(
-        'dragging plugin A onto plugin C dispatches ReorderPluginsRequested '
-        'with the new order [B, C, A]', (tester) async {
-      final repo = _ReorderingFakeRepository();
-      final bloc = PluginSystemBloc(repository: repo);
-      addTearDown(bloc.close);
-
-      // טוענים תוספים A, B, C ומחכים שה-Loaded יתפרסם.
-      repo.plugins = [
-        _pluginFor(id: 'a', name: 'A'),
-        _pluginFor(id: 'b', name: 'B'),
-        _pluginFor(id: 'c', name: 'C'),
-      ];
-      bloc.add(LoadPlugins());
-
-      await tester.pumpWidget(_wrap(
-        pluginBloc: bloc,
-        settingsBloc: _FakeSettingsBloc(),
-        showDevTools: false,
-      ));
-      await tester.pumpAndSettle();
-
-      // מאתרים את ה-drag handles ומבצעים גרירה מ-A אל C.
-      final handles =
-          find.byIcon(FluentIcons.re_order_dots_vertical_24_regular);
-      expect(handles, findsNWidgets(3));
-
-      final handleA = handles.at(0);
-      final handleC = handles.at(2);
-      final centerC = tester.getCenter(handleC);
-
-      final gesture = await tester.startGesture(tester.getCenter(handleA));
-      // pump לפני התזוזה כדי שהדיווח של Draggable יתחיל
-      await tester.pump(const Duration(milliseconds: 100));
-      await gesture.moveTo(centerC);
-      await tester.pump(const Duration(milliseconds: 100));
-      await gesture.up();
-      // לא משתמשים ב-pumpAndSettle כי ה-Tooltip על drag handle מציג
-      // fade-out animation עם showDuration ארוך שגורם ל-pumpAndSettle
-      // להישאר תקוע. די בכמה pumps כדי לתת ל-Bloc dispatch להסתיים.
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.pump(const Duration(milliseconds: 50));
-
-      // ה-repository קיבל קריאה ל-reorder עם הסדר החדש.
-      expect(repo.reorderCalls, isNotEmpty,
-          reason: 'drag-and-drop should trigger reorderPlugins');
-      // A נגרר על C — A צריך להגיע אחרי B במיקום של C.
-      expect(repo.reorderCalls.last, ['b', 'c', 'a']);
-    });
-
-    testWidgets('dropping a plugin onto itself does not call reorder',
-        (tester) async {
-      final repo = _ReorderingFakeRepository();
-      final bloc = PluginSystemBloc(repository: repo);
-      addTearDown(bloc.close);
-
-      repo.plugins = [
-        _pluginFor(id: 'a', name: 'A'),
-        _pluginFor(id: 'b', name: 'B'),
-      ];
-      bloc.add(LoadPlugins());
-
-      await tester.pumpWidget(_wrap(
-        pluginBloc: bloc,
-        settingsBloc: _FakeSettingsBloc(),
-        showDevTools: false,
-      ));
-      await tester.pumpAndSettle();
-
-      final handles =
-          find.byIcon(FluentIcons.re_order_dots_vertical_24_regular);
-      final handleA = handles.at(0);
-      final centerA = tester.getCenter(handleA);
-
-      final gesture = await tester.startGesture(centerA);
-      await tester.pump(const Duration(milliseconds: 100));
-      // תזוזה מינימלית כדי להפעיל את Draggable, אבל לשחרר באותו פריט.
-      await gesture.moveBy(const Offset(5, 5));
-      await tester.pump(const Duration(milliseconds: 100));
-      await gesture.up();
-      // ראו ההסבר על Tooltip+pumpAndSettle בטסט שלפני.
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.pump(const Duration(milliseconds: 50));
-
-      expect(repo.reorderCalls, isEmpty,
-          reason: 'self-drop must be a no-op (DragTarget rejects own data)');
-    });
-
-    testWidgets(
-        'offline reorder preserves the relative position of hidden plugins — '
-        'the bloc receives ALL plugin ids including the cloud one that is '
-        'not visible on screen', (tester) async {
-      final repo = _ReorderingFakeRepository();
-      final bloc = PluginSystemBloc(repository: repo);
-      addTearDown(bloc.close);
-
-      // a (local), b (cloud-only — hidden when offline), c (local)
-      repo.plugins = [
-        _pluginFor(id: 'a', name: 'A'),
-        _pluginFor(id: 'b', name: 'B', networkEnabled: true),
-        _pluginFor(id: 'c', name: 'C'),
-      ];
-      bloc.add(LoadPlugins());
-
-      await tester.pumpWidget(_wrap(
-        pluginBloc: bloc,
-        settingsBloc: _FakeSettingsBloc(isOfflineMode: true),
-        showDevTools: false,
-      ));
-      await tester.pumpAndSettle();
-
-      // המשתמש רואה רק [a, c] במצב מנותק.
-      expect(find.text('A'), findsOneWidget);
-      expect(find.text('B'), findsNothing);
-      expect(find.text('C'), findsOneWidget);
-
-      // יש 2 drag handles — אחד ל-A ואחד ל-C.
-      final handles =
-          find.byIcon(FluentIcons.re_order_dots_vertical_24_regular);
-      expect(handles, findsNWidgets(2));
-
-      // גוררים את A (handle 0, מבין הגלויים) אל C (handle 1).
-      final handleA = handles.at(0);
-      final handleC = handles.at(1);
-      final centerC = tester.getCenter(handleC);
-
-      final gesture = await tester.startGesture(tester.getCenter(handleA));
-      await tester.pump(const Duration(milliseconds: 100));
-      await gesture.moveTo(centerC);
-      await tester.pump(const Duration(milliseconds: 100));
-      await gesture.up();
-      // ראו ההסבר על Tooltip+pumpAndSettle בטסט הראשון של Reorder UI.
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.pump(const Duration(milliseconds: 50));
-
-      expect(repo.reorderCalls, isNotEmpty);
-      // הקריטריון הקריטי: גם 'b' המוסתר חייב להיות ברשימה שנשלחת
-      // ל-reorder, אחרת user_order שלו יישאר ישן ויגרום לכפילויות.
-      expect(repo.reorderCalls.last, contains('b'),
-          reason:
-              'reorder under offline mode must still include hidden plugins '
-              'in the ordering vector — otherwise their user_order stays '
-              'stale and breaks ordering when going back online');
-      // הסדר הצפוי: A הוסר ממיקום 0, הוכנס במיקום של C (היה 2).
-      // אחרי remove: [b, c]; insert(2, a) → [b, c, a].
-      expect(repo.reorderCalls.last, ['b', 'c', 'a']);
-    });
   });
-}
-
-/// Fake repository ש"מאחסן" תוספים בזיכרון ומיישם reorderPlugins כדי
-/// שהזרימה bloc→repository→bloc תעבוד בטסט.
-class _ReorderingFakeRepository extends FakePluginRegistryRepository {
-  final List<List<String>> reorderCalls = [];
-
-  @override
-  Future<void> reorderPlugins(List<String> orderedPluginIds) async {
-    reorderCalls.add(List.of(orderedPluginIds));
-    final byId = {for (final p in plugins) p.pluginId: p};
-    plugins = [
-      for (final id in orderedPluginIds)
-        if (byId.containsKey(id)) byId[id]!,
-    ];
-  }
 }

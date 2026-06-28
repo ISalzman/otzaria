@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart'
     hide SettingsGroup, SwitchSettingsTile;
@@ -12,6 +13,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 // import 'package:path/path.dart' as p;
 // import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
@@ -38,13 +40,16 @@ import 'package:otzaria/widgets/dialogs/selection_dialog.dart';
 import 'package:otzaria/widgets/dialogs/error_report_sender_email_dialog.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
+import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:otzaria/settings/dialogs/change_location_dialog.dart';
 
 /// טאב "אוצריא" — גרסאות, נתיב ספרייה, גיבוי, מצב סייפר, איפוס.
 class SystemSettingsTab extends StatefulWidget {
@@ -212,14 +217,15 @@ class SystemSettingsTab extends StatefulWidget {
       cardId: 'system.advanced',
       keywords: ['גיבוי', 'שמור וזכור', 'מעקב לימוד'],
     ),
-    SettingsSearchEntry(
-      id: 'system.advanced.backup.user_overrides',
-      title: 'גיבוי הגדרות מתקדמות',
-      subtitle: 'הגדרות נוספות שדרסת',
-      tab: SettingsTab.system,
-      cardId: 'system.advanced',
-      keywords: ['גיבוי', 'הגדרות מתקדמות', 'overrides'],
-    ),
+    // [EDITING DISABLED]
+    // SettingsSearchEntry(
+    //   id: 'system.advanced.backup.user_overrides',
+    //   title: 'גיבוי הגדרות מתקדמות',
+    //   subtitle: 'הגדרות נוספות שדרסת',
+    //   tab: SettingsTab.system,
+    //   cardId: 'system.advanced',
+    //   keywords: ['גיבוי', 'הגדרות מתקדמות', 'overrides'],
+    // ),
     SettingsSearchEntry(
       id: 'system.advanced.backup.create',
       title: 'צור גיבוי עכשיו',
@@ -293,7 +299,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   static const _keyBackupNotes = 'key-backup-notes';
   static const _keyBackupWorkspaces = 'key-backup-workspaces';
   static const _keyBackupShamorZachor = 'key-backup-shamor-zachor';
-  static const _keyBackupUserOverrides = 'key-backup-user-overrides';
+  // [EDITING DISABLED] static const _keyBackupUserOverrides = 'key-backup-user-overrides';
   static const _keyBackupPlugins = 'key-backup-plugins';
   static const _keyAutoBackupFrequency = 'key-auto-backup-frequency';
 
@@ -304,6 +310,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   // ── גיבוי (expandable) ─────────────────────────────────────────────────────
   bool _isBackupExpanded = false;
+  BackupStatus? _backupStatus;
 
   // ── גרסאות ────────────────────────────────────────────────────────────────
   String? _appVersion;
@@ -314,13 +321,28 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   bool _isExportingPendingReports = false;
   bool _isClearingSentReports = false;
   bool _isPendingReportsExpanded = false;
+  static const _backupFolderName = 'תיקיית גיבוי';
+
   bool _isSentReportsExpanded = false;
   String? _sendingPendingReportId;
+  String _resolvedBackupPath = '';
+  String _defaultBackupPath = '';
 
   @override
   void initState() {
     super.initState();
     _loadVersionInfo();
+    _loadBackupStatus();
+    _loadResolvedBackupPath();
+    AppPaths.getDefaultBackupPath().then((p) {
+      if (mounted) setState(() => _defaultBackupPath = p);
+    });
+  }
+
+  void _loadResolvedBackupPath() {
+    AppPaths.getBackupPath().then((path) {
+      if (mounted) setState(() => _resolvedBackupPath = path);
+    });
   }
 
   @override
@@ -351,6 +373,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     });
   }
 
+  Future<void> _loadBackupStatus() async {
+    final status = await BackupService.analyzeBackupStatus();
+    if (!mounted) return;
+    setState(() => _backupStatus = status);
+  }
+
   Future<void> _openBooksListDialog(BuildContext context) async {
     try {
       final library = await DataRepository.instance.library;
@@ -363,6 +391,31 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       if (!mounted) return;
       UiSnack.showError('שגיאה בטעינת רשימת הספרים: $e');
     }
+  }
+
+  Widget? _buildBackupSubtitle() {
+    final status = _backupStatus;
+    if (status == null) return null;
+
+    if (status.lastBackupDate == null) {
+      return const Text(
+        'לא נמצא קובץ גיבוי במערכת. מומלץ ליצור גיבוי כדי לשמור על הנתונים שלך.',
+      );
+    }
+
+    final d = status.lastBackupDate!;
+    final dateStr = getHebrewDateFormattedAsString(d);
+    final timeStr =
+        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+    if (!status.hasSignificantChanges) {
+      return Text(
+        'הנתונים שמורים. הגיבוי האחרון נוצר ב$dateStr בשעה $timeStr.',
+      );
+    }
+    return Text(
+      'הגיבוי האחרון מ-$dateStr. ואינו מעודכן, מומלץ ליצור גיבוי ולהגדיר מצב שבועי.',
+    );
   }
 
   bool _shouldInclude(String key) =>
@@ -812,8 +865,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       children: [
         KeyedSubtree(
           key: _networkModeTileKey,
-          child: SegmentedSettingsTile<bool>(
-            icon: Icon(FluentIcons.globe_24_regular),
+          child: SettingsActionTile.segmentedTile<bool>(
+            icon: FluentIcons.globe_24_regular,
             title: 'סינכרון ומצב רשת',
             subtitle: state.isOfflineMode
                 ? 'התוכנה מנותקת לגמרי מהרשת'
@@ -845,7 +898,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             },
           ),
         ),
-        SwitchSettingsTile.text(
+        SettingsActionTile.switchTile(
           icon: FluentIcons.arrow_download_24_regular,
           title: 'עדכוני תוכנה וספרים',
           subtitle: state.isOfflineMode
@@ -865,7 +918,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
         if (!(Platform.isAndroid || Platform.isIOS) &&
             state.canUseSoftwareAndBookUpdates) ...[
-          SwitchSettingsTile.text(
+          SettingsActionTile.switchTile(
             icon: FluentIcons.arrow_sync_24_regular,
             title: 'סינכרון הספרייה באופן אוטומטי',
             subtitle: (Settings.getValue<bool>(
@@ -880,7 +933,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               setState(() {});
             },
           ),
-          SwitchSettingsTile.text(
+          SettingsActionTile.switchTile(
             icon: FluentIcons.beaker_24_regular,
             title: 'עדכון לגרסאות מפתחים',
             subtitle:
@@ -917,17 +970,17 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           subtitleLtr: senderEmail.isNotEmpty,
           actions: [
             if (senderEmail.isNotEmpty)
-              NeutralActionButton(
+              ActionButton.neutral(
                 text: 'נקה',
                 onPressed: _clearSenderEmail,
               ),
-            RecommendedActionButton(
+            ActionButton.recommended(
               text: senderEmail.isEmpty ? 'הגדר' : 'ערוך',
               onPressed: _editSenderEmail,
             ),
           ],
         ),
-        SwitchSettingsTile.text(
+        SettingsActionTile.switchTile(
           icon: FluentIcons.cloud_arrow_up_24_regular,
           title: 'שמירת דיווחים אוטומטית כשאין חיבור',
           subtitle: queueWhenOffline
@@ -940,201 +993,161 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             setState(() {});
           },
         ),
-        FutureBuilder<List<List<DirectErrorReport>>>(
-          future: Future.wait([
-            reportService.getPendingReports(),
-            reportService.getSentReports(),
-          ]),
+        FutureBuilder<List<DirectErrorReport>>(
+          future: reportService.getPendingReports(),
           builder: (context, snapshot) {
-            final pendingReports =
-                snapshot.data?.first ?? const <DirectErrorReport>[];
-            final sentReports =
-                snapshot.data?.last ?? const <DirectErrorReport>[];
+            final pendingReports = snapshot.data ?? const <DirectErrorReport>[];
             final pendingCount = pendingReports.length;
             final hasReports = pendingCount > 0;
 
-            return Column(
+            return ExpandableSection(
+              icon: FluentIcons.task_list_ltr_24_regular,
+              title: const Text('ניהול דיווחים שמורים'),
+              subtitle: Text(
+                pendingCount == 0
+                    ? 'אין כרגע דיווחים שמורים בתור'
+                    : 'יש כרגע $pendingCount דיווחים שמורים בתור',
+              ),
+              hasContent: hasReports,
+              onTap: () => setState(
+                () => _isPendingReportsExpanded = !_isPendingReportsExpanded,
+              ),
+              isExpanded: _isPendingReportsExpanded,
               children: [
-                ListTile(
-                  leading: const Icon(FluentIcons.task_list_ltr_24_regular),
-                  title: const Text(
-                    'ניהול דיווחים שמורים',
-                    style: kSettingsTitleStyle,
-                  ),
-                  subtitle: Text(
-                    pendingCount == 0
-                        ? 'אין כרגע דיווחים שמורים בתור'
-                        : 'יש כרגע $pendingCount דיווחים שמורים בתור',
-                    style: kSettingsSubtitleStyle,
-                  ),
-                  trailing: Icon(
-                    _isPendingReportsExpanded
-                        ? FluentIcons.chevron_up_24_regular
-                        : FluentIcons.chevron_down_24_regular,
-                  ),
-                  onTap: () => setState(
-                    () =>
-                        _isPendingReportsExpanded = !_isPendingReportsExpanded,
-                  ),
-                ),
-                AnimatedSize(
-                  duration: AppTokens.animNormal,
-                  curve: Curves.easeInOut,
-                  child: _isPendingReportsExpanded
-                      ? Column(
-                          children: [
-                            if (hasReports)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  right: 16,
-                                  left: 16,
-                                  top: 8,
-                                  bottom: 16,
-                                ),
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final isNarrow = constraints.maxWidth <
-                                        LayoutBreakpoints.compact;
-                                    final sendButton =
-                                        _buildManagedActionButton(
-                                      enabled: !state.isOfflineMode,
-                                      child: RecommendedActionButton(
-                                        text: 'שלח עכשיו',
-                                        icon: FluentIcons.arrow_sync_24_regular,
-                                        onPressed: _flushPendingReports,
-                                        isLoading: _isFlushingPendingReports,
-                                      ),
-                                    );
-                                    final clearButton =
-                                        _buildManagedActionButton(
-                                      enabled: hasReports,
-                                      child: NeutralActionButton(
-                                        text: 'נקה דיווחים',
-                                        icon: FluentIcons.delete_24_regular,
-                                        onPressed: _clearPendingReports,
-                                        isLoading: _isClearingPendingReports,
-                                      ),
-                                    );
-                                    final exportButton =
-                                        _buildManagedActionButton(
-                                      enabled: hasReports,
-                                      child: NeutralActionButton(
-                                        text: 'הורד לשליחה במחשב מחובר',
-                                        icon: FluentIcons
-                                            .arrow_download_24_regular,
-                                        onPressed: _exportPendingReportsScript,
-                                        isLoading: _isExportingPendingReports,
-                                      ),
-                                    );
+                if (hasReports)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      right: 16,
+                      left: 16,
+                      top: 8,
+                      bottom: 16,
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isNarrow =
+                            constraints.maxWidth < LayoutBreakpoints.compact;
+                        final sendButton = _buildManagedActionButton(
+                          enabled: !state.isOfflineMode,
+                          child: ActionButton.recommended(
+                            text: 'שלח עכשיו',
+                            icon: FluentIcons.arrow_sync_24_regular,
+                            onPressed: _flushPendingReports,
+                            isLoading: _isFlushingPendingReports,
+                          ),
+                        );
+                        final clearButton = _buildManagedActionButton(
+                          enabled: hasReports,
+                          child: ActionButton.neutral(
+                            text: 'נקה דיווחים',
+                            icon: FluentIcons.delete_24_regular,
+                            onPressed: _clearPendingReports,
+                            isLoading: _isClearingPendingReports,
+                          ),
+                        );
+                        final exportButton = _buildManagedActionButton(
+                          enabled: hasReports,
+                          child: ActionButton.neutral(
+                            text: 'הורד לשליחה במחשב מחובר',
+                            icon: FluentIcons.arrow_download_24_regular,
+                            onPressed: _exportPendingReportsScript,
+                            isLoading: _isExportingPendingReports,
+                          ),
+                        );
 
-                                    if (isNarrow) {
-                                      return Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          sendButton,
-                                          const SizedBox(height: 8),
-                                          clearButton,
-                                          const SizedBox(height: 8),
-                                          exportButton,
-                                        ],
-                                      );
-                                    }
+                        if (isNarrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              sendButton,
+                              const SizedBox(height: 8),
+                              clearButton,
+                              const SizedBox(height: 8),
+                              exportButton,
+                            ],
+                          );
+                        }
 
-                                    return Row(
-                                      children: [
-                                        Expanded(child: sendButton),
-                                        const SizedBox(width: 12),
-                                        Expanded(child: clearButton),
-                                        const SizedBox(width: 12),
-                                        Expanded(child: exportButton),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ),
-                            if (state.isOfflineMode)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  right: 16,
-                                  left: 16,
-                                  bottom: 16,
-                                ),
-                                child: Text(
-                                  'במצב מנותק אי אפשר לשלוח כעת, אך ניתן להוריד סקריפט לשליחה ממחשב מחובר.',
-                                  style: kSettingsSubtitleStyle,
-                                ),
-                              ),
-                            if (pendingReports.isNotEmpty)
-                              ...pendingReports.map(
-                                (report) => _buildPendingReportTile(
-                                  context,
-                                  report,
-                                  canSend: !state.isOfflineMode,
-                                ),
-                              ),
-                          ],
-                        )
-                      : const SizedBox.shrink(),
-                ),
-                ListTile(
-                  leading: const Icon(FluentIcons.checkmark_circle_24_regular),
-                  title: const Text(
-                    'דיווחים שנשלחו',
-                    style: kSettingsTitleStyle,
-                  ),
-                  subtitle: Text(
-                    sentReports.isEmpty
-                        ? 'עדיין אין דיווחים שנשלחו דרך המערכת'
-                        : 'נשמרו ${sentReports.length} דיווחים שנשלחו',
-                    style: kSettingsSubtitleStyle,
-                  ),
-                  trailing: Icon(
-                    _isSentReportsExpanded
-                        ? FluentIcons.chevron_up_24_regular
-                        : FluentIcons.chevron_down_24_regular,
-                  ),
-                  onTap: () => setState(
-                    () => _isSentReportsExpanded = !_isSentReportsExpanded,
-                  ),
-                ),
-                AnimatedSize(
-                  duration: AppTokens.animNormal,
-                  curve: Curves.easeInOut,
-                  child: _isSentReportsExpanded
-                      ? Column(
+                        return Row(
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                right: 16,
-                                left: 16,
-                                bottom: 16,
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildManagedActionButton(
-                                      enabled: sentReports.isNotEmpty,
-                                      child: NeutralActionButton(
-                                        text: 'נקה את כל ההיסטוריה',
-                                        icon: FluentIcons.delete_24_regular,
-                                        onPressed: _clearSentReports,
-                                        isLoading: _isClearingSentReports,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (sentReports.isNotEmpty)
-                              ...sentReports.map(
-                                (report) =>
-                                    _buildSentReportTile(context, report),
-                              ),
+                            Expanded(child: sendButton),
+                            const SizedBox(width: 12),
+                            Expanded(child: clearButton),
+                            const SizedBox(width: 12),
+                            Expanded(child: exportButton),
                           ],
-                        )
-                      : const SizedBox.shrink(),
+                        );
+                      },
+                    ),
+                  ),
+                if (state.isOfflineMode)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      right: 16,
+                      left: 16,
+                      bottom: 16,
+                    ),
+                    child: Text(
+                      'במצב מנותק אי אפשר לשלוח כעת, אך ניתן להוריד סקריפט לשליחה ממחשב מחובר.',
+                      style: kSettingsSubtitleStyle,
+                    ),
+                  ),
+                if (pendingReports.isNotEmpty)
+                  ...pendingReports.map(
+                    (report) => _buildPendingReportTile(
+                      context,
+                      report,
+                      canSend: !state.isOfflineMode,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+        FutureBuilder<List<DirectErrorReport>>(
+          future: reportService.getSentReports(),
+          builder: (context, snapshot) {
+            final sentReports = snapshot.data ?? const <DirectErrorReport>[];
+
+            return ExpandableSection(
+              icon: FluentIcons.checkmark_circle_24_regular,
+              title: const Text('דיווחים שנשלחו'),
+              hasContent: sentReports.isNotEmpty,
+              subtitle: Text(
+                sentReports.isEmpty
+                    ? 'עדיין אין דיווחים שנשלחו דרך המערכת'
+                    : 'נשמרו ${sentReports.length} דיווחים שנשלחו',
+              ),
+              onTap: () => setState(
+                () => _isSentReportsExpanded = !_isSentReportsExpanded,
+              ),
+              isExpanded: _isSentReportsExpanded,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(
+                    right: 16,
+                    left: 16,
+                    bottom: 16,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildManagedActionButton(
+                          enabled: sentReports.isNotEmpty,
+                          child: ActionButton.neutral(
+                            text: 'נקה את כל ההיסטוריה',
+                            icon: FluentIcons.delete_24_regular,
+                            onPressed: _clearSentReports,
+                            isLoading: _isClearingSentReports,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                if (sentReports.isNotEmpty)
+                  ...sentReports.map(
+                    (report) => _buildSentReportTile(context, report),
+                  ),
               ],
             );
           },
@@ -1166,29 +1179,29 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
         _buildReportActions(
           children: [
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'צפה',
               icon: FluentIcons.eye_24_regular,
               onPressed: () => _showReportDetails(report, sent: false),
             ),
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'ערוך',
               icon: FluentIcons.edit_24_regular,
               onPressed: () => _editPendingReport(report),
             ),
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'מחק',
               icon: FluentIcons.delete_24_regular,
               onPressed: () => _deletePendingReport(report),
             ),
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'סמן כנשלח',
               icon: FluentIcons.checkmark_24_regular,
               onPressed: () => _markPendingReportAsSent(report),
             ),
             _buildManagedActionButton(
               enabled: canSend,
-              child: RecommendedActionButton(
+              child: ActionButton.recommended(
                 text: 'שלח',
                 icon: FluentIcons.send_24_regular,
                 isLoading: isSending,
@@ -1219,12 +1232,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
         _buildReportActions(
           children: [
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'צפה',
               icon: FluentIcons.eye_24_regular,
               onPressed: () => _showReportDetails(report, sent: true),
             ),
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'מחק',
               icon: FluentIcons.delete_24_regular,
               onPressed: () => _deleteSentReport(report),
@@ -1261,65 +1274,43 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     return SettingsCard(
       title: 'מערכת אוצריא',
       children: [
-        ListTile(
-          leading: const Icon(FluentIcons.info_24_regular),
-          title: const Text(
-            'גרסת תוכנה',
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: Text(
-            _appVersion ?? 'טוען...',
-            style: kSettingsSubtitleStyle,
-            // ltr בתוך RTL מצמיד לשמאל - יישור ימינה משאיר את הערך מתחת לכותרת
-            textAlign: TextAlign.right,
-            textDirection: _appVersion == null ? null : TextDirection.ltr,
-          ),
-          trailing: TextButton.icon(
-            icon: const Icon(FluentIcons.history_24_regular, size: 16),
-            label: const Text('יומן שינויים'),
-            onPressed: () => _showChangelogDialog(context),
-          ),
+        SettingsActionTile.text(
+          icon: FluentIcons.info_24_regular,
+          title: 'גרסת תוכנה',
+          subtitle: _appVersion ?? 'טוען...',
+          subtitleLtr: _appVersion != null,
+          actions: [
+            ActionButton.ghost(
+              icon: FluentIcons.history_24_regular,
+              text: 'יומן שינויים',
+              onPressed: () => _showChangelogDialog(context),
+            ),
+          ],
         ),
-        ListTile(
-          leading: const Icon(FluentIcons.library_24_regular),
-          title: const Text(
-            'גרסת ספרייה',
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: Text(
-            _libraryVersion ?? 'טוען...',
-            style: kSettingsSubtitleStyle,
-            textAlign: TextAlign.right,
-            // 'לא ידוע' הוא עברית - ltr רק כשמדובר במספר גרסה אמיתי
-            textDirection:
-                _libraryVersion == null || _libraryVersion == 'לא ידוע'
-                    ? null
-                    : TextDirection.ltr,
-          ),
+        SettingsActionTile.text(
+          icon: FluentIcons.library_24_regular,
+          title: 'גרסת ספרייה',
+          subtitle: _libraryVersion ?? 'טוען...',
+          subtitleLtr: _libraryVersion != null && _libraryVersion != 'לא ידוע',
+          actions: const [],
           // trailing: TextButton.icon(
           //   icon: const Icon(FluentIcons.history_24_regular, size: 16),
           //   label: const Text('יומן שינויים'),
           //   onPressed: () => _showLibraryChangelogDialog(context),
           // ),
         ),
-        ListTile(
-          hoverColor: Colors.transparent,
-          leading: const Icon(FluentIcons.book_24_regular),
-          title: const Text(
-            'מספר ספרים',
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: Text(
-            _bookCount != null ? '${_bookCount!} ספרים' : 'טוען...',
-            style: kSettingsSubtitleStyle,
-          ),
-          trailing: _bookCount == null
-              ? null
-              : TextButton.icon(
-                  icon: const Icon(FluentIcons.list_24_regular, size: 16),
-                  label: const Text('הצג רשימה'),
-                  onPressed: () => _openBooksListDialog(context),
-                ),
+        SettingsActionTile.text(
+          icon: FluentIcons.book_24_regular,
+          title: 'מספר ספרים',
+          subtitle: _bookCount != null ? '${_bookCount!} ספרים' : 'טוען...',
+          actions: [
+            if (_bookCount != null)
+              ActionButton.ghost(
+                icon: FluentIcons.list_24_regular,
+                text: 'הצג רשימה',
+                onPressed: () => _openBooksListDialog(context),
+              ),
+          ],
         ),
       ],
     );
@@ -1361,7 +1352,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         includeNotes: _shouldInclude(_keyBackupNotes),
         includeWorkspaces: _shouldInclude(_keyBackupWorkspaces),
         includeShamorZachor: _shouldInclude(_keyBackupShamorZachor),
-        includeUserOverrides: _shouldInclude(_keyBackupUserOverrides),
+        // [EDITING DISABLED] includeUserOverrides: _shouldInclude(_keyBackupUserOverrides),
         includePlugins: _shouldInclude(_keyBackupPlugins),
       );
       if (!mounted) return;
@@ -1371,6 +1362,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       final size = exists ? await file.length() : 0;
       if (!mounted) return;
       if (exists) {
+        _loadBackupStatus();
         final partial = result.skippedSections.isNotEmpty;
         final sizeStr = '${(size / 1024).toStringAsFixed(1)} KB';
         final message = partial
@@ -1495,7 +1487,19 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       ),
     );
     if (result == true && context.mounted && !hasExistingPassword) {
-      context.read<SettingsBloc>().add(const UpdateProtectedModeEnabled(true));
+      final activate = await showTwoActionsDialog(
+        context: context,
+        title: 'הפעלת מצב סייפר',
+        content: 'האם להפעיל כעת את מצב הסייפר?\n'
+            'ניתן להפעיל ולבטל אותו מאוחר יותר דרך ההגדרות.',
+        cancelText: 'לא עכשיו',
+        confirmText: 'הפעל',
+      );
+      if (activate == true && context.mounted) {
+        context
+            .read<SettingsBloc>()
+            .add(const UpdateProtectedModeEnabled(true));
+      }
     }
   }
 
@@ -1513,270 +1517,229 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       title: 'מתקדם',
       children: [
         // ── גיבוי אוטומטי ──
-        // שורה ראשית — לחיצה פותחת/סוגרת
-        KeyedSubtree(
-          key: tourBackupSettingsTargetKey,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              const frequencyOptions = [
-                SegmentOption<String>(value: 'none', label: 'ללא'),
-                SegmentOption<String>(value: 'weekly', label: 'שבועי'),
-                SegmentOption<String>(value: 'monthly', label: 'חודשי'),
-              ];
-              final segmentControl = AppSegmentedControl<String>(
-                options: frequencyOptions,
-                currentValue: autoFrequency,
-                onChanged: (value) {
-                  Settings.setValue<String>(_keyAutoBackupFrequency, value);
-                  setState(() {});
+        ExpandableSection(
+          headerKey: tourBackupSettingsTargetKey,
+          icon: FluentIcons.calendar_clock_24_regular,
+          title: const Text('גיבוי הגדרות ונתונים אישיים'),
+          subtitle: _buildBackupSubtitle(),
+          onTap: () => setState(() => _isBackupExpanded = !_isBackupExpanded),
+          isExpanded: _isBackupExpanded,
+          children: [
+            SettingsActionTile.pathTile(
+              icon: FluentIcons.folder_24_regular,
+              title: 'תיקיית גיבוי',
+              currentPath: _resolvedBackupPath,
+              placeholder: 'שימוש בתיקיית ברירת המחדל',
+              simpleButtonWhenEmpty: false,
+              clearPathEnabled: (Settings.getValue<String>(
+                          SettingsRepository.keyBackupPath) ??
+                      '')
+                  .isNotEmpty,
+              onFolderChanged: (path) async {
+                Settings.setValue<String>(
+                    SettingsRepository.keyBackupPath, path);
+                _loadResolvedBackupPath();
+              },
+              requestChangeLocation: makeChangeLocationCallback(
+                currentPath: _resolvedBackupPath,
+                folderName: _backupFolderName,
+                onPathChanged: (newPath) async {
+                  Settings.setValue<String>(
+                      SettingsRepository.keyBackupPath, newPath);
+                  _loadResolvedBackupPath();
                 },
-              );
-              final totalW = segmentGroupWidth(frequencyOptions);
-              final isNarrow =
-                  constraints.maxWidth < totalW + kSegmentNarrowLayoutThreshold;
-
-              const icon = Icon(FluentIcons.calendar_clock_24_regular);
-              final title = Expanded(
-                child: Text('גיבוי אוטומטי', style: kSettingsTitleStyle),
-              );
-              final chevron = Icon(
-                _isBackupExpanded
-                    ? FluentIcons.chevron_up_24_regular
-                    : FluentIcons.chevron_down_24_regular,
-              );
-
-              return InkWell(
-                onTap: () =>
-                    setState(() => _isBackupExpanded = !_isBackupExpanded),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: isNarrow
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              children: [
-                                icon,
-                                const SizedBox(width: 12),
-                                title,
-                                const SizedBox(width: 12),
-                                chevron,
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: SizedBox(
-                                  width: totalW, child: segmentControl),
-                            ),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            icon,
-                            const SizedBox(width: 12),
-                            title,
-                            segmentControl,
-                            const SizedBox(width: 12),
-                            chevron,
-                          ],
-                        ),
+                onAfterMove: _resolvedBackupPath.isNotEmpty
+                    ? (newPath) async {
+                        Settings.setValue<String>(
+                            SettingsRepository.keyBackupPath, newPath);
+                        _loadResolvedBackupPath();
+                      }
+                    : null,
+                defaultPath: _defaultBackupPath.isNotEmpty
+                    ? _defaultBackupPath
+                    : null,
+              ),
+              onOpenFolder: () {
+                final path = _resolvedBackupPath;
+                if (path.isEmpty) return;
+                if (Platform.isWindows) {
+                  unawaited(Process.run('explorer', [path]));
+                } else if (Platform.isMacOS) {
+                  unawaited(Process.run('open', [path]));
+                } else if (Platform.isLinux) {
+                  unawaited(Process.run('xdg-open', [path]));
+                }
+              },
+              onClearPath: () {
+                Settings.setValue<String>(SettingsRepository.keyBackupPath, '');
+                _loadResolvedBackupPath();
+              },
+            ),
+            SettingsActionTile.dropdownTile<String>(
+              icon: FluentIcons.calendar_clock_24_regular,
+              title: 'גיבוי אוטומטי',
+              subtitle: switch (autoFrequency) {
+                'daily' => 'יתבצע גיבוי בכל יום',
+                'weekly' => 'יתבצע גיבוי כל שבוע',
+                'monthly' => 'יתבצע גיבוי כל חודש',
+                _ => 'גיבוי אוטומטי מושבת',
+              },
+              value: autoFrequency,
+              entries: const [
+                AppMenuEntry(value: 'none', label: 'ללא'),
+                AppMenuEntry(value: 'daily', label: 'יומי'),
+                AppMenuEntry(value: 'weekly', label: 'שבועי'),
+                AppMenuEntry(value: 'monthly', label: 'חודשי'),
+              ],
+              onSelected: (value) {
+                if (value == null) return;
+                Settings.setValue<String>(_keyAutoBackupFrequency, value);
+                setState(() {});
+              },
+            ),
+            SettingsActionTile.segmentedTile<_BackupMode>(
+              icon: FluentIcons.options_24_regular,
+              title: 'מצב גיבוי',
+              options: const [
+                SegmentOption<_BackupMode>(
+                  value: _BackupMode.all,
+                  label: 'גבה הכל',
                 ),
-              );
-            },
-          ),
-        ),
+                SegmentOption<_BackupMode>(
+                  value: _BackupMode.custom,
+                  label: 'מותאם אישית',
+                ),
+              ],
+              currentValue: _selectedBackupMode,
+              onChanged: (value) =>
+                  setState(() => _selectedBackupMode = value),
+            ),
 
-        // תוכן מורחב של גיבוי — אנימציה
-        AnimatedSize(
-          duration: AppTokens.animNormal,
-          curve: Curves.easeInOut,
-          child: _isBackupExpanded
-              ? Column(
-                  children: [
-                    SegmentedSettingsTile<_BackupMode>(
-                      icon: Icon(FluentIcons.options_24_regular),
-                      title: 'מצב גיבוי',
-                      options: const [
-                        SegmentOption<_BackupMode>(
-                          value: _BackupMode.all,
-                          label: 'גבה הכל',
-                        ),
-                        SegmentOption<_BackupMode>(
-                          value: _BackupMode.custom,
-                          label: 'מותאם אישית',
-                        ),
-                      ],
-                      currentValue: _selectedBackupMode,
-                      onChanged: (value) =>
-                          setState(() => _selectedBackupMode = value),
+            if (_selectedBackupMode == _BackupMode.custom) ...[
+              _BackupOptionTile(
+                icon: FluentIcons.settings_24_regular,
+                title: 'הגדרות',
+                subtitle: 'כולל את כלל הגדרות התוכנה',
+                settingKey: _keyBackupSettings,
+                onChanged: () => setState(() {}),
+              ),
+              _BackupOptionTile(
+                icon: FluentIcons.bookmark_24_regular,
+                title: 'סימניות',
+                subtitle: 'כל הסימניות שנשמרו',
+                settingKey: _keyBackupBookmarks,
+                onChanged: () => setState(() {}),
+              ),
+              _BackupOptionTile(
+                icon: FluentIcons.history_24_regular,
+                title: 'היסטוריה',
+                subtitle: 'היסטוריית הלימוד',
+                settingKey: _keyBackupHistory,
+                onChanged: () => setState(() {}),
+              ),
+              _BackupOptionTile(
+                icon: FluentIcons.note_24_regular,
+                title: 'הערות אישיות',
+                subtitle: 'כל ההערות האישיות שלך',
+                settingKey: _keyBackupNotes,
+                onChanged: () => setState(() {}),
+              ),
+              _BackupOptionTile(
+                icon: FluentIcons.grid_24_regular,
+                title: 'שולחנות עבודה',
+                subtitle: 'כל שולחנות העבודה',
+                settingKey: _keyBackupWorkspaces,
+                onChanged: () => setState(() {}),
+              ),
+              _BackupOptionTile(
+                icon: FluentIcons.book_24_regular,
+                title: 'שמור וזכור',
+                subtitle: 'ספרים ומעקב לימוד',
+                settingKey: _keyBackupShamorZachor,
+                onChanged: () => setState(() {}),
+              ),
+              // [EDITING DISABLED]
+              // _BackupOptionTile(
+              //   icon: FluentIcons.document_edit_24_regular,
+              //   title: 'הגדרות מתקדמות',
+              //   subtitle: 'הגדרות נוספות שדרסת',
+              //   settingKey: _keyBackupUserOverrides,
+              //   onChanged: () => setState(() {}),
+              // ),
+              _BackupOptionTile(
+                icon: FluentIcons.puzzle_piece_24_regular,
+                title: 'תוספים',
+                subtitle: 'התוספים שהותקנו, הגדרותיהם ונתוניהם',
+                settingKey: _keyBackupPlugins,
+                onChanged: () => setState(() {}),
+              ),
+            ],
+
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ActionButton.recommended(
+                      icon: FluentIcons.arrow_upload_24_regular,
+                      text: 'צור גיבוי עכשיו',
+                      onPressed: _createBackup,
                     ),
-
-                    // בחר מה לגבות (רק במצב מותאם אישית)
-                    if (_selectedBackupMode == _BackupMode.custom) ...[
-                      _BackupOptionTile(
-                        icon: FluentIcons.settings_24_regular,
-                        title: 'הגדרות',
-                        subtitle: 'כולל את כלל הגדרות התוכנה',
-                        settingKey: _keyBackupSettings,
-                        onChanged: () => setState(() {}),
-                      ),
-                      _BackupOptionTile(
-                        icon: FluentIcons.bookmark_24_regular,
-                        title: 'סימניות',
-                        subtitle: 'כל הסימניות שנשמרו',
-                        settingKey: _keyBackupBookmarks,
-                        onChanged: () => setState(() {}),
-                      ),
-                      _BackupOptionTile(
-                        icon: FluentIcons.history_24_regular,
-                        title: 'היסטוריה',
-                        subtitle: 'היסטוריית הלימוד',
-                        settingKey: _keyBackupHistory,
-                        onChanged: () => setState(() {}),
-                      ),
-                      _BackupOptionTile(
-                        icon: FluentIcons.note_24_regular,
-                        title: 'הערות אישיות',
-                        subtitle: 'כל ההערות האישיות שלך',
-                        settingKey: _keyBackupNotes,
-                        onChanged: () => setState(() {}),
-                      ),
-                      _BackupOptionTile(
-                        icon: FluentIcons.grid_24_regular,
-                        title: 'שולחנות עבודה',
-                        subtitle: 'כל שולחנות העבודה',
-                        settingKey: _keyBackupWorkspaces,
-                        onChanged: () => setState(() {}),
-                      ),
-                      _BackupOptionTile(
-                        icon: FluentIcons.book_24_regular,
-                        title: 'שמור וזכור',
-                        subtitle: 'ספרים ומעקב לימוד',
-                        settingKey: _keyBackupShamorZachor,
-                        onChanged: () => setState(() {}),
-                      ),
-                      _BackupOptionTile(
-                        icon: FluentIcons.document_edit_24_regular,
-                        title: 'הגדרות מתקדמות',
-                        subtitle: 'הגדרות נוספות שדרסת',
-                        settingKey: _keyBackupUserOverrides,
-                        onChanged: () => setState(() {}),
-                      ),
-                      _BackupOptionTile(
-                        icon: FluentIcons.puzzle_piece_24_regular,
-                        title: 'תוספים',
-                        subtitle: 'התוספים שהותקנו, הגדרותיהם ונתוניהם',
-                        settingKey: _keyBackupPlugins,
-                        onChanged: () => setState(() {}),
-                      ),
-                    ],
-
-                    // כפתורי צור/שחזר
-                    AppCard.sectionDivider(context),
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: RecommendedActionButton(
-                              icon: FluentIcons.arrow_upload_24_regular,
-                              text: 'צור גיבוי עכשיו',
-                              onPressed: _createBackup,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: NeutralActionButton(
-                              icon: FluentIcons.arrow_download_24_regular,
-                              text: 'שחזר מגיבוי',
-                              onPressed: _restoreBackup,
-                            ),
-                          ),
-                        ],
-                      ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ActionButton.neutral(
+                      icon: FluentIcons.arrow_download_24_regular,
+                      text: 'שחזר מגיבוי',
+                      onPressed: _restoreBackup,
                     ),
-                  ],
-                )
-              : const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
 
         // ── מצב סייפר ──
-        ListTile(
-          leading: Icon(
-            state.protectedModeEnabled
-                ? FluentIcons.shield_lock_24_filled
-                : FluentIcons.shield_lock_24_regular,
-            color: state.protectedModeEnabled
-                ? Theme.of(context).colorScheme.primary
-                : null,
-          ),
-          title: const Text(
-            'מצב סייפר',
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: const Text(
-            'נעילת הגדרות',
-            style: kSettingsSubtitleStyle,
-          ),
-          trailing: Icon(
-            _isCypherExpanded
-                ? FluentIcons.chevron_up_24_regular
-                : FluentIcons.chevron_down_24_regular,
-          ),
+        ExpandableSection(
+          icon: state.protectedModeEnabled
+              ? FluentIcons.shield_lock_24_filled
+              : FluentIcons.shield_lock_24_regular,
+          iconColor: state.protectedModeEnabled
+              ? Theme.of(context).colorScheme.primary
+              : null,
+          title: const Text('מצב סייפר'),
+          subtitle: const Text('נעילת הגדרות'),
           onTap: () => setState(() => _isCypherExpanded = !_isCypherExpanded),
-        ),
+          isExpanded: _isCypherExpanded,
+          children: [
+            SettingsActionTile.switchTile(
+              icon: state.protectedModeEnabled
+                  ? FluentIcons.lock_closed_24_filled
+                  : FluentIcons.lock_open_24_regular,
+              title: 'הפעל מצב סייפר',
+              subtitle: hasPassword ? 'סיסמה הוגדרה' : 'יש להגדיר סיסמה תחילה',
+              value: state.protectedModeEnabled,
+              onChanged: hasPassword
+                  ? (value) =>
+                      _handleToggleProtectedMode(context, repository, value)
+                  : null,
+            ),
 
-        // תוכן מורחב של סייפר — אנימציה
-        AnimatedSize(
-          duration: AppTokens.animNormal,
-          curve: Curves.easeInOut,
-          child: _isCypherExpanded
-              ? Column(
-                  children: [
-                    SwitchSettingsTile(
-                      leading: Icon(
-                        state.protectedModeEnabled
-                            ? FluentIcons.lock_closed_24_filled
-                            : FluentIcons.lock_open_24_regular,
-                      ),
-                      title: const Text('הפעל מצב סייפר',
-                          style: kSettingsTitleStyle),
-                      subtitle: Text(
-                        hasPassword ? 'סיסמה הוגדרה' : 'יש להגדיר סיסמה תחילה',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: hasPassword
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                      value: state.protectedModeEnabled,
-                      onChanged: hasPassword
-                          ? (value) => _handleToggleProtectedMode(
-                              context, repository, value)
-                          : null,
-                    ),
-
-                    AppCard.sectionDivider(context),
-
-                    // הגדרת/שינוי סיסמה
-                    ListTile(
-                      leading: const Icon(FluentIcons.key_24_regular),
-                      title: const Text(
-                        'סיסמה',
-                        style: kSettingsTitleStyle,
-                      ),
-                      trailing: RecommendedActionButton(
-                        icon: FluentIcons.key_24_regular,
-                        text: hasPassword ? 'שנה סיסמה' : 'בחר סיסמה',
-                        onPressed: () => _handleSetPassword(
-                            context, repository, hasPassword),
-                      ),
-                    ),
-                  ],
-                )
-              : const SizedBox.shrink(),
+            ListTile(
+              leading: const Icon(FluentIcons.key_24_regular),
+              title: const Text(
+                'סיסמה',
+                style: kSettingsTitleStyle,
+              ),
+              trailing: ActionButton.recommended(
+                icon: FluentIcons.key_24_regular,
+                text: hasPassword ? 'שנה סיסמה' : 'בחר סיסמה',
+                onPressed: () =>
+                    _handleSetPassword(context, repository, hasPassword),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -1797,7 +1760,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             'הסיור יוצג מההתחלה וידריך אותך במסכי האפליקציה.',
             style: kSettingsSubtitleStyle,
           ),
-          trailing: RecommendedActionButton(
+          trailing: ActionButton.recommended(
             icon: FluentIcons.play_24_regular,
             text: 'הפעל',
             onPressed: () {
@@ -1832,7 +1795,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             'מחיקת כל ההגדרות וחזרה למצב ההתחלתי',
             style: kSettingsSubtitleStyle,
           ),
-          trailing: NeutralActionButton(
+          trailing: ActionButton.ghost(
             icon: FluentIcons.arrow_reset_24_regular,
             text: 'אפס הגדרות',
             onPressed: () async {
@@ -2094,7 +2057,7 @@ class _BackupOptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchSettingsTile.text(
+    return SettingsActionTile.switchTile(
       icon: icon,
       title: title,
       subtitle: subtitle,
