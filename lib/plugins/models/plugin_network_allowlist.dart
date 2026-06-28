@@ -56,6 +56,9 @@ const List<String> pluginNetworkAllowlist = <String>[
   'https://api.github.com/repos/Y-PLONI/iyun_h-halacha_plugin',
   'https://github.com/Y-PLONI/iyun_h-halacha_plugin',
   'https://raw.githubusercontent.com/Y-PLONI/iyun_h-halacha_plugin',
+
+  // דיווח תוספים יאיר דניאל
+  'https://formsubmit.co/ajax/575cd25953ea11970a7a017b6913a3ee',
 ];
 
 /// דומייני ה-CDN שאליהם GitHub מפנה (redirect) בהורדת asset של release.
