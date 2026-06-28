@@ -186,8 +186,25 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     CancelLibraryUpdate event,
     Emitter<LibraryUpdateState> emit,
   ) {
+    // משלב כתיבת ה-DB ואילך ביטול אסור: ה-DB מתעדכן אטומית והריענון כבר בדרך,
+    // וביטול כאן היה משאיר קטלוג ואינדקס ישנים עד restart.
+    if (!_canCancel(state)) return;
     _operationId++; // מבטל את הריצה הפעילה — ה-Future הישן יזהה זאת.
     emit(const LibraryUpdateState(message: 'העדכון בוטל'));
+  }
+
+  /// ביטול אפשרי עד שמתחילים לכתוב ל-DB. בדלתא נקודת האל-חזור היא שלב ה-applying
+  /// (החלת ה-patch); בהורדה מלאה רק שלב ה-refreshing — שם ה-applying הוא חילוץ
+  /// הארכיב, שעדיין ניתן לבטל לפני ההחלפה האטומית.
+  bool _canCancel(LibraryUpdateState state) {
+    switch (state.status) {
+      case LibraryUpdateStatus.refreshing:
+        return false;
+      case LibraryUpdateStatus.applying:
+        return state.plan?.kind == LibraryUpdatePlanKind.fullDownload;
+      default:
+        return true;
+    }
   }
 
   void _onReset(
