@@ -1,3 +1,4 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/settings/dialogs/change_location_dialog.dart';
@@ -19,6 +20,7 @@ Future<void> _openDialog(
   String folderName = 'ספרייה',
   bool canMoveContents = true,
   String? defaultPath,
+  String? moveContentsWarning,
 }) async {
   await tester.binding.setSurfaceSize(const Size(1200, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -29,6 +31,7 @@ Future<void> _openDialog(
         folderName: folderName,
         canMoveContents: canMoveContents,
         defaultPath: defaultPath,
+        moveContentsWarning: moveContentsWarning,
       )));
   await tester.tap(find.text('פתח'));
   await tester.pumpAndSettle();
@@ -60,19 +63,22 @@ void main() {
       expect(find.text('שנה מיקום בלבד'), findsOneWidget);
     });
 
-    testWidgets('canMoveContents=false — רק "שנה מיקום בלבד" מוצג', (tester) async {
+    testWidgets('canMoveContents=false — רק "שנה מיקום בלבד" מוצג',
+        (tester) async {
       await _openDialog(tester, canMoveContents: false);
       expect(find.text('העבר תוכן תיקייה'), findsNothing);
       expect(find.text('שנה מיקום בלבד'), findsOneWidget);
     });
 
-    testWidgets('canMoveContents=true — "העבר תוכן" נבחר כברירת מחדל', (tester) async {
+    testWidgets('canMoveContents=true — "העבר תוכן" נבחר כברירת מחדל',
+        (tester) async {
       await _openDialog(tester, canMoveContents: true);
 
       final checkboxes =
           tester.widgetList<Checkbox>(find.byType(Checkbox)).toList();
       expect(checkboxes[0].value, isTrue, reason: '"העבר תוכן" — נבחר');
-      expect(checkboxes[1].value, isFalse, reason: '"שנה מיקום בלבד" — לא נבחר');
+      expect(checkboxes[1].value, isFalse,
+          reason: '"שנה מיקום בלבד" — לא נבחר');
     });
 
     testWidgets('לחיצה על "שנה מיקום בלבד" מחליפה את הבחירה', (tester) async {
@@ -109,8 +115,7 @@ void main() {
       expect(find.text('מיקום ברירת מחדל'), findsNothing);
     });
 
-    testWidgets(
-        'כשcurrentPath==defaultPath כפתור "השתמש בברירת מחדל" מושבת',
+    testWidgets('כשcurrentPath==defaultPath כפתור "השתמש בברירת מחדל" מושבת',
         (tester) async {
       const path = '/default/path';
       await _openDialog(tester, currentPath: path, defaultPath: path);
@@ -123,11 +128,10 @@ void main() {
       expect((tester.widget(btnFinder) as FilledButton).onPressed, isNull);
     });
 
-    testWidgets(
-        'כשcurrentPath!=defaultPath כפתור "השתמש בברירת מחדל" פעיל',
+    testWidgets('כשcurrentPath!=defaultPath כפתור "השתמש בברירת מחדל" פעיל',
         (tester) async {
-      await _openDialog(
-          tester, currentPath: '/other/path', defaultPath: '/default/path');
+      await _openDialog(tester,
+          currentPath: '/other/path', defaultPath: '/default/path');
 
       final btnFinder = find.ancestor(
         of: find.text('השתמש בברירת מחדל'),
@@ -141,6 +145,23 @@ void main() {
       await tester.tap(find.text('ביטול'));
       await tester.pumpAndSettle();
       expect(find.text('שינוי מיקום ספרייה'), findsNothing);
+    });
+
+    testWidgets('אזהרת העברה מוצגת כש"העבר תוכן" נבחר', (tester) async {
+      await _openDialog(tester, moveContentsWarning: 'התוכנה תיטען מחדש');
+      expect(find.text('התוכנה תיטען מחדש'), findsOneWidget);
+    });
+
+    testWidgets('אזהרת העברה נעלמת כשעוברים ל"שנה מיקום בלבד"', (tester) async {
+      await _openDialog(tester, moveContentsWarning: 'התוכנה תיטען מחדש');
+      await tester.tap(find.text('שנה מיקום בלבד'));
+      await tester.pump();
+      expect(find.text('התוכנה תיטען מחדש'), findsNothing);
+    });
+
+    testWidgets('ללא moveContentsWarning — אין אזהרה', (tester) async {
+      await _openDialog(tester);
+      expect(find.byIcon(FluentIcons.info_24_regular), findsNothing);
     });
   });
 
@@ -157,7 +178,8 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('onAfterMove=null → אפשרות "העבר תוכן" לא מוצגת', (tester) async {
+    testWidgets('onAfterMove=null → אפשרות "העבר תוכן" לא מוצגת',
+        (tester) async {
       final cb = makeChangeLocationCallback(
         currentPath: '/some/path',
         folderName: 'ספרייה',
@@ -180,8 +202,7 @@ void main() {
       expect(find.text('העבר תוכן תיקייה'), findsNothing);
     });
 
-    testWidgets(
-        'onAfterMove מוגדר + currentPath לא ריק → "העבר תוכן" מוצג',
+    testWidgets('onAfterMove מוגדר + currentPath לא ריק → "העבר תוכן" מוצג',
         (tester) async {
       final cb = makeChangeLocationCallback(
         currentPath: '/some/path',

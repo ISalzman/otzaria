@@ -29,6 +29,24 @@ class DatabaseConstants {
   /// The default name of the Otzaria folder
   static const String otzariaFolderName = 'Otzaria';
 
+  /// שמות הקבצים והתיקיות שהתוכנה מנהלת בתוך תיקיית הספרייה. בהעברת מיקום
+  /// הספרייה מעבירים רק אותם — קבצים שהמשתמש הוסיף לתיקייה נשארים במקומם.
+  /// כולל קובצי לוואי של SQLite (-wal/-shm) שעשויים להישאר ליד ה-DB.
+  static Set<String> libraryManagedEntryNames() => {
+        databaseFileName,
+        '$databaseFileName-wal',
+        '$databaseFileName-shm',
+        databaseArchiveFileName,
+        externalCatalogDatabaseFileName,
+        '$externalCatalogDatabaseFileName-wal',
+        '$externalCatalogDatabaseFileName-shm',
+        externalCatalogArchiveFileName,
+        externalCatalogVersionFileName,
+        talmudBavliFolderName,
+        talmudBavliArchiveFileName,
+        'files_manifest.json',
+      };
+
   /// Gets the full database path based on the library path setting.
   ///
   /// On Android, if the user selected a directory in external/scoped storage,

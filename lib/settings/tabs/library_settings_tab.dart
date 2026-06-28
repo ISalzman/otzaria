@@ -228,9 +228,14 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
           await _showExtractionDialog(context, newPath, isLibraryPath: true);
           if (mounted) setState(() {});
         },
-        onAfterMove: pathStr != null && pathStr.isNotEmpty
-            ? (newPath) => _afterMoveUpdateBloc(newPath, UpdateLibraryPath.new)
+        onMoveContents: pathStr != null && pathStr.isNotEmpty
+            ? (ctx, from, to) =>
+                performLibraryMove(context: ctx, from: from, to: to)
             : null,
+        moveContentsWarning:
+            'בזמן העברת הספרייה התוכנה תיסגר ותיטען מחדש, ולא תהיה זמינה עד '
+            'לסיום הפעולה. רק קבצי הספרייה יועברו; קבצים אחרים שהוספת לתיקייה '
+            'יישארו במקומם.',
         defaultPath: _defaultLibraryPath,
       ),
       onOpenFolder: () {
@@ -271,7 +276,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
           if (mounted) setState(() {});
         },
         onAfterMove: hasPath
-            ? (newPath) => _afterMoveUpdateBloc(newPath, UpdateHebrewBooksPath.new)
+            ? (newPath) =>
+                _afterMoveUpdateBloc(newPath, UpdateHebrewBooksPath.new)
             : null,
       ),
       onOpenFolder: () {
@@ -497,8 +503,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                   ActionButton.recommended(
                     text: 'עדכן',
                     onPressed: () {
-                      final library =
-                          context.read<LibraryBloc>().state.library;
+                      final library = context.read<LibraryBloc>().state.library;
                       if (library != null) {
                         context
                             .read<IndexingBloc>()
