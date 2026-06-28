@@ -892,6 +892,34 @@ String normalizeForFindRefMatch(String input) {
   return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
+/// בודק אם כותרת TOC תואמת להפניה חופשית של תוסף (למשל "ס\"ד ע\"ב" ↔ "דף סד:").
+/// תחילה התאמה גולמית, ואז התאמת טוקנים מנורמלים — כדי לגשר על פערי
+/// גרשיים, "דף"/"עמוד", וסימון העמוד ("ע\"א/ע\"ב" מול ".":/":") שבין התוסף ל-TOC.
+bool tocTextMatchesRef(String tocText, String ref) {
+  if (ref.isEmpty) return false;
+  if (tocText.contains(ref)) return true;
+  final refTokens = _refMatchTokens(ref);
+  if (refTokens.isEmpty) return false;
+  final tocTokens = _refMatchTokens(tocText);
+  // תת-רצף מסודר — הסדר מבדיל בין מספר הדף לציון העמוד,
+  // כך ש"ב ע\"א" (ב,א) לא יתאים ל"דף א:" (א,ב).
+  var ti = 0;
+  for (final token in refTokens) {
+    while (ti < tocTokens.length && tocTokens[ti] != token) {
+      ti++;
+    }
+    if (ti == tocTokens.length) return false;
+    ti++;
+  }
+  return true;
+}
+
+List<String> _refMatchTokens(String s) => normalizeForFindRefMatch(s)
+    .split(' ')
+    .map((t) => t == 'עא' ? 'א' : (t == 'עב' ? 'ב' : t))
+    .where((t) => t.isNotEmpty && t != 'דף' && t != 'עמוד')
+    .toList();
+
 String removeSectionNames(String s) => s
     .replaceAll('פרק', '')
     .replaceAll('פסוק', '')

@@ -553,3 +553,20 @@ class TocEntry {
     this.parent,
   });
 }
+
+/// משטח עץ [TocEntry] לרשימה אחת (pre-order), כולל כל הצאצאים.
+/// נחוץ למי שמחפש כותרת בכל העץ — `tableOfContents` מחזיר רק את שורשי העץ.
+List<TocEntry> flattenToc(List<TocEntry> entries) {
+  final flat = <TocEntry>[];
+  void visit(TocEntry e) {
+    flat.add(e);
+    for (final child in e.children) {
+      visit(child);
+    }
+  }
+
+  for (final e in entries) {
+    visit(e);
+  }
+  return flat;
+}

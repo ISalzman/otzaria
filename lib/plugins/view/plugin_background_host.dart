@@ -30,6 +30,7 @@ import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
+import 'package:otzaria/find_ref/repository/find_ref_factory.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
@@ -305,6 +306,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
     final searchRepository = SearchRepository();
     final personalNotesRepository = PersonalNotesRepository();
     final pluginRegistryRepository = PluginRegistryRepository();
+    final findRefRepository = buildFindRefRepository();
 
     final dependencies = PluginBridgeDependencies(
       historyBloc: historyBloc,
@@ -319,6 +321,13 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         historyBloc: historyBloc,
         navigationBloc: navigationBloc,
       ),
+      resolveReference: (reference) async {
+        final results = await findRefRepository.findRefs(reference);
+        return results
+            .map((r) =>
+                (title: r.title, index: r.segment.toInt(), isPdf: r.isPdf))
+            .toList();
+      },
       themePayloadBuilder: () {
         if (!mounted) {
           return {
