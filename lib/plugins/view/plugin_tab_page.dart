@@ -23,6 +23,7 @@ import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
+import 'package:otzaria/find_ref/repository/find_ref_factory.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
@@ -132,6 +133,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     final searchRepository = SearchRepository();
     final personalNotesRepository = PersonalNotesRepository();
     final pluginRegistryRepository = PluginRegistryRepository();
+    final findRefRepository = buildFindRefRepository();
 
     final dependencies = PluginBridgeDependencies(
       historyBloc: historyBloc,
@@ -146,6 +148,13 @@ class _PluginTabPageState extends State<PluginTabPage> {
         historyBloc: historyBloc,
         navigationBloc: navigationBloc,
       ),
+      resolveReference: (reference) async {
+        final results = await findRefRepository.findRefs(reference);
+        return results
+            .map((r) =>
+                (title: r.title, index: r.segment.toInt(), isPdf: r.isPdf))
+            .toList();
+      },
       themePayloadBuilder: () {
         if (!mounted) {
           return {
