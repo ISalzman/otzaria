@@ -8,7 +8,6 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/plugin_permission_labels.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
-import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/settings/widgets/settings_card.dart';
 
@@ -105,73 +104,12 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
       }
 
       return AppCustomContentDialog(
-        title: 'הגדרות תוסף: ${currentPlugin.name}',
-        actions: [
-          if (currentPlugin.isDevelopment)
-            ActionButton.neutral(
-              text: 'נתק תוסף פיתוח',
-              onPressed: () async {
-                context.read<PluginSystemBloc>().add(
-                    DetachDevelopmentPluginRequested(currentPlugin.pluginId));
-                Navigator.of(context).pop();
-              },
-            )
-          else
-            ActionButton.neutral(
-              text: 'הסרת תוסף',
-              onPressed: () async {
-                final deleted =
-                    await showDeletePluginDialog(context, currentPlugin);
-                if (deleted && context.mounted) {
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-        ],
+        title: 'ניהול הרשאות: ${currentPlugin.name}',
+        actions: const [],
         child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SettingsCard(
-                title: 'הגדרות כלליות',
-                children: [
-                  SettingsActionTile.switchTile(
-                    title: 'מצב מופעל',
-                    subtitle: 'כיבוי ימנע מהתוסף לרוץ לחלוטין באפליקציה',
-                    value: currentPlugin.enabled,
-                    onChanged: (val) {
-                      if (val) {
-                        context
-                            .read<PluginSystemBloc>()
-                            .add(EnablePluginRequested(currentPlugin.pluginId));
-                      } else {
-                        context.read<PluginSystemBloc>().add(
-                            DisablePluginRequested(currentPlugin.pluginId));
-                      }
-                    },
-                  ),
-                  SettingsActionTile.switchTile(
-                    title: 'הצמדה לסרגל הניווט',
-                    subtitle:
-                        'הצגת התוסף כפריט קבוע בסרגל הניווט הראשי, בין "כלים" ל"הגדרות"',
-                    value: currentPlugin.pinnedToNavRail,
-                    enabled: currentPlugin.enabled,
-                    onChanged: currentPlugin.enabled
-                        ? (val) {
-                            if (val) {
-                              context.read<PluginSystemBloc>().add(
-                                  PinPluginToNavRailRequested(
-                                      currentPlugin.pluginId));
-                            } else {
-                              context.read<PluginSystemBloc>().add(
-                                  UnpinPluginFromNavRailRequested(
-                                      currentPlugin.pluginId));
-                            }
-                          }
-                        : null,
-                  ),
-                ],
-              ),
               if (currentPlugin.manifest.permissions.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 SettingsCard(
@@ -232,16 +170,6 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                       context.read<PluginSystemBloc>().add(
                           ReloadDevelopmentPluginRequested(
                               currentPlugin.pluginId));
-                    },
-                  ),
-                  SettingsActionTile.text(
-                    icon: FluentIcons.window_new_24_regular,
-                    title: 'פתח מחדש את הצפייה',
-                    onTap: () {
-                      context.read<PluginSystemBloc>().add(
-                          ReloadDevelopmentPluginRequested(
-                              currentPlugin.pluginId));
-                      Navigator.of(context).pop(true);
                     },
                   ),
                 ]),
