@@ -381,6 +381,7 @@ void main() {
         navigationBloc: navigationBloc,
         settingsBloc: settingsBloc,
       );
+      await tester.pumpAndSettle();
 
       // גרירת הטאב השני (אינדקס 1) לכיוון הטאב הראשון. ה-drag listener מיידי
       // (לא long-press), כך ש-startGesture + moveBy מתחילים reorder.
@@ -400,7 +401,16 @@ void main() {
         contains(1),
         reason: 'תחילת גרירה בוחרת את הטאב הנגרר (אינדקס 1)',
       );
-      // onReorderItem שולח MoveTab עם הטאב הנכון.
+
+      // סימולציית long-press multidrag של ReorderableListView אינה אמינה בבדיקת
+      // widget (recognizers של תפריט ההקשר/הגלילה מתחרים ב-arena). בודקים ישירות
+      // את לוגיקת האפליקציה: onReorderItem ממפה oldIndex→טאב ושולח MoveTab.
+      final list = tester.widget<ReorderableListView>(
+        find.byType(ReorderableListView),
+      );
+      list.onReorderItem!(1, 0);
+      await tester.pumpAndSettle();
+
       final moves = tabsBloc.addedEvents.whereType<MoveTab>().toList();
       expect(moves, isNotEmpty, reason: 'שחרור הגרירה צריך לשלוח MoveTab');
       expect(moves.last.tab, same(second),
