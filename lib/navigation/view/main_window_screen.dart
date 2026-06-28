@@ -3281,6 +3281,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }) async {
     final effectiveSettingsIdx = _effectiveSettingsNavIndex(hideTools);
     if (index < effectiveSettingsIdx) {
+      // לחיצה על כלי/מסך רגיל — נקה תוסף מוסתר פעיל אם יש
+      moreScreenKey.currentState?.clearHiddenNavRailPlugin();
       await _onNavTap(context, index, currentScreen);
       return;
     }
@@ -3291,6 +3293,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       return;
     }
     // האחרון — "הגדרות" שמופה ל-_navData[_settingsNavIndex]
+    moreScreenKey.currentState?.clearHiddenNavRailPlugin();
     await _onNavTap(context, _settingsNavIndex, currentScreen);
   }
 
@@ -3302,6 +3305,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
     BuildContext context,
     _PinnedToolNavItem item,
   ) {
+    // נקה hidden plugin פעיל לפני פתיחת פריט אחר (אלא אם זה אותו תוסף)
+    final toolsState = moreScreenKey.currentState;
+    if (toolsState != null &&
+        toolsState.hasHiddenNavRailPlugin &&
+        item.plugin?.pluginId != toolsState.hiddenNavRailPluginId) {
+      toolsState.clearHiddenNavRailPlugin();
+    }
     context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
     if (item.isPlugin && item.plugin != null) {
       _openPluginInToolsWhenAvailable(item.plugin!);
@@ -3333,6 +3343,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (index == currentIndex &&
         item.screen != Screen.search &&
         item.screen != Screen.find) {
+      // אם hidden plugin פעיל ולוחצים "כלים" — הצג כלים רגיל
+      if (moreScreenKey.currentState?.clearHiddenNavRailPlugin() ?? false) {
+        return;
+      }
       await _syncPageWithState();
       return;
     }

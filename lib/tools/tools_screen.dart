@@ -292,6 +292,9 @@ class ToolsScreenState extends State<ToolsScreen>
   InstalledPlugin? _transientPlugin;
   bool _didInitFromBloc = false;
 
+  // תוסף מוסתר-מכלים שנפתח מניווט ראשי — חי כ-transient אך tab שלו מוסתר.
+  InstalledPlugin? _hiddenNavRailPlugin;
+
   /// toolId-ים שכבר הוצגו פעם אחת לפחות. בדסקטופ ה-IndexedStack בונה את
   /// הילדים שלו עצלן: רק כלים שמופיעים פה נבנים בפועל, השאר נשארים
   /// SizedBox.shrink(). זה מונע יצירה מקבילית של כל ה-WebViews של תוספים
@@ -527,16 +530,37 @@ class ToolsScreenState extends State<ToolsScreen>
           'התוסף "${plugin.name}" דורש חיבור אינטרנט ולא ניתן לפתוח אותו במצב מנותק');
       return;
     }
+    if (!plugin.showInTools) {
+      setState(() {
+        _hiddenNavRailPlugin = plugin;
+        _transientPlugin = plugin;
+        _showMobileMenu = false;
+        _setSelectedToolId(plugin.pluginId);
+      });
+      final blocState = context.read<PluginSystemBloc>().state;
+      if (blocState is PluginSystemLoaded) {
+        _rebuildTabs(
+          blocState.pinnedPlugins.filterForOfflineMode(isOfflineMode),
+          transient: _transientPlugin,
+        );
+      }
+      return;
+    }
+    // פתיחת תוסף רגיל — מנקה hidden state ישן (כולל transient ו-descriptor) אם יש
+    clearHiddenNavRailPlugin();
     if (plugin.pinned) {
-      // לתוסף שמוצמד-ללשוניות יש (או יהיה) descriptor רגיל. מנתבים דרך
+      // לתוסף שמוצמד-ללשוניות ומוצג בכלים יש descriptor רגיל. מנתבים דרך
       // requestOpenTool כדי לקבל את מנגנון ה-pending/timeout במקרה שה-bloc
       // עדיין לא טען את הרשימה ברגע הלחיצה.
       requestOpenTool(plugin.pluginId);
       return;
     }
     // לתוסף שלא מוצמד ללשוניות — מצב transient (מחושב כאן ולא מחכה ל-bloc)
-    _transientPlugin = plugin;
-    _setSelectedToolId(plugin.pluginId);
+    setState(() {
+      _transientPlugin = plugin;
+      _showMobileMenu = false;
+      _setSelectedToolId(plugin.pluginId);
+    });
     final blocState = context.read<PluginSystemBloc>().state;
     if (blocState is PluginSystemLoaded) {
       _rebuildTabs(
@@ -544,6 +568,25 @@ class ToolsScreenState extends State<ToolsScreen>
         transient: _transientPlugin,
       );
     }
+  }
+
+  bool get hasHiddenNavRailPlugin => _hiddenNavRailPlugin != null;
+  String? get hiddenNavRailPluginId => _hiddenNavRailPlugin?.pluginId;
+
+  /// מנקה את התוסף המוסתר הפעיל. מחזיר true אם היה תוסף שנוקה.
+  bool clearHiddenNavRailPlugin() {
+    if (_hiddenNavRailPlugin == null) return false;
+    _hiddenNavRailPlugin = null;
+    _transientPlugin = null;
+    final blocState = context.read<PluginSystemBloc>().state;
+    if (blocState is PluginSystemLoaded) {
+      final isOfflineMode = context.read<SettingsBloc>().state.isOfflineMode;
+      _rebuildTabs(
+        blocState.pinnedPlugins.filterForOfflineMode(isOfflineMode),
+        transient: null,
+      );
+    }
+    return true;
   }
 
   void _applyTabState(
@@ -740,7 +783,7 @@ class ToolsScreenState extends State<ToolsScreen>
         }
       }
       if (matchedPlugin != null) {
-        if (!matchedPlugin.showInTools) {
+        if (!matchedPlugin.showInTools && !matchedPlugin.pinnedToNavRail) {
           _clearPendingTool();
           UiSnack.showError(
               'התוסף "${matchedPlugin.name}" אינו מוצג בכלים. ניתן להציג אותו דרך הגדרות → ניהול כלים');
@@ -816,8 +859,14 @@ class ToolsScreenState extends State<ToolsScreen>
 
   Widget _buildMobileMenu(Color bgColor) {
     final cs = Theme.of(context).colorScheme;
+    // תוסף מוסתר-מכלים אינו מוצג בתפריט המובייל (כמו בסרגל הלשוניות בדסקטופ)
+    final visibleDescriptors = _hiddenNavRailPlugin == null
+        ? _descriptors
+        : _descriptors
+            .where((d) => d.toolId != _hiddenNavRailPlugin!.pluginId)
+            .toList();
     final groupedDescriptors = buildMobileToolGroups(
-      _descriptors,
+      visibleDescriptors,
       groupDefs: _mobileGroupDefs,
     );
 
@@ -1020,18 +1069,27 @@ class ToolsScreenState extends State<ToolsScreen>
                                             for (int index = 0;
                                                 index < _descriptors.length;
                                                 index++) ...[
-                                              _descriptors[index]
-                                                  .buildTopNavItem(
-                                                key: tourToolTabTargetKeys[
-                                                    _descriptors[index].toolId],
-                                                isSelected: _selectedToolId ==
-                                                    _descriptors[index].toolId,
-                                                onTap: () => _changeTab(index),
-                                              ),
-                                              if (index <
-                                                  _descriptors.length - 1)
-                                                const SizedBox(
-                                                    width: AppTokens.spaceXS),
+                                              // תוסף מוסתר-מכלים: לא מציג tab
+                                              if (_descriptors[index].toolId !=
+                                                  _hiddenNavRailPlugin
+                                                      ?.pluginId) ...[
+                                                _descriptors[index]
+                                                    .buildTopNavItem(
+                                                  key: tourToolTabTargetKeys[
+                                                      _descriptors[index]
+                                                          .toolId],
+                                                  isSelected:
+                                                      _selectedToolId ==
+                                                          _descriptors[index]
+                                                              .toolId,
+                                                  onTap: () =>
+                                                      _changeTab(index),
+                                                ),
+                                                if (index <
+                                                    _descriptors.length - 1)
+                                                  const SizedBox(
+                                                      width: AppTokens.spaceXS),
+                                              ],
                                             ],
                                           ],
                                         ),
@@ -1170,10 +1228,24 @@ class ToolsScreenState extends State<ToolsScreen>
                 final updatedTransient = state.plugins.firstWhere(
                     (p) => p.pluginId == _transientPlugin!.pluginId,
                     orElse: () => _transientPlugin!);
-                if (!updatedTransient.showInTools) {
+                if (!updatedTransient.showInTools &&
+                    !updatedTransient.pinnedToNavRail) {
                   _transientPlugin = null;
                 } else {
                   _transientPlugin = updatedTransient;
+                }
+              }
+              // עדכון מידע תוסף מוסתר פעיל (אם הותקן מחדש / השתנה)
+              if (_hiddenNavRailPlugin != null) {
+                final updated = state.plugins.firstWhere(
+                    (p) => p.pluginId == _hiddenNavRailPlugin!.pluginId,
+                    orElse: () => _hiddenNavRailPlugin!);
+                if (!updated.enabled || !updated.pinnedToNavRail) {
+                  // התוסף הושבת או הוסר מ-NavRail — סגור
+                  _hiddenNavRailPlugin = null;
+                  _transientPlugin = null;
+                } else {
+                  _hiddenNavRailPlugin = updated;
                 }
               }
               final isOfflineMode =
