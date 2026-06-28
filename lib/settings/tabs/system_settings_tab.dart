@@ -1440,21 +1440,21 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     SettingsRepository repository,
     bool newValue,
   ) async {
-    if (!newValue) {
-      final verified = await showDialog<bool>(
-        context: context,
-        builder: (context) => PasswordVerificationDialog(
-          title: 'אמת סיסמה',
-          hint: 'הזן את הסיסמה כדי להשבית את המצב המוגן',
-          onVerify: (password) async =>
-              repository.verifyProtectedModePassword(password),
-        ),
-      );
-      if (verified != true) return;
-    }
+    final verified = await showDialog<bool>(
+      context: context,
+      builder: (context) => PasswordVerificationDialog(
+        title: 'אמת סיסמה',
+        hint: newValue
+            ? 'הזן את הסיסמה כדי להפעיל את המצב המוגן'
+            : 'הזן את הסיסמה כדי להשבית את המצב המוגן',
+        onVerify: (password) async =>
+            repository.verifyProtectedModePassword(password),
+      ),
+    );
+    if (verified != true) return;
     if (context.mounted) {
       context.read<SettingsBloc>().add(UpdateProtectedModeEnabled(newValue));
-      if (!newValue) UiSnack.show('המצב המוגן הושבת');
+      UiSnack.show(newValue ? 'המצב המוגן הופעל' : 'המצב המוגן הושבת');
     }
   }
 
@@ -1511,7 +1511,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final autoFrequency =
         Settings.getValue<String>(_keyAutoBackupFrequency) ?? 'none';
     final repository = RepositoryProvider.of<SettingsRepository>(context);
-    final hasPassword = repository.hasProtectedModePassword();
+    final hasPassword = state.protectedModePasswordSet;
 
     return SettingsCard(
       title: 'מתקדם',
@@ -1555,9 +1555,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                         _loadResolvedBackupPath();
                       }
                     : null,
-                defaultPath: _defaultBackupPath.isNotEmpty
-                    ? _defaultBackupPath
-                    : null,
+                defaultPath:
+                    _defaultBackupPath.isNotEmpty ? _defaultBackupPath : null,
               ),
               onOpenFolder: () {
                 final path = _resolvedBackupPath;
@@ -1611,10 +1610,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 ),
               ],
               currentValue: _selectedBackupMode,
-              onChanged: (value) =>
-                  setState(() => _selectedBackupMode = value),
+              onChanged: (value) => setState(() => _selectedBackupMode = value),
             ),
-
             if (_selectedBackupMode == _BackupMode.custom) ...[
               _BackupOptionTile(
                 icon: FluentIcons.settings_24_regular,
@@ -1674,7 +1671,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 onChanged: () => setState(() {}),
               ),
             ],
-
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
@@ -1725,7 +1721,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                       _handleToggleProtectedMode(context, repository, value)
                   : null,
             ),
-
             ListTile(
               leading: const Icon(FluentIcons.key_24_regular),
               title: const Text(
