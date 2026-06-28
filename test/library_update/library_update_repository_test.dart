@@ -9,14 +9,9 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-import 'package:otzaria/library_update/models/library_release.dart';
-import 'package:otzaria/library_update/models/library_update_plan.dart';
 import 'package:otzaria/library_update/repository/library_update_repository.dart';
-import 'package:otzaria/library_update/services/github_library_release_client.dart';
 import 'package:otzaria/library_update/services/library_runtime_refresh_service.dart';
-import 'package:otzaria/library_update/services/library_update_discovery.dart';
-import 'package:otzaria/library_update/services/local_db_version_reader.dart';
-import 'package:otzaria/library_update/services/patch_downloader.dart';
+import 'package:seforim_library_updater/seforim_library_updater.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/utils/file/zstd_stream_extractor.dart';
 import 'package:path/path.dart' as p;
@@ -65,6 +60,7 @@ void main() {
             contentLength: archive.length,
           );
         }),
+        decompress: (bytes) async => bytes,
       );
       final repository = LibraryUpdateRepository(
         discovery: _unusedDiscovery(),

@@ -3,10 +3,8 @@ import 'dart:async';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
-import 'package:otzaria/library_update/models/library_release.dart';
-import 'package:otzaria/library_update/models/library_update_plan.dart';
 import 'package:otzaria/library_update/repository/library_update_repository.dart';
-import 'package:otzaria/library_update/services/library_db_recovery_service.dart';
+import 'package:seforim_library_updater/seforim_library_updater.dart';
 
 class _FakeService implements LibraryUpdateService {
   final LibraryUpdatePlan plan;
