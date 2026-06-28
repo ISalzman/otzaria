@@ -1,9 +1,8 @@
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:seforim_library_updater/seforim_library_updater.dart';
 
-import '../models/library_update_plan.dart';
 import '../repository/library_update_repository.dart';
-import '../services/patch_downloader.dart';
 
 part 'library_update_event.dart';
 part 'library_update_state.dart';

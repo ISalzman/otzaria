@@ -8,15 +8,9 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/utils/file/zstd_stream_extractor.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'package:seforim_library_updater/seforim_library_updater.dart';
 
-import '../models/library_update_plan.dart';
-import '../services/library_db_recovery_service.dart';
 import '../services/library_runtime_refresh_service.dart';
-import '../services/library_update_discovery.dart';
-import '../services/library_update_planner.dart';
-import '../services/local_db_version_reader.dart';
-import '../services/patch_applier.dart';
-import '../services/patch_downloader.dart';
 
 /// שלבי תהליך העדכון — לתצוגת הודעות למשתמש.
 enum LibraryUpdatePhase {

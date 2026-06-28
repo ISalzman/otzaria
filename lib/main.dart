@@ -51,11 +51,9 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 import 'package:otzaria/library_update/repository/library_update_repository.dart';
-import 'package:otzaria/library_update/services/github_library_release_client.dart';
-import 'package:otzaria/library_update/services/library_db_recovery_service.dart';
-import 'package:otzaria/library_update/services/library_update_discovery.dart';
+import 'package:seforim_library_updater/seforim_library_updater.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
-import 'package:otzaria/library_update/services/patch_downloader.dart';
+import 'package:zstandard/zstandard.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
@@ -1109,7 +1107,9 @@ class _AppBootstrapState extends State<AppBootstrap> {
                 discovery: LibraryUpdateDiscovery(
                   client: GithubLibraryReleaseClient(),
                 ),
-                downloader: PatchDownloader(),
+                downloader: PatchDownloader(
+                  decompress: (bytes) => Zstandard().decompress(bytes),
+                ),
               ),
               isOfflineMode: () =>
                   Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ??
