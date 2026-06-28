@@ -48,8 +48,12 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
-import 'package:otzaria/file_sync/bloc/file_sync_bloc.dart';
-import 'package:otzaria/file_sync/repository/file_sync_repository.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
+import 'package:otzaria/library_update/repository/library_update_repository.dart';
+import 'package:seforim_library_updater/seforim_library_updater.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'package:zstandard/zstandard.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
@@ -603,7 +607,54 @@ Future<void> _initializeProcessSingletons() async {
   unawaited(_runDeferredErrorReportFlush());
 }
 
+/// משחזר עדכון ספרייה שנקטע (marker+backup) לפני פתיחת ה-DB.
+Future<void> _recoverInterruptedLibraryUpdate() async {
+  try {
+    final dbPath = DatabaseConstants.getDatabasePath();
+    const recovery = LibraryDbRecoveryService();
+    final result = await recovery.recoverIfNeeded(dbPath);
+    switch (result.action) {
+      case RecoveryAction.restored:
+        debugPrint('📦 ${result.detail}');
+      case RecoveryAction.blockedMissingBackup:
+        debugPrint('⚠️ ${result.detail}');
+        // לא מוחקים בשקט. מוודאים תקינות מלאה (quick_check) של ה-DB — רץ רק
+        // במצב חריג ונדיר זה. אם תקין — הסימון שריד וניתן לנקותו; אם פגום —
+        // משאירים evidence; נדרשת הורדה מלאה.
+        if (_isLocalDbHealthy(dbPath)) {
+          debugPrint('   ה-DB עבר quick_check; מנקה סימון שריד');
+          recovery.clearStaleArtifacts(dbPath);
+        } else {
+          debugPrint('   ⚠️ ה-DB פגום/לא קריא — נדרשת הורדה מלאה; משאיר סימון');
+        }
+      case RecoveryAction.none:
+        break;
+    }
+  } catch (e) {
+    debugPrint('library update recovery failed: $e');
+  }
+}
+
+/// בדיקת תקינות מלאה (PRAGMA quick_check) של ה-DB, read-only. כבדה — נקראת
+/// רק במצב blockedMissingBackup הנדיר, לא בעלייה הרגילה.
+bool _isLocalDbHealthy(String dbPath) {
+  try {
+    final db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+    try {
+      final result = db.select('PRAGMA quick_check');
+      return result.isNotEmpty && result.first.values.first?.toString() == 'ok';
+    } finally {
+      db.close();
+    }
+  } catch (_) {
+    return false;
+  }
+}
+
 Future<void> _initializeRestartableRuntime() async {
+  // שחזור עדכון ספרייה שנקטע (marker+backup) חייב לרוץ לפני פתיחת ה-DB.
+  await _recoverInterruptedLibraryUpdate();
+
   // initHive נקרא כבר ב-_initializeProcessSingletons. הקריאה הכפולה כאן
   // הייתה no-op (Hive.openBox מחזיר box קיים), אבל בכל זאת חוסכת קצת זמן
   // בקריאה הראשונה. ב-restart אין צורך לפתוח שוב — boxes לא נסגרים.
@@ -1049,14 +1100,27 @@ class _AppBootstrapState extends State<AppBootstrap> {
           BlocProvider<WorkStatusCubit>(
             create: (_) => WorkStatusCubit(),
           ),
-          BlocProvider<FileSyncBloc>(
+          BlocProvider<LibraryUpdateBloc>(
             lazy: true,
-            create: (context) => FileSyncBloc(
-              repository: FileSyncRepository(
-                githubOwner: 'Otzaria',
-                repositoryName: 'SeforimLibrary',
+            create: (context) => LibraryUpdateBloc(
+              repository: LibraryUpdateRepository(
+                discovery: LibraryUpdateDiscovery(
+                  client: GithubLibraryReleaseClient(),
+                ),
+                downloader: PatchDownloader(
+                  decompress: (bytes) => Zstandard().decompress(bytes),
+                ),
               ),
-              workStatusCubit: context.read<WorkStatusCubit>(),
+              isOfflineMode: () =>
+                  Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ??
+                  false,
+              areUpdatesEnabled: () =>
+                  Settings.getValue<bool>(
+                      SettingsRepository.keySoftwareAndBookUpdatesEnabled) ??
+                  true,
+              allowPrerelease: () =>
+                  Settings.getValue<bool>(SettingsRepository.keyDevChannel) ??
+                  false,
             ),
           ),
           BlocProvider<PluginSystemBloc>(
