@@ -19,7 +19,6 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/controls/action_buttons.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 class TantivySearchResults extends StatefulWidget {
   final SearchingTab tab;
@@ -520,12 +519,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                 if (result.isPdf)
                                   Padding(
                                     padding: const EdgeInsets.only(left: 8),
-                                    child: RtlIcon(
+                                    child: Icon(
                                       FluentIcons.document_pdf_24_regular,
                                       size: 16,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
                                     ),
                                   ),
                                 Expanded(
@@ -534,9 +532,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                     style: TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.bold,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
                                     ),
                                     textAlign: TextAlign.right,
                                     maxLines: 1,
@@ -544,7 +541,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                   ),
                                 ),
                                 IconButton(
-                                  icon: RtlIcon(
+                                  icon: Icon(
                                     FluentIcons.copy_24_regular,
                                     size: 16,
                                     color: Theme.of(context)
