@@ -1,4 +1,4 @@
-﻿import 'package:file_picker/file_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +11,6 @@ import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
-import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
@@ -227,108 +226,20 @@ class _PluginListTile extends StatelessWidget {
       ),
       title: Text(plugin.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(plugin.version),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: Icon(FluentIcons.settings_24_regular),
-            tooltip: 'הגדרות תוסף',
-            onPressed: () async {
-              final result = await showPluginSettingsDialog(context, plugin);
-              if (result == true && onPluginSelected != null) {
-                if (context.mounted) {
-                  context
-                      .read<NavigationBloc>()
-                      .add(const NavigateToScreen(Screen.more));
-                  onPluginSelected!(plugin);
-                }
-              }
-            },
-          ),
-          IconButton(
-            icon: RtlIcon(
-              plugin.pinned
-                  ? FluentIcons.pin_24_filled
-                  : FluentIcons.pin_24_regular,
-            ),
-            tooltip: plugin.pinned ? 'בטל הצמדה' : 'הצמד לסרגל',
-            onPressed: () {
-              if (plugin.pinned) {
-                context
-                    .read<PluginSystemBloc>()
-                    .add(UnpinPluginRequested(plugin.pluginId));
-              } else {
-                context
-                    .read<PluginSystemBloc>()
-                    .add(PinPluginRequested(plugin.pluginId));
-              }
-            },
-          ),
-          // ה-Draggable יושב רק על האייקון כדי שגרירה תתחיל ממנו ולא
-          // מכל מקום ברצי (ככה Tap לפתוח את התוסף עדיין עובד טוב).
-          Draggable<String>(
-            data: plugin.pluginId,
-            dragAnchorStrategy: pointerDragAnchorStrategy,
-            feedback: _DragFeedback(plugin: plugin),
-            child: MouseRegion(
-              cursor: SystemMouseCursors.grab,
-              child: Tooltip(
-                message: 'גרור ושחרר לסידור מחדש',
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  child: Icon(FluentIcons.re_order_dots_vertical_24_regular),
-                ),
-              ),
-            ),
-          ),
-        ],
+      trailing: IconButton(
+        icon: Icon(FluentIcons.settings_24_regular),
+        tooltip: 'הגדרות תוסף',
+        onPressed: () {
+          context
+              .read<NavigationBloc>()
+              .add(const NavigateToScreen(Screen.settings));
+        },
       ),
       onTap: () {
         if (onPluginSelected != null) {
           onPluginSelected!(plugin);
         }
       },
-    );
-  }
-}
-
-/// ה-widget שצף מתחת לסמן בזמן הגרירה. מוצג מעל Overlay של ה-Navigator
-/// (לא OverlayPortal) ולכן אין חששות לקונפליקטים עם LayoutBuilders.
-class _DragFeedback extends StatelessWidget {
-  final InstalledPlugin plugin;
-
-  const _DragFeedback({required this.plugin});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: cs.shadow.withValues(alpha: 0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(FluentIcons.puzzle_piece_24_regular),
-            const SizedBox(width: 8),
-            Text(
-              plugin.name,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

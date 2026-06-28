@@ -840,8 +840,19 @@ class _PluginRow extends StatelessWidget {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             )
-          : Icon(icon),
-      title: Text(plugin.name),
+          : null,
+      title: isSelectionMode
+          ? Text(plugin.name)
+          : Row(
+              children: [
+                Icon(icon, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(plugin.name,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
       subtitle: _StatusBadges(
         version: plugin.version,
         hidden: !plugin.showInTools,
