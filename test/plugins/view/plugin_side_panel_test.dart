@@ -16,13 +16,20 @@ import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
+import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
 import 'package:mockito/mockito.dart';
 // ignore: depend_on_referenced_packages
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+
+class _FakeSettingsRepository extends Fake implements SettingsRepository {
+  @override
+  bool hasProtectedModePassword() => false;
+}
 
 class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
     implements SettingsBloc {
@@ -101,15 +108,18 @@ Widget _wrap({
   required SettingsBloc settingsBloc,
   bool showDevTools = true,
 }) {
-  return MaterialApp(
-    navigatorKey: navigatorKey,
-    home: Scaffold(
-      body: MultiBlocProvider(
-        providers: [
-          BlocProvider<PluginSystemBloc>.value(value: pluginBloc),
-          BlocProvider<SettingsBloc>.value(value: settingsBloc),
-        ],
-        child: PluginSidePanel(showDevTools: showDevTools),
+  return Provider<SettingsRepository>.value(
+    value: _FakeSettingsRepository(),
+    child: MaterialApp(
+      navigatorKey: navigatorKey,
+      home: Scaffold(
+        body: MultiBlocProvider(
+          providers: [
+            BlocProvider<PluginSystemBloc>.value(value: pluginBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: PluginSidePanel(showDevTools: showDevTools),
+        ),
       ),
     ),
   );
