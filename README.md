@@ -12,7 +12,7 @@
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
-[![GPL-3.0 License][license-shield]][license-url]
+[![Personal Use License][license-shield]][license-url]
 
 
 
@@ -189,6 +189,17 @@
 4. בצעו Push לענף (`git push origin feature/AmazingFeature`)
 5. פתחו Pull Request
 
+### תנאי תרומה (חובה לקריאה)
+
+בעצם פתיחת Pull Request, שליחת קוד, או עריכת תוכן קיים במאגר, התורם מסכים לתנאים הבאים — אלא אם צוין במפורש אחרת בכתב בעת מסירת התרומה:
+
+* **העברת זכויות והסכמה לרישוי:** התורם מעביר לבעל הפרויקט (Otzaria Project) את מלוא זכויות היוצרים והקניין בתרומתו, או — לכל הפחות — מעניק רישיון בלעדי, עולמי, בלתי חוזר, ללא תמלוגים ועם זכות רישוי-מחדש, להשתמש בתרומה, לשנותה, להפיצה ולרשותה תחת כל רישיון, לרבות [Personal Use License](LICENSE) ורישיונות עתידיים.
+* **ויתור על תביעות:** התורם מוותר על כל דרישה, תמלוג או תביעה בגין השימוש בתרומתו במסגרת הפרויקט או מיזמים נלווים לו.
+* **הצהרת בעלות:** התורם מצהיר שהתרומה היא יצירה מקורית שלו ושהוא רשאי להעניק בה את הזכויות הללו, ושאינה מפרה זכויות של צד שלישי.
+* **שמירת קרדיט:** מתן הקרדיט לתורם (ברשימת התורמים / היסטוריית הגיט) נשמר; אין באמור כדי לגרוע מזכותו המוסרית להיות מוכר כיוצר התרומה.
+
+תרומה שאינה עומדת בתנאים אלו לא תיקלט במאגר.
+
 ### פתרון בעיות בבנייה (Build)
 
 **שגיאת תעודת SSL ברשתות מסוננות (NetFree וכדומה)**
@@ -210,15 +221,21 @@ flutter build windows
 <!-- LICENSE -->
 ## רישיון
 
-הקוד מורשה תחת [רישיון GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
+הקוד המקורי של הפרויקט מופץ תחת:
 
-משמעות הדבר:
-- ✅ ניתן להשתמש בתוכנה זו, לשנות אותה ולהפיץ אותה
-- ✅ כל שינוי חייב להיות מופץ תחת אותו רישיון GPL-3.0
-- ✅ קוד המקור חייב להיות זמין בעת ההפצה
-- ❌ שימוש מסחרי מחייב שיתוף של כל השינויים והשיפורים
+**Personal Use License 1.0 — שימוש אישי בלבד**
 
-לטקסטים יש רישיונות פתוחים שונים. ניתן לבדוק באתר של ספריא למידע נוסף על כך.
+[פירוט מלא ברישיון](LICENSE)
+
+**תנאי הרישיון בקצרה:**
+- מותר שימוש אישי ופרטי בלבד של אדם פרטי (הורדה, הרצה, לימוד ושינוי לצורך עצמי)
+- אסור כל שימוש ציבורי — בין מסחרי ובין במסגרת תוכנה חינמית/קוד פתוח — ללא רשות מפורשת בכתב
+- אסורה כל הפצה, פרסום, או שילוב במוצר/שירות/אתר/API
+- אסור שימוש של חברה, עמותה, מוסד או כל גוף שהוא ללא רשות מפורשת בכתב
+- חובת מתן קרדיט ל'אוצריא' נשמרת גם לאחר קבלת רשות
+- לבקשת רשות: otzaria.1@gmail.com
+
+> **הערת מעבר:** גרסאות של התוכנה שפורסמו לפני כניסת רישיון זה לתוקף היו תחת GPL-3.0, וזכויות שכבר ניתנו תחתיו אינן מבוטלות. רישיון זה חל על הגרסה הנוכחית ואילך, ובכפוף לזכויות של תורמים אחרים בקוד. רישיון זה חל **רק על הקוד המקורי שלנו** — רכיבי צד שלישי (ספריות, חבילות, גופנים ונכסים) נשארים תחת רישיונותיהם המקוריים, וכך גם הטקסטים והספרים המופצים בנפרד.
 
 ([⇧](#readme-top))
 
@@ -289,7 +306,7 @@ flutter build windows
 [issues-url]: https://github.com/otzaria/otzaria/issues
 [Github-downloads]: https://img.shields.io/github/downloads/otzaria/otzaria/total.svg?style=for-the-badge
 [license-shield]: https://img.shields.io/github/license/otzaria/otzaria.svg?style=for-the-badge
-[license-url]: https://github.com/otzaria/otzaria/blob/master/LICENSE.txt
+[license-url]: https://github.com/otzaria/otzaria/blob/main/LICENSE
 [dart]: https://img.shields.io/badge/dart-000000?style=for-the-badge&logo=dart&logoColor=61DAFB
 [Dart-url]: https://dart.dev/
 [Flutter]: https://img.shields.io/badge/Flutter-20232A?style=for-the-badge&logo=flutter&logoColor=61DAFB
