@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:equatable/equatable.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 
@@ -126,6 +128,23 @@ class NavigateToNextTab extends TabsEvent {}
 class NavigateToPreviousTab extends TabsEvent {}
 
 class LoadTabs extends TabsEvent {}
+
+/// ממפה נתיבי קבצים של הטאבים הפתוחים מתיקיית ספרייה ישנה לחדשה, אחרי
+/// העברת מיקום הספרייה, כדי שספרי PDF/DOCX פתוחים ייטענו מהמיקום החדש.
+///
+/// [completer] מאפשר להמתין לסיום ה-handler (עדכון הזיכרון + שמירה ל-Hive)
+/// לפני שממשיכים לרענון, כדי שלא ייווצר race שבו שמירת הטאבים בעת ה-dispose
+/// תדרוס את המיפוי עם הנתיב הישן. מוחרג מ-props (לא משפיע על שוויון האירוע).
+class RemapBookPaths extends TabsEvent {
+  final String fromDir;
+  final String toDir;
+  final Completer<void>? completer;
+
+  const RemapBookPaths(this.fromDir, this.toDir, {this.completer});
+
+  @override
+  List<Object?> get props => [fromDir, toDir];
+}
 
 class TogglePinTab extends TabsEvent {
   final OpenedTab tab;

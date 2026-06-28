@@ -124,6 +124,69 @@ void main() {
     });
   });
 
+  group('IndexingRepository.hasPathKeyedIndexEntry', () {
+    test('PdfBook תמיד מאונדקס לפי נתיב (גם עם id)', () {
+      expect(
+        IndexingRepository.hasPathKeyedIndexEntry(
+            PdfBook(title: 'ברכות', path: r'C:\lib\ברכות.pdf')),
+        isTrue,
+      );
+      expect(
+        IndexingRepository.hasPathKeyedIndexEntry(
+            PdfBook(title: 'ברכות', path: r'C:\lib\ברכות.pdf', id: 5)),
+        isTrue,
+      );
+    });
+
+    test('DocxBook ללא id — לפי נתיב; עם id — שורד העברה', () {
+      expect(
+        IndexingRepository.hasPathKeyedIndexEntry(
+            DocxBook(title: 'מסמך', path: r'C:\lib\doc.docx')),
+        isTrue,
+      );
+      expect(
+        IndexingRepository.hasPathKeyedIndexEntry(
+            DocxBook(title: 'מסמך', path: r'C:\lib\doc.docx', id: 7)),
+        isFalse,
+      );
+    });
+
+    test('TextBook מ-DB — לא לפי נתיב', () {
+      expect(
+        IndexingRepository.hasPathKeyedIndexEntry(TextBook(title: 'שבת')),
+        isFalse,
+      );
+    });
+  });
+
+  group('IndexingRepository.dropRelocatedFileBookEntries', () {
+    test('מוחק כל כותרת ייחודית פעם אחת ומבצע commit יחיד', () async {
+      final engine = _RecordingSearchEngine();
+      final repository =
+          IndexingRepository(_RecordingTantivyDataProvider(engine));
+
+      await repository.dropRelocatedFileBookEntries([
+        PdfBook(title: 'ברכות', path: r'C:\old\ברכות.pdf'),
+        PdfBook(title: 'ברכות', path: r'C:\old\ברכות-עותק.pdf'),
+        PdfBook(title: 'שבת', path: r'C:\old\שבת.pdf'),
+      ]);
+
+      expect(engine.removedTitles.toSet(), {'ברכות', 'שבת'});
+      expect(engine.commitCount, 1);
+    });
+
+    test('ללא ספרים — לא נוגע במנוע', () async {
+      final engine = _RecordingSearchEngine();
+      final repository =
+          IndexingRepository(_RecordingTantivyDataProvider(engine));
+
+      await repository.dropRelocatedFileBookEntries(const []);
+
+      expect(engine.removedTitles, isEmpty);
+      expect(engine.commitCount, 0);
+    });
+  });
+
   group('IndexingRepository.indexAllBooks', () {
     test('fast path מחזיר מוקדם בלי להפעיל isolate ובלי callbacks', () async {
       final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
@@ -392,6 +455,47 @@ class FakeTantivyDataProvider implements TantivyDataProvider {
 }
 
 class _FakeSearchEngine implements SearchEngine {
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    throw UnimplementedError('Unexpected call: $invocation');
+  }
+}
+
+/// ספק עם מנוע יציב המקליט קריאות — לבדיקת ניקוי רשומות אינדקס שהועברו.
+class _RecordingTantivyDataProvider implements TantivyDataProvider {
+  _RecordingTantivyDataProvider(this._engine);
+
+  final _RecordingSearchEngine _engine;
+
+  @override
+  final Set<String> indexedFilePaths = {};
+
+  @override
+  Future<SearchEngine> get engine async => _engine;
+
+  @override
+  set engine(Future<SearchEngine> value) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    throw UnimplementedError('Unexpected call: $invocation');
+  }
+}
+
+class _RecordingSearchEngine implements SearchEngine {
+  final List<String> removedTitles = [];
+  int commitCount = 0;
+
+  @override
+  Future<void> removeDocumentsByTitle({required String title}) async {
+    removedTitles.add(title);
+  }
+
+  @override
+  Future<void> commit() async {
+    commitCount++;
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) {
     throw UnimplementedError('Unexpected call: $invocation');

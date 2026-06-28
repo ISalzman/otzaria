@@ -24,9 +24,11 @@ import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/dialogs/change_location_dialog.dart';
+import 'package:path/path.dart' as p;
 
 /// טאב הגדרות ספרייה
 class LibrarySettingsTab extends StatefulWidget {
@@ -36,11 +38,11 @@ class LibrarySettingsTab extends StatefulWidget {
   static const List<SettingsSearchEntry> searchEntries = [
     SettingsSearchEntry(
       id: 'library.location.path',
-      title: 'מיקום ספריית אוצריא',
-      subtitle: 'התיקייה בה נשמרים ספרי אוצריא',
+      title: 'מיקום הספרייה והאינדקס',
+      subtitle: 'התיקייה הראשית שמכילה את הספרים ואת אינדקס החיפוש',
       tab: SettingsTab.library,
       cardId: 'library.repository',
-      keywords: ['נתיב', 'תיקיה', 'מאגר'],
+      keywords: ['נתיב', 'תיקיה', 'מאגר', 'אינדקס', 'חיפוש', 'שורש'],
     ),
     SettingsSearchEntry(
       id: 'library.location.hebrewbooks',
@@ -114,12 +116,16 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
       IndexingRepository(TantivyDataProvider.instance);
   bool? _requiresManualReindex;
   String? _defaultLibraryPath;
+  String? _indexPath;
 
   @override
   void initState() {
     super.initState();
-    AppPaths.getDefaultLibraryPath().then((p) {
-      if (mounted) setState(() => _defaultLibraryPath = p);
+    AppPaths.getDefaultLibraryPath().then((path) {
+      if (mounted) setState(() => _defaultLibraryPath = path);
+    });
+    AppPaths.getIndexPath().then((path) {
+      if (mounted) setState(() => _indexPath = path);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -205,50 +211,93 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     }
   }
 
-  /// שורת מיקום ספריית אוצריא — ללא אפשרות ניקוי (הספרייה חיונית לפעולה)
+  /// פותח נתיב במנהל הקבצים של מערכת ההפעלה.
+  void _openInFileManager(String path) {
+    if (path.isEmpty) return;
+    if (Platform.isWindows) {
+      unawaited(Process.run('explorer', [path]));
+    } else if (Platform.isMacOS) {
+      unawaited(Process.run('open', [path]));
+    } else if (Platform.isLinux) {
+      unawaited(Process.run('xdg-open', [path]));
+    }
+  }
+
+  /// מחיל בחירת תיקיית שורש של הספרייה: ה-DB מאותר תחת <שורש>/books, ואם אינו
+  /// שם — ישירות תחת התיקייה שנבחרה (תמיכה במי שמצביע על תיקיית הספרים עצמה).
+  Future<void> _applyLibraryRootChange(String root) async {
+    final booksDir = p.join(root, 'books');
+    String target;
+    if (await File(p.join(booksDir, DatabaseConstants.databaseFileName))
+        .exists()) {
+      target = booksDir;
+    } else if (await File(p.join(root, DatabaseConstants.databaseFileName))
+        .exists()) {
+      target = root;
+    } else {
+      target = booksDir;
+    }
+    if (!mounted || !context.mounted) return;
+    await _showExtractionDialog(context, target, isLibraryPath: true);
+    if (mounted) setState(() {});
+  }
+
+  /// תיקיית השורש (ההורה של books/index) עבור נתיב ספרייה נתון.
+  /// כשהנתיב הוא תת-תיקיית "books" — השורש הוא ההורה; אחרת המשתמש הצביע
+  /// על תיקייה שמכילה את ה-DB ישירות, והיא עצמה השורש.
+  String _libraryRootOf(String libraryPath) =>
+      p.basename(libraryPath).toLowerCase() == 'books'
+          ? p.dirname(libraryPath)
+          : libraryPath;
+
+  /// שורת מיקום הספרייה והאינדקס — מציגה את תיקיית השורש המשותפת
+  /// (ההורה של books ו-index), בלי אפשרות ניקוי (הספרייה חיונית לפעולה).
   Widget _buildLibraryLocationWidget(BuildContext context) {
-    final pathStr =
-        Settings.getValue<String>(SettingsRepository.keyLibraryPath);
+    final booksPath =
+        Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '';
+    final rootPath = booksPath.isEmpty ? '' : _libraryRootOf(booksPath);
+    final defaultRoot =
+        (_defaultLibraryPath == null || _defaultLibraryPath!.isEmpty)
+            ? null
+            : _libraryRootOf(_defaultLibraryPath!);
+    final indexPath = _indexPath ?? '';
 
     return SettingsActionTile.pathTile(
       icon: FluentIcons.folder_24_regular,
-      title: 'מיקום ספריית אוצריא',
-      currentPath: pathStr ?? '',
+      title: 'מיקום הספרייה והאינדקס',
+      currentPath: rootPath,
       placeholder: 'בחר מיקום עבור מאגר הספרים',
-      onFolderChanged: (path) async {
+      onFolderChanged: (root) async {
         if (!context.mounted) return;
-        await _showExtractionDialog(context, path, isLibraryPath: true);
-        if (mounted) setState(() {});
+        await _applyLibraryRootChange(root);
       },
       requestChangeLocation: makeChangeLocationCallback(
-        currentPath: pathStr ?? '',
+        currentPath: rootPath,
         folderName: _libraryFolderName,
-        onPathChanged: (newPath) async {
+        onPathChanged: (root) async {
           if (!context.mounted) return;
-          await _showExtractionDialog(context, newPath, isLibraryPath: true);
-          if (mounted) setState(() {});
+          await _applyLibraryRootChange(root);
         },
-        onMoveContents: pathStr != null && pathStr.isNotEmpty
+        // ה-from של ההעברה הוא תיקיית הספרים בפועל; ה-to הוא השורש שנבחר,
+        // ותחתיו performLibraryMove יוצר books ו-index.
+        onMoveContents: booksPath.isNotEmpty
             ? (ctx, from, to) =>
-                performLibraryMove(context: ctx, from: from, to: to)
+                performLibraryMove(context: ctx, from: booksPath, to: to)
             : null,
         moveContentsWarning:
             'בזמן העברת הספרייה התוכנה תיסגר ותיטען מחדש, ולא תהיה זמינה עד '
             'לסיום הפעולה. תחת התיקייה שתבחר ייווצרו "books" (הספרייה) ו-"index" '
             '(אינדקס החיפוש). רק קבצי הספרייה המזוהים יועברו; קבצים אחרים '
             'שהוספת לתיקייה יישארו במקומם.',
-        defaultPath: _defaultLibraryPath,
+        defaultPath: defaultRoot,
       ),
-      onOpenFolder: () {
-        if (pathStr == null || pathStr.isEmpty) return;
-        if (Platform.isWindows) {
-          unawaited(Process.run('explorer', [pathStr]));
-        } else if (Platform.isMacOS) {
-          unawaited(Process.run('open', [pathStr]));
-        } else if (Platform.isLinux) {
-          unawaited(Process.run('xdg-open', [pathStr]));
-        }
-      },
+      onOpenFolder: () => _openInFileManager(rootPath),
+      onOpenPath: _openInFileManager,
+      pathTargets: [
+        PathTarget(label: 'תיקייה ראשית', path: rootPath),
+        PathTarget(label: 'ספרייה', path: booksPath),
+        PathTarget(label: 'אינדקס', path: indexPath),
+      ],
     );
   }
 
@@ -281,16 +330,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                 _afterMoveUpdateBloc(newPath, UpdateHebrewBooksPath.new)
             : null,
       ),
-      onOpenFolder: () {
-        if (!hasPath) return;
-        if (Platform.isWindows) {
-          unawaited(Process.run('explorer', [pathStr]));
-        } else if (Platform.isMacOS) {
-          unawaited(Process.run('open', [pathStr]));
-        } else if (Platform.isLinux) {
-          unawaited(Process.run('xdg-open', [pathStr]));
-        }
-      },
+      onOpenFolder: () => _openInFileManager(hasPath ? pathStr : ''),
       onClearPath: () => _removeHebrewBooksPath(context),
     );
   }

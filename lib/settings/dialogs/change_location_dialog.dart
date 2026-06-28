@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/core/app_paths.dart';
@@ -10,10 +11,11 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
-import 'package:otzaria/tabs/tabs_repository.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/utils/move_directory.dart';
@@ -89,11 +91,16 @@ Future<void> Function(BuildContext) makeChangeLocationCallback({
   };
 }
 
-/// מחזיר את שמות הרשומות העליונות בתיקיית הספרייה [from] שיש להעביר: קבצי
-/// ה-DB שהתוכנה מנהלת, וכן כל ספר (PDF/DOCX) שהספרייה מזהה וקובצו יושב בתוך
-/// התיקייה. כך מועברים רק ספרים מזוהים, וקבצים אקראיים שהמשתמש הוסיף נשארים.
-Future<Set<String>> _libraryMoveIncludeSet(String from) async {
+/// סורק את ספרי הספרייה שבתוך [from] ומחזיר:
+/// - [include]: שמות הרשומות העליונות שיש להעביר (קבצי DB מנוהלים + ספרי
+///   קובץ מזוהים). כך מועברים רק ספרים מזוהים, וקבצים אקראיים שהמשתמש הוסיף
+///   נשארים במקומם.
+/// - [relocated]: ספרי קובץ שרשומתם באינדקס נשמרת לפי נתיב מוחלט (PDF, וספרי
+///   קובץ ללא id יציב), ולכן רשומתם תישבר בהעברה ויש לנקותה אחרי ההעברה.
+Future<({Set<String> include, List<Book> relocated})> _scanLibraryMove(
+    String from) async {
   final include = DatabaseConstants.libraryManagedEntryNames();
+  final relocated = <Book>[];
   try {
     final library = await DataRepository.instance.library;
     for (final book in library.getAllBooks()) {
@@ -105,11 +112,12 @@ Future<Set<String>> _libraryMoveIncludeSet(String from) async {
       if (segments.isNotEmpty && segments.first.isNotEmpty) {
         include.add(segments.first);
       }
+      if (IndexingRepository.hasPathKeyedIndexEntry(book)) relocated.add(book);
     }
   } catch (e) {
-    debugPrint('[performLibraryMove] library include scan failed: $e');
+    debugPrint('[performLibraryMove] library scan failed: $e');
   }
-  return include;
+  return (include: include, relocated: relocated);
 }
 
 /// מעביר את ספריית אוצריא למיקום חדש. [to] היא התיקייה שהמשתמש בחר, ותחתיה
@@ -139,7 +147,8 @@ Future<void> performLibraryMove({
     'מעביר את הספרייה למיקום החדש…\nהתוכנה לא תהיה פעילה עד לסיום הפעולה.',
   );
 
-  final include = await _libraryMoveIncludeSet(from);
+  final scan = await _scanLibraryMove(from);
+  final include = scan.include;
   final oldIndex = await AppPaths.getIndexPath();
   final newIndex = p.join(to, p.basename(oldIndex));
   final shouldMoveIndex =
@@ -161,8 +170,12 @@ Future<void> performLibraryMove({
       await Settings.setValue<String>(
           SettingsRepository.keyIndexPath, newIndex);
     }
-    // 4. מיפוי נתיבי הספרים הפתוחים כך שייטענו מהמיקום החדש לאחר הרענון.
-    await TabsRepository().remapBookPaths(from, newLibrary);
+    // 4. מיפוי נתיבי הספרים הפתוחים *בזיכרון* (לא רק ב-Hive), אחרת שמירת
+    //    הטאבים בעת הרענון תדרוס את המיפוי וה-PDF ייפתח מהנתיב הישן.
+    //    awaited בכוונה: חובה שהמיפוי יושלם לפני ה-reset/restart, אחרת יש race.
+    if (context.mounted) {
+      await context.read<TabsBloc>().remapBookPathsAwaitable(from, newLibrary);
+    }
     // 5. סגירת חיבורי ה-DB (משחרר את נעילת seforim.db) והפניה למיקום החדש.
     await resetRuntimeStateForAppRestart();
     // 6. פתיחה מחדש של האינדקס בנתיב החדש — סוגר את האינדקס הישן ומשחרר אותו.
@@ -171,6 +184,17 @@ Future<void> performLibraryMove({
     } catch (e) {
       // כשל בפתיחת האינדקס אינו עוצר את ההעברה — הרענון/אינדוקס מחדש יתקן.
       debugPrint('[performLibraryMove] reopenIndex failed: $e');
+    }
+    // 7. ניקוי רשומות אינדקס של ספרי קובץ שנתיבם השתנה (PDF וכו'), כדי
+    //    שהאינדוקס שלאחר הרענון יוסיף אותם בנתיב החדש בלי כפילויות. ספרי
+    //    הטקסט מ-DB מאונדקסים לפי id ושורדים את ההעברה — אינם נוגעים בזה.
+    if (scan.relocated.isNotEmpty) {
+      try {
+        await IndexingRepository(TantivyDataProvider.instance)
+            .dropRelocatedFileBookEntries(scan.relocated);
+      } catch (e) {
+        debugPrint('[performLibraryMove] index cleanup failed: $e');
+      }
     }
   } catch (e) {
     if (navigator.canPop()) navigator.pop();
