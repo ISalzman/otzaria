@@ -82,7 +82,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             ),
             if (showEditButton && widget.onEditSearch != null) ...[
               const SizedBox(height: 16),
-              NeutralActionButton(
+              ActionButton.neutral(
                 text: 'ערוך חיפוש',
                 onPressed: widget.onEditSearch!,
                 icon: FluentIcons.edit_24_regular,
@@ -310,7 +310,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 260),
-                child: NeutralActionButton(
+                child: ActionButton.neutral(
                   text: state.isLoading ? 'טוען...' : remainingText,
                   onPressed: () {
                     context.read<SearchBloc>().add(

@@ -134,7 +134,18 @@ class PluginSystemDatabase {
 
   Future<List<InstalledPlugin>> getAllInstalledPlugins() async {
     final db = await database;
-    final maps = db.select('SELECT * FROM plugin_installation').toMapList();
+    final maps = db.select('''
+      SELECT p.*,
+        COALESCE((
+          SELECT granted FROM plugin_permission_grant
+          WHERE plugin_id = p.plugin_id AND permission = 'network.access'
+        ), 0) AS network_access_granted,
+        COALESCE((
+          SELECT granted FROM plugin_permission_grant
+          WHERE plugin_id = p.plugin_id AND permission = 'app.run_on_startup'
+        ), 0) AS run_on_startup_granted
+      FROM plugin_installation p
+    ''').toMapList();
     return maps.map((map) => InstalledPlugin.fromDbMap(map)).toList();
   }
 
@@ -183,13 +194,13 @@ class PluginSystemDatabase {
         [pinned ? 1 : 0, DateTime.now().toIso8601String(), pluginId]);
   }
 
-  Future<void> updatePluginHiddenState(
-      String pluginId, bool hiddenFromTools) async {
+  Future<void> updatePluginShowInTools(
+      String pluginId, bool showInTools) async {
     final db = await database;
     db.execute(
         'UPDATE plugin_installation SET hidden_from_tools = ?, updated_at = ? WHERE plugin_id = ?',
         [
-          hiddenFromTools ? 1 : 0,
+          showInTools ? 0 : 1,
           DateTime.now().toIso8601String(),
           pluginId,
         ]);

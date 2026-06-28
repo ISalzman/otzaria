@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:path/path.dart' as p;
 
@@ -272,10 +273,15 @@ class PluginExtendedValidator {
     for (final method in apiUsage.keys) {
       final required = _methodRequiredPermission[method];
       if (required == null) continue;
-      if (!declaredPermissions.contains(required)) {
-        warnings.add(
-            'התוסף משתמש ב-$method אך לא ביקש את ההרשאה "$required" ב-manifest');
+      if (declaredPermissions.contains(required)) continue;
+      // קריאות רשת (network.fetch/download) מסתפקות גם ב-network.localhost
+      // (גישה לשירות מקומי), לא רק ב-network.access.
+      if (required == 'network.access' &&
+          declaredPermissions.contains('network.localhost')) {
+        continue;
       }
+      warnings.add(
+          'התוסף משתמש ב-$method אך לא ביקש את ההרשאה "$required" ב-manifest');
     }
 
     // Cross-check: event subscription דורש הרשאת events.subscribe:X.
@@ -311,21 +317,30 @@ class PluginExtendedValidator {
   ) {
     final network = manifestJson['network'];
     final networkEnabled = network is Map && network['enabled'] == true;
-    final networkRequested =
-        networkEnabled || declaredPermissions.contains('network.access');
+    final networkRequested = networkEnabled ||
+        declaredPermissions.contains('network.access') ||
+        declaredPermissions.contains('network.localhost');
     if (!networkRequested) return;
 
     final allowlistRaw = network is Map ? network['allowlist'] : null;
     if (allowlistRaw is! List || allowlistRaw.isEmpty) {
       warnings.add(
-          'התוסף מבקש network.access או network.enabled אך network.allowlist ריק. השדה הוא הצהרתי בלבד (התיעוד בפועל מוגדר באוצריא), אך מומלץ לפרט את הכתובות שבהן התוסף עושה שימוש לטובת שקיפות מול המשתמש');
+          'התוסף מבקש גישת רשת (network.access / network.localhost / network.enabled) אך network.allowlist ריק. השדה הוא הצהרתי בלבד (התיעוד בפועל מוגדר באוצריא), אך מומלץ לפרט את הכתובות שבהן התוסף עושה שימוש לטובת שקיפות מול המשתמש');
       return;
     }
     final urlPattern = RegExp(r'^https?://', caseSensitive: false);
     for (final raw in allowlistRaw) {
-      if (raw is! String || !urlPattern.hasMatch(raw)) {
+      if (raw is! String) {
         warnings.add(
-            'כתובת לא תקינה ב-network.allowlist: ${jsonEncode(raw)} (מומלץ http(s) URL מלא)');
+            'כתובת לא תקינה ב-network.allowlist: ${jsonEncode(raw)} (מומלץ http(s) URL מלא, או שם host מקומי כמו 127.0.0.1)');
+        continue;
+      }
+      // host חשוף ל-loopback (127.0.0.1 / localhost) תקין — מתיר כל פורט
+      // על אותו host עבור שירות מקומי (network.localhost).
+      if (isLoopbackHost(raw.trim())) continue;
+      if (!urlPattern.hasMatch(raw)) {
+        warnings.add(
+            'כתובת לא תקינה ב-network.allowlist: ${jsonEncode(raw)} (מומלץ http(s) URL מלא, או שם host מקומי כמו 127.0.0.1)');
       } else if (raw.contains('*')) {
         warnings.add('network.allowlist אינו תומך ב-wildcard: $raw');
       }

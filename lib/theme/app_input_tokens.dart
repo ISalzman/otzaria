@@ -23,16 +23,6 @@ abstract class AppInputTokens {
   static const double focusedAlpha = 0.12;
   static const double disabledAlpha = 0.04;
 
-  // ── רוחבי אייקונים ─────────────────────────────────────────────────────────
-  static const double regularPrefixMinWidth = 44.0;
-  static const double compactPrefixMinWidth = 36.0;
-
-  static const double regularSuffixMinWidth = 40.0;
-  static const double compactSuffixMinWidth = 32.0;
-
-  static const double regularIconSize = 20.0;
-  static const double compactIconSize = 18.0;
-
   // ── פונקציות עזר ───────────────────────────────────────────────────────────
 
   static double height(bool isCompact) =>
@@ -43,13 +33,4 @@ abstract class AppInputTokens {
 
   static double fontSize(bool isCompact) =>
       isCompact ? compactFontSize : regularFontSize;
-
-  static double prefixMinWidth(bool isCompact) =>
-      isCompact ? compactPrefixMinWidth : regularPrefixMinWidth;
-
-  static double suffixMinWidth(bool isCompact) =>
-      isCompact ? compactSuffixMinWidth : regularSuffixMinWidth;
-
-  static double iconSize(bool isCompact) =>
-      isCompact ? compactIconSize : regularIconSize;
 }

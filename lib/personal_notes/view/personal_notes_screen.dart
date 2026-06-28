@@ -29,6 +29,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
@@ -465,6 +466,8 @@ class _PersonalNotesManagerScreenState
   }
 
   Future<void> _exportNotes() async {
+    if (!await verifyPasswordForAction(context)) return;
+    if (!mounted) return;
     final selection = await showDialog<NotesExportSelection>(
       context: context,
       builder: (context) => PersonalNotesExportDialog(
@@ -497,6 +500,8 @@ class _PersonalNotesManagerScreenState
   }
 
   Future<void> _exportNotesToText() async {
+    if (!await verifyPasswordForAction(context)) return;
+    if (!mounted) return;
     final selection = await showDialog<NotesExportSelection>(
       context: context,
       builder: (context) => PersonalNotesExportDialog(
@@ -529,6 +534,8 @@ class _PersonalNotesManagerScreenState
   }
 
   Future<void> _importNotes() async {
+    if (!await verifyPasswordForAction(context)) return;
+    if (!mounted) return;
     final picked = await FilePicker.pickFiles(
       dialogTitle: 'בחר קובץ ייבוא',
       allowedExtensions: ['json'],

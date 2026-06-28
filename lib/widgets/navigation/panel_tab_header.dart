@@ -3,6 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/app_tokens.dart';
+import 'package:otzaria/widgets/misc/animated_pin_button.dart';
 
 /// טאב סטנדרטי לפנלים הימניים (ללא אייקון filled).
 /// כאשר [label] הוא null — מוצג אייקון בלבד (מצב compact).
@@ -48,17 +49,9 @@ class PinSidebarButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final globalPin = Settings.getValue<bool>('key-pin-sidebar') ?? false;
     final effectivePinned = isPinned || globalPin;
-    return IconButton(
+    return AnimatedPinButton(
+      isPinned: effectivePinned,
       onPressed: globalPin ? null : onToggle,
-      icon: AnimatedRotation(
-        turns: effectivePinned ? -0.125 : 0.0,
-        duration: const Duration(milliseconds: 200),
-        child: Icon(effectivePinned
-            ? FluentIcons.pin_24_filled
-            : FluentIcons.pin_24_regular),
-      ),
-      color: effectivePinned ? Theme.of(context).colorScheme.primary : null,
-      isSelected: effectivePinned,
     );
   }
 }

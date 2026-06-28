@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -112,7 +112,7 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
             children: [
               Row(
                 children: [
-                  RtlIcon(FluentIcons.library_24_regular,
+                  Icon(FluentIcons.library_24_regular,
                       color: colorScheme.primary),
                   const SizedBox(width: 10),
                   Text(
@@ -144,12 +144,12 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
                       style: TextStyle(color: colorScheme.onSurfaceVariant),
                     ),
                   const Spacer(),
-                  NeutralActionButton(
+                  ActionButton.neutral(
                     text: 'ביטול',
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                   const SizedBox(width: 12),
-                  RecommendedActionButton(
+                  ActionButton.recommended(
                     text: _selectedBooks.isEmpty
                         ? 'הוסף'
                         : 'הוסף (${_selectedBooks.length})',
@@ -172,11 +172,11 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
       autofocus: true,
       decoration: InputDecoration(
         hintText: 'חיפוש ספר...',
-        prefixIcon: const RtlIcon(FluentIcons.search_24_regular),
+        prefixIcon: const Icon(FluentIcons.search_24_regular),
         suffixIcon: _searchController.text.isEmpty
             ? null
             : IconButton(
-                icon: const RtlIcon(FluentIcons.dismiss_24_regular),
+                icon: const Icon(FluentIcons.dismiss_24_regular),
                 onPressed: () => setState(_searchController.clear),
               ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),

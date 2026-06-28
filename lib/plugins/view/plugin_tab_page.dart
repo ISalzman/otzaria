@@ -24,6 +24,8 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/plugins/view/plugin_dev_error_view.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
@@ -33,6 +35,7 @@ import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/view/plugin_crashed_view.dart';
 import 'package:otzaria/plugins/view/plugin_webview2_missing_view.dart';
+import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 
@@ -185,6 +188,29 @@ class _PluginTabPageState extends State<PluginTabPage> {
       },
       requestPluginInstall: (downloadUrl) {
         _pluginSystemBloc.add(InstallRemotePluginRequested(downloadUrl));
+      },
+      pickFolder: ({String? title}) async {
+        if (!mounted) return null;
+        if (!await verifyPasswordForAction(context)) return null;
+        if (!mounted) return null;
+        return FilePicker.getDirectoryPath(
+          lockParentWindow: true,
+          dialogTitle: title,
+        );
+      },
+      pickFile: ({List<String>? allowedExtensions, String? title}) async {
+        if (!mounted) return null;
+        if (!await verifyPasswordForAction(context)) return null;
+        if (!mounted) return null;
+        final hasExtensions =
+            allowedExtensions != null && allowedExtensions.isNotEmpty;
+        final result = await FilePicker.pickFiles(
+          dialogTitle: title,
+          lockParentWindow: true,
+          type: hasExtensions ? FileType.custom : FileType.any,
+          allowedExtensions: hasExtensions ? allowedExtensions : null,
+        );
+        return result?.files.single.path;
       },
     );
 
@@ -472,7 +498,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
             if (widget.plugin.manifest.networkEnabled) {
               final granted = await _pluginRegistryRepository.getPermission(
                 widget.plugin.pluginId,
-                'network.access',
+                requiredNetworkPermissionFor(uri),
               );
               final allowed = granted == true &&
                   await PluginNetworkAccessResolver.instance
@@ -517,7 +543,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
             if (widget.plugin.manifest.networkEnabled) {
               final granted = await _pluginRegistryRepository.getPermission(
                 widget.plugin.pluginId,
-                'network.access',
+                requiredNetworkPermissionFor(uri),
               );
               final allowed = granted == true &&
                   await PluginNetworkAccessResolver.instance

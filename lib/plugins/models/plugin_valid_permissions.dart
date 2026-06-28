@@ -147,6 +147,11 @@ const pluginValidPermissions = <String>[
   /// גישה לאינטרנט (לתוספים שצריכים לטעון משאבים חיצוניים)
   'network.access',
 
+  /// גישה לשירותים מקומיים על המחשב (loopback: localhost / 127.0.0.1),
+  /// למשל מודל שפה מקומי (Ollama / LM Studio). נפרדת מ-network.access —
+  /// אינה מתירה גישה לאינטרנט, ולהפך.
+  'network.localhost',
+
   // ===== משוב ומיילים =====
   /// שליחת משוב/דיווחים למייל מותאם אישית
   'feedback.send_email',

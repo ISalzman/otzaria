@@ -53,7 +53,7 @@ void main() {
       includeNotes: false,
       includeWorkspaces: false,
       includeShamorZachor: true,
-      includeUserOverrides: false,
+      // includeUserOverrides: false,
       includePlugins: false,
     );
 
@@ -312,7 +312,7 @@ void main() {
         includeNotes: false,
         includeWorkspaces: false,
         includeShamorZachor: false,
-        includeUserOverrides: false,
+        // includeUserOverrides: false,
         includePlugins: true,
       );
       return (path: result.path, skipped: result.skippedSections);

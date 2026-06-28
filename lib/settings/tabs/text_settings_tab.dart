@@ -1,12 +1,12 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
-import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
@@ -482,8 +482,8 @@ class TextSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'כתרי אותיות',
       children: [
-        SegmentedSettingsTile<String>(
-          icon: Icon(FluentIcons.text_font_info_24_regular),
+        SettingsActionTile.segmentedTile<String>(
+          icon: FluentIcons.text_font_info_24_regular,
           title: 'הצגת הניקוד',
           subtitle: nikudSubtitle,
           options: const [
@@ -518,7 +518,7 @@ class TextSettingsTab extends StatelessWidget {
             }
           },
         ),
-        SwitchSettingsTile.text(
+        SettingsActionTile.switchTile(
           icon: FluentIcons.shield_keyhole_24_regular,
           title: 'הצגת שם הקודש',
           subtitle: !state.replaceHolyNames
@@ -529,7 +529,7 @@ class TextSettingsTab extends StatelessWidget {
             context.read<SettingsBloc>().add(UpdateReplaceHolyNames(!value));
           },
         ),
-        SwitchSettingsTile.text(
+        SettingsActionTile.switchTile(
           icon: FluentIcons.text_more_24_regular,
           title: 'הצגת טעמי המקרא',
           subtitle:
@@ -588,8 +588,8 @@ class TextSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'העתקת כותרות ופרקים',
       children: [
-        SegmentedSettingsTile<String>(
-          icon: Icon(FluentIcons.copy_24_regular),
+        SettingsActionTile.segmentedTile<String>(
+          icon: FluentIcons.copy_24_regular,
           title: 'העתקת הכותרת',
           subtitle: copySubtitle,
           options: const [
@@ -603,13 +603,11 @@ class TextSettingsTab extends StatelessWidget {
           },
         ),
         if (state.copyWithHeaders != 'none')
-          DropdownSettingsTile<String>(
-            icon: RtlIcon(FluentIcons.text_align_right_24_regular),
+          SettingsActionTile.dropdownTile<String>(
+            rtlIcon: FluentIcons.text_align_right_24_regular,
             title: 'עיצוב כותרות',
             subtitle: formatSubtitle,
             value: state.copyHeaderFormat,
-            minFieldWidth: 220,
-            maxFieldWidth: 320,
             entries: const [
               AppMenuEntry(
                 value: 'same_line_after_brackets',
@@ -650,7 +648,7 @@ class TextSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'הגדרות לפי ספר',
       children: [
-        SwitchSettingsTile.text(
+        SettingsActionTile.switchTile(
           icon: FluentIcons.book_open_24_regular,
           title: 'שמירת התאמות לכל ספר בנפרד',
           subtitle: state.enablePerBookSettings
@@ -669,7 +667,7 @@ class TextSettingsTab extends StatelessWidget {
             title: 'איפוס הגדרות לפי ספר',
             subtitle: 'מחיקת כל ההתאמות שנשמרו לכל ספר בנפרד',
             actions: [
-              NeutralActionButton(
+              ActionButton.ghost(
                 onPressed: () => _resetPerBookSettings(context),
                 text: 'איפוס',
               ),
@@ -684,7 +682,7 @@ class TextSettingsTab extends StatelessWidget {
       context: context,
       title: 'אישור איפוס הגדרות לפי ספר',
       content: 'האם אתה בטוח שברצונך לאפס ולמחוק את כל ההגדרות לפי ספר?',
-      subtitle: 'פעולה זו אינה ניתנת לביטול.',
+      subtitle: 'פעולה זו אינה ניתנת לביטול!',
       cancelText: 'ביטול',
       confirmText: 'איפוס',
     );
@@ -917,8 +915,8 @@ class _FontDropdown extends StatelessWidget {
           tooltip: bold ? 'הצגה במשקל רגיל' : 'הדגשת הגופן (בולד)',
           isSelected: bold,
           onPressed: () => onBoldChanged(!bold),
-          icon: const RtlIcon(FluentIcons.text_bold_24_regular),
-          selectedIcon: const RtlIcon(FluentIcons.text_bold_24_filled),
+          icon: const Icon(FluentIcons.text_bold_24_regular),
+          selectedIcon: const Icon(FluentIcons.text_bold_24_filled),
         ),
       ],
     );

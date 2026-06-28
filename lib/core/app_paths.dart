@@ -124,6 +124,27 @@ class AppPaths {
       if (File(p.join(exeDir, 'system_install.marker')).existsSync()) {
         return InstallMode.systemWide;
       }
+      // fallback: נתיב הספרייה הנוכחי מתחת ל-ProgramData → התקנה מערכתית
+      final currentPath =
+          Settings.getValue<String>(SettingsRepository.keyLibraryPath);
+      if (currentPath != null && currentPath.isNotEmpty) {
+        final pd = (Platform.environment['ProgramData'] ?? r'C:\ProgramData')
+            .toLowerCase();
+        if (currentPath.toLowerCase().startsWith(pd)) {
+          return InstallMode.systemWide;
+        }
+      }
+      // fallback נוסף: exe בתוך Program Files → התקנה מערכתית
+      final exeDirLower = exeDir.toLowerCase();
+      final pf = (Platform.environment['ProgramFiles'] ??
+              r'C:\Program Files')
+          .toLowerCase();
+      final pfX86 = (Platform.environment['ProgramFiles(x86)'] ??
+              r'C:\Program Files (x86)')
+          .toLowerCase();
+      if (exeDirLower.startsWith(pf) || exeDirLower.startsWith(pfX86)) {
+        return InstallMode.systemWide;
+      }
     }
     if (Platform.isLinux) {
       if (await Directory('/var/lib/otzaria').exists()) {
@@ -395,10 +416,10 @@ class AppPaths {
     return p.join(await getDataRootPath(), 'plugins');
   }
 
-  /// Gets the root path for user overrides.
-  static Future<String> getUserOverridesRootPath() async {
-    return p.join(await getDataRootPath(), 'user_overrides');
-  }
+  // [EDITING DISABLED]
+  // static Future<String> getUserOverridesRootPath() async {
+  //   return p.join(await getDataRootPath(), 'user_overrides');
+  // }
 
   /// Gets the root path for per-book settings files.
   static Future<String> getPerBookSettingsPath() async {

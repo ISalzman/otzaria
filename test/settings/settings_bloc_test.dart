@@ -5,7 +5,7 @@ import 'package:mockito/mockito.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
-import '../../unit/mocks/mock_settings_repository.mocks.dart';
+import '../unit/mocks/mock_settings_repository.mocks.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

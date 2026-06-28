@@ -329,14 +329,13 @@ class _ZmanInfoButton extends StatelessWidget {
 }
 
 /// עוזר להצגת הדיאלוג. ה-context חייב לכלול CalendarCubit ב-tree.
-/// משתמש ברכיב הדיאלוג הסטנדרטי [SingleActionDialog] של הפרויקט.
 Future<void> showZmanimSettingsDialog(BuildContext context) {
   final cubit = context.read<CalendarCubit>();
   return showDialog<void>(
     context: context,
     builder: (_) => BlocProvider.value(
       value: cubit,
-      child: const SingleActionDialog(
+      child: const AppDialog.singleAction(
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

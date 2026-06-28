@@ -315,13 +315,13 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    RecommendedActionButton(
+                    ActionButton.recommended(
                       text: 'חפש',
                       icon: FluentIcons.search_24_regular,
                       onPressed: () => _performSearch(context),
                     ),
                     const SizedBox(width: 8),
-                    NeutralActionButton(
+                    ActionButton.neutral(
                       text: 'סגור',
                       icon: FluentIcons.dismiss_24_regular,
                       onPressed: widget.onClose,

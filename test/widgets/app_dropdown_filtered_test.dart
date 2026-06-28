@@ -50,7 +50,6 @@ void main() {
       AppMenuEntry<int>(value: 3, label: 'פרק ד'),
       AppMenuEntry<int>(value: 4, label: 'פרק ה'),
     ];
-    // הסינון שנעשה במסך ההדפסה: רק ערכים <= endIndex (=2)
     const endIndex = 2;
     final filtered = allHeaders.where((e) => e.value <= endIndex).toList();
 
@@ -60,7 +59,7 @@ void main() {
       value: 0,
     );
 
-    await tester.tap(find.byType(AppSelectionField));
+    await tester.tap(find.byType(AppDropdownField<int>));
     await tester.pumpAndSettle();
 
     expect(popupItem('פרק א'), findsOneWidget);
@@ -89,7 +88,7 @@ void main() {
       value: 4,
     );
 
-    await tester.tap(find.byType(AppSelectionField));
+    await tester.tap(find.byType(AppDropdownField<int>));
     await tester.pumpAndSettle();
 
     expect(popupItem('פרק א'), findsNothing,
@@ -117,7 +116,7 @@ void main() {
       value: 0,
     );
 
-    await tester.tap(find.byType(AppSelectionField));
+    await tester.tap(find.byType(AppDropdownField<int>));
     await tester.pumpAndSettle();
 
     expect(popupItem('פרק א'), findsOneWidget);
@@ -127,8 +126,6 @@ void main() {
 
   testWidgets('סינון של עמודי PDF: "מעמוד" מסתיים ב-pdfEndPage',
       (tester) async {
-    // זה מדמה את הסינון: List.generate(_pdfEndPage, (i) => ...)
-    // עוצרים בערך הנבחר ב"עד עמוד".
     const pdfEndPage = 3;
     final entries = List.generate(
       pdfEndPage,
@@ -144,7 +141,7 @@ void main() {
       value: 1,
     );
 
-    await tester.tap(find.byType(AppSelectionField));
+    await tester.tap(find.byType(AppDropdownField<int>));
     await tester.pumpAndSettle();
 
     expect(popupItem('דף 1'), findsOneWidget);

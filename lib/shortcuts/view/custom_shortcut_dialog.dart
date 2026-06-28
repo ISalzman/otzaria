@@ -179,7 +179,7 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog>
               ],
               const SizedBox(height: 16),
               if (_isRecording)
-                NeutralActionButton(
+                ActionButton.neutral(
                   onPressed: () {
                     setState(() {
                       _isRecording = false;
@@ -189,7 +189,7 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog>
                   text: 'עצור הקלטה',
                 )
               else
-                RecommendedActionButton(
+                ActionButton.recommended(
                   onPressed: () {
                     setState(() {
                       _pressedKeys.clear();
@@ -204,11 +204,11 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog>
           ),
         ),
         actions: [
-          NeutralActionButton(
+          ActionButton.neutral(
             text: 'ביטול',
             onPressed: () => Navigator.pop(context),
           ),
-          RecommendedActionButton(
+          ActionButton.recommended(
             text: 'אישור',
             onPressed: _confirmShortcut,
           ),

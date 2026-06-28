@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:path/path.dart' as p;
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
@@ -206,6 +207,52 @@ void main() {
         }
       });
       expect(loaded, hasLength(2));
+    });
+
+    test('remapBookPaths ממפה נתיב PDF מתיקייה ישנה לחדשה', () async {
+      final oldDir = p.join('/lib', 'old');
+      final newDir = p.join('/lib', 'new');
+      final pdf = PdfBookTab(
+        book: PdfBook(
+          title: 'מסכת ברכות',
+          path: p.join(oldDir, 'תלמוד בבלי', 'ברכות.pdf'),
+        ),
+        pageNumber: 1,
+      );
+      addTearDown(pdf.dispose);
+      await repository.saveTabs([pdf], 0);
+
+      await repository.remapBookPaths(oldDir, newDir);
+
+      final loaded = repository.loadTabs();
+      addTearDown(() {
+        for (final tab in loaded) {
+          tab.dispose();
+        }
+      });
+      final restored = loaded.single as PdfBookTab;
+      expect(restored.book.path, p.join(newDir, 'תלמוד בבלי', 'ברכות.pdf'));
+    });
+
+    test('remapBookPaths לא נוגע בנתיבים שמחוץ לתיקייה הישנה', () async {
+      final pdf = PdfBookTab(
+        book: PdfBook(title: 'אחר', path: p.join('/other', 'book.pdf')),
+        pageNumber: 1,
+      );
+      addTearDown(pdf.dispose);
+      await repository.saveTabs([pdf], 0);
+
+      await repository.remapBookPaths(
+          p.join('/lib', 'old'), p.join('/lib', 'new'));
+
+      final loaded = repository.loadTabs();
+      addTearDown(() {
+        for (final tab in loaded) {
+          tab.dispose();
+        }
+      });
+      expect((loaded.single as PdfBookTab).book.path,
+          p.join('/other', 'book.pdf'));
     });
 
     test('saveCurrentTabIndex שומר את האינדקס כשכל הטאבים נשמרים', () async {

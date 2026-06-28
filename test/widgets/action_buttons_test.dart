@@ -15,7 +15,7 @@ void main() {
             child: Center(
               child: SizedBox(
                 width: 320,
-                child: NeutralActionButton(
+                child: ActionButton.neutral(
                   text: 'חלץ מקובץ דחוס',
                   onPressed: () {},
                   iconWidget: const RtlIcon(

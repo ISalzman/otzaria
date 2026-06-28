@@ -180,11 +180,11 @@ class _PersonalNoteLinkDialogState extends State<PersonalNoteLinkDialog> {
         ),
       ),
       actions: [
-        NeutralActionButton(
+        ActionButton.neutral(
           text: 'ביטול',
           onPressed: () => Navigator.of(context).pop(),
         ),
-        RecommendedActionButton(
+        ActionButton.recommended(
           text: 'הוסף',
           onPressed: _submit,
         ),

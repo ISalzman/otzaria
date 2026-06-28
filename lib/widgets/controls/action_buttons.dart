@@ -1,29 +1,32 @@
 // lib/widgets/controls/action_buttons.dart
-//
 // כפתורי פעולה גנריים בסגנון M3.
-//
-// **שינויים v4:**
-// • ToolbarActionButton — selected משתמש ב-primary/onPrimary
-//   כדי לבלוט בצורה ברורה על סרגל secondaryContainer.
-// • מצב לא נבחר נשאר שקט יותר עם surface containers.
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
-// ── RecommendedActionButton ───────────────────────────────────────────────────
+// ── ActionButton ──────────────────────────────────────────────────────────────
 
-/// כפתור פעולה מומלצת — Primary FilledButton
-class RecommendedActionButton extends StatelessWidget {
+enum _Variant { recommended, neutral, ghost, warning }
+
+/// כפתור פעולה גנרי בסגנון M3. השתמש בבנאים הממוינים:
+/// - [ActionButton.recommended] — FilledButton (Primary) לפעולה מומלצת
+/// - [ActionButton.neutral] — FilledButton.tonal לפעולה ניטרלית
+/// - [ActionButton.ghost] — TextButton שקוף וניטרלי
+/// - [ActionButton.warning] — TextButton שקוף עם טקסט cs.error לפעולות מסוכנות
+class ActionButton extends StatelessWidget {
   final String text;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool isLoading;
   final IconData? icon;
   final Widget? iconWidget;
   final TextAlign textAlign;
+  final _Variant _variant;
+  final FocusNode? focusNode;
+  final bool autofocus;
 
-  const RecommendedActionButton({
+  const ActionButton.recommended({
     super.key,
     required this.text,
     required this.onPressed,
@@ -31,117 +34,146 @@ class RecommendedActionButton extends StatelessWidget {
     this.icon,
     this.iconWidget,
     this.textAlign = TextAlign.start,
-  });
+    this.focusNode,
+    this.autofocus = false,
+  }) : _variant = _Variant.recommended;
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final leading = iconWidget ?? (icon != null ? RtlIcon(icon!) : null);
+  const ActionButton.neutral({
+    super.key,
+    required this.text,
+    required this.onPressed,
+    this.isLoading = false,
+    this.icon,
+    this.iconWidget,
+    this.textAlign = TextAlign.start,
+    this.focusNode,
+    this.autofocus = false,
+  }) : _variant = _Variant.neutral;
 
-    if (isLoading) {
-      return FilledButton(
-          onPressed: null,
-          child: SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: cs.onPrimary)));
-    }
-    if (leading != null) {
-      if (textAlign == TextAlign.center) {
-        // מירכוז אמיתי: הטקסט ממורכז יחסית לרוחב הכפתור המלא,
-        // האייקון צף בצד ה-start (ימין ב-RTL)
-        return FilledButton(
+  const ActionButton.ghost({
+    super.key,
+    required this.text,
+    required this.onPressed,
+    this.isLoading = false,
+    this.icon,
+    this.iconWidget,
+    this.textAlign = TextAlign.start,
+    this.focusNode,
+    this.autofocus = false,
+  }) : _variant = _Variant.ghost;
+
+  const ActionButton.warning({
+    super.key,
+    required this.text,
+    required this.onPressed,
+    this.isLoading = false,
+    this.icon,
+    this.iconWidget,
+    this.textAlign = TextAlign.start,
+    this.focusNode,
+    this.autofocus = false,
+  }) : _variant = _Variant.warning;
+
+  Color _loadingColor(ColorScheme cs) => switch (_variant) {
+        _Variant.recommended => cs.onPrimary,
+        _Variant.neutral => cs.onSecondaryContainer,
+        _Variant.ghost => cs.primary,
+        _Variant.warning => cs.error,
+      };
+
+  ButtonStyle? _buttonStyle(ColorScheme cs) => _variant == _Variant.warning
+      ? TextButton.styleFrom(foregroundColor: cs.error)
+      : null;
+
+  Widget _plain({
+    required VoidCallback? onPressed,
+    required Widget child,
+    required ButtonStyle? style,
+  }) =>
+      switch (_variant) {
+        _Variant.recommended => FilledButton(
+            onPressed: onPressed,
+            focusNode: focusNode,
+            autofocus: autofocus,
+            child: child),
+        _Variant.neutral => FilledButton.tonal(
+            onPressed: onPressed,
+            focusNode: focusNode,
+            autofocus: autofocus,
+            child: child),
+        _Variant.ghost || _Variant.warning => TextButton(
+            onPressed: onPressed,
+            style: style,
+            focusNode: focusNode,
+            autofocus: autofocus,
+            child: child),
+      };
+
+  Widget _withIcon({required Widget leading, required ButtonStyle? style}) {
+    final label = Text(text, textAlign: textAlign);
+    return switch (_variant) {
+      _Variant.recommended => FilledButton.icon(
           onPressed: onPressed,
-          child: Stack(
-            children: [
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28),
-                  child: _BalancedText(
-                    text,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-              Positioned.fill(
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: leading,
-                ),
-              ),
-            ],
-          ),
-        );
-      }
-      return FilledButton.icon(
+          focusNode: focusNode,
+          autofocus: autofocus,
+          icon: leading,
+          label: label),
+      _Variant.neutral => FilledButton.tonalIcon(
+          onPressed: onPressed,
+          focusNode: focusNode,
+          autofocus: autofocus,
+          icon: leading,
+          label: label),
+      _Variant.ghost || _Variant.warning => TextButton.icon(
           onPressed: onPressed,
           icon: leading,
-          label: Text(text, textAlign: textAlign));
-    }
-    return FilledButton(
-        onPressed: onPressed, child: Text(text, textAlign: textAlign));
+          label: label,
+          style: style,
+          focusNode: focusNode,
+          autofocus: autofocus),
+    };
   }
-}
-
-// ── NeutralActionButton ───────────────────────────────────────────────────────
-
-/// כפתור פעולה ניטרלית — Tonal/SecondaryContainer FilledButton
-class NeutralActionButton extends StatelessWidget {
-  final String text;
-  final VoidCallback onPressed;
-  final bool isLoading;
-  final IconData? icon;
-  final Widget? iconWidget;
-  final TextAlign textAlign;
-
-  const NeutralActionButton({
-    super.key,
-    required this.text,
-    required this.onPressed,
-    this.isLoading = false,
-    this.icon,
-    this.iconWidget,
-    this.textAlign = TextAlign.start,
-  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final leading = iconWidget ?? (icon != null ? RtlIcon(icon!) : null);
+    final style = _buttonStyle(cs);
 
     if (isLoading) {
-      return FilledButton.tonal(
-          onPressed: null,
-          child: SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: cs.onSecondaryContainer)));
+      return _plain(
+        onPressed: null,
+        child: SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(
+              strokeWidth: 2, color: _loadingColor(cs)),
+        ),
+        style: style,
+      );
     }
     if (leading != null) {
       if (textAlign == TextAlign.center) {
-        return FilledButton.tonal(
+        return _plain(
           onPressed: onPressed,
-          child: _CenteredButtonContent(
-            text: text,
-            leading: leading,
-          ),
+          child: _CenteredButtonContent(text: text, leading: leading),
+          style: style,
         );
       }
-      return FilledButton.tonalIcon(
-        onPressed: onPressed,
-        icon: leading,
-        label: Text(text, textAlign: textAlign),
-      );
+      return _withIcon(leading: leading, style: style);
     }
-    return FilledButton.tonal(
+    return _plain(
       onPressed: onPressed,
       child: Text(text, textAlign: textAlign),
+      style: style,
     );
   }
 }
 
+// ── _CenteredButtonContent ────────────────────────────────────────────────────
+
+// Stack במקום Row כדי שהטקסט יהיה ממורכז יחסית לרוחב הכפתור המלא,
+// והאייקון צף בצד ה-start מבלי להזזת הטקסט.
 class _CenteredButtonContent extends StatelessWidget {
   final String text;
   final Widget leading;
@@ -158,10 +190,7 @@ class _CenteredButtonContent extends StatelessWidget {
         Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: _BalancedText(
-              text,
-              textAlign: TextAlign.center,
-            ),
+            child: _BalancedText(text, textAlign: TextAlign.center),
           ),
         ),
         Positioned.fill(
@@ -198,7 +227,6 @@ class _BalancedText extends StatelessWidget {
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
 
-        // בדוק אם הטקסט נכנס בשורה אחת
         final singleLinePainter = TextPainter(
           text: TextSpan(text: text, style: effectiveStyle),
           textDirection: textDir,
@@ -209,7 +237,6 @@ class _BalancedText extends StatelessWidget {
           return Text(text, textAlign: textAlign);
         }
 
-        // מצא את נקודת השבירה שנותנת שורות שוות ביותר
         final words = text.split(' ');
         if (words.length <= 1) {
           return Text(text, textAlign: textAlign);
@@ -228,7 +255,6 @@ class _BalancedText extends StatelessWidget {
             maxLines: 1,
           )..layout(maxWidth: double.infinity);
 
-          // אם שורה 1 רחבה מהמקום הפנוי — לא ניתן לשבור כאן
           if (p1.width > maxWidth) continue;
 
           final p2 = TextPainter(
@@ -327,7 +353,6 @@ class ToolbarActionButton extends StatelessWidget {
   final bool selected;
   final String? label;
   final bool compact;
-
   final bool flipInRtl;
 
   const ToolbarActionButton({
@@ -348,18 +373,16 @@ class ToolbarActionButton extends StatelessWidget {
 
     final Color bg =
         selected ? cs.onSurface.withValues(alpha: 0.12) : Colors.transparent;
-
     final Color fg = selected ? cs.onSecondaryContainer : cs.onSurfaceVariant;
 
-    final double iconSize = compact ? 20 : 20;
+    const double iconSize = 20;
     final double fontSize = compact ? 12 : 14;
     final double minSize = compact ? 36 : 40;
     final EdgeInsets padding = compact
         ? const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0)
         : const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0);
 
-    // אייקון עם הצבע הנכון — IconTheme מאפשר לwidgets מורכבים (RotatedBox, Transform)
-    // לרשת את הצבע באופן אוטומטי דרך nested Icon.
+    // IconTheme מאפשר לwidgets מורכבים (RotatedBox, Transform) לרשת את הצבע אוטומטית.
     final Widget iconEl = iconWidget != null
         ? IconTheme(
             data: IconThemeData(color: fg, size: iconSize),
@@ -395,8 +418,7 @@ class ToolbarActionButton extends StatelessWidget {
       button = IconButton(
         onPressed: onPressed,
         icon: iconEl,
-        padding:
-            compact ? const EdgeInsets.all(8.0) : const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(8.0),
         constraints: BoxConstraints(minWidth: minSize, minHeight: minSize),
         style: IconButton.styleFrom(
           backgroundColor: Colors.transparent,

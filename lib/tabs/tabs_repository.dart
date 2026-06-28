@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:hive_ce/hive.dart';
+import 'package:path/path.dart' as p;
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
@@ -57,6 +58,47 @@ class TabsRepository {
       rightTabIndex: persistedRight,
       splitRatio: sideBySideMode.splitRatio,
     );
+  }
+
+  /// ממפה נתיבי קבצים שמורים של טאבים מתיקיית הספרייה הישנה [fromDir] לחדשה
+  /// [toDir], כדי שספרי PDF/DOCX פתוחים ייטענו מהמיקום החדש לאחר רענון התוכנה.
+  /// משכתב את שדות 'path' ו-'filePath' בכל עומק (כולל ה-book המקונן).
+  Future<void> remapBookPaths(String fromDir, String toDir) async {
+    final box = Hive.box('tabs');
+    final rawTabs = box.get(_tabsBoxKey, defaultValue: []) as List;
+    var changed = false;
+    final remapped = rawTabs
+        .map((e) => _remapNode(e, fromDir, toDir, () => changed = true))
+        .toList();
+    if (changed) await box.put(_tabsBoxKey, remapped);
+  }
+
+  dynamic _remapNode(
+    dynamic node,
+    String fromDir,
+    String toDir,
+    void Function() onChange,
+  ) {
+    if (node is Map) {
+      final result = <String, dynamic>{};
+      node.forEach((key, value) {
+        final k = key.toString();
+        if ((k == 'path' || k == 'filePath') &&
+            value is String &&
+            value.isNotEmpty &&
+            (p.equals(fromDir, value) || p.isWithin(fromDir, value))) {
+          result[k] = p.join(toDir, p.relative(value, from: fromDir));
+          onChange();
+        } else {
+          result[k] = _remapNode(value, fromDir, toDir, onChange);
+        }
+      });
+      return result;
+    }
+    if (node is List) {
+      return node.map((e) => _remapNode(e, fromDir, toDir, onChange)).toList();
+    }
+    return node;
   }
 
   List<OpenedTab> loadTabs() {
