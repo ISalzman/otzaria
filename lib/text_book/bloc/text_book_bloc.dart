@@ -2240,7 +2240,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   void _preloadLinkEras(List<Link> links) {
     final titles = <String>{
       for (final link in links)
-        if (!LinkTypes.isCommentaryOrTargum(link.connectionType))
+        if (!LinkTypes.isDependentTextLink(link.connectionType))
           utils.getTitleFromPath(link.path2),
     };
     if (titles.isEmpty) return;
@@ -2384,6 +2384,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     final authorChanged =
         enriched.author != null && enriched.author != book.author;
     final heEraChanged = enriched.heEra != null && enriched.heEra != book.heEra;
+
+    // ה-enrichment רץ ברקע; אם ה-bloc נסגר בינתיים אסור להוסיף event.
+    if (isClosed) return;
 
     if ((book.id == null && enriched.resolvedId != null) ||
         heCategoriesChanged ||

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -394,8 +395,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   Future<void> _loadCommentatorGroups() async {
     final commentatorsSet = <String>{};
     for (final link in widget.tab.sourceTab.links) {
-      if (link.connectionType == 'COMMENTARY' ||
-          link.connectionType == 'TARGUM') {
+      if (LinkTypes.isDependentTextLink(link.connectionType)) {
         commentatorsSet.add(utils.getTitleFromPath(link.path2));
       }
     }

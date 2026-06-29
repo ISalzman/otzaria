@@ -1,4 +1,5 @@
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
@@ -383,8 +384,7 @@ class CommentaryService {
 
     return links.any((link) {
       if (!indexSet.contains(link.index1)) return false;
-      final type = link.connectionType.toUpperCase();
-      if (type != "COMMENTARY" && type != "TARGUM") return false;
+      if (!LinkTypes.isDependentTextLink(link.connectionType)) return false;
       if (link.path2 != lastPath) {
         lastPath = link.path2;
         lastTitle = utils.getTitleFromPath(link.path2);

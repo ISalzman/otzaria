@@ -64,7 +64,7 @@ List<Link> computeVisibleLinks({
     final candidates = linksByLine[index + 1] ?? const [];
 
     for (final link in candidates) {
-      if (!LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+      if (!LinkTypes.isDependentTextLink(link.connectionType) &&
           link.start == null &&
           link.end == null) {
         visibleLinks.add(link);

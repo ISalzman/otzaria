@@ -32,7 +32,7 @@ Map<String, dynamic> _loadCategoryTreeInWorker(Map<String, dynamic> request) {
     db.execute('PRAGMA query_only = ON');
 
     final allBooks = _selectMaps(db, '''
-      SELECT id, categoryId, title, orderIndex, totalLines, isBaseBook, fileType
+      SELECT id, categoryId, title, orderIndex, totalLines, isBaseBook
       FROM book
       ORDER BY orderIndex, title
     ''');
@@ -165,12 +165,6 @@ Map<String, dynamic> _convertBookToDetails({
   required String contentType,
   required List<String> categoryPath,
 }) {
-  final fileType = dbBook['fileType'] as String?;
-  final effectiveContentType = fileType == 'pdf'
-      ? 'pdf'
-      : fileType == 'docx'
-          ? 'docx'
-          : contentType;
   final totalLines = dbBook['totalLines'] as int? ?? 0;
   final endPage = totalLines > 0 ? totalLines : 1;
   final sections = _loadTocForBook(
@@ -180,7 +174,7 @@ Map<String, dynamic> _convertBookToDetails({
   );
 
   return {
-    'contentType': effectiveContentType,
+    'contentType': contentType,
     'isCustom': (dbBook['isBaseBook'] as int? ?? 0) != 1,
     'id': dbBook['id'],
     'originalPageCount': totalLines,
@@ -202,12 +196,12 @@ List<Map<String, dynamic>> _loadTocForBook(
   int totalLines,
 ) {
   final tocEntries = _selectMaps(db, '''
-    SELECT t.*, tt.text, COALESCE(l.lineIndex, t.lineIndex, t.lineId) as lineIndex
+    SELECT t.*, tt.text, COALESCE(l.lineIndex, t.lineId) as lineIndex
     FROM tocEntry t
     JOIN tocText tt ON t.textId = tt.id
     LEFT JOIN line l ON t.lineId = l.id
     WHERE t.bookId = ?
-    ORDER BY COALESCE(l.lineIndex, t.lineIndex, t.lineId) ASC,
+    ORDER BY COALESCE(l.lineIndex, t.lineId) ASC,
              CASE WHEN t.id < 0 THEN -t.id ELSE t.id END ASC
   ''', [bookId]);
 

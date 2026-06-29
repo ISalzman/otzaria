@@ -16,6 +16,7 @@ import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/migration/models/category.dart' as db_models;
 import 'package:otzaria/migration/models/book.dart' as db_models;
@@ -267,6 +268,44 @@ void _flattenRawRecursive(
 
 // ──────────────────────────────────────────────────────────────────────────
 
+/// טוען קישורי "מקור" (SOURCE וירטואלי) לספר כ-target: הופך source↔target כדי
+/// שספר מפרש יציג את מקורו. ב-v3 הקישור נשמר בכיוון קנוני אחד בלבד.
+List<Map<String, dynamic>> _loadInverseSourceRows(
+  sqlite3.Database db,
+  int bookId, {
+  int? startLineIndex,
+  int? endLineIndex,
+}) {
+  final types = LinkTypes.dependentTextTypes.toList();
+  final typePlaceholders = List.filled(types.length, '?').join(', ');
+  final hasRange = startLineIndex != null && endLineIndex != null;
+  final params = <Object?>[
+    bookId,
+    if (hasRange) ...[startLineIndex, endLineIndex],
+    ...types,
+  ];
+  return db.select('''
+      SELECT
+        tl.lineIndex as sourceLineIndex,
+        sl.lineIndex as targetLineIndex,
+        sl.heRef as targetLineHeRef,
+        sb.title as targetBookTitle,
+        sb.categoryId as targetCategoryId,
+        NULL as targetFileType,
+        'SOURCE' as connectionTypeName
+      FROM link l
+      JOIN line tl ON l.targetLineId = tl.id
+      JOIN line sl ON l.sourceLineId = sl.id
+      JOIN book sb ON l.sourceBookId = sb.id
+      JOIN connection_type ct ON l.connectionTypeId = ct.id
+      WHERE l.targetBookId = ?
+        ${hasRange ? 'AND tl.lineIndex BETWEEN ? AND ?' : ''}
+        AND ct.name IN ($typePlaceholders)
+        AND l.sourceBookId != l.targetBookId
+      ORDER BY tl.lineIndex
+    ''', params).toMapList();
+}
+
 List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
   required String dbPath,
   required String title,
@@ -278,8 +317,8 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
     db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
 
     final bookResults = db.select(
-      'SELECT id FROM book WHERE title = ? AND categoryId = ? AND fileType = ? LIMIT 1',
-      [title, categoryId, fileType],
+      'SELECT id FROM book WHERE title = ? AND categoryId = ? LIMIT 1',
+      [title, categoryId],
     ).toMapList();
 
     if (bookResults.isEmpty) {
@@ -288,8 +327,8 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
 
     final bookId = bookResults.first['id'] as int;
 
-    return db.select('''
-        SELECT 
+    final forwardRows = db.select('''
+        SELECT
           l.sourceLineId,
           l.targetLineId,
           sl.lineIndex as sourceLineIndex,
@@ -297,7 +336,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
           tl.heRef as targetLineHeRef,
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
-          tb.fileType as targetFileType,
+          NULL as targetFileType,
           ct.name as connectionTypeName
         FROM link l
         JOIN line sl ON l.sourceLineId = sl.id
@@ -307,6 +346,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
         WHERE l.sourceBookId = ?
         ORDER BY sl.lineIndex
       ''', [bookId]).toMapList();
+    return [...forwardRows, ..._loadInverseSourceRows(db, bookId)];
   } finally {
     db?.close();
   }
@@ -326,8 +366,8 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
     db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
 
     final bookResults = db.select(
-      'SELECT id FROM book WHERE title = ? AND categoryId = ? AND fileType = ? LIMIT 1',
-      [title, categoryId, fileType],
+      'SELECT id FROM book WHERE title = ? AND categoryId = ? LIMIT 1',
+      [title, categoryId],
     ).toMapList();
 
     if (bookResults.isEmpty) {
@@ -351,15 +391,18 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
       parameters.addAll(targetBookTitles);
     }
 
-    // תנאי הפילטר:
+    // תנאי הפילטר ("מפרש" = אחד מ-7 הסוגים התלויים, כולל SUPER_COMMENTARY/
+    // MIDRASH וכו', לא רק COMMENTARY/TARGUM):
     // null     → ללא פילטר (כל הקישורים)
-    // ריק      → רק קישורי non-commentary (REFERENCE וכד׳)
-    // לא ריק   → קישורי non-commentary + המפרשים הנבחרים
+    // ריק      → רק קישורים שאינם מפרשים (REFERENCE וכד׳)
+    // לא ריק   → קישורים שאינם מפרשים + המפרשים הנבחרים
+    final depTypesIn =
+        LinkTypes.dependentTextTypes.map((t) => "'$t'").join(', ');
     final commentaryFilterClause = targetBookTitles == null
         ? ''
         : hasCommentaryFilter
-            ? 'AND (ct.name IS NULL OR ct.name NOT IN (\'COMMENTARY\', \'TARGUM\') OR tb.title IN ($targetBookPlaceholders))'
-            : 'AND (ct.name IS NULL OR ct.name NOT IN (\'COMMENTARY\', \'TARGUM\'))';
+            ? 'AND (ct.name IS NULL OR ct.name NOT IN ($depTypesIn) OR tb.title IN ($targetBookPlaceholders))'
+            : 'AND (ct.name IS NULL OR ct.name NOT IN ($depTypesIn))';
 
     final rows = db.select('''
         SELECT
@@ -368,7 +411,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
           tl.heRef as targetLineHeRef,
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
-          tb.fileType as targetFileType,
+          NULL as targetFileType,
           ct.name as connectionTypeName
         FROM link l
         JOIN line sl ON l.sourceLineId = sl.id
@@ -380,7 +423,11 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
           $commentaryFilterClause
         ORDER BY sl.lineIndex, tb.orderIndex
       ''', parameters).toMapList();
-    return rows;
+    return [
+      ...rows,
+      ..._loadInverseSourceRows(db, bookId,
+          startLineIndex: startLineIndex, endLineIndex: endLineIndex),
+    ];
   } catch (error) {
     rethrow;
   } finally {
@@ -492,8 +539,8 @@ Future<List<Map<String, Object?>>> _runBookLinksInRangeInIsolate({
     db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
 
     final bookResults = db.select(
-      'SELECT id, totalLines FROM book WHERE title = ? AND categoryId = ? AND fileType = ? LIMIT 1',
-      [title, categoryId, fileType],
+      'SELECT id, totalLines FROM book WHERE title = ? AND categoryId = ? LIMIT 1',
+      [title, categoryId],
     ).toMapList();
     if (bookResults.isEmpty) {
       return null;
@@ -1039,11 +1086,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
       return false;
     }
 
-    final book = await repository.getBookByTitleCategoryAndFileType(
-      title,
-      categoryId,
-      seforimKey.fileType,
-    );
+    // seforim.db v3 אינו מכיל fileType — איתור לפי כותרת+קטגוריה בלבד.
+    final book = await repository.getBookByTitleAndCategory(title, categoryId);
     return book != null;
   }
 
@@ -1291,8 +1335,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     if (_sqliteProvider.repository != null) {
       try {
+        // seforim.db v3 אינו מכיל fileType — איתור לפי כותרת+קטגוריה בלבד.
         final book = await _sqliteProvider.repository!
-            .getBookByTitleCategoryAndFileType(title, categoryId, fileType);
+            .getBookByTitleAndCategory(title, categoryId);
         if (book != null && book.isFileBacked && book.filePath != null) {
           final file = File(book.filePath!);
           if (await file.exists()) {
@@ -1899,7 +1944,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
       // (ספרי המשתמש שכבר נטענו) נשמר עד הניסיון הבא, במקום להיעלם.
       final db = await repo.database.database;
       withTransaction(db, () {
-        userBooks = repo.database.bookDao.getAllBooksMinimal(db);
+        userBooks =
+            repo.database.bookDao.getAllBooksMinimal(db, withFileColumns: true);
         userCats = repo.database.categoryDao.getAllCategoryRows(db);
         userAuthors = repo.database.bookDao.getBookAuthorsMap(db);
       });

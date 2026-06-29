@@ -269,8 +269,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   static const double _verticalScrollbarGutter = 16.0;
   static const double _horizontalScrollbarGutter = 10.0;
   static const double _scrollbarGutterGap = 4.0;
-  static const String _connectionTypeCommentary = 'COMMENTARY';
-  static const String _connectionTypeTargum = 'TARGUM';
   static const int _kCommentaryTabIndex = 0;
   static const int _kLinksTabIndex = 1;
   static const int _kPersonalNotesTabIndex = 2;
@@ -781,9 +779,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       if (link.index1 > range.endLine) break;
       if (link.index1 < range.startLine) continue;
 
-      final connectionType = link.connectionType.toUpperCase();
-      if (connectionType == _connectionTypeCommentary ||
-          connectionType == _connectionTypeTargum) {
+      if (LinkTypes.isDependentTextLink(link.connectionType)) {
         commentators.add(utils.getTitleFromPath(link.path2));
         continue;
       }
@@ -2589,8 +2585,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Future<void> _loadCommentatorGroups() async {
     final commentatorsSet = <String>{};
     for (final link in widget.tab.links) {
-      if (link.connectionType == 'COMMENTARY' ||
-          link.connectionType == 'TARGUM') {
+      if (LinkTypes.isDependentTextLink(link.connectionType)) {
         commentatorsSet.add(utils.getTitleFromPath(link.path2));
       }
     }
@@ -2811,12 +2806,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // טעינת דורות מראש כדי שמיון הקישורים לפי דורות יעבוד סינכרונית
         // (תפריט הקשר + פאנל קישורים)
         CommentaryService.preloadEras(loadedLinks
-            .where((l) => !LinkTypes.isCommentaryOrTargum(l.connectionType))
+            .where((l) => !LinkTypes.isDependentTextLink(l.connectionType))
             .map((l) => utils.getTitleFromPath(l.path2)));
         final commentaryCount = loadedLinks
-            .where((l) =>
-                l.connectionType.toUpperCase() == 'COMMENTARY' ||
-                l.connectionType.toUpperCase() == 'TARGUM')
+            .where((l) => LinkTypes.isDependentTextLink(l.connectionType))
             .length;
         _bookHasCommentaryLinks = commentaryCount > 0;
         await _loadCommentatorGroups();

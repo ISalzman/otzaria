@@ -6,6 +6,7 @@ import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -1297,10 +1298,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                 final hasAnyCommentaryLinks = currentIndexes.any((idx) {
                   final lineLinks = state.linksByLine[idx + 1];
                   if (lineLinks == null) return false;
-                  return lineLinks.any((link) {
-                    final type = link.connectionType.toUpperCase();
-                    return type == "COMMENTARY" || type == "TARGUM";
-                  });
+                  return lineLinks.any((link) =>
+                      LinkTypes.isDependentTextLink(link.connectionType));
                 });
 
                 // סינון מהיר של קישורים רלוונטיים
