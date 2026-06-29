@@ -2,11 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/services/commentary_service.dart';
 
-/// מטמון בזיכרון של דור המחבר לכל ספר (bookId), מתוך טבלאות book_author →
-/// author → generation. משמש לשובר-שוויון לפי סדר הדורות בחיפוש הספרייה.
+/// מטמון בזיכרון של דור הספר לכל ספר (bookId), מתוך טבלת book_generation →
+/// generation. משמש לשובר-שוויון לפי סדר הדורות בחיפוש הספרייה.
 ///
-/// בניגוד ל-heuristic לפי נתיב (שמסווג שגוי ספרי "משנה תורה" כחז"ל), כאן הדור
-/// נלקח מהנתון המוסמך ב-DB; ספר בלי דור משויך לסוף ([CommentaryEra.other]).
+/// הדור נלקח מהנתון המוסמך ב-DB (לא היוריסטי לפי נתיב); ספר בלי דור משויך
+/// לסוף ([CommentaryEra.other]).
 class GenerationCache {
   GenerationCache._();
 
