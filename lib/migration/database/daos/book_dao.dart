@@ -26,12 +26,26 @@ class BookDao {
   /// Gets minimal book data, optionally within an ongoing transaction.
   /// Used by [DatabaseLibraryProvider] to load books and categories atomically.
   /// Must be called synchronously inside a [withTransaction] block.
-  List<Map<String, dynamic>> getAllBooksMinimal(sqlite3.Database db) {
+  ///
+  /// [withFileColumns] שולף גם `fileType`/`filePath` עבור `user_books.db`, שבו
+  /// הספרים הם קבצים פיזיים. ל-seforim.db v3 אין עמודות אלה והברירת מחדל
+  /// (false) משמיטה אותן.
+  List<Map<String, dynamic>> getAllBooksMinimal(
+    sqlite3.Database db, {
+    bool withFileColumns = false,
+  }) {
+    if (withFileColumns) {
+      return db.select('''
+        SELECT id, title, categoryId, orderIndex, fileType, filePath,
+               heShortDesc
+        FROM book
+        WHERE COALESCE(fileType, '') NOT IN ('link', 'url')
+        ORDER BY orderIndex, title
+      ''').toMapList();
+    }
     return db.select('''
-      SELECT id, title, categoryId, orderIndex, fileType, filePath,
-             heShortDesc
+      SELECT id, title, categoryId, orderIndex, heShortDesc
       FROM book
-      WHERE COALESCE(fileType, '') NOT IN ('link', 'url')
       ORDER BY orderIndex, title
     ''').toMapList();
   }
@@ -46,8 +60,6 @@ class BookDao {
                a.name AS name
         FROM book_author ba
         JOIN author a ON a.id = ba.authorId
-        JOIN book b ON b.id = ba.bookId
-        WHERE COALESCE(b.fileType, '') NOT IN ('link', 'url')
         ORDER BY ba.bookId, a.name
       ) AS author_rows
       GROUP BY author_rows.bookId
@@ -86,7 +98,7 @@ class BookDao {
     final bookIdsStr = bookIds.join(',');
 
     final authorsData = db.select('''
-        SELECT ba.bookId, a.id, a.name, a.generationId
+        SELECT ba.bookId, a.id, a.name
         FROM book_author ba
         JOIN author a ON ba.authorId = a.id
         WHERE ba.bookId IN ($bookIdsStr)
@@ -126,7 +138,6 @@ class BookDao {
       authorsByBook[bookId]!.add({
         'id': row['id'],
         'name': row['name'],
-        'generationId': row['generationId'],
       });
     }
 

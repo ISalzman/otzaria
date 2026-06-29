@@ -497,10 +497,12 @@ class LinkProcessor {
       WITH book_connections AS (
         SELECT
             book_id,
-            MAX(CASE WHEN connectionTypeId = 2 THEN 1 ELSE 0 END) as has_targum,
-            MAX(CASE WHEN connectionTypeId = 3 THEN 1 ELSE 0 END) as has_reference,
-            MAX(CASE WHEN connectionTypeId = 1 THEN 1 ELSE 0 END) as has_commentary,
-            MAX(CASE WHEN connectionTypeId = 4 THEN 1 ELSE 0 END) as has_other
+            -- ה-id של כל סוג נקבע ע"י יוצר ה-DB ואינו קבוע בין גרסאות; חובה
+            -- לזהות לפי שם (ב-v3 למשל TARGUM=3, REFERENCE=4, לא 2/3 הישנים).
+            MAX(CASE WHEN connectionTypeId = (SELECT id FROM connection_type WHERE name = 'TARGUM') THEN 1 ELSE 0 END) as has_targum,
+            MAX(CASE WHEN connectionTypeId = (SELECT id FROM connection_type WHERE name = 'REFERENCE') THEN 1 ELSE 0 END) as has_reference,
+            MAX(CASE WHEN connectionTypeId = (SELECT id FROM connection_type WHERE name = 'COMMENTARY') THEN 1 ELSE 0 END) as has_commentary,
+            MAX(CASE WHEN connectionTypeId = (SELECT id FROM connection_type WHERE name = 'OTHER') THEN 1 ELSE 0 END) as has_other
         FROM (
             SELECT sourceBookId as book_id, connectionTypeId FROM link
             UNION ALL

@@ -6,7 +6,6 @@ SELECT * FROM book ORDER BY orderIndex, title;
 selectAllIgnoreExternalCatalogs:
 SELECT *
 FROM book
-WHERE COALESCE(fileType, '') NOT IN ('link', 'url')
 ORDER BY orderIndex, title;
 
 
@@ -15,20 +14,19 @@ selectById:
 SELECT * FROM book WHERE id = ?;
 
 selectByCategoryId:
-SELECT * FROM book WHERE categoryId = ? AND COALESCE(fileType, '') NOT IN ('link', 'url') ORDER BY orderIndex, title;
+SELECT * FROM book WHERE categoryId = ? ORDER BY orderIndex, title;
 
 -- Select all books whose category is a descendant of the given ancestor category
 selectByAncestorCategory:
 SELECT b.* FROM book b
 WHERE b.categoryId IN (SELECT descendantId FROM category_closure WHERE ancestorId = ?)
-  AND COALESCE(b.fileType, '') NOT IN ('link', 'url')
 ORDER BY b.orderIndex, b.title;
 
 selectByTitle:
-SELECT * FROM book WHERE title = ? AND COALESCE(fileType, '') NOT IN ('link', 'url') LIMIT 1;
+SELECT * FROM book WHERE title = ? LIMIT 1;
 
 selectByTitleAndCategory:
-SELECT * FROM book WHERE title = ? AND categoryId = ? AND COALESCE(fileType, '') NOT IN ('link', 'url') LIMIT 1;
+SELECT * FROM book WHERE title = ? AND categoryId = ? LIMIT 1;
 
 selectByTitleCategoryAndFileType:
 SELECT * FROM book WHERE title = ? AND categoryId = ? AND fileType = ? LIMIT 1;
@@ -37,10 +35,10 @@ selectByTitleAndFileType:
 SELECT * FROM book WHERE title = ? AND fileType = ? LIMIT 1;
 
 selectByTitleLike:
-SELECT * FROM book WHERE title LIKE ? AND COALESCE(fileType, '') NOT IN ('link', 'url') LIMIT 1;
+SELECT * FROM book WHERE title LIKE ? LIMIT 1;
 
 selectManyByTitleLike:
-SELECT * FROM book WHERE title LIKE ? AND COALESCE(fileType, '') NOT IN ('link', 'url') ORDER BY orderIndex, title LIMIT ?;
+SELECT * FROM book WHERE title LIKE ? ORDER BY orderIndex, title LIMIT ?;
 
 
 selectByAuthor:
@@ -48,7 +46,6 @@ SELECT b.* FROM book b
 JOIN book_author ba ON b.id = ba.bookId
 JOIN author a ON ba.authorId = a.id
 WHERE a.name LIKE ?
-  AND COALESCE(b.fileType, '') NOT IN ('link', 'url')
 ORDER BY b.orderIndex, b.title;
 
 -- Base-books helpers
@@ -96,7 +93,7 @@ countByCategoryId:
 SELECT COUNT(*) FROM book WHERE categoryId = ?;
 
 countAll:
-SELECT COUNT(*) FROM book WHERE COALESCE(fileType, '') NOT IN ('link', 'url');
+SELECT COUNT(*) FROM book;
 
 getMaxId:
 SELECT MAX(id) FROM book;

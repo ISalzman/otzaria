@@ -307,8 +307,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   Future<void> _loadCommentatorGroups() async {
     final commentatorsSet = <String>{};
     for (final link in widget.tab.links) {
-      if (link.connectionType == 'COMMENTARY' ||
-          link.connectionType == 'TARGUM') {
+      if (LinkTypes.isDependentTextLink(link.connectionType)) {
         commentatorsSet.add(utils.getTitleFromPath(link.path2));
       }
     }
@@ -319,7 +318,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     // ומרעננים, כדי שסדר fallback (אלפבתי) שאולי נקבע מוקדם לא יישאר תקוע.
     final nonCommentaryTitles = <String>{
       for (final link in widget.tab.links)
-        if (!LinkTypes.isCommentaryOrTargum(link.connectionType))
+        if (!LinkTypes.isDependentTextLink(link.connectionType))
           utils.getTitleFromPath(link.path2),
     };
     if (nonCommentaryTitles.isNotEmpty) {
@@ -1420,9 +1419,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         continue;
       }
 
-      final connectionType = link.connectionType.toUpperCase();
-      final isCommentary =
-          connectionType == 'COMMENTARY' || connectionType == 'TARGUM';
+      final isCommentary = LinkTypes.isDependentTextLink(link.connectionType);
 
       if (isCommentary) {
         hasAnyCommentaryLinks = true;
