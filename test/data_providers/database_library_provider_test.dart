@@ -161,6 +161,57 @@ void main() {
       }
     });
 
+    test('loadBookLinksRowsForTesting מחזיר מקור (SOURCE inverse) לספר מפרש',
+        () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_inverse');
+      final dbPath = path.join(tempDir.path, 'db.sqlite');
+      final db = sqlite3.sqlite3.open(dbPath);
+
+      try {
+        db.execute(
+            'CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT)');
+        db.execute(
+            'CREATE TABLE line (id INTEGER PRIMARY KEY, lineIndex INTEGER, heRef TEXT)');
+        db.execute(
+            'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
+        db.execute(
+            'CREATE TABLE link (sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+
+        // בראשית (1) הוא הבסיס ורש"י (2) המפרש. הקישור נשמר בכיוון קנוני
+        // base→commentary (כמו ב-v3), בלי שורה הפוכה.
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType) VALUES (1, 'בראשית', 7, 'txt')");
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType) VALUES (2, 'רש''י על בראשית', 8, 'txt')");
+        db.execute(
+            "INSERT INTO line (id, lineIndex, heRef) VALUES (10, 0, 'א')");
+        db.execute(
+            "INSERT INTO line (id, lineIndex, heRef) VALUES (20, 5, 'ה')");
+        db.execute(
+            "INSERT INTO connection_type (id, name) VALUES (1, 'COMMENTARY')");
+        db.execute(
+            'INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 10, 20, 2, 1)');
+
+        // פותחים את רש"י (target) — אמור לקבל את בראשית כמקור דרך inverse.
+        final rows = DatabaseLibraryProvider.loadBookLinksRowsForTesting(
+          dbPath: dbPath,
+          title: 'רש\'י על בראשית',
+          categoryId: 8,
+          fileType: 'txt',
+        );
+
+        expect(rows, hasLength(1));
+        expect(rows.first['connectionTypeName'], 'SOURCE');
+        expect(rows.first['targetBookTitle'], 'בראשית');
+        expect(rows.first['sourceLineIndex'], 5);
+        expect(rows.first['targetLineIndex'], 0);
+      } finally {
+        db.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
     test('loadBookLinksRowsInRangeForTesting מסנן לפי חלון שורות', () async {
       final tempDir = await Directory.systemTemp.createTemp('otzaria_db_range');
       final dbPath = path.join(tempDir.path, 'db.sqlite');
@@ -960,11 +1011,11 @@ void main() {
       );
 
       // הספר האישי מסומן ב-isUserBook=true.
-      final userBook = breslevCategory.books
-          .firstWhere((b) => b.title == 'ספר ברסלב אישי');
+      final userBook =
+          breslevCategory.books.firstWhere((b) => b.title == 'ספר ברסלב אישי');
       expect(userBook.isUserBook, isTrue);
-      final mainBook = breslevCategory.books
-          .firstWhere((b) => b.title == 'ליקוטי מוהר"ן');
+      final mainBook =
+          breslevCategory.books.firstWhere((b) => b.title == 'ליקוטי מוהר"ן');
       expect(mainBook.isUserBook, isFalse);
 
       // תיקייה ללא התאמה בעץ הראשי — מופיעה בשורש הספרייה (לא תחת "מסמכים").
@@ -973,8 +1024,8 @@ void main() {
       expect(unmatchedCategories, hasLength(1),
           reason: 'תיקייה ללא התאמה אמורה להופיע בשורש הספרייה');
       final unmatchedCategory = unmatchedCategories.single;
-      expect(unmatchedCategory.books.map((b) => b.title),
-          contains('שיעור שבועי'));
+      expect(
+          unmatchedCategory.books.map((b) => b.title), contains('שיעור שבועי'));
 
       // קובץ שיושב ישירות בתוך התיקייה הנבחרת — מופיע בשורש הספרייה.
       expect(

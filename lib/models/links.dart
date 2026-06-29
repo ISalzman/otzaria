@@ -4,6 +4,7 @@ import 'dart:collection';
 
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 
@@ -205,8 +206,7 @@ Future<List<Link>> getLinksforIndexs(
   final filteredLinks = links.where((link) {
     // בדיקות מהירות קודם
     if (!indexSet.contains(link.index1)) return false;
-    final type = link.connectionType.toUpperCase();
-    if (type != "COMMENTARY" && type != "TARGUM") return false;
+    if (!LinkTypes.isDependentTextLink(link.connectionType)) return false;
     if (link.path2.isEmpty || link.index2 <= 0) return false;
 
     // בדיקה איטית יותר בסוף

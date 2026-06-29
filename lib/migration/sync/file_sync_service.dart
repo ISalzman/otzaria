@@ -529,8 +529,9 @@ class FileSyncService {
     // ששמורים כעותק עצמאי (txt עם content בתוך ה-DB, filePath=null).
     validBookKeys?.add('$categoryId|$title|$fileType');
 
-    // Check if book already exists in this category with the same file type
-    final existingBook = await _repository
+    // ספרי תיקיות מותאמות חיים ב-user_books.db; הבדיקה חייבת לפנות לשם —
+    // ל-seforim.db v3 אין עמודת fileType (וגם הוא read-only).
+    final existingBook = await _customFoldersRepo
         .checkBookExistsInCategoryWithFileType(title, categoryId, fileType);
 
     bool wasAdded = false;
@@ -541,7 +542,7 @@ class FileSyncService {
           '[FileSyncService] Found existing book: title=$title, id=${existingBook.id}, filePath=${existingBook.filePath}, isFileBacked=${existingBook.isFileBacked}, totalLines=${existingBook.totalLines}');
 
       final existingSourceName =
-          (await _repository.getSourceById(existingBook.sourceId))?.name;
+          (await _customFoldersRepo.getSourceById(existingBook.sourceId))?.name;
 
       // Book exists - check if file has changed
       final file = File(filePath);

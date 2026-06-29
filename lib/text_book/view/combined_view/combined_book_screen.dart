@@ -109,7 +109,7 @@ List<Link> buildCombinedViewContextMenuLinksForParagraph({
 }) {
   final lineLinks = linksByLine[paragraphIndex + 1] ?? const <Link>[];
   final visibleLinks = lineLinks.where((link) {
-    return !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+    return !LinkTypes.isDependentTextLink(link.connectionType) &&
         link.start == null &&
         link.end == null;
   }).toList();
@@ -163,8 +163,7 @@ bool hasCommentariesForLine({
   String? lastTitle;
 
   return lineLinks.any((link) {
-    final type = link.connectionType.toUpperCase();
-    if (type != "COMMENTARY" && type != "TARGUM") return false;
+    if (!LinkTypes.isDependentTextLink(link.connectionType)) return false;
     if (link.path2 != lastPath) {
       lastPath = link.path2;
       lastTitle = utils.getTitleFromPath(link.path2);

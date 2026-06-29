@@ -1249,17 +1249,28 @@ class SeforimRepository {
   Future<void> initializeConnectionTypes() async {
     if (_connectionTypeCache.isNotEmpty) return;
 
-    final types = ['OTHER', 'COMMENTARY', 'SOURCE', 'TARGUM', 'REFERENCE'];
+    // טוענים את *כל* הסוגים שקיימים ב-DB לפי שם→id. ב-seforim.db v3 יש 14
+    // סוגים, וה-id שלהם נקבע ע"י היוצר ואינו זהה למבנה הישן — לכן חובה לטעון
+    // לפי שם ולא להניח מספרים קבועים.
+    final db = await _database.database;
+    for (final row
+        in db.select('SELECT id, name FROM connection_type').toMapList()) {
+      _connectionTypeCache[row['name'] as String] = row['id'] as int;
+    }
 
-    for (final type in types) {
-      // Force creation/retrieval and cache it
-      try {
-        _connectionTypeCache[type] = await _fetchOrCreateConnectionType(type);
-      } catch (e) {
-        // In read-only mode a missing connection type cannot be created.
-        // A properly generated seforim.db already has all types, so this is
-        // only a safety net — skip the missing type rather than aborting.
-        if (!_database.isReadOnly) rethrow;
+    // DB כתיב (user_books/generator) שעדיין חסר סוגים בסיסיים — יוצרים אותם
+    // כדי שכתיבת links תמצא connectionTypeId. ב-read-only מדלגים.
+    if (!_database.isReadOnly) {
+      for (final type in const [
+        'OTHER',
+        'COMMENTARY',
+        'SOURCE',
+        'TARGUM',
+        'REFERENCE',
+      ]) {
+        if (!_connectionTypeCache.containsKey(type)) {
+          _connectionTypeCache[type] = await _fetchOrCreateConnectionType(type);
+        }
       }
     }
     _logger.info('Initialized connection types cache: $_connectionTypeCache');
@@ -1405,9 +1416,8 @@ class SeforimRepository {
     final result = db.select('''
       SELECT g.id, g.name
       FROM book b
-      LEFT JOIN book_author ba ON b.id = ba.bookId
-      LEFT JOIN author a ON ba.authorId = a.id
-      LEFT JOIN generation g ON a.generationId = g.id
+      LEFT JOIN book_generation bg ON bg.bookId = b.id
+      LEFT JOIN generation g ON g.id = bg.generationId
       WHERE b.id = ?
       LIMIT 1
     ''', [bookId]).toMapList();
@@ -1432,11 +1442,9 @@ class SeforimRepository {
     final result = db.select('''
       SELECT g.id, g.name
       FROM book b
-      LEFT JOIN book_author ba ON b.id = ba.bookId
-      LEFT JOIN author a ON ba.authorId = a.id
-      LEFT JOIN generation g ON a.generationId = g.id
+      LEFT JOIN book_generation bg ON bg.bookId = b.id
+      LEFT JOIN generation g ON g.id = bg.generationId
       WHERE b.title = ?
-        AND COALESCE(b.fileType, '') NOT IN ('link', 'url')
       LIMIT 1
     ''', [bookTitle]).toMapList();
 
@@ -1515,8 +1523,10 @@ class SeforimRepository {
 
     // Build VALUES string with all links in a single SQL statement
     final values = links.map((link) {
-      // Use cache directly - extremely fast
-      int? connectionTypeId = _connectionTypeCache[link.connectionType.name];
+      // שמות הסוגים ב-DB באותיות גדולות (COMMENTARY), אך enum.name קטן
+      // (commentary) — בלי toUpperCase הלוקאפ מחטיא וכל לינק נופל ל-default.
+      int? connectionTypeId =
+          _connectionTypeCache[link.connectionType.name.toUpperCase()];
 
       // Fallback only if not found in cache (rare case for non-standard types)
       connectionTypeId ??= _connectionTypeCache['default'] ?? 1;
@@ -1839,7 +1849,6 @@ class SeforimRepository {
       SELECT b.* FROM book b
       JOIN book_has_links bhl ON b.id = bhl.bookId
       WHERE (bhl.hasSourceLinks = 1 OR bhl.hasTargetLinks = 1)
-        AND COALESCE(b.fileType, '') NOT IN ('link', 'url')
       ORDER BY b.orderIndex, b.title
     ''').toMapList();
 
@@ -1868,7 +1877,6 @@ class SeforimRepository {
       SELECT b.* FROM book b
       JOIN book_has_links bhl ON b.id = bhl.bookId
       WHERE bhl.hasSourceLinks = 1
-        AND COALESCE(b.fileType, '') NOT IN ('link', 'url')
       ORDER BY b.orderIndex, b.title
     ''').toMapList();
 
@@ -1897,7 +1905,6 @@ class SeforimRepository {
       SELECT b.* FROM book b
       JOIN book_has_links bhl ON b.id = bhl.bookId
       WHERE bhl.hasTargetLinks = 1
-        AND COALESCE(b.fileType, '') NOT IN ('link', 'url')
       ORDER BY b.orderIndex, b.title
     ''').toMapList();
 
@@ -2328,10 +2335,9 @@ extension BookAcronymRepository on SeforimRepository {
 
     // 1. Search by book title (LIKE search)
     final titleResults = db.select('''
-        SELECT b.id, b.title, b.categoryId, b.filePath, b.fileType
+        SELECT b.id, b.title, b.categoryId
         FROM book b
         WHERE LOWER(b.title) LIKE ?
-          AND COALESCE(b.fileType, '') NOT IN ('link', 'url')
         ORDER BY 
           CASE WHEN LOWER(b.title) = ? THEN 0
                WHEN LOWER(b.title) LIKE ? THEN 1
@@ -2361,7 +2367,7 @@ extension BookAcronymRepository on SeforimRepository {
 
     // 2. Search by acronym
     final acronymResults = db.select('''
-        SELECT DISTINCT b.id, b.title, b.categoryId, b.filePath, b.fileType, ba.term
+        SELECT DISTINCT b.id, b.title, b.categoryId, ba.term
         FROM book_acronym ba
         JOIN book b ON ba.bookId = b.id
         WHERE LOWER(ba.term) LIKE ?

@@ -160,7 +160,11 @@ class BookDatabaseResolver {
       // פשוט יחזיר null וננסה את המועמד הבא.
       final candidateCategoryId = categoryId;
 
-      if (normalizedFilePath != null && normalizedFilePath.isNotEmpty) {
+      // filePath ו-fileType שייכים רק לסכמת user_books; ל-seforim.db v3 אין
+      // עמודות אלה, ולכן מריצים את החיפושים האלה רק על מועמד user_books.
+      if (candidate.isUserBooks &&
+          normalizedFilePath != null &&
+          normalizedFilePath.isNotEmpty) {
         final bookByPath =
             await repository.getExternalBookByFilePath(normalizedFilePath);
         if (bookByPath != null) {
@@ -172,7 +176,8 @@ class BookDatabaseResolver {
         }
       }
 
-      if (candidateCategoryId != null &&
+      if (candidate.isUserBooks &&
+          candidateCategoryId != null &&
           normalizedFileType != null &&
           normalizedFileType.isNotEmpty) {
         final bookByCompositeKey =

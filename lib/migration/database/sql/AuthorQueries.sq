@@ -55,8 +55,7 @@ SELECT COUNT(*) FROM book_author WHERE bookId = ?;
 selectAllBookTitleToGeneration:
 SELECT b.title, GROUP_CONCAT(DISTINCT g.name) as generationName
 FROM book b
-JOIN book_author ba ON b.id = ba.bookId
-JOIN author a ON ba.authorId = a.id
-JOIN generation g ON a.generationId = g.id
+JOIN book_generation bg ON bg.bookId = b.id
+JOIN generation g ON g.id = bg.generationId
 WHERE g.name IS NOT NULL
 GROUP BY b.title;
