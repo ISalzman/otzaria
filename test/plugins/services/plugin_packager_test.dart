@@ -200,18 +200,17 @@ void main() {
       expect(p.dirname(result.outputPath), tempDir.path);
     });
 
-    test('allows name and toolTab.title to differ (per official docs)',
-        () async {
-      // לפי `docs/plugin-sdk/README.md`, contributes.toolTab.title
-      // הוא שדה אופציונלי שברירת המחדל שלו היא שם התוסף — שני השדות יכולים
-      // להיות שונים. הוולידטור החדש לא חוסם.
+    test('rejects a toolTab.title that differs from name', () async {
+      // הכותרת המוצגת בטאב חייבת להיות זהה לשם התוסף (כמו בחנות) — אחרת
+      // התוסף יוצג בשם אחד בחנות ובאחר בטאב.
       final manifest = _minimalManifest(name: 'שם התוסף', title: 'שם הטאב');
       final pluginDir = _writePluginDir(tempDir, manifestOverride: manifest);
 
-      final result =
-          await PluginPackager.packDirectory(directoryPath: pluginDir);
-
-      expect(result.validation.hasErrors, isFalse);
+      await expectLater(
+        PluginPackager.packDirectory(directoryPath: pluginDir),
+        throwsA(
+            predicate((e) => e.toString().contains('השמות חייבים להיות זהים'))),
+      );
     });
 
     test('packaging preserves allowOrderBeforeBuiltIns from the manifest',

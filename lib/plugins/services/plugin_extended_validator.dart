@@ -498,17 +498,13 @@ class PluginExtendedValidator {
     }
   }
 
-  /// `contributes.toolTab.title` הוא שדה אופציונלי שברירת המחדל שלו היא
-  /// שם התוסף; הדוגמה הרשמית עצמה משתמשת בשמות שונים. לכן אי-התאמה אינה
-  /// שגיאה — לכל היותר אזהרה אינפורמטיבית, וגם זאת רק כשהמפתח **התעלם**
-  /// מההמלצה (כלומר הגדיר title שזהה לגמרי לשם, מה שמיותר). למעשה אין כאן
-  /// מה לאסור — אם בעתיד יוחלט להוסיף אזהרה, להוסיף כאן.
+  /// זהות `contributes.toolTab.title` ל-name נאכפת כשגיאה חוסמת ב-
+  /// `PluginManifestValidator.validateManifest` (רץ גם בהתקנה וגם באריזה),
+  /// לכן אין כאן בדיקה נוספת. נשמר כ-hook עתידי לאזהרות עיצוב סביב הטאב.
   static void _checkNameVsToolTabTitle(
     Map<String, dynamic> manifestJson,
     List<String> warnings,
   ) {
-    // לפי התיעוד הרשמי, השדות עצמאיים. אין ולידציה נוספת כרגע.
-    // הפונקציה נשמרת כ-hook עתידי.
     return;
   }
 
