@@ -58,6 +58,34 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     super.dispose();
   }
 
+  /// ממפה מקש ספרה (שורת המספרים או הספרון) ל-1..9. מחזיר null לכל מקש אחר.
+  /// אפס לא נכלל בכוונה — Ctrl+0 שמור לאיפוס גודל טקסט.
+  static int? _tabDigitForKey(LogicalKeyboardKey key) =>
+      _tabDigitKeys[key.keyId];
+
+  // ממופה לפי keyId (פרימיטיב) כי LogicalKeyboardKey דורס את == ולא יכול
+  // לשמש מפתח במפת const.
+  static final Map<int, int> _tabDigitKeys = {
+    LogicalKeyboardKey.digit1.keyId: 1,
+    LogicalKeyboardKey.digit2.keyId: 2,
+    LogicalKeyboardKey.digit3.keyId: 3,
+    LogicalKeyboardKey.digit4.keyId: 4,
+    LogicalKeyboardKey.digit5.keyId: 5,
+    LogicalKeyboardKey.digit6.keyId: 6,
+    LogicalKeyboardKey.digit7.keyId: 7,
+    LogicalKeyboardKey.digit8.keyId: 8,
+    LogicalKeyboardKey.digit9.keyId: 9,
+    LogicalKeyboardKey.numpad1.keyId: 1,
+    LogicalKeyboardKey.numpad2.keyId: 2,
+    LogicalKeyboardKey.numpad3.keyId: 3,
+    LogicalKeyboardKey.numpad4.keyId: 4,
+    LogicalKeyboardKey.numpad5.keyId: 5,
+    LogicalKeyboardKey.numpad6.keyId: 6,
+    LogicalKeyboardKey.numpad7.keyId: 7,
+    LogicalKeyboardKey.numpad8.keyId: 8,
+    LogicalKeyboardKey.numpad9.keyId: 9,
+  };
+
   /// בודק אם הפוקוס הנוכחי נמצא על שדה טקסט
   bool _isEditing() {
     final focusNode = FocusManager.instance.primaryFocus;
@@ -337,6 +365,28 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
         context.read<TabsBloc>().add(NavigateToNextTab());
       }
       return KeyEventResult.handled;
+    }
+
+    // Ctrl+1..9 - מעבר ישיר לטאב לפי מיקומו, כמו בדפדפן: 1-8 לטאבים הראשונים
+    // ו-9 תמיד לטאב האחרון. נבדק אחרי כל קיצורי matchesShortcut כדי שקיצור
+    // מותאם-אישית שהמשתמש שייך ל-Ctrl+ספרה יקבל קדימות. ללא matchesShortcut
+    // (כמו Ctrl+Tab) כדי לא להפוך ל-Cmd ב-Mac.
+    if (HardwareKeyboard.instance.isControlPressed &&
+        !HardwareKeyboard.instance.isShiftPressed &&
+        !HardwareKeyboard.instance.isAltPressed &&
+        !HardwareKeyboard.instance.isMetaPressed) {
+      final digit = _tabDigitForKey(event.logicalKey);
+      if (digit != null) {
+        final tabsBloc = context.read<TabsBloc>();
+        final tabCount = tabsBloc.state.tabs.length;
+        if (tabCount > 0) {
+          final targetIndex = digit == 9 ? tabCount - 1 : digit - 1;
+          if (targetIndex < tabCount) {
+            tabsBloc.add(SetCurrentTab(targetIndex));
+          }
+          return KeyEventResult.handled;
+        }
+      }
     }
 
     // F11 - מסך מלא (רק בעיון/כלים)

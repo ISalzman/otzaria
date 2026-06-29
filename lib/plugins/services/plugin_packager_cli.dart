@@ -76,8 +76,11 @@ class PluginPackagerCli {
       );
       _printValidationReport(result.validation, outSink);
       outSink.writeln('הושלם בהצלחה! נארז ל: ${result.outputPath}');
+      final excludedNote = result.excludedCount > 0
+          ? ', ${result.excludedCount} מוחרגים (.otzignore)'
+          : '';
       outSink.writeln(
-          '  קבצים: ${result.fileCount}, גודל: ${result.bytes} בייטים');
+          '  קבצים: ${result.fileCount}$excludedNote, גודל: ${result.bytes} בייטים');
       return PluginPackagerCliExitCode.success;
     } on PluginPackagerException catch (e) {
       errSink.writeln('שגיאה: ${e.message}');

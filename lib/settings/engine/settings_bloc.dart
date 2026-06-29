@@ -122,6 +122,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       compactMenuMode: settings['compactMenuMode'] ?? false,
       mergeUserBooksIntoLibrary: settings['mergeUserBooksIntoLibrary'] ?? false,
       protectedModeEnabled: settings['protectedModeEnabled'] ?? false,
+      protectedModePasswordSet: _repository.hasProtectedModePassword(),
       hiddenBuiltInToolIds:
           (settings['hiddenBuiltInToolIds'] as Set<String>?) ?? <String>{},
       builtInToolsPinnedToNavRail:
@@ -219,6 +220,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     Emitter<SettingsState> emit,
   ) async {
     await _repository.updateProtectedModePassword(event.password);
+    emit(state.copyWith(protectedModePasswordSet: true));
   }
 
   Future<void> _onUpdateHiddenBuiltInToolIds(

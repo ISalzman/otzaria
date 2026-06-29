@@ -62,6 +62,12 @@ class InstalledPlugin {
   bool get allowsOrderBeforeBuiltIns =>
       manifest.allowOrderBeforeBuiltIns && allowOrderBeforeBuiltInsGranted;
 
+  /// נתיב קובץ הכניסה לריצת רקע (`app.run_on_startup`). אם התוסף הצהיר על
+  /// background.entrypoint קליל (ללא UI) משתמשים בו; אחרת נופלים לקובץ הכניסה
+  /// הרגיל, כך שתוספי רקע קיימים ממשיכים לעבוד ללא שינוי.
+  String get backgroundEntrypointPath =>
+      manifest.backgroundEntrypoint ?? entrypointPath;
+
   bool get isLocalhostDev => sourceType == 'localhost_dev';
   bool get isDevelopment => sourceType == 'development' || isLocalhostDev;
   String get resolvedRootPath =>

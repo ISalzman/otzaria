@@ -194,6 +194,81 @@ void main() {
     );
   });
 
+  group('PathSettingsTile — pathTargets תת-תפריט', () {
+    testWidgets(
+      '"פתח תיקייה..." פותח תת-תפריט של יעדים וקורא ל-onOpenPath',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1200, 800));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        String? opened;
+        await tester.pumpWidget(_wrap(
+          SettingsActionTile.pathTile(
+            icon: icon,
+            title: title,
+            currentPath: r'C:\root',
+            placeholder: placeholder,
+            onFolderChanged: (_) async {},
+            onOpenFolder: () {},
+            onOpenPath: (path) => opened = path,
+            pathTargets: const [
+              PathTarget(label: 'תיקייה ראשית', path: r'C:\root'),
+              PathTarget(label: 'ספרייה', path: r'C:\root\books'),
+              PathTarget(label: 'אינדקס', path: r'C:\root\index'),
+            ],
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('אפשרויות מיקום'));
+        await tester.pumpAndSettle();
+        expect(find.text('פתח תיקייה...'), findsOneWidget);
+
+        await tester.tap(find.text('פתח תיקייה...'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('אינדקס'), findsOneWidget);
+        await tester.tap(find.text('אינדקס'));
+        await tester.pumpAndSettle();
+
+        expect(opened, r'C:\root\index');
+      },
+    );
+
+    testWidgets(
+      '"העתק נתיב..." מציג תת-תפריט של היעדים',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1200, 800));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(_wrap(
+          SettingsActionTile.pathTile(
+            icon: icon,
+            title: title,
+            currentPath: r'C:\root',
+            placeholder: placeholder,
+            onFolderChanged: (_) async {},
+            onOpenFolder: () {},
+            pathTargets: const [
+              PathTarget(label: 'תיקייה ראשית', path: r'C:\root'),
+              PathTarget(label: 'ספרייה', path: r'C:\root\books'),
+            ],
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('אפשרויות מיקום'));
+        await tester.pumpAndSettle();
+        expect(find.text('העתק נתיב...'), findsOneWidget);
+
+        await tester.tap(find.text('העתק נתיב...'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('ספרייה'), findsOneWidget);
+      },
+    );
+  });
+
   group('PathSettingsTile — requestChangeLocation', () {
     testWidgets(
       'לחיצה על "שינוי מיקום..." בתפריט קוראת ל-requestChangeLocation',

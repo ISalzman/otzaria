@@ -542,8 +542,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(
-        find.text('0 = צמוד, ערך גבוה יותר מרחיב את ההתאמה'), findsOneWidget);
+    expect(find.text('מרווח בין מילים'), findsOneWidget);
 
     await tester.longPress(find.text('מקורב').first);
     await tester.pumpAndSettle();

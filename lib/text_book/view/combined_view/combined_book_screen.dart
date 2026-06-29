@@ -1850,6 +1850,7 @@ class _CombinedViewState extends State<CombinedView> {
             openBookCallback: widget.openBookCallback,
             viewportHeight: _viewportHeight,
             selectionSyncController: widget.selectionSyncController,
+            searchText: state.searchText,
           ),
       ],
     );
@@ -2048,6 +2049,7 @@ class _CommentaryCard extends StatefulWidget {
   final Function(OpenedTab) openBookCallback;
   final double viewportHeight;
   final SelectionSyncController? selectionSyncController;
+  final String searchText;
 
   const _CommentaryCard({
     super.key,
@@ -2056,6 +2058,7 @@ class _CommentaryCard extends StatefulWidget {
     required this.openBookCallback,
     required this.viewportHeight,
     this.selectionSyncController,
+    this.searchText = '',
   });
 
   @override
@@ -2064,6 +2067,31 @@ class _CommentaryCard extends StatefulWidget {
 
 class _CommentaryCardState extends State<_CommentaryCard> {
   final GlobalKey<CommentaryListBaseState> _commentaryKey = GlobalKey();
+  late final ValueNotifier<String> _highlightNotifier;
+  final ValueNotifier<int> _totalNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
+
+  @override
+  void initState() {
+    super.initState();
+    _highlightNotifier = ValueNotifier<String>(widget.searchText);
+  }
+
+  @override
+  void didUpdateWidget(_CommentaryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.searchText != widget.searchText) {
+      _highlightNotifier.value = widget.searchText;
+    }
+  }
+
+  @override
+  void dispose() {
+    _highlightNotifier.dispose();
+    _totalNotifier.dispose();
+    _currentIndexNotifier.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2124,9 +2152,29 @@ class _CommentaryCardState extends State<_CommentaryCard> {
                     showSearch: false,
                     selectionSyncController: widget.selectionSyncController,
                     shrinkWrap: true,
+                    highlightQueryListenable: _highlightNotifier,
+                    externalTotalResultsNotifier: _totalNotifier,
+                    externalCurrentIndexNotifier: _currentIndexNotifier,
                   ),
                 ),
               ),
+            );
+
+            final content = Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (widget.searchText.isNotEmpty)
+                  _CommentarySearchNavBar(
+                    totalNotifier: _totalNotifier,
+                    currentIndexNotifier: _currentIndexNotifier,
+                    onPrev: () =>
+                        _commentaryKey.currentState?.navigateSearchPrev(),
+                    onNext: () =>
+                        _commentaryKey.currentState?.navigateSearchNext(),
+                  ),
+                commentaryContainer,
+              ],
             );
 
             // מרכוז אופקי בלבד (topCenter) באותו רוחב כמו הטקסט. Center מלא
@@ -2136,11 +2184,79 @@ class _CommentaryCardState extends State<_CommentaryCard> {
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: textMaxWidth),
-                  child: commentaryContainer,
+                  child: content,
                 ),
               );
             }
-            return commentaryContainer;
+            return content;
+          },
+        );
+      },
+    );
+  }
+}
+
+/// סרגל ניווט מינימלי לתוצאות חיפוש במפרשים (תצוגה משולבת).
+/// מופיע בין שורת הטקסט הראשי לכרטיס המפרשים כשיש תוצאות חיפוש.
+class _CommentarySearchNavBar extends StatelessWidget {
+  final ValueNotifier<int> totalNotifier;
+  final ValueNotifier<int> currentIndexNotifier;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+
+  const _CommentarySearchNavBar({
+    required this.totalNotifier,
+    required this.currentIndexNotifier,
+    required this.onPrev,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: totalNotifier,
+      builder: (context, total, _) {
+        if (total == 0) return const SizedBox.shrink();
+        return ValueListenableBuilder<int>(
+          valueListenable: currentIndexNotifier,
+          builder: (context, current, _) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'במפרשים: ${current + 1}/$total',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                  ),
+                  const SizedBox(width: 4),
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(FluentIcons.chevron_up_24_regular,
+                          size: 16),
+                      onPressed: current > 0 ? onPrev : null,
+                      tooltip: 'תוצאה קודמת במפרשים',
+                    ),
+                  ),
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(FluentIcons.chevron_down_24_regular,
+                          size: 16),
+                      onPressed: current < total - 1 ? onNext : null,
+                      tooltip: 'תוצאה הבאה במפרשים',
+                    ),
+                  ),
+                ],
+              ),
+            );
           },
         );
       },

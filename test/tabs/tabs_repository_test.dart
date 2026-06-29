@@ -255,6 +255,50 @@ void main() {
           p.join('/other', 'book.pdf'));
     });
 
+    test('remapTabsInMemory ממפה נתיב PDF בזיכרון ומחזיר טאב חדש', () {
+      final oldDir = p.join('/lib', 'old');
+      final newDir = p.join('/lib', 'new');
+      final pdf = PdfBookTab(
+        book: PdfBook(
+          title: 'מסכת ברכות',
+          path: p.join(oldDir, 'תלמוד בבלי', 'ברכות.pdf'),
+        ),
+        pageNumber: 3,
+      );
+      addTearDown(pdf.dispose);
+
+      final remapped = repository.remapTabsInMemory([pdf], oldDir, newDir);
+      addTearDown(() {
+        for (final tab in remapped) {
+          tab.dispose();
+        }
+      });
+
+      expect(remapped, hasLength(1));
+      final restored = remapped.single as PdfBookTab;
+      expect(restored.book.path, p.join(newDir, 'תלמוד בבלי', 'ברכות.pdf'));
+      expect(restored.pageNumber, 3);
+      expect(identical(restored, pdf), isFalse, reason: 'טאב ששונה נבנה מחדש');
+    });
+
+    test('remapTabsInMemory משמר אובייקט מקורי לטאב שלא השתנה', () {
+      final outside = PdfBookTab(
+        book: PdfBook(title: 'אחר', path: p.join('/other', 'book.pdf')),
+        pageNumber: 1,
+      );
+      final textTab = TextBookTab(book: TextBook(title: 'ספר'), index: 1);
+      addTearDown(outside.dispose);
+      addTearDown(textTab.dispose);
+
+      final remapped = repository.remapTabsInMemory(
+          [outside, textTab], p.join('/lib', 'old'), p.join('/lib', 'new'));
+
+      expect(identical(remapped[0], outside), isTrue,
+          reason: 'נתיב מחוץ לתיקייה — אותו אובייקט');
+      expect(identical(remapped[1], textTab), isTrue,
+          reason: 'טאב טקסט ללא נתיב — אותו אובייקט');
+    });
+
     test('saveCurrentTabIndex שומר את האינדקס כשכל הטאבים נשמרים', () async {
       final firstTab = TextBookTab(
         book: TextBook(title: 'ספר בדיקה'),

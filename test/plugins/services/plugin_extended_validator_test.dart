@@ -11,6 +11,7 @@ Map<String, dynamic> _baseManifest({
   Map<String, dynamic>? network,
   String name = 'Test Plugin',
   String? title,
+  String minAppVersion = '0.9.94',
 }) =>
     {
       'schemaVersion': 1,
@@ -21,7 +22,7 @@ Map<String, dynamic> _baseManifest({
       'author': '',
       'homepage': '',
       'entrypoint': 'index.html',
-      'minAppVersion': '0.0.0',
+      'minAppVersion': minAppVersion,
       'sdkVersion': '1.x',
       'permissions': permissions,
       if (network != null) 'network': network,
@@ -613,6 +614,78 @@ void main() {
         files: const {'app.js': '/* logic only */'},
       );
       expect(report.design.compliant, isFalse);
+    });
+  });
+
+  group('minAppVersion vs גרסת ה-API (שגיאה חוסמת)', () {
+    test('שגיאה כשמשתמשים ב-API חדש מ-minAppVersion שהוצהר', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['ui.create_shortcut'],
+          minAppVersion: '0.9.90',
+        ),
+        files: const {
+          'index.html': '<!doctype html><html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('shortcut.create', {});",
+        },
+      );
+      expect(
+        report.errors.any((e) =>
+            e.contains('shortcut.create') &&
+            e.contains('0.9.94') &&
+            e.contains('0.9.90')),
+        isTrue,
+        reason: 'shortcut.create (0.9.94) עם minAppVersion=0.9.90 חייב error',
+      );
+    });
+
+    test('אין שגיאה כש-minAppVersion מספיק גבוה', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['ui.create_shortcut'],
+          minAppVersion: '0.9.94',
+        ),
+        files: const {
+          'index.html': '<!doctype html><html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('shortcut.create', {});",
+        },
+      );
+      expect(report.errors, isEmpty);
+    });
+
+    test('מדווח על ה-API הגבוה ביותר כשיש כמה גרסאות', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['library.books.read', 'fs.user_files.read'],
+          minAppVersion: '0.9.90',
+        ),
+        files: const {
+          'index.html': '<!doctype html><html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('library.findBooks', {});"
+              "Otzaria.call('fs.readTextFile', {});",
+        },
+      );
+      // library.findBooks (0.9.90) תקין; fs.readTextFile (0.9.94) חוסם.
+      expect(report.errors.any((e) => e.contains('fs.readTextFile')), isTrue);
+      expect(
+          report.errors.any((e) => e.contains('library.findBooks')), isFalse);
+    });
+
+    test('API לא מוכר אינו מפעיל בדיקת גרסה (רק אזהרה)', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(minAppVersion: '0.9.90'),
+        files: const {
+          'index.html': '<!doctype html><html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('totally.fake_method', {});",
+        },
+      );
+      expect(report.errors, isEmpty);
+      expect(report.warnings.any((w) => w.contains('totally.fake_method')),
+          isTrue);
     });
   });
 }

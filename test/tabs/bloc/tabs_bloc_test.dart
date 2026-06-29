@@ -17,6 +17,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
+import 'package:path/path.dart' as p;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 void main() {
@@ -564,6 +565,95 @@ void main() {
     });
   });
 
+  group('TabsBloc remap book paths', () {
+    setUp(() async {
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+    });
+
+    test('RemapBookPaths ממפה נתיב PDF פתוח בזיכרון', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final pdf = PdfBookTab(
+        book: PdfBook(title: 'ברכות', path: p.join('/lib', 'old', 'ברכות.pdf')),
+        pageNumber: 1,
+      );
+
+      bloc.add(AddTab(pdf));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      final newPath = p.join('/lib', 'new', 'ברכות.pdf');
+      bloc.add(RemapBookPaths(p.join('/lib', 'old'), p.join('/lib', 'new')));
+      await bloc.stream.firstWhere((s) =>
+          s.tabs.isNotEmpty &&
+          (s.tabs.first as PdfBookTab).book.path == newPath);
+
+      expect((bloc.state.tabs.first as PdfBookTab).book.path, newPath);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('remapBookPathsAwaitable ממתין לסיום המיפוי (זיכרון + שמירה)',
+        () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final pdf = PdfBookTab(
+        book: PdfBook(title: 'ברכות', path: p.join('/lib', 'old', 'ברכות.pdf')),
+        pageNumber: 1,
+      );
+
+      bloc.add(AddTab(pdf));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      // ה-Future נפתר רק אחרי שה-state כבר עודכן — בלי race.
+      await bloc.remapBookPathsAwaitable(
+          p.join('/lib', 'old'), p.join('/lib', 'new'));
+
+      expect((bloc.state.tabs.first as PdfBookTab).book.path,
+          p.join('/lib', 'new', 'ברכות.pdf'));
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('remapBookPathsAwaitable נכשל אם שמירת הטאבים נכשלה', () async {
+      final repo = _ThrowingSaveTabsRepository();
+      final bloc = TabsBloc(repository: repo);
+      final pdf = PdfBookTab(
+        book: PdfBook(title: 'ברכות', path: p.join('/lib', 'old', 'ברכות.pdf')),
+        pageNumber: 1,
+      );
+
+      bloc.add(AddTab(pdf));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      repo.armed = true;
+      await expectLater(
+        bloc.remapBookPathsAwaitable(
+            p.join('/lib', 'old'), p.join('/lib', 'new')),
+        throwsA(isA<Exception>()),
+      );
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('RemapBookPaths לא משנה state כשאין נתיב תואם', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final pdf = PdfBookTab(
+        book: PdfBook(title: 'אחר', path: p.join('/other', 'book.pdf')),
+        pageNumber: 1,
+      );
+
+      bloc.add(AddTab(pdf));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+      final before = bloc.state;
+
+      bloc.add(RemapBookPaths(p.join('/lib', 'old'), p.join('/lib', 'new')));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(identical(bloc.state.tabs.first, pdf), isTrue);
+      expect(bloc.state, same(before));
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+  });
+
   group('TabsBloc restore closed tab', () {
     setUp(() async {
       await Settings.init(cacheProvider: _MemoryCacheProvider());
@@ -1085,6 +1175,22 @@ class _FakeTabsRepository extends TabsRepository {
     int currentTabIndex,
   ) async {
     _currentTabIndex = currentTabIndex;
+  }
+}
+
+/// כמו _FakeTabsRepository אך זורק ב-saveTabs כשהוא "חמוש" — לבדיקת התפשטות
+/// כשל שמירה דרך ה-Future של remapBookPathsAwaitable.
+class _ThrowingSaveTabsRepository extends _FakeTabsRepository {
+  bool armed = false;
+
+  @override
+  Future<void> saveTabs(
+    List<OpenedTab> tabs,
+    int currentTabIndex, [
+    SideBySideMode? sideBySideMode,
+  ]) async {
+    if (armed) throw Exception('save failed');
+    return super.saveTabs(tabs, currentTabIndex, sideBySideMode);
   }
 }
 

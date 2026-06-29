@@ -401,4 +401,34 @@ void main() {
       });
     });
   });
+
+  group('tocTextMatchesRef', () {
+    test('הפניית תוסף עם גרשיים וע"ב מתאימה לכותרת TOC עם נקודתיים', () {
+      expect(tocTextMatchesRef('דף סד:', 'ס"ד ע"ב'), isTrue);
+    });
+
+    test('הפניית ע"א מתאימה לעמוד א ולא לעמוד ב', () {
+      expect(tocTextMatchesRef('דף סד.', 'ס"ד ע"א'), isTrue);
+      expect(tocTextMatchesRef('דף סד:', 'ס"ד ע"א'), isFalse);
+      expect(tocTextMatchesRef('דף סד.', 'ס"ד ע"ב'), isFalse);
+    });
+
+    test('אינה מתאימה דף אות-בודדת לדף עם סיומת זהה', () {
+      // "ב ע"ב" לא יתאים ל"דף כב:" (התאמת טוקנים, לא substring)
+      expect(tocTextMatchesRef('דף כב:', 'ב ע"ב'), isFalse);
+      expect(tocTextMatchesRef('דף ב:', 'ב ע"ב'), isTrue);
+    });
+
+    test('הסדר מבדיל בין מספר הדף לציון העמוד', () {
+      // "ב ע"א" (דף ב, עמוד א) — הטוקנים ב,א מול א,ב של "דף א:"
+      expect(tocTextMatchesRef('דף א:', 'ב ע"א'), isFalse);
+      expect(tocTextMatchesRef('דף ב.', 'ב ע"א'), isTrue);
+      expect(tocTextMatchesRef('דף ב:', 'ב ע"א'), isFalse);
+    });
+
+    test('התאמה גולמית נשמרת ו-ref ריק לא מתאים', () {
+      expect(tocTextMatchesRef('דף סד:', 'דף סד:'), isTrue);
+      expect(tocTextMatchesRef('דף סד:', ''), isFalse);
+    });
+  });
 }

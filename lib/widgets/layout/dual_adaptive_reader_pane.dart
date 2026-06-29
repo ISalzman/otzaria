@@ -93,6 +93,7 @@ class _DualAdaptiveReaderPaneState extends State<DualAdaptiveReaderPane> {
     return ResizableDragHandle(
       isVertical: true,
       hitSize: _kHandleHitSize,
+      showDivider: false,
       onDragDelta: onChanged == null
           ? null
           : (delta) {

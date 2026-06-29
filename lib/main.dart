@@ -20,8 +20,7 @@ import 'package:otzaria/app.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/repository/bookmark_repository.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_bloc.dart';
-import 'package:otzaria/find_ref/repository/find_ref_db_isolate.dart';
-import 'package:otzaria/find_ref/repository/find_ref_repository.dart';
+import 'package:otzaria/find_ref/repository/find_ref_factory.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/history_repository.dart';
@@ -515,39 +514,6 @@ Future<void> presentMainWindow() async {
     // משחרר את חימומי המטמון הדחויים גם אם אחת מפעולות החלון נכשלה.
     _markMainWindowRevealed();
   }
-}
-
-/// בונה את ה-[FindRefRepository] כשהוא מחווט לשירות ה-isolate
-/// ([FindRefDbIsolate]) עבור כל שאילתות `seforim.db` הכבדות (TOC/AltToc/
-/// מפרשים/דור). כך שאילתות אלו רצות על isolate נפרד ואינן מקפיאות את ההקלדה
-/// בדיאלוג "איתור מקורות".
-///
-/// שאר ה-hooks (חיפוש ספרים בקאש בזיכרון, נתיב קטגוריה, outline של PDF,
-/// וספרי משתמש) נשארים `null` ומשתמשים ב-singletons על ה-main isolate —
-/// הם עתירי-CPU/קאש ולא הם שגרמו לקיפאון.
-FindRefRepository _buildFindRefRepository() {
-  return FindRefRepository(
-    dataRepository: DataRepository.instance,
-    getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async =>
-        (await FindRefDbIsolate.instance())
-            .getTocEntries(bookId, bookTitle, queryTokens: queryTokens),
-    getAltTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async =>
-        (await FindRefDbIsolate.instance())
-            .getAltTocEntries(bookId, bookTitle, queryTokens: queryTokens),
-    getAllAltTocFlatEntries: () async =>
-        (await FindRefDbIsolate.instance()).getAllAltTocFlat(),
-    fetchCommentatorRows: (ref) async =>
-        (await FindRefDbIsolate.instance()).getCommentatorRows(
-      bookId: ref.bookId,
-      bookTitle: ref.title,
-      sourceLineId: ref.sourceLineId,
-      startLineIndex: ref.segment.toInt(),
-      level: ref.tocLevel,
-      isAltToc: ref.isAltToc,
-    ),
-    getBookEra: (bookTitle) async =>
-        (await FindRefDbIsolate.instance()).getBookEra(bookTitle),
-  );
 }
 
 /// אתחול כבד שרץ בזמן שה-splash מוצג.
@@ -1068,7 +1034,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
           ),
           BlocProvider<FindRefBloc>(
             create: (_) => FindRefBloc(
-              findRefRepository: _buildFindRefRepository(),
+              findRefRepository: buildFindRefRepository(),
             ),
           ),
           BlocProvider<PersonalNotesBloc>(

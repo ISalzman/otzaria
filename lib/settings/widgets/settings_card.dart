@@ -232,6 +232,8 @@ class SettingsActionTile extends StatelessWidget {
     Future<void> Function(BuildContext)? requestChangeLocation,
     bool simpleButtonWhenEmpty = true,
     bool clearPathEnabled = true,
+    List<PathTarget>? pathTargets,
+    void Function(String path)? onOpenPath,
   }) =>
       _PathTile(
         key: key,
@@ -245,6 +247,8 @@ class SettingsActionTile extends StatelessWidget {
         requestChangeLocation: requestChangeLocation,
         simpleButtonWhenEmpty: simpleButtonWhenEmpty,
         clearPathEnabled: clearPathEnabled,
+        pathTargets: pathTargets,
+        onOpenPath: onOpenPath,
       );
 
   /// שורת on/off עם [CustomSwitch].
@@ -716,6 +720,16 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
   }
 }
 
+// ── PathTarget ───────────────────────────────────────────────────────────────
+
+/// יעד נתיב בתפריט "אפשרויות מיקום" — תווית + נתיב (למשל שורש/ספרייה/אינדקס).
+/// כשמסופקת רשימה כזו, "פתח תיקייה" ו"העתק נתיב" נפתחים כתת-תפריט של היעדים.
+class PathTarget {
+  final String label;
+  final String path;
+  const PathTarget({required this.label, required this.path});
+}
+
 // ── _PathTile ─────────────────────────────────────────────────────────────────
 
 class _PathTile extends StatelessWidget {
@@ -729,6 +743,8 @@ class _PathTile extends StatelessWidget {
   final Future<void> Function(BuildContext)? requestChangeLocation;
   final bool simpleButtonWhenEmpty;
   final bool clearPathEnabled;
+  final List<PathTarget>? pathTargets;
+  final void Function(String path)? onOpenPath;
 
   const _PathTile({
     super.key,
@@ -742,6 +758,8 @@ class _PathTile extends StatelessWidget {
     this.requestChangeLocation,
     this.simpleButtonWhenEmpty = true,
     this.clearPathEnabled = true,
+    this.pathTargets,
+    this.onOpenPath,
   });
 
   @override
@@ -760,6 +778,8 @@ class _PathTile extends StatelessWidget {
           requestChangeLocation: requestChangeLocation,
           simpleButtonWhenEmpty: simpleButtonWhenEmpty,
           clearPathEnabled: clearPathEnabled,
+          pathTargets: pathTargets,
+          onOpenPath: onOpenPath,
         ),
       ],
     );
@@ -776,6 +796,8 @@ class _PathMenuButton extends StatefulWidget {
   final Future<void> Function(BuildContext)? requestChangeLocation;
   final bool simpleButtonWhenEmpty;
   final bool clearPathEnabled;
+  final List<PathTarget>? pathTargets;
+  final void Function(String path)? onOpenPath;
 
   const _PathMenuButton({
     required this.currentPath,
@@ -785,6 +807,8 @@ class _PathMenuButton extends StatefulWidget {
     this.requestChangeLocation,
     this.simpleButtonWhenEmpty = true,
     this.clearPathEnabled = true,
+    this.pathTargets,
+    this.onOpenPath,
   });
 
   @override
@@ -807,12 +831,14 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
 
   Future<void> _showMenu(BuildContext anchorContext) async {
     final hasPath = widget.currentPath.isNotEmpty;
+    final targets = widget.pathTargets;
+    final hasTargets = targets != null && targets.isNotEmpty;
     final entries = <AppMenuEntry<_PathMenuAction>>[
       AppMenuEntry(
         value: _PathMenuAction.openFolder,
-        label: 'פתח תיקייה',
+        label: hasTargets ? 'פתח תיקייה...' : 'פתח תיקייה',
         icon: FluentIcons.folder_open_24_regular,
-        enabled: hasPath,
+        enabled: hasPath || hasTargets,
       ),
       const AppMenuEntry(
         value: _PathMenuAction.changeLocation,
@@ -821,9 +847,9 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
       ),
       AppMenuEntry(
         value: _PathMenuAction.copyPath,
-        label: 'העתק נתיב',
+        label: hasTargets ? 'העתק נתיב...' : 'העתק נתיב',
         icon: FluentIcons.copy_24_regular,
-        enabled: hasPath,
+        enabled: hasPath || hasTargets,
       ),
       // מוצג תמיד כשיש onClearPath; מושבת אם clearPathEnabled=false
       if (widget.onClearPath != null)
@@ -844,18 +870,64 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
           .toList(),
     );
 
-    if (selected == null) return;
+    if (selected == null || !mounted || !anchorContext.mounted) return;
 
     switch (selected) {
       case _PathMenuAction.openFolder:
-        widget.onOpenFolder();
+        if (hasTargets) {
+          await _showTargetSubMenu(anchorContext, open: true);
+        } else {
+          widget.onOpenFolder();
+        }
       case _PathMenuAction.changeLocation:
         await _handleChangeLocation();
       case _PathMenuAction.copyPath:
-        await Clipboard.setData(ClipboardData(text: widget.currentPath));
-        UiSnack.showSuccess('הנתיב הועתק ללוח');
+        if (hasTargets) {
+          await _showTargetSubMenu(anchorContext, open: false);
+        } else {
+          await Clipboard.setData(ClipboardData(text: widget.currentPath));
+          UiSnack.showSuccess('הנתיב הועתק ללוח');
+        }
       case _PathMenuAction.clearPath:
         widget.onClearPath?.call();
+    }
+  }
+
+  /// תת-תפריט לבחירת יעד (שורש/ספרייה/אינדקס) עבור פתיחה או העתקה.
+  Future<void> _showTargetSubMenu(
+    BuildContext anchorContext, {
+    required bool open,
+  }) async {
+    final targets = widget.pathTargets!;
+    if (!mounted) return;
+    final selected = await showAnchoredAppMenu<int>(
+      context: context,
+      anchorContext: anchorContext,
+      itemsBuilder: (m) => [
+        for (var i = 0; i < targets.length; i++)
+          buildAppPopupMenuItem<int>(
+            context,
+            AppMenuEntry(
+              value: i,
+              label: targets[i].label,
+              icon: open
+                  ? FluentIcons.folder_open_24_regular
+                  : FluentIcons.copy_24_regular,
+              enabled: targets[i].path.isNotEmpty,
+            ),
+            m,
+            null,
+          ),
+      ],
+    );
+    if (selected == null) return;
+    final path = targets[selected].path;
+    if (path.isEmpty) return;
+    if (open) {
+      widget.onOpenPath?.call(path);
+    } else {
+      await Clipboard.setData(ClipboardData(text: path));
+      UiSnack.showSuccess('הנתיב הועתק ללוח');
     }
   }
 
@@ -873,7 +945,10 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
       return ActionButton.recommended(
         text: 'הגדר מיקום',
         isLoading: _isLoading,
-        onPressed: _isLoading ? null : _pickAndChange,
+        // דיאלוג שינוי המיקום ברור יותר מבורר תיקייה ישיר; כשאין
+        // requestChangeLocation נופלים לבורר. בלי מיקום נוכחי הדיאלוג
+        // ממילא מסתיר את אפשרות העברת התוכן.
+        onPressed: _isLoading ? null : _handleChangeLocation,
         icon: FluentIcons.folder_arrow_right_24_regular,
       );
     }

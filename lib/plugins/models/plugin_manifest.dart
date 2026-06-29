@@ -11,6 +11,12 @@ class PluginManifest {
   final String author;
   final String homepage;
   final String entrypoint;
+
+  /// קובץ כניסה קליל (ללא UI) לריצת רקע עם הרשאת `app.run_on_startup`.
+  /// משמש את ה-host הנסתר במקום [entrypoint] המלא, כדי לא לטעון את דף
+  /// הכלים השלם רק כדי לרשום תפריט הקשר / להאזין לאירועים. אם null —
+  /// תוסף הרקע נופל ל-[entrypoint] הרגיל.
+  final String? backgroundEntrypoint;
   final String? icon;
   final String minAppVersion;
   final String? maxAppVersion;
@@ -48,6 +54,7 @@ class PluginManifest {
     required this.author,
     required this.homepage,
     required this.entrypoint,
+    this.backgroundEntrypoint,
     this.icon,
     required this.minAppVersion,
     this.maxAppVersion,
@@ -68,6 +75,7 @@ class PluginManifest {
     final network = json['network'] as Map<String, dynamic>? ?? {};
     final contributes = json['contributes'] as Map<String, dynamic>? ?? {};
     final toolTab = contributes['toolTab'] as Map<String, dynamic>? ?? {};
+    final background = contributes['background'] as Map<String, dynamic>? ?? {};
 
     return PluginManifest(
       schemaVersion: json['schemaVersion'] as int? ?? 1,
@@ -78,6 +86,7 @@ class PluginManifest {
       author: json['author'] as String? ?? '',
       homepage: json['homepage'] as String? ?? '',
       entrypoint: json['entrypoint'] as String,
+      backgroundEntrypoint: background['entrypoint'] as String?,
       icon: json['icon'] as String?,
       minAppVersion: json['minAppVersion'] as String? ?? '0.0.0',
       maxAppVersion: json['maxAppVersion'] as String?,
@@ -137,6 +146,8 @@ class PluginManifest {
         },
         'publishedDataTypes': publishedDataTypes,
         'databaseSources': databaseSources,
+        if (backgroundEntrypoint != null)
+          'background': {'entrypoint': backgroundEntrypoint},
       }
     };
   }

@@ -72,6 +72,7 @@ import 'package:otzaria/widgets/navigation/nav_rail_item.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/services/windows_jump_list_service.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -308,6 +309,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   bool _isProcessingExternalActivations = false;
   StreamSubscription<FileSystemEvent>? _externalActivationWatchSub;
   StreamSubscription<String>? _externalActivationChannelSub;
+  final WindowsJumpListService _jumpListService = WindowsJumpListService();
 
   static const _navData = [
     (
@@ -478,6 +480,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
       }
 
       unawaited(_initializeExternalActivationMonitoring());
+
+      _tourCubit.registerSession();
 
       AdPopupDialog.showIfNeeded(
         context,
@@ -999,6 +1003,16 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case OpenPluginAction(:final pluginId):
         context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
         _openPluginByIdWhenAvailable(pluginId);
+        return true;
+      case SwitchToTabAction(:final index):
+        final tabsBloc = context.read<TabsBloc>();
+        if (index < 0 || index >= tabsBloc.state.tabs.length) {
+          return false;
+        }
+        tabsBloc.add(SetCurrentTab(index));
+        context
+            .read<NavigationBloc>()
+            .add(const NavigateToScreen(Screen.reading));
         return true;
       case OpenBookAction():
         return await _openBookByExternalId(action);
@@ -2515,6 +2529,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
               }
             },
           ),
+          // סנכרון רשימת הטאבים הפתוחים ל-Jump List של שורת המשימות (Windows).
+          // נדלק כשהכותרות או סדרן משתנים; השירות עצמו no-op מחוץ ל-Windows.
+          BlocListener<TabsBloc, TabsState>(
+            listenWhen: (previous, current) => !listEquals(
+              previous.tabs.map((tab) => tab.title).toList(),
+              current.tabs.map((tab) => tab.title).toList(),
+            ),
+            listener: (context, state) => _jumpListService.sync(state.tabs),
+          ),
           // settings.changed עבור selectedCity ו-calendarType —
           // שדות אלה נמצאים ב-CalendarState ולא ב-SettingsState
           BlocListener<CalendarCubit, CalendarState>(
@@ -3258,6 +3281,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }) async {
     final effectiveSettingsIdx = _effectiveSettingsNavIndex(hideTools);
     if (index < effectiveSettingsIdx) {
+      // לחיצה על כלי/מסך רגיל — נקה תוסף מוסתר פעיל אם יש
+      moreScreenKey.currentState?.clearHiddenNavRailPlugin();
       await _onNavTap(context, index, currentScreen);
       return;
     }
@@ -3268,6 +3293,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       return;
     }
     // האחרון — "הגדרות" שמופה ל-_navData[_settingsNavIndex]
+    moreScreenKey.currentState?.clearHiddenNavRailPlugin();
     await _onNavTap(context, _settingsNavIndex, currentScreen);
   }
 
@@ -3279,6 +3305,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
     BuildContext context,
     _PinnedToolNavItem item,
   ) {
+    // נקה hidden plugin פעיל לפני פתיחת פריט אחר (אלא אם זה אותו תוסף)
+    final toolsState = moreScreenKey.currentState;
+    if (toolsState != null &&
+        toolsState.hasHiddenNavRailPlugin &&
+        item.plugin?.pluginId != toolsState.hiddenNavRailPluginId) {
+      toolsState.clearHiddenNavRailPlugin();
+    }
     context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
     if (item.isPlugin && item.plugin != null) {
       _openPluginInToolsWhenAvailable(item.plugin!);
@@ -3310,6 +3343,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (index == currentIndex &&
         item.screen != Screen.search &&
         item.screen != Screen.find) {
+      // אם hidden plugin פעיל ולוחצים "כלים" — הצג כלים רגיל
+      if (moreScreenKey.currentState?.clearHiddenNavRailPlugin() ?? false) {
+        return;
+      }
       await _syncPageWithState();
       return;
     }

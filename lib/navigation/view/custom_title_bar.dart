@@ -62,7 +62,7 @@ const double _kWindowCaptionButtonsWidth = 138.0;
 const double _kWindowCaptionButtonWidth = 46.0;
 
 /// רוחב מרבי לטאב בודד: טאב לא נמתח מעבר לזה גם כשיש מעט טאבים ומלא מקום.
-const double _kTabMaxWidth = 200.0;
+const double _kTabMaxWidth = 140.0;
 
 /// מתחת לרוחב הזה כפתור ה-X מוסתר ומופיע רק ב-hover/בטאב הנבחר (כמו כרום).
 const double _kTabCloseHideBelowWidth = 80.0;
@@ -781,8 +781,10 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     }
 
     Widget buildTabAppearance(StateSetter? setState) {
-      final showLeadingDivider =
-          index > 0 && !isTabActive(index) && !isTabActive(index - 1);
+      // הטאב הראשון מקבל מפריד מול לחצני הפעולה שלפניו; שאר הטאבים מול הקודם.
+      final showLeadingDivider = index == 0
+          ? !isTabActive(index)
+          : !isTabActive(index) && !isTabActive(index - 1);
       final colorScheme = Theme.of(context).colorScheme;
 
       // תקציב הרוחב לאלמנטים שאינם הכותרת (X/נעץ), אחרי ה-paddings הקבועים

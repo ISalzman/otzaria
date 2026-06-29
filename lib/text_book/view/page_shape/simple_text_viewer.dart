@@ -68,11 +68,12 @@ import 'package:otzaria/utils/text/html_link_handler.dart';
 ///
 /// [isShiftPressed] - כש-Shift לחוץ הניווט מוותר, כדי שחיצים ירחיבו את בחירת
 /// הטקסט (Shift+חץ) במקום לדלג בין שורות או לגלול.
+/// חריג: Shift+Space — גלילה מסך אחד אחורה, כמקובל בקוראים.
 bool shouldHandlePageShapeNavigationKeyEvent(
   KeyEvent event, {
   bool isShiftPressed = false,
 }) {
-  if (isShiftPressed) {
+  if (isShiftPressed && event.logicalKey != LogicalKeyboardKey.space) {
     return false;
   }
   return event is KeyDownEvent || event is KeyRepeatEvent;
@@ -1039,6 +1040,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   bool _handleNavigationLogicalKey(
     LogicalKeyboardKey logicalKey, {
     required bool isControlPressed,
+    bool isShiftPressed = false,
     required String source,
   }) {
     if (!widget.isMainText) {
@@ -1146,6 +1148,28 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       return true;
     }
 
+    if (logicalKey == LogicalKeyboardKey.space) {
+      final visibleSourceIndices = _sourceIndicesForVisiblePositions(
+        _positionsListener.itemPositions.value,
+      );
+      final pageSize =
+          visibleSourceIndices.isNotEmpty ? visibleSourceIndices.length : 10;
+      final delta = isShiftPressed ? -pageSize : pageSize;
+      final targetIndex =
+          (currentIndex + delta).clamp(0, widget.content.length - 1);
+      if (targetIndex == currentIndex) return true;
+      context.read<TextBookBloc>().add(UpdateSelectedIndex(targetIndex));
+      if (_scrollController.isAttached) {
+        _scrollController.scrollTo(
+          index: _segmentIndexForSourceLine(targetIndex),
+          duration: const Duration(milliseconds: 300),
+          alignment: 0.0,
+        );
+      }
+      _requestKeyboardFocusAfterFrame('navigation-space');
+      return true;
+    }
+
     return false;
   }
 
@@ -1250,14 +1274,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       entries.addAll(commentatorItems);
     }
 
-    if (hasLinkItems) {
-      entries.add(const AppContextMenuEntry.divider());
-      entries.add(AppContextMenuEntry(
-        label: 'קישורים',
-        icon: FluentIcons.link_24_regular,
-        childrenBuilder: buildLinksItems,
-      ));
-    }
+    if (entries.isNotEmpty) entries.add(const AppContextMenuEntry.divider());
+    entries.add(AppContextMenuEntry(
+      label: 'קישורים',
+      icon: FluentIcons.link_24_regular,
+      enabled: hasLinkItems,
+      childrenBuilder: buildLinksItems,
+    ));
 
     final dictionaryText = (capturedText?.trim().isNotEmpty == true)
         ? capturedText
@@ -1806,6 +1829,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                               event.logicalKey,
                               isControlPressed:
                                   HardwareKeyboard.instance.isControlPressed,
+                              isShiftPressed:
+                                  HardwareKeyboard.instance.isShiftPressed,
                               source: 'content-focus',
                             );
                             return handled

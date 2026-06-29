@@ -165,7 +165,7 @@ void main() {
       await tester.pumpWidget(buildWidget());
 
       await tester.pump();
-      await tester.drag(find.byType(ListView), const Offset(0, -12000));
+      await tester.drag(find.byType(ListView), const Offset(0, -100000));
       await tester.pump();
 
       expect(

@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
@@ -1098,6 +1099,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               );
             }
           : null,
+      calculateCurrentPageNumber: layoutMode == PdfLayoutMode.bookView
+          ? null
+          : (visibleRect, pageRects, controller) =>
+              pdfTopmostVisiblePage(visibleRect, pageRects),
       normalizeMatrix: layoutMode == PdfLayoutMode.bookView
           ? (matrix, viewSize, layout, controller) {
               if (_isPageTurnInProgress) {
@@ -1188,8 +1193,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           child: AppContextMenuRegion(
             key: _pdfContextMenuKey,
             menuBuilder: _buildPdfContextMenuEntries,
-            child: Listener(
-              behavior: HitTestBehavior.translucent,
+            child: _PdfScrollOnlyListener(
               onPointerSignal: (event) {
                 final adjusted = _trackpadAxisLock.apply(
                   event,
@@ -1991,9 +1995,24 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // During progressive PDF loading, pdfrx may wait indefinitely for the
     // viewport to settle while new tiles keep arriving. Time out the await so
     // page-turn state cannot deadlock the navigation flow.
-    await controller
-        .goToPage(pageNumber: safePage)
-        .timeout(const Duration(seconds: 3), onTimeout: () {});
+    //
+    // goToPage() resets zoom to fit-page when the user has zoomed in beyond
+    // fit-page level. Preserve zoom by computing the target matrix explicitly.
+    // safePage נגזר מ-pageCount, וב-טעינה הדרגתית pageLayouts יכול להיות קצר ממנו
+    // (גם ריק) — אז נופלים ל-goToPage הבטוח, אחרת אינדוקס מחוץ-לטווח יקרוס.
+    if (controller.layout.pageLayouts.length < safePage) {
+      await controller
+          .goToPage(pageNumber: safePage)
+          .timeout(const Duration(seconds: 3), onTimeout: () {});
+    } else {
+      final page = controller.layout.pageLayouts[safePage - 1];
+      final halfViewHeight =
+          controller.viewSize.height / 2 / controller.value.zoom;
+      await controller
+          .goTo(controller
+              .calcMatrixFor(page.topCenter.translate(0, halfViewHeight)))
+          .timeout(const Duration(seconds: 3), onTimeout: () {});
+    }
 
     if (!_pdfViewFocusNode.hasFocus) {
       _pdfViewFocusNode.requestFocus();
@@ -2909,7 +2928,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _schedulePrerenderForAdjacentSpreads();
 
     final tourCubit = context.read<TourCubit>();
-    widget.tab.savedZoom = widget.tab.pdfViewerController.value.zoom;
+    final newZoom = widget.tab.pdfViewerController.value.zoom;
+    widget.tab.savedZoom = newZoom;
+
+    // Sync wheel/pinch zoom into BLoC so toolbar buttons start from the
+    // current zoom, and show the zoom bar just like the toolbar buttons do.
+    if (!_isJumping) {
+      final currentState = _bloc.state;
+      if (currentState is PdfBookLoaded &&
+          (currentState.zoom - newZoom).abs() > 0.001) {
+        _bloc.add(pdf_events.UpdateZoom(newZoom));
+        _bloc.add(const pdf_events.SetShowZoomBar(true));
+      }
+    }
 
     final newPage = widget.tab.pdfViewerController.pageNumber ?? 1;
 
@@ -5292,5 +5323,52 @@ class _BookViewTurnButton extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Listener variant that registers with [PointerSignalResolver] only for
+/// [PointerScrollEvent] (mouse wheel / Ctrl+scroll).
+///
+/// [PointerScaleEvent] (trackpad two-finger pinch) deliberately bypasses the
+/// resolver so the underlying pdfrx InteractiveViewer can claim it and zoom
+/// at the correct focal point (cursor position) instead of the viewport center.
+class _PdfScrollOnlyListener extends SingleChildRenderObjectWidget {
+  const _PdfScrollOnlyListener({
+    required this.onPointerSignal,
+    super.child,
+  });
+
+  final void Function(PointerSignalEvent) onPointerSignal;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderPdfScrollOnlyListener(onPointerSignal: onPointerSignal);
+
+  @override
+  void updateRenderObject(
+      BuildContext context, _RenderPdfScrollOnlyListener renderObject) {
+    renderObject.onPointerSignal = onPointerSignal;
+  }
+}
+
+class _RenderPdfScrollOnlyListener extends RenderProxyBoxWithHitTestBehavior {
+  _RenderPdfScrollOnlyListener({
+    required void Function(PointerSignalEvent) onPointerSignal,
+  })  : _onPointerSignal = onPointerSignal,
+        super(behavior: HitTestBehavior.translucent);
+
+  void Function(PointerSignalEvent) _onPointerSignal;
+
+  set onPointerSignal(void Function(PointerSignalEvent) value) {
+    _onPointerSignal = value;
+  }
+
+  @override
+  void handleEvent(PointerEvent event, HitTestEntry entry) {
+    if (event is PointerScrollEvent) {
+      GestureBinding.instance.pointerSignalResolver
+          .register(event, _onPointerSignal);
+    }
+    // PointerScaleEvent is not claimed — pdfrx zooms at the correct focal point
   }
 }

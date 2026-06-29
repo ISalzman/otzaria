@@ -435,6 +435,84 @@ void main() {
     });
   });
 
+  group('PluginBridgeAdapter.reader.openBookAtRef', () {
+    late _MockBookOpenCoordinator mockCoordinator;
+    late TextBook yerushalmi;
+
+    PluginBridgeAdapter buildAdapter({
+      Future<List<({String title, int index, bool isPdf})>> Function(String)?
+          resolveReference,
+    }) {
+      return PluginBridgeAdapter(
+        _buildInstalledPlugin(permissions: const ['reader.open']),
+        dependencies: PluginBridgeDependencies(
+          historyBloc: _MockHistoryBloc(),
+          tabsBloc: _StubTabsBloc(),
+          navigationBloc: _MockNavigationBloc(),
+          calendarCubit: _StubCalendarCubit(
+            _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+          ),
+          workspaceBloc: _MockWorkspaceBloc(),
+          searchRepository: _MockSearchRepository(),
+          personalNotesRepository: _MockPersonalNotesRepository(),
+          bookOpenCoordinator: mockCoordinator,
+          themePayloadBuilder: () => <String, dynamic>{},
+          showConfirmDialog: ({required title, required content}) async => true,
+          showWarningDialog: ({
+            required title,
+            required content,
+            required subtitle,
+          }) async =>
+              true,
+          resolveReference: resolveReference,
+        ),
+        pluginRepository: _StubPluginRegistryRepository(),
+      );
+    }
+
+    setUp(() {
+      mockCoordinator = _MockBookOpenCoordinator();
+      yerushalmi = TextBook(
+        title: 'תלמוד ירושלמי עירובין',
+        categoryId: 1,
+        fileType: 'txt',
+      );
+      final category = Category(
+        title: 'ש"ס',
+        description: '',
+        shortDescription: '',
+        order: 0,
+        subCategories: [],
+        books: [yerushalmi],
+        parent: null,
+      );
+      final library = Library(categories: [category]);
+      category.parent = library;
+      DataRepository.instance.library = Future.value(library);
+    });
+
+    test('find_ref מפענח הפניה מובנית → קופץ ל-index בלי להשאיר חיפוש',
+        () async {
+      // ירושלמי: "פ\"ו ה\"ז" דו-משמעי; find_ref מודע-הקשר מחזיר את ה-index.
+      final adapter = buildAdapter(
+        resolveReference: (reference) async => [
+          (title: 'תלמוד ירושלמי עירובין', index: 1234, isPdf: false),
+        ],
+      );
+
+      final result = await adapter.execute('reader', 'openBookAtRef', {
+        'bookId': 'תלמוד ירושלמי עירובין',
+        'ref': 'פ"ו ה"ז',
+      });
+
+      expect(result, isTrue);
+      // קפיצה ל-index של find_ref, וללא searchText (כי הכותרת נמצאה)
+      verify(mockCoordinator.openBook(yerushalmi, 1234, '',
+              ignoreHistory: true))
+          .called(1);
+    });
+  });
+
   group('PluginBridgeAdapter.library.getBookContent', () {
     late PluginBridgeAdapter adapter;
     late _FakeBookProvider fakeProvider;
@@ -980,7 +1058,7 @@ void main() {
           isA<Exception>().having(
             (e) => e.toString(),
             'message',
-            contains('network.enabled required'),
+            contains('error.permission_denied'),
           ),
         ),
       );

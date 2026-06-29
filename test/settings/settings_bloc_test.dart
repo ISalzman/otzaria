@@ -72,6 +72,7 @@ void main() {
         build: () {
           when(mockRepository.loadSettings())
               .thenAnswer((_) async => mockSettings);
+          when(mockRepository.hasProtectedModePassword()).thenReturn(false);
           return settingsBloc;
         },
         act: (bloc) => bloc.add(LoadSettings()),
@@ -311,6 +312,24 @@ void main() {
         ],
         verify: (_) {
           verify(mockRepository.updateAutoSyncCatalogs(true)).called(1);
+        },
+      );
+    });
+
+    group('UpdateProtectedModePassword', () {
+      blocTest<SettingsBloc, SettingsState>(
+        'emits protectedModePasswordSet=true ושומר ב-repository',
+        build: () {
+          when(mockRepository.updateProtectedModePassword('1234'))
+              .thenAnswer((_) async {});
+          return settingsBloc;
+        },
+        act: (bloc) => bloc.add(const UpdateProtectedModePassword('1234')),
+        expect: () => [
+          settingsBloc.state.copyWith(protectedModePasswordSet: true),
+        ],
+        verify: (_) {
+          verify(mockRepository.updateProtectedModePassword('1234')).called(1);
         },
       );
     });

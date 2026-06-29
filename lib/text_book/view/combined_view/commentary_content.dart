@@ -131,21 +131,29 @@ class _CommentaryContentState extends State<CommentaryContent> {
                         snapshot.data ?? widget.removeNikud;
 
                     if (widget.searchQuery.isNotEmpty) {
-                      String textForCount = data;
-                      if (effectiveRemoveNikud) {
-                        textForCount = utils.removeVolwels(textForCount);
-                      }
+                      // ספירה תמיד על טקסט ללא ניקוד — תואמת את ה-regex
+                      // הגמיש לניקוד שמשמש ב-highLight.
+                      String countText = utils.removeVolwels(data);
                       if (widget.removePunctuation) {
-                        textForCount = utils.removePunctuation(textForCount);
+                        countText = utils.removePunctuation(countText);
                       }
                       final searchCount =
-                          _countSearchMatches(textForCount, widget.searchQuery);
+                          _countSearchMatches(countText, widget.searchQuery);
+                      // textForSnippet משמר העדפת ניקוד משתמש (לקטעי תצוגה)
+                      String textForSnippet = data;
+                      if (effectiveRemoveNikud) {
+                        textForSnippet = utils.removeVolwels(textForSnippet);
+                      }
+                      if (widget.removePunctuation) {
+                        textForSnippet =
+                            utils.removePunctuation(textForSnippet);
+                      }
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         widget.onSearchResultsCountChanged?.call(searchCount);
                         if (widget.onSearchSnippetsChanged != null &&
                             searchCount > 0) {
                           final plainText =
-                              utils.stripHtmlIfNeeded(textForCount);
+                              utils.stripHtmlIfNeeded(textForSnippet);
                           final excerpt = SnippetBuilder.buildExcerptText(
                             fullText: plainText,
                             query: widget.searchQuery,
@@ -169,6 +177,7 @@ class _CommentaryContentState extends State<CommentaryContent> {
                           ? FontWeight.bold
                           : null,
                       lineHeight: settingsState.lineHeight,
+                      partialWordHighlight: true,
                     );
 
                     _reportRenderedText(data, renderSettings);

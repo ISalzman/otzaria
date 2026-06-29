@@ -18,6 +18,7 @@ class SearchPaneBase extends StatefulWidget {
     this.onAdvancedSearch,
     this.additionalActions,
     this.collapsibleOnScroll = false,
+    this.onSubmitted,
     super.key,
   });
 
@@ -34,6 +35,7 @@ class SearchPaneBase extends StatefulWidget {
   final VoidCallback? onAdvancedSearch;
   final List<Widget>? additionalActions;
   final bool collapsibleOnScroll;
+  final VoidCallback? onSubmitted;
 
   @override
   State<SearchPaneBase> createState() => _SearchPaneBaseState();
@@ -99,7 +101,10 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
             hintText: widget.hintText ?? '',
             onChanged: (value) =>
                 _debounce(() => widget.onSearchTextChanged?.call(value)),
-            onSubmitted: (_) => widget.focusNode.requestFocus(),
+            onSubmitted: (_) {
+              widget.onSubmitted?.call();
+              widget.focusNode.requestFocus();
+            },
             onClear: () {
               widget.onSearchTextChanged?.call('');
               widget.resetSearchCallback();

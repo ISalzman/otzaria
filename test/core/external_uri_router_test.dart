@@ -172,6 +172,44 @@ void main() {
       });
     });
 
+    group('open/tab/<index>', () {
+      test('מחזיר SwitchToTabAction עם המיקום שנדרש', () {
+        final action =
+            ExternalUriRouter.parseUri(Uri.parse('otzaria://open/tab/4'));
+
+        expect(action, isA<SwitchToTabAction>());
+        expect((action as SwitchToTabAction).index, 4);
+      });
+
+      test('מיקום 0 תקף', () {
+        final action =
+            ExternalUriRouter.parseUri(Uri.parse('otzaria://open/tab/0'));
+
+        expect((action as SwitchToTabAction).index, 0);
+      });
+
+      test('המילה tab אינה רגישה לאותיות גדולות/קטנות', () {
+        final action =
+            ExternalUriRouter.parseUri(Uri.parse('otzaria://open/TAB/2'));
+
+        expect((action as SwitchToTabAction).index, 2);
+      });
+
+      test('דוחה מיקום שלילי', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/tab/-1')),
+          isNull,
+        );
+      });
+
+      test('דוחה מיקום לא-מספרי', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/tab/abc')),
+          isNull,
+        );
+      });
+    });
+
     group('open/book/<id>', () {
       test('פותחת ספר לפי מזהה DB', () {
         final action = ExternalUriRouter.parseUri(
