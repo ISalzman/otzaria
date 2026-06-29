@@ -21,6 +21,23 @@ class PluginManifestValidator {
       throw Exception('מזהה התוסף אינו תקין');
     }
 
+    // שם התוסף מוצג בראש לשונית התוסף ב"כלים" — מעבר ל-14 תווים גולש מהכרטיסייה.
+    if (manifest.name.trim().length > 14) {
+      throw Exception('שם התוסף חייב להכיל לכל היותר 14 תווים');
+    }
+
+    // description הוא התיאור הקצר שמוצג בכרטיס התוסף בחנות — מוגבל ל-150 תווים.
+    if (manifest.description.trim().length > 150) {
+      throw Exception('תיאור קצר חייב להכיל לכל היותר 150 תווים');
+    }
+
+    // הכותרת המוצגת בטאב חייבת להיות זהה ל-name (גם כותרת ריקה נחסמת — היא
+    // תציג טאב בלי טקסט). title חסר נופל ל-name ב-fromJson ולכן עובר.
+    if (manifest.toolTabTitle.trim() != manifest.name.trim()) {
+      throw Exception(
+          'שם התוסף ("${manifest.name}") שונה מכותרת הטאב ב-contributes.toolTab.title ("${manifest.toolTabTitle}"). השמות חייבים להיות זהים');
+    }
+
     if (!RegExp(r'^\d+\.\d+\.\d+(?:\+.*)?$').hasMatch(manifest.version)) {
       throw Exception(
           'גרסת התוסף במניפסט אינה חוקית. נדרש פורמט SemVer חוקיות.');

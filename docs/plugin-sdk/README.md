@@ -98,7 +98,7 @@ my-plugin/
   },
   "contributes": {
     "toolTab": {
-      "title": "שם הטאב",
+      "title": "שם התוסף",
       "order": 200,
       "allowOrderBeforeBuiltIns": false,
       "defaultPinned": true,
@@ -115,7 +115,7 @@ my-plugin/
 |-----|-----|--------|
 | `schemaVersion` | `number` | תמיד `1` |
 | `id` | `string` | מזהה ייחודי בסגנון reverse-domain: `com.company.plugin-name` |
-| `name` | `string` | שם התוסף כפי שיוצג למשתמש |
+| `name` | `string` | שם התוסף כפי שיוצג למשתמש (עד 14 תווים — מוצג בראש לשונית התוסף ב"כלים") |
 | `version` | `string` | גרסה בפורמט SemVer: `major.minor.patch` |
 | `entrypoint` | `string` | נתיב יחסי לקובץ HTML הראשי |
 | `minAppVersion` | `string` | גרסת אוצריא המינימלית הנתמכת |
@@ -127,9 +127,9 @@ my-plugin/
 
 | שדה | חובה | תיאור |
 |-----|------|--------|
-| `name` | ✓ | שם התוסף כפי שיוצג למשתמש |
+| `name` | ✓ | שם התוסף כפי שיוצג למשתמש (עד 14 תווים — מוצג בראש לשונית התוסף ב"כלים") |
 | `author` | ✓ | שם המפתח או הגוף המפרסם |
-| `description` | ✓ | תיאור קצר של התוסף |
+| `description` | ✓ | תיאור קצר של התוסף, מוצג בכרטיס בחנות (עד 150 תווים) |
 | `version` | ✓ | גרסת התוסף |
 | `stability` | ✓ | מצב שחרור: `stable`, `beta`, או `experimental` |
 | `minAppVersion` | ✓ | גרסת אוצריא המינימלית הנתמכת |
@@ -140,14 +140,14 @@ my-plugin/
 
 | שדה | ברירת מחדל | תיאור |
 |-----|-----------|--------|
-| `description` | `""` | תיאור מורחב |
+| `description` | `""` | תיאור קצר של התוסף, מוצג בכרטיס בחנות (עד 150 תווים) |
 | `author` | `""` | שם המפתח |
 | `homepage` | `""` | כתובת לדף הבית של התוסף, למשל עמוד GitHub, תיעוד, או אתר פרויקט |
 | `icon` | `null` | נתיב לאייקון (PNG, 64×64 מומלץ) |
 | `maxAppVersion` | `null` | גרסת אוצריא המקסימלית הנתמכת |
 | `network.enabled` | `false` | האם להצהיר על שימוש ברשת (חובה כדי להפעיל את מנגנון הרשת בתוסף) |
 | `network.allowlist` | `[]` | רשימת ה-URLs שהתוסף מצהיר שהוא צריך. ה-URL חייב להופיע כאן **וגם** להיות מאושר ע"י אוצריא: או ברשימה המובנית `pluginNetworkAllowlist`, או בקובץ המקביל הרשמי ב-GitHub של אוצריא. הצהרה ב-manifest לבדה **אינה** מספיקה. |
-| `contributes.toolTab.title` | שם התוסף | כותרת הטאב |
+| `contributes.toolTab.title` | שם התוסף | כותרת הטאב. אם מגדירים אותה במפורש — חייבת להיות זהה ל-`name` (עד 14 תווים), אחרת התוסף יידחה |
 | `contributes.toolTab.order` | `900` | סדר הופעה בטאבים (מספר נמוך = קודם) |
 | `contributes.toolTab.allowOrderBeforeBuiltIns` | `false` | חריג מפורש שמאפשר לתוסף להתחרות מול הכלים המובנים ולהופיע לפניהם במסך "כלים" |
 | `contributes.toolTab.defaultPinned` | `true` | האם להצמיד אוטומטית בהתקנה |
