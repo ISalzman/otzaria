@@ -31,7 +31,9 @@ const aboutEssentialPeople = <Map<String, String>>[
   {'name': 'יעקב מ. פינס', 'url': 'https://github.com/ymp112'},
 ];
 
-// מהדירים שההדירו 10 ספרים ומעלה
+const aboutTopEditorsLabel = 'מהדירים שההדירו 10 ספרים ומעלה';
+const aboutRegularEditorsLabel = 'מהדירים שההדירו בין 5 ל-10 ספרים';
+
 const aboutTopEditors = <Map<String, String>>[
   {
     'name': 'י. פל',
@@ -113,7 +115,6 @@ const aboutTopEditors = <Map<String, String>>[
   },
 ];
 
-// מהדירים שההדירו בין 5 ל-10 ספרים
 const aboutRegularEditors = <Map<String, String>>[
   {
     'name': 'מויטיו',
@@ -138,6 +139,13 @@ const aboutRegularEditors = <Map<String, String>>[
     'name': 'ש. נ.', // שילה נוי
   },
 ];
+
+const aboutMainSourcesLabel =
+    'מקור חלק גדול מהספרים בספריית אוצריא נלקח מהפרויקט המדהים של ספריא '
+    'ושל עמותת דיקטה, שבאמצעותו נוספו חלק ניכר מהספרים.';
+
+const aboutAdditionalSourcesLabel =
+    'כמו כן נוספו ספרים חשובים רבים מהפרויקטים הבאים:';
 
 const aboutMainSources = <Map<String, String>>[
   {'name': 'ספריא', 'url': 'https://www.sefaria.org/texts'},

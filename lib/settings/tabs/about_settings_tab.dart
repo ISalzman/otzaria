@@ -142,6 +142,13 @@ class AboutSettingsTab extends StatelessWidget {
 
             kSettingsCardSpacing,
 
+            // ── ציטוט סיום ──
+            SettingsCard(
+              children: [_ClosingQuote()],
+            ),
+
+            kSettingsCardSpacing,
+
             // ── תורמים ──
             SettingsCard(
               title: 'תורמים',
@@ -151,6 +158,18 @@ class AboutSettingsTab extends StatelessWidget {
                   child: _MemorialCardsGrid(
                     onDonationTap: () => _openUrl('https://nedar.im/ezOd'),
                   ),
+                ),
+                SettingsActionTile(
+                  title: Text(
+                    'תרמו מהונם ומזמנם',
+                    style: SettingsCard.titleStyleOf(context),
+                  ),
+                  actions: [
+                    _InfoChipWrap(
+                      items: aboutEssentialPeople,
+                      icon: FluentIcons.person_24_regular,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -164,23 +183,10 @@ class AboutSettingsTab extends StatelessWidget {
                 _cardTitle(context, 'מפתחים'),
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: _InfoChipWrap(
+                  child: _InfoChipSection(
                     items: aboutDevelopers,
                     icon: FluentIcons.person_24_regular,
                   ),
-                ),
-                SettingsActionTile.text(
-                  icon: FluentIcons.code_24_regular,
-                  title: 'הצטרף לפיתוח',
-                  subtitle:
-                      'מפתחים מוזמנים לתרום לקהילה התורנית ולשדרג את אוצריא',
-                  actions: [
-                    ActionButton.recommended(
-                      text: 'הצטרף עכשיו',
-                      onPressed: () =>
-                          _openUrl('https://github.com/otzaria/otzaria'),
-                    ),
-                  ],
                 ),
                 SettingsActionTile.text(
                   icon: FluentIcons.chat_24_regular,
@@ -192,22 +198,6 @@ class AboutSettingsTab extends StatelessWidget {
                       onPressed: () => _openUrl('https://otzaria.org/forum'),
                     ),
                   ],
-                ),
-              ],
-            ),
-
-            kSettingsCardSpacing,
-
-            // ── אנשים חיוניים ──
-            SettingsCard(
-              title: 'התוכנה נעזרה רבות ב:',
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _InfoChipWrap(
-                    items: aboutEssentialPeople,
-                    icon: FluentIcons.people_24_regular,
-                  ),
                 ),
               ],
             ),
@@ -241,9 +231,17 @@ class AboutSettingsTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _editorCategory('10 ספרים ומעלה', aboutTopEditors),
+                      _InfoChipSection(
+                        label: aboutTopEditorsLabel,
+                        items: aboutTopEditors,
+                        icon: FluentIcons.book_24_regular,
+                      ),
                       const SizedBox(height: 20),
-                      _editorCategory('בין 5 ל-10 ספרים', aboutRegularEditors),
+                      _InfoChipSection(
+                        label: aboutRegularEditorsLabel,
+                        items: aboutRegularEditors,
+                        icon: FluentIcons.book_24_regular,
+                      ),
                     ],
                   ),
                 ),
@@ -260,13 +258,6 @@ class AboutSettingsTab extends StatelessWidget {
                   ],
                 ),
               ],
-            ),
-
-            kSettingsCardSpacing,
-
-            // ── ציטוט סיום ──
-            SettingsCard(
-              children: [_ClosingQuote()],
             ),
           ],
         ),
@@ -342,23 +333,6 @@ class AboutSettingsTab extends StatelessWidget {
     );
   }
 
-  Widget _editorCategory(String label, List<Map<String, String>> editors) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'מהדירים שההדירו $label',
-          style: kSettingsSubtitleStyle,
-        ),
-        const SizedBox(height: 8),
-        _InfoChipWrap(
-          items: editors,
-          icon: FluentIcons.book_24_regular,
-        ),
-      ],
-    );
-  }
-
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) await launchUrl(uri);
@@ -378,7 +352,7 @@ class AboutSettingsTab extends StatelessWidget {
 // ── _InfoChip ─────────────────────────────────────────────────────────────────
 
 /// צ'יפ מידע אחיד לכל סוגי הנתונים בטאב — אייקון אפור + שם (primary כשיש קישור),
-/// תיאור אופציונלי בסוגריים, ולחיץ כשקיים url. מאוחד לכל הסקציות.
+/// תיאור אופציונלי בסוגריים, ולחיץ (InkWell) כשקיים url. מאוחד לכל הסקציות.
 class _InfoChipWrap extends StatelessWidget {
   final List<Map<String, String>> items;
   final IconData icon;
@@ -388,8 +362,8 @@ class _InfoChipWrap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 16,
-      runSpacing: 10,
+      spacing: 4,
+      runSpacing: 4,
       alignment: WrapAlignment.center,
       children: items
           .map((c) => _InfoChip(
@@ -399,6 +373,30 @@ class _InfoChipWrap extends StatelessWidget {
                 icon: icon,
               ))
           .toList(),
+    );
+  }
+}
+
+/// מקטע צ'יפים ברוחב מלא, עם כותרת/תיאור אופציונלי מעליו.
+/// מאחד את עיצוב סקציות הצ'יפים (מפתחים, מקור הספרים, מהדירים).
+class _InfoChipSection extends StatelessWidget {
+  final String? label;
+  final List<Map<String, String>> items;
+  final IconData icon;
+
+  const _InfoChipSection({this.label, required this.items, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (label != null) ...[
+          Text(label!, style: kSettingsSubtitleStyle),
+          const SizedBox(height: 10),
+        ],
+        _InfoChipWrap(items: items, icon: icon),
+      ],
     );
   }
 }
@@ -420,24 +418,27 @@ class _InfoChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasUrl = url.isNotEmpty;
-    final nameStyle = hasUrl
-        ? kSettingsTitleStyle.copyWith(color: colorScheme.primary)
-        : kSettingsTitleStyle;
+    // סגנון מפורש התואם למראה בכרטיס 'תרמו מהונם' — labelSmall (w500) של
+    // ListTile.trailing עם גודל הכותרת — כך אחיד בכל מיקום ולא תלוי בהקשר.
+    final nameStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontSize: kSettingsTitleStyle.fontSize,
+          color: hasUrl ? colorScheme.primary : colorScheme.onSurfaceVariant,
+        );
 
-    final content = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        RtlIcon(icon, size: 15, color: colorScheme.onSurfaceVariant),
-        const SizedBox(width: 6),
-        Text(name, style: nameStyle),
-        if (description != null && description!.isNotEmpty) ...[
-          const SizedBox(width: 4),
-          Text(
-            '(${description!})',
-            style: kSettingsSubtitleStyle,
-          ),
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          RtlIcon(icon, size: 15, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text(name, style: nameStyle),
+          if (description != null && description!.isNotEmpty) ...[
+            const SizedBox(width: 4),
+            Text('(${description!})', style: kSettingsSubtitleStyle),
+          ],
         ],
-      ],
+      ),
     );
 
     if (!hasUrl) return content;
@@ -452,137 +453,6 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-// ── _MemorialCardsGrid ────────────────────────────────────────────────────────
-
-class _MemorialCardsGrid extends StatelessWidget {
-  final VoidCallback onDonationTap;
-  const _MemorialCardsGrid({required this.onDonationTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth < 400) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _MemorialCard(
-              name: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
-              description: 'סכום משמעותי לפיתוח התוכנה',
-            ),
-            const SizedBox(height: 12),
-            _DonationMemorialCard(onTap: onDonationTap),
-            const SizedBox(height: 12),
-            _DonationMemorialCard(onTap: onDonationTap),
-          ],
-        );
-      }
-      return IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: _MemorialCard(
-                name: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
-                description: 'סכום משמעותי לפיתוח התוכנה',
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: _DonationMemorialCard(onTap: onDonationTap)),
-            const SizedBox(width: 12),
-            Expanded(child: _DonationMemorialCard(onTap: onDonationTap)),
-          ],
-        ),
-      );
-    });
-  }
-}
-
-class _MemorialCard extends StatelessWidget {
-  final String name;
-  final String description;
-  const _MemorialCard({required this.name, required this.description});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 0,
-      color: colorScheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
-        borderRadius: AppTokens.borderRadiusAll,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(FluentIcons.heart_24_filled,
-                color: colorScheme.primary, size: 24),
-            const SizedBox(height: 6),
-            Text(name,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface)),
-            const SizedBox(height: 4),
-            Text(description,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 11, color: colorScheme.onSurfaceVariant)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DonationMemorialCard extends StatelessWidget {
-  final VoidCallback onTap;
-  const _DonationMemorialCard({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 0,
-      color: colorScheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
-        borderRadius: AppTokens.borderRadiusAll,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(FluentIcons.heart_24_regular,
-                color: colorScheme.primary.withValues(alpha: 0.6), size: 24),
-            const SizedBox(height: 6),
-            Text(
-              'מקום זה יכול להיות מונצח לע"נ יקירך',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.onSurface),
-            ),
-            const SizedBox(height: 8),
-            ActionButton.recommended(
-              icon: FluentIcons.payment_24_regular,
-              text: 'נדרים+',
-              onPressed: onTap,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ── _BookSourcesSection ───────────────────────────────────────────────────────
 
 class _BookSourcesSection extends StatelessWidget {
@@ -593,22 +463,14 @@ class _BookSourcesSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'מקור חלק גדול מהספרים בספריית אוצריא נלקח מהפרויקט המדהים של ספריא ושל עמותת דיקטה, שבאמצעותו נוספו חלק ניכר מהספרים.',
-          style: kSettingsSubtitleStyle,
-        ),
-        const SizedBox(height: 10),
-        _InfoChipWrap(
+        _InfoChipSection(
+          label: aboutMainSourcesLabel,
           items: aboutMainSources,
           icon: FluentIcons.library_24_regular,
         ),
         const SizedBox(height: 16),
-        Text(
-          'כמו כן נוספו ספרים חשובים רבים מהפרויקטים הבאים:',
-          style: kSettingsSubtitleStyle,
-        ),
-        const SizedBox(height: 10),
-        _InfoChipWrap(
+        _InfoChipSection(
+          label: aboutAdditionalSourcesLabel,
           items: aboutAdditionalSources,
           icon: FluentIcons.library_24_regular,
         ),
@@ -627,14 +489,7 @@ class _ClosingQuote extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Card(
-        elevation: 0,
-        color: colorScheme.surfaceContainerHigh,
-        shape: RoundedRectangleBorder(
-          side: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
-          borderRadius: AppTokens.borderRadiusAll,
-        ),
+      child: _SurfaceCard(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           child: Column(
@@ -699,6 +554,130 @@ class _ClosingQuote extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── _MemorialCardsGrid ────────────────────────────────────────────────────────
+
+class _MemorialCardsGrid extends StatelessWidget {
+  final VoidCallback onDonationTap;
+  const _MemorialCardsGrid({required this.onDonationTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 400) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _MemorialCard.donor(
+              title: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
+              description: 'סכום משמעותי לפיתוח התוכנה',
+            ),
+            const SizedBox(height: 12),
+            _MemorialCard.donation(onDonate: onDonationTap),
+            const SizedBox(height: 12),
+            _MemorialCard.donation(onDonate: onDonationTap),
+          ],
+        );
+      }
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _MemorialCard.donor(
+                title: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
+                description: 'סכום משמעותי לפיתוח התוכנה',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: _MemorialCard.donation(onDonate: onDonationTap)),
+            const SizedBox(width: 12),
+            Expanded(child: _MemorialCard.donation(onDonate: onDonationTap)),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+/// כרטיס משטח אחיד — רקע surfaceContainerHigh, פינות מעוגלות, ללא מסגרת.
+class _SurfaceCard extends StatelessWidget {
+  final Widget child;
+  const _SurfaceCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1,
+      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+      child: child,
+    );
+  }
+}
+
+/// כרטיס הנצחה — `donor` למנציח קיים, `donation` למקום פנוי עם כפתור תרומה.
+class _MemorialCard extends StatelessWidget {
+  final IconData icon;
+  final bool dimIcon;
+  final String title;
+  final double titleFontSize;
+  final String? description;
+  final VoidCallback? onDonate;
+
+  const _MemorialCard.donor({required this.title, required this.description})
+      : icon = FluentIcons.heart_24_filled,
+        dimIcon = false,
+        titleFontSize = 14,
+        onDonate = null;
+
+  const _MemorialCard.donation({required this.onDonate})
+      : icon = FluentIcons.heart_24_regular,
+        dimIcon = true,
+        title = 'מקום זה יכול להיות מונצח לע"נ יקירך',
+        titleFontSize = 13,
+        description = null;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final iconColor = dimIcon
+        ? colorScheme.primary.withValues(alpha: 0.6)
+        : colorScheme.primary;
+    return _SurfaceCard(
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: iconColor, size: 24),
+            const SizedBox(height: 6),
+            Text(title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: titleFontSize,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface)),
+            if (description != null) ...[
+              const SizedBox(height: 4),
+              Text(description!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 11, color: colorScheme.onSurfaceVariant)),
+            ],
+            if (onDonate != null) ...[
+              const SizedBox(height: 8),
+              ActionButton.recommended(
+                icon: FluentIcons.payment_24_regular,
+                text: 'נדרים+',
+                onPressed: onDonate!,
+              ),
+            ],
+          ],
         ),
       ),
     );

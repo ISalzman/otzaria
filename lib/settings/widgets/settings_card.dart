@@ -30,16 +30,22 @@ class SettingsCard extends StatelessWidget {
   bool get _hasTitle =>
       title != null && !(title is String && (title as String).isEmpty);
 
+  /// סגנון כותרת הכרטיס — מקור אמת יחיד, גם לשורות שרוצות להיראות ככותרת.
+  static TextStyle? titleStyleOf(BuildContext context) {
+    final theme = Theme.of(context);
+    return theme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.bold,
+      color: theme.colorScheme.primary,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     if (!_hasTitle) return AppCard.section(children: children);
 
-    final titleStyle = theme.textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.bold,
-      color: theme.colorScheme.primary,
-    );
+    final titleStyle = titleStyleOf(context);
 
     final header = Container(
       width: double.infinity,
