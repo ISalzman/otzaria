@@ -153,18 +153,37 @@ class FocusRepository {
   // [requestTabContentFocus] עם הטאב הפעיל בכל מעבר.
   final Map<Object, VoidCallback> _tabContentFocusRequesters = {};
 
+  // בקשת מיקוד שהגיעה לפני שאזור הקריאה נרשם (פתיחת ספר מתוך דיאלוג איתור/
+  // חיפוש) — תבוצע ברגע הרישום, אחרת הקיצורים (Ctrl+F) מתים עד קליק.
+  Object? _pendingTabContentFocus;
+
   void registerTabContentFocusRequester(Object tabKey, VoidCallback requester) {
     _tabContentFocusRequesters[tabKey] = requester;
+    if (_pendingTabContentFocus != tabKey) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // בין התזמון להרצה הטאב עלול להיות מוחלף/מוסר או טאב אחר ביקש פוקוס.
+      if (_pendingTabContentFocus != tabKey) return;
+      final current = _tabContentFocusRequesters[tabKey];
+      if (current == null) return;
+      _pendingTabContentFocus = null;
+      current();
+    });
   }
 
   void unregisterTabContentFocusRequester(Object tabKey) {
     _tabContentFocusRequesters.remove(tabKey);
+    if (_pendingTabContentFocus == tabKey) _pendingTabContentFocus = null;
   }
 
   /// ממקד את אזור הקריאה של הטאב הפעיל (אם נרשם). מחזיר true אם נמצא ומופעל.
+  /// אם התוכן עדיין לא נרשם, הבקשה נזכרת ותבוצע ברגע הרישום.
   bool requestTabContentFocus(Object tabKey) {
     final requester = _tabContentFocusRequesters[tabKey];
-    if (requester == null) return false;
+    if (requester == null) {
+      _pendingTabContentFocus = tabKey;
+      return false;
+    }
+    _pendingTabContentFocus = null;
     requester();
     return true;
   }
@@ -269,6 +288,7 @@ class FocusRepository {
     _screenRestorer = null;
     _dialogRestorers.clear();
     _tabContentFocusRequesters.clear();
+    _pendingTabContentFocus = null;
     _hasScheduledRestore = false;
     _resizeDebounceTimer?.cancel();
     _resizeDebounceTimer = null;
