@@ -1528,8 +1528,9 @@ class SeforimRepository {
       int? connectionTypeId =
           _connectionTypeCache[link.connectionType.name.toUpperCase()];
 
-      // Fallback only if not found in cache (rare case for non-standard types)
-      connectionTypeId ??= _connectionTypeCache['default'] ?? 1;
+      // אם הסוג לא נמצא — נופלים ל-OTHER (מובטח קיים ב-DB כתיב), לא ל-1 קשיח
+      // שב-v3 הוא דווקא COMMENTARY ולכן היה ממפה לינק לא-מזוהה כמפרש.
+      connectionTypeId ??= _connectionTypeCache['OTHER'] ?? 1;
 
       return '(${link.sourceBookId}, ${link.targetBookId}, ${link.sourceLineId}, ${link.targetLineId}, $connectionTypeId)';
     }).join(',');
