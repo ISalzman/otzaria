@@ -55,8 +55,8 @@ class _StubHistoryBloc extends Bloc<HistoryEvent, HistoryState>
 
 class _StubNavigationBloc extends Bloc<NavigationEvent, NavigationState>
     implements NavigationBloc {
-  _StubNavigationBloc()
-      : super(const NavigationState(currentScreen: Screen.reading)) {
+  _StubNavigationBloc([Screen screen = Screen.reading])
+      : super(NavigationState(currentScreen: screen)) {
     on<NavigationEvent>((_, __) {});
   }
 
@@ -572,6 +572,102 @@ void main() {
       // לא אמור לזרוק ולא להשפיע — מאומת דרך היעדר חריגה.
       await sendAlt(tester, LogicalKeyboardKey.arrowUp);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('KeyboardShortcuts - Ctrl+W מוגבל למסך עיון', () {
+    late MockSettingsBloc settingsBlocLocal;
+    late StreamController<SettingsState> settingsControllerLocal;
+
+    setUpAll(() async {
+      await Settings.init(cacheProvider: MemorySettingsCache());
+    });
+
+    setUp(() {
+      FocusRepository().resetForTesting();
+      settingsBlocLocal = MockSettingsBloc();
+      settingsControllerLocal = StreamController<SettingsState>.broadcast();
+      whenListen(
+        settingsBlocLocal,
+        settingsControllerLocal.stream,
+        initialState: SettingsState.initial().copyWith(
+          shortcuts: const {'key-shortcut-close-tab': 'ctrl+w'},
+        ),
+      );
+    });
+
+    tearDown(() async {
+      await settingsControllerLocal.close();
+      FocusRepository().resetForTesting();
+    });
+
+    Future<TabsBloc> pumpOnScreen(WidgetTester tester, Screen screen) async {
+      final tabsBloc = TabsBloc(repository: _FakeTabsRepository());
+      final historyBloc = _StubHistoryBloc();
+      final navigationBloc = _StubNavigationBloc(screen);
+      addTearDown(() async {
+        final openTabs = List<OpenedTab>.from(tabsBloc.state.tabs);
+        await tabsBloc.close();
+        for (final tab in openTabs) {
+          tab.dispose();
+        }
+        await historyBloc.close();
+        await navigationBloc.close();
+      });
+
+      tabsBloc.add(AddTab(SearchingTab('חיפוש א', 'א')));
+      await tester.pump();
+      tabsBloc.add(AddTab(SearchingTab('חיפוש ב', 'ב')));
+      await tester.pump();
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<SettingsBloc>.value(value: settingsBlocLocal),
+            BlocProvider<TabsBloc>.value(value: tabsBloc),
+            BlocProvider<HistoryBloc>.value(value: historyBloc),
+            BlocProvider<NavigationBloc>.value(value: navigationBloc),
+            Provider<FocusRepository>.value(value: FocusRepository()),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: KeyboardShortcuts(
+                onFindRefRequested: () {},
+                child: const SizedBox(width: 100, height: 100),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      return tabsBloc;
+    }
+
+    Future<void> sendCtrlW(WidgetTester tester) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyW);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyW);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+    }
+
+    testWidgets('Ctrl+W במסך עיון סוגר את הטאב הנוכחי', (tester) async {
+      final tabsBloc = await pumpOnScreen(tester, Screen.reading);
+      expect(tabsBloc.state.tabs, hasLength(2));
+
+      await sendCtrlW(tester);
+      expect(tabsBloc.state.tabs, hasLength(1));
+
+      // ניקוז טיימר ההשהיה של שחרור הטאב (_disposeTabLater).
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('Ctrl+W מחוץ למסך עיון אינו סוגר טאב', (tester) async {
+      final tabsBloc = await pumpOnScreen(tester, Screen.library);
+      expect(tabsBloc.state.tabs, hasLength(2));
+
+      await sendCtrlW(tester);
+      expect(tabsBloc.state.tabs, hasLength(2));
     });
   });
 }

@@ -148,10 +148,16 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     final prevTocShortcut = shortcutOf('key-shortcut-prev-toc');
     final nextTocShortcut = shortcutOf('key-shortcut-next-toc');
 
+    // קיצורי טאבים/עיון פועלים רק במסך העיון; במסכים אחרים נופלים ל-`ignored`
+    // כדי לא לסגור/לשנות טאב שברקע (למשל Ctrl+W בספרייה או בהגדרות).
+    final isReadingScreen =
+        context.read<NavigationBloc>().state.currentScreen == Screen.reading;
+
     // פתח/סגור חלונית ניווט. אם הטאב הפעיל אינו ספר — מחזירים `ignored`
     // כדי לא לבלוע את הקיצור (כך מנוע ה-shortcut יכול להמשיך הלאה במקום
     // להציג למשתמש "כלום קרה" שקטה).
-    if (ShortcutHelper.matchesShortcut(event, toggleNavPaneShortcut)) {
+    if (isReadingScreen &&
+        ShortcutHelper.matchesShortcut(event, toggleNavPaneShortcut)) {
       final tab = context.read<TabsBloc>().state.currentTab;
       if (tab is TextBookTab) {
         final state = tab.bloc.state;
@@ -169,7 +175,8 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
 
     // פתח/סגור חלונית מפרשים — פועל גם ב-TextBookTab וגם ב-PdfBookTab
     // (תיקון לבאג שב-PR המקורי שבלע את האירוע ב-PDF בלי השפעה).
-    if (ShortcutHelper.matchesShortcut(event, toggleCommentatorsPaneShortcut)) {
+    if (isReadingScreen &&
+        ShortcutHelper.matchesShortcut(event, toggleCommentatorsPaneShortcut)) {
       final tab = context.read<TabsBloc>().state.currentTab;
       if (tab is TextBookTab) {
         tab.toggleCommentatorsPaneNotifier.value++;
@@ -183,7 +190,8 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     }
 
     // פתיחת כרטיסיית מפרשים נפרדת מהטאב הנוכחי
-    if (openCommentatorsTabShortcut.isNotEmpty &&
+    if (isReadingScreen &&
+        openCommentatorsTabShortcut.isNotEmpty &&
         ShortcutHelper.matchesShortcut(event, openCommentatorsTabShortcut)) {
       final tabsBloc = context.read<TabsBloc>();
       final tab = tabsBloc.state.currentTab;
@@ -206,7 +214,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     // מאזין לו ומבצע בדיוק את אותו ניווט כמו לחיצה על הכפתור. רלוונטי רק
     // ל-TextBookTab; במסכים אחרים מחזירים `ignored` כדי לא לבלוע את הקיצור.
     final navTab = context.read<TabsBloc>().state.currentTab;
-    if (navTab is TextBookTab) {
+    if (isReadingScreen && navTab is TextBookTab) {
       ValueNotifier<int>? navNotifier;
       if (ShortcutHelper.matchesShortcut(event, prevSegmentShortcut)) {
         navNotifier = navTab.navPreviousSegmentNotifier;
@@ -240,7 +248,8 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     }
 
     // סגור טאב
-    if (ShortcutHelper.matchesShortcut(event, closeTabShortcut)) {
+    if (isReadingScreen &&
+        ShortcutHelper.matchesShortcut(event, closeTabShortcut)) {
       final tabsBloc = context.read<TabsBloc>();
       final historyBloc = context.read<HistoryBloc>();
       if (tabsBloc.state.tabs.isNotEmpty) {
@@ -252,7 +261,8 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     }
 
     // סגור כל הטאבים
-    if (ShortcutHelper.matchesShortcut(event, closeAllTabsShortcut)) {
+    if (isReadingScreen &&
+        ShortcutHelper.matchesShortcut(event, closeAllTabsShortcut)) {
       final tabsBloc = context.read<TabsBloc>();
       final historyBloc = context.read<HistoryBloc>();
       for (final tab in tabsBloc.state.tabs) {
@@ -264,7 +274,8 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       return KeyEventResult.handled;
     }
 
-    if (ShortcutHelper.matchesShortcut(event, restoreClosedTabShortcut)) {
+    if (isReadingScreen &&
+        ShortcutHelper.matchesShortcut(event, restoreClosedTabShortcut)) {
       context.read<TabsBloc>().add(const RestoreLastClosedTab());
       return KeyEventResult.handled;
     }
@@ -355,7 +366,8 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     // Ctrl+Tab / Ctrl+Shift+Tab - מעבר בין טאבים.
     // לא משתמשים ב-matchesShortcut כדי לא להפוך ל-Cmd ב-Mac: Cmd+Tab
     // שמור למערכת ההפעלה, ולכן ב-Mac נשארים עם Ctrl פיזי (זמין שם).
-    if (event.logicalKey == LogicalKeyboardKey.tab &&
+    if (isReadingScreen &&
+        event.logicalKey == LogicalKeyboardKey.tab &&
         HardwareKeyboard.instance.isControlPressed &&
         !HardwareKeyboard.instance.isAltPressed &&
         !HardwareKeyboard.instance.isMetaPressed) {
@@ -371,7 +383,8 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     // ו-9 תמיד לטאב האחרון. נבדק אחרי כל קיצורי matchesShortcut כדי שקיצור
     // מותאם-אישית שהמשתמש שייך ל-Ctrl+ספרה יקבל קדימות. ללא matchesShortcut
     // (כמו Ctrl+Tab) כדי לא להפוך ל-Cmd ב-Mac.
-    if (HardwareKeyboard.instance.isControlPressed &&
+    if (isReadingScreen &&
+        HardwareKeyboard.instance.isControlPressed &&
         !HardwareKeyboard.instance.isShiftPressed &&
         !HardwareKeyboard.instance.isAltPressed &&
         !HardwareKeyboard.instance.isMetaPressed) {
