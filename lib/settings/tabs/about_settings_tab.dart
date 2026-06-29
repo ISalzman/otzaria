@@ -6,13 +6,14 @@ import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
+import 'package:otzaria/settings/tabs/about_settings_data.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
 
 /// טאב "חכמי לב" — אודות, קהילה, תורמים ומפתחים.
-class AboutDevTab extends StatelessWidget {
-  const AboutDevTab({super.key});
+class AboutSettingsTab extends StatelessWidget {
+  const AboutSettingsTab({super.key});
 
   /// פריטי חיפוש בהגדרות. נסרק על-ידי tool/generate_search_index.dart.
   static const List<SettingsSearchEntry> searchEntries = [
@@ -107,143 +108,6 @@ class AboutDevTab extends StatelessWidget {
     ),
   ];
 
-  static const _developers = <Map<String, String>>[
-    {'name': 'sivan22', 'url': 'https://github.com/Sivan22'},
-    {
-      'name': 'ר. נבון',
-      'url': 'https://github.com/rachelGrayover',
-      'description': 'השקעה עצומה במעבר ל-SQLite',
-    },
-    {'name': 'Y.PL.', 'url': 'https://github.com/Y-PLONI'},
-    {'name': 'palmoni', 'url': 'https://github.com/palmoni5'},
-    {'name': 'YOSEFTT', 'url': 'https://github.com/YOSEFTT'},
-    {'name': 'zevisvei', 'url': 'https://github.com/zevisvei'},
-    {'name': 'evel-avalim', 'url': 'https://github.com/evel-avalim'},
-    {'name': 'userbot', 'url': 'https://github.com/userbot000'},
-    {'name': 'asz', 'url': 'https://github.com/DeveShlomo'},
-    {'name': 'mosh-dvd', 'url': 'https://github.com/mosh-dvd'},
-    {
-      'name': 'אליהו גמבש',
-      'url': 'https://github.com/kdroidFilter',
-      'description': 'המרת נתוני ספריא ל-SQLite',
-    },
-    {
-      'name': 'NHLOCAL',
-      'url': 'https://github.com/NHLOCAL/Shamor-Zachor',
-      'description': "מפתח 'שמור וזכור'",
-    },
-    {'name': 'michaelush', 'url': 'https://github.com/mmichaelush'},
-  ];
-
-  static const _essentialPeople = <Map<String, String>>[
-    {'name': 'דוד אריאל', 'url': ''},
-    {'name': 'יעקב מ. פינס', 'url': 'https://github.com/ymp112'},
-    {'name': 'רפאל א.', 'url': ''},
-  ];
-
-  static const _topEditors = <Map<String, String>>[
-    {
-      'name': 'י. פל',
-      'url': 'https://forum.otzaria.org/user/%D7%99.-%D7%A4%D7%9C.',
-    },
-    {
-      'name': 'האדם החושב', // האדם החושב
-      'url':
-          'https://forum.otzaria.org/user/%D7%94%D7%90%D7%93%D7%9D-%D7%94%D7%97%D7%95%D7%A9%D7%91',
-    },
-    {
-      'name': 'י. ח. מ.', // יום חדש מתחיל
-      'url':
-          'https://forum.otzaria.org/user/%D7%99%D7%95%D7%9D-%D7%97%D%93%D7%A9-%D7%9E%D7%AA%D7%97%D7%99%D7%9C',
-    },
-    {
-      'name': 'ס. כב.', // sivan22
-      'url': 'https://mitmachim.top/user/sivan22'
-    },
-    {
-      'name': 'י. צ.', // יהודי צעיר
-      'url':
-          'https://forum.otzaria.org/user/%D7%99%D7%94%D7%95%D7%93%D7%99-%D7%A6%D7%A2%D7%99%D7%A8',
-    },
-    // {
-    //   'name': 'דורש טוב',  // כרגע לא רוצה
-    //   'url':
-    //       'https://forum.otzaria.org/user/%D7%93%D7%95%D7%A8%D7%A9-%D7%98%D7%95%D7%91',
-    // },
-    // {
-    //   'name': 'מ. פינק', // כרגע לא רוצה
-    // },
-    // {
-    //   'name': 'זקצ',
-    // },
-    {
-      'name': 'קטנטן', // ד. בנדל
-      'url': 'https://forum.otzaria.org/user/%D7%A7%D7%98%D7%A0%D7%98%D7%9F',
-    },
-    {
-      'name': 'ד.', // דאנציג
-      'url':
-          'https://forum.otzaria.org/user/%D7%93%D7%90%D7%A0%D7%A6%D7%99%D7%92',
-    },
-    {
-      'name': 'י. א.', // ישי אשכנזי
-    },
-    {
-      'name': '333',
-      'url': 'https://forum.otzaria.org/user/333',
-    },
-    {
-      'name': "ט. ג.", // "טכנולוגי גו'ניור", // י. אייזנשטיין
-      'url':
-          'https://forum.otzaria.org/user/%D7%98%D7%9B%D7%A0%D7%95%D7%9C%D7%95%D7%92%D7%99-%D7%92%D7%95-%D7%A0%D7%99%D7%95%D7%A8',
-    },
-    {
-      'name': 'ה. ה.', // גאון גדול - הבל הבלים
-      'url':
-          'https://forum.otzaria.org/user/%D7%94%D7%91%D7%9C-%D7%94%D7%91%D7%9C%D7%99%D7%9D',
-    },
-    {
-      'name': 'י. א. ח.', // U88
-      'url': 'https://otzaria.org/forum/user/u88',
-    },
-    {
-      'name': 'מיכאלוש', // מיכאלוש
-      'url':
-          'https://otzaria.org/forum/user/%D7%9E%D7%99%D7%9B%D7%90%D7%9C%D7%95%D7%A9',
-    },
-  ];
-
-  // מהדירים שההדירו בין 5 ל-10 ספרים
-  static const _regularEditors = <Map<String, String>>[
-    {
-      'name': 'מויטיו',
-      'url': 'https://mitmachim.top/user/%D7%9E%D7%95%D7%99%D7%98%D7%99%D7%95',
-    },
-    {
-      'name': 'ד. מ. א.', // דוד משה 1
-      'url':
-          'https://forum.otzaria.org/user/%D7%93%D7%95%D7%93-%D7%9E%D7%A9%D7%94-1',
-    },
-    {
-      'name': 'א. צ. מ.', // איש צדיק מידי
-      'url':
-          'https://forum.otzaria.org/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99',
-    },
-    {
-      'name': 'שני אנשים',
-      'url':
-          'https://forum.otzaria.org/user/%D7%A9%D7%A0%D7%99-%D7%90%D7%A0%D7%A9%D7%99%D7%9D',
-    },
-    {
-      'name': 'י. ד.', // יאיר דניאל
-      'url':
-          'https://forum.otzaria.org/user/%D7%99%D7%90%D7%99%D7%A8-%D7%93%D7%A0%D7%99%D7%90%D7%9C',
-    },
-    {
-      'name': 'ש. נ.', // שילה נוי
-    },
-  ];
-
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -300,10 +164,9 @@ class AboutDevTab extends StatelessWidget {
                 _cardTitle(context, 'מפתחים'),
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: _ContributorWrap(
-                    contributors: _developers,
+                  child: _InfoChipWrap(
+                    items: aboutDevelopers,
                     icon: FluentIcons.person_24_regular,
-                    alignment: WrapAlignment.center,
                   ),
                 ),
                 SettingsActionTile.text(
@@ -341,10 +204,9 @@ class AboutDevTab extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: _ContributorWrap(
-                    contributors: _essentialPeople,
+                  child: _InfoChipWrap(
+                    items: aboutEssentialPeople,
                     icon: FluentIcons.people_24_regular,
-                    alignment: WrapAlignment.center,
                   ),
                 ),
               ],
@@ -365,7 +227,7 @@ class AboutDevTab extends StatelessWidget {
                 ),
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: _BookSourcesSection(onOpenUrl: _openUrl),
+                  child: _BookSourcesSection(),
                 ),
                 _cardTitle(
                   context,
@@ -379,9 +241,9 @@ class AboutDevTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _editorCategory('10 ספרים ומעלה', _topEditors),
+                      _editorCategory('10 ספרים ומעלה', aboutTopEditors),
                       const SizedBox(height: 20),
-                      _editorCategory('בין 5 ל-10 ספרים', _regularEditors),
+                      _editorCategory('בין 5 ל-10 ספרים', aboutRegularEditors),
                     ],
                   ),
                 ),
@@ -489,10 +351,9 @@ class AboutDevTab extends StatelessWidget {
           style: kSettingsSubtitleStyle,
         ),
         const SizedBox(height: 8),
-        _ContributorWrap(
-          contributors: editors,
+        _InfoChipWrap(
+          items: editors,
           icon: FluentIcons.book_24_regular,
-          alignment: WrapAlignment.center,
         ),
       ],
     );
@@ -514,27 +375,24 @@ class AboutDevTab extends StatelessWidget {
   }
 }
 
-// ── _ContributorWrap ──────────────────────────────────────────────────────────
+// ── _InfoChip ─────────────────────────────────────────────────────────────────
 
-class _ContributorWrap extends StatelessWidget {
-  final List<Map<String, String>> contributors;
+/// צ'יפ מידע אחיד לכל סוגי הנתונים בטאב — אייקון אפור + שם (primary כשיש קישור),
+/// תיאור אופציונלי בסוגריים, ולחיץ כשקיים url. מאוחד לכל הסקציות.
+class _InfoChipWrap extends StatelessWidget {
+  final List<Map<String, String>> items;
   final IconData icon;
-  final WrapAlignment alignment;
 
-  const _ContributorWrap({
-    required this.contributors,
-    required this.icon,
-    this.alignment = WrapAlignment.start,
-  });
+  const _InfoChipWrap({required this.items, required this.icon});
 
   @override
   Widget build(BuildContext context) {
     return Wrap(
       spacing: 16,
       runSpacing: 10,
-      alignment: alignment,
-      children: contributors
-          .map((c) => _ContributorChip(
+      alignment: WrapAlignment.center,
+      children: items
+          .map((c) => _InfoChip(
                 name: c['name']!,
                 url: c['url'] ?? '',
                 description: c['description'],
@@ -545,13 +403,13 @@ class _ContributorWrap extends StatelessWidget {
   }
 }
 
-class _ContributorChip extends StatelessWidget {
+class _InfoChip extends StatelessWidget {
   final String name;
   final String url;
   final String? description;
   final IconData icon;
 
-  const _ContributorChip({
+  const _InfoChip({
     required this.name,
     required this.url,
     this.description,
@@ -566,7 +424,7 @@ class _ContributorChip extends StatelessWidget {
         ? kSettingsTitleStyle.copyWith(color: colorScheme.primary)
         : kSettingsTitleStyle;
 
-    Widget content = Row(
+    final content = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         RtlIcon(icon, size: 15, color: colorScheme.onSurfaceVariant),
@@ -582,17 +440,15 @@ class _ContributorChip extends StatelessWidget {
       ],
     );
 
-    if (hasUrl) {
-      return InkWell(
-        onTap: () async {
-          final uri = Uri.parse(url);
-          if (await canLaunchUrl(uri)) await launchUrl(uri);
-        },
-        borderRadius: AppTokens.borderRadiusAll,
-        child: content,
-      );
-    }
-    return content;
+    if (!hasUrl) return content;
+    return InkWell(
+      onTap: () async {
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) await launchUrl(uri);
+      },
+      borderRadius: AppTokens.borderRadiusAll,
+      child: content,
+    );
   }
 }
 
@@ -730,40 +586,7 @@ class _DonationMemorialCard extends StatelessWidget {
 // ── _BookSourcesSection ───────────────────────────────────────────────────────
 
 class _BookSourcesSection extends StatelessWidget {
-  final Future<void> Function(String) onOpenUrl;
-  const _BookSourcesSection({required this.onOpenUrl});
-
-  static const _mainSources = [
-    {'name': 'ספריא', 'url': 'https://www.sefaria.org/texts'},
-    {
-      'name': 'דיקטה',
-      'url':
-          'https://github.com/Dicta-Israel-Center-for-Text-Analysis/Dicta-Library-Download'
-    },
-  ];
-
-  static const _additionalSources = [
-    {'name': 'אורייתא', 'url': 'https://github.com/MosheWagner/Orayta-Books'},
-    {'name': 'ובלכתך בדרך', 'url': 'http://mobile.tora.ws'},
-    {
-      'name': 'תורת אמת',
-      'url': 'http://www.toratemetfreeware.com/index.html?downloads;1;'
-    },
-    {
-      'name': 'אוצר הספרים היהודי',
-      'url':
-          'https://wiki.jewishbooks.org.il/mediawiki/wiki/%D7%A2%D7%9E%D7%95%D7%93_%D7%A8%D7%90%D7%A9%D7%99'
-    },
-    {'name': 'ויקיטקסט', 'url': 'https://he.wikisource.org/wiki'},
-    {'name': 'תא שמע', 'url': 'https://tashma.co.il/'},
-    {'name': 'פנינים', 'url': 'https://pninim.org/'},
-    {'name': 'הספרייה הלאומית', 'url': 'https://www.nli.org.il/'},
-    {'name': 'פרויקט פרידברג', 'url': 'https://fjms.genizah.org/'},
-    {
-      'name': 'פרויקט בן יהודה',
-      'url': 'https://github.com/projectbenyehuda/public_domain_dump'
-    },
-  ];
+  const _BookSourcesSection();
 
   @override
   Widget build(BuildContext context) {
@@ -775,16 +598,9 @@ class _BookSourcesSection extends StatelessWidget {
           style: kSettingsSubtitleStyle,
         ),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          children: _mainSources
-              .map((s) => _SourceChip(
-                    name: s['name']!,
-                    url: s['url']!,
-                    onTap: onOpenUrl,
-                  ))
-              .toList(),
+        _InfoChipWrap(
+          items: aboutMainSources,
+          icon: FluentIcons.library_24_regular,
         ),
         const SizedBox(height: 16),
         Text(
@@ -792,51 +608,11 @@ class _BookSourcesSection extends StatelessWidget {
           style: kSettingsSubtitleStyle,
         ),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          children: _additionalSources
-              .map((s) => _SourceChip(
-                    name: s['name']!,
-                    url: s['url']!,
-                    onTap: onOpenUrl,
-                  ))
-              .toList(),
+        _InfoChipWrap(
+          items: aboutAdditionalSources,
+          icon: FluentIcons.library_24_regular,
         ),
       ],
-    );
-  }
-}
-
-class _SourceChip extends StatelessWidget {
-  final String name;
-  final String url;
-  final Future<void> Function(String) onTap;
-
-  const _SourceChip({
-    required this.name,
-    required this.url,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: () => onTap(url),
-      borderRadius: AppTokens.borderRadiusAll,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(FluentIcons.library_24_regular,
-              size: 14, color: colorScheme.onSurfaceVariant),
-          const SizedBox(width: 4),
-          Text(
-            name,
-            style: kSettingsTitleStyle.copyWith(color: colorScheme.primary),
-          ),
-        ],
-      ),
     );
   }
 }
