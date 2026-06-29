@@ -85,7 +85,7 @@ class AppSegmentedControl<T> extends StatelessWidget {
         }),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTokens.radiusSM),
+            borderRadius: AppTokens.borderRadiusAll,
           ),
         ),
       );

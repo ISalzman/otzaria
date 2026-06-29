@@ -799,7 +799,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             height: 80,
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppTokens.borderRadiusAll,
               boxShadow: [
                 BoxShadow(
                   color: Theme.of(
@@ -1326,7 +1326,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               height: iconBoxSize,
               decoration: BoxDecoration(
                 color: cs.secondaryContainer,
-                borderRadius: BorderRadius.circular(AppTokens.radiusSM),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
               child: Center(
                 child: Icon(
@@ -1443,9 +1443,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       child: InkWell(
         focusNode: focusNode,
         mouseCursor: SystemMouseCursors.click,
-        borderRadius: isGrouped
-            ? BorderRadius.zero
-            : BorderRadius.circular(AppTokens.radiusXL),
+        borderRadius: isGrouped ? BorderRadius.zero : AppTokens.borderRadiusAll,
         hoverDuration: Durations.medium1,
         onTap: onTap,
         onDoubleTap: onDoubleTap,
@@ -1515,7 +1513,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       height: iconBoxSize,
       decoration: BoxDecoration(
         color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(AppTokens.radiusSM),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Center(
         child: _buildListRowIconChild(book, cs, iconSize),
@@ -1576,7 +1574,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       height: iconBoxSize,
       decoration: BoxDecoration(
         color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(AppTokens.radiusSM),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Center(
         child: Row(

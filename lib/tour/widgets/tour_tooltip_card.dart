@@ -1,6 +1,7 @@
 // לתחזוקת כרטיסי הסיור המודרך ראו: docs/guided_tour_developer_guide.md
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/tour/widgets/tour_progress_dots.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
@@ -47,14 +48,7 @@ class TourTooltipCard extends StatelessWidget {
       color: colorScheme.secondaryContainer,
       elevation: 18,
       shape: RoundedRectangleBorder(
-        borderRadius: isDialog
-            ? BorderRadius.circular(22)
-            : const BorderRadius.only(
-                topLeft: Radius.circular(22),
-                topRight: Radius.circular(22),
-                bottomLeft: Radius.circular(8),
-                bottomRight: Radius.circular(22),
-              ),
+        borderRadius: AppTokens.borderRadiusAll,
         side: BorderSide(
           color: colorScheme.outlineVariant.withValues(alpha: 0.85),
         ),
@@ -75,7 +69,7 @@ class TourTooltipCard extends StatelessWidget {
                     height: 42,
                     decoration: BoxDecoration(
                       color: colorScheme.surface.withValues(alpha: 0.28),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: AppTokens.borderRadiusAll,
                     ),
                     child: Icon(
                       isLastStep

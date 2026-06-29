@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
@@ -47,7 +48,7 @@ class _SettingsSearchFieldState extends State<SettingsSearchField> {
       height: 36,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppTokens.borderRadiusAll,
         border: Border.all(
           color: colorScheme.outlineVariant,
           width: 1,

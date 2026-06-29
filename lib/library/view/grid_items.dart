@@ -100,7 +100,7 @@ Decoration _libraryTooltipDecoration(BuildContext context) {
   final cs = Theme.of(context).colorScheme;
   return BoxDecoration(
     color: cs.surfaceContainerHigh,
-    borderRadius: BorderRadius.circular(12),
+    borderRadius: AppTokens.borderRadiusAll,
   );
 }
 
@@ -296,7 +296,7 @@ class CategoryGridItem extends StatelessWidget {
               height: 32,
               decoration: BoxDecoration(
                 color: cs.secondaryContainer,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
               child: Icon(
                 FluentIcons.folder_24_regular,
@@ -400,7 +400,7 @@ class _BookGridMediaColumn extends StatelessWidget {
       height: iconBoxSize,
       decoration: BoxDecoration(
         color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Center(
         child: _buildBookIconChild(book, cs, iconSize),

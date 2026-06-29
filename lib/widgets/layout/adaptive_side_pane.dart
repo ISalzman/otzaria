@@ -84,8 +84,6 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
   // אחרי הפתיחה הראשונה, התוכן נשמר במגדל הוויידג'טים גם בזמן סגירה כדי לשמור state.
   bool _paneEverOpened = false;
 
-  static const BorderRadius _kPanelRadius =
-      BorderRadius.all(Radius.circular(AppTokens.radiusPanel));
   static const double _kWideTopGap = 14;
   static const double _kWideBottomGap = 10;
   static const double _kWideOuterSideGap = 10;
@@ -176,9 +174,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
       ),
       child: ScrollConfiguration(
         behavior: _OuterEdgePaneScrollBehavior(
-          paneOnRight
-              ? ScrollbarOrientation.right
-              : ScrollbarOrientation.left,
+          paneOnRight ? ScrollbarOrientation.right : ScrollbarOrientation.left,
         ),
         child: child,
       ),
@@ -189,7 +185,6 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         color: paneColor,
         elevation: 8,
         shadowColor: shadowColor,
-        borderRadius: _kPanelRadius,
         child: scrollbarWrapped,
       );
     }
@@ -199,7 +194,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
       elevation: 4,
       shadowColor: shadowColor,
       surfaceTintColor: Colors.transparent,
-      borderRadius: _kPanelRadius,
+      borderRadius: AppTokens.borderRadiusAll,
       clipBehavior: Clip.hardEdge,
       child: scrollbarWrapped,
     );

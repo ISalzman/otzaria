@@ -2409,10 +2409,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     final cells = rows * cols;
 
     return ClipRRect(
-      borderRadius: const BorderRadius.only(
-        topRight: Radius.circular(12),
-        topLeft: Radius.circular(12),
-      ),
+      borderRadius: AppTokens.borderRadiusAll,
       child: ValueListenableBuilder<
           ({
             List<Uint8List> pages,
@@ -2775,7 +2772,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return AppCard(
-      radius: 12,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2830,7 +2826,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
               child: Text(
                 displayValue,

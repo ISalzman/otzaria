@@ -2036,11 +2036,7 @@ class _CommentaryCardState extends State<_CommentaryCard> {
               margin: const EdgeInsets.only(bottom: 8.0),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerLow,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  bottomLeft: Radius.circular(12),
-                  bottomRight: Radius.circular(12),
-                ),
+                borderRadius: AppTokens.borderRadiusAll,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.05),
@@ -2050,11 +2046,7 @@ class _CommentaryCardState extends State<_CommentaryCard> {
                 ],
               ),
               child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  bottomLeft: Radius.circular(12),
-                  bottomRight: Radius.circular(12),
-                ),
+                borderRadius: AppTokens.borderRadiusAll,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: maxHeight,

@@ -211,8 +211,7 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
   /// בונה את אזור התוכן עם [PanelScrollableContent].
   /// ה-padding האנכי נשאר בחוץ; האופקי עובר לתוך ה-ScrollView.
   Widget _buildScrollableContent(BuildContext context) {
-    final resolved =
-        widget.contentPadding.resolve(Directionality.of(context));
+    final resolved = widget.contentPadding.resolve(Directionality.of(context));
     final verticalPadding =
         EdgeInsets.only(top: resolved.top, bottom: resolved.bottom);
     final horizontalPadding =
@@ -297,7 +296,6 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
                 child: FloatingPanel(
                   elevation: 8,
                   color: effectiveBackgroundColor,
-                  borderRadius: BorderRadius.circular(AppTokens.radiusPanel),
                   child: SizedBox(
                     width: _currentWidth,
                     child: SafeArea(

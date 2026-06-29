@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 
 /// הצד שאליו תיפתח תווית היעד ביחס לנקודת העוגן (מיקום העכבר על הסרגל).
 /// [left] — התווית גדלה שמאלה מהעוגן (כשהסרגל בקצה ימין של המסך, כמו ברוב
@@ -69,7 +70,7 @@ class ScrollbarTargetLabelController {
         constraints: BoxConstraints(maxWidth: screen.width * 0.4),
         decoration: BoxDecoration(
           color: theme.colorScheme.inverseSurface,
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: AppTokens.borderRadiusAll,
           boxShadow: [
             BoxShadow(
               // צללית מחייבת שקיפות מעצם טבעה — חריג מותר לפי הנחיות הצבע.

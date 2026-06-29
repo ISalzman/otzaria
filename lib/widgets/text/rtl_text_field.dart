@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -339,7 +340,7 @@ class _RtlTextFieldState extends State<RtlTextField> {
       items: menuItems,
       elevation: 4,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       color: Theme.of(context).colorScheme.surface,
     ).then((value) async {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -154,7 +155,7 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
                         : null,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppTokens.borderRadiusAll,
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16.0,
@@ -549,7 +550,7 @@ class OrderOfResults extends StatelessWidget {
                 border: Border.all(
                   color: Theme.of(context).colorScheme.outline,
                 ),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

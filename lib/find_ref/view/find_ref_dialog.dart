@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -736,7 +737,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
                                       .colorScheme
                                       .primaryContainer
                                   : null,
-                              borderRadius: BorderRadius.circular(8.0),
+                              borderRadius: AppTokens.borderRadiusAll,
                             ),
                             child: ListTile(
                                 hoverColor:

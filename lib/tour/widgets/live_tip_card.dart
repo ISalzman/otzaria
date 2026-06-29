@@ -1,6 +1,7 @@
 // לתחזוקת כרטיסי טיפים חיים ראו: docs/guided_tour_developer_guide.md
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
@@ -23,12 +24,12 @@ class LiveTipCard extends StatelessWidget {
 
     return Material(
       elevation: 10,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppTokens.borderRadiusAll,
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: AppTokens.borderRadiusAll,
           border: Border.all(
             color: colorScheme.outlineVariant.withValues(alpha: 0.8),
           ),

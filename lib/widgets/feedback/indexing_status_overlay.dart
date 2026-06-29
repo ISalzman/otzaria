@@ -1,4 +1,5 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
@@ -60,15 +61,15 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
             padding: padding,
             child: Material(
               color: Colors.transparent,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: AppTokens.borderRadiusAll,
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 onTap: widget.onTap,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: AppTokens.borderRadiusAll,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: colorScheme.surface.withValues(alpha: 0.96),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: AppTokens.borderRadiusAll,
                     border: Border.all(
                       color: colorScheme.outlineVariant,
                     ),

@@ -5313,7 +5313,7 @@ class _BookViewTurnButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(compactSize / 2),
+          borderRadius: AppTokens.borderRadiusAll,
           child: Center(
             child: Tooltip(
               message: tooltip,

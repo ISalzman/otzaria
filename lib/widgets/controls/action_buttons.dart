@@ -400,7 +400,7 @@ class ToolbarActionButton extends StatelessWidget {
           backgroundColor: Colors.transparent,
           foregroundColor: fg,
           padding: padding,
-          shape: const StadiumBorder(),
+          shape: AppTokens.roundedShape,
           minimumSize: compact ? const Size(0, 36) : const Size(0, 40),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
@@ -423,7 +423,7 @@ class ToolbarActionButton extends StatelessWidget {
         style: IconButton.styleFrom(
           backgroundColor: Colors.transparent,
           foregroundColor: fg,
-          shape: const CircleBorder(),
+          shape: AppTokens.roundedShape,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       );
@@ -437,7 +437,7 @@ class ToolbarActionButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           shape: label != null ? BoxShape.rectangle : BoxShape.circle,
-          borderRadius: label != null ? BorderRadius.circular(100) : null,
+          borderRadius: label != null ? AppTokens.borderRadiusAll : null,
         ),
         child: button,
       ),

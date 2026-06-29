@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -809,7 +810,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         ),
         isDense: true,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.0),
+          borderRadius: AppTokens.borderRadiusAll,
         ),
       ),
       onChanged: (value) {

@@ -15,7 +15,6 @@ class AppCard extends StatelessWidget {
     this.focusNode,
     this.margin,
     this.padding,
-    this.radius,
     this.selected = false,
   }) : children = null;
 
@@ -25,7 +24,6 @@ class AppCard extends StatelessWidget {
     required this.children,
     this.margin,
     this.padding,
-    this.radius,
     this.selected = false,
   })  : child = null,
         onTap = null,
@@ -40,9 +38,6 @@ class AppCard extends StatelessWidget {
   final FocusNode? focusNode;
   final EdgeInsetsGeometry? margin;
   final EdgeInsetsGeometry? padding;
-
-  /// ברירת מחדל: [AppTokens.radiusXL]
-  final double? radius;
 
   /// מוסיף overlay של secondaryContainer מעל הכרטיס
   final bool selected;
@@ -71,7 +66,7 @@ class AppCard extends StatelessWidget {
   }
 
   Widget _buildSingle(BuildContext context) {
-    final resolvedRadius = BorderRadius.circular(radius ?? AppTokens.radiusXL);
+    final resolvedRadius = AppTokens.borderRadiusAll;
     Widget content = child!;
 
     if (padding != null) {
@@ -107,7 +102,7 @@ class AppCard extends StatelessWidget {
   }
 
   Widget _buildSection(BuildContext context) {
-    final resolvedRadius = BorderRadius.circular(radius ?? AppTokens.radiusXL);
+    final resolvedRadius = AppTokens.borderRadiusAll;
     final cardColor = AppSurfaces.card(context);
 
     Widget wrapChild(Widget w) {
@@ -122,8 +117,7 @@ class AppCard extends StatelessWidget {
       children: [
         for (int i = 0; i < children!.length; i++) ...[
           wrapChild(children![i]),
-          if (i < children!.length - 1)
-            const SizedBox(height: sectionSpacing),
+          if (i < children!.length - 1) const SizedBox(height: sectionSpacing),
         ],
       ],
     );

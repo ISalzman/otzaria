@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/focus_repository.dart';
@@ -132,7 +133,7 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog>
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppTokens.borderRadiusAll,
                   border: Border.all(
                     color: _isRecording
                         ? Theme.of(context).colorScheme.primary

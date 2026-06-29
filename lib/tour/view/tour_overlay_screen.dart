@@ -2,6 +2,7 @@
 // docs/guided_tour_developer_guide.md
 
 import 'dart:math' as math;
+import 'package:otzaria/theme/app_tokens.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -187,7 +188,7 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
                     SpotlightOverlay(
                       targetRect: combinedTargetRect,
                       targetRects: targetRects,
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: AppTokens.borderRadiusAll,
                     ),
                   Align(
                     alignment: cardAlignment,

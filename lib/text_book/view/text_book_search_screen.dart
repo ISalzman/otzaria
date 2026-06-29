@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -731,7 +732,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                             .withValues(alpha: 0.3),
                     width: 1,
                   ),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppTokens.borderRadiusAll,
                 ),
                 child: InkWell(
                   onTap: () {
@@ -740,7 +741,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                       closePaneOnAndroid: true,
                     );
                   },
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppTokens.borderRadiusAll,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -929,14 +930,14 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       message: tooltip,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: AppTokens.borderRadiusAll,
         child: Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
             color: isEnabled
                 ? colorScheme.primaryContainer.withValues(alpha: 0.55)
                 : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: AppTokens.borderRadiusAll,
             border: Border.all(
               color: isEnabled
                   ? colorScheme.primary.withValues(alpha: 0.6)

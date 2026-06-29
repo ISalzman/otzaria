@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -474,7 +475,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
             .colorScheme
             .primaryContainer
             .withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppTokens.borderRadiusAll,
         border: Border.all(
           color: Theme.of(context).colorScheme.primary,
           width: 2,

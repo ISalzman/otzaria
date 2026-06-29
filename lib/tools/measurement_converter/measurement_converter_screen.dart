@@ -477,7 +477,6 @@ class _MeasurementConverterScreenState
                   final isCompact = settingsState.compactMenuMode;
                   final fieldHeight = AppInputTokens.height(isCompact);
                   final fieldFontSize = AppInputTokens.fontSize(isCompact);
-                  final fieldRadius = AppInputTokens.radius(isCompact);
 
                   // סטטוס הסרגל: רחב=_sidebarVisible, צר=_narrowShowCategories
                   final sidebarOpen =
@@ -509,8 +508,7 @@ class _MeasurementConverterScreenState
                               height: fieldHeight,
                               decoration: BoxDecoration(
                                 color: cs.onSurface.withValues(alpha: 0.07),
-                                borderRadius:
-                                    BorderRadius.circular(fieldRadius),
+                                borderRadius: AppTokens.borderRadiusAll,
                               ),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -762,9 +760,8 @@ class _MeasurementConverterScreenState
     bool enabled = true,
     bool isCompact = false,
   }) {
-    final radius = AppInputTokens.radius(isCompact);
     final noBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(radius),
+      borderRadius: AppTokens.borderRadiusAll,
       borderSide: BorderSide.none,
     );
     return InputDecoration(
@@ -780,7 +777,7 @@ class _MeasurementConverterScreenState
       enabledBorder: noBorder,
       disabledBorder: noBorder,
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radius),
+        borderRadius: AppTokens.borderRadiusAll,
         borderSide: BorderSide(
           color: cs.primary.withValues(alpha: 0.5),
           width: 1.5,
@@ -1073,7 +1070,7 @@ class _MeasurementConverterScreenState
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+        borderRadius: AppTokens.borderRadiusAll,
         border: Border.all(color: cs.outline.withValues(alpha: 0.2)),
       ),
       child: Column(
@@ -1154,7 +1151,7 @@ class _MeasurementConverterScreenState
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected ? cs.secondaryContainer : cs.surface,
-          borderRadius: BorderRadius.circular(AppTokens.radiusSM),
+          borderRadius: AppTokens.borderRadiusAll,
           border: Border.all(
             color:
                 isSelected ? cs.secondary : cs.outline.withValues(alpha: 0.25),

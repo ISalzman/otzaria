@@ -65,6 +65,7 @@ class AppThemeData {
       textTheme: const TextTheme(
         bodyMedium: TextStyle(fontSize: 18.0, fontFamily: 'candara'),
       ),
+      cardTheme: const CardThemeData(shape: AppTokens.roundedShape),
       iconButtonTheme: _iconButtonTheme(cs),
       filledButtonTheme: _filledButtonTheme(cs),
       textButtonTheme: _textButtonTheme(cs),
@@ -87,6 +88,7 @@ class AppThemeData {
       dialogTheme: DialogThemeData(
         barrierColor: AppColors.dialogBarrier,
         backgroundColor: cs.surfaceContainerHigh,
+        shape: AppTokens.roundedShape,
       ),
     );
   }
@@ -111,6 +113,7 @@ class AppThemeData {
           fontFamily: 'candara',
         ),
       ),
+      cardTheme: const CardThemeData(shape: AppTokens.roundedShape),
       iconButtonTheme: _iconButtonTheme(cs),
       filledButtonTheme: _filledButtonTheme(cs),
       textButtonTheme: _textButtonTheme(cs),
@@ -133,6 +136,7 @@ class AppThemeData {
       dialogTheme: DialogThemeData(
         barrierColor: AppColors.dialogBarrier,
         backgroundColor: cs.surfaceContainerHigh,
+        shape: AppTokens.roundedShape,
       ),
     );
   }
@@ -147,9 +151,7 @@ class AppThemeData {
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.black.withValues(alpha: 0.22),
       elevation: AppTokens.elevation2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(metrics.menuBorderRadius),
-      ),
+      shape: AppTokens.roundedShape,
       menuPadding: metrics.menuPadding,
       textStyle: TextStyle(
         fontFamily: 'Roboto',
@@ -172,11 +174,7 @@ class AppThemeData {
         shadowColor:
             WidgetStatePropertyAll(Colors.black.withValues(alpha: 0.22)),
         elevation: const WidgetStatePropertyAll(AppTokens.elevation2),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(metrics.menuBorderRadius),
-          ),
-        ),
+        shape: const WidgetStatePropertyAll(AppTokens.roundedShape),
         padding: WidgetStatePropertyAll(metrics.menuPadding),
         visualDensity: metrics.visualDensity,
       ),
@@ -204,11 +202,7 @@ class AppThemeData {
         shadowColor:
             WidgetStatePropertyAll(Colors.black.withValues(alpha: 0.22)),
         elevation: const WidgetStatePropertyAll(AppTokens.elevation2),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(metrics.menuBorderRadius),
-          ),
-        ),
+        shape: const WidgetStatePropertyAll(AppTokens.roundedShape),
         padding: WidgetStatePropertyAll(metrics.menuPadding),
         visualDensity: metrics.visualDensity,
       ),
@@ -235,11 +229,7 @@ class AppThemeData {
         ),
         foregroundColor: WidgetStatePropertyAll(cs.onSurface),
         iconColor: WidgetStatePropertyAll(cs.onSurface),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(metrics.itemBorderRadius),
-          ),
-        ),
+        shape: const WidgetStatePropertyAll(AppTokens.roundedShape),
         overlayColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.hovered) ||
               states.contains(WidgetState.focused)) {
@@ -262,12 +252,7 @@ class AppThemeData {
   static IconButtonThemeData _iconButtonTheme(ColorScheme cs) =>
       IconButtonThemeData(
         style: ButtonStyle(
-          // צורה עגולה — M3 standard
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTokens.radiusXL),
-            ),
-          ),
+          shape: const WidgetStatePropertyAll(AppTokens.roundedShape),
           // primary (לא אפור) — hover תואם את צבעי האפליקציה
           overlayColor: WidgetStateProperty.resolveWith((s) {
             if (s.contains(WidgetState.hovered)) {
@@ -285,11 +270,7 @@ class AppThemeData {
   static FilledButtonThemeData _filledButtonTheme(ColorScheme cs) =>
       FilledButtonThemeData(
         style: ButtonStyle(
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-            ),
-          ),
+          shape: const WidgetStatePropertyAll(AppTokens.roundedShape),
           overlayColor: WidgetStateProperty.resolveWith((s) {
             if (s.contains(WidgetState.hovered)) {
               return cs.onPrimary.withValues(alpha: 0.08);
@@ -306,11 +287,7 @@ class AppThemeData {
   static TextButtonThemeData _textButtonTheme(ColorScheme cs) =>
       TextButtonThemeData(
         style: ButtonStyle(
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-            ),
-          ),
+          shape: const WidgetStatePropertyAll(AppTokens.roundedShape),
           overlayColor: WidgetStateProperty.resolveWith((s) {
             if (s.contains(WidgetState.hovered)) {
               return cs.primary.withValues(alpha: 0.08);
@@ -327,11 +304,7 @@ class AppThemeData {
   static OutlinedButtonThemeData _outlinedButtonTheme(ColorScheme cs) =>
       OutlinedButtonThemeData(
         style: ButtonStyle(
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-            ),
-          ),
+          shape: const WidgetStatePropertyAll(AppTokens.roundedShape),
           overlayColor: WidgetStateProperty.resolveWith((s) {
             if (s.contains(WidgetState.hovered)) {
               return cs.primary.withValues(alpha: 0.08);
@@ -353,7 +326,7 @@ class AppThemeData {
         dividerColor: Colors.transparent,
         dividerHeight: 0,
         indicator: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+          borderRadius: AppTokens.borderRadiusAll,
           color: cs.secondaryContainer,
         ),
         indicatorSize: TabBarIndicatorSize.tab,
@@ -390,8 +363,6 @@ class AppMenuMetrics extends ThemeExtension<AppMenuMetrics> {
   final double dividerHeight;
   final double fontSize;
   final double iconSize;
-  final double menuBorderRadius;
-  final double itemBorderRadius;
   final double menuMinWidth;
   final FontWeight itemFontWeight;
 
@@ -404,8 +375,6 @@ class AppMenuMetrics extends ThemeExtension<AppMenuMetrics> {
     required this.dividerHeight,
     required this.fontSize,
     required this.iconSize,
-    required this.menuBorderRadius,
-    required this.itemBorderRadius,
     required this.menuMinWidth,
     required this.itemFontWeight,
   });
@@ -423,8 +392,6 @@ class AppMenuMetrics extends ThemeExtension<AppMenuMetrics> {
       dividerHeight: 8,
       fontSize: 14,
       iconSize: 18,
-      menuBorderRadius: 8,
-      itemBorderRadius: 4,
       menuMinWidth: 150,
       itemFontWeight: FontWeight.w400,
     );
@@ -440,8 +407,6 @@ class AppMenuMetrics extends ThemeExtension<AppMenuMetrics> {
     double? dividerHeight,
     double? fontSize,
     double? iconSize,
-    double? menuBorderRadius,
-    double? itemBorderRadius,
     double? menuMinWidth,
     FontWeight? itemFontWeight,
   }) {
@@ -454,8 +419,6 @@ class AppMenuMetrics extends ThemeExtension<AppMenuMetrics> {
       dividerHeight: dividerHeight ?? this.dividerHeight,
       fontSize: fontSize ?? this.fontSize,
       iconSize: iconSize ?? this.iconSize,
-      menuBorderRadius: menuBorderRadius ?? this.menuBorderRadius,
-      itemBorderRadius: itemBorderRadius ?? this.itemBorderRadius,
       menuMinWidth: menuMinWidth ?? this.menuMinWidth,
       itemFontWeight: itemFontWeight ?? this.itemFontWeight,
     );
@@ -477,12 +440,6 @@ class AppMenuMetrics extends ThemeExtension<AppMenuMetrics> {
           lerpDouble(dividerHeight, other.dividerHeight, t) ?? dividerHeight,
       fontSize: lerpDouble(fontSize, other.fontSize, t) ?? fontSize,
       iconSize: lerpDouble(iconSize, other.iconSize, t) ?? iconSize,
-      menuBorderRadius:
-          lerpDouble(menuBorderRadius, other.menuBorderRadius, t) ??
-              menuBorderRadius,
-      itemBorderRadius:
-          lerpDouble(itemBorderRadius, other.itemBorderRadius, t) ??
-              itemBorderRadius,
       menuMinWidth:
           lerpDouble(menuMinWidth, other.menuMinWidth, t) ?? menuMinWidth,
       itemFontWeight: t < 0.5 ? itemFontWeight : other.itemFontWeight,

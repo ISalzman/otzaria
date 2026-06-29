@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -390,7 +391,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                   color: colorScheme.outline.withValues(alpha: 0.3),
                   width: 1,
                 ),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
               child: InkWell(
                 onTap: () {
@@ -481,7 +482,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                         );
                   }
                 },
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppTokens.borderRadiusAll,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
@@ -493,7 +494,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                         height: 32,
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppTokens.borderRadiusAll,
                         ),
                         child: Center(
                           child: Text(
