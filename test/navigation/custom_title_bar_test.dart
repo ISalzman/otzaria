@@ -132,7 +132,7 @@ void main() {
     );
   });
 
-  testWidgets('כרטיסיות מקבלות רוחב קבוע שווה, חסום בתקרה (~200px)',
+  testWidgets('כרטיסיות מקבלות רוחב קבוע שווה, חסום בתקרה (~140px)',
       (tester) async {
     final tab1 = _makeTextTab('ספר קצר');
     final tab2 = _makeTextTab('ספר עם שם ארוך מאוד שנמשך הרחק');
@@ -162,7 +162,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // כל טאב עטוף ב-SizedBox ברוחב המחושב (ילדו ה-Listener של _buildTab); שני
-    // הטאבים זהים וחסומים בתקרה (200px) — לא רוחב טבעי לפי אורך הכותרת.
+    // הטאבים זהים וחסומים בתקרה (140px) — לא רוחב טבעי לפי אורך הכותרת.
     final widths = tester
         .widgetList<SizedBox>(find.descendant(
           of: find.byType(ReorderableListView),
@@ -175,8 +175,8 @@ void main() {
     expect(widths.length, 2, reason: 'שני טאבים → שני SizedBox ברוחב קבוע');
     expect(widths[0], moreOrLessEquals(widths[1], epsilon: 1.0),
         reason: 'כל הטאבים ברוחב קבוע שווה');
-    expect(widths[0], lessThanOrEqualTo(201.0),
-        reason: 'רוחב הטאב חסום בתקרה (~200px) גם כשיש מקום');
+    expect(widths[0], lessThanOrEqualTo(141.0),
+        reason: 'רוחב הטאב חסום בתקרה (~140px) גם כשיש מקום');
   });
 
   testWidgets('כותרת ארוכה נחתכת בדהייה (TextOverflow.fade) ללא שלוש נקודות',
