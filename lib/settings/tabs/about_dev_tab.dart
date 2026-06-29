@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
@@ -587,7 +588,7 @@ class _ContributorChip extends StatelessWidget {
           final uri = Uri.parse(url);
           if (await canLaunchUrl(uri)) await launchUrl(uri);
         },
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: AppTokens.borderRadiusAll,
         child: content,
       );
     }
@@ -654,7 +655,7 @@ class _MemorialCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         side: BorderSide(
             color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Padding(
         padding: const EdgeInsets.all(10),
@@ -695,7 +696,7 @@ class _DonationMemorialCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         side: BorderSide(
             color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Padding(
         padding: const EdgeInsets.all(10),
@@ -823,7 +824,7 @@ class _SourceChip extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: () => onTap(url),
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: AppTokens.borderRadiusAll,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -856,7 +857,7 @@ class _ClosingQuote extends StatelessWidget {
         shape: RoundedRectangleBorder(
           side: BorderSide(
               color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: AppTokens.borderRadiusAll,
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),

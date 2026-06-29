@@ -8,12 +8,12 @@ class AppTokens {
   static const double spaceLG = 24;
   static const double spaceXL = 32;
 
-  // ── Border Radius ——————————————————————————
-  static const double radiusSM = 8;
-  static const double radiusMD = 12;
-  static const double radiusLG = 16;
-  static const double radiusXL = 20; // SettingsCard
-  static const double radiusPanel = 18;
+  // ── Border Radius — מקור אמת יחיד: כל הפינות 8 ——————————————
+  static const double radius = 8;
+  static const BorderRadius borderRadiusAll =
+      BorderRadius.all(Radius.circular(radius));
+  static const RoundedRectangleBorder roundedShape =
+      RoundedRectangleBorder(borderRadius: borderRadiusAll);
 
   // ── Typography Scale ——————————————————————
   static const double fontSM = 12;

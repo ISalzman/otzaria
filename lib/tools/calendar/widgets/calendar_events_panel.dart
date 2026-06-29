@@ -326,7 +326,6 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
                 );
 
                 return AppCard(
-                  radius: AppTokens.radiusMD,
                   padding: const EdgeInsets.all(12),
                   child: content,
                 );
@@ -388,7 +387,7 @@ class _EventMetaChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: backgroundColor,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: AppTokens.borderRadiusAll,
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

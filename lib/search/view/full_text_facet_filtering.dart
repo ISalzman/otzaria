@@ -1,5 +1,6 @@
 ﻿import 'dart:async';
 import 'dart:io' show Platform;
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -406,7 +407,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                 // כפתור החץ - מרחיב/מכווץ בלבד
                 InkWell(
                   onTap: toggle,
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: AppTokens.borderRadiusAll,
                   child: Padding(
                     padding: const EdgeInsets.all(4.0),
                     child: RtlIcon(

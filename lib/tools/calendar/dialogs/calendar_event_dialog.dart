@@ -152,7 +152,7 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: cs.primaryContainer.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+                  borderRadius: BorderRadius.circular(AppTokens.radius),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

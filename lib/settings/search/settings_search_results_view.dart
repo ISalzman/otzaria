@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
@@ -112,7 +113,7 @@ class _SearchResultTile extends StatelessWidget {
 
     return Material(
       color: cardColor,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: AppTokens.borderRadiusAll,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -156,7 +157,7 @@ class _SearchResultTile extends StatelessWidget {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: colorScheme.primary.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: AppTokens.borderRadiusAll,
                 ),
                 child: Text(
                   _tabLabel(entry.tab),

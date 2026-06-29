@@ -2,6 +2,7 @@
 // Super simple thumbnails view
 //
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 class ThumbnailsView extends StatefulWidget {
@@ -119,7 +120,7 @@ class _ThumbnailsViewState extends State<ThumbnailsView>
                       border: Border.all(
                         color: Theme.of(context).colorScheme.outlineVariant,
                       ),
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: AppTokens.borderRadiusAll,
                     )
                   : null,
               child: Column(

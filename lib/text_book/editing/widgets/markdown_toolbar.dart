@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 /// Toolbar widget providing markdown formatting controls
@@ -163,7 +164,7 @@ class MarkdownToolbar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: cs.errorContainer.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: AppTokens.borderRadiusAll,
                 border: Border.all(
                   color: cs.error.withValues(alpha: 0.35),
                 ),
@@ -243,7 +244,7 @@ class _ToolbarButton extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         onTap: enabled ? onPressed : null,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: AppTokens.borderRadiusAll,
         child: Opacity(
           opacity: enabled ? 1.0 : 0.5,
           child: content, // הצגת התוכן שיצרנו

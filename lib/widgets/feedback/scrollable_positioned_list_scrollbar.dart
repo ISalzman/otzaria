@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
@@ -410,7 +411,7 @@ class _ScrollablePositionedListScrollbarState
                             decoration: BoxDecoration(
                               color: AppSurfaces.scrollbarThumb(colorScheme,
                                   isDragging: _isDragging),
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: AppTokens.borderRadiusAll,
                             ),
                           ),
                         ),

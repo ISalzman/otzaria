@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 
 /// מציג פירוש של מילה במילון הארמי-עברי בצורה מונגשת ומובנית.
@@ -64,7 +65,7 @@ class _MeaningView extends StatelessWidget {
           margin: const EdgeInsetsDirectional.only(top: 2, end: 10),
           decoration: BoxDecoration(
             color: colorScheme.primary.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: AppTokens.borderRadiusAll,
           ),
           child: Text(
             '${index + 1}',
@@ -88,7 +89,7 @@ class _MeaningView extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: colorScheme.surfaceContainerHighest
                         .withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppTokens.borderRadiusAll,
                   ),
                   child: Text(
                     meaning.expression!,

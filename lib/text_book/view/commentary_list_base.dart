@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -378,7 +379,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppTokens.borderRadiusAll,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
@@ -590,7 +591,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                           ),
                           isDense: true,
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8.0),
+                            borderRadius: AppTokens.borderRadiusAll,
                           ),
                         ),
                         onChanged: (value) {
@@ -1755,7 +1756,7 @@ class _SkeletonLine extends StatelessWidget {
       width: MediaQuery.of(context).size.width * width,
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
     );
   }

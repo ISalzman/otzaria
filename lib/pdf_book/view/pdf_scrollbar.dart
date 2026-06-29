@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:otzaria/theme/app_tokens.dart';
 
 import 'package:flutter/material.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
@@ -183,8 +184,7 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                 decoration: BoxDecoration(
                   color: widget.thumbColor ??
                       colorScheme.outline.withValues(alpha: 0.75),
-                  borderRadius:
-                      BorderRadius.circular(widget.trackThickness / 2),
+                  borderRadius: AppTokens.borderRadiusAll,
                 ),
                 child: isVertical
                     ? Center(
@@ -391,8 +391,7 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                           width: widget.trackThickness,
                           decoration: BoxDecoration(
                             color: resolvedTrackColor,
-                            borderRadius: BorderRadius.circular(
-                                widget.trackThickness / 2),
+                            borderRadius: AppTokens.borderRadiusAll,
                           ),
                         ),
                         Positioned(
@@ -410,8 +409,7 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                               height: thumbHeight,
                               decoration: BoxDecoration(
                                 color: resolvedThumbColor,
-                                borderRadius: BorderRadius.circular(
-                                    widget.trackThickness / 2),
+                                borderRadius: AppTokens.borderRadiusAll,
                               ),
                               child: Center(
                                 child: _buildPageNumberText(
@@ -587,8 +585,7 @@ class _PdfHorizontalScrollbarState extends State<PdfHorizontalScrollbar> {
                           height: widget.trackThickness,
                           decoration: BoxDecoration(
                             color: resolvedThumbColor,
-                            borderRadius: BorderRadius.circular(
-                                widget.trackThickness / 2),
+                            borderRadius: AppTokens.borderRadiusAll,
                           ),
                         ),
                       ),

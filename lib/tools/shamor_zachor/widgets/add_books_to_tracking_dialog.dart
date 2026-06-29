@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
@@ -179,7 +180,7 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
                 icon: const Icon(FluentIcons.dismiss_24_regular),
                 onPressed: () => setState(_searchController.clear),
               ),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        border: OutlineInputBorder(borderRadius: AppTokens.borderRadiusAll),
         isDense: true,
       ),
       onChanged: (_) => setState(() {}),
@@ -202,7 +203,7 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
         return Container(
           decoration: BoxDecoration(
             border: Border.all(color: colorScheme.outlineVariant),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppTokens.borderRadiusAll,
           ),
           clipBehavior: Clip.antiAlias,
           child: _hasActiveSearch

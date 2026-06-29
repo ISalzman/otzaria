@@ -299,7 +299,7 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
     if (widget.child != null) {
       trigger = InkWell(
         onTap: widget.enabled ? _showAdaptiveMenu : null,
-        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+        borderRadius: AppTokens.borderRadiusAll,
         child: widget.child,
       );
     } else if (_isTouchMode &&
@@ -675,8 +675,7 @@ class _AnchoredSearchMenuContentState<T>
             opacity: widget.animation,
             child: Material(
               elevation: 8,
-              borderRadius:
-                  BorderRadius.circular(widget.metrics.menuBorderRadius),
+              borderRadius: AppTokens.borderRadiusAll,
               color: menuColor,
               clipBehavior: Clip.antiAlias,
               child: Column(
@@ -706,7 +705,7 @@ class _AnchoredSearchMenuContentState<T>
                         filled: true,
                         fillColor: cs.onSurface.withValues(alpha: 0.06),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppTokens.borderRadiusAll,
                           borderSide: BorderSide.none,
                         ),
                         contentPadding: const EdgeInsets.symmetric(
@@ -1045,7 +1044,7 @@ ButtonStyle buildAppSubmenuItemStyle(
     visualDensity: metrics.visualDensity,
     shape: WidgetStatePropertyAll(
       RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(metrics.itemBorderRadius),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
     ),
     alignment: Alignment.centerRight,
@@ -1210,8 +1209,7 @@ class _SubmenuItemWidgetState<T> extends State<_SubmenuItemWidget<T>> {
     // צבע רקע מה-theme (כמו showMenu)
     final menuColor = Theme.of(context).popupMenuTheme.color ??
         Theme.of(context).colorScheme.surface;
-    final menuBorderRadius =
-        BorderRadius.circular(widget.metrics.menuBorderRadius);
+    final menuBorderRadius = AppTokens.borderRadiusAll;
     final menuPadding = widget.metrics.menuPadding;
 
     _submenuOpen = true;
@@ -1264,8 +1262,7 @@ class _SubmenuItemWidgetState<T> extends State<_SubmenuItemWidget<T>> {
                         children: widget.menuChildren.map((menuEntry) {
                           if (menuEntry is PopupMenuItem<T>) {
                             return InkWell(
-                              borderRadius: BorderRadius.circular(
-                                  widget.metrics.itemBorderRadius),
+                              borderRadius: AppTokens.borderRadiusAll,
                               onTap: menuEntry.enabled
                                   ? () {
                                       final value = menuEntry.value;
@@ -1317,7 +1314,7 @@ class _SubmenuItemWidgetState<T> extends State<_SubmenuItemWidget<T>> {
         onExit: (_) => _cancelHoverDelay(),
         child: InkWell(
           onTap: () => _openSubmenu(innerContext),
-          borderRadius: BorderRadius.circular(widget.metrics.itemBorderRadius),
+          borderRadius: AppTokens.borderRadiusAll,
           child: buildAppMenuRowContent(
             context,
             widget.metrics,

@@ -428,7 +428,7 @@ class _MoveContentsWarning extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

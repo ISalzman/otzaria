@@ -84,10 +84,7 @@ class _PanelOpenHandleState extends State<PanelOpenHandle> {
           height: 80,
           decoration: BoxDecoration(
             color: AppSurfaces.panelOpenHandle(cs, isHovering: _isHovering),
-            borderRadius: const BorderRadius.only(
-              topRight: Radius.circular(40),
-              bottomRight: Radius.circular(40),
-            ),
+            borderRadius: AppTokens.borderRadiusAll,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.15),
@@ -169,7 +166,7 @@ class _SidebarTabHeaderState extends State<SidebarTabHeader> {
           Expanded(
             child: TabBar(
               controller: widget.controller,
-              splashBorderRadius: BorderRadius.circular(AppTokens.radiusMD),
+              splashBorderRadius: AppTokens.borderRadiusAll,
               tabs: [
                 for (var i = 0; i < widget.tabs.length; i++)
                   _tab(widget.tabs[i], i == sel),
@@ -237,7 +234,7 @@ class PanelTabHeader extends StatelessWidget {
             child: TabBar(
               controller: controller,
               tabs: tabs,
-              splashBorderRadius: BorderRadius.circular(AppTokens.radiusMD),
+              splashBorderRadius: AppTokens.borderRadiusAll,
               onTap: onTap,
             ),
           ),

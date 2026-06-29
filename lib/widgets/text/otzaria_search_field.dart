@@ -21,7 +21,6 @@ import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 abstract class _ST {
   // Touch (standard)
-  static const double radius = AppInputTokens.regularRadius;
   static const double height = AppInputTokens.regularHeight;
   static const double heightCompact = 40.0;
   static const double fontSize = AppInputTokens.regularFontSize;
@@ -29,7 +28,6 @@ abstract class _ST {
   // Desktop (slim)
   static const double heightSlim = AppInputTokens.compactHeight;
   static const double fontSizeSlim = AppInputTokens.compactFontSize;
-  static const double radiusSlim = AppInputTokens.compactRadius;
 
   static const double fillAlphaUnfocused = AppInputTokens.unfocusedAlpha;
   static const double fillAlphaFocused = AppInputTokens.focusedAlpha;
@@ -300,7 +298,6 @@ class _OtzariaSearchFieldState extends State<OtzariaSearchField> {
     // גובה וגופן — slim (desktop) לעומת touch
     final double effectiveHeight = isSlim ? _ST.heightSlim : _ST.height;
     final double effectiveFontSize = isSlim ? _ST.fontSizeSlim : _ST.fontSize;
-    final double effectiveRadius = isSlim ? _ST.radiusSlim : _ST.radius;
     final double prefixIconSize = isSlim ? 18.0 : 20.0;
 
     // Fill
@@ -310,7 +307,7 @@ class _OtzariaSearchFieldState extends State<OtzariaSearchField> {
 
     // Borders
     final noBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(effectiveRadius),
+      borderRadius: AppTokens.borderRadiusAll,
       borderSide: BorderSide.none,
     );
 

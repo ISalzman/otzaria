@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -90,7 +91,7 @@ class _PersonalNoteLinkDialogState extends State<PersonalNoteLinkDialog> {
                   _labelController.clear();
                 });
               },
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: AppTokens.borderRadiusAll,
               children: const [
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12),
