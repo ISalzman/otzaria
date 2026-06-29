@@ -7,10 +7,15 @@ enum LiveTipId {
   sideBySideSuggestion,
   dictionaryContextMenuHint,
   commentaryHint,
+  customFoldersHint,
+  bookSourceHint,
 }
 
 class LiveTipStorage {
   static const String resolvedTipsKey = 'live_tips_resolved';
+
+  /// מונה כמה פעמים נפתחה התוכנה, לתזמון טיפים מבוססי-ותק שימוש.
+  static const String launchCountKey = 'live_tips_launch_count';
 
   static String encode(Set<LiveTipId> tips) {
     final names = tips.map((tip) => tip.name).toList()..sort();
@@ -45,6 +50,7 @@ enum TourInteractionType {
   dictionaryUsed,
   commentaryAvailable,
   commentaryUsed,
+  bookSourceViewed,
 }
 
 class TourInteraction extends Equatable {
@@ -104,6 +110,24 @@ const List<LiveTipSpec> liveTipSpecs = [
     title: 'כדאי לפתוח מפרשים',
     description:
         'לספר הזה יש מפרשים זמינים. אפשר לפתוח את סרגל הצד בלחצן הסמוך ולעבוד מהר יותר.',
+  ),
+  LiveTipSpec(
+    id: LiveTipId.customFoldersHint,
+    area: TourSpotlightArea.navigation,
+    title: 'הידעת?',
+    description:
+        'כותבים חידושי תורה? אפשר להציג אותם בתוך אוצריא ואף לחפש בהם. הוסיפו את '
+        'התיקיה שלכם דרך הגדרות ← ספרייה ← תיקיות מותאמות אישית. כל הקבצים שבתיקיה '
+        '(כולל Word ו-TXT) יתווספו ל"ספרים אישיים", והחיפוש יסרוק אותם אוטומטית. '
+        'כדי לאתר אותם באיתור — סמנו "כלול ספרים אישיים".',
+  ),
+  LiveTipSpec(
+    id: LiveTipId.bookSourceHint,
+    area: TourSpotlightArea.reading,
+    title: 'הידעת?',
+    description:
+        'בכל ספר פתוח אפשר ללחוץ על "אודות הספר" שבסרגל הכלים ולראות מהיכן הגיע '
+        'הטקסט. כך תדעו למי לפנות אם מצאתם טעות בספר.',
   ),
 ];
 

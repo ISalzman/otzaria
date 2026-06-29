@@ -451,6 +451,154 @@ void main() {
     await cubit.close();
   });
 
+  test('טיפ התיקיות המותאמות מופיע אחרי ההפעלה השלישית וכמה דקות שימוש',
+      () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+
+    // שתי ההפעלות הראשונות אינן מתזמנות את הטיפ
+    for (var i = 0; i < 2; i++) {
+      final cubit =
+          TourCubit(delayedTipDelay: const Duration(milliseconds: 10));
+      cubit.registerSession();
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(cubit.state.activeLiveTipId, isNull);
+      await cubit.close();
+    }
+
+    final cubit = TourCubit(delayedTipDelay: const Duration(milliseconds: 10));
+    cubit.registerSession();
+    expect(cubit.state.activeLiveTipId, isNull, reason: 'לפני שחלף זמן השימוש');
+
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    expect(cubit.state.activeLiveTipId, LiveTipId.customFoldersHint);
+    await cubit.close();
+  });
+
+  test('אם ההפעלה השלישית הייתה קצרה, הטיפ מופיע בהפעלה הרביעית', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+
+    for (var i = 0; i < 2; i++) {
+      final warmup = TourCubit()..registerSession();
+      await warmup.close();
+    }
+
+    // הפעלה שלישית קצרה — נסגרת לפני שהטיימר יורה
+    final shortSession =
+        TourCubit(delayedTipDelay: const Duration(seconds: 30));
+    shortSession.registerSession();
+    await shortSession.close();
+    expect(shortSession.state.activeLiveTipId, isNull);
+
+    final nextSession =
+        TourCubit(delayedTipDelay: const Duration(milliseconds: 10));
+    nextSession.registerSession();
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    expect(nextSession.state.activeLiveTipId, LiveTipId.customFoldersHint);
+    await nextSession.close();
+  });
+
+  test('לאחר סגירת טיפ התיקיות הוא אינו חוזר בהפעלה הבאה', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+
+    final first = TourCubit(
+      delayedTipDelay: const Duration(milliseconds: 10),
+      delayedTipMinimumLaunchCount: 1,
+    );
+    first.registerSession();
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    expect(first.state.activeLiveTipId, LiveTipId.customFoldersHint);
+    first.dismissLiveTip();
+    expect(first.state.resolvedTips, contains(LiveTipId.customFoldersHint));
+    await first.close();
+
+    final second = TourCubit(
+      delayedTipDelay: const Duration(milliseconds: 10),
+      delayedTipMinimumLaunchCount: 1,
+    );
+    second.registerSession();
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    expect(second.state.activeLiveTipId, isNull);
+    await second.close();
+  });
+
+  test('TourCubit מציג טיפ אודות הספר אחרי פתיחת שלושה ספרים שונים', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 3);
+    final cubit = TourCubit();
+
+    for (final title in ['בראשית', 'שמות', 'ויקרא']) {
+      await cubit.recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.openedTextBook,
+          primaryValue: title,
+        ),
+      );
+    }
+
+    expect(cubit.state.activeLiveTipId, LiveTipId.bookSourceHint);
+    await cubit.close();
+  });
+
+  test('TourCubit אינו מציג טיפ אודות הספר בהפעלות הראשונות', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 2);
+    final cubit = TourCubit();
+
+    for (final title in ['בראשית', 'שמות', 'ויקרא']) {
+      await cubit.recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.openedTextBook,
+          primaryValue: title,
+        ),
+      );
+    }
+
+    expect(cubit.state.activeLiveTipId, isNull);
+    await cubit.close();
+  });
+
+  test('TourCubit אינו מציג טיפ אודות הספר על אותו ספר שנפתח שוב ושוב',
+      () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 3);
+    final cubit = TourCubit();
+
+    for (var i = 0; i < 3; i++) {
+      await cubit.recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.openedTextBook,
+          primaryValue: 'בראשית',
+        ),
+      );
+    }
+
+    expect(cubit.state.activeLiveTipId, isNull);
+    await cubit.close();
+  });
+
+  test('TourCubit פותר את טיפ אודות הספר כאשר נצפה מקור הספר', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 3);
+    final cubit = TourCubit();
+
+    await cubit.recordInteraction(
+      TourInteraction(type: TourInteractionType.bookSourceViewed),
+    );
+    expect(cubit.state.resolvedTips, contains(LiveTipId.bookSourceHint));
+
+    for (final title in ['בראשית', 'שמות', 'ויקרא']) {
+      await cubit.recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.openedTextBook,
+          primaryValue: title,
+        ),
+      );
+    }
+
+    expect(cubit.state.activeLiveTipId, isNull);
+    await cubit.close();
+  });
+
   test('Spotlight של הניווט מוצג בצד ימין בממשק RTL', () {
     final rect = tourTargetRectFor(
       TourSpotlightArea.navigation,

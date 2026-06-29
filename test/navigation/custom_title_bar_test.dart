@@ -132,7 +132,7 @@ void main() {
     );
   });
 
-  testWidgets('כרטיסיות מקבלות רוחב קבוע שווה, חסום בתקרה (~200px)',
+  testWidgets('כרטיסיות מקבלות רוחב קבוע שווה, חסום בתקרה (~140px)',
       (tester) async {
     final tab1 = _makeTextTab('ספר קצר');
     final tab2 = _makeTextTab('ספר עם שם ארוך מאוד שנמשך הרחק');
@@ -162,7 +162,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // כל טאב עטוף ב-SizedBox ברוחב המחושב (ילדו ה-Listener של _buildTab); שני
-    // הטאבים זהים וחסומים בתקרה (200px) — לא רוחב טבעי לפי אורך הכותרת.
+    // הטאבים זהים וחסומים בתקרה (140px) — לא רוחב טבעי לפי אורך הכותרת.
     final widths = tester
         .widgetList<SizedBox>(find.descendant(
           of: find.byType(ReorderableListView),
@@ -175,8 +175,8 @@ void main() {
     expect(widths.length, 2, reason: 'שני טאבים → שני SizedBox ברוחב קבוע');
     expect(widths[0], moreOrLessEquals(widths[1], epsilon: 1.0),
         reason: 'כל הטאבים ברוחב קבוע שווה');
-    expect(widths[0], lessThanOrEqualTo(201.0),
-        reason: 'רוחב הטאב חסום בתקרה (~200px) גם כשיש מקום');
+    expect(widths[0], lessThanOrEqualTo(141.0),
+        reason: 'רוחב הטאב חסום בתקרה (~140px) גם כשיש מקום');
   });
 
   testWidgets('כותרת ארוכה נחתכת בדהייה (TextOverflow.fade) ללא שלוש נקודות',
@@ -383,19 +383,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // גרירת הטאב השני (אינדקס 1) לכיוון הטאב הראשון. ה-drag listener מיידי
-      // (לא long-press), כך ש-startGesture + moveBy מתחילים reorder.
-      final gesture =
-          await tester.startGesture(tester.getCenter(find.text('ספר ב')));
-      await tester.pump(const Duration(milliseconds: 300));
-      await gesture.moveBy(const Offset(-200, 0));
-      await tester.pump(const Duration(milliseconds: 200));
-      await gesture.moveBy(const Offset(-150, 0));
-      await tester.pump(const Duration(milliseconds: 200));
-      await gesture.up();
+      // הבחירה מתבצעת ב-onPointerDown — תחילת גרירה (כמו לחיצה) בוחרת את הטאב.
+      await tester.tap(find.text('ספר ב'), warnIfMissed: false);
       await tester.pumpAndSettle();
-
-      // onReorderStart בוחר את הטאב הנגרר.
       expect(
         tabsBloc.addedEvents.whereType<SetCurrentTab>().map((e) => e.index),
         contains(1),
@@ -409,12 +399,13 @@ void main() {
         find.byType(ReorderableListView),
       );
       list.onReorderItem!(1, 0);
-      await tester.pumpAndSettle();
+      await tester.pump();
 
       final moves = tabsBloc.addedEvents.whereType<MoveTab>().toList();
-      expect(moves, isNotEmpty, reason: 'שחרור הגרירה צריך לשלוח MoveTab');
+      expect(moves, isNotEmpty, reason: 'reorder צריך לשלוח MoveTab');
       expect(moves.last.tab, same(second),
           reason: 'הטאב שמועבר הוא הטאב שנגרר');
+      expect(moves.last.newIndex, 0, reason: 'היעד הוא אינדקס 0');
     });
 
     testWidgets('בדסקטופ הטאבים עטופים ב-listener מיידי (גרירה מסדרת מיד)',

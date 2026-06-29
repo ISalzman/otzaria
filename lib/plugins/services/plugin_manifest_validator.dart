@@ -104,6 +104,19 @@ class PluginManifestValidator {
       if (!File(entrypointPath).existsSync()) {
         throw Exception('קובץ הכניסה ${manifest.entrypoint} לא נמצא בתיקייה');
       }
+
+      final backgroundEntrypoint = manifest.backgroundEntrypoint;
+      if (backgroundEntrypoint != null) {
+        final backgroundPath =
+            p.normalize(p.join(directoryPath, backgroundEntrypoint));
+        if (!p.isWithin(directoryPath, backgroundPath)) {
+          throw Exception(
+              'נתיב קובץ הרקע $backgroundEntrypoint חורג מגבולות תיקיית התוסף');
+        }
+        if (!File(backgroundPath).existsSync()) {
+          throw Exception('קובץ הרקע $backgroundEntrypoint לא נמצא בתיקייה');
+        }
+      }
     }
   }
 }

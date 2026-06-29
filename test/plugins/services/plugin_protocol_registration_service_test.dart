@@ -87,6 +87,22 @@ void main() {
         isTrue,
         reason: 'חסר הקישור בין סיומת ‎.otzplugin ל-ProgID',
       );
+
+      // EditFlags=FTA_NoRecentDocs — מונע הוספת ‎.otzplugin ל-Jump List
+      expect(
+        commands.any(
+          (cmd) =>
+              cmd.length >= 9 &&
+              cmd[0] == 'add' &&
+              cmd[1] == r'HKCU\Software\Classes\OtzariaPluginFile' &&
+              cmd[2] == '/v' &&
+              cmd[3] == 'EditFlags' &&
+              cmd[5] == 'REG_DWORD' &&
+              cmd[7] == '0x00100000',
+        ),
+        isTrue,
+        reason: 'חסר דגל FTA_NoRecentDocs שמונע כניסה ל"מסמכים אחרונים"',
+      );
     });
 
     test('buildLinuxDesktopEntry does not add leading or empty lines', () {

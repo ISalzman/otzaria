@@ -214,6 +214,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
+  // חובה להיות זהה ל-AppUserModelID שבקיצורי המתקין, אחרת קיצור עם פרמטר
+  // (למשל לוח שנה) מקבל כפתור נפרד בשורת המשימות במקום להתאחד עם הסמל המוצמד.
+  ::SetCurrentProcessExplicitAppUserModelID(L"Otzaria.Otzaria");
+
   // Show the native floating-icon splash as early as possible (it needs COM
   // for WIC PNG decoding). It is an independent, top-most, click-through
   // layered window centered on the primary monitor — decoupled from the main

@@ -463,6 +463,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return data?.buffer.asUint8List();
   }
 
+  void _handleBookSourcePress(BuildContext context, TextBookLoaded state) {
+    context.read<TourCubit>().recordInteraction(
+          TourInteraction(type: TourInteractionType.bookSourceViewed),
+        );
+    showBookSourceDialog(context, state);
+  }
+
   Future<void> _handlePrintPress(TextBookLoaded state) async {
     if (state.showPageShapeView) {
       final png = await _capturePageShapeViewPng();
@@ -1518,11 +1525,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           widget: IconButton(
             icon: const Icon(FluentIcons.book_information_24_regular),
             tooltip: 'אודות הספר',
-            onPressed: () => showBookSourceDialog(context, state),
+            onPressed: () => _handleBookSourcePress(context, state),
           ),
           icon: FluentIcons.book_information_24_regular,
           tooltip: 'אודות הספר',
-          onPressed: () => showBookSourceDialog(context, state),
+          onPressed: () => _handleBookSourcePress(context, state),
         ),
 
       // תת-תפריט "פעולות נוספות" - רק בתצוגה משולבת
@@ -1558,7 +1565,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               widget: const SizedBox.shrink(),
               icon: FluentIcons.book_information_24_regular,
               tooltip: 'אודות הספר',
-              onPressed: () => showBookSourceDialog(context, state),
+              onPressed: () => _handleBookSourcePress(context, state),
             ),
           ],
         ),
@@ -2215,6 +2222,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         _sidebarWidth.value = nextWidth;
       },
       onPaneResizeEnd: () {
+        _reanchorMainContentToTopmostVisible();
         context
             .read<SettingsBloc>()
             .add(UpdateSidebarWidth(_sidebarWidth.value));

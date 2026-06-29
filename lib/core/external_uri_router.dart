@@ -82,6 +82,14 @@ class InstallLocalPluginAction extends ExternalUriAction {
   const InstallLocalPluginAction(this.archivePath);
 }
 
+/// מעבר לטאב פתוח לפי מיקומו ברשימה (0-based). משמש את ה-Jump List של
+/// שורת המשימות ב-Windows, שבונה פריט לכל טאב פתוח. אינו פותח טאב חדש —
+/// אם המיקום לא קיים, מתעלמים.
+class SwitchToTabAction extends ExternalUriAction {
+  final int index;
+  const SwitchToTabAction(this.index);
+}
+
 /// פתיחת דיאלוג ההיסטוריה.
 class OpenHistoryAction extends ExternalUriAction {
   const OpenHistoryAction();
@@ -143,6 +151,7 @@ class RunDetectionAction extends ExternalUriAction {
 /// * `otzaria://open/detection?q=<text>`    – פותח דיאלוג איתור מקורות עם טקסט מילוי-מראש
 /// * `otzaria://open/tool/<tool-id>`        – לשונית כלי לפי מזהה מלא
 /// * `otzaria://open/plugin/<plugin-id>`    – פתיחת תוסף ישירות לפי מזהה (גם לא-מוצמד)
+/// * `otzaria://open/tab/<index>`           – מעבר לטאב פתוח לפי מיקומו (0-based; Jump List)
 /// * `otzaria://open/book/<id>`             – פתיחת ספר טקסט בעיון לפי מזהה DB
 ///   - `?index=<n>` קפיצה לסעיף התחלתי (n >= 0)
 ///   - `?q=<text>`  מחרוזת חיפוש להדגשה
@@ -338,6 +347,15 @@ class ExternalUriRouter {
         return null;
       }
       return OpenPluginAction(rawId);
+    }
+
+    // tab/<index> — מעבר לטאב פתוח לפי מיקומו (0-based). נבנה ע"י ה-Jump List.
+    if (segments.length == 2 && firstLower == 'tab') {
+      final index = int.tryParse(segments[1].trim());
+      if (index == null || index < 0) {
+        return null;
+      }
+      return SwitchToTabAction(index);
     }
 
     if (segments.length == 2 && firstLower == 'book') {

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/pdf_book/utils/pdf_spread_layout.dart';
 
@@ -97,6 +99,44 @@ void main() {
     test('ללא totalPages: התנהגות המקור (ללא חיתוך)', () {
       final range = pdfSpreadPageRange(10, bookView: true);
       expect(range, (startPage: 10, endPageExclusive: 12));
+    });
+  });
+
+  group('pdfTopmostVisiblePage', () {
+    // פריסה אנכית: 3 עמודים בגובה 800 עם רווח 4 ביניהם.
+    final pageRects = <Rect>[
+      const Rect.fromLTWH(0, 0, 500, 800), // עמוד 1: 0–800
+      const Rect.fromLTWH(0, 804, 500, 800), // עמוד 2: 804–1604
+      const Rect.fromLTWH(0, 1608, 500, 800), // עמוד 3: 1608–2408
+    ];
+    Rect viewportAt(double top) => Rect.fromLTWH(0, top, 500, 600);
+
+    test('בראש עמוד 2 מחזיר 2 (לא את הקודם)', () {
+      expect(pdfTopmostVisiblePage(viewportAt(804), pageRects), 2);
+    });
+
+    test('בתחתית עמוד 2 עדיין מחזיר 2', () {
+      expect(pdfTopmostVisiblePage(viewportAt(1004), pageRects), 2);
+    });
+
+    test('בתוך הרווח שמעל עמוד 2 מחזיר 2', () {
+      expect(pdfTopmostVisiblePage(viewportAt(802), pageRects), 2);
+    });
+
+    test('בתוך עמוד 1 מחזיר 1', () {
+      expect(pdfTopmostVisiblePage(viewportAt(750), pageRects), 1);
+    });
+
+    test('גלילה מעל ראש המסמך מחזירה 1', () {
+      expect(pdfTopmostVisiblePage(viewportAt(-50), pageRects), 1);
+    });
+
+    test('גלילה מעבר לעמוד האחרון מחזירה את העמוד האחרון', () {
+      expect(pdfTopmostVisiblePage(viewportAt(5000), pageRects), 3);
+    });
+
+    test('רשימת עמודים ריקה מחזירה null', () {
+      expect(pdfTopmostVisiblePage(viewportAt(0), const []), isNull);
     });
   });
 

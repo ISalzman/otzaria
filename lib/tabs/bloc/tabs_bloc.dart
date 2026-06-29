@@ -43,6 +43,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   })  : _repository = repository,
         super(TabsState.initial()) {
     on<LoadTabs>(_onLoadTabs);
+    on<RemapBookPaths>(_onRemapBookPaths, transformer: sequential());
     on<ReplaceAllTabs>(_onReplaceAllTabs, transformer: sequential());
     on<AddTab>(_onAddTab, transformer: sequential());
     on<OpenOrFocusTab>(_onOpenOrFocusTab, transformer: sequential());
@@ -92,6 +93,43 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       currentTabIndex: currentTabIndex,
       sideBySideMode: validatedMode,
     ));
+  }
+
+  /// ממפה נתיבי ספרים פתוחים מ-[from] ל-[to] (זיכרון + Hive) וממתין לסיום.
+  /// משמש את העברת הספרייה: חובה להמתין לפני הרענון כדי ששמירת הטאבים בעת
+  /// ה-dispose לא תדרוס את המיפוי עם הנתיב הישן.
+  Future<void> remapBookPathsAwaitable(String from, String to) {
+    final completer = Completer<void>();
+    add(RemapBookPaths(from, to, completer: completer));
+    // רשת ביטחון: לא להקפיא את זרימת ההעברה אם ה-handler לא ירוץ (למשל
+    // אם ה-bloc נסגר). בזרימה הרגילה ה-handler משלים הרבה לפני הזמן הזה.
+    return completer.future
+        .timeout(const Duration(seconds: 5), onTimeout: () {});
+  }
+
+  Future<void> _onRemapBookPaths(
+      RemapBookPaths event, Emitter<TabsState> emit) async {
+    try {
+      final remapped =
+          _repository.remapTabsInMemory(state.tabs, event.fromDir, event.toDir);
+      final unchanged = remapped.length == state.tabs.length &&
+          List.generate(remapped.length, (i) => i)
+              .every((i) => identical(remapped[i], state.tabs[i]));
+      if (!unchanged) {
+        emit(state.copyWith(tabs: remapped));
+        await _repository.saveTabs(
+            remapped, state.currentTabIndex, state.sideBySideMode);
+      }
+      event.completer?.complete();
+    } catch (e, st) {
+      // בהעברת ספרייה זו פעולה קריטית — הכישלון חייב להגיע למי שממתין
+      // ל-Future (ולא להיראות כהצלחה). ללא completer (fire-and-forget) נזרק.
+      if (event.completer != null) {
+        event.completer!.completeError(e, st);
+      } else {
+        rethrow;
+      }
+    }
   }
 
   Future<void> _onReplaceAllTabs(

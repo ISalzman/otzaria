@@ -320,8 +320,11 @@ class _ScrollablePositionedListScrollbarState
     });
     // התווית מוסתרת בתום הגרירה; ריחוף נוסף יחזיר אותה דרך ה-MouseRegion.
     _hideLabel();
-    // עדכון סופי ליתר ביטחון
-    _updateScrollPosition();
+    // עדכון סופי דחוי לframe הבא: itemPositions.value מתעדכן רק אחרי שה-list
+    // מרנדר את מיקום הקפיצה; קריאה סינכרונית מחזירה ערך ישן וגורמת לחזרת האגודל.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _updateScrollPosition();
+    });
   }
 
   @override

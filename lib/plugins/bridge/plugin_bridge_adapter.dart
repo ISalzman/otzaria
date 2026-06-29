@@ -22,6 +22,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -246,6 +247,13 @@ class PluginBridgeDependencies {
     String? title,
   })? pickFile;
 
+  /// פותר הפניה חופשית (שם ספר + ref, למשל "תלמוד ירושלמי עירובין פ\"ו ה\"ז")
+  /// למיקום, דרך מנוע `find_ref` המודע-להקשר. מחזיר התאמות עם מיקום ה-index.
+  /// אופציונלי — אם לא סופק, `openBookAtRef` נופל להתאמת TOC מקומית בלבד.
+  final Future<List<({String title, int index, bool isPdf})>> Function(
+    String reference,
+  )? resolveReference;
+
   const PluginBridgeDependencies({
     required this.historyBloc,
     required this.tabsBloc,
@@ -261,6 +269,7 @@ class PluginBridgeDependencies {
     this.requestPluginInstall,
     this.pickFolder,
     this.pickFile,
+    this.resolveReference,
   });
 }
 
@@ -468,11 +477,16 @@ class PluginBridgeAdapter {
     final library = await DataRepository.instance.library;
     switch (action) {
       case 'findBooks':
-        final query = args['query']?.toString().toLowerCase() ?? '';
+        final query = args['query']?.toString() ?? '';
         final limit = args['limit'] as int? ?? 20;
-        final allBooks = library.getAllBooks();
-        return allBooks
-            .where((b) => b.title.toLowerCase().contains(query))
+        // query ריק = עיון בכל הספרים (תאימות לאחור). אחרת מנוע החיפוש המדורג
+        // של הספרייה — מחזיר ספר בסיסי/התאמה טובה לפני פירושים, כך שתוסף
+        // שלוקח את התוצאה הראשונה יקבל את הספר הנכון (ולא פירוש על
+        // "ירושלמי עירובין").
+        final List<dynamic> matched = query.trim().isEmpty
+            ? library.getAllBooks()
+            : await DataRepository.instance.findBooks(query, null);
+        return matched
             .take(limit)
             // spec: returns [{bookId, title, author?, topics?}]
             .map((b) => {
@@ -527,7 +541,7 @@ class PluginBridgeAdapter {
             .cast<dynamic>()
             .firstWhere((b) => b?.title == bookId, orElse: () => null);
         if (book != null && book is TextBook) {
-          final toc = await book.tableOfContents;
+          final toc = flattenToc(await book.tableOfContents);
           return toc
               .map((e) => {'text': e.text, 'index': e.index, 'level': e.level})
               .toList();
@@ -661,20 +675,45 @@ class PluginBridgeAdapter {
             .cast<dynamic>()
             .firstWhere((b) => b?.title == bookId, orElse: () => null);
         if (book == null) return false;
+        var refFound = false;
         if (ref != null && ref.isNotEmpty && book is TextBook) {
-          try {
-            final toc = await book.tableOfContents;
-            final entry = toc.cast<dynamic>().firstWhere(
-                  (e) => e?.text != null && e.text.toString().contains(ref),
-                  orElse: () => null,
-                );
-            if (entry != null) index = entry.index as int;
-          } catch (_) {}
+          // מנוע find_ref ראשון — מודע-הקשר, מפענח הפניות מובנות
+          // (פרק/הלכה/סימן) שתלויות בסוג הספר. ההפניה כוללת את שם הספר.
+          final resolve = _dependencies.resolveReference;
+          if (resolve != null) {
+            try {
+              final hits = await resolve('$bookId $ref');
+              final hit =
+                  hits.where((h) => h.title == bookId && !h.isPdf).firstOrNull;
+              if (hit != null) {
+                index = hit.index;
+                refFound = true;
+              }
+            } catch (_) {}
+          }
+          // fallback: התאמת TOC מקומית (flatten + נרמול) — בעיקר לבבלי
+          if (!refFound) {
+            try {
+              final toc = flattenToc(await book.tableOfContents);
+              final entry = toc.cast<dynamic>().firstWhere(
+                    (e) =>
+                        e?.text != null &&
+                        tocTextMatchesRef(e.text.toString(), ref),
+                    orElse: () => null,
+                  );
+              if (entry != null) {
+                index = entry.index as int;
+                refFound = true;
+              }
+            } catch (_) {}
+          }
         }
+        // חיפוש רק כ-fallback: אם מצאנו את הכותרת וקפצנו אליה,
+        // אין טעם להשאיר אותה גם בתיבת החיפוש.
         _dependencies.bookOpenCoordinator.openBook(
           book,
           index,
-          ref ?? '',
+          refFound ? '' : (ref ?? ''),
           ignoreHistory: true,
         );
         return true;
@@ -1957,8 +1996,10 @@ class PluginBridgeAdapter {
     switch (action) {
       case 'fetch':
         if (!plugin.manifest.networkEnabled) {
-          throw Exception('error.permission_denied: network.enabled required');
+          throw Exception('error.permission_denied: '
+              'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.');
         }
+
 
         final url = args['url'] as String?;
         if (url == null) throw Exception('error.invalid_params: url required');
@@ -2021,8 +2062,10 @@ class PluginBridgeAdapter {
         // הכל מתבצע בצד Flutter — ה-WebView (origin file://) אינו יכול
         // לכתוב לדיסק. נדרשת הרשאת רשת לפי היעד (אינטרנט או localhost).
         if (!plugin.manifest.networkEnabled) {
-          throw Exception('error.permission_denied: network.enabled required');
+          throw Exception('error.permission_denied: '
+              'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.');
         }
+
 
         final url = args['url'] as String?;
         if (url == null) throw Exception('error.invalid_params: url required');

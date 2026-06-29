@@ -46,6 +46,10 @@ class SettingsState extends Equatable {
   final bool enableHtmlLinks;
   final bool personalNotesCollapsedByDefault;
   final bool protectedModeEnabled;
+
+  /// האם הוגדרה סיסמה למצב סייפר. נגזר מה-repository בטעינה ומעודכן בעת שמירה,
+  /// כדי שה-UI יתרענן ריאקטיבית גם כשהמצב המוגן עצמו לא מופעל.
+  final bool protectedModePasswordSet;
   final bool autoSyncCatalogs;
   final bool compactMenuMode;
 
@@ -98,6 +102,7 @@ class SettingsState extends Equatable {
     required this.enableHtmlLinks,
     required this.personalNotesCollapsedByDefault,
     required this.protectedModeEnabled,
+    this.protectedModePasswordSet = false,
     required this.autoSyncCatalogs,
     this.compactMenuMode = false,
     this.mergeUserBooksIntoLibrary = false,
@@ -190,6 +195,7 @@ class SettingsState extends Equatable {
     bool? enableHtmlLinks,
     bool? personalNotesCollapsedByDefault,
     bool? protectedModeEnabled,
+    bool? protectedModePasswordSet,
     bool? autoSyncCatalogs,
     bool? compactMenuMode,
     bool? mergeUserBooksIntoLibrary,
@@ -241,6 +247,8 @@ class SettingsState extends Equatable {
       personalNotesCollapsedByDefault: personalNotesCollapsedByDefault ??
           this.personalNotesCollapsedByDefault,
       protectedModeEnabled: protectedModeEnabled ?? this.protectedModeEnabled,
+      protectedModePasswordSet:
+          protectedModePasswordSet ?? this.protectedModePasswordSet,
       autoSyncCatalogs: autoSyncCatalogs ?? this.autoSyncCatalogs,
       compactMenuMode: compactMenuMode ?? this.compactMenuMode,
       mergeUserBooksIntoLibrary:
@@ -299,6 +307,7 @@ class SettingsState extends Equatable {
         enableHtmlLinks,
         personalNotesCollapsedByDefault,
         protectedModeEnabled,
+        protectedModePasswordSet,
         autoSyncCatalogs,
         compactMenuMode,
         mergeUserBooksIntoLibrary,

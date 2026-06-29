@@ -50,6 +50,7 @@
 | `otzaria://open/detection?q=<text>` | פותח את דיאלוג איתור מקורות עם טקסט מילוי-מראש ומפעיל חיפוש מיידית |
 | `otzaria://open/tool/<tool-id>` | פותח לשונית כלי לפי מזהה מלא — תומך גם בתוספים מוצמדים |
 | `otzaria://open/plugin/<plugin-id>` | פותח תוסף ישירות לפי מזהה התוסף — גם תוסף שאינו מוצמד ללשוניות (נפתח במצב transient) |
+| `otzaria://open/tab/<index>` | מעבר לטאב פתוח לפי מיקומו (0-based). אינו פותח טאב חדש; אם המיקום לא קיים — מתעלם. נבנה אוטומטית ב-Jump List של שורת המשימות (Windows) |
 | `otzaria://open/book/<id>` | פותח ספר בעיון לפי מזהה מסד הנתונים |
 | `otzaria://open/book/<id>?index=<n>` | פותח את הספר בסעיף `n` (אינדקס לא שלילי). |
 | `otzaria://open/book/<id>?q=<text>` | פותח את הספר עם מחרוזת חיפוש להדגשה. ניתן לשלב עם `index`. |
@@ -261,6 +262,7 @@ _externalActivationWatchSub = queueFile.parent.watch().listen((event) {
 | `OpenScreenAction(Screen)` | `otzaria://open/library`, ... | מסך עליון |
 | `OpenToolAction(String toolId)` | `otzaria://open/calendar`, `/daily`, `/shamor_zachor`, `/measurements`, `/aramaic_dictionary`, `/acronyms_dictionary`, `/gematria`, `/notes`, `/tool/<id>`, ... | לשונית כלי |
 | `OpenPluginAction(String pluginId)` | `otzaria://open/plugin/<plugin-id>` | פתיחת תוסף ישירות (גם לא-מוצמד) |
+| `SwitchToTabAction(int index)` | `otzaria://open/tab/<index>` | מעבר לטאב פתוח קיים לפי מיקומו (Jump List של Windows) |
 | `OpenBookAction(int bookId, {int? index, String? searchQuery, bool markSection, String? markText})` | `otzaria://open/book/<id>?index=<n>&q=<text>&mark&m=<text>` | ספר בעיון |
 | `OpenSettingsTabAction({SettingsTab? tab})` | `otzaria://open/settings`, `/settings/design`, `/settings/text`, ... | פתיחת הגדרות, אופציונלית עם ניווט לטאב |
 | `OpenHistoryAction()` | `otzaria://open/history` | דיאלוג היסטוריה |

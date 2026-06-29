@@ -63,6 +63,40 @@ void main() {
       expect(toolTab['allowOrderBeforeBuiltIns'], isFalse);
     });
 
+    test('backgroundEntrypoint is null when omitted', () {
+      final manifest = PluginManifest.fromJson({
+        'schemaVersion': 1,
+        'id': 'test.plugin.no.background',
+        'name': 'No Background Plugin',
+        'version': '1.0.0',
+        'entrypoint': 'index.html',
+      });
+
+      expect(manifest.backgroundEntrypoint, isNull);
+      final contributes =
+          manifest.toJson()['contributes'] as Map<String, dynamic>;
+      expect(contributes.containsKey('background'), isFalse);
+    });
+
+    test('parses contributes.background.entrypoint and serializes it back', () {
+      final manifest = PluginManifest.fromJson({
+        'schemaVersion': 1,
+        'id': 'test.plugin.background',
+        'name': 'Background Plugin',
+        'version': '1.0.0',
+        'entrypoint': 'index.html',
+        'contributes': {
+          'background': {'entrypoint': 'dist/background.html'},
+        },
+      });
+
+      expect(manifest.backgroundEntrypoint, 'dist/background.html');
+
+      final background = (manifest.toJson()['contributes']
+          as Map<String, dynamic>)['background'] as Map<String, dynamic>;
+      expect(background['entrypoint'], 'dist/background.html');
+    });
+
     test('parses allowOrderBeforeBuiltIns=true and serializes it back', () {
       final manifest = PluginManifest.fromJson({
         'schemaVersion': 1,

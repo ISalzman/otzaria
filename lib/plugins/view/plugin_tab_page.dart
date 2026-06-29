@@ -23,6 +23,7 @@ import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
+import 'package:otzaria/find_ref/repository/find_ref_factory.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
@@ -132,6 +133,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     final searchRepository = SearchRepository();
     final personalNotesRepository = PersonalNotesRepository();
     final pluginRegistryRepository = PluginRegistryRepository();
+    final findRefRepository = buildFindRefRepository();
 
     final dependencies = PluginBridgeDependencies(
       historyBloc: historyBloc,
@@ -146,6 +148,13 @@ class _PluginTabPageState extends State<PluginTabPage> {
         historyBloc: historyBloc,
         navigationBloc: navigationBloc,
       ),
+      resolveReference: (reference) async {
+        final results = await findRefRepository.findRefs(reference);
+        return results
+            .map((r) =>
+                (title: r.title, index: r.segment.toInt(), isPdf: r.isPdf))
+            .toList();
+      },
       themePayloadBuilder: () {
         if (!mounted) {
           return {
@@ -238,9 +247,22 @@ class _PluginTabPageState extends State<PluginTabPage> {
     if (!mounted) return;
     if (!widget.plugin.isDevelopment) return;
 
+    // במסך שגיאה ה-WebView ירד מהעץ וה-controller מת — ניקוי הדגל בונה
+    // WebView חדש שטוען מחדש את נקודת הכניסה, במקום reload על controller מת.
+    if (_hasError) {
+      setState(() => _hasError = false);
+      return;
+    }
+
     // localhost_dev: HMR handles JS/CSS changes automatically.
     // A manual reload clears the cache and reloads the page.
     if (widget.plugin.isLocalhostDev) {
+      // במסך שגיאת חיבור אין WebView חי (ה-controller מת) — ניקוי השגיאה בונה
+      // WebView חדש שטוען את כתובת השרת מחדש, במקום reload על controller מת.
+      if (_devErrorMessage != null) {
+        setState(() => _devErrorMessage = null);
+        return;
+      }
       try {
         await InAppWebViewController.clearAllCache();
       } catch (_) {}
@@ -680,6 +702,19 @@ class _PluginTabPageState extends State<PluginTabPage> {
           // מנקים את ה-canary כדי שלא נחסום שגיאה רגילה כ"קריסה".
           unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
           if (mounted) setState(() => _hasError = true);
+          return;
+        }
+        // localhost_dev: כשל בטעינת ה-main frame = שרת הפיתוח אינו רץ. מציגים
+        // מסך מותאם במקום דף השגיאה של הדפדפן (ERR_CONNECTION_REFUSED).
+        if (widget.plugin.isLocalhostDev &&
+            request.isForMainFrame == true &&
+            _isDevServerUri(request.url)) {
+          unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
+          if (mounted) {
+            setState(() => _devErrorMessage =
+                'שרת הפיתוח אינו זמין בכתובת ${widget.plugin.devRootPath}.\n'
+                    'ודא ששרת הפיתוח רץ (למשל: npm run dev) ולחץ "נסה קריאה מחדש".');
+          }
         }
       },
       onConsoleMessage: (controller, consoleMessage) {

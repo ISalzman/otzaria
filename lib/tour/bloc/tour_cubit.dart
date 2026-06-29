@@ -10,7 +10,12 @@ import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/tour/models/tour_steps.dart';
 
 class TourCubit extends Cubit<TourState> {
-  TourCubit() : super(_loadInitialState());
+  TourCubit({
+    Duration delayedTipDelay = const Duration(minutes: 2, seconds: 30),
+    int delayedTipMinimumLaunchCount = 3,
+  })  : _delayedTipDelay = delayedTipDelay,
+        _delayedTipMinimumLaunchCount = delayedTipMinimumLaunchCount,
+        super(_loadInitialState());
 
   static TourState _loadInitialState() {
     final stored = Settings.getValue<String>(LiveTipStorage.resolvedTipsKey);
@@ -21,8 +26,16 @@ class TourCubit extends Cubit<TourState> {
     return const TourState.inactive().copyWith(resolvedTips: resolved);
   }
 
+  /// כמה ספרי טקסט שונים צריך לפתוח לפני שמוצג טיפ "אודות הספר".
+  static const int _bookSourceHintMinimumBooks = 3;
+
+  final Duration _delayedTipDelay;
+  final int _delayedTipMinimumLaunchCount;
+  bool _sessionRegistered = false;
+  Timer? _delayedTipTimer;
   Timer? _autoPlayTimer;
   final List<TourInteraction> _recentInteractions = <TourInteraction>[];
+  final Set<String> _openedTextBooks = <String>{};
   int _textSelectionCount = 0;
   bool _hasRegisteredCommentaryOpportunity = false;
   bool _commentaryOpportunityOpen = false;
@@ -60,6 +73,42 @@ class TourCubit extends Cubit<TourState> {
             TourSteps.build(libraryLoaded: libraryLoaded, isRestart: isRestart),
         shownTips: state.shownTips,
         resolvedTips: state.resolvedTips,
+      ),
+    );
+  }
+
+  /// נקרא פעם אחת בעליית החלון. סופר הפעלות ומתזמן את טיפ התיקיות המותאמות;
+  /// סגירה לפני שהטיימר ירה משאירה אותו להפעלה הבאה (כלל "אם השימוש היה קצר").
+  void registerSession() {
+    if (_sessionRegistered) {
+      return;
+    }
+    _sessionRegistered = true;
+
+    final launchCount =
+        (Settings.getValue<int>(LiveTipStorage.launchCountKey) ?? 0) + 1;
+    Settings.setValue<int>(LiveTipStorage.launchCountKey, launchCount);
+
+    if (state.resolvedTips.contains(LiveTipId.customFoldersHint) ||
+        launchCount < _delayedTipMinimumLaunchCount) {
+      return;
+    }
+    _delayedTipTimer = Timer(_delayedTipDelay, _maybeShowDelayedTip);
+  }
+
+  void _maybeShowDelayedTip() {
+    if (state.isActive ||
+        state.hasActiveLiveTip ||
+        !_canShowTip(LiveTipId.customFoldersHint)) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        activeLiveTipId: LiveTipId.customFoldersHint,
+        shownTips: <LiveTipId>{
+          ...state.shownTips,
+          LiveTipId.customFoldersHint,
+        },
       ),
     );
   }
@@ -152,6 +201,7 @@ class TourCubit extends Cubit<TourState> {
   @override
   Future<void> close() {
     _cancelAutoPlay();
+    _delayedTipTimer?.cancel();
     return super.close();
   }
 
@@ -201,8 +251,19 @@ class TourCubit extends Cubit<TourState> {
         _commentaryOpportunityBook = null;
         _markTipResolved(LiveTipId.commentaryHint);
         break;
-      case TourInteractionType.currentTabChanged:
       case TourInteractionType.openedTextBook:
+        if (_isInteractionRelevantToOpportunity(interaction)) {
+          _commentaryOpportunityScore++;
+        }
+        if (!state.resolvedTips.contains(LiveTipId.bookSourceHint) &&
+            interaction.primaryValue != null) {
+          _openedTextBooks.add(interaction.primaryValue!);
+        }
+        break;
+      case TourInteractionType.bookSourceViewed:
+        _markTipResolved(LiveTipId.bookSourceHint);
+        break;
+      case TourInteractionType.currentTabChanged:
       case TourInteractionType.readerPositionChanged:
         if (_isInteractionRelevantToOpportunity(interaction)) {
           _commentaryOpportunityScore++;
@@ -273,12 +334,25 @@ class TourCubit extends Cubit<TourState> {
       return LiveTipId.commentaryHint;
     }
 
+    if (_canShowTip(LiveTipId.bookSourceHint) &&
+        _hasMinimumLaunches &&
+        _openedTextBooks.length >= _bookSourceHintMinimumBooks) {
+      return LiveTipId.bookSourceHint;
+    }
+
     return null;
   }
 
   bool _canShowTip(LiveTipId tipId) {
     return !state.shownTips.contains(tipId) &&
         !state.resolvedTips.contains(tipId);
+  }
+
+  /// טיפ "הידעת?" אינו מוצג בהפעלות הראשונות, אלא רק מהסף ואילך.
+  bool get _hasMinimumLaunches {
+    final launchCount =
+        Settings.getValue<int>(LiveTipStorage.launchCountKey) ?? 0;
+    return launchCount >= _delayedTipMinimumLaunchCount;
   }
 
   bool _shouldShowSideBySideSuggestion() {
