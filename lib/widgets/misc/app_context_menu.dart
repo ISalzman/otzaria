@@ -1556,7 +1556,7 @@ class _IconRowSubmenu extends StatelessWidget {
             child: buildAppMenuRowContent(
               context,
               metrics,
-              label: entry.label ?? '',
+              label: entry.label,
               icon: entry.icon,
               enabled: entry.enabled,
             ),

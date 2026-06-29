@@ -1265,7 +1265,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           AppContextMenuIconAction(
             label: 'קישור',
             icon: FluentIcons.link_24_regular,
-            submenuBuilder: () => buildDirectLinkContextMenuEntries(
+            submenuBuilder: () => buildDirectLinkSubmenuActions(
               bookId: state.book.id!,
               index: index,
               selectedText: capturedText,
