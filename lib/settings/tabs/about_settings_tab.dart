@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:otzaria/widgets/layout/adaptive_row.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
@@ -568,40 +569,20 @@ class _MemorialCardsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth < 400) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _MemorialCard.donor(
-              title: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
-              description: 'סכום משמעותי לפיתוח התוכנה',
-            ),
-            const SizedBox(height: 12),
-            _MemorialCard.donation(onDonate: onDonationTap),
-            const SizedBox(height: 12),
-            _MemorialCard.donation(onDonate: onDonationTap),
-          ],
-        );
-      }
-      return IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: _MemorialCard.donor(
-                title: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
-                description: 'סכום משמעותי לפיתוח התוכנה',
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: _MemorialCard.donation(onDonate: onDonationTap)),
-            const SizedBox(width: 12),
-            Expanded(child: _MemorialCard.donation(onDonate: onDonationTap)),
-          ],
+    return AdaptiveRow(
+      breakpoint: 400,
+      spacing: 12,
+      equalHeight: true,
+      wideCrossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _MemorialCard.donor(
+          title: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
+          description: 'סכום משמעותי לפיתוח התוכנה',
         ),
-      );
-    });
+        _MemorialCard.donation(onDonate: onDonationTap),
+        _MemorialCard.donation(onDonate: onDonationTap),
+      ],
+    );
   }
 }
 
