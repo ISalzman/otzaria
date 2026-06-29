@@ -186,8 +186,8 @@ bool shouldShowSelectCommentatorsEntry({
   return hasOpenCommentatorsPaneWithFilterCallback && !isCommentatorsTabActive;
 }
 
-/// מעבד טקסט גולמי לפי הגדרות התצוגה (טעמים/ניקוד/פיסוק), כך שפעולות
-/// "העתק את כל הפסקה" ו"העתק טקסט מוצג" ישקפו את מה שמוצג בפועל על המסך —
+/// מעבד טקסט גולמי לפי הגדרות התצוגה (טעמים/ניקוד/פיסוק), כך שפעולת
+/// "העתק את כל הפסקה" תשקף את מה שמוצג בפועל על המסך —
 /// באותו סדר עיבוד של [TextRendererService] (טעמים → ניקוד → פיסוק).
 ///
 /// הערה: [utils.removeVolwels] מסיר גם ניקוד וגם טעמים, ולכן כש-[removeNikud]
@@ -738,51 +738,64 @@ class _CombinedViewState extends State<CombinedView> {
               )),
         ];
 
+    // החיפוש עובד תמיד על טקסט ללא ניקוד וטעמים — מנקים פעם אחת לשימוש
+    // בשורת האייקונים, בכיתובי החיפוש ובשאילתת החיפוש בפועל.
+    final rawText = selectedText?.trim() ?? '';
+    final cleanedText =
+        utils.hasNikud(rawText) ? utils.removeVolwels(rawText).trim() : rawText;
+    final hasSelectedText = cleanedText.isNotEmpty;
+    // ציטוט קצר של הבחירה לכיתוב/tooltip: עד maxChars תווים ואז "...".
+    // חיתוך לפי graphemes (לא code units) כדי לא לשבור תווים מורכבים.
+    String quote(int maxChars) {
+      final chars = cleanedText.characters;
+      return chars.length > maxChars
+          ? '${chars.take(maxChars)}...'
+          : cleanedText;
+    }
+
     return [
-      () {
-        // החיפוש עובד תמיד על טקסט ללא ניקוד וטעמים — מנקים פעם אחת
-        // לשימוש גם בתווית התפריט וגם בשאילתת החיפוש בפועל.
-        final rawText = selectedText?.trim() ?? '';
-        final cleanedText = utils.hasNikud(rawText)
-            ? utils.removeVolwels(rawText).trim()
-            : rawText;
-        final hasSelectedText = cleanedText.isNotEmpty;
-        final preview = hasSelectedText ? previewForLabel(cleanedText) : '';
-        return AppContextMenuEntry(
+      // שורת אייקונים עליונה בסגנון Windows 11 — הרשימה המלאה נשארת מתחת.
+      AppContextMenuEntry.iconRow([
+        AppContextMenuIconAction(
           label: 'חיפוש',
-          icon: FluentIcons.search_24_regular,
-          enabled: true,
-          // ללא טקסט נבחר: פתיחת חיפוש רגיל בספר ללא שאילתה.
-          onTap: hasSelectedText ? null : () => widget.openLeftPaneTab(1),
-          children: hasSelectedText
-              ? [
-                  AppContextMenuEntry(
-                    label: "חפש '$preview' בספר זה",
-                    labelWidget: buildSearchMenuLabel(
-                      selectedText: cleanedText,
-                      suffix: 'בספר זה',
-                    ),
-                    icon: FluentIcons.search_24_regular,
-                    onTap: () =>
-                        widget.openLeftPaneTab(1, searchText: cleanedText),
-                  ),
-                  AppContextMenuEntry(
-                    label: "חפש '$preview' בכל הספרים",
-                    labelWidget: buildSearchMenuLabel(
-                      selectedText: cleanedText,
-                      suffix: 'בכל הספרים',
-                    ),
-                    icon: FluentIcons.library_24_regular,
-                    onTap: () => openGlobalSearch(
-                      context,
-                      cleanedText,
-                      insertAdjacent: true,
-                    ),
-                  ),
-                ]
-              : null,
-        );
-      }(),
+          tooltip: hasSelectedText
+              ? 'חיפוש "${quote(14)}" בכל הספרים'
+              : 'חיפוש בכל הספרים',
+          icon: FluentIcons.library_24_regular,
+          enabled: hasSelectedText,
+          onTap: () =>
+              openGlobalSearch(context, cleanedText, insertAdjacent: true),
+        ),
+        AppContextMenuIconAction(
+          label: 'העתקה',
+          icon: FluentIcons.copy_24_regular,
+          enabled: hasSelectedText,
+          onTap: () => _copyFormattedText(selectedText),
+        ),
+        AppContextMenuIconAction(
+          label: 'הערה',
+          icon: FluentIcons.note_add_24_regular,
+          onTap: () => _showNoteEditor(selectedText),
+        ),
+        if (state.book.id != null)
+          AppContextMenuIconAction(
+            label: 'קישור',
+            icon: FluentIcons.link_24_regular,
+            submenuBuilder: () => buildDirectLinkSubmenuActions(
+              bookId: state.book.id!,
+              index: paragraphIndex,
+              selectedText: selectedText,
+            ),
+          ),
+      ]),
+      const AppContextMenuEntry.divider(),
+      AppContextMenuEntry(
+        label: hasSelectedText ? 'חפש "${quote(10)}" בספר זה' : 'חיפוש',
+        icon: FluentIcons.search_24_regular,
+        onTap: hasSelectedText
+            ? () => widget.openLeftPaneTab(1, searchText: cleanedText)
+            : () => widget.openLeftPaneTab(1),
+      ),
       AppContextMenuEntry(
         label: 'מפרשים',
         icon: FluentIcons.book_24_regular,
@@ -818,11 +831,6 @@ class _CombinedViewState extends State<CombinedView> {
         icon: FluentIcons.bookmark_add_24_regular,
         onTap: () => addTextSectionBookmark(context, state, paragraphIndex),
       ),
-      AppContextMenuEntry(
-        label: 'הוסף הערה אישית',
-        icon: FluentIcons.note_add_24_regular,
-        onTap: () => _showNoteEditor(selectedText),
-      ),
       if (!state.book.isUserBook)
         AppContextMenuEntry(
           label: 'דווח על טעות בספר',
@@ -834,35 +842,11 @@ class _CombinedViewState extends State<CombinedView> {
         ),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
-        label: 'העתק',
-        icon: FluentIcons.copy_24_regular,
-        enabled: selectedText != null && selectedText.trim().isNotEmpty,
-        onTap: () => _copyFormattedText(selectedText),
-      ),
-      AppContextMenuEntry(
         label: 'העתק את כל הפסקה',
         icon: FluentIcons.document_copy_24_regular,
         enabled: paragraphIndex >= 0 && paragraphIndex < widget.data.length,
         onTap: () => _copyParagraphByIndex(paragraphIndex),
       ),
-      AppContextMenuEntry(
-        label: 'העתק טקסט מוצג',
-        icon: FluentIcons.document_copy_24_regular,
-        onTap: _copyVisibleText,
-      ),
-      // העתק קישור ישיר — מוצג רק אם יש book_id
-      if (state.book.id != null) ...[
-        const AppContextMenuEntry.divider(),
-        AppContextMenuEntry(
-          label: 'העתק קישור ישיר',
-          icon: FluentIcons.link_24_regular,
-          childrenBuilder: () => buildDirectLinkContextMenuEntries(
-            bookId: state.book.id!,
-            index: paragraphIndex,
-            selectedText: selectedText,
-          ),
-        ),
-      ],
       // פריטי תפריט מפלאגינים
       ...() {
         final pluginItems = ContextMenuRegistry.instance.getAll();
@@ -983,74 +967,6 @@ class _CombinedViewState extends State<CombinedView> {
 
       finalHtmlText = CopyUtils.formatTextWithHeaders(
         originalText: processedText,
-        copyWithHeaders: settingsState.copyWithHeaders,
-        copyHeaderFormat: settingsState.copyHeaderFormat,
-        bookName: bookName,
-        currentPath: currentPath,
-      );
-    }
-
-    final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
-      plainText: finalText,
-      htmlText: finalHtmlText,
-      replaceHolyNames: settingsState.replaceHolyNames,
-    );
-
-    final item = DataWriterItem();
-    item.add(Formats.plainText(copyContent.plainText.trimRight()));
-    item.add(Formats.htmlText(_formatTextAsHtml(copyContent.htmlText)));
-
-    await SystemClipboard.instance?.write([item]);
-  }
-
-  /// העתקת הטקסט המוצג במסך ללוח
-  void _copyVisibleText() async {
-    final state = context.read<TextBookBloc>().state;
-    if (state is! TextBookLoaded || state.visibleIndices.isEmpty) return;
-
-    // קבלת ההגדרות הנוכחיות
-    final settingsState = context.read<SettingsBloc>().state;
-
-    // איסוף כל הטקסט הנראה במסך — עם אותן העדפות תצוגה (טעמים/ניקוד/פיסוק)
-    // שמיושמות בפועל על המסך, כדי שההעתקה תשקף את מה שמוצג.
-    final visibleTexts = <String>[];
-    for (final index in state.visibleIndices) {
-      if (index >= 0 && index < widget.data.length) {
-        visibleTexts.add(
-          _applyDisplayTextPreferences(
-              widget.data[index], state, settingsState),
-        );
-      }
-    }
-
-    if (visibleTexts.isEmpty) return;
-
-    final combinedText = visibleTexts.join('\n\n');
-    final plainText = utils.stripHtmlIfNeeded(combinedText);
-
-    String finalText = plainText;
-    String finalHtmlText = combinedText;
-
-    // אם צריך להוסיף כותרות
-    if (settingsState.copyWithHeaders != 'none') {
-      final bookName = CopyUtils.extractBookName(state.book);
-      final firstVisibleIndex = state.visibleIndices.first;
-      final currentPath = await CopyUtils.extractCurrentPath(
-        state.book,
-        firstVisibleIndex,
-        bookContent: state.content,
-      );
-
-      finalText = CopyUtils.formatTextWithHeaders(
-        originalText: plainText,
-        copyWithHeaders: settingsState.copyWithHeaders,
-        copyHeaderFormat: settingsState.copyHeaderFormat,
-        bookName: bookName,
-        currentPath: currentPath,
-      );
-
-      finalHtmlText = CopyUtils.formatTextWithHeaders(
-        originalText: combinedText,
         copyWithHeaders: settingsState.copyWithHeaders,
         copyHeaderFormat: settingsState.copyHeaderFormat,
         bookName: bookName,
