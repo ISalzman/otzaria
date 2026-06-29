@@ -66,11 +66,6 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     try {
       final plan =
           await repository.checkForUpdate(allowPrerelease: allowPrerelease());
-      // אבחון זמני: איזו תוכנית נבחרה.
-      debugPrint('[LibraryUpdate] plan kind=${plan.kind} '
-          'local=${plan.localVersion} target=${plan.targetVersion} '
-          'deltaSteps=${plan.deltaSteps.length} '
-          'reason=${plan.reason}');
       // אם המשתמש ביטל/התחיל ריצה חדשה במהלך הבדיקה — לא להמשיך.
       if (_isStale(opId)) return;
       switch (plan.kind) {
@@ -240,7 +235,7 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       LibraryUpdatePhase.downloading => 'מוריד עדכון ספרייה'
           '${p.totalSteps > 1 ? ' (${p.stepIndex + 1}/${p.totalSteps})' : ''}',
       LibraryUpdatePhase.verifying => 'מאמת קובץ עדכון',
-      LibraryUpdatePhase.applying => 'מחיל עדכון DB',
+      LibraryUpdatePhase.applying => _applyStageMessage(p.stage),
       LibraryUpdatePhase.refreshing => 'מרענן ספרייה',
       LibraryUpdatePhase.done => 'מסיים',
     };
@@ -250,11 +245,6 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       LibraryUpdatePhase.refreshing => LibraryUpdateStatus.refreshing,
       _ => LibraryUpdateStatus.checking,
     };
-    // אבחון זמני: מתעד מעבר שלב (לא כל chunk של הורדה).
-    if (status != state.status) {
-      debugPrint('[LibraryUpdate] phase -> ${p.phase} '
-          '(step ${p.stepIndex + 1}/${p.totalSteps})');
-    }
     emit(state.copyWith(
       status: status,
       message: message,
@@ -264,6 +254,19 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       bytesTotal: p.bytesTotal,
     ));
   }
+
+  // ממפה את תת-שלבי ה-apply (מ-PatchApplier.onStage) להודעות קריאות למשתמש.
+  String _applyStageMessage(String? stage) => switch (stage) {
+        'preflight' => 'בודק תאימות גרסה',
+        'verifyFromHash' => 'מאמת את הספרייה הנוכחית',
+        'attach' => 'מכין את העדכון',
+        'migrations' => 'מעדכן מבנה נתונים',
+        'upserts' => 'מוסיף ומעדכן רשומות',
+        'deletes' => 'מסיר רשומות שהוסרו',
+        'verifyToHash' => 'מאמת את הספרייה המעודכנת',
+        'commit' => 'שומר שינויים',
+        _ => 'מחיל עדכון',
+      };
 
   String _formatSize(int bytes) {
     if (bytes >= 1 << 30) {
@@ -275,7 +278,7 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     return '${(bytes / (1 << 10)).toStringAsFixed(0)}KB';
   }
 
-  // אבחון זמני: מדפיס את השגיאה ל-console וגם שומר ל-errors.txt לקריאה חוזרת.
+  // ה-UI מציג שגיאת עדכון גנרית בלבד; שומרים את הפרטים ל-errors.txt לאבחון.
   void _logUpdateError(String stage, Object e, StackTrace st) {
     debugPrint('[LibraryUpdate] ERROR in $stage: $e\n$st');
     try {
