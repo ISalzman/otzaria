@@ -1551,7 +1551,7 @@ void main() {
             tooltip: 'העתק קישור ישיר',
             icon: FluentIcons.link_24_regular,
             submenuBuilder: () => [
-              AppContextMenuEntry(
+              AppContextMenuSubAction(
                 label: 'העתק קישור למקטע',
                 onTap: () => optionTapped = true,
               ),

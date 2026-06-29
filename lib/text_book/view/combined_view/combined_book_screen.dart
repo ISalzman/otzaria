@@ -781,7 +781,7 @@ class _CombinedViewState extends State<CombinedView> {
           AppContextMenuIconAction(
             label: 'קישור',
             icon: FluentIcons.link_24_regular,
-            submenuBuilder: () => buildDirectLinkContextMenuEntries(
+            submenuBuilder: () => buildDirectLinkSubmenuActions(
               bookId: state.book.id!,
               index: paragraphIndex,
               selectedText: selectedText,

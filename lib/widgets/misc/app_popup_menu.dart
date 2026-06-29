@@ -62,7 +62,7 @@ class AppContextMenuIconAction {
   final bool enabled;
 
   /// כשמוגדר, האייקון פותח תת-תפריט (עם חץ למטה) במקום פעולה ישירה.
-  final List<AppContextMenuEntry> Function()? submenuBuilder;
+  final List<AppContextMenuSubAction> Function()? submenuBuilder;
 
   const AppContextMenuIconAction({
     required this.icon,
@@ -71,6 +71,23 @@ class AppContextMenuIconAction {
     this.onTap,
     this.enabled = true,
     this.submenuBuilder,
+  });
+}
+
+/// פריט פעולה פשוט בתת-תפריט של כפתור אייקון בשורה העליונה.
+/// מכיל בדיוק את מה שתת-התפריט מרנדר — בלי divider/trailing/קינון של
+/// [AppContextMenuEntry] שלא נתמכים שם.
+class AppContextMenuSubAction {
+  final String label;
+  final IconData? icon;
+  final bool enabled;
+  final VoidCallback? onTap;
+
+  const AppContextMenuSubAction({
+    required this.label,
+    this.icon,
+    this.enabled = true,
+    this.onTap,
   });
 }
 
