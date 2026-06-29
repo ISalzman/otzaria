@@ -244,7 +244,7 @@ class LibraryUpdateRepository implements LibraryUpdateService {
       onProgress?.call(
           const LibraryUpdateProgress(phase: LibraryUpdatePhase.verifying));
       // האימות הכבד (quick_check על ~5.5GB) רץ ב-isolate כדי לא לחסום UI.
-      await Isolate.run(() => _verifyFullDb(newDbPath, plan.targetVersion));
+      await _verifyFullDbInIsolate(newDbPath, plan.targetVersion);
       _throwIfCancelled(isCancelled);
 
       // מכאן ואילך אין ביטול — ה-DB מוחלף אטומית.
@@ -336,13 +336,12 @@ class LibraryUpdateRepository implements LibraryUpdateService {
           toVersion: step.toVersion,
           timestamp: nowTimestamp(),
         );
-        final manifest = step.manifest;
-        await Isolate.run(() => const PatchApplier().apply(
-              dbPath: dbPath,
-              patchPath: patchPath,
-              manifest: manifest,
-              verifyFromHash: verifyFromHash,
-            ));
+        await _applyPatchInIsolate(
+          dbPath: dbPath,
+          patchPath: patchPath,
+          manifest: step.manifest,
+          verifyFromHash: verifyFromHash,
+        );
         recovery.finishSuccess(dbPath);
       } catch (_) {
         await recovery.rollback(dbPath);
@@ -351,6 +350,30 @@ class LibraryUpdateRepository implements LibraryUpdateService {
         await SqliteDataProvider.instance.reopenAfterExternalWrite();
       }
     });
+  }
+
+  // חייב להיות static: closure ב-Isolate.run בתוך מתודת instance לוכד את `this`,
+  // ו-`this` מחזיק PatchDownloader עם HttpClient לא-sendable → ה-spawn נכשל.
+  static Future<void> _applyPatchInIsolate({
+    required String dbPath,
+    required String patchPath,
+    required DeltaManifest manifest,
+    required bool verifyFromHash,
+  }) {
+    return Isolate.run(() => const PatchApplier().apply(
+          dbPath: dbPath,
+          patchPath: patchPath,
+          manifest: manifest,
+          verifyFromHash: verifyFromHash,
+        ));
+  }
+
+  // static מאותה סיבה כמו [_applyPatchInIsolate] — מונע לכידת `this`.
+  static Future<void> _verifyFullDbInIsolate(
+    String newDbPath,
+    int? expectedVersion,
+  ) {
+    return Isolate.run(() => _verifyFullDb(newDbPath, expectedVersion));
   }
 
   void _deleteQuietly(String path) {
