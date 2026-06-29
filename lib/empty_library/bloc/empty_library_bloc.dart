@@ -11,6 +11,7 @@ import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
+import 'package:otzaria/search/magic_dictionary_downloader.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/download_eta_estimator.dart';
 import 'package:otzaria/utils/file/zip_extractor_service.dart';
@@ -747,6 +748,10 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       // ניקוי override Android — ה-DB החדש נמצא ישירות בספרייה
       await Settings.setValue(SettingsRepository.keyDbEffectivePath, '');
 
+      // שלב 3 — הורדת מילון המורפולוגיה (lexical.db) לחיפוש המקורב. רץ אחרי
+      // שמירת keyLibraryPath כי נתיב היעד נגזר ממנו (getMagicDictionaryPath).
+      await _downloadMagicDictionary(emit);
+
       emit(EmptyLibraryDirectorySelected(selectedPath: libraryPath));
     } catch (e) {
       // קבצי ה-temp נשמרים בכוונה — ישמשו ל-resume בניסיון הבא
@@ -754,6 +759,26 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         errorMessage:
             'שגיאה בהורדה: $e\nניתן ללחוץ שוב כדי להמשיך מהנקודה שנעצרה.',
       ));
+    }
+  }
+
+  /// מוריד את מילון המורפולוגיה (`lexical.db`) דרך [MagicDictionaryDownloader].
+  /// best-effort: כשל אינו עוצר את כניסת המשתמש לספרייה — החיפוש המקורב פשוט
+  /// יפעל ללא הרחבה מורפולוגית. משתף את ה-http client של ה-bloc (לא נסגר
+  /// ב-dispose כי הבעלות נשארת אצל ה-bloc).
+  Future<void> _downloadMagicDictionary(Emitter<EmptyLibraryState> emit) async {
+    const message = 'מוריד מילון מורפולוגי לחיפוש המקורב';
+    emit(const EmptyLibraryDownloading(progress: 0.0, message: message));
+    final downloader = MagicDictionaryDownloader(client: _httpClient);
+    try {
+      await downloader.ensureLatest(
+        onProgress: (progress) =>
+            emit(EmptyLibraryDownloading(progress: progress, message: message)),
+      );
+    } catch (e) {
+      debugPrint('הורדת המילון המורפולוגי נכשלה: $e');
+    } finally {
+      downloader.dispose();
     }
   }
 

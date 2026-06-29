@@ -290,6 +290,8 @@ flutter build windows
 
 עבור עדכונים אוטומטיים, השתמשתי ב-[updat](https://pub.dev/packages/updat).
 
+Sefaria book conversion, the fuzzy search, and the library updates are powered by the technologies that drive Zayit — https://zayitapp.com/ (licensed under GNU AGPL v3).
+
 ([⇧](#readme-top))
 
 </div>

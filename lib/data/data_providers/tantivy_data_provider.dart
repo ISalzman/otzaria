@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_engine_gateway.dart';
+import 'package:otzaria/search/magic_dictionary_downloader.dart';
 import 'package:otzaria/core/app_paths.dart';
 
 /// A singleton class that manages search functionality using Tantivy search engine.
@@ -28,6 +29,7 @@ class TantivyDataProvider {
   /// Track if index is being reopened to prevent concurrent reopens
   bool _isReopening = false;
   DateTime? _lastReopenTime;
+  Future<bool>? _magicDictionaryDownload;
 
   static final TantivyDataProvider _singleton = TantivyDataProvider._internal();
   static TantivyDataProvider instance = _singleton;
@@ -117,6 +119,68 @@ class TantivyDataProvider {
     }
   }
 
+  /// טוען את מילון `lexical.db` (חיפוש מקורב) אל המנוע, אם הוא קיים.
+  /// פעולה best-effort: כשל או קובץ חסר אינם שוברים את אתחול המנוע —
+  /// החיפוש המקורב פשוט ימשיך ללא הרחבה מורפולוגית. מחזיר האם המילון נטען.
+  Future<bool> _attachMagicDictionary(SearchEngine engine) async {
+    try {
+      final dictPath = await AppPaths.getMagicDictionaryPath();
+      final loaded = engine.setMagicDictionaryPath(path: dictPath);
+      debugPrint(loaded
+          ? '🔤 מילון מורפולוגי נטען לחיפוש המקורב: $dictPath'
+          : 'ℹ️ אין מילון מורפולוגי ($dictPath) — חיפוש מקורב ללא הרחבה');
+      return loaded;
+    } catch (e) {
+      debugPrint('⚠️ טעינת המילון המורפולוגי נכשלה: $e');
+      return false;
+    }
+  }
+
+  /// האם החיפוש המקורב משתמש כרגע בהרחבה מורפולוגית (מילון טעון).
+  Future<bool> get hasMagicDictionary async =>
+      (await engine).hasMagicDictionary();
+
+  /// מוריד את מילון המורפולוגיה האחרון (אם חסר/ישן) וטוען אותו אל המנוע
+  /// החי, כך שהחיפוש המקורב יתחיל להשתמש בו מיד — בלי הפעלה מחדש.
+  ///
+  /// מחזיר `true` אם בסיום קיים מילון טעון. best-effort: כשל הורדה אינו
+  /// משפיע על שאר המנוע.
+  Future<bool> downloadMagicDictionary({
+    void Function(double progress)? onProgress,
+    bool force = false,
+  }) async {
+    final currentDownload = _magicDictionaryDownload;
+    if (currentDownload != null) return currentDownload;
+
+    final download = _downloadMagicDictionary(
+      onProgress: onProgress,
+      force: force,
+    );
+    _magicDictionaryDownload = download;
+    try {
+      return await download;
+    } finally {
+      if (identical(_magicDictionaryDownload, download)) {
+        _magicDictionaryDownload = null;
+      }
+    }
+  }
+
+  Future<bool> _downloadMagicDictionary({
+    void Function(double progress)? onProgress,
+    required bool force,
+  }) async {
+    final downloader = MagicDictionaryDownloader();
+    try {
+      final ok =
+          await downloader.ensureLatest(onProgress: onProgress, force: force);
+      if (!ok) return false;
+      return await _attachMagicDictionary(await engine);
+    } finally {
+      downloader.dispose();
+    }
+  }
+
   Future<SearchEngine> _initEngine() async {
     String? indexPath;
     File? sentinelFile;
@@ -172,6 +236,9 @@ class TantivyDataProvider {
       // If this CRASHES the process, the sentinel remains for next run.
       // If it throws an Exception, we catch it below.
       final engine = SearchEngine(path: indexPath);
+
+      // טעינת מילון מורפולוגי לחיפוש המקורב (best-effort, לא חוסם).
+      await _attachMagicDictionary(engine);
 
       // If we got here, success! Remove sentinel.
       try {
