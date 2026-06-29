@@ -232,6 +232,9 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     // התקדמות מריצה שבוטלה/הוחלפה — מתעלמים כדי לא לדרוס state חדש.
     if (_isStale(event.opId)) return;
     final p = event.progress;
+    // phase=done הוא רגע לפני שה-completed נפלט מ-_runDelta; ה-event מגיע בתור
+    // אחרי ה-completed, אז emit כאן ידרוס אותו וה-UI ייתקע ב'מסיים'.
+    if (p.phase == LibraryUpdatePhase.done) return;
     final message = switch (p.phase) {
       LibraryUpdatePhase.checking => 'בודק עדכוני ספרייה',
       LibraryUpdatePhase.downloading => 'מוריד עדכון ספרייה'

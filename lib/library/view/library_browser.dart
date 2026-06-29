@@ -842,6 +842,15 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             compact: compact,
             tooltip: tooltip,
             icon: icon,
+            // ספינר מסתובב בזמן עדכון — אינדיקציית פעילות רציפה (ticker עצמאי),
+            // כי בשלב ה-apply הארוך אין שינויי state שיבנו מחדש את הכפתור.
+            iconWidget: isBusy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                  )
+                : null,
             selected: isBusy,
             onPressed: () {
               final b = ctx.read<LibraryUpdateBloc>();
@@ -1217,7 +1226,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     }
     for (final sub in filteredSubs) {
       final isExpanded = _expandedCategories.contains(sub.path);
-      final subChildren = isExpanded ? _buildCategoryTree(sub, level + 1) : <Widget>[];
+      final subChildren =
+          isExpanded ? _buildCategoryTree(sub, level + 1) : <Widget>[];
       if (level == 0) {
         widgets.add(
           ExpandableCard(
