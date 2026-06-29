@@ -311,7 +311,9 @@ Future<void> _deleteWorkerEntryPoint(Map<String, Object?> payload) async {
   final userBooksDbPath = payload['userBooksDbPath'] as String;
   final folderPath = payload['folderPath'] as String;
 
-  final database = MyDatabase.withPath(dbPath);
+  // מחיקת תיקייה כותבת רק ל-user_books.db; seforim.db נפתח read-only כדי לא
+  // להפוך אותו ל-WAL ולא להריץ עליו DDL (CREATE TABLE) שמזהם את ה-DB הרשמי.
+  final database = MyDatabase.withPath(dbPath, readOnly: true);
   final repository = SeforimRepository(database);
   await repository.ensureInitialized();
 

@@ -1,23 +1,52 @@
-/// Constants for link connection types
+/// קבועים ועזרים לסיווג סוגי קישורים, בהתאם ל-14 הסוגים ב-seforim.db v3.
 class LinkTypes {
   LinkTypes._();
 
-  /// Commentary link type - indicates a commentary relationship
   static const String commentary = 'COMMENTARY';
-
-  /// Targum link type - indicates a translation/targum relationship
+  static const String superCommentary = 'SUPER_COMMENTARY';
   static const String targum = 'TARGUM';
-
-  /// Reference link type - indicates a general reference
   static const String reference = 'REFERENCE';
+  static const String source = 'SOURCE';
+  static const String midrash = 'MIDRASH';
+  static const String quotation = 'QUOTATION';
+  static const String mesoratHashas = 'MESORAT_HASHAS';
+  static const String einMishpat = 'EIN_MISHPAT';
+  static const String diburHamatchil = 'DIBUR_HAMATCHIL';
+  static const String parshanut = 'PARSHANUT';
+  static const String mishnahInTalmud = 'MISHNAH_IN_TALMUD';
+  static const String related = 'RELATED';
+  static const String other = 'OTHER';
 
-  /// Checks if a connection type is a commentary or targum
+  /// סוגי קישור תלויי-טקסט — טקסטים שתלויים בטקסט הבסיס (פירוש/תרגום/מדרש
+  /// וכד׳) ומוצגים בפאנל המפרשים. תואם את הסינון של היוצר ל-SOURCE ההפוך.
+  static const Set<String> dependentTextTypes = {
+    commentary,
+    superCommentary,
+    targum,
+    midrash,
+    parshanut,
+    diburHamatchil,
+    einMishpat,
+  };
+
+  /// האם הקישור הוא תלוי-טקסט (מפרש) — מוצג בפאנל המפרשים ולא כהפניה צדדית.
   ///
-  /// ההשוואה אינה תלוית רישיות — חלק ממקורות הנתונים עשויים לספק
-  /// 'commentary'/'targum' באותיות קטנות (כפי שקורה גם בטסטים).
-  static bool isCommentaryOrTargum(String? connectionType) {
+  /// ההשוואה אינה תלוית רישיות — חלק ממקורות הנתונים עשויים לספק ערכים
+  /// באותיות קטנות (כפי שקורה גם בטסטים).
+  static bool isDependentTextLink(String? connectionType) {
+    if (connectionType == null) return false;
+    return dependentTextTypes.contains(connectionType.toUpperCase());
+  }
+
+  /// האם הקישור הוא קשר עיון/הפניה (לא מפרש ולא SOURCE הווירטואלי):
+  /// reference, quotation, mesorat hashas, mishnah in talmud, related, other.
+  static bool isReferenceLikeLink(String? connectionType) {
     if (connectionType == null) return false;
     final upper = connectionType.toUpperCase();
-    return upper == commentary || upper == targum;
+    return upper != source && !dependentTextTypes.contains(upper);
   }
+
+  /// `SOURCE` הוא קשר וירטואלי שנבנה בשאילתת inverse ואינו נשמר כשורת link.
+  static bool isVirtualSource(String? connectionType) =>
+      connectionType?.toUpperCase() == source;
 }

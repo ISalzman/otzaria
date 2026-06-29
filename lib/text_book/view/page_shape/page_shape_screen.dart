@@ -1352,7 +1352,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     _relevantLinks = state.links.where((link) {
       final linkTitle = utils.getTitleFromPath(link.path2);
       return linkTitle == widget.commentatorName &&
-          LinkTypes.isCommentaryOrTargum(link.connectionType);
+          LinkTypes.isDependentTextLink(link.connectionType);
     }).toList();
   }
 

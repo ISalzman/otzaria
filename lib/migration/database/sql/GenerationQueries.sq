@@ -8,6 +8,3 @@ SELECT * FROM generation WHERE id = ? LIMIT 1;
 
 selectByName:
 SELECT * FROM generation WHERE name = ? LIMIT 1;
-
-selectChildren:
-SELECT * FROM generation WHERE parentGenerationId = ? ORDER BY name;

@@ -7,6 +7,7 @@ import 'package:otzaria/migration/models/category.dart';
 import 'package:otzaria/migration/database/daos/database.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/sync/background_db_sync_worker.dart';
+import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:path/path.dart' as p;
 
@@ -130,6 +131,43 @@ void main() {
       final books = await userBooksRepository.getBooksByCategory(folderCat!.id);
       expect(books.first.isFileBacked, isTrue,
           reason: 'addToDatabase=false → ספר חיצוני');
+    });
+
+    test(
+        'סנכרון תיקייה פעמיים אינו מכפיל ספר '
+        '(existence check מול user_books, לא seforim)', () async {
+      final folderPath = await makeFolder('תיקייה-dup', 'ספר-dup');
+      final folders = [
+        CustomFolder(
+            path: folderPath,
+            addToDatabase: true,
+            addedAt: DateTime(2026, 1, 1)),
+      ];
+
+      await runCustomFoldersDbSyncInIsolate(
+        dbPath: dbPath,
+        userBooksDbPath: userBooksDbPath,
+        libraryPath: libPath(),
+        customFolders: folders,
+      );
+      // סנכרון שני: ה-existence check חייב למצוא את הספר ב-user_books ולא
+      // להוסיף כפיל (לפני התיקון הבדיקה פנתה ל-seforim ולא מצאה אותו).
+      await runCustomFoldersDbSyncInIsolate(
+        dbPath: dbPath,
+        userBooksDbPath: userBooksDbPath,
+        libraryPath: libPath(),
+        customFolders: folders,
+      );
+
+      final personalCat = (await userBooksRepository.getRootCategories())
+          .firstWhere((c) => c.title == 'ספרים אישיים');
+      final folderCat = await userBooksRepository.getCategoryByTitleAndParent(
+        p.basename(folderPath),
+        personalCat.id,
+      );
+      final books = await userBooksRepository.getBooksByCategory(folderCat!.id);
+      expect(books, hasLength(1),
+          reason: 'סנכרון חוזר לא מכפיל — הספר נמצא דרך user_books');
     });
 
     test('שתי תיקיות באותו worker: שני ספרים נוצרים', () async {
@@ -301,6 +339,58 @@ void main() {
 
       expect(await userBooksRepository.getCategory(personalCatId), isNull,
           reason: '"ספרים אישיים" ריקה — חייבת להינקות');
+    });
+
+    test(
+        'מחיקת תיקייה מצליחה גם כש-seforim.db פתוח read-only '
+        '(חוזה: המחיקה לא כותבת ל-DB הרשמי)', () async {
+      // seforim.db read-only: יוצרים סכמה, ממירים ל-DELETE (תנאי לפתיחת RO),
+      // וסוגרים. אם המחיקה תנסה לכתוב לשם — החיבור ה-RO יזרוק.
+      final roPath = p.join(tempDir.path, 'seforim_ro.db');
+      final tmpDb = MyDatabase.withPath(roPath);
+      final tmpRepo = SeforimRepository(tmpDb);
+      await tmpRepo.ensureInitialized();
+      await tmpRepo.setJournalMode('DELETE');
+      tmpDb.close();
+
+      final roDb = MyDatabase.withPath(roPath, readOnly: true);
+      final roRepo = SeforimRepository(roDb);
+      await roRepo.ensureInitialized();
+
+      // ספר אישי לתיקייה 'ro' ב-user_books (כתיב).
+      final personalCatId = await userBooksRepository
+          .insertCategory(const Category(title: 'ספרים אישיים'));
+      final folderCatId = await userBooksRepository.insertCategory(
+        Category(title: 'תיקיית-ro', parentId: personalCatId, level: 1),
+      );
+      final sourceId =
+          await userBooksRepository.insertSource('Personal::ro', -1);
+      await userBooksRepository.insertBook(
+        Book(
+          id: 0,
+          categoryId: folderCatId,
+          sourceId: sourceId,
+          title: 'ספר ro',
+          isPersonal: true,
+          fileType: 'txt',
+        ),
+      );
+      await userBooksRepository.rebuildCategoryClosure();
+
+      final service = FileSyncService.createForWorker(
+        roRepo,
+        userBooksRepository: userBooksRepository,
+      );
+
+      try {
+        // לא אמור לזרוק — כל הכתיבה ל-user_books בלבד.
+        await service.deleteFolderFromDatabase('ro');
+
+        expect(await userBooksRepository.getCategory(folderCatId), isNull,
+            reason: 'ספרי התיקייה נמחקו מ-user_books');
+      } finally {
+        roDb.close();
+      }
     });
   });
 

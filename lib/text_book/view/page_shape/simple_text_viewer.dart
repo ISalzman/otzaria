@@ -1170,7 +1170,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       }
       final sortedLinks = CommentaryService.sortLinksByEraSync(lineLinks
           .where((link) =>
-              !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+              !LinkTypes.isDependentTextLink(link.connectionType) &&
               link.start == null &&
               link.end == null)
           .toList());
@@ -1191,7 +1191,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
 
     final hasLinkItems = lineLinks.any((link) =>
-        !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+        !LinkTypes.isDependentTextLink(link.connectionType) &&
         link.start == null &&
         link.end == null);
 
