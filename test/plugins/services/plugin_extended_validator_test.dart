@@ -292,6 +292,97 @@ void main() {
       );
     });
 
+    test(
+        'every known API method has a required-permission mapping '
+        '(except the runtime-ungated fs ops)', () {
+      // שומר מפני רגרסיה: כל API שנוסף ל-knownApiMethods חייב להופיע גם
+      // ב-methodRequiredPermissions, אלא אם ה-runtime לא דורש עבורו הרשאה.
+      // fs.extractZip/deleteFile מגודרים ע"י ui.pickFolder, לא ע"י manifest.
+      const noManifestPermission = {'fs.extractZip', 'fs.deleteFile'};
+      final missing = PluginExtendedValidator.knownApiMethods
+          .where((m) => !noManifestPermission.contains(m))
+          .where((m) =>
+              !PluginExtendedValidator.methodRequiredPermissions.containsKey(m))
+          .toList();
+      expect(missing, isEmpty,
+          reason: 'APIs ללא מיפוי הרשאה — יעברו אריזה אך ייכשלו ב-runtime: '
+              '$missing');
+    });
+
+    test('warns when library.getTree is used without library.books.read', () {
+      final report = _runOn(
+        tempDir,
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('library.getTree', {});",
+        },
+      );
+      expect(
+        report.warnings.any((w) =>
+            w.contains('library.getTree') && w.contains('library.books.read')),
+        isTrue,
+      );
+    });
+
+    test('warns when ui.pickFolder is used without ui.feedback', () {
+      final report = _runOn(
+        tempDir,
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('ui.pickFolder', {});",
+        },
+      );
+      expect(
+        report.warnings.any(
+            (w) => w.contains('ui.pickFolder') && w.contains('ui.feedback')),
+        isTrue,
+      );
+    });
+
+    test('warns when personal-file APIs are used without fs.user_files.read',
+        () {
+      final report = _runOn(
+        tempDir,
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('fs.pickUserFile', {});"
+              "Otzaria.call('fs.resolveFileUrl', {});"
+              "Otzaria.call('fs.readTextFile', {});"
+              "Otzaria.call('fs.revokeFile', {});",
+        },
+      );
+      for (final method in const [
+        'fs.pickUserFile',
+        'fs.resolveFileUrl',
+        'fs.readTextFile',
+        'fs.revokeFile',
+      ]) {
+        expect(
+          report.warnings.any(
+              (w) => w.contains(method) && w.contains('fs.user_files.read')),
+          isTrue,
+          reason: '$method חייב לדרוש את fs.user_files.read',
+        );
+      }
+    });
+
+    test('no warning for personal-file APIs when fs.user_files.read declared',
+        () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride:
+            _baseManifest(permissions: const ['fs.user_files.read']),
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('fs.readTextFile', {});",
+        },
+      );
+      expect(
+        report.warnings.any((w) => w.contains('fs.user_files.read')),
+        isFalse,
+      );
+    });
+
     test('shorthand `Otzaria.app.getInfo()` is detected as API usage', () {
       final report = _runOn(
         tempDir,
