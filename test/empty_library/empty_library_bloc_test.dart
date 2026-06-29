@@ -370,8 +370,12 @@ void main() {
         lessThan(0.5),
       );
 
-      // ההתקדמות לא יורדת לאורך כל ההורדה, ומגיעה ל-100% בסוף.
-      final progresses = downloading.map((s) => s.progress).toList();
+      // ההתקדמות לא יורדת לאורך הורדת הספרייה, ומגיעה ל-100% בסוף. הורדת
+      // המילון המורפולוגי היא שלב נפרד שפותח פס חדש מ-0, מחוץ לפס המאוחד.
+      final progresses = downloading
+          .where((s) => !s.message.contains('מילון מורפולוגי'))
+          .map((s) => s.progress)
+          .toList();
       for (var i = 1; i < progresses.length; i++) {
         expect(progresses[i], greaterThanOrEqualTo(progresses[i - 1]));
       }
