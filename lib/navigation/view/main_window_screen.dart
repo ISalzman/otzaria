@@ -418,9 +418,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
         .every((m) => settingsState.hiddenBuiltInToolIds.contains(m.toolId));
     if (!allBuiltInsHidden) return false;
     if (pluginState is! PluginSystemLoaded) return true;
-    return pluginState.plugins
-        .where((p) => p.enabled && p.showInTools)
-        .isEmpty;
+    return pluginState.plugins.where((p) => p.enabled && p.showInTools).isEmpty;
   }
 
   /// אינדקס "הגדרות" בפועל בתוך ה-bar destinations, בהתחשב בהסתרת כלים.
@@ -2342,6 +2340,29 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 ));
               } else {
                 cubit.remove('indexing');
+              }
+            },
+          ),
+          BlocListener<LibraryUpdateBloc, LibraryUpdateState>(
+            listenWhen: (previous, current) =>
+                previous.status != current.status ||
+                previous.message != current.message ||
+                previous.bytesDownloaded != current.bytesDownloaded,
+            listener: (context, state) {
+              final cubit = context.read<WorkStatusCubit>();
+              if (state.isBusy) {
+                final total = state.bytesTotal ?? 0;
+                final progress = total > 0
+                    ? ((state.bytesDownloaded ?? 0) / total).clamp(0.0, 1.0)
+                    : null;
+                cubit.upsert(WorkStatusItem(
+                  id: 'library_update',
+                  title: 'עדכון ספרייה',
+                  message: state.message,
+                  progress: progress,
+                ));
+              } else {
+                cubit.remove('library_update');
               }
             },
           ),

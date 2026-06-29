@@ -30,12 +30,16 @@ class LibraryUpdateProgress {
   final int? bytesDownloaded;
   final int? bytesTotal;
 
+  /// תת-שלב גולמי בתוך ה-apply (מ-`PatchApplier.onStage`), לתצוגה מפורטת.
+  final String? stage;
+
   const LibraryUpdateProgress({
     required this.phase,
     this.stepIndex = 0,
     this.totalSteps = 0,
     this.bytesDownloaded,
     this.bytesTotal,
+    this.stage,
   });
 }
 
@@ -180,6 +184,12 @@ class LibraryUpdateRepository implements LibraryUpdateService {
           patchPath: patchPath,
           step: step,
           verifyFromHash: i == 0,
+          onStage: (stage) => onProgress?.call(LibraryUpdateProgress(
+            phase: LibraryUpdatePhase.applying,
+            stepIndex: i,
+            totalSteps: steps.length,
+            stage: stage,
+          )),
         );
       } finally {
         _deleteQuietly(patchPath); // מנקה גם בכשל apply, לא רק בהצלחה.
@@ -326,6 +336,7 @@ class LibraryUpdateRepository implements LibraryUpdateService {
     required String patchPath,
     required PatchEdge step,
     required bool verifyFromHash,
+    void Function(String stage)? onStage,
   }) {
     return DatabaseLibraryProvider.operationQueue.enqueue(() async {
       await SqliteDataProvider.instance.closeForExternalWrite();
@@ -341,6 +352,7 @@ class LibraryUpdateRepository implements LibraryUpdateService {
           patchPath: patchPath,
           manifest: step.manifest,
           verifyFromHash: verifyFromHash,
+          onStage: onStage,
         );
         recovery.finishSuccess(dbPath);
       } catch (_) {
@@ -352,19 +364,52 @@ class LibraryUpdateRepository implements LibraryUpdateService {
     });
   }
 
-  // חייב להיות static: closure ב-Isolate.run בתוך מתודת instance לוכד את `this`,
-  // ו-`this` מחזיק PatchDownloader עם HttpClient לא-sendable → ה-spawn נכשל.
+  // מאזין לתת-שלבי ה-apply דרך ReceivePort ומעביר ל-onStage (רץ ב-main isolate).
+  // ה-onStage עצמו אסור שייכנס ל-scope של ה-Isolate.run (ראה [_runApplyIsolate]).
   static Future<void> _applyPatchInIsolate({
     required String dbPath,
     required String patchPath,
     required DeltaManifest manifest,
     required bool verifyFromHash,
+    void Function(String stage)? onStage,
+  }) async {
+    final port = ReceivePort();
+    final sub = port.listen((msg) {
+      if (msg is String) onStage?.call(msg);
+    });
+    try {
+      await _runApplyIsolate(
+        dbPath: dbPath,
+        patchPath: patchPath,
+        manifest: manifest,
+        verifyFromHash: verifyFromHash,
+        sendPort: port.sendPort,
+      );
+    } finally {
+      await sub.cancel();
+      port.close();
+    }
+  }
+
+  // ה-Isolate.run מבודד כאן: closure לוכד את כל ה-scope של המתודה (גם פרמטרים
+  // שאינם בשימוש), לכן המתודה מקבלת *רק* ערכים sendable. onStage/onProgress
+  // נשארים ב-caller — אחרת הם גוררים את ה-bloc הלא-sendable ל-spawn.
+  static Future<void> _runApplyIsolate({
+    required String dbPath,
+    required String patchPath,
+    required DeltaManifest manifest,
+    required bool verifyFromHash,
+    required SendPort sendPort,
   }) {
     return Isolate.run(() => const PatchApplier().apply(
           dbPath: dbPath,
           patchPath: patchPath,
           manifest: manifest,
           verifyFromHash: verifyFromHash,
+          // checkForeignKeys=false: verifyToHash מאמת את כל 28 הטבלאות (וכל ה-FK
+          // שביניהן) מול ה-DB התקין, אז התאמת hash כבר שוללת הפרות FK — חוסך ~60ש.
+          checkForeignKeys: false,
+          onStage: (stage) => sendPort.send(stage),
         ));
   }
 

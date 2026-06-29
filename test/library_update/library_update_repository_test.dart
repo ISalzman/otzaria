@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
@@ -104,6 +105,43 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );
+
+  test(
+    'applyDeltaPlan: ה-apply ב-isolate אינו לוכד את ה-downloader הלא-sendable',
+    () async {
+      final dbPath = p.join(tmp.path, DatabaseConstants.databaseFileName);
+      _writeDb(dbPath, version: 1, marker: 'old');
+
+      // downloader עם http.Client אמיתי (IOClient — לא-sendable, כמו בייצור),
+      // אך מחזיר patch מקומי בלי רשת.
+      final downloader = _LocalPatchDownloader(p.join(tmp.path, 'patch.db'));
+      final repository = LibraryUpdateRepository(
+        discovery: _unusedDiscovery(),
+        downloader: downloader,
+        refreshService: _NoopRefreshService(),
+        dbPathProvider: () => dbPath,
+        dataRootProvider: () async => tmp.path,
+        nowTimestamp: () => '2026-06-28T00:00:00Z',
+      );
+
+      // onProgress שלוכד Completer לא-sendable — מדמה את ה-bloc האמיתי, שלוכד
+      // _Emitter/_AsyncCompleter ב-onProgress. שני מקורות לא-sendable נבדקים
+      // יחד: ה-repository (HttpClient) וה-onProgress (Completer).
+      final emitterLike = Completer<void>();
+
+      // רגרסיה: לפני התיקון ה-spawn נכשל ב-ArgumentError "object is unsendable"
+      // (ה-closure לכד את ה-repository או את onStage→onProgress). אחרי התיקון
+      // ה-apply רץ ב-isolate ומגיע ל-verifyFromHash → PatchApplyException.
+      await expectLater(
+        repository.applyDeltaPlan(
+          _deltaPlan(),
+          onProgress: (_) => emitterLike.future.ignore(),
+        ),
+        throwsA(isA<PatchApplyException>()),
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
 }
 
 LibraryUpdateDiscovery _unusedDiscovery() {
@@ -178,4 +216,52 @@ class _NoopRefreshService extends LibraryRuntimeRefreshService {
   Future<void> refreshAfterDbUpdate() async {
     called = true;
   }
+}
+
+/// downloader עם http.Client אמיתי (IOClient לא-sendable), שמחזיר patch מקומי.
+class _LocalPatchDownloader extends PatchDownloader {
+  _LocalPatchDownloader(this.patchPath) : super(decompress: (b) async => b);
+  final String patchPath;
+
+  @override
+  Future<String> downloadAndExtract({
+    required PatchFileEntry patchFile,
+    required String downloadUrl,
+    required Directory destDir,
+    void Function(int downloaded, int? total)? onProgress,
+    bool Function()? isCancelled,
+  }) async =>
+      patchPath;
+}
+
+LibraryUpdatePlan _deltaPlan() {
+  final manifest = DeltaManifest.fromJson({
+    'fromVersion': 1,
+    'toVersion': 2,
+    'fromSchemaVersion': 1,
+    'toSchemaVersion': 1,
+    'fromContentHash': 'deadbeef',
+    'toContentHash': 'cafef00d',
+    'patchFiles': [
+      {
+        'file': 'patch.db.zst',
+        'compression': 'zstd',
+        'sha256': 'aa',
+        'size': 1,
+        'uncompressedSha256': 'bb',
+        'uncompressedSize': 1,
+      }
+    ],
+  });
+  return LibraryUpdatePlan.delta(
+    localVersion: 1,
+    targetVersion: 2,
+    steps: [
+      PatchEdge(
+        manifest: manifest,
+        patchFileUrls: const {'patch.db.zst': 'https://x/patch.db.zst'},
+        manifestUrl: 'https://x/manifest.json',
+      ),
+    ],
+  );
 }
