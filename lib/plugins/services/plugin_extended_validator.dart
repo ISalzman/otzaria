@@ -149,6 +149,7 @@ const Map<String, String> _methodRequiredPermission = {
   'library.findBooks': 'library.books.read',
   'library.getBookMetadata': 'library.books.read',
   'library.listRecentBooks': 'library.books.read',
+  'library.getTree': 'library.books.read',
   'library.getBookContent': 'library.content.read',
   'library.getBookToc': 'library.content.read',
   'search.fullText': 'search.fulltext.read',
@@ -174,6 +175,13 @@ const Map<String, String> _methodRequiredPermission = {
   'ui.showError': 'ui.feedback',
   'ui.showConfirm': 'ui.feedback',
   'ui.showWarning': 'ui.feedback',
+  'ui.pickFolder': 'ui.feedback',
+  // fs.extractZip/deleteFile מכוונים בכוונה לא להופיע כאן — ה-runtime לא דורש
+  // עבורם הרשאת manifest (הם מגודרים ע"י תיקייה שנבחרה ב-ui.pickFolder).
+  'fs.pickUserFile': 'fs.user_files.read',
+  'fs.resolveFileUrl': 'fs.user_files.read',
+  'fs.readTextFile': 'fs.user_files.read',
+  'fs.revokeFile': 'fs.user_files.read',
   'feedback.sendEmail': 'feedback.send_email',
   'history.list': 'history.read',
   'history.listSearches': 'history.read',
@@ -320,6 +328,10 @@ class PluginExtendedValidator {
 
   @visibleForTesting
   static Set<String> get knownApiMethods => _knownApiMethods;
+
+  @visibleForTesting
+  static Map<String, String> get methodRequiredPermissions =>
+      Map.unmodifiable(_methodRequiredPermission);
 
   /// מבצע ולידציה מורחבת על תיקיית התוסף.
   ///
