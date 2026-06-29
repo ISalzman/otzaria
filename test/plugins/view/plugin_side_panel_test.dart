@@ -103,6 +103,19 @@ class _StaticPluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState>
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
+/// כמו [_StaticPluginSystemBloc] אך מתעד את האירועים שנשלחו, לאימות פעולות.
+class _RecordingPluginSystemBloc
+    extends Bloc<PluginSystemEvent, PluginSystemState>
+    implements PluginSystemBloc {
+  final List<PluginSystemEvent> recorded = [];
+  _RecordingPluginSystemBloc(super.initial) {
+    on<PluginSystemEvent>((event, _) => recorded.add(event));
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
 Widget _wrap({
   required PluginSystemBloc pluginBloc,
   required SettingsBloc settingsBloc,
@@ -281,8 +294,7 @@ void main() {
 
     // Step 2: Simulate dialog confirmation — dispatch ConfirmDevPluginInstall
     // with the manifest the BLoC already fetched and stored in the state.
-    final permState =
-        bloc.state as PluginSystemDevInstallRequiresPermissions;
+    final permState = bloc.state as PluginSystemDevInstallRequiresPermissions;
 
     final loadedExpectation = expectLater(
       bloc.stream,
@@ -405,7 +417,8 @@ void main() {
 
       expect(find.text('תוסף גלוי'), findsOneWidget);
       expect(find.text('תוסף לא בכלים'), findsOneWidget,
-          reason: 'showInTools only hides from tools screen, not from side panel');
+          reason:
+              'showInTools only hides from tools screen, not from side panel');
     });
   });
 
@@ -440,6 +453,51 @@ void main() {
     test('מחזיר false כאשר manifest.networkEnabled=false', () {
       final plugin = _pluginFor(id: 'a', name: 'A');
       expect(plugin.requiresNetwork, isFalse);
+    });
+  });
+
+  group('תפריט פעולות', () {
+    testWidgets('פתיחת התפריט מציגה את כל הפעולות', (tester) async {
+      final pluginBloc = _StaticPluginSystemBloc(
+          PluginSystemLoaded([_pluginFor(id: 'a', name: 'תוסף א')]));
+      addTearDown(pluginBloc.close);
+
+      await tester.pumpWidget(_wrap(
+        pluginBloc: pluginBloc,
+        settingsBloc: _FakeSettingsBloc(),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('פעולות'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ניהול הרשאות'), findsOneWidget);
+      expect(find.text('הצמד לסרגל הניווט'), findsOneWidget);
+      expect(find.text('הסתר מהממשק'), findsOneWidget);
+      expect(find.text('השבת'), findsOneWidget);
+      expect(find.text('מחק תוסף'), findsOneWidget);
+    });
+
+    testWidgets('לחיצה על "השבת" שולחת DisablePluginRequested', (tester) async {
+      final pluginBloc = _RecordingPluginSystemBloc(
+          PluginSystemLoaded([_pluginFor(id: 'a', name: 'תוסף א')]));
+      addTearDown(pluginBloc.close);
+
+      await tester.pumpWidget(_wrap(
+        pluginBloc: pluginBloc,
+        settingsBloc: _FakeSettingsBloc(),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('פעולות'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('השבת'));
+      await tester.pumpAndSettle();
+
+      expect(
+        pluginBloc.recorded.whereType<DisablePluginRequested>().single.pluginId,
+        'a',
+      );
     });
   });
 
@@ -489,6 +547,5 @@ void main() {
       expect(find.text('B'), findsOneWidget);
       expect(find.text('C'), findsOneWidget);
     });
-
   });
 }

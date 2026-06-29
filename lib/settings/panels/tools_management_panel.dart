@@ -10,6 +10,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
+import 'package:otzaria/plugins/view/plugin_actions.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
@@ -167,37 +168,6 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
     context.read<SettingsBloc>().add(UpdateBuiltInToolsPinnedToNavRail(next));
   }
 
-  // ── פעולות תוסף בודד (לחצן בשורה) ───────────────────────────────────────────
-
-  void _togglePluginHide(InstalledPlugin plugin) {
-    context.read<PluginSystemBloc>().add(SetPluginShowInToolsRequested(
-          pluginId: plugin.pluginId,
-          showInTools: !plugin.showInTools,
-        ));
-  }
-
-  void _togglePluginPinNavRail(InstalledPlugin plugin) {
-    final bloc = context.read<PluginSystemBloc>();
-    if (plugin.pinnedToNavRail) {
-      bloc.add(UnpinPluginFromNavRailRequested(plugin.pluginId));
-    } else {
-      bloc.add(PinPluginToNavRailRequested(plugin.pluginId));
-    }
-  }
-
-  void _togglePluginEnabled(InstalledPlugin plugin) {
-    final bloc = context.read<PluginSystemBloc>();
-    if (plugin.enabled) {
-      bloc.add(DisablePluginRequested(plugin.pluginId));
-    } else {
-      bloc.add(EnablePluginRequested(plugin.pluginId));
-    }
-  }
-
-  Future<void> _deletePlugin(InstalledPlugin plugin) async {
-    await showDeletePluginDialog(context, plugin);
-  }
-
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<PluginSystemBloc, PluginSystemState>(
@@ -344,10 +314,11 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
               sourcePluginId: sourceId,
               targetPluginId: plugins[i].pluginId,
             ),
-            onToggleHide: () => _togglePluginHide(plugins[i]),
-            onTogglePinNavRail: () => _togglePluginPinNavRail(plugins[i]),
-            onToggleEnabled: () => _togglePluginEnabled(plugins[i]),
-            onDelete: () => _deletePlugin(plugins[i]),
+            onToggleHide: () => togglePluginShowInTools(context, plugins[i]),
+            onTogglePinNavRail: () =>
+                togglePluginPinnedToNavRail(context, plugins[i]),
+            onToggleEnabled: () => togglePluginEnabled(context, plugins[i]),
+            onDelete: () => showDeletePluginDialog(context, plugins[i]),
           ),
         ),
     ];
@@ -382,15 +353,7 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
     required String sourcePluginId,
     required String targetPluginId,
   }) {
-    final sourceIdx =
-        allPlugins.indexWhere((p) => p.pluginId == sourcePluginId);
-    final targetIdx =
-        allPlugins.indexWhere((p) => p.pluginId == targetPluginId);
-    if (sourceIdx < 0 || targetIdx < 0) return;
-    final reordered = List.of(allPlugins);
-    final src = reordered.removeAt(sourceIdx);
-    reordered.insert(targetIdx, src);
-    final ids = reordered.map((p) => p.pluginId).toList();
+    final ids = reorderedPluginIds(allPlugins, sourcePluginId, targetPluginId);
     // Same deferral as _handleMove: prevents LayoutBuilder + BlocBuilder
     // dirty collision that causes OverlayPortal reactivation crash.
     WidgetsBinding.instance.addPostFrameCallback((_) {
