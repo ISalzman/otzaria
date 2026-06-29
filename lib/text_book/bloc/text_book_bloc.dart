@@ -2055,9 +2055,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         return;
       }
 
+      final lines = await splitContentLines(fullContent);
+      if (isClosed) {
+        return;
+      }
       add(ApplyFullBookContent(
         bookTitle: book.title,
-        content: await splitContentLines(fullContent),
+        content: lines,
       ));
     } catch (e) {
       if (kDebugMode) {
@@ -2111,6 +2115,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       }
     }
 
+    if (isClosed) return;
+
     if (!force &&
         _isLinksWindowSufficient(
           book.title,
@@ -2124,6 +2130,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     _isLoadingLinks = true;
     _pendingLinksReload = false;
+    if (isClosed) {
+      _isLoadingLinks = false;
+      return;
+    }
     add(const SetLinksLoading(true));
 
     try {
@@ -2153,13 +2163,17 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final replaceExistingLinks = currentState.links.isNotEmpty &&
           _activeLinksTargetBookTitlesSignature != targetBookTitlesSignature;
 
+      if (isClosed) {
+        _isLoadingLinks = false;
+        return;
+      }
       add(UpdateLinks(
         links,
         replaceExisting: replaceExistingLinks,
         targetBookTitlesSignature: targetBookTitlesSignature,
       ));
 
-      if (state is TextBookLoaded) {
+      if (!isClosed && state is TextBookLoaded) {
         final latestState = state as TextBookLoaded;
         final latestWindow = _calculateLinksWindow(latestState.visibleIndices);
         final windowOutdated = !_isLinksWindowSufficient(
@@ -2194,7 +2208,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       }
     } catch (e) {
       _isLoadingLinks = false;
-      add(const SetLinksLoading(false));
+      if (!isClosed) {
+        add(const SetLinksLoading(false));
+      }
       if (kDebugMode) {
         debugPrint(
           '⚠️ TextBookBloc::loadLinks failed for ${book.title} '
@@ -2331,6 +2347,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       // הזיהוי של 'הערות' כמפרש וירטואלי נעשה בנפרד דרך
       // _withInlineNotesCommentator שמופעל בכל עדכון של ה-content.
+      if (isClosed) return;
       add(UpdateAvailableCommentators(availableCommentators, groups));
 
       // בחירה שמורה פר-ספר גוברת על ברירת המחדל: אם המשתמש בחר בעבר (כולל
@@ -2340,6 +2357,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (isClosed) return;
 
       if (saved?.activeCommentators != null) {
+        if (isClosed) return;
         add(UpdateCommentators(saved!.activeCommentators!,
             isUserAction: false, isRestore: true));
         return;
@@ -2379,6 +2397,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   Future<void> _enrichHeCategoriesInBackground(TextBook book) async {
     final enriched = await enrichHeCategories(book);
+    if (isClosed) return;
+
     final heCategoriesChanged = enriched.heCategories != null &&
         enriched.heCategories != book.heCategories;
     final authorChanged =
@@ -2392,6 +2412,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         heCategoriesChanged ||
         authorChanged ||
         heEraChanged) {
+      if (isClosed) return;
       add(UpdateResolvedBookId(
         bookTitle: book.title,
         resolvedId: enriched.resolvedId,
