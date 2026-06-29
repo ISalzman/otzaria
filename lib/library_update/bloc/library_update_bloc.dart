@@ -1,5 +1,7 @@
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
+import 'package:otzaria/core/error_log_file.dart';
 import 'package:seforim_library_updater/seforim_library_updater.dart';
 
 import '../repository/library_update_repository.dart';
@@ -64,6 +66,11 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     try {
       final plan =
           await repository.checkForUpdate(allowPrerelease: allowPrerelease());
+      // אבחון זמני: איזו תוכנית נבחרה.
+      debugPrint('[LibraryUpdate] plan kind=${plan.kind} '
+          'local=${plan.localVersion} target=${plan.targetVersion} '
+          'deltaSteps=${plan.deltaSteps.length} '
+          'reason=${plan.reason}');
       // אם המשתמש ביטל/התחיל ריצה חדשה במהלך הבדיקה — לא להמשיך.
       if (_isStale(opId)) return;
       switch (plan.kind) {
@@ -89,9 +96,10 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
             errorMessage: plan.reason,
           ));
       }
-    } catch (e) {
+    } catch (e, st) {
       // אם בוטל/הוחלף במהלך הבדיקה — לא לדרוס state של ריצה חדשה בשגיאה.
       if (_isStale(opId)) return;
+      _logUpdateError('checkForUpdate', e, st);
       emit(LibraryUpdateState(
         status: LibraryUpdateStatus.error,
         message: 'שגיאה בבדיקת עדכונים',
@@ -121,8 +129,9 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       ));
     } on PatchDownloadCancelled {
       // ביטול לפני apply — לא שגיאה; _onCancel כבר העביר ל-idle.
-    } catch (e) {
+    } catch (e, st) {
       if (_isStale(opId)) return;
+      _logUpdateError('applyDeltaPlan', e, st);
       emit(LibraryUpdateState(
         status: LibraryUpdateStatus.error,
         message: 'שגיאה בהחלת העדכון',
@@ -160,8 +169,9 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       ));
     } on PatchDownloadCancelled {
       // ביטול — _onCancel כבר העביר ל-idle.
-    } catch (e) {
+    } catch (e, st) {
       if (_isStale(opId)) return;
+      _logUpdateError('applyFullDownload', e, st);
       emit(LibraryUpdateState(
         status: LibraryUpdateStatus.error,
         message: 'שגיאה בהורדה המלאה',
@@ -237,6 +247,11 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       LibraryUpdatePhase.refreshing => LibraryUpdateStatus.refreshing,
       _ => LibraryUpdateStatus.checking,
     };
+    // אבחון זמני: מתעד מעבר שלב (לא כל chunk של הורדה).
+    if (status != state.status) {
+      debugPrint('[LibraryUpdate] phase -> ${p.phase} '
+          '(step ${p.stepIndex + 1}/${p.totalSteps})');
+    }
     emit(state.copyWith(
       status: status,
       message: message,
@@ -255,5 +270,17 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       return '${(bytes / (1 << 20)).toStringAsFixed(0)}MB';
     }
     return '${(bytes / (1 << 10)).toStringAsFixed(0)}KB';
+  }
+
+  // אבחון זמני: מדפיס את השגיאה ל-console וגם שומר ל-errors.txt לקריאה חוזרת.
+  void _logUpdateError(String stage, Object e, StackTrace st) {
+    debugPrint('[LibraryUpdate] ERROR in $stage: $e\n$st');
+    try {
+      ErrorLogFile.append(
+        title: 'Library Update Error ($stage)',
+        error: e,
+        stackTrace: st,
+      );
+    } catch (_) {}
   }
 }
