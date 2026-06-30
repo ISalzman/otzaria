@@ -67,7 +67,7 @@ enum _LibraryListItemStyle { root, grouped, search }
   final previewWidth = viewMode == 'list'
       ? availableWidth * previewWidthFactorList
       : availableWidth * previewWidthFactorGrid;
-  final maxPaneWidth = max(minPaneWidth, availableWidth - 350);
+  final maxPaneWidth = max(minPaneWidth, availableWidth - 230);
   final paneWidth = (paneWidthOverride ?? previewWidth)
       .clamp(minPaneWidth, maxPaneWidth)
       .toDouble();
@@ -761,7 +761,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           mainContent: RepaintBoundary(child: mainContent),
           paneContent: _buildPreviewPane(settingsState),
           paneWidth: previewPaneWidths.paneWidth,
-          minMainContentWidth: 420,
+          minMainContentWidth: 200,
           onClose: () => _hidePreviewPanel(settingsState),
           onOpen: () => _showPreviewPanel(settingsState),
           paneColor: Theme.of(ctx).colorScheme.surface,
@@ -2107,7 +2107,7 @@ class _LibraryBrowserList extends StatelessWidget {
   Widget build(BuildContext context) {
     final padding = forPanel
         ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
-        : const EdgeInsets.symmetric(horizontal: 45, vertical: 8);
+        : const EdgeInsets.symmetric(horizontal: 16, vertical: 8);
 
     if (children != null) {
       return ListView(
