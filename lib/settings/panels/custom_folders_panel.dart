@@ -495,9 +495,8 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
           const SizedBox(height: 8),
           _legendRow(
             FluentIcons.link_24_regular,
-            'דורות וקישורים: אפשר להניח בתיקייה קובצי CSV/JSON — "דורות.csv" '
-            'לסדר הדורות, ו-"<שם הספר>.links.csv" לקישורים — והם ייקלטו '
-            'אוטומטית בסריקה.',
+            'דורות וקישורים: לייבוא סדר דורות וקישורים לספרים האישיים השתמש '
+            'בכפתור "ייבוא דורות וקישורים" שלהלן.',
           ),
         ],
       ),
@@ -526,3 +525,77 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
 }
 
 enum _FolderMenuAction { openFolder, copyPath, remove }
+
+/// ייבוא ידני של דורות וקישורים מקבצי CSV/JSON שהמשתמש בוחר, ומחיקת כל
+/// המיובא. הייבוא קבוע (לא תלוי בנוכחות הקבצים) ומצטבר בדריסה.
+class UserContentImportTile extends StatelessWidget {
+  const UserContentImportTile({super.key});
+
+  Future<void> _import(BuildContext context) async {
+    final bloc = context.read<CustomFoldersBloc>();
+    final result = await FilePicker.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: const ['csv', 'json'],
+      lockParentWindow: true,
+    );
+    if (result == null) return;
+    final paths = result.files.map((f) => f.path).whereType<String>().toList();
+    if (paths.isEmpty) return;
+    bloc.add(ImportUserContentFiles(paths));
+  }
+
+  Future<void> _clear(BuildContext context) async {
+    final bloc = context.read<CustomFoldersBloc>();
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: 'מחיקת דורות וקישורים',
+      content: 'פעולה זו תמחק את כל הדורות והקישורים שיובאו לתוכנה.',
+      subtitle: 'הספרים עצמם לא יימחקו — רק הדורות והקישורים המיובאים.',
+      confirmText: 'מחק הכל',
+    );
+    if (confirmed == true) bloc.add(const ClearUserContent());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return BlocBuilder<CustomFoldersBloc, CustomFoldersState>(
+      buildWhen: (p, c) => p.isSyncing != c.isSyncing,
+      builder: (context, state) {
+        final isSyncing =
+            state.isSyncing || DatabaseLibraryProvider.operationQueue.isBusy;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'בחר קובצי "דורות.csv" או "<שם הספר>.links.csv" והם ייקלטו '
+                'לצמיתות. ייבוא חוזר מעדכן ערכים קיימים ומוסיף חדשים.',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ActionButton.recommended(
+                    text: 'ייבוא דורות וקישורים',
+                    icon: FluentIcons.arrow_import_24_regular,
+                    onPressed: isSyncing ? null : () => _import(context),
+                    isLoading: isSyncing,
+                  ),
+                  ActionButton.warning(
+                    text: 'נקה הכל',
+                    onPressed: isSyncing ? null : () => _clear(context),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}

@@ -5,8 +5,9 @@ import 'package:otzaria/migration/database/daos/database.dart';
 import 'package:otzaria/user_content_import/models/user_import_models.dart';
 import 'package:otzaria/user_content_import/repository/user_content_repository.dart';
 import 'package:otzaria/user_content_import/services/user_import_parser.dart';
+import 'package:otzaria/user_content_import/services/user_link_ref_resolver.dart';
 
-/// תוצאת ייבוא נתוני-משתמש מתיקייה: ספירות + שגיאות מרוכזות (עם הקשר קובץ).
+/// תוצאת ייבוא נתוני-משתמש מקבצים: ספירות + שגיאות מרוכזות (עם הקשר קובץ).
 class UserImportResult {
   final int generationsApplied;
   final int linksApplied;
@@ -24,11 +25,12 @@ class UserImportResult {
       generationsApplied > 0 || linksApplied > 0 || errors.isNotEmpty;
 }
 
-/// קולט קבצי CSV שהמשתמש הכין מראש בתיקייה מותאמת, וכותב את הדורות
-/// והקישורים ל-user_books.db. רץ בכל סריקה (idempotent) כדי לקלוט גם
-/// מצב שבו רק ה-CSV נערך (קובץ הספר לא השתנה).
+/// קולט קבצי CSV/JSON שהמשתמש בחר ידנית, וכותב את הדורות והקישורים
+/// ל-user_books.db לצמיתות. הייבוא מצטבר: דור דורס דור קודם לאותו ספר,
+/// וקישור דורס קישור זהה (ראה [UserContentRepository.upsertUserLink]).
+/// מחיקה אינה נגזרת מהקבצים — לאיפוס משמשת פעולת "נקה הכל".
 ///
-/// שמות קבצים שמזוהים (בכל עומק בעץ התיקייה):
+/// סוג כל קובץ נקבע משמו:
 /// - `דורות.csv` / `generations.csv` — דורות (עמודות: ספר, דור).
 /// - `קישורים.csv|json` / `links.csv|json` — קישורים רוחביים (עם ספר_מקור).
 /// - `<שם הספר>.links.csv` / `<שם הספר>.links.json` — קישורים לספר בודד.
@@ -44,94 +46,64 @@ class UserContentImporter {
     'links.json',
   };
 
-  /// ייבוא תיקייה בודדת (עוטף את [importFolders]).
-  static Future<UserImportResult> importFolder(
-    String folderPath,
-    MyDatabase userDb,
-  ) =>
-      importFolders([folderPath], userDb);
-
-  /// ייבוא של כמה תיקיות כפעולה אחת קוהרנטית: אוסף את כל קבצי הייבוא
-  /// (CSV/JSON), מנקה את נתוני-הייבוא הקיימים, ואז מיישם — כך מחיקת שורה/קובץ
-  /// משתקפת ב-DB (idempotent מלא). אם לא נמצא אף קובץ ייבוא — לא נוגעים בקיים.
-  static Future<UserImportResult> importFolders(
-    Iterable<String> folderPaths,
-    MyDatabase userDb,
-  ) async {
+  /// ייבוא של קבצים נבחרים כפעולה אחת אטומית: מפענח את כולם, וכל שגיאה
+  /// (פענוח, ספר-לא-נמצא, או כתובת-יעד שלא נפתרה) חוסמת כתיבה כלשהי — לא
+  /// כותבים חלקית, כך שטעות לא תפגע בנתונים קיימים. אם אין שגיאות — מיישם
+  /// בדריסה מצטברת. [resolveRef] מאפשר הזרקת פותר-כתובות לבדיקות.
+  static Future<UserImportResult> importFiles(
+    Iterable<String> filePaths,
+    MyDatabase userDb, {
+    UserLinkRefResolver resolveRef = resolveUserLinkTargetLine,
+  }) async {
     final repo = UserContentRepository(userDb);
     final errors = <String>[];
 
-    // bookId → שם דור (אחרון מנצח); bookId → רשימת קישורים מצטברת.
+    // bookId → שם דור (אחרון מנצח); רשימת קישורים שטוחה לכל הקבצים.
     final generationByBook = <int, String>{};
-    final linksByBook = <int, List<UserLinkRecord>>{};
-    var anyImportFile = false;
+    final links = <UserLinkRecord>[];
 
-    for (final folderPath in folderPaths) {
-      final dir = Directory(folderPath);
-      if (!await dir.exists()) continue;
-      final files = await dir
-          .list(recursive: true, followLinks: false)
-          .where((e) =>
-              e is File &&
-              (e.path.toLowerCase().endsWith('.csv') ||
-                  e.path.toLowerCase().endsWith('.json')))
-          .cast<File>()
-          .toList();
-      if (files.isEmpty) continue;
-      for (final file in files) {
-        final name = _baseName(file.path);
-        final lower = name.toLowerCase();
-        // anyImportFile מסומן רק לקובץ *מוכר* — קובץ CSV/JSON לא-קשור בתיקייה
-        // לא ייחשב מקור-אמת ולא יגרור ניקוי.
-        if (_generationFileNames.contains(name)) {
-          anyImportFile = true;
-          await _ingestGenerations(file, repo, generationByBook, errors);
-        } else if (_folderLinkFileNames.contains(name)) {
-          anyImportFile = true;
-          await _ingestLinks(file, repo, linksByBook, errors,
-              bookTitleFromFile: null);
-        } else if (lower.endsWith('.links.csv')) {
-          anyImportFile = true;
-          final bookTitle =
-              name.substring(0, name.length - '.links.csv'.length);
-          await _ingestLinks(file, repo, linksByBook, errors,
-              bookTitleFromFile: bookTitle);
-        } else if (lower.endsWith('.links.json')) {
-          anyImportFile = true;
-          final bookTitle =
-              name.substring(0, name.length - '.links.json'.length);
-          await _ingestLinks(file, repo, linksByBook, errors,
-              bookTitleFromFile: bookTitle);
-        }
+    for (final filePath in filePaths) {
+      final file = File(filePath);
+      if (!await file.exists()) {
+        errors.add('${_baseName(filePath)}: הקובץ לא נמצא');
+        continue;
+      }
+      final name = _baseName(filePath);
+      final lower = name.toLowerCase();
+      if (_generationFileNames.contains(name)) {
+        await _ingestGenerations(file, repo, generationByBook, errors);
+      } else if (_folderLinkFileNames.contains(name)) {
+        await _ingestLinks(file, repo, links, errors,
+            bookTitleFromFile: null, resolveRef: resolveRef);
+      } else if (lower.endsWith('.links.csv')) {
+        final bookTitle = name.substring(0, name.length - '.links.csv'.length);
+        await _ingestLinks(file, repo, links, errors,
+            bookTitleFromFile: bookTitle, resolveRef: resolveRef);
+      } else if (lower.endsWith('.links.json')) {
+        final bookTitle = name.substring(0, name.length - '.links.json'.length);
+        await _ingestLinks(file, repo, links, errors,
+            bookTitleFromFile: bookTitle, resolveRef: resolveRef);
+      } else {
+        errors.add(
+            '$name: קובץ לא מזוהה (צפוי "דורות.csv" או "<ספר>.links.csv")');
       }
     }
 
-    // החלטת-מוצר מכוונת: כשאין אף קובץ ייבוא (CSV/JSON; אולי תיקייה לא-זמינה
-    // זמנית/באג) לא מוחקים נתונים שכבר יובאו — בטיחות מעל מקור-אמת. מחיקת
-    // *שורה* או *קובץ* בודד כן משתקפת (clear+apply למטה), רק מחיקת הכל אינה מנקה.
-    if (!anyImportFile) return const UserImportResult();
-
-    // ייבוא אטומי: כל שגיאה (פענוח או ספר-לא-נמצא) חוסמת כתיבה כלשהי — לא
-    // מוחקים ולא כותבים חלקית (replaceUserLinksForBook הוא הרסני פר-ספר). כך
-    // טעות לא תאבד נתונים קיימים; המשתמש מתקן ומייבא שוב.
     if (errors.isNotEmpty) {
       return UserImportResult(errors: errors);
     }
 
-    await repo.clearAllUserContent();
     for (final entry in generationByBook.entries) {
       await repo.setBookGeneration(entry.key, entry.value);
     }
-    var linksApplied = 0;
-    for (final entry in linksByBook.entries) {
-      await repo.replaceUserLinksForBook(entry.key, entry.value);
-      linksApplied += entry.value.length;
+    for (final link in links) {
+      await repo.upsertUserLink(link);
     }
 
     return UserImportResult(
       generationsApplied: generationByBook.length,
-      linksApplied: linksApplied,
-      booksWithLinks: linksByBook.length,
+      linksApplied: links.length,
+      booksWithLinks: links.map((l) => l.sourceBookId).toSet().length,
       errors: errors,
     );
   }
@@ -167,9 +139,10 @@ class UserContentImporter {
   static Future<void> _ingestLinks(
     File file,
     UserContentRepository repo,
-    Map<int, List<UserLinkRecord>> out,
+    List<UserLinkRecord> out,
     List<String> errors, {
     required String? bookTitleFromFile,
+    required UserLinkRefResolver resolveRef,
   }) async {
     final fileName = _baseName(file.path);
     final ParseResult<ParsedUserLink> parsed;
@@ -196,23 +169,58 @@ class UserContentImporter {
         errors.add('$fileName: ספר המקור "$sourceTitle" לא נמצא');
         continue;
       }
-      out.putIfAbsent(sourceId, () => []).add(_toRecord(sourceId, row));
+      final record =
+          await _resolveRecord(sourceId, row, resolveRef, fileName, errors);
+      if (record != null) out.add(record);
     }
   }
 
-  /// ממיר שורה שפוענחה לרשומת DB. "מיקום_יעד" מספרי → אינדקס שורה (0-based);
-  /// אחרת נשמר כ-ref גולמי ל-resolution בזמן קריאה.
-  static UserLinkRecord _toRecord(int sourceBookId, ParsedUserLink row) {
-    final refRaw = row.targetRef;
-    final refAsLine = refRaw == null ? null : int.tryParse(refRaw.trim());
+  /// בונה רשומת קישור עם אינדקס-שורה ביעד. "מיקום_יעד" מספרי = אינדקס שורה
+  /// ישיר (1-based); אחרת זו כתובת טקסטואלית שנפתרת לשורה דרך [resolveRef].
+  /// מחזיר null (ומוסיף שגיאה) אם חסרה כתובת או שהכתובת לא נפתרה.
+  static Future<UserLinkRecord?> _resolveRecord(
+    int sourceBookId,
+    ParsedUserLink row,
+    UserLinkRefResolver resolveRef,
+    String fileName,
+    List<String> errors,
+  ) async {
+    final ref = row.targetRef?.trim();
+    if (ref == null || ref.isEmpty) {
+      errors.add('$fileName: חסר מיקום_יעד לקישור אל "${row.targetTitle}"');
+      return null;
+    }
+    final numeric = int.tryParse(ref);
+    final int targetLineIndex;
+    if (numeric != null) {
+      if (numeric < 1) {
+        errors.add('$fileName: מיקום_יעד לא חוקי: "$ref"');
+        return null;
+      }
+      targetLineIndex = numeric - 1;
+    } else {
+      final resolved = await resolveRef(
+        targetTitle: row.targetTitle,
+        targetCategoryId: row.targetCategoryId,
+        targetIsUserBook: row.targetIsUserBook,
+        ref: ref,
+      );
+      if (resolved == null) {
+        errors
+            .add('$fileName: לא נמצא המיקום "$ref" בספר "${row.targetTitle}"');
+        return null;
+      }
+      targetLineIndex = resolved;
+    }
     return UserLinkRecord(
       sourceBookId: sourceBookId,
       sourceLineIndex: row.sourceLineNumber - 1,
       targetTitle: row.targetTitle,
       targetCategoryId: row.targetCategoryId,
       targetIsUserBook: row.targetIsUserBook,
-      targetRef: refAsLine == null ? refRaw : null,
-      targetLineIndex: refAsLine == null ? null : refAsLine - 1,
+      // כתובת טקסטואלית נשמרת להצגה; מספרית מיותרת (heRef נופל לכותרת היעד).
+      targetRef: numeric != null ? null : ref,
+      targetLineIndex: targetLineIndex,
       connectionType: row.connectionType,
     );
   }
@@ -221,15 +229,13 @@ class UserContentImporter {
       path.replaceAll('\\', '/').split('/').last;
 }
 
-/// עטיפה בטוחה לכל התיקיות בפעולה אחת — לעולם לא זורקת, רק מדווחת.
-/// פעולה אחת לכל התיקיות (ולא לולאה) כי [UserContentImporter.importFolders]
-/// מנקה את נתוני-הייבוא לפני היישום.
-Future<UserImportResult> importUserContentSafe(
-  Iterable<String> folderPaths,
+/// עטיפה בטוחה לייבוא קבצים נבחרים — לעולם לא זורקת, רק מדווחת.
+Future<UserImportResult> importUserFilesSafe(
+  Iterable<String> filePaths,
   MyDatabase userDb,
 ) async {
   try {
-    return await UserContentImporter.importFolders(folderPaths, userDb);
+    return await UserContentImporter.importFiles(filePaths, userDb);
   } catch (e) {
     debugPrint('⚠️ [UserContentImport] failed: $e');
     return UserImportResult(errors: ['ייבוא נתוני-המשתמש נכשל: $e']);

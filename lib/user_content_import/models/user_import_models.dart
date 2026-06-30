@@ -102,6 +102,10 @@ class UserLinkRecord {
   /// כדי לבנות קישור שמצביע חזרה אל ספר-המשתמש.
   final String? sourceTitle;
 
+  /// קטגוריית ספר המקור — ממולא רק ב-[inverseUserLinks], כדי שהקישור ההפוך
+  /// יוכל לפתוח את ספר-המשתמש הנכון כששתי כותרות זהות בקטגוריות שונות.
+  final int? sourceCategoryId;
+
   const UserLinkRecord({
     required this.sourceBookId,
     required this.sourceLineIndex,
@@ -112,6 +116,7 @@ class UserLinkRecord {
     this.targetLineIndex,
     required this.connectionType,
     this.sourceTitle,
+    this.sourceCategoryId,
   });
 }
 

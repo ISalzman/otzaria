@@ -36,11 +36,14 @@ Future<List<Link>> loadUserLinksForBook({
         endLineIndex: endLineIndex,
       );
       for (final r in forward) {
+        final targetLine = r.targetLineIndex;
+        // ללא יעד-שורה אין לאן לפתוח (index2==0 נכשל כ-"Invalid link reference").
+        if (targetLine == null) continue;
         result.add(Link(
           heRef: r.targetRef ?? r.targetTitle,
           index1: r.sourceLineIndex + 1,
           path2: r.targetTitle,
-          index2: (r.targetLineIndex ?? -1) + 1,
+          index2: targetLine + 1,
           connectionType: r.connectionType,
           targetCategoryId: r.targetCategoryId,
           targetIsUserBook: r.targetIsUserBook,
@@ -68,6 +71,7 @@ Future<List<Link>> loadUserLinksForBook({
       index2: r.sourceLineIndex + 1,
       connectionType: r.connectionType,
       targetIsUserBook: true,
+      targetCategoryId: r.sourceCategoryId,
     ));
   }
 

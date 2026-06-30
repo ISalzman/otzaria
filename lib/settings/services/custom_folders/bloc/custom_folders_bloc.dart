@@ -1,7 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/cache/generation_cache.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
@@ -14,6 +13,7 @@ import 'package:otzaria/migration/sync/file_sync_service.dart'
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
+import 'package:otzaria/user_content_import/repository/user_content_repository.dart';
 import 'package:otzaria/user_content_import/services/user_content_importer.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart'
     show clearCommentatorOrderCache;
@@ -52,6 +52,8 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     on<RemoveCustomFolder>(_onRemove);
     on<ToggleAddToDatabase>(_onToggleAddToDatabase);
     on<RescanCustomFolders>(_onRescan);
+    on<ImportUserContentFiles>(_onImportUserFiles);
+    on<ClearUserContent>(_onClearUserContent);
   }
 
   void _onLoad(LoadCustomFolders event, Emitter<CustomFoldersState> emit) {
@@ -80,34 +82,24 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
               event.path, folderName, repository);
 
       if (result.isSuccess) {
-        final imp = await _importUserData(newFolders);
         _libraryBloc.add(RefreshLibrary());
-        final importMsg = _importSummary(imp);
-        final importErr = _importErrorText(imp);
-        if (result.hasPartialFailure || importErr != null) {
+        if (result.hasPartialFailure) {
           final failedMsg = result.failedDetails.isNotEmpty
               ? result.failedDetails.map((d) => '"${d.$1}": ${d.$2}').join('\n')
-              : (result.hasPartialFailure ? 'כשל: ${result.failedBooks}' : '');
+              : 'כשל: ${result.failedBooks}';
           emit(state.copyWith(
             isSyncing: false,
-            message: importMsg,
             error: [
               '${result.addedBooks} ספרים נוספו, ${result.updatedBooks} עודכנו',
               if (failedMsg.isNotEmpty) failedMsg,
-              if (importErr != null) importErr,
             ].join('\n'),
           ));
         } else {
-          final pieces = <String>[
-            if (result.hasChanges)
-              '${result.addedBooks} ספרים נוספו, ${result.updatedBooks} עודכנו',
-            if (importMsg != null) importMsg,
-          ];
           emit(state.copyWith(
             isSyncing: false,
-            message: pieces.isEmpty
-                ? 'התיקייה נוספה. לא נמצאו ספרים חדשים.'
-                : pieces.join('; '),
+            message: result.hasChanges
+                ? '${result.addedBooks} ספרים נוספו, ${result.updatedBooks} עודכנו'
+                : 'התיקייה נוספה. לא נמצאו ספרים חדשים.',
           ));
         }
       } else {
@@ -176,19 +168,13 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
               'תוכן הספרים נסרק ועודכן.\nמעתה הספרים ייקראו ישירות מהקבצים.',
         ));
       } else {
-        final imp = await _importUserData(newFolders);
         final hasChanges = result.addedBooks > 0 || result.updatedBooks > 0;
-        final importMsg = _importSummary(imp);
-        final pieces = <String>[
-          if (hasChanges)
-            '${result.addedBooks} ספרים נוספו, ${result.updatedBooks} עודכנו',
-          if (importMsg != null) importMsg,
-        ];
         emit(state.copyWith(
           isSyncing: false,
-          message:
-              pieces.isEmpty ? null : 'הסריקה הושלמה: ${pieces.join('; ')}',
-          error: _importErrorText(imp),
+          message: hasChanges
+              ? 'הסריקה הושלמה: ${result.addedBooks} ספרים נוספו, '
+                  '${result.updatedBooks} עודכנו'
+              : null,
         ));
       }
       _libraryBloc.add(RefreshLibrary());
@@ -208,24 +194,14 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     ));
     try {
       final result = await _syncCustomFolders(currentFolders);
-      final imp = await _importUserData(currentFolders);
       final hasChanges = result.addedBooks > 0 || result.updatedBooks > 0;
-      final importMsg = _importSummary(imp);
-      final pieces = <String>[
-        if (hasChanges)
-          '${result.addedBooks} ספרים נוספו, ${result.updatedBooks} עודכנו',
-        if (importMsg != null) importMsg,
-      ];
-      final message = pieces.isNotEmpty
-          ? 'הסריקה הושלמה: ${pieces.join('; ')}'
+      final message = hasChanges
+          ? 'הסריקה הושלמה: ${result.addedBooks} ספרים נוספו, '
+              '${result.updatedBooks} עודכנו'
           : event.showNoChangesMessage
               ? 'הסריקה הושלמה. לא נמצאו ספרים חדשים.'
               : null;
-      emit(state.copyWith(
-        isSyncing: false,
-        message: message,
-        error: _importErrorText(imp),
-      ));
+      emit(state.copyWith(isSyncing: false, message: message));
       _libraryBloc.add(RefreshLibrary());
     } catch (e) {
       emit(state.copyWith(
@@ -233,32 +209,56 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     }
   }
 
-  /// מייבא דורות וקישורים מקבצי ה-CSV של התיקיות (idempotent) ומנקה את
-  /// ה-caches של הדור כדי שהשינוי ייכנס לתוקף. בטוח לכישלון תשתית (no-op).
-  Future<({int generations, int links, List<String> errors})> _importUserData(
-    List<CustomFolder> folders,
-  ) async {
-    if (folders.isEmpty) {
-      return (generations: 0, links: 0, errors: const <String>[]);
-    }
+  /// מייבא דורות וקישורים מקבצים שהמשתמש בחר — לצמיתות, בדריסה מצטברת. מנקה
+  /// את מטמוני הדור כדי שהשינוי ייכנס לתוקף מיד.
+  Future<void> _onImportUserFiles(
+      ImportUserContentFiles event, Emitter<CustomFoldersState> emit) async {
+    if (event.paths.isEmpty) return;
+    emit(state.copyWith(isSyncing: true, message: null, error: null));
     try {
       final userDb =
           (await UserBooksDatabaseHolder.instance.repository).database;
-      // קריאה אחת לכל התיקיות — הייבוא מנקה לפני יישום (idempotent).
-      final r = await importUserContentSafe(folders.map((f) => f.path), userDb);
+      final r = await importUserFilesSafe(event.paths, userDb);
       if (r.generationsApplied > 0 || r.linksApplied > 0) {
         GenerationCache.instance.clear();
         clearCommentatorOrderCache();
         CommentaryService.clearEraCache();
+        _libraryBloc.add(RefreshLibrary());
       }
-      return (
+      final imp = (
         generations: r.generationsApplied,
         links: r.linksApplied,
-        errors: r.errors,
+        errors: r.errors
       );
+      emit(state.copyWith(
+        isSyncing: false,
+        message: _importSummary(imp) ??
+            (r.errors.isEmpty ? 'לא נמצאו נתונים לייבוא בקבצים שנבחרו.' : null),
+        error: _importErrorText(imp),
+      ));
     } catch (e) {
-      debugPrint('⚠️ [CustomFolders] user content import skipped: $e');
-      return (generations: 0, links: 0, errors: const <String>[]);
+      emit(state.copyWith(isSyncing: false, error: 'שגיאה בייבוא הקבצים: $e'));
+    }
+  }
+
+  /// מוחק את כל הדורות והקישורים המיובאים ומנקה את מטמוני הדור.
+  Future<void> _onClearUserContent(
+      ClearUserContent event, Emitter<CustomFoldersState> emit) async {
+    emit(state.copyWith(isSyncing: true, message: null, error: null));
+    try {
+      final userDb =
+          (await UserBooksDatabaseHolder.instance.repository).database;
+      await UserContentRepository(userDb).clearAllUserContent();
+      GenerationCache.instance.clear();
+      clearCommentatorOrderCache();
+      CommentaryService.clearEraCache();
+      _libraryBloc.add(RefreshLibrary());
+      emit(state.copyWith(
+        isSyncing: false,
+        message: 'הדורות והקישורים המיובאים נמחקו.',
+      ));
+    } catch (e) {
+      emit(state.copyWith(isSyncing: false, error: 'שגיאה במחיקת הנתונים: $e'));
     }
   }
 
