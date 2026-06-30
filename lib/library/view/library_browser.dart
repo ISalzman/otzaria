@@ -1089,7 +1089,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   List<Widget> _buildCategoryContent(Category category) {
     final List<Widget> items = [];
     final filteredBooks = category.books.toList();
-    final filteredSubCategories = category.subCategories.toList();
+    final filteredSubCategories =
+        category.subCategories.where((c) => c.hasBooks).toList();
     filteredBooks.sort((a, b) => a.order.compareTo(b.order));
     if (category is Library) {
       filteredSubCategories.sort(
@@ -1214,7 +1215,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     final List<Widget> widgets = [];
     final filteredBooks = category.books.toList()
       ..sort((a, b) => a.order.compareTo(b.order));
-    final filteredSubs = category.subCategories.toList();
+    final filteredSubs =
+        category.subCategories.where((c) => c.hasBooks).toList();
     if (category is Library) {
       filteredSubs.sort(
         (a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)),
