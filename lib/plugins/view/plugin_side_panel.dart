@@ -14,7 +14,6 @@ import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 class PluginSidePanel extends StatelessWidget {
   final Function(InstalledPlugin)? onPluginSelected;
@@ -245,7 +244,7 @@ class _PluginListTile extends StatelessWidget {
       leading: Stack(
         clipBehavior: Clip.none,
         children: [
-          RtlIcon(fluentIconFromName(plugin.manifest.toolTabIconName) ??
+          Icon(fluentIconFromName(plugin.manifest.toolTabIconName) ??
               FluentIcons.puzzle_piece_24_regular),
           if (plugin.isDevelopment)
             Positioned(

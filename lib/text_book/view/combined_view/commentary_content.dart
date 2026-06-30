@@ -112,6 +112,7 @@ class _CommentaryContentState extends State<CommentaryContent> {
           book: TextBook(
             title: utils.getTitleFromPath(widget.link.path2),
             isUserBook: widget.link.targetIsUserBook,
+            categoryId: widget.link.targetCategoryId,
           ),
           index: widget.link.index2 - 1,
           openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
