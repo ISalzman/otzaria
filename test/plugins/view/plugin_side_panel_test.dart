@@ -72,6 +72,7 @@ InstalledPlugin _pluginFor({
   required String id,
   required String name,
   bool networkEnabled = false,
+  bool networkAccessGranted = false,
   bool showInTools = true,
 }) {
   return InstalledPlugin(
@@ -83,6 +84,7 @@ InstalledPlugin _pluginFor({
     enabled: true,
     pinned: true,
     showInTools: showInTools,
+    networkAccessGranted: networkAccessGranted,
     manifest: _manifestFor(
       id: id,
       name: name,
@@ -345,10 +347,15 @@ void main() {
       expect(find.text('תוסף ענן'), findsOneWidget);
     });
 
-    testWidgets('במצב מנותק מסתיר תוספים שדורשים אינטרנט', (tester) async {
+    testWidgets('במצב מנותק מסתיר תוספים שדורשים אינטרנט והרשאתם דלוקה',
+        (tester) async {
       final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
         _pluginFor(id: 'local.plugin', name: 'תוסף מקומי'),
-        _pluginFor(id: 'cloud.plugin', name: 'תוסף ענן', networkEnabled: true),
+        _pluginFor(
+            id: 'cloud.plugin',
+            name: 'תוסף ענן',
+            networkEnabled: true,
+            networkAccessGranted: true),
       ]));
       addTearDown(pluginBloc.close);
 
@@ -363,10 +370,35 @@ void main() {
     });
 
     testWidgets(
+        'במצב מנותק תוסף רשת שהמשתמש כיבה בו את הרשאת הרשת ממשיך להופיע',
+        (tester) async {
+      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
+        _pluginFor(
+            id: 'cloud.plugin',
+            name: 'תוסף ענן',
+            networkEnabled: true,
+            networkAccessGranted: false),
+      ]));
+      addTearDown(pluginBloc.close);
+
+      await tester.pumpWidget(_wrap(
+        pluginBloc: pluginBloc,
+        settingsBloc: _FakeSettingsBloc(isOfflineMode: true),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('תוסף ענן'), findsOneWidget);
+    });
+
+    testWidgets(
         'במצב מנותק כשכל התוספים דורשים אינטרנט - מציג הודעת empty state ייעודית',
         (tester) async {
       final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(id: 'cloud.plugin', name: 'תוסף ענן', networkEnabled: true),
+        _pluginFor(
+            id: 'cloud.plugin',
+            name: 'תוסף ענן',
+            networkEnabled: true,
+            networkAccessGranted: true),
       ]));
       addTearDown(pluginBloc.close);
 
@@ -431,11 +463,23 @@ void main() {
       expect(plugins.filterForOfflineMode(false), equals(plugins));
     });
 
-    test('במצב מנותק מסנן רק תוספים עם networkEnabled=true', () {
+    test('במצב מנותק מסנן רק תוספי רשת שהרשאתם הוענקה בפועל', () {
       final local = _pluginFor(id: 'a', name: 'A');
-      final cloud = _pluginFor(id: 'b', name: 'B', networkEnabled: true);
+      final cloud = _pluginFor(
+          id: 'b', name: 'B', networkEnabled: true, networkAccessGranted: true);
       final filtered = [local, cloud].filterForOfflineMode(true);
       expect(filtered, [local]);
+    });
+
+    test('במצב מנותק תוסף רשת ללא הרשאת רשת מוענקת אינו מסונן', () {
+      final local = _pluginFor(id: 'a', name: 'A');
+      final cloudRevoked = _pluginFor(
+          id: 'b',
+          name: 'B',
+          networkEnabled: true,
+          networkAccessGranted: false);
+      final filtered = [local, cloudRevoked].filterForOfflineMode(true);
+      expect(filtered, [local, cloudRevoked]);
     });
 
     test('רשימה ריקה מוחזרת כרשימה ריקה', () {
