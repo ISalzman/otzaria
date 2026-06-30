@@ -43,4 +43,23 @@ void main() {
       expect(isTashmaSource(null), isFalse);
     });
   });
+
+  group('isNationalLibrarySource', () {
+    test('should detect the National-Library source as stored in DB', () {
+      expect(isNationalLibrarySource('National-LibraryToOtzaria'), isTrue);
+    });
+
+    test('should detect variants with separators and casing', () {
+      expect(isNationalLibrarySource('national library'), isTrue);
+      expect(isNationalLibrarySource('National_Library'), isTrue);
+      expect(isNationalLibrarySource('NATIONALLIBRARY'), isTrue);
+    });
+
+    test('should return false for other or empty sources', () {
+      expect(isNationalLibrarySource('Sefaria'), isFalse);
+      expect(isNationalLibrarySource('TashmaToOtzaria'), isFalse);
+      expect(isNationalLibrarySource(''), isFalse);
+      expect(isNationalLibrarySource(null), isFalse);
+    });
+  });
 }

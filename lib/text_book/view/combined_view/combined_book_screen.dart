@@ -46,6 +46,7 @@ import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/text_book/view/widgets/book_source_banner.dart';
 import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:otzaria/utils/text/word_at_position.dart';
@@ -229,6 +230,9 @@ class _CombinedViewState extends State<CombinedView> {
 
   bool _hasScrolledToInitialPosition = false;
 
+  // האם להציג את שורת "יד הרמב"ם" מעל השורה הראשונה (נטען פעם אחת לכל ספר).
+  bool _showSourceBanner = false;
+
   // מנהל בחירת טקסט משופר
   late final TextSelectionManager _selectionManager;
 
@@ -279,6 +283,8 @@ class _CombinedViewState extends State<CombinedView> {
     }
     // שמירת ה-BLoC מראש
     _textBookBloc = context.read<TextBookBloc>();
+
+    _loadSourceBanner();
 
     // אתחול מנהל הבחירה
     _selectionManager = TextSelectionManager();
@@ -345,6 +351,14 @@ class _CombinedViewState extends State<CombinedView> {
       context
           .read<PersonalNotesBloc>()
           .add(LoadPersonalNotes(widget.tab.book.title));
+      _loadSourceBanner();
+    }
+  }
+
+  Future<void> _loadSourceBanner() async {
+    final show = await isBookFromNationalLibrary(widget.tab.book);
+    if (mounted && show != _showSourceBanner) {
+      setState(() => _showSourceBanner = show);
     }
   }
 
@@ -730,6 +744,7 @@ class _CombinedViewState extends State<CombinedView> {
                     book: TextBook(
                       title: utils.getTitleFromPath(link.path2),
                       isUserBook: link.targetIsUserBook,
+                      categoryId: link.targetCategoryId,
                     ),
                     index: link.index2 - 1,
                     openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
@@ -1420,7 +1435,7 @@ class _CombinedViewState extends State<CombinedView> {
         ExpansibleController controller = ExpansibleController();
         // מבודד את שכבת הצביעה של כל פריט - rebuild של פריט בודד (בחירה/
         // הדגשה) או emit של warming לא יצבע מחדש את כל ה-viewport.
-        return RepaintBoundary(
+        final tile = RepaintBoundary(
           child: buildExpansiomTile(
             controller,
             index,
@@ -1428,6 +1443,13 @@ class _CombinedViewState extends State<CombinedView> {
             noteMap,
           ),
         );
+        if (index == 0 && _showSourceBanner) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [BookSourceBanner(fontSize: widget.textSize), tile],
+          );
+        }
+        return tile;
       },
     );
   }
