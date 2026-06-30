@@ -1065,6 +1065,10 @@ begin
   WizardForm.StatusLabel.Update;
   ExtractBundledTarArchive('talmud_bavli_latest.tar.zst', 'תלמוד בבלי');
 
+  WizardForm.StatusLabel.Caption := 'מחלץ מילון לחיפוש המקורב...';
+  WizardForm.StatusLabel.Update;
+  ExtractBundledDatabase('lexical.db.zst', 'lexical.db');
+
   WizardForm.ProgressGauge.Style := npbstNormal;
   WizardForm.ProgressGauge.Position := WizardForm.ProgressGauge.Max;
 
@@ -1112,6 +1116,7 @@ Source: "..\build\windows\x64\runner\Release\*"; \
 Source: "library_db\seforim.db.zst"; DestDir: "{tmp}"; Flags: deleteafterinstall nocompression
 Source: "library_db\otzar-HB_catalog.db.zst"; DestDir: "{tmp}"; Flags: deleteafterinstall nocompression
 Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{tmp}"; Flags: deleteafterinstall nocompression
+Source: "library_db\lexical.db.zst"; DestDir: "{tmp}"; Flags: deleteafterinstall nocompression
 Source: "zstd.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "7za.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
