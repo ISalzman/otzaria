@@ -391,7 +391,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
       parameters.addAll(targetBookTitles);
     }
 
-    // תנאי הפילטר ("מפרש" = אחד מ-7 הסוגים התלויים, כולל SUPER_COMMENTARY/
+    // תנאי הפילטר ("מפרש" = אחד מסוגי הטקסט התלויים, כולל SUPER_COMMENTARY/
     // MIDRASH וכו', לא רק COMMENTARY/TARGUM):
     // null     → ללא פילטר (כל הקישורים)
     // ריק      → רק קישורים שאינם מפרשים (REFERENCE וכד׳)
