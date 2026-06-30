@@ -636,7 +636,7 @@ class MyGridView extends StatelessWidget {
           child: Padding(
             // top: 8 או מרווח מתאים; horizontal: 45 או רוחב אף
             padding:
-                const EdgeInsets.only(top: 8, left: 45, right: 45, bottom: 0),
+                const EdgeInsets.only(top: 8, left: 30, right: 30, bottom: 8),
             child: GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: max(1, min(constraints.maxWidth ~/ 250, 5)),
