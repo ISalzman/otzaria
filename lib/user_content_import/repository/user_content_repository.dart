@@ -12,8 +12,8 @@ class UserContentRepository {
   UserContentRepository(this._db);
 
   /// מוחק את כל נתוני-הייבוא (דור + קישורים). ב-user_books.db טבלאות אלה
-  /// מנוהלות אך ורק ע"י הייבוא, לכן בטוח לרוקן לפני יישום מחדש — כך מחיקת
-  /// שורה/קובץ CSV משתקפת (ייבוא idempotent מלא).
+  /// מנוהלות אך ורק ע"י הייבוא, לכן בטוח לרוקן. משמש את פעולת "נקה הכל"
+  /// (הייבוא עצמו מצטבר ואינו מנקה).
   Future<void> clearAllUserContent() async {
     final db = await _db.database;
     db.execute('DELETE FROM book_generation');
@@ -65,30 +65,42 @@ class UserContentRepository {
 
   // ---- קישורי-משתמש ----
 
-  /// מחליף את כל קישורי-המשתמש של ספר מקור (מחיקה + הוספה — idempotent).
-  Future<void> replaceUserLinksForBook(
-    int sourceBookId,
-    List<UserLinkRecord> links,
-  ) async {
+  /// מוסיף קישור-משתמש, או דורס קישור זהה אם כבר קיים. שני קישורים נחשבים
+  /// "זהים" כשכל שדות הזיהוי שווים (מקור, שורת-מקור, יעד ומיקומו); רק
+  /// [UserLinkRecord.connectionType] מתעדכן. כך ייבוא חוזר מצטבר ואינו מכפיל.
+  Future<void> upsertUserLink(UserLinkRecord link) async {
     final db = await _db.database;
-    db.execute('DELETE FROM user_link WHERE sourceBookId = ?', [sourceBookId]);
-    for (final link in links) {
-      db.execute(
-        'INSERT INTO user_link (sourceBookId, sourceLineIndex, targetTitle, '
-        'targetCategoryId, targetIsUserBook, targetRef, targetLineIndex, '
-        'connectionType) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          link.sourceBookId,
-          link.sourceLineIndex,
-          link.targetTitle,
-          link.targetCategoryId,
-          link.targetIsUserBook ? 1 : 0,
-          link.targetRef,
-          link.targetLineIndex,
-          link.connectionType,
-        ],
-      );
-    }
+    // השוואת השדות ב-IS (ולא =) כדי ש-NULL ישווה ל-NULL — אחרת קישור עם
+    // targetRef/targetLineIndex ריק לא היה נדרס בייבוא חוזר.
+    db.execute(
+      'DELETE FROM user_link WHERE sourceBookId = ? AND sourceLineIndex = ? '
+      'AND targetTitle = ? AND targetIsUserBook = ? AND targetCategoryId IS ? '
+      'AND targetRef IS ? AND targetLineIndex IS ?',
+      [
+        link.sourceBookId,
+        link.sourceLineIndex,
+        link.targetTitle,
+        link.targetIsUserBook ? 1 : 0,
+        link.targetCategoryId,
+        link.targetRef,
+        link.targetLineIndex,
+      ],
+    );
+    db.execute(
+      'INSERT INTO user_link (sourceBookId, sourceLineIndex, targetTitle, '
+      'targetCategoryId, targetIsUserBook, targetRef, targetLineIndex, '
+      'connectionType) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        link.sourceBookId,
+        link.sourceLineIndex,
+        link.targetTitle,
+        link.targetCategoryId,
+        link.targetIsUserBook ? 1 : 0,
+        link.targetRef,
+        link.targetLineIndex,
+        link.connectionType,
+      ],
+    );
   }
 
   /// קישורי-משתמש *יוצאים* מספר מקור, בטווח שורות (0-based, כולל).
@@ -127,7 +139,8 @@ class UserContentRepository {
     final rangeClause =
         hasRange ? 'AND ul.targetLineIndex BETWEEN ? AND ?' : '';
     final rows = db.select(
-      'SELECT ul.*, b.title AS sourceTitle FROM user_link ul '
+      'SELECT ul.*, b.title AS sourceTitle, b.categoryId AS sourceCategoryId '
+      'FROM user_link ul '
       'JOIN book b ON b.id = ul.sourceBookId '
       'WHERE ul.targetTitle = ? AND ul.targetIsUserBook = ? '
       '$categoryClause $rangeClause '
@@ -152,5 +165,6 @@ class UserContentRepository {
         targetLineIndex: row['targetLineIndex'] as int?,
         connectionType: row['connectionType'] as String,
         sourceTitle: row['sourceTitle'] as String?,
+        sourceCategoryId: row['sourceCategoryId'] as int?,
       );
 }

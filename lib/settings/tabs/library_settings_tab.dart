@@ -417,6 +417,16 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                           ),
                         ],
                       ),
+                      kSettingsCardSpacing,
+                      SettingsCard(
+                        cardId: 'library.user_content_import',
+                        title: 'דורות וקישורים לספרים אישיים',
+                        subtitle:
+                            'ייבוא קובצי CSV/JSON של סדר דורות וקישורים לספרים האישיים.',
+                        children: [
+                          const UserContentImportTile(),
+                        ],
+                      ),
                     ],
 
                     // חיפוש ואינדקס
