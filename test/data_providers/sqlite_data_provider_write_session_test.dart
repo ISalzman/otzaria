@@ -234,6 +234,51 @@ void main() {
         reason: 'הקורא התעורר מיד עם reopen, לא חיכה לתום הפעימה');
   });
 
+  test(
+      'initialize() מתאוששת מיומן rollback חם שנותר מסגירה באמצע עדכון '
+      '(תיקון SQLITE_READONLY_ROLLBACK 776)', () async {
+    final dbPath = path.join(libraryPath, DatabaseConstants.databaseFileName);
+
+    // סוגרים את ה-RO הראשי כדי לשחרר את נעילת הקובץ.
+    await SqliteDataProvider.instance.dispose();
+
+    // משחזרים מצב "סגירה באמצע כתיבה": פותחים חיבור כתיב במצב rollback עם
+    // מטמון זעיר (מכריח spill ליומן), מתחילים טרנזקציה כבדה, ומצלמים את
+    // הקובץ + היומן בעודם לא-עקביים. החזרת הצילום מדמה את היומן החם.
+    final writable = MyDatabase.withPath(dbPath);
+    final wdb = await writable.database;
+    wdb.execute('PRAGMA journal_mode=DELETE');
+    wdb.execute('PRAGMA cache_size=1');
+    wdb.execute('BEGIN IMMEDIATE');
+    for (var i = 0; i < 500; i++) {
+      wdb.execute("INSERT INTO category (title, level) VALUES ('flood$i', 0)");
+    }
+    final dbBytes = File(dbPath).readAsBytesSync();
+    final journalBytes = File('$dbPath-journal').readAsBytesSync();
+    wdb.execute('ROLLBACK');
+    writable.close();
+
+    // החזרת הצילום — עכשיו על הדיסק DB + יומן rollback חם לא-עקביים.
+    File('$dbPath-wal').existsSync() ? File('$dbPath-wal').deleteSync() : null;
+    File('$dbPath-shm').existsSync() ? File('$dbPath-shm').deleteSync() : null;
+    File(dbPath).writeAsBytesSync(dbBytes);
+    File('$dbPath-journal').writeAsBytesSync(journalBytes);
+    expect(File('$dbPath-journal').lengthSync(), greaterThan(0),
+        reason: 'התרחיש דורש יומן חם לא-ריק');
+
+    // ללא נרמול היומן החם, הפתיחה ה-RO הייתה נכשלת ב-776 והאפליקציה לא נפתחת.
+    await SqliteDataProvider.instance.initialize();
+    expect(SqliteDataProvider.instance.isInitialized, isTrue,
+        reason: 'היומן החם נורמל ל-DELETE, וה-RO נפתח בהצלחה');
+
+    // הטרנזקציה שנקטעה בוטלה (rollback), והקריאה עובדת.
+    final categories =
+        await SqliteDataProvider.instance.repository!.getRootCategories();
+    expect(categories.where((c) => c.title == 'שורש'), isNotEmpty);
+    expect(categories.where((c) => c.title.startsWith('flood')), isEmpty,
+        reason: 'הטרנזקציה הלא-גמורה לא הוחלה');
+  });
+
   test('write-sessions סדרתיים — שתי כתיבות מצטברות', () async {
     await SqliteDataProvider.instance.withWritableSession((rw) async {
       await rw.insertCategory(const migration_models.Category(title: 'א'));
