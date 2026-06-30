@@ -266,7 +266,7 @@ class UserImportParser {
   }
 
   static List<_CsvRecord> _parseCsv(String content) {
-    final clean = content.replaceFirst('﻿', '');
+    final clean = content.replaceFirst('\uFEFF', '');
     final records = <_CsvRecord>[];
     var lineNumber = 0;
     for (final rawLine in const LineSplitter().convert(clean)) {

@@ -54,12 +54,13 @@ Future<List<Link>> loadUserLinksForBook({
     bookTitle,
     targetIsUserBook: isUserBook,
     targetCategoryId: bookCategoryId,
+    startLineIndex: startLineIndex,
+    endLineIndex: endLineIndex,
   );
   for (final r in inverse) {
     final targetLine = r.targetLineIndex;
     final sourceTitle = r.sourceTitle;
     if (targetLine == null || sourceTitle == null) continue;
-    if (targetLine < startLineIndex || targetLine > endLineIndex) continue;
     result.add(Link(
       heRef: sourceTitle,
       index1: targetLine + 1,

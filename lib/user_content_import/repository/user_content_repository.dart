@@ -114,6 +114,8 @@ class UserContentRepository {
     String targetTitle, {
     required bool targetIsUserBook,
     int? targetCategoryId,
+    int? startLineIndex,
+    int? endLineIndex,
   }) async {
     final db = await _db.database;
     // כשידועה קטגוריית היעד, מסננים גם לפיה (כדי לא לערבב בין שני ספרי-יעד
@@ -121,15 +123,20 @@ class UserContentRepository {
     final categoryClause = targetCategoryId != null
         ? 'AND (ul.targetCategoryId IS NULL OR ul.targetCategoryId = ?)'
         : '';
+    final hasRange = startLineIndex != null && endLineIndex != null;
+    final rangeClause =
+        hasRange ? 'AND ul.targetLineIndex BETWEEN ? AND ?' : '';
     final rows = db.select(
       'SELECT ul.*, b.title AS sourceTitle FROM user_link ul '
       'JOIN book b ON b.id = ul.sourceBookId '
-      'WHERE ul.targetTitle = ? AND ul.targetIsUserBook = ? $categoryClause '
+      'WHERE ul.targetTitle = ? AND ul.targetIsUserBook = ? '
+      '$categoryClause $rangeClause '
       'ORDER BY ul.targetLineIndex',
       [
         targetTitle,
         targetIsUserBook ? 1 : 0,
         if (targetCategoryId != null) targetCategoryId,
+        if (hasRange) ...[startLineIndex, endLineIndex],
       ],
     );
     return rows.map(_fromRow).toList();
