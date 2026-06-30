@@ -361,12 +361,9 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: KeyedSubtree(
-        key: _anchorKey,
-        child: trigger,
-      ),
+    return KeyedSubtree(
+      key: _anchorKey,
+      child: trigger,
     );
   }
 }
