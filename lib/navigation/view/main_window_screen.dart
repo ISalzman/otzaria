@@ -1139,47 +1139,53 @@ class MainWindowScreenState extends State<MainWindowScreen>
     return true;
   }
 
-  void _openToolWhenAvailable(String toolId, {int attemptsLeft = 6}) {
+  /// ממתין ל-ToolsScreen (נבנה lazy בעת המעבר ל-Screen.more) ומריץ [onReady]
+  /// ברגע שהוא זמין. [isReady] מאפשר להמתין גם לתנאי נוסף (למשל טעינת מערכת
+  /// התוספים). מנסה שוב כל 50ms עד [attemptsLeft]; כשנגמרו — מריץ [onExhausted].
+  void _whenToolsScreenAvailable(
+    void Function(ToolsScreenState toolsState) onReady, {
+    bool Function(ToolsScreenState toolsState)? isReady,
+    VoidCallback? onExhausted,
+    int attemptsLeft = 6,
+  }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final toolsState = moreScreenKey.currentState;
-      if (toolsState != null) {
-        toolsState.requestOpenTool(toolId);
+      if (toolsState != null && (isReady == null || isReady(toolsState))) {
+        onReady(toolsState);
         return;
       }
-      if (attemptsLeft <= 0) return;
+      if (attemptsLeft <= 0) {
+        onExhausted?.call();
+        return;
+      }
       Future<void>.delayed(const Duration(milliseconds: 50), () {
         if (!mounted) return;
-        _openToolWhenAvailable(toolId, attemptsLeft: attemptsLeft - 1);
+        _whenToolsScreenAvailable(onReady,
+            isReady: isReady,
+            onExhausted: onExhausted,
+            attemptsLeft: attemptsLeft - 1);
       });
     });
   }
 
-  void _openPluginPanelWhenAvailable({int attemptsLeft = 6}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final toolsState = moreScreenKey.currentState;
-      if (toolsState != null) {
-        toolsState.openPluginPanel();
-        return;
-      }
-      if (attemptsLeft <= 0) return;
-      Future<void>.delayed(const Duration(milliseconds: 50), () {
-        if (!mounted) return;
-        _openPluginPanelWhenAvailable(attemptsLeft: attemptsLeft - 1);
-      });
-    });
+  void _openToolWhenAvailable(String toolId) {
+    _whenToolsScreenAvailable(
+        (toolsState) => toolsState.requestOpenTool(toolId));
+  }
+
+  void _openPluginPanelWhenAvailable() {
+    _whenToolsScreenAvailable((toolsState) => toolsState.openPluginPanel());
   }
 
   /// פותח תוסף לפי מזהה (deep-link `otzaria://open/plugin/<id>`). ממתין הן
   /// ל-ToolsScreen (נבנה lazy) והן ל-PluginSystemLoaded, ואז פותח דרך
   /// `openPluginTransiently` שמטפל גם בתוסף מוצמד וגם בלא-מוצמד.
-  void _openPluginByIdWhenAvailable(String pluginId, {int attemptsLeft = 100}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final toolsState = moreScreenKey.currentState;
-      final blocState = context.read<PluginSystemBloc>().state;
-      if (toolsState != null && blocState is PluginSystemLoaded) {
+  void _openPluginByIdWhenAvailable(String pluginId) {
+    _whenToolsScreenAvailable(
+      (toolsState) {
+        final blocState =
+            context.read<PluginSystemBloc>().state as PluginSystemLoaded;
         final plugin =
             blocState.plugins.firstWhereOrNull((p) => p.pluginId == pluginId);
         if (plugin == null) {
@@ -1189,17 +1195,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
         } else {
           toolsState.openPluginTransiently(plugin);
         }
-        return;
-      }
-      if (attemptsLeft <= 0) {
-        UiSnack.showError('התוסף "$pluginId" לא נמצא');
-        return;
-      }
-      Future<void>.delayed(const Duration(milliseconds: 50), () {
-        if (!mounted) return;
-        _openPluginByIdWhenAvailable(pluginId, attemptsLeft: attemptsLeft - 1);
-      });
-    });
+      },
+      isReady: (_) =>
+          context.read<PluginSystemBloc>().state is PluginSystemLoaded,
+      onExhausted: () => UiSnack.showError('התוסף "$pluginId" לא נמצא'),
+      attemptsLeft: 100,
+    );
   }
 
   @override

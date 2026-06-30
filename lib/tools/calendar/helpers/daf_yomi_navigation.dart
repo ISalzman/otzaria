@@ -51,7 +51,10 @@ void _openDafYomiBookInCategory(
 ) async {
   final libraryBlocState = BlocProvider.of<LibraryBloc>(context).state;
   final library = libraryBlocState.library;
-  if (library == null) return;
+  if (library == null) {
+    UiSnack.showError('הספרייה עדיין בטעינה, נסה שוב בעוד רגע');
+    return;
+  }
 
   Category? talmudCategory;
   for (var category in library.getAllCategories()) {
