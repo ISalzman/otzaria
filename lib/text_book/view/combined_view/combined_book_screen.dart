@@ -351,6 +351,8 @@ class _CombinedViewState extends State<CombinedView> {
       context
           .read<PersonalNotesBloc>()
           .add(LoadPersonalNotes(widget.tab.book.title));
+    }
+    if (!sameSourceIdentity(oldWidget.tab.book, widget.tab.book)) {
       _loadSourceBanner();
     }
   }
