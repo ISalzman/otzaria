@@ -2,7 +2,7 @@ $targetPaths = @(
     "${env:APPDATA}\אוצריא\אוצריא",
     "${env:APPDATA}\otzaria",
     "${env:LOCALAPPDATA}\otzaria",
-    "${env:APPDATA}\com.example"
+    "${env:APPDATA}\com.example\otzaria"
 )
 
 foreach ($targetPath in $targetPaths) {
