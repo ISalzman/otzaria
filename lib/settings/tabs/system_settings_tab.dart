@@ -267,12 +267,12 @@ class SystemSettingsTab extends StatefulWidget {
       keywords: ['סיסמה', 'סייפר', 'password', 'שינוי סיסמה'],
     ),
     SettingsSearchEntry(
-      id: 'system.tour',
-      title: 'הפעל סיור מחדש',
-      subtitle: 'סיור מודרך לחלקי האפליקציה',
+      id: 'system.advanced.tour',
+      title: 'סיור מודרך להכרת התוכנה',
+      subtitle: 'הפעל סיור מודרך להדרכה והכרת כל מסכי אוצריא',
       tab: SettingsTab.system,
-      cardId: 'system.tour',
-      keywords: ['סיור', 'הדרכה', 'tour'],
+      cardId: 'system.advanced',
+      keywords: ['סיור', 'הדרכה', 'tour', 'מודרך'],
     ),
     SettingsSearchEntry(
       id: 'system.reset',
@@ -834,11 +834,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   SettingsAnchor(
                     cardId: 'system.advanced',
                     child: _buildAdvancedSection(context, state),
-                  ),
-
-                  SettingsAnchor(
-                    cardId: 'system.tour',
-                    child: _buildGuidedTourSection(context),
                   ),
 
                   // 6. איפוס
@@ -1516,6 +1511,29 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     return SettingsCard(
       title: 'מתקדם',
       children: [
+        // ── סיור מודרך ──
+        SettingsActionTile.text(
+          icon: FluentIcons.sparkle_24_regular,
+          title: 'סיור מודרך להכרת התוכנה',
+          subtitle: 'הפעל סיור מודרך להדרכה והכרת כל מסכי אוצריא',
+          actions: [
+            ActionButton.recommended(
+              icon: FluentIcons.play_24_regular,
+              text: 'הפעל',
+              onPressed: () {
+                final libraryLoaded =
+                    !context.read<NavigationBloc>().state.isLibraryEmpty;
+                context.read<NavigationBloc>().add(
+                      const CheckLibrary(),
+                    );
+                context
+                    .read<TourCubit>()
+                    .restart(libraryLoaded: libraryLoaded);
+              },
+            ),
+          ],
+        ),
+
         // ── גיבוי אוטומטי ──
         ExpandableSection(
           headerKey: tourBackupSettingsTargetKey,
@@ -1735,38 +1753,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               ),
             ),
           ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGuidedTourSection(BuildContext context) {
-    return SettingsCard(
-      title: 'סיור מודרך',
-      subtitle: 'היכרות מהירה עם החלקים המרכזיים באוצריא.',
-      children: [
-        ListTile(
-          leading: const Icon(FluentIcons.sparkle_24_regular),
-          title: const Text(
-            'הפעל סיור מחדש',
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: const Text(
-            'הסיור יוצג מההתחלה וידריך אותך במסכי האפליקציה.',
-            style: kSettingsSubtitleStyle,
-          ),
-          trailing: ActionButton.recommended(
-            icon: FluentIcons.play_24_regular,
-            text: 'הפעל',
-            onPressed: () {
-              final libraryLoaded =
-                  !context.read<NavigationBloc>().state.isLibraryEmpty;
-              context.read<NavigationBloc>().add(
-                    const CheckLibrary(),
-                  );
-              context.read<TourCubit>().restart(libraryLoaded: libraryLoaded);
-            },
-          ),
         ),
       ],
     );
