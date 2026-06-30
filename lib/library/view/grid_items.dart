@@ -606,6 +606,9 @@ class _BookGridActionColumn extends StatelessWidget {
 //  • FocusTraversalGroup כדי לנווט Tab בסדר קריאה (ולא קפיצה ציגזג)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// ריווח אחיד בין כרטיסי הרשת — משותף לתצוגת הספרייה ולתוצאות החיפוש.
+const double kLibraryGridSpacing = 14;
+
 class MyGridView extends StatelessWidget {
   final List<Widget> items;
 
@@ -638,8 +641,8 @@ class MyGridView extends StatelessWidget {
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: max(1, min(constraints.maxWidth ~/ 250, 5)),
                 childAspectRatio: childAspectRatio,
-                crossAxisSpacing: 4,
-                mainAxisSpacing: 4,
+                crossAxisSpacing: kLibraryGridSpacing,
+                mainAxisSpacing: kLibraryGridSpacing,
               ),
               itemCount: items.length,
               itemBuilder: (context, index) => items[index],
