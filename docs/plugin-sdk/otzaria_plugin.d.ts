@@ -418,6 +418,7 @@ export type OtzariaMethod =
   | 'app.getLocale'
   | 'app.getUserEmail'
   | 'app.getGrantedPermissions'
+  | 'app.openUrl'
   | 'library.findBooks'
   | 'library.getBookMetadata'
   | 'library.listRecentBooks'

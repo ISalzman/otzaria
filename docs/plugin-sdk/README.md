@@ -279,6 +279,7 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `app.getInfo` | `app.info.read` | גרסת האפליקציה, פלטפורמה |
 | `app.getTheme` | `app.info.read` | ערכת נושא מלאה (colorScheme + typography) |
 | `app.getLocale` | `app.info.read` | locale ו-textDirection |
+| `app.openUrl` | `app.open_url` | פתיחת כתובת http/https בדפדפן המערכת |
 
 ### library.*
 
@@ -478,6 +479,7 @@ const { data: keys } = await Otzaria.call('storage.list');
 | הרשאה | מה מאפשרת |
 |-------|-----------|
 | `app.info.read` | קריאת מידע על האפליקציה |
+| `app.open_url` | פתיחת קישור http/https בדפדפן ברירת המחדל של מערכת ההפעלה |
 | `library.books.read` | חיפוש וקריאת metadata של ספרים |
 | `library.content.read` | קריאת תוכן ספרים (TOC + טקסט) |
 | `search.fulltext.read` | חיפוש טקסט מלא |

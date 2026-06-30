@@ -335,6 +335,22 @@ void main() {
       expect(response['permissions'], ['app.info.read', 'reader.open']);
     });
 
+    test('app.openUrl דוחה סכמה שאינה http/https (לפני שיגור)', () async {
+      // file://, otzaria:// וכו' היו מאפשרים הרצת פעולות מחוץ לדפדפן.
+      await expectLater(
+        adapter.execute('app', 'openUrl', {'url': 'file:///etc/passwd'}),
+        throwsA(predicate((e) => e.toString().contains('error.forbidden'))),
+      );
+    });
+
+    test('app.openUrl ללא url זורק error.invalid_params', () async {
+      await expectLater(
+        adapter.execute('app', 'openUrl', const {}),
+        throwsA(
+            predicate((e) => e.toString().contains('error.invalid_params'))),
+      );
+    });
+
     test('reader.getCurrentRef returns current reference for active pdf tab',
         () async {
       final currentTab = PdfBookTab(

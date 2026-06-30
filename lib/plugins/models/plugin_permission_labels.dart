@@ -30,6 +30,11 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
     label: 'כתובת מייל',
     description: 'גישה לכתובת המייל של המשתמש, לשימוש בדיווח שגיאות בלבד',
   ),
+  'app.open_url': PluginPermissionInfo(
+    label: 'פתיחת קישורים בדפדפן',
+    description:
+        'פתיחת כתובות אינטרנט (http/https) בדפדפן ברירת המחדל של מערכת ההפעלה',
+  ),
   'app.run_on_startup': PluginPermissionInfo(
     label: 'טעינה אוטומטית עם עליית האפליקציה',
     description:
