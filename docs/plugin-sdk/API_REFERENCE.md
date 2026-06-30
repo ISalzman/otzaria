@@ -28,6 +28,7 @@ if (response.success) {
 | `app.getLocale` | 0.9.89 |
 | `app.getUserEmail` | 0.9.89 |
 | `app.getGrantedPermissions` | 0.9.89 |
+| `app.openUrl` | 0.9.95 |
 | `library.findBooks` | 0.9.89 |
 | `library.getBookMetadata` | 0.9.89 |
 | `library.listRecentBooks` | 0.9.89 |
@@ -185,6 +186,18 @@ const { data } = await Otzaria.call('app.getGrantedPermissions');
 ```
 
 הערה: בשדה `permissions` של `plugin.boot` מתקבל snapshot בזמן העלייה בלבד. אם אתם צריכים מצב עדכני אחרי שהמשתמש שינה הרשאות, השתמשו ב-API הזה או האזינו ל-`plugin.permissions_changed`.
+
+### `app.openUrl`
+**הרשאה נדרשת:** `app.open_url`
+
+פותח כתובת אינטרנט בדפדפן ברירת המחדל של מערכת ההפעלה (לא בתוך התוסף).
+
+```javascript
+await Otzaria.call('app.openUrl', { url: 'https://example.com' });
+// מחזיר true בהצלחה
+```
+
+מותרות אך ורק כתובות `http`/`https`. סכמות אחרות (`file://`, `javascript:`, פרוטוקולים מותאמים) נדחות עם `error.forbidden`.
 
 ---
 

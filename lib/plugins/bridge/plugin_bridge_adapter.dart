@@ -460,6 +460,26 @@ class PluginBridgeAdapter {
                 SettingsRepository.keyErrorReportSenderEmail) ??
             '';
         return {'email': email.trim()};
+      case 'openUrl':
+        final url = args['url'] as String?;
+        if (url == null || url.isEmpty) {
+          throw Exception('error.invalid_params: url required');
+        }
+        final uri = Uri.tryParse(url);
+        if (uri == null) {
+          throw Exception('error.invalid_params: invalid URL');
+        }
+        // רק http/https — חוסם file://, javascript:, ומטפלי-פרוטוקול מותקנים
+        // (otzaria:// וכו') שהיו מאפשרים לתוסף להריץ פעולות מחוץ לדפדפן.
+        if (uri.scheme != 'http' && uri.scheme != 'https') {
+          throw Exception('error.forbidden: only http/https URLs are allowed');
+        }
+        final launched =
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!launched) {
+          throw Exception('error.internal: failed to open URL');
+        }
+        return true;
       case 'getGrantedPermissions':
         return {
           'permissions': await _getGrantedPermissions(),
@@ -2000,7 +2020,6 @@ class PluginBridgeAdapter {
               'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.');
         }
 
-
         final url = args['url'] as String?;
         if (url == null) throw Exception('error.invalid_params: url required');
 
@@ -2065,7 +2084,6 @@ class PluginBridgeAdapter {
           throw Exception('error.permission_denied: '
               'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.');
         }
-
 
         final url = args['url'] as String?;
         if (url == null) throw Exception('error.invalid_params: url required');

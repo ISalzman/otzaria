@@ -16,6 +16,7 @@ const Map<String, String> apiCallToPermissionHint = {
 
   // app.*
   'app.getUserEmail': 'app.user_email.read',
+  'app.openUrl': 'app.open_url',
   'app.getInfo': 'app.info.read',
   'app.getTheme': 'app.info.read',
   'app.getLocale': 'app.info.read',
@@ -75,6 +76,9 @@ const pluginValidPermissions = <String>[
 
   /// גישה למייל המשתמש (לדיווח שגיאות)
   'app.user_email.read',
+
+  /// פתיחת קישור (http/https) בדפדפן ברירת המחדל של מערכת ההפעלה
+  'app.open_url',
 
   /// טעינת התוסף ברקע עם עליית האפליקציה (גם בלי לפתוח את מסך "כלים").
   /// ברירת מחדל: כבויה — מאחר שזו הרשאה רגישה שמרחיבה את משך הריצה של התוסף.

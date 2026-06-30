@@ -45,6 +45,7 @@ const Set<String> _knownApiMethods = {
   'app.getLocale',
   'app.getUserEmail',
   'app.getGrantedPermissions',
+  'app.openUrl',
   'library.findBooks',
   'library.getBookMetadata',
   'library.listRecentBooks',
@@ -146,6 +147,7 @@ const Map<String, String> _methodRequiredPermission = {
   'app.getLocale': 'app.info.read',
   'app.getGrantedPermissions': 'app.info.read',
   'app.getUserEmail': 'app.user_email.read',
+  'app.openUrl': 'app.open_url',
   'library.findBooks': 'library.books.read',
   'library.getBookMetadata': 'library.books.read',
   'library.listRecentBooks': 'library.books.read',
@@ -304,6 +306,8 @@ const Map<String, String> _methodMinVersion = {
   'fs.readTextFile': '0.9.94',
   'fs.resolveFileUrl': '0.9.94',
   'fs.revokeFile': '0.9.94',
+  // 0.9.95
+  'app.openUrl': '0.9.95',
 };
 
 /// שדות שמורים שאינם API methods (כדי שלא ייתפסו ב-shorthand scanner).
