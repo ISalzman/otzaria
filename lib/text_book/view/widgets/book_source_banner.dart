@@ -8,6 +8,15 @@ const String kNationalLibraryBannerText =
     'באדיבות הספרייה הלאומית לישראל, ואגודת פרידברג לכתבי יד יהודיים\n'
     'כל הזכויות שמורות';
 
+/// משווה את שדות הזהות שקובעים את מקור הספר. במסלול side-by-side ה-widget
+/// אינו ממופתח לפי identity, ולכן מעבר לספר בעל אותה כותרת אך מקור שונה חייב
+/// לזהות גם הבדל ב-categoryId/fileType/isUserBook כדי לרענן את הבאנר.
+bool sameSourceIdentity(TextBook a, TextBook b) =>
+    a.title == b.title &&
+    a.categoryId == b.categoryId &&
+    a.fileType == b.fileType &&
+    a.isUserBook == b.isUserBook;
+
 /// טוען מה-DB האם הספר מקורו "יד הרמב"ם" (הספרייה הלאומית).
 /// ספרי משתמש לעולם אינם ממקור זה, ולכן מדלגים על שאילתת DB מיותרת.
 Future<bool> isBookFromNationalLibrary(TextBook book) async {

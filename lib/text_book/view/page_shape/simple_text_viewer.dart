@@ -630,6 +630,15 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       widget.selectionSyncController
           ?.addListener(_handleExternalSelectionChange);
     }
+    // side-by-side אינו ממפתח לפי identity — מעבר ספר עלול לשמר את ה-State.
+    final oldTab = oldWidget.tab;
+    final newTab = widget.tab;
+    if (widget.isMainText &&
+        oldTab is TextBookTab &&
+        newTab is TextBookTab &&
+        !sameSourceIdentity(oldTab.book, newTab.book)) {
+      _loadSourceBanner();
+    }
   }
 
   Future<void> _loadSourceBanner() async {
