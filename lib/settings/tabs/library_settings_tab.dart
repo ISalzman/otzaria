@@ -6,7 +6,6 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart'
     hide SwitchSettingsTile;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
-import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
@@ -376,14 +375,12 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                   children: [
                     // מאגר הספרים (רק בדסקטופ)
                     if (!(Platform.isAndroid || Platform.isIOS)) ...[
-                      SettingsAnchor(
+                      SettingsCard(
                         cardId: 'library.repository',
-                        child: SettingsCard(
-                          title: 'מאגר הספרים',
-                          children: [
-                            _buildLibraryLocationWidget(context),
-                          ],
-                        ),
+                        title: 'מאגר הספרים',
+                        children: [
+                          _buildLibraryLocationWidget(context),
+                        ],
                       ),
                       kSettingsCardSpacing,
                     ],
@@ -395,40 +392,36 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                     // תיקיות מותאמות אישית (רק בדסקטופ)
                     if (!(Platform.isAndroid || Platform.isIOS)) ...[
                       kSettingsCardSpacing,
-                      SettingsAnchor(
+                      SettingsCard(
                         cardId: 'library.custom_folders',
-                        child: SettingsCard(
-                          title: 'תיקיות מותאמות אישית',
-                          subtitle:
-                              'לאחר הוספת ספרים חדשים לתיקייה קיימת, יש ללחוץ על סמל הרענון.',
-                          children: [
-                            const CustomFoldersTile(),
-                            SettingsActionTile.switchTile(
-                              icon: FluentIcons.person_24_regular,
-                              title: 'מיזוג ספרים אישיים לעץ הספרייה',
-                              subtitle: state.mergeUserBooksIntoLibrary
-                                  ? 'תת-התיקיות של התיקייה הנבחרת ימוזגו לקטגוריות הראשיות לפי שם'
-                                  : 'תיקיות אישיות יוצגו תחת קטגוריית "ספרים אישיים"',
-                              value: state.mergeUserBooksIntoLibrary,
-                              onChanged: (value) {
-                                // ה-RefreshLibrary מופעל ב-listener למעלה,
-                                // אחרי שהערך החדש נשמר ב-`Settings`. אחרת
-                                // הספרייה היתה נבנית עם הערך הישן.
-                                context.read<SettingsBloc>().add(
-                                    UpdateMergeUserBooksIntoLibrary(value));
-                              },
-                            ),
-                          ],
-                        ),
+                        title: 'תיקיות מותאמות אישית',
+                        subtitle:
+                            'לאחר הוספת ספרים חדשים לתיקייה קיימת, יש ללחוץ על סמל הרענון.',
+                        children: [
+                          const CustomFoldersTile(),
+                          SettingsActionTile.switchTile(
+                            icon: FluentIcons.person_24_regular,
+                            title: 'מיזוג ספרים אישיים לעץ הספרייה',
+                            subtitle: state.mergeUserBooksIntoLibrary
+                                ? 'תת-התיקיות של התיקייה הנבחרת ימוזגו לקטגוריות הראשיות לפי שם'
+                                : 'תיקיות אישיות יוצגו תחת קטגוריית "ספרים אישיים"',
+                            value: state.mergeUserBooksIntoLibrary,
+                            onChanged: (value) {
+                              // ה-RefreshLibrary מופעל ב-listener למעלה,
+                              // אחרי שהערך החדש נשמר ב-`Settings`. אחרת
+                              // הספרייה היתה נבנית עם הערך הישן.
+                              context
+                                  .read<SettingsBloc>()
+                                  .add(UpdateMergeUserBooksIntoLibrary(value));
+                            },
+                          ),
+                        ],
                       ),
                     ],
 
                     // חיפוש ואינדקס
                     kSettingsCardSpacing,
-                    SettingsAnchor(
-                      cardId: 'library.search',
-                      child: _buildSearchSection(context, state, libraryState),
-                    ),
+                    _buildSearchSection(context, state, libraryState),
                   ],
                 ),
               ),
@@ -445,6 +438,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     LibraryState libraryState,
   ) {
     return SettingsCard(
+      cardId: 'library.search',
       title: 'חיפוש ואינדקס',
       children: [
         SettingsActionTile.switchTile(

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart'
     hide SwitchSettingsTile;
-import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
@@ -133,66 +132,63 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SettingsAnchor(
+        SettingsCard(
           cardId: 'tools.gematria',
-          child: SettingsCard(
-            title: 'חיפוש גימטריה',
-            children: [
-              SettingsActionTile.dropdownTile<int>(
-                icon: FluentIcons.number_row_24_regular,
-                title: 'מספר תוצאות מקסימלי',
-                subtitle: 'כמות התוצאות המקסימלית להצגה',
-                value: maxResults,
-                entries: [50, 100, 200, 500, 1000]
-                    .map((value) => AppMenuEntry(value: value, label: '$value'))
-                    .toList(),
-                onSelected: (value) {
-                  if (value != null) {
-                    setState(() => maxResults = value);
-                    Settings.setValue<int>('key-gematria-max-results', value);
-                  }
-                },
-              ),
-              SettingsActionTile.switchTile(
-                icon: FluentIcons.filter_24_regular,
-                title: 'סינון תוצאות כפולות',
-                subtitle: filterDuplicates
-                    ? 'תוצאות זהות יוצגו פעם אחת בלבד'
-                    : 'כל התוצאות יוצגו',
-                value: filterDuplicates,
-                onChanged: (value) {
-                  setState(() => filterDuplicates = value);
-                  Settings.setValue<bool>(
-                      'key-gematria-filter-duplicates', filterDuplicates);
-                },
-              ),
-              SettingsActionTile.switchTile(
-                icon: FluentIcons.text_word_count_24_regular,
-                title: 'חיפוש פסוק שלם בלבד',
-                subtitle: wholeVerseOnly
-                    ? 'חיפוש רק בפסוקים שלמים'
-                    : 'חיפוש גם בחלקי פסוקים',
-                value: wholeVerseOnly,
-                onChanged: (value) {
-                  setState(() => wholeVerseOnly = value);
-                  Settings.setValue<bool>(
-                      'key-gematria-whole-verse-only', wholeVerseOnly);
-                },
-              ),
-              SettingsActionTile.switchTile(
-                rtlIcon: FluentIcons.book_24_regular,
-                title: 'חיפוש בתורה בלבד',
-                subtitle: torahOnly
-                    ? 'חיפוש רק בחמישה חומשי תורה'
-                    : 'חיפוש בכל הספרים',
-                value: torahOnly,
-                onChanged: (value) {
-                  setState(() => torahOnly = value);
-                  Settings.setValue<bool>('key-gematria-torah-only', torahOnly);
-                },
-              ),
-            ],
-          ),
+          title: 'חיפוש גימטריה',
+          children: [
+            SettingsActionTile.dropdownTile<int>(
+              icon: FluentIcons.number_row_24_regular,
+              title: 'מספר תוצאות מקסימלי',
+              subtitle: 'כמות התוצאות המקסימלית להצגה',
+              value: maxResults,
+              entries: [50, 100, 200, 500, 1000]
+                  .map((value) => AppMenuEntry(value: value, label: '$value'))
+                  .toList(),
+              onSelected: (value) {
+                if (value != null) {
+                  setState(() => maxResults = value);
+                  Settings.setValue<int>('key-gematria-max-results', value);
+                }
+              },
+            ),
+            SettingsActionTile.switchTile(
+              icon: FluentIcons.filter_24_regular,
+              title: 'סינון תוצאות כפולות',
+              subtitle: filterDuplicates
+                  ? 'תוצאות זהות יוצגו פעם אחת בלבד'
+                  : 'כל התוצאות יוצגו',
+              value: filterDuplicates,
+              onChanged: (value) {
+                setState(() => filterDuplicates = value);
+                Settings.setValue<bool>(
+                    'key-gematria-filter-duplicates', filterDuplicates);
+              },
+            ),
+            SettingsActionTile.switchTile(
+              icon: FluentIcons.text_word_count_24_regular,
+              title: 'חיפוש פסוק שלם בלבד',
+              subtitle: wholeVerseOnly
+                  ? 'חיפוש רק בפסוקים שלמים'
+                  : 'חיפוש גם בחלקי פסוקים',
+              value: wholeVerseOnly,
+              onChanged: (value) {
+                setState(() => wholeVerseOnly = value);
+                Settings.setValue<bool>(
+                    'key-gematria-whole-verse-only', wholeVerseOnly);
+              },
+            ),
+            SettingsActionTile.switchTile(
+              rtlIcon: FluentIcons.book_24_regular,
+              title: 'חיפוש בתורה בלבד',
+              subtitle:
+                  torahOnly ? 'חיפוש רק בחמישה חומשי תורה' : 'חיפוש בכל הספרים',
+              value: torahOnly,
+              onChanged: (value) {
+                setState(() => torahOnly = value);
+                Settings.setValue<bool>('key-gematria-torah-only', torahOnly);
+              },
+            ),
+          ],
         ),
         kSettingsCardSpacing,
         SettingsCard(

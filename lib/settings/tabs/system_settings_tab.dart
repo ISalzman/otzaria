@@ -16,7 +16,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
-import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/dialogs/books_list_dialog.dart';
@@ -813,34 +812,19 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // 1. גרסאות + נתיב ספרייה
-                  SettingsAnchor(
-                    cardId: 'system.versions',
-                    child: _buildVersionAndPathSection(context, state),
-                  ),
+                  _buildVersionAndPathSection(context, state),
 
                   // 2. עדכוני מערכת (רשת + עדכון מפתחים)
-                  SettingsAnchor(
-                    cardId: 'system.updates',
-                    child: _buildSystemUpdatesSection(context, state),
-                  ),
+                  _buildSystemUpdatesSection(context, state),
 
                   // 3. דיווחי טעויות
-                  SettingsAnchor(
-                    cardId: 'system.reports',
-                    child: _buildErrorReportsSection(context, state),
-                  ),
+                  _buildErrorReportsSection(context, state),
 
                   // 4. מתקדם (גיבוי + מצב סייפר)
-                  SettingsAnchor(
-                    cardId: 'system.advanced',
-                    child: _buildAdvancedSection(context, state),
-                  ),
+                  _buildAdvancedSection(context, state),
 
                   // 6. איפוס
-                  SettingsAnchor(
-                    cardId: 'system.reset',
-                    child: _buildResetSection(context),
-                  ),
+                  _buildResetSection(context),
                 ],
               ),
             ),
@@ -856,6 +840,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   Widget _buildSystemUpdatesSection(BuildContext context, SettingsState state) {
     return SettingsCard(
+      cardId: 'system.updates',
       title: 'עדכוני מערכת',
       children: [
         KeyedSubtree(
@@ -954,6 +939,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final queueWhenOffline = reportService.queueWhenOfflineEnabled;
 
     return SettingsCard(
+      cardId: 'system.reports',
       title: 'דיווחי טעויות',
       subtitle: 'שליחה ישירה לצוות אוצריא, כולל תור אוטומטי במצב אופליין.',
       children: [
@@ -1267,6 +1253,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   Widget _buildVersionAndPathSection(
       BuildContext context, SettingsState state) {
     return SettingsCard(
+      cardId: 'system.versions',
       title: 'מערכת אוצריא',
       children: [
         SettingsActionTile.text(
@@ -1509,6 +1496,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final hasPassword = state.protectedModePasswordSet;
 
     return SettingsCard(
+      cardId: 'system.advanced',
       title: 'מתקדם',
       children: [
         // ── סיור מודרך ──
@@ -1526,9 +1514,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 context.read<NavigationBloc>().add(
                       const CheckLibrary(),
                     );
-                context
-                    .read<TourCubit>()
-                    .restart(libraryLoaded: libraryLoaded);
+                context.read<TourCubit>().restart(libraryLoaded: libraryLoaded);
               },
             ),
           ],
@@ -1764,6 +1750,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   Widget _buildResetSection(BuildContext context) {
     return SettingsCard(
+      cardId: 'system.reset',
       title: 'איפוס',
       children: [
         ListTile(

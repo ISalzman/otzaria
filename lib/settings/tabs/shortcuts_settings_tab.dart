@@ -7,7 +7,6 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
-import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
@@ -550,24 +549,22 @@ class ShortcutsSettingsTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // ── כללי (איפוס) ──────────────────────────────────────────────
-        SettingsAnchor(
+        SettingsCard(
           cardId: 'shortcuts.main',
-          child: SettingsCard(
-            title: 'כללי',
-            children: [
-              SettingsActionTile.text(
-                icon: FluentIcons.arrow_reset_24_regular,
-                title: 'איפוס קיצורי מקשים',
-                subtitle: 'החזר את כל קיצורי המקשים לברירת המחדל',
-                actions: [
-                  ActionButton.ghost(
-                    text: 'איפוס',
-                    onPressed: () => _resetShortcuts(context),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          title: 'כללי',
+          children: [
+            SettingsActionTile.text(
+              icon: FluentIcons.arrow_reset_24_regular,
+              title: 'איפוס קיצורי מקשים',
+              subtitle: 'החזר את כל קיצורי המקשים לברירת המחדל',
+              actions: [
+                ActionButton.ghost(
+                  text: 'איפוס',
+                  onPressed: () => _resetShortcuts(context),
+                ),
+              ],
+            ),
+          ],
         ),
 
         kSettingsCardSpacing,

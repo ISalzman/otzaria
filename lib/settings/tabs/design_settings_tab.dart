@@ -6,7 +6,6 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart'
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/dialogs/settings_dialogs_exports.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
-import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
@@ -139,239 +138,229 @@ class DesignSettingsTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // מצב כהה וצבע בסיס
-                SettingsAnchor(
+                SettingsCard(
                   cardId: 'design.theme',
-                  child: SettingsCard(
-                    title: 'ערכת נושא',
-                    children: [
-                      SettingsActionTile.segmentedTile<_ThemeMode>(
-                        icon: FluentIcons.weather_sunny_24_regular,
-                        title: 'מצב ערכת נושא',
-                        subtitle: state.followSystemTheme
-                            ? 'התוכנה תתאים את המראה באופן אוטומטי להגדרות מערכת ההפעלה'
-                            : state.isDarkMode
-                                ? 'התוכנה תשתמש בצבעים כהים'
-                                : 'התוכנה תשתמש בצבעים בהירים',
-                        options: const [
-                          SegmentOption(value: _ThemeMode.light, label: 'בהיר'),
-                          SegmentOption(
-                              value: _ThemeMode.system, label: 'מערכת'),
-                          SegmentOption(value: _ThemeMode.dark, label: 'כהה'),
-                        ],
-                        currentValue: state.followSystemTheme
-                            ? _ThemeMode.system
-                            : state.isDarkMode
-                                ? _ThemeMode.dark
-                                : _ThemeMode.light,
-                        onChanged: (mode) {
-                          if (mode == _ThemeMode.system) {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdateFollowSystemTheme(true));
-                          } else {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdateFollowSystemTheme(false));
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdateDarkMode(mode == _ThemeMode.dark));
+                  title: 'ערכת נושא',
+                  children: [
+                    SettingsActionTile.segmentedTile<_ThemeMode>(
+                      icon: FluentIcons.weather_sunny_24_regular,
+                      title: 'מצב ערכת נושא',
+                      subtitle: state.followSystemTheme
+                          ? 'התוכנה תתאים את המראה באופן אוטומטי להגדרות מערכת ההפעלה'
+                          : state.isDarkMode
+                              ? 'התוכנה תשתמש בצבעים כהים'
+                              : 'התוכנה תשתמש בצבעים בהירים',
+                      options: const [
+                        SegmentOption(value: _ThemeMode.light, label: 'בהיר'),
+                        SegmentOption(value: _ThemeMode.system, label: 'מערכת'),
+                        SegmentOption(value: _ThemeMode.dark, label: 'כהה'),
+                      ],
+                      currentValue: state.followSystemTheme
+                          ? _ThemeMode.system
+                          : state.isDarkMode
+                              ? _ThemeMode.dark
+                              : _ThemeMode.light,
+                      onChanged: (mode) {
+                        if (mode == _ThemeMode.system) {
+                          context
+                              .read<SettingsBloc>()
+                              .add(UpdateFollowSystemTheme(true));
+                        } else {
+                          context
+                              .read<SettingsBloc>()
+                              .add(UpdateFollowSystemTheme(false));
+                          context
+                              .read<SettingsBloc>()
+                              .add(UpdateDarkMode(mode == _ThemeMode.dark));
+                        }
+                      },
+                    ),
+                    ColorPickerTile(
+                      key: ValueKey(
+                          'color-picker-${Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light'}'),
+                      currentColor:
+                          Theme.of(context).brightness == Brightness.dark
+                              ? state.darkSeedColor
+                              : state.seedColor,
+                      defaultColor:
+                          Theme.of(context).brightness == Brightness.dark
+                              ? AppSeedColors.defaultDark
+                              : AppSeedColors.defaultLight,
+                      onChanged: (color) {
+                        if (Theme.of(context).brightness == Brightness.dark) {
+                          context
+                              .read<SettingsBloc>()
+                              .add(UpdateDarkSeedColor(color));
+                        } else {
+                          context
+                              .read<SettingsBloc>()
+                              .add(UpdateSeedColor(color));
                           }
                         },
                       ),
-                      ColorPickerTile(
-                        key: ValueKey(
-                            'color-picker-${Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light'}'),
-                        currentColor:
-                            Theme.of(context).brightness == Brightness.dark
-                                ? state.darkSeedColor
-                                : state.seedColor,
-                        defaultColor:
-                            Theme.of(context).brightness == Brightness.dark
-                                ? AppSeedColors.defaultDark
-                                : AppSeedColors.defaultLight,
-                        onChanged: (color) {
-                          if (Theme.of(context).brightness == Brightness.dark) {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdateDarkSeedColor(color));
-                          } else {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdateSeedColor(color));
-                          }
-                        },
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
 
                 kSettingsCardSpacing,
 
                 // צפיפות תצוגה (רק בדסקטופ)
                 if (!Platform.isAndroid && !Platform.isIOS) ...[
-                  SettingsAnchor(
+                  SettingsCard(
                     cardId: 'design.display',
-                    child: SettingsCard(
-                      title: 'תצוגה',
-                      children: [
-                        SettingsActionTile.segmentedTile<bool>(
-                          icon: FluentIcons.column_triple_24_regular,
-                          title: 'צפיפות ממשק',
-                          subtitle: state.compactMenuMode
-                              ? 'הצג יותר תוכן על ידי הקטנת המרווחים'
-                              : 'הצג פריטים במרווחים נוחים ללחיצה',
-                          options: const [
-                            SegmentOption(value: false, label: 'רחב'),
-                            SegmentOption(value: true, label: 'קומפקטי'),
-                          ],
-                          currentValue: state.compactMenuMode,
-                          onChanged: (value) {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdateCompactMenuMode(value));
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  kSettingsCardSpacing,
-                ],
-
-                SettingsAnchor(
-                  cardId: 'design.pdf',
-                  child: SettingsCard(
-                    title: 'תצוגת PDF',
+                    title: 'תצוגה',
                     children: [
-                      SettingsActionTile.switchTile(
-                        icon: FluentIcons.book_open_24_regular,
-                        title: 'תצוגת ספר בPDF',
-                        subtitle: state.enablePerBookSettings
-                            ? state.pdfBookViewByDefault
-                                ? 'ספרי PDF ייפתחו בתצוגת ספר'
-                                : 'ספרי PDF ייפתחו בתצוגה רגילה'
-                            : state.pdfBookViewByDefault
-                                ? 'כל ספרי ה-PDF ייפתחו בתצוגת ספר'
-                                : 'כל ספרי ה-PDF ייפתחו בתצוגה רגילה',
-                        value: state.pdfBookViewByDefault,
+                      SettingsActionTile.segmentedTile<bool>(
+                        icon: FluentIcons.column_triple_24_regular,
+                        title: 'צפיפות ממשק',
+                        subtitle: state.compactMenuMode
+                            ? 'הצג יותר תוכן על ידי הקטנת המרווחים'
+                            : 'הצג פריטים במרווחים נוחים ללחיצה',
+                        options: const [
+                          SegmentOption(value: false, label: 'רחב'),
+                          SegmentOption(value: true, label: 'קומפקטי'),
+                        ],
+                        currentValue: state.compactMenuMode,
                         onChanged: (value) {
                           context
                               .read<SettingsBloc>()
-                              .add(UpdatePdfBookViewByDefault(value));
+                              .add(UpdateCompactMenuMode(value));
                         },
                       ),
                     ],
                   ),
+                  kSettingsCardSpacing,
+                ],
+
+                SettingsCard(
+                  cardId: 'design.pdf',
+                  title: 'תצוגת PDF',
+                  children: [
+                    SettingsActionTile.switchTile(
+                      icon: FluentIcons.book_open_24_regular,
+                      title: 'תצוגת ספר בPDF',
+                      subtitle: state.enablePerBookSettings
+                          ? state.pdfBookViewByDefault
+                              ? 'ספרי PDF ייפתחו בתצוגת ספר'
+                              : 'ספרי PDF ייפתחו בתצוגה רגילה'
+                          : state.pdfBookViewByDefault
+                              ? 'כל ספרי ה-PDF ייפתחו בתצוגת ספר'
+                              : 'כל ספרי ה-PDF ייפתחו בתצוגה רגילה',
+                      value: state.pdfBookViewByDefault,
+                      onChanged: (value) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdatePdfBookViewByDefault(value));
+                      },
+                    ),
+                  ],
                 ),
 
                 kSettingsCardSpacing,
 
                 // התנהגות סרגל צד
-                SettingsAnchor(
+                SettingsCard(
                   cardId: 'design.layout',
-                  child: SettingsCard(
-                    title: 'חלוניות עזר',
-                    children: [
-                      SettingsActionTile.segmentedTile<_SidebarMode>(
-                        title: 'חלונית ניווט בין כותרות',
-                        subtitle: state.pinSidebar
-                            ? 'החלונית תוצג באופן קבוע'
-                            : state.defaultSidebarOpen
-                                ? 'החלונית תוצג בפתיחת ספר ותיסגר בעת גלילה'
-                                : 'החלונית לא תוצג אוטומטית עם פתיחת הספר',
-                        rtlIcon: FluentIcons.panel_left_24_regular,
-                        options: const [
-                          SegmentOption(
-                              value: _SidebarMode.pinned, label: 'הצגה'),
-                          SegmentOption(
-                              value: _SidebarMode.openOnBook, label: 'אוטומטי'),
-                          SegmentOption(
-                              value: _SidebarMode.closed, label: 'הסתרה'),
-                        ],
-                        currentValue: state.pinSidebar
-                            ? _SidebarMode.pinned
-                            : state.defaultSidebarOpen
-                                ? _SidebarMode.openOnBook
-                                : _SidebarMode.closed,
-                        onChanged: (mode) {
-                          if (mode == _SidebarMode.pinned) {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdatePinSidebar(true));
-                            context
-                                .read<SettingsBloc>()
-                                .add(const UpdateDefaultSidebarOpen(true));
-                          } else if (mode == _SidebarMode.openOnBook) {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdatePinSidebar(false));
-                            context
-                                .read<SettingsBloc>()
-                                .add(const UpdateDefaultSidebarOpen(true));
-                          } else {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdatePinSidebar(false));
-                            context
-                                .read<SettingsBloc>()
-                                .add(const UpdateDefaultSidebarOpen(false));
-                          }
-                        },
-                      ),
-                      SettingsActionTile.switchTile(
-                        icon: FluentIcons.panel_right_24_regular,
-                        title: 'פתיחת פאנל המפרשים בפתיחת ספר',
-                        subtitle: state.defaultCommentaryOpen
-                            ? 'פאנל המפרשים ייפתח אוטומטית כשיש מפרשים נבחרים '
-                                '(מפרשים בצד ו-PDF בלבד)'
-                            : 'פאנל המפרשים לא ייפתח אוטומטית בפתיחת ספר',
-                        value: state.defaultCommentaryOpen,
-                        onChanged: (value) {
+                  title: 'חלוניות עזר',
+                  children: [
+                    SettingsActionTile.segmentedTile<_SidebarMode>(
+                      title: 'חלונית ניווט בין כותרות',
+                      subtitle: state.pinSidebar
+                          ? 'החלונית תוצג באופן קבוע'
+                          : state.defaultSidebarOpen
+                              ? 'החלונית תוצג בפתיחת ספר ותיסגר בעת גלילה'
+                              : 'החלונית לא תוצג אוטומטית עם פתיחת הספר',
+                      rtlIcon: FluentIcons.panel_left_24_regular,
+                      options: const [
+                        SegmentOption(
+                            value: _SidebarMode.pinned, label: 'הצגה'),
+                        SegmentOption(
+                            value: _SidebarMode.openOnBook, label: 'אוטומטי'),
+                        SegmentOption(
+                            value: _SidebarMode.closed, label: 'הסתרה'),
+                      ],
+                      currentValue: state.pinSidebar
+                          ? _SidebarMode.pinned
+                          : state.defaultSidebarOpen
+                              ? _SidebarMode.openOnBook
+                              : _SidebarMode.closed,
+                      onChanged: (mode) {
+                        if (mode == _SidebarMode.pinned) {
                           context
                               .read<SettingsBloc>()
-                              .add(UpdateDefaultCommentaryOpen(value));
-                        },
-                      ),
-                      SettingsActionTile.switchTile(
-                        title: 'פתיחת הערות אישיות במצב סגור',
-                        subtitle: state.personalNotesCollapsedByDefault
-                            ? 'רשימות ההערות יוצגו כשהן סגורות'
-                            : 'רשימות ההערות יוצגו כשהן פתוחות',
-                        value: state.personalNotesCollapsedByDefault,
-                        onChanged: (value) {
-                          context.read<SettingsBloc>().add(
-                              UpdatePersonalNotesCollapsedByDefault(value));
-                        },
-                      ),
-                      StatefulBuilder(
-                        builder: (context, setState) {
-                          final splitedView =
-                              Settings.getValue<bool>('key-splited-view') ??
-                                  true;
-                          return SettingsActionTile.switchTile(
-                            title: 'הצגת המפרשים בחלונית בצד',
-                            subtitle: splitedView
-                                ? 'המפרשים יוצגו בחלונית מפוצלת'
-                                : 'המפרשים יוצגו בתוך הטקסט',
-                            value: splitedView,
-                            onChanged: (value) {
-                              setState(() {
-                                Settings.setValue<bool>(
-                                    'key-splited-view', value);
-                                final settingsBloc =
-                                    context.read<SettingsBloc>();
-                                PerBookSettings.cleanupRedundantSettings(
-                                  defaultFontSize: settingsBloc.state.fontSize,
-                                  defaultRemoveNikud:
-                                      settingsBloc.state.defaultRemoveNikud,
-                                  defaultShowSplitView: value,
-                                );
-                              });
-                            },
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+                              .add(UpdatePinSidebar(true));
+                          context
+                              .read<SettingsBloc>()
+                              .add(const UpdateDefaultSidebarOpen(true));
+                        } else if (mode == _SidebarMode.openOnBook) {
+                          context
+                              .read<SettingsBloc>()
+                              .add(UpdatePinSidebar(false));
+                          context
+                              .read<SettingsBloc>()
+                              .add(const UpdateDefaultSidebarOpen(true));
+                        } else {
+                          context
+                              .read<SettingsBloc>()
+                              .add(UpdatePinSidebar(false));
+                          context
+                              .read<SettingsBloc>()
+                              .add(const UpdateDefaultSidebarOpen(false));
+                        }
+                      },
+                    ),
+                    SettingsActionTile.switchTile(
+                      icon: FluentIcons.panel_right_24_regular,
+                      title: 'פתיחת פאנל המפרשים בפתיחת ספר',
+                      subtitle: state.defaultCommentaryOpen
+                          ? 'פאנל המפרשים ייפתח אוטומטית כשיש מפרשים נבחרים '
+                              '(מפרשים בצד ו-PDF בלבד)'
+                          : 'פאנל המפרשים לא ייפתח אוטומטית בפתיחת ספר',
+                      value: state.defaultCommentaryOpen,
+                      onChanged: (value) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateDefaultCommentaryOpen(value));
+                      },
+                    ),
+                    SettingsActionTile.switchTile(
+                      title: 'פתיחת הערות אישיות במצב סגור',
+                      subtitle: state.personalNotesCollapsedByDefault
+                          ? 'רשימות ההערות יוצגו כשהן סגורות'
+                          : 'רשימות ההערות יוצגו כשהן פתוחות',
+                      value: state.personalNotesCollapsedByDefault,
+                      onChanged: (value) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdatePersonalNotesCollapsedByDefault(value));
+                      },
+                    ),
+                    StatefulBuilder(
+                      builder: (context, setState) {
+                        final splitedView =
+                            Settings.getValue<bool>('key-splited-view') ?? true;
+                        return SettingsActionTile.switchTile(
+                          title: 'הצגת המפרשים בחלונית בצד',
+                          subtitle: splitedView
+                              ? 'המפרשים יוצגו בחלונית מפוצלת'
+                              : 'המפרשים יוצגו בתוך הטקסט',
+                          value: splitedView,
+                          onChanged: (value) {
+                            setState(() {
+                              Settings.setValue<bool>(
+                                  'key-splited-view', value);
+                              final settingsBloc = context.read<SettingsBloc>();
+                              PerBookSettings.cleanupRedundantSettings(
+                                defaultFontSize: settingsBloc.state.fontSize,
+                                defaultRemoveNikud:
+                                    settingsBloc.state.defaultRemoveNikud,
+                                defaultShowSplitView: value,
+                              );
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
