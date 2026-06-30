@@ -49,9 +49,9 @@ jobs:
       # בתיעוד הרשמי learn.microsoft.com/cpp/windows/latest-supported-vc-redist),
       # להעתיק את ה-URL הסופי, את ה-SHA-256 (מופיע בנתיב ה-URL עצמו)
       # ואת מספר הגרסה (מ-Get-Item ...VersionInfo.FileVersion).
-      VC_REDIST_URL: 'https://download.visualstudio.microsoft.com/download/pr/c1bd4f2c-3672-468e-8480-7ed419dbb641/90E48ADE404E4576D023ABFA374F323555F233982A8805EA9AC63DCA9491A16B/VC_redist.x64.exe'
-      VC_REDIST_SHA256: '90E48ADE404E4576D023ABFA374F323555F233982A8805EA9AC63DCA9491A16B'
-      VC_REDIST_VERSION: '14.51.36231.0'
+      VC_REDIST_URL: 'https://download.visualstudio.microsoft.com/download/pr/ebdab8e5-1d7b-4d9f-a11b-cbb1720c3b12/843068991DAAA1F73AD9F6239BCE4D0F6A07A51F18C37EA2A867E9BECA71295C/VC_redist.x64.exe'
+      VC_REDIST_SHA256: '843068991DAAA1F73AD9F6239BCE4D0F6A07A51F18C37EA2A867E9BECA71295C'
+      VC_REDIST_VERSION: '14.51.36247.0'
     # env:
     #   RUSTUP_HOME: ${{ github.workspace }}\.rustup
     #   CARGO_HOME:  ${{ github.workspace }}\.cargo
@@ -1159,10 +1159,26 @@ jobs:
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
 
-      - name: Build Flutter macOS app (Universal Binary)
+      - name: Build Flutter macOS app (Universal Binary, with retry)
         run: |
           # Build Universal Binary that supports both Intel (x86_64) and Apple Silicon (arm64)
-          flutter build macos --release --verbose
+          # xcodebuild לעיתים נכשל ב-"Internal inconsistency error: never received
+          # target ended message" — מירוץ חולף במערכת הבנייה; retry פותר אותו
+          set -e
+          tries=0
+          until [ $tries -ge 3 ]
+          do
+            if flutter build macos --release --verbose; then
+              break
+            fi
+            tries=$((tries+1))
+            echo "flutter build macos failed. retry $tries/3 after short sleep..."
+            sleep 15
+          done
+          if [ $tries -ge 3 ]; then
+            echo "::error::flutter build macos failed after 3 attempts"
+            exit 1
+          fi
 
       - name: Download library assets for macOS FULL bundle
         if: true
