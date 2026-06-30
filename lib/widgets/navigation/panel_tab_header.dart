@@ -84,7 +84,10 @@ class _PanelOpenHandleState extends State<PanelOpenHandle> {
           height: 80,
           decoration: BoxDecoration(
             color: AppSurfaces.panelOpenHandle(cs, isHovering: _isHovering),
-            borderRadius: AppTokens.borderRadiusAll,
+            borderRadius: const BorderRadius.only(
+              topRight: Radius.circular(40),
+              bottomRight: Radius.circular(40),
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.15),
