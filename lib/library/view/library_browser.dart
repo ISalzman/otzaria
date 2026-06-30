@@ -1945,8 +1945,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
                   childAspectRatio: 2,
-                  crossAxisSpacing: 4,
-                  mainAxisSpacing: 4),
+                  crossAxisSpacing: kLibraryGridSpacing,
+                  mainAxisSpacing: kLibraryGridSpacing),
               itemCount: displayLimit,
               itemBuilder: (context, index) {
                 final orderIndex = index;
