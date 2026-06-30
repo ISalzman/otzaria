@@ -12,10 +12,14 @@ import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
 
-/// פותח כתובת URL בדפדפן החיצוני, אם ניתן.
+/// פותח כתובת URL בדפדפן החיצוני.
+/// בלי canLaunchUrl — באנדרואיד 11+ הוא מחזיר false ל-https ומשתיק את הפתיחה.
 Future<void> _launchUrl(String url) async {
-  final uri = Uri.parse(url);
-  if (await canLaunchUrl(uri)) await launchUrl(uri);
+  try {
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  } catch (e) {
+    debugPrint('Could not launch $url: $e');
+  }
 }
 
 /// טאב "חכמי לב" — אודות, קהילה, תורמים ומפתחים.
@@ -662,7 +666,6 @@ class _MemorialCardsGrid extends StatelessWidget {
       breakpoint: 400,
       spacing: 12,
       equalHeight: true,
-      wideCrossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _MemorialCard.donor(
           title: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
