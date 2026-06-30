@@ -148,31 +148,69 @@ const aboutAdditionalSourcesLabel =
     'כמו כן נוספו ספרים חשובים רבים מהפרויקטים הבאים:';
 
 const aboutMainSources = <Map<String, String>>[
-  {'name': 'ספריא', 'url': 'https://www.sefaria.org/texts'},
+  {
+    'name': 'ספריא',
+    'url': 'https://www.sefaria.org/texts',
+    'logo': 'assets/logo_books/safria logo.svg',
+  },
   {
     'name': 'דיקטה',
     'url':
-        'https://github.com/Dicta-Israel-Center-for-Text-Analysis/Dicta-Library-Download'
+        'https://github.com/Dicta-Israel-Center-for-Text-Analysis/Dicta-Library-Download',
+    'logo': 'assets/logo_books/dicta_logo.svg',
   },
 ];
 
 const aboutAdditionalSources = <Map<String, String>>[
-  {'name': 'אורייתא', 'url': 'https://github.com/MosheWagner/Orayta-Books'},
-  {'name': 'ובלכתך בדרך', 'url': 'http://mobile.tora.ws'},
+  {
+    'name': 'אורייתא',
+    'url': 'https://github.com/MosheWagner/Orayta-Books',
+    'logo': 'assets/logo_books/Orayta.svg',
+    'logoOriginalColor': 'true',
+  },
+  {
+    'name': 'ובלכתך בדרך',
+    'url': 'http://mobile.tora.ws',
+    'logo': 'assets/logo_books/OnYourWay_logo.svg',
+  },
   {
     'name': 'תורת אמת',
-    'url': 'http://www.toratemetfreeware.com/index.html?downloads;1;'
+    'url': 'http://www.toratemetfreeware.com/index.html?downloads;1;',
+    'logo': 'assets/logo_books/ToratEmet.svg',
+    'logoOriginalColor': 'true',
   },
   {
     'name': 'אוצר הספרים היהודי',
     'url':
-        'https://wiki.jewishbooks.org.il/mediawiki/wiki/%D7%A2%D7%9E%D7%95%D7%93_%D7%A8%D7%90%D7%A9%D7%99'
+        'https://wiki.jewishbooks.org.il/mediawiki/wiki/%D7%A2%D7%9E%D7%95%D7%93_%D7%A8%D7%90%D7%A9%D7%99',
+    'logo': 'assets/logo_books/JewishBook-logo.svg',
   },
-  {'name': 'ויקיטקסט', 'url': 'https://he.wikisource.org/wiki'},
-  {'name': 'תא שמע', 'url': 'https://tashma.co.il/'},
-  {'name': 'פנינים', 'url': 'https://pninim.org/'},
-  {'name': 'הספרייה הלאומית', 'url': 'https://www.nli.org.il/'},
-  {'name': 'פרויקט פרידברג', 'url': 'https://fjms.genizah.org/'},
+  {
+    'name': 'ויקיטקסט',
+    'url': 'https://he.wikisource.org/wiki',
+    'logo': 'assets/logo_books/wikisource_logo.svg',
+    'logoOriginalColor': 'true',
+  },
+  {
+    'name': 'תא שמע',
+    'url': 'https://tashma.co.il/',
+    'logo': 'assets/logo_books/tashma.svg',
+  },
+  {
+    'name': 'פנינים',
+    'url': 'https://pninim.org/',
+    'logo': 'assets/logo_books/pninim.svg',
+  },
+  {
+    'name': 'הספרייה הלאומית',
+    'url': 'https://www.nli.org.il/',
+    'logo': 'assets/logo_books/national_library_il.svg',
+  },
+  {
+    'name': 'פרויקט פרידברג',
+    'url': 'https://fjms.genizah.org/',
+    'logo': 'assets/logo_books/friedberg_logo.svg',
+  },
   {
     'name': 'פרויקט בן יהודה',
     'url': 'https://github.com/projectbenyehuda/public_domain_dump'
