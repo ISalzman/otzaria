@@ -2656,6 +2656,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 current is PluginSystemDevInstallRequiresPermissions ||
                 current is PluginSystemOverwriteRequired,
             listener: (context, state) {
+              final isOfflineMode =
+                  context.read<SettingsBloc>().state.isOfflineMode;
               if (state is PluginSystemInstallRequiresPermissions) {
                 showDialog(
                   context: context,
@@ -2667,6 +2669,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                       previousVersion: state.previousVersion,
                       previousAllowOrderBeforeBuiltInsGranted:
                           state.previousAllowOrderBeforeBuiltInsGranted,
+                      isOfflineMode: isOfflineMode,
                     ),
                   ),
                 );
@@ -2680,6 +2683,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                     previousVersion: state.previousVersion,
                     previousAllowOrderBeforeBuiltInsGranted:
                         state.previousAllowOrderBeforeBuiltInsGranted,
+                    isOfflineMode: isOfflineMode,
                     onConfirm: (perms, allowOrder) => bloc.add(
                       ConfirmDevPluginInstall(
                         manifest: state.manifest,

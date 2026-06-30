@@ -69,6 +69,10 @@ const Map<String, String> apiCallToPermissionHint = {
 /// בממשק (ברירת מחדל: כבויה, בולטת חזותית במסך ההתקנה).
 const pluginRunOnStartupPermission = 'app.run_on_startup';
 
+/// שם ההרשאה לגישה לאינטרנט. מטופלת בנפרד בממשק: במצב 'מנותק' היא מתחילה
+/// כבויה במסך ההתקנה, ותוסף שהמשתמש כיבה בו הרשאה זו ממשיך להופיע גם במצב 'מנותק'.
+const pluginNetworkAccessPermission = 'network.access';
+
 const pluginValidPermissions = <String>[
   // ===== מידע על האפליקציה =====
   /// גישה למידע כללי על האפליקציה (גרסה, פלטפורמה, ערכת נושא)
