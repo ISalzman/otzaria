@@ -571,6 +571,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
                       book: TextBook(
                         title: utils.getTitleFromPath(link.path2),
                         isUserBook: link.targetIsUserBook,
+                        categoryId: link.targetCategoryId,
                       ),
                       index: link.index2 - 1,
                       openLeftPane:

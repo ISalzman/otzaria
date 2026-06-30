@@ -78,6 +78,7 @@ class ContextMenuUtils {
             book: TextBook(
               title: utils.getTitleFromPath(link.path2),
               isUserBook: link.targetIsUserBook,
+              categoryId: link.targetCategoryId,
             ),
             index: link.index2 - 1,
             openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
