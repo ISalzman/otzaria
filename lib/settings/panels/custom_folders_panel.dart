@@ -492,6 +492,13 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
             'קבצי PDF ו-Word נקראים תמיד ישירות מהקבצים '
             '(לא נשמרים כעותק עצמאי).',
           ),
+          const SizedBox(height: 8),
+          _legendRow(
+            FluentIcons.link_24_regular,
+            'דורות וקישורים: אפשר להניח בתיקייה קובצי CSV/JSON — "דורות.csv" '
+            'לסדר הדורות, ו-"<שם הספר>.links.csv" לקישורים — והם ייקלטו '
+            'אוטומטית בסריקה.',
+          ),
         ],
       ),
     );

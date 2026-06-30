@@ -33,9 +33,8 @@ void main() {
   test('getAllBookTitleToGeneration קורא דורות מ-book_generation (v3)',
       () async {
     final db = await database.database;
-    // ב-v3 הדורות הם פר-ספר דרך book_generation (סכמת אוצריא אינה יוצרת אותה).
-    db.execute(
-        'CREATE TABLE book_generation (bookId INTEGER, generationId INTEGER)');
+    // book_generation נוצרת כעת ע"י סכמת האפליקציה (MyDatabase) — אין צורך
+    // ליצור אותה ידנית.
     db.execute(
         "INSERT INTO generation (id, name) VALUES (1, 'ראשונים'), (2, 'אחרונים')");
 

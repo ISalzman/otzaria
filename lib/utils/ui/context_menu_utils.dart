@@ -75,7 +75,10 @@ class ContextMenuUtils {
         icon: FluentIcons.open_24_regular,
         onTap: () {
           openBookCallback(TextBookTab(
-            book: TextBook(title: utils.getTitleFromPath(link.path2)),
+            book: TextBook(
+              title: utils.getTitleFromPath(link.path2),
+              isUserBook: link.targetIsUserBook,
+            ),
             index: link.index2 - 1,
             openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
                     false) ||
