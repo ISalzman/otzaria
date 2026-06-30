@@ -36,7 +36,7 @@ class MagicDictionaryRelease {
 class MagicDictionaryDownloader {
   /// נקודת ה-API של ה-release האחרון.
   static const String latestReleaseApi =
-      'https://api.github.com/repos/kdroidFilter/SeforimMagicIndexer/releases/latest';
+      'https://api.github.com/repos/Otzaria/SeforimMagicIndexer/releases/latest';
 
   /// מזהים את נכס המילון לפי סיומת ה-URL.
   static const String _assetSuffix = '/lexical.db';
