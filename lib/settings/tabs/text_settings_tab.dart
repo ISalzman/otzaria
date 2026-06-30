@@ -2,7 +2,6 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
-import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
@@ -189,25 +188,13 @@ class TextSettingsTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SettingsAnchor(
-                  cardId: 'text.font',
-                  child: _buildFontSection(context, settingsState),
-                ),
+                _buildFontSection(context, settingsState),
                 kSettingsCardSpacing,
-                SettingsAnchor(
-                  cardId: 'text.nikud',
-                  child: _buildNikudSection(context, settingsState),
-                ),
+                _buildNikudSection(context, settingsState),
                 kSettingsCardSpacing,
-                SettingsAnchor(
-                  cardId: 'text.copy',
-                  child: _buildCopySection(context, settingsState),
-                ),
+                _buildCopySection(context, settingsState),
                 kSettingsCardSpacing,
-                SettingsAnchor(
-                  cardId: 'text.per_book',
-                  child: _buildPerBookSection(context, settingsState),
-                ),
+                _buildPerBookSection(context, settingsState),
               ],
             ),
           ),
@@ -220,6 +207,7 @@ class TextSettingsTab extends StatelessWidget {
 
   Widget _buildFontSection(BuildContext context, SettingsState state) {
     return SettingsCard(
+      cardId: 'text.font',
       title: 'הגדרות גופן ועיצוב',
       children: [
         // שורה 1: גודל גופן הספר + גופן טקסט
@@ -376,6 +364,7 @@ class TextSettingsTab extends StatelessWidget {
     }
 
     return SettingsCard(
+      cardId: 'text.nikud',
       title: 'כתרי אותיות',
       children: [
         SettingsActionTile.segmentedTile<String>(
@@ -482,6 +471,7 @@ class TextSettingsTab extends StatelessWidget {
     }
 
     return SettingsCard(
+      cardId: 'text.copy',
       title: 'העתקת כותרות ופרקים',
       children: [
         SettingsActionTile.segmentedTile<String>(
@@ -542,6 +532,7 @@ class TextSettingsTab extends StatelessWidget {
 
   Widget _buildPerBookSection(BuildContext context, SettingsState state) {
     return SettingsCard(
+      cardId: 'text.per_book',
       title: 'הגדרות לפי ספר',
       children: [
         SettingsActionTile.switchTile(

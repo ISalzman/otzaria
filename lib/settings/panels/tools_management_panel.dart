@@ -14,7 +14,6 @@ import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
-import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/search/settings_search_registry.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
@@ -213,96 +212,92 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                SettingsAnchor(
+                SettingsCard(
                   cardId: _builtInCardId,
-                  child: SettingsCard(
-                    title: 'כלים מובנים',
-                    children: [
-                      ExpandableSection(
-                        icon: FluentIcons.apps_24_regular,
-                        title: const Text('רשימת הכלים'),
-                        subtitle: const Text(
-                            'הסתר כלים מהממשק או הצמד אותם לסרגל הניווט הראשי.'),
-                        isExpanded: _builtInExpanded,
-                        onTap: () => setState(
-                            () => _builtInExpanded = !_builtInExpanded),
-                        children: _builtInToolRows(settingsState),
-                      ),
-                    ],
-                  ),
+                  title: 'כלים מובנים',
+                  children: [
+                    ExpandableSection(
+                      icon: FluentIcons.apps_24_regular,
+                      title: const Text('רשימת הכלים'),
+                      subtitle: const Text(
+                          'הסתר כלים מהממשק או הצמד אותם לסרגל הניווט הראשי.'),
+                      isExpanded: _builtInExpanded,
+                      onTap: () =>
+                          setState(() => _builtInExpanded = !_builtInExpanded),
+                      children: _builtInToolRows(settingsState),
+                    ),
+                  ],
                 ),
                 if (plugins.isNotEmpty) ...[
                   kSettingsCardSpacing,
-                  SettingsAnchor(
+                  SettingsCard(
                     cardId: _pluginsCardId,
-                    child: SettingsCard(
-                      title: 'תוספים מותקנים',
-                      children: [
-                        // כותרת + סרגל פעולות כילד אחד כדי ש-divider יופיע רק בין הכותרת לשורות.
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SettingsActionTile.text(
-                              icon: FluentIcons.puzzle_piece_24_regular,
-                              title: 'רשימת התוספים',
-                              subtitle: _isSelectionMode
-                                  ? '${_selectedIds.length} נבחרו'
-                                  : 'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
-                              // LayoutBuilder inside SettingsActionTile crashes when
-                              // plugin rows with Tooltip (OverlayPortal) re-activate
-                              // during drag reorder — disable responsive layout.
-                              responsiveActions: false,
-                              actions: _isSelectionMode
-                                  ? [
-                                      ActionButton.ghost(
-                                        icon: FluentIcons
-                                            .checkbox_checked_24_regular,
-                                        text: 'בחר הכל',
-                                        onPressed: _selectedIds.length ==
-                                                plugins.length
-                                            ? null
-                                            : () => _selectAllPlugins(plugins),
+                    title: 'תוספים מותקנים',
+                    children: [
+                      // כותרת + סרגל פעולות כילד אחד כדי ש-divider יופיע רק בין הכותרת לשורות.
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SettingsActionTile.text(
+                            icon: FluentIcons.puzzle_piece_24_regular,
+                            title: 'רשימת התוספים',
+                            subtitle: _isSelectionMode
+                                ? '${_selectedIds.length} נבחרו'
+                                : 'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
+                            // LayoutBuilder inside SettingsActionTile crashes when
+                            // plugin rows with Tooltip (OverlayPortal) re-activate
+                            // during drag reorder — disable responsive layout.
+                            responsiveActions: false,
+                            actions: _isSelectionMode
+                                ? [
+                                    ActionButton.ghost(
+                                      icon: FluentIcons
+                                          .checkbox_checked_24_regular,
+                                      text: 'בחר הכל',
+                                      onPressed: _selectedIds.length ==
+                                              plugins.length
+                                          ? null
+                                          : () => _selectAllPlugins(plugins),
+                                    ),
+                                    ActionButton.neutral(
+                                      icon:
+                                          FluentIcons.dismiss_circle_24_regular,
+                                      text: 'ביטול',
+                                      onPressed: _exitSelectionMode,
+                                    ),
+                                  ]
+                                : [
+                                    ActionButton.neutral(
+                                      icon: FluentIcons
+                                          .multiselect_rtl_24_regular,
+                                      text: 'בחירה',
+                                      onPressed: _enterSelectionMode,
+                                    ),
+                                  ],
+                          ),
+                          AnimatedSize(
+                            duration: AppTokens.animNormal,
+                            curve: Curves.easeInOut,
+                            child: _isSelectionMode
+                                ? Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Builder(
+                                        builder: (ctx) =>
+                                            AppCard.sectionDivider(ctx),
                                       ),
-                                      ActionButton.neutral(
-                                        icon: FluentIcons
-                                            .dismiss_circle_24_regular,
-                                        text: 'ביטול',
-                                        onPressed: _exitSelectionMode,
-                                      ),
-                                    ]
-                                  : [
-                                      ActionButton.neutral(
-                                        icon: FluentIcons
-                                            .multiselect_rtl_24_regular,
-                                        text: 'בחירה',
-                                        onPressed: _enterSelectionMode,
+                                      _ActionBar(
+                                        selectedIds: _selectedIds.toSet(),
+                                        plugins: plugins,
                                       ),
                                     ],
-                            ),
-                            AnimatedSize(
-                              duration: AppTokens.animNormal,
-                              curve: Curves.easeInOut,
-                              child: _isSelectionMode
-                                  ? Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Builder(
-                                          builder: (ctx) =>
-                                              AppCard.sectionDivider(ctx),
-                                        ),
-                                        _ActionBar(
-                                          selectedIds: _selectedIds.toSet(),
-                                          plugins: plugins,
-                                        ),
-                                      ],
-                                    )
-                                  : const SizedBox.shrink(),
-                            ),
-                          ],
-                        ),
-                        ..._pluginRows(plugins),
-                      ],
-                    ),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ],
+                      ),
+                      ..._pluginRows(plugins),
+                    ],
                   ),
                 ],
               ],

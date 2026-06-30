@@ -6,7 +6,6 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/widgets/layout/adaptive_row.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
-import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/tabs/about_settings_data.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
@@ -27,11 +26,11 @@ class AboutSettingsTab extends StatelessWidget {
   static const List<SettingsSearchEntry> searchEntries = [
     SettingsSearchEntry(
       id: 'about.team',
-      title: 'אודות הצוות',
-      subtitle: 'מידע על מפתחי אוצריא',
+      title: 'אודות',
+      subtitle: 'וצדקתו עומדת לעד — זה הכותב ספרים ומשאילן לאחרים',
       tab: SettingsTab.about,
       cardId: 'about.main',
-      keywords: ['אודות', 'מפתחים', 'צוות'],
+      keywords: ['אודות', 'ציטוט', 'about'],
     ),
     SettingsSearchEntry(
       id: 'about.donate',
@@ -39,7 +38,7 @@ class AboutSettingsTab extends StatelessWidget {
       subtitle:
           'תרומתך תעזור לנו להמשיך לפתח ולשפר את אוצריא עבור כלל ציבור הלומדים',
       tab: SettingsTab.about,
-      cardId: 'about.main',
+      cardId: 'about.donors',
       keywords: ['תרומה', 'נדרים', 'תרום', 'donate'],
     ),
     SettingsSearchEntry(
@@ -47,31 +46,31 @@ class AboutSettingsTab extends StatelessWidget {
       title: 'אוצריא מתגייסת לעזרת לומדי התורה',
       subtitle: 'מרכז המידע על ארגוני סיוע ללומדי התורה',
       tab: SettingsTab.about,
-      cardId: 'about.main',
+      cardId: 'about.aid',
       keywords: ['סיוע', 'תורה', 'לומדי תורה', 'עזרה'],
     ),
     SettingsSearchEntry(
       id: 'about.editing',
-      title: 'הצטרף לצוות העריכה',
+      title: 'הצטרף לצוות העריכה ומהדירי הספרים',
       subtitle: 'עזור לנו להוסיף ספרים חדשים לספריית אוצריא',
       tab: SettingsTab.about,
-      cardId: 'about.main',
+      cardId: 'about.library',
       keywords: ['עריכה', 'הצטרף', 'הוספת ספרים'],
     ),
     SettingsSearchEntry(
       id: 'about.dev',
-      title: 'הצטרף לפיתוח',
-      subtitle: 'מפתחים מוזמנים לתרום לקהילה התורנית',
+      title: 'אודות פיתוח התוכנה',
+      subtitle: 'מידע על מפתחי אוצריא ופיתוח התוכנה',
       tab: SettingsTab.about,
-      cardId: 'about.main',
-      keywords: ['פיתוח', 'הצטרף', 'מפתחים', 'דיבלפר', 'developers'],
+      cardId: 'about.dev',
+      keywords: ['פיתוח', 'מפתחים', 'developers', 'אודות'],
     ),
     SettingsSearchEntry(
       id: 'about.donors',
       title: 'תורמים',
       subtitle: 'רשימת תורמי אוצריא',
       tab: SettingsTab.about,
-      cardId: 'about.main',
+      cardId: 'about.donors',
       keywords: ['תורמים', 'donors'],
     ),
     SettingsSearchEntry(
@@ -79,31 +78,31 @@ class AboutSettingsTab extends StatelessWidget {
       title: 'מפתחים',
       subtitle: 'רשימת מפתחי אוצריא',
       tab: SettingsTab.about,
-      cardId: 'about.main',
+      cardId: 'about.dev',
       keywords: ['מפתחים', 'צוות פיתוח', 'developers'],
     ),
     SettingsSearchEntry(
-      id: 'about.libraries',
-      title: 'התוכנה נעזרה רבות ב:',
-      subtitle: 'ספריות וכלים שאוצריא משתמשת בהם',
+      id: 'about.contributors',
+      title: 'תרמו מהונם ומזמנם',
+      subtitle: 'אנשים שתרמו מהונם ומזמנם לפיתוח אוצריא',
       tab: SettingsTab.about,
-      cardId: 'about.main',
-      keywords: ['ספריות', 'open source', 'קרדיטים'],
+      cardId: 'about.donors',
+      keywords: ['תורמים', 'מתנדבים', 'עזרה', 'זמן'],
     ),
     SettingsSearchEntry(
       id: 'about.editors',
       title: 'מהדירי ספרים',
       subtitle: 'רשימת מהדירי הספרים בספריית אוצריא',
       tab: SettingsTab.about,
-      cardId: 'about.main',
+      cardId: 'about.library',
       keywords: ['מהדירים', 'עורכים'],
     ),
     SettingsSearchEntry(
       id: 'about.feedback',
       title: 'משוב ותמיכה',
-      subtitle: 'פורום התמיכה והמשוב של אוצריא',
+      subtitle: 'נתקלת בבאג? פורום התמיכה והמשוב של אוצריא',
       tab: SettingsTab.about,
-      cardId: 'about.main',
+      cardId: 'about.dev',
       keywords: ['משוב', 'תמיכה', 'פורום', 'באג', 'שאלה'],
     ),
     SettingsSearchEntry(
@@ -111,7 +110,7 @@ class AboutSettingsTab extends StatelessWidget {
       title: 'מקור הספרים',
       subtitle: 'ספריא, דיקטה, אורייתא ועוד',
       tab: SettingsTab.about,
-      cardId: 'about.main',
+      cardId: 'about.library',
       keywords: ['מקור', 'ספריא', 'דיקטה', 'sefaria', 'אורייתא'],
     ),
   ];
@@ -125,13 +124,11 @@ class AboutSettingsTab extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SettingsAnchor(
-              cardId: 'about.main',
-              child: _buildHeader(context),
-            ),
+            _buildHeader(context),
 
             // ── סיוע ──
             SettingsCard(
+              cardId: 'about.aid',
               title: 'סיוע ללומדי תורה',
               children: [
                 SettingsActionTile.text(
@@ -152,6 +149,7 @@ class AboutSettingsTab extends StatelessWidget {
 
             // ── ציטוט סיום ──
             SettingsCard(
+              cardId: 'about.main',
               children: [_ClosingQuote()],
             ),
 
@@ -159,6 +157,7 @@ class AboutSettingsTab extends StatelessWidget {
 
             // ── תורמים ──
             SettingsCard(
+              cardId: 'about.donors',
               title: 'תורמים',
               children: [
                 _padded(_MemorialCardsGrid(
@@ -183,6 +182,7 @@ class AboutSettingsTab extends StatelessWidget {
 
             // ── מפתחים ──
             SettingsCard(
+              cardId: 'about.dev',
               title: 'אודות פיתוח התוכנה',
               children: [
                 _cardTitle(context, 'מפתחים'),
@@ -208,6 +208,7 @@ class AboutSettingsTab extends StatelessWidget {
 
             // ── אודות ספריית אוצריא ──
             SettingsCard(
+              cardId: 'about.library',
               title: 'אודות ספריית אוצריא',
               children: [
                 _cardTitle(
