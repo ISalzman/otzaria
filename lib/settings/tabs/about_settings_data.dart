@@ -163,6 +163,22 @@ const aboutMainSources = <Map<String, String>>[
 
 const aboutAdditionalSources = <Map<String, String>>[
   {
+    'name': 'פרויקט פרידברג',
+    'url': 'https://fjms.genizah.org/',
+    'logo': 'assets/logo_books/friedberg_logo.svg',
+  },
+  {
+    'name': 'הספרייה הלאומית',
+    'url': 'https://www.nli.org.il/',
+    'logo': 'assets/logo_books/national_library_il.svg',
+  },
+  {
+    'name': 'תורת אמת',
+    'url': 'http://www.toratemetfreeware.com/index.html?downloads;1;',
+    'logo': 'assets/logo_books/ToratEmet.svg',
+    'logoOriginalColor': 'true',
+  },
+  {
     'name': 'אורייתא',
     'url': 'https://github.com/MosheWagner/Orayta-Books',
     'logo': 'assets/logo_books/Orayta.svg',
@@ -174,9 +190,14 @@ const aboutAdditionalSources = <Map<String, String>>[
     'logo': 'assets/logo_books/OnYourWay_logo.svg',
   },
   {
-    'name': 'תורת אמת',
-    'url': 'http://www.toratemetfreeware.com/index.html?downloads;1;',
-    'logo': 'assets/logo_books/ToratEmet.svg',
+    'name': 'פנינים',
+    'url': 'https://pninim.org/',
+    'logo': 'assets/logo_books/pninim.svg',
+  },
+  {
+    'name': 'ויקיטקסט',
+    'url': 'https://he.wikisource.org/wiki',
+    'logo': 'assets/logo_books/wikisource_logo.svg',
     'logoOriginalColor': 'true',
   },
   {
@@ -186,30 +207,9 @@ const aboutAdditionalSources = <Map<String, String>>[
     'logo': 'assets/logo_books/JewishBook-logo.svg',
   },
   {
-    'name': 'ויקיטקסט',
-    'url': 'https://he.wikisource.org/wiki',
-    'logo': 'assets/logo_books/wikisource_logo.svg',
-    'logoOriginalColor': 'true',
-  },
-  {
     'name': 'תא שמע',
     'url': 'https://tashma.co.il/',
     'logo': 'assets/logo_books/tashma.svg',
-  },
-  {
-    'name': 'פנינים',
-    'url': 'https://pninim.org/',
-    'logo': 'assets/logo_books/pninim.svg',
-  },
-  {
-    'name': 'הספרייה הלאומית',
-    'url': 'https://www.nli.org.il/',
-    'logo': 'assets/logo_books/national_library_il.svg',
-  },
-  {
-    'name': 'פרויקט פרידברג',
-    'url': 'https://fjms.genizah.org/',
-    'logo': 'assets/logo_books/friedberg_logo.svg',
   },
   {
     'name': 'פרויקט בן יהודה',
