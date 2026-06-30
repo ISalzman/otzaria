@@ -102,6 +102,15 @@ const aboutTopEditors = <Map<String, String>>[
     'url':
         'https://otzaria.org/forum/user/%D7%9E%D7%99%D7%9B%D7%90%D7%9C%D7%95%D7%A9',
   },
+  {
+    'name': 'א. צ. מ.', // איש צדיק מידי
+    'url':
+        'https://forum.otzaria.org/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99',
+  },
+  {
+    'name': 'obs', // ??? צריך מילוי
+    'url': 'https://otzaria.org/forum/user/ori-bensimon',
+  },
 ];
 
 // מהדירים שההדירו בין 5 ל-10 ספרים
@@ -114,11 +123,6 @@ const aboutRegularEditors = <Map<String, String>>[
     'name': 'ד. מ. א.', // דוד משה 1
     'url':
         'https://forum.otzaria.org/user/%D7%93%D7%95%D7%93-%D7%9E%D7%A9%D7%94-1',
-  },
-  {
-    'name': 'א. צ. מ.', // איש צדיק מידי
-    'url':
-        'https://forum.otzaria.org/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99',
   },
   {
     'name': 'שני אנשים',
