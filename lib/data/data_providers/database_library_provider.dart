@@ -2569,6 +2569,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     try {
       final resolvedBook = await BookDatabaseResolver.resolveBook(
         title: targetTitle,
+        preferUserBooks: link.targetIsUserBook,
       );
       if (resolvedBook == null) return 'שגיאה: הספר לא נמצא במסד הנתונים';
 

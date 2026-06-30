@@ -210,14 +210,14 @@ class DataRepository {
 }
 
 /// בונה [BookSearchEntry] לספר בודד. ה-lookups מוזרקים כדי לאפשר בדיקה
-/// בלי DB. עבור ספר אישי מדלגים על כינויים ודור — ל-id שלו אין משמעות
-/// במאגרים הרשמיים (מרחבי id נפרדים), אחרת הוא יורש נתון של ספר רשמי זר.
+/// בלי DB. עבור ספר אישי מדלגים על כינויים (אין כינויי-משתמש) — ל-id שלו אין
+/// משמעות במאגר הרשמי. הדור נלקח לפי [book.isUserBook] מהמפה הנכונה.
 @visibleForTesting
 BookSearchEntry buildBookSearchEntry(
   int index,
   Book book, {
   required List<String>? Function(int bookId) acronymsForId,
-  required int Function(int? bookId) eraOrderForId,
+  required int Function(int? bookId, bool isUserBook) eraOrderForId,
 }) {
   final id = book.id;
   return BookSearchEntry(
@@ -228,7 +228,7 @@ BookSearchEntry buildBookSearchEntry(
     acronyms: id == null || book.isUserBook
         ? const []
         : acronymsForId(id) ?? const [],
-    eraOrder: eraOrderForId(book.isUserBook ? null : id),
+    eraOrder: eraOrderForId(id, book.isUserBook),
     isUserBook: book.isUserBook,
   );
 }

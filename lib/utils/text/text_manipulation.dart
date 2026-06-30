@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 
 /// רגקס להסרת תגי HTML וישויות.
@@ -700,7 +701,20 @@ Future<void> _loadCsvCache() async {
     }
     final db = provider.repository?.database;
     if (db != null) {
-      _csvCache = await db.authorDao.getAllBookTitleToGeneration();
+      final map = await db.authorDao.getAllBookTitleToGeneration();
+      // מיזוג דורות ספרי-משתמש (אם user_books.db פתוח) — כדי שמפרש-משתמש
+      // ימוין לפי דורו. בהתנגשות כותרת נשמר הערך הרשמי.
+      final userRepo = UserBooksDatabaseHolder.instance.repositoryIfInitialized;
+      if (userRepo != null) {
+        try {
+          final userMap =
+              await userRepo.database.authorDao.getAllBookTitleToGeneration();
+          userMap.forEach((k, v) => map.putIfAbsent(k, () => v));
+        } catch (e) {
+          debugPrint('⚠️ user_books era cache skipped: $e');
+        }
+      }
+      _csvCache = map;
     } else {
       _csvCache = {};
       debugPrint('⚠️ SqliteDataProvider repository is null');

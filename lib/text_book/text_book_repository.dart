@@ -4,6 +4,7 @@ import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/user_content_import/services/user_links_loader.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/file/docx_cache.dart';
@@ -163,6 +164,34 @@ class TextBookRepository {
         .toList()
       ?..sort();
 
+    final base = await _loadBaseLinks(
+      book,
+      normalizedStart,
+      normalizedEnd,
+      normalizedTargetBookTitles,
+    );
+
+    // מיזוג קישורי-משתמש (מ-user_books.db) — forward (כשקוראים ספר אישי)
+    // ו-inverse (מפרש-משתמש שמצביע אל הספר הזה, גם אם הוא רשמי).
+    final userLinks = await loadUserLinksForBook(
+      bookTitle: book.title,
+      bookCategoryId: book.categoryId,
+      isUserBook: book.isUserBook,
+      startLineIndex: normalizedStart,
+      endLineIndex: normalizedEnd,
+      targetBookTitles: normalizedTargetBookTitles,
+    );
+    if (userLinks.isEmpty) return base;
+    return [...base, ...userLinks];
+  }
+
+  /// טוען את קישורי המאגר (seforim.db / קובץ) בלבד — בלי קישורי-משתמש.
+  Future<List<Link>> _loadBaseLinks(
+    TextBook book,
+    int normalizedStart,
+    int normalizedEnd,
+    List<String>? normalizedTargetBookTitles,
+  ) async {
     final title = book.title;
     final categoryId = book.categoryId;
     final fileType = book.fileType ?? 'txt';
