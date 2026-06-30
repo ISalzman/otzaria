@@ -280,9 +280,9 @@ void main() {
       ),
     );
 
-    // handle ממוקם בקצה השמאלי של הפאנל (right: paneWidth - overhang)
-    // → right edge dx = containerWidth - paneWidth + overhang = 500 - 300 + 12 = 212
-    expect(tester.getTopRight(find.byType(ResizableDragHandle)).dx, 212.0);
+    // handle ממוקם בקצה הפנימי של הפאנל, שמוזז _kNarrowSideGap (10) מהדופן
+    // → right = 10 + 300 - 12 = 298 → dx = 500 - 298 = 202
+    expect(tester.getTopRight(find.byType(ResizableDragHandle)).dx, 202.0);
   });
 
   // אזורי רגרסיה לאופטימיזציה של commit 4996fff (דחיית בנייה ראשונה של הפאנל)
@@ -669,5 +669,61 @@ void main() {
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
+  });
+
+  // ── שוליים במצב צף (narrow) ───────────────────────────────────────────────
+
+  Widget buildNarrowPane({required double containerWidth}) {
+    return MaterialApp(
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: containerWidth,
+              height: 600,
+              child: AdaptiveSidePane(
+                isOpen: true,
+                alignment: AlignmentDirectional.centerEnd,
+                paneWidth: 300,
+                minMainContentWidth: 420,
+                onClose: () {},
+                mainContent: const SizedBox.expand(),
+                paneContent: const Text('pane'),
+                autoHandleResponsiveVisibility: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  testWidgets('מצב צף: הפאנל מוזז מהדופן ומשאיר שוליים חיצוניים',
+      (tester) async {
+    await tester.pumpWidget(buildNarrowPane(containerWidth: 500));
+    await tester.pumpAndSettle();
+
+    final containerRect = tester.getRect(find.byType(AdaptiveSidePane));
+    final paneRect = tester.getRect(find.byType(FloatingPanel));
+
+    // centerEnd → הפאנל בימין; שוליים חיצוניים (ימין) של 10px
+    expect(containerRect.right - paneRect.right, closeTo(10, 0.5));
+    // הרוחב לא צומצם (300 < 500-20)
+    expect(paneRect.width, closeTo(300, 0.5));
+  });
+
+  testWidgets('מצב צף: בחלון צר מאוד הרוחב מצומצם ונשמרים שוליים משני הצדדים',
+      (tester) async {
+    await tester.pumpWidget(buildNarrowPane(containerWidth: 250));
+    await tester.pumpAndSettle();
+
+    final containerRect = tester.getRect(find.byType(AdaptiveSidePane));
+    final paneRect = tester.getRect(find.byType(FloatingPanel));
+
+    // 250 - 10*2 = 230 → הרוחב מצומצם לרוחב הזמין
+    expect(paneRect.width, closeTo(230, 0.5));
+    expect(paneRect.left - containerRect.left, closeTo(10, 0.5));
+    expect(containerRect.right - paneRect.right, closeTo(10, 0.5));
   });
 }
