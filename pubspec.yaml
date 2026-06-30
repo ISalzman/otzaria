@@ -189,6 +189,7 @@ flutter:
     - assets/icon/iconnew.png
     - assets/icon/mount_sinai_tablets.svg
     - assets/icon/otzplugin_file_icon.png
+    - assets/logo_books/
     - lib/migration/database/sql/
     - assets/dictionary.json
     - assets/Acronyms.json
