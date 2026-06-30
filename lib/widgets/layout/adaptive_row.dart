@@ -33,7 +33,9 @@ class AdaptiveRow extends StatelessWidget {
           );
         }
         final row = Row(
-          crossAxisAlignment: wideCrossAxisAlignment,
+          // ב-equalHeight חובה stretch כדי שהילדים יימתחו לגובה ש-IntrinsicHeight קבע.
+          crossAxisAlignment:
+              equalHeight ? CrossAxisAlignment.stretch : wideCrossAxisAlignment,
           children:
               _withGaps((c) => Expanded(child: c), SizedBox(width: spacing)),
         );
