@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -260,6 +262,13 @@ class AboutSettingsTab extends StatelessWidget {
                 ),
               ],
             ),
+
+            kSettingsCardSpacing,
+
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: _ZayitCredit(),
+            ),
           ],
         ),
       ),
@@ -371,6 +380,8 @@ class _InfoChipWrap extends StatelessWidget {
                 name: c['name']!,
                 url: c['url'] ?? '',
                 description: c['description'],
+                logo: c['logo'],
+                logoOriginalColor: c['logoOriginalColor'] == 'true',
                 icon: icon,
               ))
           .toList(),
@@ -406,12 +417,16 @@ class _InfoChip extends StatelessWidget {
   final String name;
   final String url;
   final String? description;
+  final String? logo;
+  final bool logoOriginalColor;
   final IconData icon;
 
   const _InfoChip({
     required this.name,
     required this.url,
     this.description,
+    this.logo,
+    this.logoOriginalColor = false,
     required this.icon,
   });
 
@@ -419,11 +434,13 @@ class _InfoChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasUrl = url.isNotEmpty;
+    final contentColor =
+        hasUrl ? colorScheme.primary : colorScheme.onSurfaceVariant;
     // סגנון מפורש התואם למראה בכרטיס 'תרמו מהונם' — labelSmall (w500) של
     // ListTile.trailing עם גודל הכותרת — כך אחיד בכל מיקום ולא תלוי בהקשר.
     final nameStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
           fontSize: kSettingsTitleStyle.fontSize,
-          color: hasUrl ? colorScheme.primary : colorScheme.onSurfaceVariant,
+          color: contentColor,
         );
 
     final content = Padding(
@@ -431,7 +448,20 @@ class _InfoChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          RtlIcon(icon, size: 15, color: colorScheme.onSurfaceVariant),
+          if (logo != null)
+            // לוגו צבעוני מעומעם כדי שלא יבלוט מול שאר הפריטים החד-צבעוניים.
+            Opacity(
+              opacity: logoOriginalColor ? 0.6 : 1,
+              child: SvgPicture.asset(
+                logo!,
+                height: 16,
+                colorFilter: logoOriginalColor
+                    ? null
+                    : ColorFilter.mode(contentColor, BlendMode.srcIn),
+              ),
+            )
+          else
+            RtlIcon(icon, size: 15, color: contentColor),
           const SizedBox(width: 6),
           Text(name, style: nameStyle),
           if (description != null && description!.isNotEmpty) ...[
@@ -557,6 +587,60 @@ class _ClosingQuote extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── _ZayitCredit ──────────────────────────────────────────────────────────────
+
+/// קרדיט Zayit עם קישור לחיץ inline לאתר, מיושר לתחילת השורה.
+class _ZayitCredit extends StatefulWidget {
+  const _ZayitCredit();
+
+  @override
+  State<_ZayitCredit> createState() => _ZayitCreditState();
+}
+
+class _ZayitCreditState extends State<_ZayitCredit> {
+  static const _url = 'https://zayitapp.com/';
+  final _recognizer = TapGestureRecognizer();
+
+  @override
+  void initState() {
+    super.initState();
+    _recognizer.onTap = () async {
+      final uri = Uri.parse(_url);
+      if (await canLaunchUrl(uri)) await launchUrl(uri);
+    };
+  }
+
+  @override
+  void dispose() {
+    _recognizer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Text.rich(
+      TextSpan(
+        style: kSettingsSubtitleStyle,
+        children: [
+          const TextSpan(
+            text: 'Sefaria book conversion, the fuzzy search, and the library '
+                'updates are powered by the technologies that drive Zayit — ',
+          ),
+          TextSpan(
+            text: _url,
+            style: TextStyle(color: colorScheme.primary),
+            recognizer: _recognizer,
+          ),
+          const TextSpan(text: ' (licensed under GNU AGPL v3).'),
+        ],
+      ),
+      textAlign: TextAlign.start,
+      textDirection: TextDirection.ltr,
     );
   }
 }
