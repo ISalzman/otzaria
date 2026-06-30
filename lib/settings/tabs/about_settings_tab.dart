@@ -5,7 +5,6 @@ import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/widgets/layout/adaptive_row.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
@@ -13,6 +12,12 @@ import 'package:otzaria/settings/tabs/about_settings_data.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
+
+/// פותח כתובת URL בדפדפן החיצוני, אם ניתן.
+Future<void> _launchUrl(String url) async {
+  final uri = Uri.parse(url);
+  if (await canLaunchUrl(uri)) await launchUrl(uri);
+}
 
 /// טאב "חכמי לב" — אודות, קהילה, תורמים ומפתחים.
 class AboutSettingsTab extends StatelessWidget {
@@ -156,12 +161,9 @@ class AboutSettingsTab extends StatelessWidget {
             SettingsCard(
               title: 'תורמים',
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _MemorialCardsGrid(
-                    onDonationTap: () => _openUrl('https://nedar.im/ezOd'),
-                  ),
-                ),
+                _padded(_MemorialCardsGrid(
+                  onDonationTap: () => _openUrl('https://nedar.im/ezOd'),
+                )),
                 SettingsActionTile(
                   title: Text(
                     'תרמו מהונם ומזמנם',
@@ -184,13 +186,10 @@ class AboutSettingsTab extends StatelessWidget {
               title: 'אודות פיתוח התוכנה',
               children: [
                 _cardTitle(context, 'מפתחים'),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _InfoChipSection(
-                    items: aboutDevelopers,
-                    icon: FluentIcons.person_24_regular,
-                  ),
-                ),
+                _padded(_InfoChipSection(
+                  items: aboutDevelopers,
+                  icon: FluentIcons.person_24_regular,
+                )),
                 SettingsActionTile.text(
                   icon: FluentIcons.chat_24_regular,
                   title: 'נתקלת בבאג? יש לך שאלה או משוב?',
@@ -218,36 +217,29 @@ class AboutSettingsTab extends StatelessWidget {
                       'הספרים הותאמו במיוחד עבור אוצריא, וכן נוספו ספרים רבים '
                       'נוספים בזכות עבודתם המסורה של מהדירי הספרים.',
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _BookSourcesSection(),
-                ),
-                _cardTitle(
-                  context,
-                  'מהדירי ספרים',
-                  subtitle:
+                _padded(_BookSourcesSection()),
+                _cardTitle(context, 'מהדירי ספרים'),
+                _padded(Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _InfoChipSection(
+                      label: aboutTopEditorsLabel,
+                      items: aboutTopEditors,
+                      icon: FluentIcons.person_24_regular,
+                    ),
+                    const SizedBox(height: 20),
+                    _InfoChipSection(
+                      label: aboutRegularEditorsLabel,
+                      items: aboutRegularEditors,
+                      icon: FluentIcons.person_24_regular,
+                    ),
+                    const SizedBox(height: 16),
+                    const _SubtitleText(
                       'באם שמכם אינו מופיע ברשימה או שאתם מעוניינים בשינוי, '
                       'אנא פנו למייל המערכת.',
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _InfoChipSection(
-                        label: aboutTopEditorsLabel,
-                        items: aboutTopEditors,
-                        icon: FluentIcons.book_24_regular,
-                      ),
-                      const SizedBox(height: 20),
-                      _InfoChipSection(
-                        label: aboutRegularEditorsLabel,
-                        items: aboutRegularEditors,
-                        icon: FluentIcons.book_24_regular,
-                      ),
-                    ],
-                  ),
-                ),
+                    ),
+                  ],
+                )),
                 SettingsActionTile.text(
                   icon: FluentIcons.edit_24_regular,
                   title: 'הצטרף לצוות העריכה ומהדירי הספרים',
@@ -343,10 +335,11 @@ class AboutSettingsTab extends StatelessWidget {
     );
   }
 
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) await launchUrl(uri);
-  }
+  /// עוטף widget ב-padding אחיד של 16, החוזר בכל מקטעי הכרטיסים.
+  Widget _padded(Widget child) =>
+      Padding(padding: const EdgeInsets.all(16), child: child);
+
+  Future<void> _openUrl(String url) => _launchUrl(url);
 
   void _openAdPopup(BuildContext context) {
     showDialog(
@@ -389,6 +382,23 @@ class _InfoChipWrap extends StatelessWidget {
   }
 }
 
+/// טקסט בעיצוב תת-כותרת, ממורכז — לתוויות ולהערות במקטעי הכרטיסים.
+class _SubtitleText extends StatelessWidget {
+  final String text;
+
+  const _SubtitleText(this.text);
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: double.infinity,
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: kSettingsSubtitleStyle,
+        ),
+      );
+}
+
 /// מקטע צ'יפים ברוחב מלא, עם כותרת/תיאור אופציונלי מעליו.
 /// מאחד את עיצוב סקציות הצ'יפים (מפתחים, מקור הספרים, מהדירים).
 class _InfoChipSection extends StatelessWidget {
@@ -404,7 +414,7 @@ class _InfoChipSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (label != null) ...[
-          Text(label!, style: kSettingsSubtitleStyle),
+          _SubtitleText(label!),
           const SizedBox(height: 10),
         ],
         _InfoChipWrap(items: items, icon: icon),
@@ -461,7 +471,7 @@ class _InfoChip extends StatelessWidget {
               ),
             )
           else
-            RtlIcon(icon, size: 15, color: contentColor),
+            Icon(icon, size: 15, color: contentColor),
           const SizedBox(width: 6),
           Text(name, style: nameStyle),
           if (description != null && description!.isNotEmpty) ...[
@@ -474,10 +484,7 @@ class _InfoChip extends StatelessWidget {
 
     if (!hasUrl) return content;
     return InkWell(
-      onTap: () async {
-        final uri = Uri.parse(url);
-        if (await canLaunchUrl(uri)) await launchUrl(uri);
-      },
+      onTap: () => _launchUrl(url),
       borderRadius: AppTokens.borderRadiusAll,
       child: content,
     );
@@ -608,10 +615,7 @@ class _ZayitCreditState extends State<_ZayitCredit> {
   @override
   void initState() {
     super.initState();
-    _recognizer.onTap = () async {
-      final uri = Uri.parse(_url);
-      if (await canLaunchUrl(uri)) await launchUrl(uri);
-    };
+    _recognizer.onTap = () => _launchUrl(_url);
   }
 
   @override
