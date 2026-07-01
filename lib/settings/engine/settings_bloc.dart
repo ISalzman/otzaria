@@ -60,6 +60,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateMergeUserBooksIntoLibrary>(_onUpdateMergeUserBooksIntoLibrary);
     on<UpdateProtectedModeEnabled>(_onUpdateProtectedModeEnabled);
     on<UpdateProtectedModePassword>(_onUpdateProtectedModePassword);
+    on<ClearProtectedModePassword>(_onClearProtectedModePassword);
     on<UpdateHiddenBuiltInToolIds>(_onUpdateHiddenBuiltInToolIds);
     on<UpdateBuiltInToolsPinnedToNavRail>(_onUpdateBuiltInToolsPinnedToNavRail);
   }
@@ -221,6 +222,16 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateProtectedModePassword(event.password);
     emit(state.copyWith(protectedModePasswordSet: true));
+  }
+
+  Future<void> _onClearProtectedModePassword(
+    ClearProtectedModePassword event,
+    Emitter<SettingsState> emit,
+  ) async {
+    // אי אפשר להסיר סיסמה כשמצב הסייפר פעיל - יש להשבית אותו קודם.
+    if (state.protectedModeEnabled) return;
+    await _repository.clearProtectedModePassword();
+    emit(state.copyWith(protectedModePasswordSet: false));
   }
 
   Future<void> _onUpdateHiddenBuiltInToolIds(

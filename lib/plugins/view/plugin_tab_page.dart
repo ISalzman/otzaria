@@ -26,7 +26,7 @@ import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/find_ref/repository/find_ref_factory.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/plugins/view/plugin_dev_error_view.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
@@ -200,7 +200,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
       },
       pickFolder: ({String? title}) async {
         if (!mounted) return null;
-        if (!await verifyPasswordForAction(context)) return null;
+        if (!await verifySaferModePassword(context)) return null;
         if (!mounted) return null;
         return FilePicker.getDirectoryPath(
           lockParentWindow: true,
@@ -209,7 +209,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
       },
       pickFile: ({List<String>? allowedExtensions, String? title}) async {
         if (!mounted) return null;
-        if (!await verifyPasswordForAction(context)) return null;
+        if (!await verifySaferModePassword(context)) return null;
         if (!mounted) return null;
         final hasExtensions =
             allowedExtensions != null && allowedExtensions.isNotEmpty;

@@ -18,9 +18,8 @@ import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
-import 'package:otzaria/settings/dialogs/books_list_dialog.dart';
-import 'package:otzaria/settings/services/safer_mode/password_verification_dialog.dart';
-import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/dialogs/settings_dialogs_exports.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
@@ -48,7 +47,6 @@ import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:otzaria/settings/dialogs/change_location_dialog.dart';
 
 /// טאב "אוצריא" — גרסאות, נתיב ספרייה, גיבוי, מצב סייפר, איפוס.
 class SystemSettingsTab extends StatefulWidget {
@@ -296,9 +294,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   _BackupMode _selectedBackupMode = _BackupMode.all;
 
-  // ── מצב סייפר (expandable) ────────────────────────────────────────────────
-  bool _isCypherExpanded = false;
-
   // ── גיבוי (expandable) ─────────────────────────────────────────────────────
   bool _isBackupExpanded = false;
   BackupStatus? _backupStatus;
@@ -384,14 +379,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     }
   }
 
-  Widget? _buildBackupSubtitle() {
+  String? _buildBackupSubtitle() {
     final status = _backupStatus;
     if (status == null) return null;
 
     if (status.lastBackupDate == null) {
-      return const Text(
-        'לא נמצא קובץ גיבוי במערכת. מומלץ ליצור גיבוי כדי לשמור על הנתונים שלך.',
-      );
+      return 'לא נמצא קובץ גיבוי במערכת. מומלץ ליצור גיבוי כדי לשמור על הנתונים שלך.';
     }
 
     final d = status.lastBackupDate!;
@@ -400,13 +393,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
     if (!status.hasSignificantChanges) {
-      return Text(
-        'הנתונים שמורים. הגיבוי האחרון נוצר ב$dateStr בשעה $timeStr.',
-      );
+      return 'הנתונים שמורים. הגיבוי האחרון נוצר ב$dateStr בשעה $timeStr.';
     }
-    return Text(
-      'הגיבוי האחרון מ-$dateStr. ואינו מעודכן, מומלץ ליצור גיבוי ולהגדיר מצב שבועי.',
-    );
+    return 'הגיבוי האחרון מ-$dateStr. ואינו מעודכן, מומלץ ליצור גיבוי ולהגדיר מצב שבועי.';
   }
 
   bool _shouldInclude(String key) =>
@@ -679,7 +668,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   }
 
   Future<void> _exportPendingReportsScript() async {
-    final verified = await verifyPasswordForAction(context);
+    final verified = await verifySaferModePassword(context);
     if (!verified) {
       return;
     }
@@ -975,12 +964,10 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
             return ExpandableSection(
               icon: FluentIcons.task_list_ltr_24_regular,
-              title: const Text('ניהול דיווחים שמורים'),
-              subtitle: Text(
-                pendingCount == 0
-                    ? 'אין כרגע דיווחים שמורים בתור'
-                    : 'יש כרגע $pendingCount דיווחים שמורים בתור',
-              ),
+              title: 'ניהול דיווחים שמורים',
+              subtitle: pendingCount == 0
+                  ? 'אין כרגע דיווחים שמורים בתור'
+                  : 'יש כרגע $pendingCount דיווחים שמורים בתור',
               hasContent: hasReports,
               onTap: () => setState(
                 () => _isPendingReportsExpanded = !_isPendingReportsExpanded,
@@ -1083,13 +1070,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
             return ExpandableSection(
               icon: FluentIcons.checkmark_circle_24_regular,
-              title: const Text('דיווחים שנשלחו'),
+              title: 'דיווחים שנשלחו',
               hasContent: sentReports.isNotEmpty,
-              subtitle: Text(
-                sentReports.isEmpty
-                    ? 'עדיין אין דיווחים שנשלחו דרך המערכת'
-                    : 'נשמרו ${sentReports.length} דיווחים שנשלחו',
-              ),
+              subtitle: sentReports.isEmpty
+                  ? 'עדיין אין דיווחים שנשלחו דרך המערכת'
+                  : 'נשמרו ${sentReports.length} דיווחים שנשלחו',
               onTap: () => setState(
                 () => _isSentReportsExpanded = !_isSentReportsExpanded,
               ),
@@ -1423,7 +1408,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   ) async {
     final verified = await showDialog<bool>(
       context: context,
-      builder: (context) => PasswordVerificationDialog(
+      builder: (context) => SaferModePasswordDialog(
         title: 'אמת סיסמה',
         hint: newValue
             ? 'הזן את הסיסמה כדי להפעיל את המצב המוגן'
@@ -1443,11 +1428,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     BuildContext context,
     SettingsRepository repository,
     bool hasExistingPassword,
+    bool isSaferModeEnabled,
   ) async {
     if (hasExistingPassword) {
       final verified = await showDialog<bool>(
         context: context,
-        builder: (context) => PasswordVerificationDialog(
+        builder: (context) => SaferModePasswordDialog(
           title: 'אמת סיסמה נוכחית',
           hint: 'הזן את הסיסמה הנוכחית כדי לשנות אותה',
           onVerify: (password) async =>
@@ -1459,12 +1445,20 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     if (!context.mounted) return;
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => SetPasswordDialog(
+      builder: (context) => SaferModeSetPasswordDialog(
         onSetPassword: (password) async {
           context
               .read<SettingsBloc>()
               .add(UpdateProtectedModePassword(password));
         },
+        onClearPassword: hasExistingPassword
+            ? () async {
+                context
+                    .read<SettingsBloc>()
+                    .add(const ClearProtectedModePassword());
+              }
+            : null,
+        isSaferModeEnabled: isSaferModeEnabled,
       ),
     );
     if (result == true && context.mounted && !hasExistingPassword) {
@@ -1502,7 +1496,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ExpandableSection(
           headerKey: tourBackupSettingsTargetKey,
           icon: FluentIcons.calendar_clock_24_regular,
-          title: const Text('גיבוי הגדרות ונתונים אישיים'),
+          title: 'גיבוי הגדרות ונתונים אישיים',
           subtitle: _buildBackupSubtitle(),
           onTap: () => setState(() => _isBackupExpanded = !_isBackupExpanded),
           isExpanded: _isBackupExpanded,
@@ -1679,45 +1673,50 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
 
         // ── מצב סייפר ──
-        ExpandableSection(
-          icon: state.protectedModeEnabled
-              ? FluentIcons.shield_lock_24_filled
-              : FluentIcons.shield_lock_24_regular,
-          iconColor: state.protectedModeEnabled
-              ? Theme.of(context).colorScheme.primary
-              : null,
-          title: const Text('מצב סייפר'),
-          subtitle: const Text('נעילת הגדרות'),
-          onTap: () => setState(() => _isCypherExpanded = !_isCypherExpanded),
-          isExpanded: _isCypherExpanded,
-          children: [
-            SettingsActionTile.switchTile(
-              icon: state.protectedModeEnabled
-                  ? FluentIcons.lock_closed_24_filled
-                  : FluentIcons.lock_open_24_regular,
-              title: 'הפעל מצב סייפר',
-              subtitle: hasPassword ? 'סיסמה הוגדרה' : 'יש להגדיר סיסמה תחילה',
-              value: state.protectedModeEnabled,
-              onChanged: hasPassword
-                  ? (value) =>
-                      _handleToggleProtectedMode(context, repository, value)
-                  : null,
-            ),
-            ListTile(
-              leading: const Icon(FluentIcons.key_24_regular),
-              title: const Text(
-                'סיסמה',
-                style: kSettingsTitleStyle,
-              ),
-              trailing: ActionButton.recommended(
+        if (hasPassword)
+          SettingsActionTile.switchTile(
+            icon: state.protectedModeEnabled
+                ? FluentIcons.shield_lock_24_filled
+                : FluentIcons.shield_lock_24_regular,
+            iconColor: state.protectedModeEnabled
+                ? Theme.of(context).colorScheme.primary
+                : null,
+            title: 'מצב סייפר',
+            subtitle: state.protectedModeEnabled
+                ? 'נעילת ההגדרות וסייר הקבצים פעילה'
+                : 'נעילת ההגדרות וסייר הקבצים מושבתת',
+            value: state.protectedModeEnabled,
+            onChanged: (value) =>
+                _handleToggleProtectedMode(context, repository, value),
+          )
+        else
+          SettingsActionTile.text(
+            icon: FluentIcons.shield_lock_24_regular,
+            title: 'מצב סייפר',
+            subtitle: 'נעילת הגדרות וסייר הקבצים, יש להגדיר סיסמה תחילה',
+            actions: [
+              ActionButton.recommended(
                 icon: FluentIcons.key_24_regular,
-                text: hasPassword ? 'שנה סיסמה' : 'בחר סיסמה',
-                onPressed: () =>
-                    _handleSetPassword(context, repository, hasPassword),
+                text: 'בחר סיסמה',
+                onPressed: () => _handleSetPassword(context, repository,
+                    hasPassword, state.protectedModeEnabled),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        if (hasPassword)
+          SettingsActionTile.text(
+            icon: FluentIcons.key_24_regular,
+            title: 'סיסמה',
+            subtitle: 'סיסמה הוגדרה, ניתן לשנות או למחוק את הסיסמה',
+            actions: [
+              ActionButton.recommended(
+                icon: FluentIcons.key_24_regular,
+                text: 'אפשרויות',
+                onPressed: () => _handleSetPassword(context, repository,
+                    hasPassword, state.protectedModeEnabled),
+              ),
+            ],
+          ),
       ],
     );
   }
@@ -1731,45 +1730,41 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       cardId: 'system.reset',
       title: 'איפוס',
       children: [
-        ListTile(
-          leading: const Icon(FluentIcons.arrow_reset_24_regular),
-          title: const Text(
-            'איפוס הגדרות',
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: const Text(
-            'מחיקת כל ההגדרות וחזרה למצב ההתחלתי',
-            style: kSettingsSubtitleStyle,
-          ),
-          trailing: ActionButton.ghost(
-            icon: FluentIcons.arrow_reset_24_regular,
-            text: 'אפס הגדרות',
-            onPressed: () async {
-              if (shouldProtectSettings(context)) {
-                final verified = await verifyPasswordForAction(context);
-                if (!verified || !context.mounted) return;
-              }
-              if (!context.mounted) return;
+        SettingsActionTile.text(
+          icon: FluentIcons.arrow_reset_24_regular,
+          title: 'איפוס הגדרות',
+          subtitle: 'מחיקת כל ההגדרות וחזרה למצב ההתחלתי',
+          actions: [
+            ActionButton.ghost(
+              icon: FluentIcons.arrow_reset_24_regular,
+              text: 'אפס הגדרות',
+              onPressed: () async {
+                if (shouldRequireSaferModePassword(context)) {
+                  final verified = await verifySaferModePassword(context);
+                  if (!verified || !context.mounted) return;
+                }
+                if (!context.mounted) return;
 
-              final confirmed = await showWarningDialog(
-                context: context,
-                title: 'איפוס הגדרות?',
-                content: 'כל ההגדרות האישיות שלך ימחקו.',
-                subtitle: 'פעולה זו אינה הפיכה!',
-                cancelText: 'ביטול',
-                confirmText: 'אפס',
-              );
-              if (confirmed == true && mounted) {
-                Settings.clearCache();
-                await resetRuntimeStateAfterSettingsReset();
-                if (!mounted) return;
-                RestartWidget.restartApp(
-                  this.context,
-                  afterRestart: WebViewEnvironmentHolder.disposeForAppRestart,
+                final confirmed = await showWarningDialog(
+                  context: context,
+                  title: 'איפוס הגדרות?',
+                  content: 'כל ההגדרות האישיות שלך ימחקו.',
+                  subtitle: 'פעולה זו אינה הפיכה!',
+                  cancelText: 'ביטול',
+                  confirmText: 'אפס',
                 );
-              }
-            },
-          ),
+                if (confirmed == true && mounted) {
+                  Settings.clearCache();
+                  await resetRuntimeStateAfterSettingsReset();
+                  if (!mounted) return;
+                  RestartWidget.restartApp(
+                    this.context,
+                    afterRestart: WebViewEnvironmentHolder.disposeForAppRestart,
+                  );
+                }
+              },
+            ),
+          ],
         ),
       ],
     );

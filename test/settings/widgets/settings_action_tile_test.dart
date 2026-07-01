@@ -143,11 +143,73 @@ void main() {
       expect(find.byType(ListTile), findsNothing);
 
       // הכפתור מתחת לtitle ולsubtitle
-      final subtitleBottom =
-          tester.getBottomLeft(find.text('תיאור ההגדרה')).dy;
+      final subtitleBottom = tester.getBottomLeft(find.text('תיאור ההגדרה')).dy;
       final buttonTop = tester.getTopLeft(find.byType(ElevatedButton)).dy;
       expect(buttonTop, greaterThanOrEqualTo(subtitleBottom),
           reason: 'ה-action צריך להיות מתחת ל-subtitle כשאין מקום בשורה');
+    });
+
+    testWidgets(
+        'מסך צר: onTap עדיין נקרא כשה-layout נופל ל-Column (בלי ListTile)',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(350, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      var tapped = false;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            child: SettingsActionTile.text(
+              title: 'כותרת הגדרה',
+              subtitle: 'תיאור ההגדרה',
+              onTap: () => tapped = true,
+              actions: [
+                ElevatedButton(onPressed: () {}, child: const Text('כפתור')),
+              ],
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      // ודא שאכן נפלנו ל-layout האנכי (בלי ListTile) — אחרת הבדיקה לא רלוונטית.
+      expect(find.byType(ListTile), findsNothing);
+
+      await tester.tap(find.text('כותרת הגדרה'));
+      expect(tapped, isTrue,
+          reason:
+              'לפני התיקון, onTap לא היה מחובר כלל ב-layout האנכי (_buildColumnLayout)');
+    });
+
+    testWidgets('מסך צר: onTap לא נקרא כש-enabled=false ב-layout אנכי',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(350, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      var tapped = false;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            child: SettingsActionTile.text(
+              title: 'כותרת הגדרה',
+              subtitle: 'תיאור ההגדרה',
+              enabled: false,
+              onTap: () => tapped = true,
+              actions: [
+                ElevatedButton(onPressed: () {}, child: const Text('כפתור')),
+              ],
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      expect(find.byType(ListTile), findsNothing);
+
+      await tester.tap(find.text('כותרת הגדרה'));
+      expect(tapped, isFalse);
     });
 
     testWidgets('מספר כפתורים מוצגים יחדיו', (tester) async {

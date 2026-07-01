@@ -600,6 +600,10 @@ class SettingsRepository {
     return hash.isNotEmpty;
   }
 
+  Future<void> clearProtectedModePassword() async {
+    await _settings.remove(keyProtectedModePasswordHash);
+  }
+
   String _hashPassword(String password) {
     final bytes = utf8.encode(password);
     final hash = sha256.convert(bytes);

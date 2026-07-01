@@ -66,6 +66,23 @@ class MockTabsBloc extends _i1.Mock implements _i3.TabsBloc {
       ) as _i4.Stream<_i2.TabsState>);
 
   @override
+  _i4.Future<void> remapBookPathsAwaitable(
+    String? from,
+    String? to,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #remapBookPathsAwaitable,
+          [
+            from,
+            to,
+          ],
+        ),
+        returnValue: _i4.Future<void>.value(),
+        returnValueForMissingStub: _i4.Future<void>.value(),
+      ) as _i4.Future<void>);
+
+  @override
   void add(_i5.TabsEvent? event) => super.noSuchMethod(
         Invocation.method(
           #add,
