@@ -403,11 +403,15 @@ class UpdateAvailableCommentators extends TextBookEvent {
 
 class RefreshLinksForCurrentWindow extends TextBookEvent {
   final String reason;
+  final String? workspaceId;
 
-  const RefreshLinksForCurrentWindow({this.reason = 'manual'});
+  const RefreshLinksForCurrentWindow({
+    this.reason = 'manual',
+    this.workspaceId,
+  });
 
   @override
-  List<Object?> get props => [reason];
+  List<Object?> get props => [reason, workspaceId];
 }
 
 class OpenFullFileEditor extends TextBookEvent {
