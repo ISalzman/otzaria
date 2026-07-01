@@ -671,7 +671,11 @@ class _MemorialCardsGrid extends StatelessWidget {
           title: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
           description: 'סכום משמעותי לפיתוח התוכנה',
         ),
-        _MemorialCard.donation(onDonate: onDonationTap),
+        _MemorialCard.donor(
+          title: "לע\"נ ר' משה ב\"ר פרץ ובנו ר' יצחק ב\"ר משה",
+          description:
+              "תרומה גדולה ורבה לפיתוח התוכנה, ולהצלחת דוד ב\"ר יחזקאל ומשפחתו בתורה וביראת שמים",
+        ),
         _MemorialCard.donation(onDonate: onDonationTap),
       ],
     );
@@ -703,7 +707,7 @@ class _MemorialCard extends StatelessWidget {
   final VoidCallback? onDonate;
 
   const _MemorialCard.donor({required this.title, required this.description})
-      : icon = FluentIcons.heart_24_filled,
+      : icon = FluentIcons.fire_24_filled,
         dimIcon = false,
         titleFontSize = 14,
         onDonate = null;
