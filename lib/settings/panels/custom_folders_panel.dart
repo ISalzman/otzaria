@@ -280,13 +280,10 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
             state.isSyncing || DatabaseLibraryProvider.operationQueue.isBusy;
         return ExpandableSection(
           icon: FluentIcons.folder_add_24_regular,
-          title: const Text('הוסף תיקייה לאוצריא'),
-          subtitle: Text(
-            folders.isEmpty
-                ? 'לחץ להוספת תיקיות אישיות'
-                : '${folders.length} תיקיות',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          title: 'הוסף תיקייה לאוצריא',
+          subtitle: folders.isEmpty
+              ? 'לחץ להוספת תיקיות אישיות'
+              : '${folders.length} תיקיות',
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
