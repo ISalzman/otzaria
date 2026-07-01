@@ -29,6 +29,7 @@ void main() {
     late SeforimRepository seforimRepo;
     late TextBookRepository repository;
     late int bereshitCategoryId;
+    late int bereshitId;
 
     setUp(() async {
       tempDir =
@@ -43,7 +44,7 @@ void main() {
       );
       final sourceId = await seforimRepo.insertSource('official', 1);
 
-      final bereshitId = await seforimRepo.insertBook(
+      bereshitId = await seforimRepo.insertBook(
         migration_models.Book(
           categoryId: bereshitCategoryId,
           sourceId: sourceId,
@@ -135,6 +136,51 @@ void main() {
           contains('רש"י על בראשית'),
           reason: 'ספר רשמי צריך להחזיר את מפרשיו מה-DB',
         );
+      },
+    );
+
+    test(
+      'ספר גדול (מעל 100 שורות): מפרש עם פחות מ-10 קישורים מסומן כנדיר',
+      () async {
+        await seforimRepo.updateBookTotalLines(bereshitId, 500);
+
+        final officialBook = TextBook(
+          title: 'בראשית',
+          isUserBook: false,
+          categoryId: bereshitCategoryId,
+          fileType: 'txt',
+        );
+
+        final result = await repository.getCommentatorsWithRarity(officialBook);
+
+        expect(
+          result.all,
+          contains('רש"י על בראשית'),
+          reason: 'המפרש עדיין זמין (יוצג פר-שורה)',
+        );
+        expect(
+          result.rare,
+          contains('רש"י על בראשית'),
+          reason: 'קישור בודד (<10) בספר מעל 100 שורות — נדיר',
+        );
+      },
+    );
+
+    test(
+      'ספר קטן (עד 100 שורות): אין מפרשים נדירים',
+      () async {
+        await seforimRepo.updateBookTotalLines(bereshitId, 50);
+
+        final officialBook = TextBook(
+          title: 'בראשית',
+          isUserBook: false,
+          categoryId: bereshitCategoryId,
+          fileType: 'txt',
+        );
+
+        final result = await repository.getCommentatorsWithRarity(officialBook);
+
+        expect(result.rare, isEmpty);
       },
     );
   });

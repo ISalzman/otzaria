@@ -10,6 +10,7 @@ import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/file/docx_cache.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
+import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -317,13 +318,21 @@ class TextBookRepository {
 
   /// מחזיר רשימת פרשנים זמינים לספר מה-DB
   Future<List<String>> getAvailableCommentators(TextBook book) async {
+    return (await getCommentatorsWithRarity(book)).all;
+  }
+
+  /// מחזיר את מפרשי הספר ([all]) יחד עם קבוצת המפרשים ה"נדירים" ([rare]) שיש
+  /// להסתיר מרשימת הבחירה הכללית (בספרים גדולים בלבד). ראה
+  /// [computeRareCommentators].
+  Future<({List<String> all, Set<String> rare})> getCommentatorsWithRarity(
+      TextBook book) async {
     // ספרים אישיים אינם כוללים קישורי מפרשים במסד הנתונים הרשמי.
     // חיפוש לפי book.id ב-seforim.db יחזיר מפרשים של ספר רשמי עם אותו ID.
-    if (book.isUserBook) return [];
+    if (book.isUserBook) return (all: const <String>[], rare: const <String>{});
 
     final repository = _sqliteProvider.repository;
     if (repository == null) {
-      return [];
+      return (all: const <String>[], rare: const <String>{});
     }
 
     // מקבל את ה-book ישירות מה-repository (אותו DB שממנו נשלוף את המפרשים)
@@ -332,21 +341,30 @@ class TextBookRepository {
             book.title, book.categoryId!)
         : await repository.getBookByTitle(book.title);
     if (dbBook == null) {
-      return [];
+      return (all: const <String>[], rare: const <String>{});
     }
 
-    // שולף את הפרשנים ישירות מה-DB
+    // שולף את הפרשנים ישירות מה-DB, כולל מספר הקישורים של כל מפרש
     final commentatorsData =
         await repository.database.linkDao.selectCommentatorsByBook(dbBook.id);
 
-    // ממפה לרשימת שמות ייחודיים
-    final commentatorTitles = commentatorsData
-        .map((row) => row['targetBookTitle'] as String)
-        .toSet()
-        .toList();
+    // מפרש עשוי להופיע בכמה שורות (מחבר לכל שורה) עם אותו linkCount; לוקחים
+    // את הערך המרבי כמספר הקישורים לספר.
+    final linkCountByTitle = <String, int>{};
+    for (final row in commentatorsData) {
+      final title = row['targetBookTitle'] as String;
+      final count = (row['linkCount'] as int?) ?? 0;
+      if (count > (linkCountByTitle[title] ?? 0)) {
+        linkCountByTitle[title] = count;
+      }
+    }
 
-    commentatorTitles.sort((a, b) => a.compareTo(b));
-    return commentatorTitles;
+    final all = linkCountByTitle.keys.toList()..sort((a, b) => a.compareTo(b));
+    final rare = computeRareCommentators(
+      bookTotalLines: dbBook.totalLines,
+      linkCountByCommentator: linkCountByTitle,
+    );
+    return (all: all, rare: rare);
   }
 
   Future<bool> bookExists(String title) async {

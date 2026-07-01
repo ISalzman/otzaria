@@ -149,6 +149,10 @@ class TextBookLoaded extends TextBookState {
   final List<String> activeCommentators;
   final List<CommentatorGroup> commentatorGroups;
   final List<String> availableCommentators;
+
+  /// מפרשים "נדירים" שמוסתרים מרשימת הבחירה הכללית (ספרים גדולים בלבד).
+  /// מוצגים ברשימה רק כשהשורה הנוכחית כוללת קישור מהם.
+  final Set<String> rareCommentators;
   final List<Link> links;
   final List<Link> visibleLinks;
   final List<TocEntry> tableOfContents;
@@ -226,6 +230,7 @@ class TextBookLoaded extends TextBookState {
     required this.activeCommentators,
     required this.commentatorGroups,
     required this.availableCommentators,
+    this.rareCommentators = const {},
     required this.links,
     this.visibleLinks = const [],
     required this.linksByLine,
@@ -326,6 +331,7 @@ class TextBookLoaded extends TextBookState {
     List<String>? activeCommentators,
     List<CommentatorGroup>? commentatorGroups,
     List<String>? availableCommentators,
+    Set<String>? rareCommentators,
     List<Link>? links,
     List<Link>? visibleLinks,
     Map<int, List<Link>>? linksByLine,
@@ -385,6 +391,7 @@ class TextBookLoaded extends TextBookState {
       commentatorGroups: commentatorGroups ?? this.commentatorGroups,
       availableCommentators:
           availableCommentators ?? this.availableCommentators,
+      rareCommentators: rareCommentators ?? this.rareCommentators,
       links: links ?? this.links,
       visibleLinks: visibleLinks ?? this.visibleLinks,
       linksByLine: linksByLine ?? this.linksByLine,
@@ -471,6 +478,7 @@ class TextBookLoaded extends TextBookState {
         activeCommentators,
         commentatorGroups,
         availableCommentators.length,
+        rareCommentators,
         links.length,
         visibleLinks.length,
         tableOfContents.length,
