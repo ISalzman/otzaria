@@ -393,12 +393,15 @@ class SetLinksLoading extends TextBookEvent {
 class UpdateAvailableCommentators extends TextBookEvent {
   final List<String> availableCommentators;
   final List<dynamic> commentatorGroups;
+  final Set<String> rareCommentators;
 
   const UpdateAvailableCommentators(
-      this.availableCommentators, this.commentatorGroups);
+      this.availableCommentators, this.commentatorGroups,
+      [this.rareCommentators = const {}]);
 
   @override
-  List<Object?> get props => [availableCommentators, commentatorGroups];
+  List<Object?> get props =>
+      [availableCommentators, commentatorGroups, rareCommentators];
 }
 
 class RefreshLinksForCurrentWindow extends TextBookEvent {

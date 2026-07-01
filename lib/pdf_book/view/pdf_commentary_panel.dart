@@ -7,6 +7,8 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
 import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
+import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/link_types.dart';
@@ -19,6 +21,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentary_content.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -184,6 +187,9 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   _PdfVisibleContentCache? _visibleContentCache;
   List<CommentatorGroup> _commentatorGroups = [];
 
+  /// מפרשים "נדירים" שמוסתרים מלשונית הבחירה (ספרים גדולים בלבד).
+  Set<String> _rareCommentators = {};
+
   String _getLinkKey(Link link) =>
       '${link.path2}_${link.index1}_${link.index2}';
 
@@ -305,14 +311,47 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     }
   }
 
+  /// מספר השורות האמיתי של הספר המלווה (מקור ה-index1 של הקישורים) מה-DB,
+  /// לצורך גזירת המפרשים הנדירים — זהה למקור בכרטיסיית הטקסט. null אם אין
+  /// ספר מלווה ב-DB (אז המתודה הקוראת נופלת לאומדן).
+  Future<int?> _resolveSourceBookTotalLines() async {
+    try {
+      final library = await DataRepository.instance.library;
+      final companion =
+          library.getCompanionBook(widget.tab.book, TextBook) as TextBook?;
+      if (companion == null) return null;
+      final repo = SqliteDataProvider.instance.repository;
+      if (repo == null) return null;
+      final dbBook = companion.categoryId != null
+          ? await repo.getBookByTitleAndCategory(
+              companion.title, companion.categoryId!)
+          : await repo.getBookByTitle(companion.title);
+      final lines = dbBook?.totalLines ?? 0;
+      return lines > 0 ? lines : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _loadCommentatorGroups() async {
     final commentatorsSet = <String>{};
+    final linkCountByTitle = <String, int>{};
+    // אומדן גיבוי למספר השורות (השורה הגבוהה ביותר עם קישור) — משמש רק אם
+    // מספר השורות האמיתי לא נשלף מה-DB.
+    var maxSourceLine = 0;
     for (final link in widget.tab.links) {
+      if (link.index1 > maxSourceLine) maxSourceLine = link.index1;
       if (LinkTypes.isDependentTextLink(link.connectionType)) {
-        commentatorsSet.add(utils.getTitleFromPath(link.path2));
+        final title = utils.getTitleFromPath(link.path2);
+        commentatorsSet.add(title);
+        linkCountByTitle[title] = (linkCountByTitle[title] ?? 0) + 1;
       }
     }
     final availableCommentators = commentatorsSet.toList();
+    final rare = computeRareCommentators(
+      bookTotalLines: await _resolveSourceBookTotalLines() ?? maxSourceLine,
+      linkCountByCommentator: linkCountByTitle,
+    );
 
     // טעינת דורות הקישורים הרגילים (לא מפרשים) מראש - fire-and-forget כדי לא
     // לחסום את בניית קבוצות המפרשים. כשתסתיים, מאפסים את מטמון התוכן הנראה
@@ -344,6 +383,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         .toList();
     if (!mounted) return;
     setState(() {
+      _rareCommentators = rare;
       _commentatorGroups = [
         CommentatorGroup(
             title: 'תורה שבכתב', commentators: eras['תורה שבכתב'] ?? const []),
@@ -622,6 +662,27 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     );
   }
 
+  /// מפרשים נדירים שכן יוצגו בלשונית הבחירה כי הטווח הנוכחי כולל קישור מהם.
+  Set<String> _lineRelevantRareCommentators() {
+    if (_rareCommentators.isEmpty) return const {};
+    final currentLine =
+        widget.lineStartOverride ?? widget.tab.currentTextLineNumber;
+    if (currentLine == null) return const {};
+    final range = _getCurrentRange(currentLine);
+    final extra = widget.extraLineIndices;
+    final relevant = <String>{};
+    for (final link in widget.tab.links) {
+      if (!LinkTypes.isDependentTextLink(link.connectionType)) continue;
+      if (!pdfLinkInVisibleScope(
+          link.index1, range.startLine, range.endLine, extra)) {
+        continue;
+      }
+      final title = utils.getTitleFromPath(link.path2);
+      if (_rareCommentators.contains(title)) relevant.add(title);
+    }
+    return relevant;
+  }
+
   Widget _buildCommentatorsFilter() {
     return CommentatorsFilterScreen(
       onBack: () {
@@ -640,6 +701,8 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         groups: _commentatorGroups,
         selectedCommentators: widget.tab.activeCommentators.toList(),
         bookTitle: widget.tab.book.title,
+        rareCommentators: _rareCommentators,
+        lineRelevantCommentators: _lineRelevantRareCommentators(),
         onSelectionChanged: (list) async {
           setState(() {
             widget.tab.activeCommentators

@@ -2298,6 +2298,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final updatedState = _withInlineNotesCommentator(currentState.copyWith(
         availableCommentators: event.availableCommentators,
         commentatorGroups: event.commentatorGroups.cast<CommentatorGroup>(),
+        rareCommentators: event.rareCommentators,
       ));
       emit(updatedState);
 
@@ -2340,8 +2341,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   Future<void> _loadCommentatorsInBackground(TextBook book) async {
     try {
-      final availableCommentators =
-          await repository.getAvailableCommentators(book);
+      final commentatorsData = await repository.getCommentatorsWithRarity(book);
+      final availableCommentators = commentatorsData.all;
+      final rareCommentators = commentatorsData.rare;
       final baseCommentators =
           await DefaultCommentators.getBaseCommentators(book);
 
@@ -2364,7 +2366,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       // הזיהוי של 'הערות' כמפרש וירטואלי נעשה בנפרד דרך
       // _withInlineNotesCommentator שמופעל בכל עדכון של ה-content.
       if (isClosed) return;
-      add(UpdateAvailableCommentators(availableCommentators, groups));
+      add(UpdateAvailableCommentators(
+          availableCommentators, groups, rareCommentators));
 
       // בחירה שמורה פר-ספר גוברת על ברירת המחדל: אם המשתמש בחר בעבר (כולל
       // בחירה ריקה) — משחזרים אותה; אחרת בוחרים את מפרשי ברירת המחדל.
