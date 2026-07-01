@@ -8,9 +8,48 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/plugin_permission_labels.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
-import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/settings/widgets/settings_card.dart';
+
+/// פונקציה משותפת לדיאלוג אישור מחיקת תוסף — קוראת מ-tools_management_panel
+/// ומ-PluginSettingsScreen.
+///
+/// מחזירה `true` אם המשתמש אישר ומחיקה הופעלה, `false` אם ביטל.
+Future<bool> showDeletePluginDialog(
+    BuildContext context, InstalledPlugin plugin) async {
+  final bloc = context.read<PluginSystemBloc>();
+  if (plugin.isDevelopment) {
+    bloc.add(DetachDevelopmentPluginRequested(plugin.pluginId));
+    return true;
+  }
+  final confirmed = await showWarningDialog(
+    context: context,
+    title: 'מחיקת תוסף סופית',
+    content: 'האם אתה בטוח שברצונך למחוק את התוסף "${plugin.name}"?',
+    subtitle:
+        'המחיקה תכלול את כל נתוני התוסף, המטמון והפעולות שלו. הליך זה סופי.',
+    cancelText: 'ביטול',
+    confirmText: 'מחק',
+  );
+  if (confirmed != true) return false;
+  bloc.add(UninstallPluginRequested(plugin.pluginId));
+  return true;
+}
+
+/// פונקציה משותפת לפתיחת דיאלוג הגדרות תוסף — קוראת מ-tools_management_panel
+/// ומ-plugin_side_panel.
+Future<bool?> showPluginSettingsDialog(
+  BuildContext context,
+  InstalledPlugin plugin,
+) {
+  return showDialog<bool>(
+    context: context,
+    builder: (_) => BlocProvider<PluginSystemBloc>.value(
+      value: context.read<PluginSystemBloc>(),
+      child: PluginSettingsScreen(plugin: plugin),
+    ),
+  );
+}
 
 class PluginSettingsScreen extends StatefulWidget {
   final InstalledPlugin plugin;
@@ -64,66 +103,13 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
         }
       }
 
-      return Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 60),
-        clipBehavior: Clip.antiAlias,
-        child: Scaffold(
-          appBar: AppBar(
-            title: Text(
-              'הגדרות תוסף: ${currentPlugin.name}',
-            ),
-          ),
-          body: ListView(
-            padding: const EdgeInsets.all(16),
+      return AppCustomContentDialog(
+        title: 'ניהול הרשאות: ${currentPlugin.name}',
+        actions: const [],
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SettingsCard(
-                title: 'הגדרות כלליות',
-                children: [
-                  SwitchListTile(
-                    title: const Text(
-                      'מצב מופעל (Enabled)',
-                    ),
-                    subtitle: const Text(
-                      'כיבוי ימנע מהתוסף לרוץ לחלוטין באפליקציה',
-                    ),
-                    value: currentPlugin.enabled,
-                    onChanged: (val) {
-                      if (val) {
-                        context
-                            .read<PluginSystemBloc>()
-                            .add(EnablePluginRequested(currentPlugin.pluginId));
-                      } else {
-                        context.read<PluginSystemBloc>().add(
-                            DisablePluginRequested(currentPlugin.pluginId));
-                      }
-                    },
-                    hoverColor: Colors.transparent,
-                  ),
-                  SwitchListTile(
-                    title: const Text(
-                      'הצמדה לסרגל הניווט',
-                    ),
-                    subtitle: const Text(
-                      'הצגת התוסף כפריט קבוע בסרגל הניווט הראשי, בין "כלים" ל"הגדרות"',
-                    ),
-                    value: currentPlugin.pinnedToNavRail,
-                    onChanged: currentPlugin.enabled
-                        ? (val) {
-                            if (val) {
-                              context.read<PluginSystemBloc>().add(
-                                  PinPluginToNavRailRequested(
-                                      currentPlugin.pluginId));
-                            } else {
-                              context.read<PluginSystemBloc>().add(
-                                  UnpinPluginFromNavRailRequested(
-                                      currentPlugin.pluginId));
-                            }
-                          }
-                        : null,
-                    hoverColor: Colors.transparent,
-                  ),
-                ],
-              ),
               if (currentPlugin.manifest.permissions.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 SettingsCard(
@@ -145,18 +131,11 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                     final iconColor = isSensitive
                         ? colorScheme.tertiary
                         : (isGranted ? colorScheme.primary : colorScheme.error);
-                    return SwitchListTile(
-                      secondary: Icon(iconData, color: iconColor),
-                      title: Text(
-                        info.label,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w500,
-                          color: isSensitive ? colorScheme.tertiary : null,
-                        ),
-                      ),
-                      subtitle: Text(
-                        info.description,
-                      ),
+                    return SettingsActionTile.switchTile(
+                      icon: iconData,
+                      iconColor: iconColor,
+                      title: info.label,
+                      subtitle: info.description,
                       value: isGranted,
                       onChanged: (val) async {
                         context
@@ -170,7 +149,6 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                           _permissions[p] = val;
                         });
                       },
-                      hoverColor: Colors.transparent,
                     );
                   }).toList(),
                 ),
@@ -178,78 +156,26 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
               const SizedBox(height: 32),
               if (currentPlugin.isDevelopment) ...[
                 SettingsCard(title: 'פיתוח', children: [
-                  ListTile(
-                    title: const Text(
-                      'נתיב תיקייה',
-                    ),
-                    subtitle: Text(
-                      _formatPathForDisplay(currentPlugin.resolvedRootPath),
-                      textDirection: TextDirection.ltr,
-                      textAlign: TextAlign.end,
-                    ),
+                  SettingsActionTile.text(
+                    icon: FluentIcons.folder_24_regular,
+                    title: 'נתיב תיקייה',
+                    subtitle:
+                        _formatPathForDisplay(currentPlugin.resolvedRootPath),
+                    subtitleLtr: true,
                   ),
-                  ListTile(
-                    title: const Text(
-                      'רענן עכשיו',
-                    ),
-                    trailing:
-                        const Icon(FluentIcons.arrow_clockwise_24_regular),
+                  SettingsActionTile.text(
+                    icon: FluentIcons.arrow_clockwise_24_regular,
+                    title: 'רענן עכשיו',
                     onTap: () {
                       context.read<PluginSystemBloc>().add(
                           ReloadDevelopmentPluginRequested(
                               currentPlugin.pluginId));
                     },
-                    hoverColor: Colors.transparent,
-                  ),
-                  ListTile(
-                    title: const Text(
-                      'פתח מחדש את הצפייה',
-                    ),
-                    trailing: const Icon(FluentIcons.window_new_24_regular),
-                    onTap: () {
-                      context.read<PluginSystemBloc>().add(
-                          ReloadDevelopmentPluginRequested(
-                              currentPlugin.pluginId));
-                      Navigator.of(context).pop(true);
-                    },
-                    hoverColor: Colors.transparent,
                   ),
                 ]),
-                const SizedBox(height: 16),
-                NeutralActionButton(
-                  text: 'נתק תוסף פיתוח',
-                  onPressed: () async {
-                    context.read<PluginSystemBloc>().add(
-                        DetachDevelopmentPluginRequested(
-                            currentPlugin.pluginId));
-                    Navigator.of(context).pop();
-                  },
-                )
-              ] else ...[
-                NeutralActionButton(
-                  text: 'הסרת תוסף',
-                  onPressed: () async {
-                    final confirm = await showWarningDialog(
-                      context: context,
-                      title: 'מחיקת תוסף סופית',
-                      content:
-                          'האם אתה בטוח שברצונך למחוק את התוסף "${currentPlugin.name}"?',
-                      subtitle:
-                          'המחיקה תכלול את כל נתוני התוסף, המטמון והפעולות שלו. הליך זה סופי.',
-                      cancelText: 'ביטול',
-                      confirmText: 'מחק',
-                    );
-                    if (confirm == true && context.mounted) {
-                      context.read<PluginSystemBloc>().add(
-                          UninstallPluginRequested(currentPlugin.pluginId));
-                      Navigator.of(context).pop();
-                    }
-                  },
-                )
-              ]
+              ],
             ],
           ),
-        ),
       );
     });
   }

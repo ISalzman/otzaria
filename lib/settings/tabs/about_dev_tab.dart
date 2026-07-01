@@ -5,8 +5,8 @@ import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
-import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
+import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
 
@@ -693,7 +693,7 @@ class _DonationMemorialCard extends StatelessWidget {
                   color: colorScheme.onSurface),
             ),
             const SizedBox(height: 8),
-            RecommendedActionButton(
+            ActionButton.recommended(
               icon: FluentIcons.payment_24_regular,
               text: 'נדרים+',
               onPressed: onTap,
@@ -736,7 +736,7 @@ class _ActionTile extends StatelessWidget {
         subtitle,
         style: kSettingsSubtitleStyle,
       ),
-      trailing: RecommendedActionButton(
+      trailing: ActionButton.recommended(
         text: buttonLabel,
         icon: buttonIcon,
         onPressed: onTap,

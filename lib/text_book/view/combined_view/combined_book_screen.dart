@@ -109,7 +109,7 @@ List<Link> buildCombinedViewContextMenuLinksForParagraph({
 }) {
   final lineLinks = linksByLine[paragraphIndex + 1] ?? const <Link>[];
   final visibleLinks = lineLinks.where((link) {
-    return !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+    return !LinkTypes.isDependentTextLink(link.connectionType) &&
         link.start == null &&
         link.end == null;
   }).toList();
@@ -163,8 +163,7 @@ bool hasCommentariesForLine({
   String? lastTitle;
 
   return lineLinks.any((link) {
-    final type = link.connectionType.toUpperCase();
-    if (type != "COMMENTARY" && type != "TARGUM") return false;
+    if (!LinkTypes.isDependentTextLink(link.connectionType)) return false;
     if (link.path2 != lastPath) {
       lastPath = link.path2;
       lastTitle = utils.getTitleFromPath(link.path2);
@@ -187,8 +186,8 @@ bool shouldShowSelectCommentatorsEntry({
   return hasOpenCommentatorsPaneWithFilterCallback && !isCommentatorsTabActive;
 }
 
-/// מעבד טקסט גולמי לפי הגדרות התצוגה (טעמים/ניקוד/פיסוק), כך שפעולות
-/// "העתק את כל הפסקה" ו"העתק טקסט מוצג" ישקפו את מה שמוצג בפועל על המסך —
+/// מעבד טקסט גולמי לפי הגדרות התצוגה (טעמים/ניקוד/פיסוק), כך שפעולת
+/// "העתק את כל הפסקה" תשקף את מה שמוצג בפועל על המסך —
 /// באותו סדר עיבוד של [TextRendererService] (טעמים → ניקוד → פיסוק).
 ///
 /// הערה: [utils.removeVolwels] מסיר גם ניקוד וגם טעמים, ולכן כש-[removeNikud]
@@ -739,51 +738,64 @@ class _CombinedViewState extends State<CombinedView> {
               )),
         ];
 
+    // החיפוש עובד תמיד על טקסט ללא ניקוד וטעמים — מנקים פעם אחת לשימוש
+    // בשורת האייקונים, בכיתובי החיפוש ובשאילתת החיפוש בפועל.
+    final rawText = selectedText?.trim() ?? '';
+    final cleanedText =
+        utils.hasNikud(rawText) ? utils.removeVolwels(rawText).trim() : rawText;
+    final hasSelectedText = cleanedText.isNotEmpty;
+    // ציטוט קצר של הבחירה לכיתוב/tooltip: עד maxChars תווים ואז "...".
+    // חיתוך לפי graphemes (לא code units) כדי לא לשבור תווים מורכבים.
+    String quote(int maxChars) {
+      final chars = cleanedText.characters;
+      return chars.length > maxChars
+          ? '${chars.take(maxChars)}...'
+          : cleanedText;
+    }
+
     return [
-      () {
-        // החיפוש עובד תמיד על טקסט ללא ניקוד וטעמים — מנקים פעם אחת
-        // לשימוש גם בתווית התפריט וגם בשאילתת החיפוש בפועל.
-        final rawText = selectedText?.trim() ?? '';
-        final cleanedText = utils.hasNikud(rawText)
-            ? utils.removeVolwels(rawText).trim()
-            : rawText;
-        final hasSelectedText = cleanedText.isNotEmpty;
-        final preview = hasSelectedText ? previewForLabel(cleanedText) : '';
-        return AppContextMenuEntry(
+      // שורת אייקונים עליונה בסגנון Windows 11 — הרשימה המלאה נשארת מתחת.
+      AppContextMenuEntry.iconRow([
+        AppContextMenuIconAction(
           label: 'חיפוש',
-          icon: FluentIcons.search_24_regular,
-          enabled: true,
-          // ללא טקסט נבחר: פתיחת חיפוש רגיל בספר ללא שאילתה.
-          onTap: hasSelectedText ? null : () => widget.openLeftPaneTab(1),
-          children: hasSelectedText
-              ? [
-                  AppContextMenuEntry(
-                    label: "חפש '$preview' בספר זה",
-                    labelWidget: buildSearchMenuLabel(
-                      selectedText: cleanedText,
-                      suffix: 'בספר זה',
-                    ),
-                    icon: FluentIcons.search_24_regular,
-                    onTap: () =>
-                        widget.openLeftPaneTab(1, searchText: cleanedText),
-                  ),
-                  AppContextMenuEntry(
-                    label: "חפש '$preview' בכל הספרים",
-                    labelWidget: buildSearchMenuLabel(
-                      selectedText: cleanedText,
-                      suffix: 'בכל הספרים',
-                    ),
-                    icon: FluentIcons.library_24_regular,
-                    onTap: () => openGlobalSearch(
-                      context,
-                      cleanedText,
-                      insertAdjacent: true,
-                    ),
-                  ),
-                ]
-              : null,
-        );
-      }(),
+          tooltip: hasSelectedText
+              ? 'חיפוש "${quote(14)}" בכל הספרים'
+              : 'חיפוש בכל הספרים',
+          icon: FluentIcons.library_24_regular,
+          enabled: hasSelectedText,
+          onTap: () =>
+              openGlobalSearch(context, cleanedText, insertAdjacent: true),
+        ),
+        AppContextMenuIconAction(
+          label: 'העתקה',
+          icon: FluentIcons.copy_24_regular,
+          enabled: hasSelectedText,
+          onTap: () => _copyFormattedText(selectedText),
+        ),
+        AppContextMenuIconAction(
+          label: 'הערה',
+          icon: FluentIcons.note_add_24_regular,
+          onTap: () => _showNoteEditor(selectedText),
+        ),
+        if (state.book.id != null)
+          AppContextMenuIconAction(
+            label: 'קישור',
+            icon: FluentIcons.link_24_regular,
+            submenuBuilder: () => buildDirectLinkSubmenuActions(
+              bookId: state.book.id!,
+              index: paragraphIndex,
+              selectedText: selectedText,
+            ),
+          ),
+      ]),
+      const AppContextMenuEntry.divider(),
+      AppContextMenuEntry(
+        label: hasSelectedText ? 'חפש "${quote(10)}" בספר זה' : 'חיפוש',
+        icon: FluentIcons.search_24_regular,
+        onTap: hasSelectedText
+            ? () => widget.openLeftPaneTab(1, searchText: cleanedText)
+            : () => widget.openLeftPaneTab(1),
+      ),
       AppContextMenuEntry(
         label: 'מפרשים',
         icon: FluentIcons.book_24_regular,
@@ -819,11 +831,6 @@ class _CombinedViewState extends State<CombinedView> {
         icon: FluentIcons.bookmark_add_24_regular,
         onTap: () => addTextSectionBookmark(context, state, paragraphIndex),
       ),
-      AppContextMenuEntry(
-        label: 'הוסף הערה אישית',
-        icon: FluentIcons.note_add_24_regular,
-        onTap: () => _showNoteEditor(selectedText),
-      ),
       if (!state.book.isUserBook)
         AppContextMenuEntry(
           label: 'דווח על טעות בספר',
@@ -835,35 +842,11 @@ class _CombinedViewState extends State<CombinedView> {
         ),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
-        label: 'העתק',
-        icon: FluentIcons.copy_24_regular,
-        enabled: selectedText != null && selectedText.trim().isNotEmpty,
-        onTap: () => _copyFormattedText(selectedText),
-      ),
-      AppContextMenuEntry(
         label: 'העתק את כל הפסקה',
         icon: FluentIcons.document_copy_24_regular,
         enabled: paragraphIndex >= 0 && paragraphIndex < widget.data.length,
         onTap: () => _copyParagraphByIndex(paragraphIndex),
       ),
-      AppContextMenuEntry(
-        label: 'העתק טקסט מוצג',
-        icon: FluentIcons.document_copy_24_regular,
-        onTap: _copyVisibleText,
-      ),
-      // העתק קישור ישיר — מוצג רק אם יש book_id
-      if (state.book.id != null) ...[
-        const AppContextMenuEntry.divider(),
-        AppContextMenuEntry(
-          label: 'העתק קישור ישיר',
-          icon: FluentIcons.link_24_regular,
-          childrenBuilder: () => buildDirectLinkContextMenuEntries(
-            bookId: state.book.id!,
-            index: paragraphIndex,
-            selectedText: selectedText,
-          ),
-        ),
-      ],
       // פריטי תפריט מפלאגינים
       ...() {
         final pluginItems = ContextMenuRegistry.instance.getAll();
@@ -984,74 +967,6 @@ class _CombinedViewState extends State<CombinedView> {
 
       finalHtmlText = CopyUtils.formatTextWithHeaders(
         originalText: processedText,
-        copyWithHeaders: settingsState.copyWithHeaders,
-        copyHeaderFormat: settingsState.copyHeaderFormat,
-        bookName: bookName,
-        currentPath: currentPath,
-      );
-    }
-
-    final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
-      plainText: finalText,
-      htmlText: finalHtmlText,
-      replaceHolyNames: settingsState.replaceHolyNames,
-    );
-
-    final item = DataWriterItem();
-    item.add(Formats.plainText(copyContent.plainText.trimRight()));
-    item.add(Formats.htmlText(_formatTextAsHtml(copyContent.htmlText)));
-
-    await SystemClipboard.instance?.write([item]);
-  }
-
-  /// העתקת הטקסט המוצג במסך ללוח
-  void _copyVisibleText() async {
-    final state = context.read<TextBookBloc>().state;
-    if (state is! TextBookLoaded || state.visibleIndices.isEmpty) return;
-
-    // קבלת ההגדרות הנוכחיות
-    final settingsState = context.read<SettingsBloc>().state;
-
-    // איסוף כל הטקסט הנראה במסך — עם אותן העדפות תצוגה (טעמים/ניקוד/פיסוק)
-    // שמיושמות בפועל על המסך, כדי שההעתקה תשקף את מה שמוצג.
-    final visibleTexts = <String>[];
-    for (final index in state.visibleIndices) {
-      if (index >= 0 && index < widget.data.length) {
-        visibleTexts.add(
-          _applyDisplayTextPreferences(
-              widget.data[index], state, settingsState),
-        );
-      }
-    }
-
-    if (visibleTexts.isEmpty) return;
-
-    final combinedText = visibleTexts.join('\n\n');
-    final plainText = utils.stripHtmlIfNeeded(combinedText);
-
-    String finalText = plainText;
-    String finalHtmlText = combinedText;
-
-    // אם צריך להוסיף כותרות
-    if (settingsState.copyWithHeaders != 'none') {
-      final bookName = CopyUtils.extractBookName(state.book);
-      final firstVisibleIndex = state.visibleIndices.first;
-      final currentPath = await CopyUtils.extractCurrentPath(
-        state.book,
-        firstVisibleIndex,
-        bookContent: state.content,
-      );
-
-      finalText = CopyUtils.formatTextWithHeaders(
-        originalText: plainText,
-        copyWithHeaders: settingsState.copyWithHeaders,
-        copyHeaderFormat: settingsState.copyHeaderFormat,
-        bookName: bookName,
-        currentPath: currentPath,
-      );
-
-      finalHtmlText = CopyUtils.formatTextWithHeaders(
-        originalText: combinedText,
         copyWithHeaders: settingsState.copyWithHeaders,
         copyHeaderFormat: settingsState.copyHeaderFormat,
         bookName: bookName,
@@ -1851,6 +1766,7 @@ class _CombinedViewState extends State<CombinedView> {
             openBookCallback: widget.openBookCallback,
             viewportHeight: _viewportHeight,
             selectionSyncController: widget.selectionSyncController,
+            searchText: state.searchText,
           ),
       ],
     );
@@ -2049,6 +1965,7 @@ class _CommentaryCard extends StatefulWidget {
   final Function(OpenedTab) openBookCallback;
   final double viewportHeight;
   final SelectionSyncController? selectionSyncController;
+  final String searchText;
 
   const _CommentaryCard({
     super.key,
@@ -2057,6 +1974,7 @@ class _CommentaryCard extends StatefulWidget {
     required this.openBookCallback,
     required this.viewportHeight,
     this.selectionSyncController,
+    this.searchText = '',
   });
 
   @override
@@ -2065,6 +1983,31 @@ class _CommentaryCard extends StatefulWidget {
 
 class _CommentaryCardState extends State<_CommentaryCard> {
   final GlobalKey<CommentaryListBaseState> _commentaryKey = GlobalKey();
+  late final ValueNotifier<String> _highlightNotifier;
+  final ValueNotifier<int> _totalNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
+
+  @override
+  void initState() {
+    super.initState();
+    _highlightNotifier = ValueNotifier<String>(widget.searchText);
+  }
+
+  @override
+  void didUpdateWidget(_CommentaryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.searchText != widget.searchText) {
+      _highlightNotifier.value = widget.searchText;
+    }
+  }
+
+  @override
+  void dispose() {
+    _highlightNotifier.dispose();
+    _totalNotifier.dispose();
+    _currentIndexNotifier.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2125,9 +2068,29 @@ class _CommentaryCardState extends State<_CommentaryCard> {
                     showSearch: false,
                     selectionSyncController: widget.selectionSyncController,
                     shrinkWrap: true,
+                    highlightQueryListenable: _highlightNotifier,
+                    externalTotalResultsNotifier: _totalNotifier,
+                    externalCurrentIndexNotifier: _currentIndexNotifier,
                   ),
                 ),
               ),
+            );
+
+            final content = Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (widget.searchText.isNotEmpty)
+                  _CommentarySearchNavBar(
+                    totalNotifier: _totalNotifier,
+                    currentIndexNotifier: _currentIndexNotifier,
+                    onPrev: () =>
+                        _commentaryKey.currentState?.navigateSearchPrev(),
+                    onNext: () =>
+                        _commentaryKey.currentState?.navigateSearchNext(),
+                  ),
+                commentaryContainer,
+              ],
             );
 
             // מרכוז אופקי בלבד (topCenter) באותו רוחב כמו הטקסט. Center מלא
@@ -2137,11 +2100,79 @@ class _CommentaryCardState extends State<_CommentaryCard> {
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: textMaxWidth),
-                  child: commentaryContainer,
+                  child: content,
                 ),
               );
             }
-            return commentaryContainer;
+            return content;
+          },
+        );
+      },
+    );
+  }
+}
+
+/// סרגל ניווט מינימלי לתוצאות חיפוש במפרשים (תצוגה משולבת).
+/// מופיע בין שורת הטקסט הראשי לכרטיס המפרשים כשיש תוצאות חיפוש.
+class _CommentarySearchNavBar extends StatelessWidget {
+  final ValueNotifier<int> totalNotifier;
+  final ValueNotifier<int> currentIndexNotifier;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+
+  const _CommentarySearchNavBar({
+    required this.totalNotifier,
+    required this.currentIndexNotifier,
+    required this.onPrev,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: totalNotifier,
+      builder: (context, total, _) {
+        if (total == 0) return const SizedBox.shrink();
+        return ValueListenableBuilder<int>(
+          valueListenable: currentIndexNotifier,
+          builder: (context, current, _) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'במפרשים: ${current + 1}/$total',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                  ),
+                  const SizedBox(width: 4),
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(FluentIcons.chevron_up_24_regular,
+                          size: 16),
+                      onPressed: current > 0 ? onPrev : null,
+                      tooltip: 'תוצאה קודמת במפרשים',
+                    ),
+                  ),
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(FluentIcons.chevron_down_24_regular,
+                          size: 16),
+                      onPressed: current < total - 1 ? onNext : null,
+                      tooltip: 'תוצאה הבאה במפרשים',
+                    ),
+                  ),
+                ],
+              ),
+            );
           },
         );
       },

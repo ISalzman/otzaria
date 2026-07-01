@@ -88,7 +88,10 @@ dependencies:
   googleapis_auth: ^2.3.2
   characters: ^1.4.1
   collection: ^1.19.1
-  otzaria_search_engine: ^0.6.5
+  otzaria_search_engine: ^0.6.7
+  seforim_library_updater:
+    git:
+      url: https://github.com/Otzaria/otzaria_library_updater
   window_manager: ^0.5.1
   flutter_spinbox: ^0.13.1
   toggle_switch: ^2.3.0

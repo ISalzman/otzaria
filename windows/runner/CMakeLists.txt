@@ -8,6 +8,7 @@ project(runner LANGUAGES CXX)
 # Any new source files that you add to the application should be added here.
 add_executable(${BINARY_NAME} WIN32
   "flutter_window.cpp"
+  "jump_list_manager.cpp"
   "main.cpp"
   "splash_window.cpp"
   "utils.cpp"
@@ -37,6 +38,11 @@ target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
 # windowscodecs (WIC) — פענוח ה-PNG של סמל ה-splash הנייטיב (splash_window.cpp).
 target_link_libraries(${BINARY_NAME} PRIVATE "windowscodecs.lib")
+# ole32/shell32/propsys — Jump List מותאם (ICustomDestinationList, IShellLink,
+# InitPropVariantFromString) ב-jump_list_manager.cpp.
+target_link_libraries(${BINARY_NAME} PRIVATE "ole32.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "shell32.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "propsys.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

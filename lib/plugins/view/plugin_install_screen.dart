@@ -7,6 +7,7 @@ import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_labels.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
+import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/settings/widgets/settings_card.dart';
 
 /// מסך אישור התקנת/עדכון תוסף — מאפשר למשתמש לבחור אילו הרשאות להעניק
@@ -106,141 +107,101 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final isUpdate = widget.isUpdate;
 
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 60),
-      clipBehavior: Clip.antiAlias,
-      child: PopScope(
-        // מניעת יציאה בלי ניקוי — Back של מערכת מטופל ידנית
-        canPop: false,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) _onCancel();
-        },
-        child: Scaffold(
-          appBar: AppBar(
-            title: Text(
-              isUpdate ? 'אישור עדכון תוסף' : 'אישור התקנת תוסף',
-            ),
-            leading: IconButton(
-              icon: const Icon(FluentIcons.dismiss_24_regular),
-              tooltip: 'ביטול',
-              onPressed: _onCancel,
-            ),
-          ),
-          body: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // ===== כרטיס פרטי התוסף =====
-              SettingsCard(
-                title: widget.manifest.name,
-                subtitle: widget.manifest.description.isNotEmpty
-                    ? widget.manifest.description
-                    : null,
-                children: [
-                  if (widget.manifest.author.isNotEmpty)
-                    ListTile(
-                      leading: const Icon(FluentIcons.person_24_regular),
-                      title: const Text(
-                        'מחבר',
-                      ),
-                      subtitle: Text(
-                        widget.manifest.author,
-                      ),
-                      hoverColor: Colors.transparent,
-                    ),
-                  if (isUpdate)
-                    ListTile(
-                      leading:
-                          const Icon(FluentIcons.arrow_circle_up_24_regular),
-                      title: const Text(
-                        'עדכון גרסה',
-                      ),
-                      subtitle: Text(
-                        '${widget.previousVersion}  ←  ${widget.manifest.version}',
-                      ),
-                      hoverColor: Colors.transparent,
-                    )
-                  else
-                    ListTile(
-                      leading: const Icon(FluentIcons.tag_24_regular),
-                      title: const Text(
-                        'גרסה',
-                      ),
-                      subtitle: Text(
-                        widget.manifest.version,
-                      ),
-                      hoverColor: Colors.transparent,
-                    ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // ===== באנר בולט: בקשת טעינה אוטומטית עם עליית האפליקציה =====
-              if (_requestsRunOnStartup) ...[
-                _RunOnStartupBanner(colorScheme: colorScheme),
-                const SizedBox(height: 16),
+    return AppCustomContentDialog(
+      title: isUpdate
+          ? 'עדכון תוסף: ${widget.manifest.name}'
+          : 'התקנת תוסף: ${widget.manifest.name}',
+      actions: [
+        ActionButton.ghost(
+          text: 'ביטול',
+          onPressed: _onCancel,
+        ),
+        ActionButton.recommended(
+          text: isUpdate ? 'עדכן' : 'התקן',
+          onPressed: _onInstall,
+        ),
+      ],
+      child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ===== כרטיס מידע על התוסף =====
+            SettingsCard(
+              title: 'מידע על התוסף',
+              children: [
+                if (widget.manifest.description.isNotEmpty)
+                  SettingsActionTile.text(
+                    icon: FluentIcons.info_24_regular,
+                    title: 'תכונות',
+                    subtitle: widget.manifest.description,
+                  ),
+                SettingsActionTile.text(
+                  icon: FluentIcons.person_24_regular,
+                  title: 'מחבר: ${widget.manifest.author}',
+                  subtitle: isUpdate
+                      ? 'עדכון גרסה ${widget.previousVersion}  ←  ${widget.manifest.version}'
+                      : 'גרסה ${widget.manifest.version}',
+                  subtitleLtr: true,
+                ),
               ],
+            ),
 
-              if (_requestsOrderBeforeBuiltIns) ...[
-                SettingsCard(
-                  title: 'מיקום במסך כלים',
-                  subtitle: 'התוסף מבקש להופיע לפני הכלים המובנים במסך "כלים".',
-                  children: [
-                    SwitchListTile(
-                      secondary: Icon(
-                        _allowOrderBeforeBuiltInsGranted
-                            ? FluentIcons.arrow_sort_up_24_regular
-                            : FluentIcons.arrow_sort_24_regular,
-                        color: _allowOrderBeforeBuiltInsGranted
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant,
-                      ),
-                      title: const Text(
-                        'אפשר לתוסף להופיע לפני הכלים המובנים',
-                      ),
-                      subtitle: const Text(
+            const SizedBox(height: 16),
+
+            // ===== באנר בולט: בקשת טעינה אוטומטית עם עליית האפליקציה =====
+            if (_requestsRunOnStartup) ...[
+              _RunOnStartupBanner(colorScheme: colorScheme),
+              const SizedBox(height: 16),
+            ],
+
+            if (_requestsOrderBeforeBuiltIns) ...[
+              SettingsCard(
+                title: 'מיקום במסך כלים',
+                subtitle: 'התוסף מבקש להופיע לפני הכלים המובנים במסך "כלים".',
+                children: [
+                  SettingsActionTile.switchTile(
+                    icon: _allowOrderBeforeBuiltInsGranted
+                        ? FluentIcons.arrow_sort_up_24_regular
+                        : FluentIcons.arrow_sort_24_regular,
+                    iconColor: _allowOrderBeforeBuiltInsGranted
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                    title: 'אפשר לתוסף להופיע לפני הכלים המובנים',
+                    subtitle:
                         'אם תכבה את האפשרות, התוסף עדיין יותקן כרגיל, אבל '
                         'יופיע רק אחרי הכלים המובנים גם אם המניפסט שלו ביקש אחרת.',
-                      ),
-                      value: _allowOrderBeforeBuiltInsGranted,
-                      onChanged: (value) {
-                        setState(() {
-                          _allowOrderBeforeBuiltInsGranted = value;
-                        });
-                      },
-                      hoverColor: Colors.transparent,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-              ],
+                    value: _allowOrderBeforeBuiltInsGranted,
+                    onChanged: (value) {
+                      setState(() {
+                        _allowOrderBeforeBuiltInsGranted = value;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
 
-              // ===== הרשאות =====
-              if (!hasPermissions)
-                SettingsCard(
-                  title: 'הרשאות',
-                  children: [
-                    ListTile(
-                      leading: Icon(
-                        FluentIcons.shield_checkmark_24_regular,
-                        color: colorScheme.primary,
-                      ),
-                      title: const Text(
-                        'אין הרשאות מיוחדות נדרשות',
-                      ),
-                      subtitle: const Text(
-                        'תוסף זה אינו מבקש גישה למשאבים רגישים',
-                      ),
-                      hoverColor: Colors.transparent,
-                    ),
-                  ],
-                )
-              else ...[
-                SettingsCard(
-                  title: 'הרשאות נדרשות',
-                  subtitle:
-                      'בחר אילו הרשאות להעניק לתוסף זה (ברירת מחדל: הכל מופעל)',
-                  children: widget.manifest.permissions.map((permission) {
+            // ===== הרשאות =====
+            if (!hasPermissions)
+              SettingsCard(
+                title: 'הרשאות',
+                children: [
+                  SettingsActionTile.text(
+                    icon: FluentIcons.shield_checkmark_24_regular,
+                    iconColor: colorScheme.primary,
+                    title: 'אין הרשאות מיוחדות נדרשות',
+                    subtitle: 'תוסף זה אינו מבקש גישה למשאבים רגישים',
+                  ),
+                ],
+              )
+            else ...[
+              SettingsCard(
+                title: 'הרשאות נדרשות',
+                subtitle:
+                    'בחר אילו הרשאות להעניק לתוסף זה (ברירת מחדל: הכל מופעל)',
+                children: [
+                  ...widget.manifest.permissions.map((permission) {
                     final info = getPermissionInfo(permission);
                     final isGranted = _permissionToggles[permission] ?? true;
                     final isSensitive =
@@ -255,77 +216,31 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                     final iconColor = isSensitive
                         ? colorScheme.tertiary
                         : (isGranted ? colorScheme.primary : colorScheme.error);
-                    return SwitchListTile(
-                      secondary: Icon(iconData, color: iconColor),
-                      title: Text(
-                        info.label,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w500,
-                          color: isSensitive ? colorScheme.tertiary : null,
-                        ),
-                      ),
-                      subtitle: Text(
-                        info.description,
-                      ),
+                    return SettingsActionTile.switchTile(
+                      icon: iconData,
+                      iconColor: iconColor,
+                      title: info.label,
+                      subtitle: info.description,
                       value: isGranted,
                       onChanged: (val) {
                         setState(() {
                           _permissionToggles[permission] = val;
                         });
                       },
-                      hoverColor: Colors.transparent,
                     );
-                  }).toList(),
-                ),
-                const SizedBox(height: 8),
-                // הסבר שניתן לשנות אחרי ההתקנה
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Row(
-                    children: [
-                      Icon(
-                        FluentIcons.info_24_regular,
-                        size: 16,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'ניתן לשנות הרשאות בכל עת מהגדרות התוסף',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 32),
-
-              // ===== כפתורי פעולה =====
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  NeutralActionButton(
-                    text: 'ביטול',
-                    onPressed: _onCancel,
-                  ),
-                  const SizedBox(width: 12),
-                  RecommendedActionButton(
-                    text: isUpdate ? 'עדכן' : 'התקן',
-                    onPressed: _onInstall,
+                  }),
+                  SettingsActionTile.text(
+                    icon: FluentIcons.info_24_regular,
+                    iconColor: colorScheme.onSurfaceVariant,
+                    title: 'ניתן לשנות הרשאות בכל עת מהגדרות התוסף',
                   ),
                 ],
               ),
-
-              const SizedBox(height: 16),
             ],
-          ),
+
+            const SizedBox(height: 32),
+          ],
         ),
-      ),
     );
   }
 }

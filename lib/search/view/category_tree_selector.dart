@@ -517,7 +517,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                 children: [
                   SizedBox(
                     height: 30,
-                    child: RecommendedActionButton(
+                    child: ActionButton.recommended(
                       text: 'בחר הכל',
                       icon: FluentIcons.checkbox_checked_24_regular,
                       onPressed: () => _selectAllSearchResults(results),
@@ -526,7 +526,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                   const SizedBox(width: 8),
                   SizedBox(
                     height: 30,
-                    child: NeutralActionButton(
+                    child: ActionButton.neutral(
                       text: 'נקה',
                       icon: FluentIcons.eraser_24_regular,
                       onPressed: () => _clearSearchResultsSelection(results),

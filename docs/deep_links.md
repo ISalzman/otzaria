@@ -26,7 +26,6 @@
 | כתובת | תוצאה |
 |--------|--------|
 | `otzaria://open/calendar` | פותח את לוח השנה (לשונית במסך הכלים) |
-| `otzaria://open/daily` | פותח את לוח השנה (alias קצר) |
 | `otzaria://open/gematria` | פותח את כלי הגימטריה |
 | `otzaria://open/notes` | פותח הערות אישיות |
 | `otzaria://open/shamor_zachor` | פותח שמור וזכור |
@@ -48,8 +47,13 @@
 | `otzaria://open/history` | פותח את דיאלוג ההיסטוריה |
 | `otzaria://open/bookmarks` | פותח את דיאלוג הסימניות |
 | `otzaria://open/detection?q=<text>` | פותח את דיאלוג איתור מקורות עם טקסט מילוי-מראש ומפעיל חיפוש מיידית |
+| `otzaria://open/detection` | פותח את דיאלוג איתור מקורות ריק |
+| `otzaria://open/inspection` | פותח את מסך העיון (הספר האחרון שנפתח) |
+| `otzaria://open/sdk` | פותח את דיאלוג ניהול התוספים |
+| `otzaria://open/daily_page` | פותח את הדף היומי (PDF תלמוד בבלי בדף הנכון ליום) |
 | `otzaria://open/tool/<tool-id>` | פותח לשונית כלי לפי מזהה מלא — תומך גם בתוספים מוצמדים |
 | `otzaria://open/plugin/<plugin-id>` | פותח תוסף ישירות לפי מזהה התוסף — גם תוסף שאינו מוצמד ללשוניות (נפתח במצב transient) |
+| `otzaria://open/tab/<index>` | מעבר לטאב פתוח לפי מיקומו (0-based). אינו פותח טאב חדש; אם המיקום לא קיים — מתעלם. נבנה אוטומטית ב-Jump List של שורת המשימות (Windows) |
 | `otzaria://open/book/<id>` | פותח ספר בעיון לפי מזהה מסד הנתונים |
 | `otzaria://open/book/<id>?index=<n>` | פותח את הספר בסעיף `n` (אינדקס לא שלילי). |
 | `otzaria://open/book/<id>?q=<text>` | פותח את הספר עם מחרוזת חיפוש להדגשה. ניתן לשלב עם `index`. |
@@ -62,7 +66,6 @@
 
 ```text
 otzaria://open/calendar
-otzaria://open/daily
 otzaria://open/shamor_zachor
 otzaria://open/measurements
 otzaria://open/aramaic_dictionary
@@ -71,6 +74,11 @@ otzaria://open/library
 otzaria://open/history
 otzaria://open/bookmarks
 otzaria://open/settings
+otzaria://open/detection
+otzaria://open/detection?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
+otzaria://open/inspection
+otzaria://open/sdk
+otzaria://open/daily_page
 otzaria://open/settings/design
 otzaria://open/settings/text
 otzaria://open/settings/library
@@ -261,12 +269,16 @@ _externalActivationWatchSub = queueFile.parent.watch().listen((event) {
 | `OpenScreenAction(Screen)` | `otzaria://open/library`, ... | מסך עליון |
 | `OpenToolAction(String toolId)` | `otzaria://open/calendar`, `/daily`, `/shamor_zachor`, `/measurements`, `/aramaic_dictionary`, `/acronyms_dictionary`, `/gematria`, `/notes`, `/tool/<id>`, ... | לשונית כלי |
 | `OpenPluginAction(String pluginId)` | `otzaria://open/plugin/<plugin-id>` | פתיחת תוסף ישירות (גם לא-מוצמד) |
+| `SwitchToTabAction(int index)` | `otzaria://open/tab/<index>` | מעבר לטאב פתוח קיים לפי מיקומו (Jump List של Windows) |
 | `OpenBookAction(int bookId, {int? index, String? searchQuery, bool markSection, String? markText})` | `otzaria://open/book/<id>?index=<n>&q=<text>&mark&m=<text>` | ספר בעיון |
 | `OpenSettingsTabAction({SettingsTab? tab})` | `otzaria://open/settings`, `/settings/design`, `/settings/text`, ... | פתיחת הגדרות, אופציונלית עם ניווט לטאב |
 | `OpenHistoryAction()` | `otzaria://open/history` | דיאלוג היסטוריה |
 | `OpenBookmarksAction()` | `otzaria://open/bookmarks` | דיאלוג סימניות |
 | `RunSearchAction(String query)` | `otzaria://open/search?q=<text>` | חיפוש מלא בלשונית חדשה |
-| `RunDetectionAction(String query)` | `otzaria://open/detection?q=<text>` | פתיחת דיאלוג איתור מקורות עם טקסט מילוי-מראש |
+| `RunDetectionAction(String query)` | `otzaria://open/detection?q=<text>`, `otzaria://open/detection` | פתיחת דיאלוג איתור מקורות (ריק או עם טקסט) |
+| `OpenInspectionAction()` | `otzaria://open/inspection` | מסך העיון (ספר אחרון) |
+| `OpenSdkAction()` | `otzaria://open/sdk` | פתיחת דיאלוג ניהול תוספים |
+| `OpenDailyPageAction()` | `otzaria://open/daily_page` | פתיחת ה-PDF של תלמוד בבלי בדף הנכון ליום |
 | `InstallPluginAction(PluginStoreInstallRequest)` | `otzaria://plugin/install?url=...` | התקנת תוסף מהחנות |
 | `InstallLocalPluginAction(String archivePath)` | `otzaria://plugin/install-local?path=<abs>` | התקנת תוסף מקובץ `.otzplugin` מקומי (לחיצה כפולה על קובץ משויך) |
 

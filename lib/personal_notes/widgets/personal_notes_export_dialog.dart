@@ -194,11 +194,11 @@ class _PersonalNotesExportDialogState extends State<PersonalNotesExportDialog> {
         ),
       ),
       actions: [
-        NeutralActionButton(
+        ActionButton.neutral(
           onPressed: () => Navigator.of(context).pop(),
           text: 'ביטול',
         ),
-        RecommendedActionButton(
+        ActionButton.recommended(
           onPressed: _submit,
           text: widget.confirmText,
         ),

@@ -168,14 +168,14 @@ class _BooksListDialogState extends State<_BooksListDialog> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  RecommendedActionButton(
+                  ActionButton.recommended(
                     text: 'ייצוא ל-CSV',
                     icon: FluentIcons.arrow_download_24_regular,
                     isLoading: _isExporting,
                     onPressed: _exportToCsv,
                   ),
                   const Spacer(),
-                  NeutralActionButton(
+                  ActionButton.neutral(
                     text: 'סגור',
                     onPressed: () => Navigator.of(context).pop(),
                   ),

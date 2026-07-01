@@ -68,11 +68,12 @@ import 'package:otzaria/utils/text/html_link_handler.dart';
 ///
 /// [isShiftPressed] - כש-Shift לחוץ הניווט מוותר, כדי שחיצים ירחיבו את בחירת
 /// הטקסט (Shift+חץ) במקום לדלג בין שורות או לגלול.
+/// חריג: Shift+Space — גלילה מסך אחד אחורה, כמקובל בקוראים.
 bool shouldHandlePageShapeNavigationKeyEvent(
   KeyEvent event, {
   bool isShiftPressed = false,
 }) {
-  if (isShiftPressed) {
+  if (isShiftPressed && event.logicalKey != LogicalKeyboardKey.space) {
     return false;
   }
   return event is KeyDownEvent || event is KeyRepeatEvent;
@@ -1039,6 +1040,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   bool _handleNavigationLogicalKey(
     LogicalKeyboardKey logicalKey, {
     required bool isControlPressed,
+    bool isShiftPressed = false,
     required String source,
   }) {
     if (!widget.isMainText) {
@@ -1146,6 +1148,28 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       return true;
     }
 
+    if (logicalKey == LogicalKeyboardKey.space) {
+      final visibleSourceIndices = _sourceIndicesForVisiblePositions(
+        _positionsListener.itemPositions.value,
+      );
+      final pageSize =
+          visibleSourceIndices.isNotEmpty ? visibleSourceIndices.length : 10;
+      final delta = isShiftPressed ? -pageSize : pageSize;
+      final targetIndex =
+          (currentIndex + delta).clamp(0, widget.content.length - 1);
+      if (targetIndex == currentIndex) return true;
+      context.read<TextBookBloc>().add(UpdateSelectedIndex(targetIndex));
+      if (_scrollController.isAttached) {
+        _scrollController.scrollTo(
+          index: _segmentIndexForSourceLine(targetIndex),
+          duration: const Duration(milliseconds: 300),
+          alignment: 0.0,
+        );
+      }
+      _requestKeyboardFocusAfterFrame('navigation-space');
+      return true;
+    }
+
     return false;
   }
 
@@ -1170,7 +1194,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       }
       final sortedLinks = CommentaryService.sortLinksByEraSync(lineLinks
           .where((link) =>
-              !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+              !LinkTypes.isDependentTextLink(link.connectionType) &&
               link.start == null &&
               link.end == null)
           .toList());
@@ -1191,56 +1215,77 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
 
     final hasLinkItems = lineLinks.any((link) =>
-        !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+        !LinkTypes.isDependentTextLink(link.connectionType) &&
         link.start == null &&
         link.end == null);
 
     final entries = <AppContextMenuEntry>[];
 
     if (widget.isMainText) {
-      // החיפוש עובד תמיד על טקסט ללא ניקוד וטעמים — מנקים פעם אחת
-      // לשימוש גם בתווית התפריט וגם בשאילתת החיפוש בפועל.
+      // החיפוש עובד תמיד על טקסט ללא ניקוד וטעמים — מנקים פעם אחת לשימוש
+      // בשורת האייקונים, בכיתובי החיפוש ובשאילתת החיפוש בפועל.
       final rawText = capturedText?.trim() ?? '';
       final cleanedText = utils.hasNikud(rawText)
           ? utils.removeVolwels(rawText).trim()
           : rawText;
       final hasSelectedText = cleanedText.isNotEmpty;
-      final preview = hasSelectedText ? previewForLabel(cleanedText) : '';
+      // ציטוט קצר של הבחירה לכיתוב/tooltip: עד maxChars תווים ואז "...".
+      // חיתוך לפי graphemes (לא code units) כדי לא לשבור תווים מורכבים.
+      String quote(int maxChars) {
+        final chars = cleanedText.characters;
+        return chars.length > maxChars
+            ? '${chars.take(maxChars)}...'
+            : cleanedText;
+      }
+
+      // שורת אייקונים עליונה בסגנון Windows 11 — הרשימה המלאה נשארת מתחת.
+      entries.add(AppContextMenuEntry.iconRow([
+        AppContextMenuIconAction(
+          label: 'חיפוש',
+          tooltip: hasSelectedText
+              ? 'חיפוש "${quote(14)}" בכל הספרים'
+              : 'חיפוש בכל הספרים',
+          icon: FluentIcons.library_24_regular,
+          enabled: hasSelectedText,
+          onTap: () =>
+              openGlobalSearch(context, cleanedText, insertAdjacent: true),
+        ),
+        AppContextMenuIconAction(
+          label: 'העתקה',
+          icon: FluentIcons.copy_24_regular,
+          enabled: hasSelectedText,
+          onTap: () => _copyFormattedText(capturedText),
+        ),
+        AppContextMenuIconAction(
+          label: 'הערה',
+          icon: FluentIcons.note_add_24_regular,
+          onTap: () => _createNoteForCurrentLine(index, capturedText),
+        ),
+        if (state.book.id != null)
+          AppContextMenuIconAction(
+            label: 'קישור',
+            icon: FluentIcons.link_24_regular,
+            submenuBuilder: () => buildDirectLinkSubmenuActions(
+              bookId: state.book.id!,
+              index: index,
+              selectedText: capturedText,
+            ),
+          ),
+      ]));
+      entries.add(const AppContextMenuEntry.divider());
+
       entries.add(AppContextMenuEntry(
-        label: 'חיפוש',
-        icon: FluentIcons.search_24_regular,
+        label: hasSelectedText ? 'חפש "${quote(10)}" בספר זה' : 'חיפוש',
+        icon: FluentIcons.book_search_24_regular,
         enabled: hasSelectedText,
-        children: hasSelectedText
-            ? [
-                AppContextMenuEntry(
-                  label: "חפש '$preview' בספר זה",
-                  labelWidget: buildSearchMenuLabel(
-                    selectedText: cleanedText,
-                    suffix: 'בספר זה',
-                  ),
-                  icon: FluentIcons.book_search_24_regular,
-                  onTap: () {
-                    if (widget.onOpenSearch != null) {
-                      widget.onOpenSearch!(cleanedText);
-                    } else {
-                      UiSnack.show('חיפוש לא זמין בתצוגה זו');
-                    }
-                  },
-                ),
-                AppContextMenuEntry(
-                  label: "חפש '$preview' בכל הספרים",
-                  labelWidget: buildSearchMenuLabel(
-                    selectedText: cleanedText,
-                    suffix: 'בכל הספרים',
-                  ),
-                  icon: FluentIcons.library_24_regular,
-                  onTap: () => openGlobalSearch(
-                    context,
-                    cleanedText,
-                    insertAdjacent: true,
-                  ),
-                ),
-              ]
+        onTap: hasSelectedText
+            ? () {
+                if (widget.onOpenSearch != null) {
+                  widget.onOpenSearch!(cleanedText);
+                } else {
+                  UiSnack.show('חיפוש לא זמין בתצוגה זו');
+                }
+              }
             : null,
       ));
     }
@@ -1250,14 +1295,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       entries.addAll(commentatorItems);
     }
 
-    if (hasLinkItems) {
-      entries.add(const AppContextMenuEntry.divider());
-      entries.add(AppContextMenuEntry(
-        label: 'קישורים',
-        icon: FluentIcons.link_24_regular,
-        childrenBuilder: buildLinksItems,
-      ));
-    }
+    if (entries.isNotEmpty) entries.add(const AppContextMenuEntry.divider());
+    entries.add(AppContextMenuEntry(
+      label: 'קישורים',
+      icon: FluentIcons.link_24_regular,
+      enabled: hasLinkItems,
+      childrenBuilder: buildLinksItems,
+    ));
 
     final dictionaryText = (capturedText?.trim().isNotEmpty == true)
         ? capturedText
@@ -1281,11 +1325,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           icon: FluentIcons.bookmark_add_24_regular,
           onTap: () => addTextSectionBookmark(context, state, index),
         ),
-      AppContextMenuEntry(
-        label: 'הוסף הערה אישית ',
-        icon: FluentIcons.note_add_24_regular,
-        onTap: () => _createNoteForCurrentLine(index, capturedText),
-      ),
+      // בטקסט ראשי "הוסף הערה" ו"העתק" קיימים כאייקונים למעלה; במפרשים
+      // (ללא שורת אייקונים) הם נשארים כאן ברשימה.
+      if (!widget.isMainText)
+        AppContextMenuEntry(
+          label: 'הוסף הערה אישית ',
+          icon: FluentIcons.note_add_24_regular,
+          onTap: () => _createNoteForCurrentLine(index, capturedText),
+        ),
       if (!reportTargetBook.isUserBook)
         AppContextMenuEntry(
           label: 'דווח על טעות בספר',
@@ -1293,12 +1340,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           onTap: () => _openErrorReportDialog(capturedText ?? ''),
         ),
       const AppContextMenuEntry.divider(),
-      AppContextMenuEntry(
-        label: 'העתק',
-        icon: FluentIcons.copy_24_regular,
-        enabled: capturedText != null && capturedText.trim().isNotEmpty,
-        onTap: () => _copyFormattedText(capturedText),
-      ),
+      if (!widget.isMainText)
+        AppContextMenuEntry(
+          label: 'העתק',
+          icon: FluentIcons.copy_24_regular,
+          enabled: capturedText != null && capturedText.trim().isNotEmpty,
+          onTap: () => _copyFormattedText(capturedText),
+        ),
       AppContextMenuEntry(
         label: 'העתק את כל הפסקה',
         icon: FluentIcons.document_copy_24_regular,
@@ -1307,22 +1355,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       ),
     ]);
 
-    // העתק קישור ישיר — מוצג בטקסט ראשי (לפי book_id של state.book)
-    // ובמפרשים (לפי book_id של widget.reportBook)
+    // העתק קישור ישיר — בטקסט ראשי מוצג כאייקון בשורה העליונה; במפרשים
+    // (ללא שורת אייקונים) נשאר כתת-תפריט ברשימה לפי book_id של widget.reportBook.
     if (widget.isMainText) {
-      if (state.book.id != null) {
-        entries.add(const AppContextMenuEntry.divider());
-        entries.add(AppContextMenuEntry(
-          label: 'העתק קישור ישיר',
-          icon: FluentIcons.link_24_regular,
-          childrenBuilder: () => buildDirectLinkContextMenuEntries(
-            bookId: state.book.id!,
-            index: index,
-            selectedText: capturedText,
-          ),
-        ));
-      }
-
       final pluginItems = ContextMenuRegistry.instance.getAll();
       if (pluginItems.isNotEmpty) {
         entries.add(const AppContextMenuEntry.divider());
@@ -1806,6 +1841,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                               event.logicalKey,
                               isControlPressed:
                                   HardwareKeyboard.instance.isControlPressed,
+                              isShiftPressed:
+                                  HardwareKeyboard.instance.isShiftPressed,
                               source: 'content-focus',
                             );
                             return handled

@@ -4,6 +4,7 @@ import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/file/docx_cache.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
@@ -195,8 +196,7 @@ class TextBookRepository {
           return true;
         }
         // Non-commentary links (cross-references, sources, etc.) always pass through
-        final type = link.connectionType.toUpperCase();
-        if (type != 'COMMENTARY' && type != 'TARGUM') {
+        if (!LinkTypes.isDependentTextLink(link.connectionType)) {
           return true;
         }
         return targetBookTitlesSet.contains(utils.getTitleFromPath(link.path2));

@@ -36,13 +36,4 @@ class GenerationDao {
     if (result.isEmpty) return null;
     return Generation.fromJson(result.first);
   }
-
-  Future<List<Generation>> getChildren(int parentGenerationId) async {
-    final db = await database;
-    return db
-        .select(_queries['selectChildren']!, [parentGenerationId])
-        .toMapList()
-        .map((row) => Generation.fromJson(row))
-        .toList();
-  }
 }

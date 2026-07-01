@@ -100,6 +100,7 @@ String backgroundKey(InstalledPlugin p) => 'background_${p.pluginId}'
     '_${p.version}'
     '_${p.installPath}'
     '_${p.entrypointPath}'
+    '_${p.backgroundEntrypointPath}'
     '_${p.devRootPath ?? ""}';
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -218,6 +219,26 @@ void main() {
     test('key שונה בין שני תוספים שונים', () {
       final other = _plugin(id: 'other.plugin');
       expect(backgroundKey(base), isNot(equals(backgroundKey(other))));
+    });
+
+    test('key משתנה כש-backgroundEntrypoint משתנה (ללא שינוי גרסה/נתיב)', () {
+      PluginManifest manifestWithBackground(String background) =>
+          PluginManifest.fromJson({
+            'schemaVersion': 1,
+            'id': base.pluginId,
+            'name': 'Test Plugin',
+            'version': base.version,
+            'entrypoint': base.entrypointPath,
+            'contributes': {
+              'background': {'entrypoint': background},
+            },
+          });
+
+      final before =
+          base.copyWith(manifest: manifestWithBackground('background.html'));
+      final after =
+          base.copyWith(manifest: manifestWithBackground('worker.html'));
+      expect(backgroundKey(before), isNot(equals(backgroundKey(after))));
     });
 
     test('שינוי ב-devRootPath בלבד (ללא bump גרסה) מייצר key שונה', () {

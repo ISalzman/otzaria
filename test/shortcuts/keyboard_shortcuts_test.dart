@@ -362,6 +362,106 @@ void main() {
     });
   });
 
+  group('KeyboardShortcuts - Ctrl+1..9 מעבר לטאב', () {
+    late MockSettingsBloc settingsBlocLocal;
+    late StreamController<SettingsState> settingsControllerLocal;
+
+    setUpAll(() async {
+      await Settings.init(cacheProvider: MemorySettingsCache());
+    });
+
+    setUp(() {
+      FocusRepository().resetForTesting();
+      settingsBlocLocal = MockSettingsBloc();
+      settingsControllerLocal = StreamController<SettingsState>.broadcast();
+      whenListen(
+        settingsBlocLocal,
+        settingsControllerLocal.stream,
+        initialState: SettingsState.initial(),
+      );
+    });
+
+    tearDown(() async {
+      await settingsControllerLocal.close();
+      FocusRepository().resetForTesting();
+    });
+
+    Future<TabsBloc> pumpWithTabs(WidgetTester tester, int tabCount) async {
+      final tabsBloc = TabsBloc(repository: _FakeTabsRepository());
+      final historyBloc = _StubHistoryBloc();
+      final navigationBloc = _StubNavigationBloc();
+      addTearDown(() async {
+        final openTabs = List<OpenedTab>.from(tabsBloc.state.tabs);
+        await tabsBloc.close();
+        for (final tab in openTabs) {
+          tab.dispose();
+        }
+        await historyBloc.close();
+        await navigationBloc.close();
+      });
+
+      for (var i = 1; i <= tabCount; i++) {
+        tabsBloc.add(AddTab(SearchingTab('חיפוש $i', '$i')));
+        await tester.pump();
+      }
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<SettingsBloc>.value(value: settingsBlocLocal),
+            BlocProvider<TabsBloc>.value(value: tabsBloc),
+            BlocProvider<HistoryBloc>.value(value: historyBloc),
+            BlocProvider<NavigationBloc>.value(value: navigationBloc),
+            Provider<FocusRepository>.value(value: FocusRepository()),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: KeyboardShortcuts(
+                onFindRefRequested: () {},
+                child: const SizedBox(width: 100, height: 100),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      return tabsBloc;
+    }
+
+    Future<void> sendCtrl(WidgetTester tester, LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(key);
+      await tester.sendKeyUpEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+    }
+
+    testWidgets('Ctrl+3 עובר לטאב השלישי', (tester) async {
+      final tabsBloc = await pumpWithTabs(tester, 5);
+
+      await sendCtrl(tester, LogicalKeyboardKey.digit3);
+      expect(tabsBloc.state.currentTabIndex, 2);
+    });
+
+    testWidgets('Ctrl+9 עובר תמיד לטאב האחרון', (tester) async {
+      final tabsBloc = await pumpWithTabs(tester, 5);
+
+      await sendCtrl(tester, LogicalKeyboardKey.digit9);
+      expect(tabsBloc.state.currentTabIndex, 4);
+    });
+
+    testWidgets('Ctrl+ספרה מעבר למספר הטאבים אינו משנה את הטאב הפעיל',
+        (tester) async {
+      final tabsBloc = await pumpWithTabs(tester, 3);
+      tabsBloc.add(const SetCurrentTab(1));
+      await tester.pump();
+
+      // Ctrl+8 ואין טאב 8 — נשאר על הטאב הנוכחי.
+      await sendCtrl(tester, LogicalKeyboardKey.digit8);
+      expect(tabsBloc.state.currentTabIndex, 1);
+    });
+  });
+
   group('KeyboardShortcuts - ניווט קטע/דף-פרק (Alt+חיצים, Alt+Page)', () {
     late MockSettingsBloc settingsBlocLocal;
     late StreamController<SettingsState> settingsControllerLocal;

@@ -11,6 +11,7 @@ Map<String, dynamic> _baseManifest({
   Map<String, dynamic>? network,
   String name = 'Test Plugin',
   String? title,
+  String minAppVersion = '0.9.94',
 }) =>
     {
       'schemaVersion': 1,
@@ -21,7 +22,7 @@ Map<String, dynamic> _baseManifest({
       'author': '',
       'homepage': '',
       'entrypoint': 'index.html',
-      'minAppVersion': '0.0.0',
+      'minAppVersion': minAppVersion,
       'sdkVersion': '1.x',
       'permissions': permissions,
       if (network != null) 'network': network,
@@ -127,6 +128,37 @@ void main() {
       expect(report.errors, isEmpty);
       expect(report.warnings.any((w) => w.contains('network')), isFalse);
     });
+
+    test('host חשוף ל-localhost תקין ב-allowlist (network.localhost)', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['network.localhost'],
+          network: {
+            'enabled': true,
+            'allowlist': ['127.0.0.1', 'localhost'],
+          },
+        ),
+      );
+      expect(report.errors, isEmpty);
+      expect(
+        report.warnings.any((w) => w.contains('כתובת לא תקינה')),
+        isFalse,
+      );
+    });
+
+    test('network.localhost ללא allowlist מקבל אזהרת allowlist ריק', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['network.localhost'],
+        ),
+      );
+      expect(
+        report.warnings.any((w) => w.contains('network.allowlist')),
+        isTrue,
+      );
+    });
   });
 
   group('name vs toolTab.title (allowed to differ — per official docs)', () {
@@ -190,6 +222,29 @@ void main() {
       );
     });
 
+    test('network.localhost מספיקה ל-network.fetch ללא network.access', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['network.localhost'],
+          network: const {
+            'enabled': true,
+            'allowlist': ['127.0.0.1'],
+          },
+        ),
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js':
+              "Otzaria.call('network.fetch', {url: 'http://127.0.0.1:11434/api/tags'});",
+        },
+      );
+      expect(
+        report.warnings.any(
+            (w) => w.contains('network.fetch') && w.contains('network.access')),
+        isFalse,
+      );
+    });
+
     test('warns when network.download is used but network.access is missing',
         () {
       final report = _runOn(
@@ -233,6 +288,97 @@ void main() {
       );
       expect(
         report.warnings.any((w) => w.contains('library.books.read')),
+        isFalse,
+      );
+    });
+
+    test(
+        'every known API method has a required-permission mapping '
+        '(except the runtime-ungated fs ops)', () {
+      // שומר מפני רגרסיה: כל API שנוסף ל-knownApiMethods חייב להופיע גם
+      // ב-methodRequiredPermissions, אלא אם ה-runtime לא דורש עבורו הרשאה.
+      // fs.extractZip/deleteFile מגודרים ע"י ui.pickFolder, לא ע"י manifest.
+      const noManifestPermission = {'fs.extractZip', 'fs.deleteFile'};
+      final missing = PluginExtendedValidator.knownApiMethods
+          .where((m) => !noManifestPermission.contains(m))
+          .where((m) =>
+              !PluginExtendedValidator.methodRequiredPermissions.containsKey(m))
+          .toList();
+      expect(missing, isEmpty,
+          reason: 'APIs ללא מיפוי הרשאה — יעברו אריזה אך ייכשלו ב-runtime: '
+              '$missing');
+    });
+
+    test('warns when library.getTree is used without library.books.read', () {
+      final report = _runOn(
+        tempDir,
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('library.getTree', {});",
+        },
+      );
+      expect(
+        report.warnings.any((w) =>
+            w.contains('library.getTree') && w.contains('library.books.read')),
+        isTrue,
+      );
+    });
+
+    test('warns when ui.pickFolder is used without ui.feedback', () {
+      final report = _runOn(
+        tempDir,
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('ui.pickFolder', {});",
+        },
+      );
+      expect(
+        report.warnings.any(
+            (w) => w.contains('ui.pickFolder') && w.contains('ui.feedback')),
+        isTrue,
+      );
+    });
+
+    test('warns when personal-file APIs are used without fs.user_files.read',
+        () {
+      final report = _runOn(
+        tempDir,
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('fs.pickUserFile', {});"
+              "Otzaria.call('fs.resolveFileUrl', {});"
+              "Otzaria.call('fs.readTextFile', {});"
+              "Otzaria.call('fs.revokeFile', {});",
+        },
+      );
+      for (final method in const [
+        'fs.pickUserFile',
+        'fs.resolveFileUrl',
+        'fs.readTextFile',
+        'fs.revokeFile',
+      ]) {
+        expect(
+          report.warnings.any(
+              (w) => w.contains(method) && w.contains('fs.user_files.read')),
+          isTrue,
+          reason: '$method חייב לדרוש את fs.user_files.read',
+        );
+      }
+    });
+
+    test('no warning for personal-file APIs when fs.user_files.read declared',
+        () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride:
+            _baseManifest(permissions: const ['fs.user_files.read']),
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('fs.readTextFile', {});",
+        },
+      );
+      expect(
+        report.warnings.any((w) => w.contains('fs.user_files.read')),
         isFalse,
       );
     });
@@ -559,6 +705,78 @@ void main() {
         files: const {'app.js': '/* logic only */'},
       );
       expect(report.design.compliant, isFalse);
+    });
+  });
+
+  group('minAppVersion vs גרסת ה-API (שגיאה חוסמת)', () {
+    test('שגיאה כשמשתמשים ב-API חדש מ-minAppVersion שהוצהר', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['ui.create_shortcut'],
+          minAppVersion: '0.9.90',
+        ),
+        files: const {
+          'index.html': '<!doctype html><html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('shortcut.create', {});",
+        },
+      );
+      expect(
+        report.errors.any((e) =>
+            e.contains('shortcut.create') &&
+            e.contains('0.9.94') &&
+            e.contains('0.9.90')),
+        isTrue,
+        reason: 'shortcut.create (0.9.94) עם minAppVersion=0.9.90 חייב error',
+      );
+    });
+
+    test('אין שגיאה כש-minAppVersion מספיק גבוה', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['ui.create_shortcut'],
+          minAppVersion: '0.9.94',
+        ),
+        files: const {
+          'index.html': '<!doctype html><html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('shortcut.create', {});",
+        },
+      );
+      expect(report.errors, isEmpty);
+    });
+
+    test('מדווח על ה-API הגבוה ביותר כשיש כמה גרסאות', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['library.books.read', 'fs.user_files.read'],
+          minAppVersion: '0.9.90',
+        ),
+        files: const {
+          'index.html': '<!doctype html><html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('library.findBooks', {});"
+              "Otzaria.call('fs.readTextFile', {});",
+        },
+      );
+      // library.findBooks (0.9.90) תקין; fs.readTextFile (0.9.94) חוסם.
+      expect(report.errors.any((e) => e.contains('fs.readTextFile')), isTrue);
+      expect(
+          report.errors.any((e) => e.contains('library.findBooks')), isFalse);
+    });
+
+    test('API לא מוכר אינו מפעיל בדיקת גרסה (רק אזהרה)', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(minAppVersion: '0.9.90'),
+        files: const {
+          'index.html': '<!doctype html><html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('totally.fake_method', {});",
+        },
+      );
+      expect(report.errors, isEmpty);
+      expect(report.warnings.any((w) => w.contains('totally.fake_method')),
+          isTrue);
     });
   });
 }

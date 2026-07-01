@@ -95,13 +95,13 @@ class PluginWebView2MissingView extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  RecommendedActionButton(
+                  ActionButton.recommended(
                     text: 'הורד WebView2',
                     icon: FluentIcons.arrow_download_24_regular,
                     onPressed: _download,
                   ),
                   const SizedBox(width: 12),
-                  NeutralActionButton(
+                  ActionButton.neutral(
                     text: 'בדוק שוב',
                     icon: FluentIcons.arrow_clockwise_24_regular,
                     onPressed: onRetry,

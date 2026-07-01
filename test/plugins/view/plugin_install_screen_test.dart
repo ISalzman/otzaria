@@ -14,6 +14,7 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/services/plugin_installer_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/settings/widgets/custom_switch.dart';
 
 // ────────────────────────────────────────────────
 // Fakes & helpers
@@ -103,7 +104,9 @@ Future<void> _openDialog(
   bool? previousAllowOrderBeforeBuiltInsGranted,
   double screenHeight = 900,
 }) async {
-  tester.view.physicalSize = Size(800, screenHeight);
+  // רוחב 1400 מדמה דסקטופ — הדיאלוג מקבל width = 1400 * 0.5 = 700px,
+  // מספיק רחב כדי שתוכן הדיאלוג לא יתעטף לגובה בלתי צפוי בטסטים.
+  tester.view.physicalSize = Size(1400, screenHeight);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -165,14 +168,14 @@ void main() {
   testWidgets('PluginInstallScreen מציג שם תוסף', (tester) async {
     await _openDialog(tester, bloc, _manifest());
 
-    expect(find.text('תוסף בדיקה'), findsWidgets);
+    expect(find.textContaining('תוסף בדיקה'), findsWidgets);
   });
 
   testWidgets('PluginInstallScreen מציג מחבר וגרסה', (tester) async {
     await _openDialog(tester, bloc, _manifest());
 
-    expect(find.text('בודק'), findsOneWidget);
-    expect(find.text('1.0.0'), findsOneWidget);
+    expect(find.text('מחבר: בודק'), findsOneWidget);
+    expect(find.text('גרסה 1.0.0'), findsOneWidget);
   });
 
   // ── הרשאות ──
@@ -263,34 +266,32 @@ void main() {
 
   // ── מצב עדכון ──
 
-  testWidgets('עדכון — כותרת AppBar היא "אישור עדכון תוסף"', (tester) async {
+  testWidgets('עדכון — כותרת הדיאלוג כוללת שם תוסף ו"עדכון"', (tester) async {
     await _openDialog(tester, bloc, _manifest(), previousVersion: '1.0.0');
 
-    expect(find.text('אישור עדכון תוסף'), findsOneWidget);
-    expect(find.text('אישור התקנת תוסף'), findsNothing);
+    expect(find.text('עדכון תוסף: תוסף בדיקה'), findsOneWidget);
+    expect(find.text('התקנת תוסף: תוסף בדיקה'), findsNothing);
   });
 
-  testWidgets('התקנה ראשונה — כותרת AppBar היא "אישור התקנת תוסף"',
+  testWidgets('התקנה ראשונה — כותרת הדיאלוג כוללת שם תוסף ו"התקנת"',
       (tester) async {
     await _openDialog(tester, bloc, _manifest());
 
-    expect(find.text('אישור התקנת תוסף'), findsOneWidget);
-    expect(find.text('אישור עדכון תוסף'), findsNothing);
+    expect(find.text('התקנת תוסף: תוסף בדיקה'), findsOneWidget);
+    expect(find.text('עדכון תוסף: תוסף בדיקה'), findsNothing);
   });
 
   testWidgets('עדכון — מוצגת שורת מעבר גרסאות עם חץ', (tester) async {
     await _openDialog(tester, bloc, _manifest(version: '2.0.0'),
         previousVersion: '1.0.0');
 
-    expect(find.text('1.0.0  ←  2.0.0'), findsOneWidget);
-    expect(find.text('עדכון גרסה'), findsOneWidget);
+    expect(find.text('עדכון גרסה 1.0.0  ←  2.0.0'), findsOneWidget);
   });
 
-  testWidgets('התקנה ראשונה — מוצגת שורת "גרסה" רגילה', (tester) async {
+  testWidgets('התקנה ראשונה — מוצגת גרסה בסאבטייטל', (tester) async {
     await _openDialog(tester, bloc, _manifest(version: '2.0.0'));
 
-    expect(find.text('גרסה'), findsOneWidget);
-    expect(find.text('2.0.0'), findsOneWidget);
+    expect(find.text('גרסה 2.0.0'), findsOneWidget);
   });
 
   testWidgets('עדכון — כפתור פעולה מציג "עדכן"', (tester) async {
@@ -346,16 +347,18 @@ void main() {
       tester,
       bloc,
       _manifest(permissions: [pluginRunOnStartupPermission]),
+      screenHeight: 1400,
     );
 
-    // מאתר את ה-SwitchListTile של ההרשאה לפי הכותרת
-    final switchFinder = find.ancestor(
+    final rowFinder = find.ancestor(
       of: find.text('טעינה אוטומטית עם עליית האפליקציה'),
-      matching: find.byType(SwitchListTile),
+      matching: find.byType(ListTile),
     );
-    expect(switchFinder, findsOneWidget);
-    final switchTile = tester.widget<SwitchListTile>(switchFinder);
-    expect(switchTile.value, isFalse);
+    expect(rowFinder, findsOneWidget);
+    final sw = tester.widget<CustomSwitch>(
+      find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
+    );
+    expect(sw.value, isFalse);
   });
 
   testWidgets('הרשאה רגילה — Switch מתחיל דלוק ברירת מחדל', (tester) async {
@@ -365,13 +368,15 @@ void main() {
       _manifest(permissions: ['app.info.read']),
     );
 
-    final switchFinder = find.ancestor(
+    final rowFinder = find.ancestor(
       of: find.text('מידע אפליקציה'),
-      matching: find.byType(SwitchListTile),
+      matching: find.byType(ListTile),
     );
-    expect(switchFinder, findsOneWidget);
-    final switchTile = tester.widget<SwitchListTile>(switchFinder);
-    expect(switchTile.value, isTrue);
+    expect(rowFinder, findsOneWidget);
+    final sw = tester.widget<CustomSwitch>(
+      find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
+    );
+    expect(sw.value, isTrue);
   });
 
   testWidgets(
@@ -408,13 +413,15 @@ void main() {
       _manifest(allowOrderBeforeBuiltIns: true),
     );
 
-    final switchFinder = find.ancestor(
+    final rowFinder = find.ancestor(
       of: find.text('אפשר לתוסף להופיע לפני הכלים המובנים'),
-      matching: find.byType(SwitchListTile),
+      matching: find.byType(ListTile),
     );
-    expect(switchFinder, findsOneWidget);
-    final switchTile = tester.widget<SwitchListTile>(switchFinder);
-    expect(switchTile.value, isTrue);
+    expect(rowFinder, findsOneWidget);
+    final sw = tester.widget<CustomSwitch>(
+      find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
+    );
+    expect(sw.value, isTrue);
   });
 
   testWidgets(
@@ -428,13 +435,15 @@ void main() {
       previousAllowOrderBeforeBuiltInsGranted: false,
     );
 
-    final switchFinder = find.ancestor(
+    final rowFinder = find.ancestor(
       of: find.text('אפשר לתוסף להופיע לפני הכלים המובנים'),
-      matching: find.byType(SwitchListTile),
+      matching: find.byType(ListTile),
     );
-    expect(switchFinder, findsOneWidget);
-    final switchTile = tester.widget<SwitchListTile>(switchFinder);
-    expect(switchTile.value, isFalse);
+    expect(rowFinder, findsOneWidget);
+    final sw = tester.widget<CustomSwitch>(
+      find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
+    );
+    expect(sw.value, isFalse);
   });
 
   // ── payload של ConfirmPluginInstall ──────────────────────────────────────
@@ -492,13 +501,12 @@ void main() {
       screenHeight: 1400,
     );
 
-    // מפעיל את ה-Switch של ההרשאה הרגישה
-    final switchFinder = find.ancestor(
+    final rowFinder = find.ancestor(
       of: find.text('טעינה אוטומטית עם עליית האפליקציה'),
-      matching: find.byType(SwitchListTile),
+      matching: find.byType(ListTile),
     );
-    await tester.ensureVisible(switchFinder);
-    await tester.tap(switchFinder);
+    await tester.ensureVisible(rowFinder);
+    await tester.tap(rowFinder);
     await tester.pump();
 
     await tester.ensureVisible(find.text('התקן'));
@@ -546,12 +554,12 @@ void main() {
       screenHeight: 1400,
     );
 
-    final switchFinder = find.ancestor(
+    final rowFinder = find.ancestor(
       of: find.text('אפשר לתוסף להופיע לפני הכלים המובנים'),
-      matching: find.byType(SwitchListTile),
+      matching: find.byType(ListTile),
     );
-    await tester.ensureVisible(switchFinder);
-    await tester.tap(switchFinder);
+    await tester.ensureVisible(rowFinder);
+    await tester.tap(rowFinder);
     await tester.pump();
 
     await tester.ensureVisible(find.text('התקן'));

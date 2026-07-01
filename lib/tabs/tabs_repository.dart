@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:hive_ce/hive.dart';
+import 'package:path/path.dart' as p;
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
@@ -57,6 +58,66 @@ class TabsRepository {
       rightTabIndex: persistedRight,
       splitRatio: sideBySideMode.splitRatio,
     );
+  }
+
+  /// ממפה נתיבי קבצים שמורים של טאבים מתיקיית הספרייה הישנה [fromDir] לחדשה
+  /// [toDir], כדי שספרי PDF/DOCX פתוחים ייטענו מהמיקום החדש לאחר רענון התוכנה.
+  /// משכתב את שדות 'path' ו-'filePath' בכל עומק (כולל ה-book המקונן).
+  Future<void> remapBookPaths(String fromDir, String toDir) async {
+    final box = Hive.box('tabs');
+    final rawTabs = box.get(_tabsBoxKey, defaultValue: []) as List;
+    var changed = false;
+    final remapped = rawTabs
+        .map((e) => _remapNode(e, fromDir, toDir, () => changed = true))
+        .toList();
+    if (changed) await box.put(_tabsBoxKey, remapped);
+  }
+
+  /// ממפה נתיבי קבצים של טאבים פתוחים *בזיכרון* מ-[fromDir] ל-[toDir].
+  /// טאב שהנתיב שלו לא משתנה מוחזר כאובייקט המקורי (ללא בנייה מחדש);
+  /// טאב ששונה נבנה מחדש דרך toJson→fromJson עם הנתיב החדש.
+  /// נדרש בנוסף ל-[remapBookPaths]: שמירה ל-Hive בלבד נדרסת ע"י שמירת
+  /// הטאבים שבזיכרון בעת dispose, ולכן ספר PDF היה נטען מהנתיב הישן.
+  List<OpenedTab> remapTabsInMemory(
+    List<OpenedTab> tabs,
+    String fromDir,
+    String toDir,
+  ) {
+    return tabs.map((tab) {
+      var changed = false;
+      final remappedJson =
+          _remapNode(tab.toJson(), fromDir, toDir, () => changed = true);
+      if (!changed) return tab;
+      return _tabFromJson(castMap(remappedJson)) ?? tab;
+    }).toList();
+  }
+
+  dynamic _remapNode(
+    dynamic node,
+    String fromDir,
+    String toDir,
+    void Function() onChange,
+  ) {
+    if (node is Map) {
+      final result = <String, dynamic>{};
+      node.forEach((key, value) {
+        final k = key.toString();
+        if ((k == 'path' || k == 'filePath') &&
+            value is String &&
+            value.isNotEmpty &&
+            (p.equals(fromDir, value) || p.isWithin(fromDir, value))) {
+          result[k] = p.join(toDir, p.relative(value, from: fromDir));
+          onChange();
+        } else {
+          result[k] = _remapNode(value, fromDir, toDir, onChange);
+        }
+      });
+      return result;
+    }
+    if (node is List) {
+      return node.map((e) => _remapNode(e, fromDir, toDir, onChange)).toList();
+    }
+    return node;
   }
 
   List<OpenedTab> loadTabs() {

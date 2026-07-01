@@ -121,18 +121,25 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
+    // ערכים שמורים הם פיקסלים מוחלטים מסשן קודם — יש לחתוך לגבולות
+    // החלון הנוכחי כדי שלא יגלשו כשהחלון קטן ממה שהיה בסשן הקודם.
     _leftSidebarWidth =
-        Settings.getValue<double>('page_shape_left_sidebar_width') ??
-            screenWidth * 0.22;
-    _leftWidth = Settings.getValue<double>('page_shape_left_width') ??
-        screenWidth * 0.17;
-    _rightWidth = Settings.getValue<double>('page_shape_right_width') ??
-        screenWidth * 0.17;
-    _bottomHeight = Settings.getValue<double>('page_shape_bottom_height') ??
-        screenHeight * 0.27;
+        (Settings.getValue<double>('page_shape_left_sidebar_width') ??
+                screenWidth * 0.22)
+            .clamp(0.0, screenWidth * 0.35);
+    _leftWidth = (Settings.getValue<double>('page_shape_left_width') ??
+            screenWidth * 0.17)
+        .clamp(0.0, screenWidth * 0.4);
+    _rightWidth = (Settings.getValue<double>('page_shape_right_width') ??
+            screenWidth * 0.17)
+        .clamp(0.0, screenWidth * 0.4);
+    _bottomHeight = (Settings.getValue<double>('page_shape_bottom_height') ??
+            screenHeight * 0.27)
+        .clamp(0.0, screenHeight * 0.5);
     _bottomLeftWidth =
-        Settings.getValue<double>('page_shape_bottom_left_width') ??
-            screenWidth * 0.5;
+        (Settings.getValue<double>('page_shape_bottom_left_width') ??
+                screenWidth * 0.5)
+            .clamp(0.0, screenWidth * 0.9);
 
     setState(() {});
 
@@ -152,24 +159,56 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final settings = await TextBookPerBookSettings.load(book);
     if (settings == null || !mounted) return;
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
     setState(() {
       if (settings.pageShapeLeftWidth != null) {
-        _leftWidth = settings.pageShapeLeftWidth;
+        _leftWidth = settings.pageShapeLeftWidth!.clamp(0.0, screenWidth * 0.4);
       }
       if (settings.pageShapeRightWidth != null) {
-        _rightWidth = settings.pageShapeRightWidth;
+        _rightWidth =
+            settings.pageShapeRightWidth!.clamp(0.0, screenWidth * 0.4);
       }
       if (settings.pageShapeBottomHeight != null) {
-        _bottomHeight = settings.pageShapeBottomHeight;
+        _bottomHeight =
+            settings.pageShapeBottomHeight!.clamp(0.0, screenHeight * 0.5);
       }
       if (settings.pageShapeBottomLeftWidth != null) {
-        _bottomLeftWidth = settings.pageShapeBottomLeftWidth;
+        _bottomLeftWidth =
+            settings.pageShapeBottomLeftWidth!.clamp(0.0, screenWidth * 0.9);
       }
     });
   }
 
+  /// עיגון מחדש לפריט העליון הנראה לפני שינוי רוחב התוכן.
+  void _reanchorMainText() {
+    final blocState = context.read<TextBookBloc>().state;
+    if (blocState is! TextBookLoaded) return;
+
+    final controller = blocState.scrollController;
+    if (!controller.isAttached) return;
+
+    final visible = blocState.positionsListener.itemPositions.value
+        .where((p) => p.itemLeadingEdge < 1 && p.itemTrailingEdge > 0);
+    if (visible.isEmpty) return;
+
+    ItemPosition pickByMin(Iterable<ItemPosition> items) =>
+        items.reduce((a, b) => a.itemLeadingEdge <= b.itemLeadingEdge ? a : b);
+
+    final atOrBelowFold = visible.where((p) => p.itemLeadingEdge >= 0);
+    final anchor = atOrBelowFold.isNotEmpty
+        ? pickByMin(atOrBelowFold)
+        : pickByMin(visible);
+
+    controller.jumpTo(
+      index: anchor.index,
+      alignment: anchor.itemLeadingEdge.clamp(0.0, 1.0),
+    );
+  }
+
   /// שמירת גדלים
   void _saveSizes() {
+    _reanchorMainText();
     // סרגל הצד נשמר תמיד גלובלית (אינו חלק מרוחב הטורים).
     if (_leftSidebarWidth != null) {
       Settings.setValue<double>(
@@ -501,13 +540,13 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            RecommendedActionButton(
+            ActionButton.recommended(
               onPressed: onSelectCommentator,
               icon: FluentIcons.book_24_regular,
               text: 'בחר מפרש',
             ),
             const SizedBox(height: 12),
-            NeutralActionButton(
+            ActionButton.neutral(
               onPressed: onHideColumn,
               icon: FluentIcons.eye_off_24_regular,
               text: 'הסתר טור זה',
@@ -553,6 +592,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       return;
     }
 
+    if (!_isLeftSidebarOpen) _reanchorMainText();
     setState(() {
       _isLeftSidebarOpen = true;
       _leftSidebarTabIndex = validIndex;
@@ -573,6 +613,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   }
 
   void _toggleLeftSidebar() {
+    _reanchorMainText();
     setState(() {
       _isLeftSidebarOpen = !_isLeftSidebarOpen;
     });
@@ -593,6 +634,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   /// פתוחה על "קישורים" → סגור.
   void _onToggleCommentatorsPaneRequest() {
     if (!mounted) return;
+    _reanchorMainText();
     setState(() {
       if (_isLeftSidebarOpen && _leftSidebarTabIndex == _kLinksTabIndex) {
         _isLeftSidebarOpen = false;
@@ -1352,7 +1394,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     _relevantLinks = state.links.where((link) {
       final linkTitle = utils.getTitleFromPath(link.path2);
       return linkTitle == widget.commentatorName &&
-          LinkTypes.isCommentaryOrTargum(link.connectionType);
+          LinkTypes.isDependentTextLink(link.connectionType);
     }).toList();
   }
 

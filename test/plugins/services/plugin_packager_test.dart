@@ -379,5 +379,78 @@ void main() {
         contains('src/app/index.html'),
       );
     });
+
+    // ── החרגה דרך .otzignore ───────────────────────────────────────────────
+
+    test('.otzignore excludes files, dirs, and globs (with ! re-include)',
+        () async {
+      final pluginDir = _writePluginDir(
+        tempDir,
+        extraFiles: {
+          'app.js': 'x',
+          'app.js.map': 'x', // *.map glob
+          'notes.txt': 'x', // קובץ בודד מעוגן
+          'src/raw.ts': 'x', // גזימת תיקיית src/
+          'src/keep.js': 'x', // מוחזר ע"י !
+          '.otzignore': '# build excludes\n'
+              '*.map\n'
+              'notes.txt\n'
+              'src/\n'
+              '!src/keep.js\n',
+        },
+      );
+
+      final result = await PluginPackager.packDirectory(
+        directoryPath: pluginDir,
+        outputPath: p.join(tempDir.path, 'out.otzplugin'),
+      );
+
+      final archive =
+          ZipDecoder().decodeBytes(File(result.outputPath).readAsBytesSync());
+      final names = archive.files.map((f) => f.name).toSet();
+
+      expect(names,
+          containsAll(<String>['manifest.json', 'index.html', 'app.js']));
+      expect(names, contains('src/keep.js')); // !src/keep.js הוחזר
+      expect(names, isNot(contains('app.js.map')));
+      expect(names, isNot(contains('notes.txt')));
+      expect(names, isNot(contains('src/raw.ts')));
+      expect(names, isNot(contains('.otzignore'))); // הקובץ עצמו לא נארז
+      expect(result.excludedCount, 3); // app.js.map, notes.txt, src/raw.ts
+    });
+
+    test('no .otzignore => excludedCount is 0 and nothing extra is dropped',
+        () async {
+      final pluginDir = _writePluginDir(tempDir, extraFiles: {'a.js': 'x'});
+
+      final result = await PluginPackager.packDirectory(
+        directoryPath: pluginDir,
+        outputPath: p.join(tempDir.path, 'out.otzplugin'),
+      );
+
+      expect(result.excludedCount, 0);
+      expect(result.fileCount, 3); // manifest + index + a.js
+    });
+
+    test('throws when .otzignore would exclude the entrypoint', () async {
+      final manifest = _minimalManifest(entrypoint: 'app/index.html');
+      final pluginDir = _writePluginDir(
+        tempDir,
+        manifestOverride: manifest,
+        extraFiles: {
+          'app/index.html': '<html></html>',
+          '.otzignore': 'app/\n',
+        },
+      );
+
+      await expectLater(
+        () => PluginPackager.packDirectory(directoryPath: pluginDir),
+        throwsA(isA<PluginPackagerException>().having(
+          (e) => e.message,
+          'message',
+          allOf(contains('app/index.html'), contains('.otzignore')),
+        )),
+      );
+    });
   });
 }

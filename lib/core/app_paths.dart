@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 enum InstallMode { systemWide, perUser }
@@ -72,7 +73,6 @@ class AppPaths {
     return result;
   }
 
-
   /// Returns the default writable root for user-scoped app data.
   ///
   /// במצב נייד ([isPortable]) — תיקיית [_portableDataFolderName] ליד
@@ -122,7 +122,20 @@ class AppPaths {
     }
     if (Platform.isWindows) {
       final exeDir = p.dirname(Platform.resolvedExecutable);
+      // ה-marker (נכתב ע"י ה-installer בהתקנת מנהל) וה-exe תחת Program Files
+      // הם אותות יציבים שאינם משתנים כשהמשתמש מעביר את הספרייה. בכוונה אין
+      // כאן fallback לפי נתיב הספרייה — הוא היה גורם לזיהוי להתהפך ל-perUser
+      // (וברירת מחדל ל-AppData) ברגע שהספרייה הועברה מחוץ ל-ProgramData.
       if (File(p.join(exeDir, 'system_install.marker')).existsSync()) {
+        return InstallMode.systemWide;
+      }
+      final exeDirLower = exeDir.toLowerCase();
+      final pf = (Platform.environment['ProgramFiles'] ?? r'C:\Program Files')
+          .toLowerCase();
+      final pfX86 = (Platform.environment['ProgramFiles(x86)'] ??
+              r'C:\Program Files (x86)')
+          .toLowerCase();
+      if (exeDirLower.startsWith(pf) || exeDirLower.startsWith(pfX86)) {
         return InstallMode.systemWide;
       }
     }
@@ -333,6 +346,13 @@ class AppPaths {
     return _getDefaultIndexPath();
   }
 
+  /// נתיב קובץ המילון המורפולוגי (`lexical.db`) של החיפוש המקורב.
+  ///
+  /// יושב לצד `seforim.db`. בהיעדרו החיפוש המקורב נופל חזרה ל-fuzzy רגיל.
+  static Future<String> getMagicDictionaryPath() async {
+    return p.join(DatabaseConstants.getDatabaseDirectoryPath(), 'lexical.db');
+  }
+
   /// מחזיר רשימת נתיבי ברירת מחדל לאינדקס שאינם הנתיב הפעיל כעת.
   ///
   /// משמש בעת איפוס אינדקס: אינדקסים ישנים בנתיבים אלו (למשל אינדקס
@@ -396,10 +416,10 @@ class AppPaths {
     return p.join(await getDataRootPath(), 'plugins');
   }
 
-  /// Gets the root path for user overrides.
-  static Future<String> getUserOverridesRootPath() async {
-    return p.join(await getDataRootPath(), 'user_overrides');
-  }
+  // [EDITING DISABLED]
+  // static Future<String> getUserOverridesRootPath() async {
+  //   return p.join(await getDataRootPath(), 'user_overrides');
+  // }
 
   /// Gets the root path for per-book settings files.
   static Future<String> getPerBookSettingsPath() async {

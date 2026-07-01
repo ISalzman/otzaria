@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
@@ -11,7 +11,6 @@ import '../shamor_zachor_widget.dart';
 import '../widgets/shamor_zachor_sidebar.dart';
 import '../widgets/category_books_grid.dart';
 import '../widgets/add_books_to_tracking_dialog.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import '../models/book_model.dart';
 import 'book_detail_screen.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -246,7 +245,7 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
             tooltip: 'הוסף ספרים למעקב',
             visualDensity: VisualDensity.compact,
             onPressed: _openAddBooksDialog,
-            icon: const RtlIcon(FluentIcons.add_24_regular),
+            icon: const Icon(FluentIcons.add_24_regular),
           ),
         ),
         AppSegmentedControl<String>(
@@ -444,7 +443,7 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                       const Text('שגיאה בטעינת הנתונים'),
-                      RecommendedActionButton(
+                      ActionButton.recommended(
                         text: 'נסה שוב',
                         onPressed: () async {
                           if (dataProvider.error != null) {

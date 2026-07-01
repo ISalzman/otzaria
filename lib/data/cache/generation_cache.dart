@@ -52,9 +52,8 @@ class GenerationCache {
       final rows = db.select('''
         SELECT b.id AS bookId, g.name AS generationName
         FROM book b
-        JOIN book_author ba ON b.id = ba.bookId
-        JOIN author a ON ba.authorId = a.id
-        JOIN generation g ON a.generationId = g.id
+        JOIN book_generation bg ON bg.bookId = b.id
+        JOIN generation g ON g.id = bg.generationId
       ''');
 
       final local = <int, int>{};

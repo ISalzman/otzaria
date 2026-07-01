@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
@@ -269,8 +270,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   static const double _verticalScrollbarGutter = 16.0;
   static const double _horizontalScrollbarGutter = 10.0;
   static const double _scrollbarGutterGap = 4.0;
-  static const String _connectionTypeCommentary = 'COMMENTARY';
-  static const String _connectionTypeTargum = 'TARGUM';
   static const int _kCommentaryTabIndex = 0;
   static const int _kLinksTabIndex = 1;
   static const int _kPersonalNotesTabIndex = 2;
@@ -781,9 +780,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       if (link.index1 > range.endLine) break;
       if (link.index1 < range.startLine) continue;
 
-      final connectionType = link.connectionType.toUpperCase();
-      if (connectionType == _connectionTypeCommentary ||
-          connectionType == _connectionTypeTargum) {
+      if (LinkTypes.isDependentTextLink(link.connectionType)) {
         commentators.add(utils.getTitleFromPath(link.path2));
         continue;
       }
@@ -1102,6 +1099,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               );
             }
           : null,
+      calculateCurrentPageNumber: layoutMode == PdfLayoutMode.bookView
+          ? null
+          : (visibleRect, pageRects, controller) =>
+              pdfTopmostVisiblePage(visibleRect, pageRects),
       normalizeMatrix: layoutMode == PdfLayoutMode.bookView
           ? (matrix, viewSize, layout, controller) {
               if (_isPageTurnInProgress) {
@@ -1192,8 +1193,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           child: AppContextMenuRegion(
             key: _pdfContextMenuKey,
             menuBuilder: _buildPdfContextMenuEntries,
-            child: Listener(
-              behavior: HitTestBehavior.translucent,
+            child: _PdfScrollOnlyListener(
               onPointerSignal: (event) {
                 final adjusted = _trackpadAxisLock.apply(
                   event,
@@ -1995,9 +1995,24 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // During progressive PDF loading, pdfrx may wait indefinitely for the
     // viewport to settle while new tiles keep arriving. Time out the await so
     // page-turn state cannot deadlock the navigation flow.
-    await controller
-        .goToPage(pageNumber: safePage)
-        .timeout(const Duration(seconds: 3), onTimeout: () {});
+    //
+    // goToPage() resets zoom to fit-page when the user has zoomed in beyond
+    // fit-page level. Preserve zoom by computing the target matrix explicitly.
+    // safePage נגזר מ-pageCount, וב-טעינה הדרגתית pageLayouts יכול להיות קצר ממנו
+    // (גם ריק) — אז נופלים ל-goToPage הבטוח, אחרת אינדוקס מחוץ-לטווח יקרוס.
+    if (controller.layout.pageLayouts.length < safePage) {
+      await controller
+          .goToPage(pageNumber: safePage)
+          .timeout(const Duration(seconds: 3), onTimeout: () {});
+    } else {
+      final page = controller.layout.pageLayouts[safePage - 1];
+      final halfViewHeight =
+          controller.viewSize.height / 2 / controller.value.zoom;
+      await controller
+          .goTo(controller
+              .calcMatrixFor(page.topCenter.translate(0, halfViewHeight)))
+          .timeout(const Duration(seconds: 3), onTimeout: () {});
+    }
 
     if (!_pdfViewFocusNode.hasFocus) {
       _pdfViewFocusNode.requestFocus();
@@ -2589,8 +2604,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Future<void> _loadCommentatorGroups() async {
     final commentatorsSet = <String>{};
     for (final link in widget.tab.links) {
-      if (link.connectionType == 'COMMENTARY' ||
-          link.connectionType == 'TARGUM') {
+      if (LinkTypes.isDependentTextLink(link.connectionType)) {
         commentatorsSet.add(utils.getTitleFromPath(link.path2));
       }
     }
@@ -2811,12 +2825,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // טעינת דורות מראש כדי שמיון הקישורים לפי דורות יעבוד סינכרונית
         // (תפריט הקשר + פאנל קישורים)
         CommentaryService.preloadEras(loadedLinks
-            .where((l) => !LinkTypes.isCommentaryOrTargum(l.connectionType))
+            .where((l) => !LinkTypes.isDependentTextLink(l.connectionType))
             .map((l) => utils.getTitleFromPath(l.path2)));
         final commentaryCount = loadedLinks
-            .where((l) =>
-                l.connectionType.toUpperCase() == 'COMMENTARY' ||
-                l.connectionType.toUpperCase() == 'TARGUM')
+            .where((l) => LinkTypes.isDependentTextLink(l.connectionType))
             .length;
         _bookHasCommentaryLinks = commentaryCount > 0;
         await _loadCommentatorGroups();
@@ -2916,7 +2928,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _schedulePrerenderForAdjacentSpreads();
 
     final tourCubit = context.read<TourCubit>();
-    widget.tab.savedZoom = widget.tab.pdfViewerController.value.zoom;
+    final newZoom = widget.tab.pdfViewerController.value.zoom;
+    widget.tab.savedZoom = newZoom;
+
+    // Sync wheel/pinch zoom into BLoC so toolbar buttons start from the
+    // current zoom, and show the zoom bar just like the toolbar buttons do.
+    if (!_isJumping) {
+      final currentState = _bloc.state;
+      if (currentState is PdfBookLoaded &&
+          (currentState.zoom - newZoom).abs() > 0.001) {
+        _bloc.add(pdf_events.UpdateZoom(newZoom));
+        _bloc.add(const pdf_events.SetShowZoomBar(true));
+      }
+    }
 
     final newPage = widget.tab.pdfViewerController.pageNumber ?? 1;
 
@@ -3268,7 +3292,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                   ),
                                 ),
                                 const SizedBox(height: 16),
-                                RecommendedActionButton(
+                                ActionButton.recommended(
                                   text: 'נסה שוב',
                                   icon: FluentIcons.arrow_clockwise_24_regular,
                                   onPressed: () {
@@ -5299,5 +5323,52 @@ class _BookViewTurnButton extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Listener variant that registers with [PointerSignalResolver] only for
+/// [PointerScrollEvent] (mouse wheel / Ctrl+scroll).
+///
+/// [PointerScaleEvent] (trackpad two-finger pinch) deliberately bypasses the
+/// resolver so the underlying pdfrx InteractiveViewer can claim it and zoom
+/// at the correct focal point (cursor position) instead of the viewport center.
+class _PdfScrollOnlyListener extends SingleChildRenderObjectWidget {
+  const _PdfScrollOnlyListener({
+    required this.onPointerSignal,
+    super.child,
+  });
+
+  final void Function(PointerSignalEvent) onPointerSignal;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderPdfScrollOnlyListener(onPointerSignal: onPointerSignal);
+
+  @override
+  void updateRenderObject(
+      BuildContext context, _RenderPdfScrollOnlyListener renderObject) {
+    renderObject.onPointerSignal = onPointerSignal;
+  }
+}
+
+class _RenderPdfScrollOnlyListener extends RenderProxyBoxWithHitTestBehavior {
+  _RenderPdfScrollOnlyListener({
+    required void Function(PointerSignalEvent) onPointerSignal,
+  })  : _onPointerSignal = onPointerSignal,
+        super(behavior: HitTestBehavior.translucent);
+
+  void Function(PointerSignalEvent) _onPointerSignal;
+
+  set onPointerSignal(void Function(PointerSignalEvent) value) {
+    _onPointerSignal = value;
+  }
+
+  @override
+  void handleEvent(PointerEvent event, HitTestEntry entry) {
+    if (event is PointerScrollEvent) {
+      GestureBinding.instance.pointerSignalResolver
+          .register(event, _onPointerSignal);
+    }
+    // PointerScaleEvent is not claimed — pdfrx zooms at the correct focal point
   }
 }

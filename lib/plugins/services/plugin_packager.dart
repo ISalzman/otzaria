@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/services/plugin_extended_validator.dart';
+import 'package:otzaria/plugins/services/plugin_ignore.dart';
 import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
 import 'package:path/path.dart' as p;
 
@@ -12,6 +13,9 @@ import 'package:path/path.dart' as p;
 class PluginPackageResult {
   final String outputPath;
   final int fileCount;
+
+  /// מספר הקבצים שהוחרגו ע"י `.otzignore` (0 אם אין קובץ כזה).
+  final int excludedCount;
   final int bytes;
   final PluginManifest manifest;
   final PluginValidationReport validation;
@@ -19,6 +23,7 @@ class PluginPackageResult {
   const PluginPackageResult({
     required this.outputPath,
     required this.fileCount,
+    this.excludedCount = 0,
     required this.bytes,
     required this.manifest,
     required this.validation,
@@ -110,8 +115,14 @@ class PluginPackager {
     // תיקיות פיתוח שאין צורך לארוז — שומרות על חבילה רזה ומונעות הדלפת
     // היסטוריית git/הגדרות IDE לתוך ה-‎.otzplugin שמופץ.
     const skipDirs = <String>{
-      '.git', '.svn', '.hg', '.idea', '.vscode',
-      'node_modules', '__pycache__', '.claude',
+      '.git',
+      '.svn',
+      '.hg',
+      '.idea',
+      '.vscode',
+      'node_modules',
+      '__pycache__',
+      '.claude',
     };
 
     // בדיקת תקינות: ה-entrypoint לא יכול לשבת בתוך תיקייה מוחרגת —
@@ -131,6 +142,42 @@ class PluginPackager {
         '("$blockedDir"). העבר את ה-entrypoint מחוץ לתיקיות: '
         '${skipDirs.join(', ')}',
       );
+    }
+
+    // קובץ החרגה אופציונלי (`.otzignore`) בשורש התוסף — מחריג קבצים נוספים
+    // מהארכיון. נטען כאן כדי לבדוק שה-entrypoint לא הוחרג בטעות (אחרת התוסף
+    // יישבר בשקט בדיוק כמו entrypoint בתוך תיקייה מוחרגת).
+    final ignore = PluginIgnore.load(dir.path);
+    final entrypointForIgnore = entrypointRelativePath.replaceAll('\\', '/');
+    if (ignore.ignores(entrypointForIgnore)) {
+      throw PluginPackagerException(
+        'קובץ הכניסה "${manifest.entrypoint}" מוחרג ע"י $kOtzignoreFilename. '
+        'הסר את הכלל שמתאים לו מ-$kOtzignoreFilename כדי שייכלל באריזה.',
+      );
+    }
+
+    // אותה בדיקה לקובץ הרקע (אם הוצהר) — אחרת תוסף רקע יישבר בשקט בעלייה.
+    final backgroundEntrypoint = manifest.backgroundEntrypoint;
+    if (backgroundEntrypoint != null) {
+      final backgroundRelativePath = p.relative(
+        p.normalize(p.absolute(p.join(dir.path, backgroundEntrypoint))),
+        from: dir.path,
+      );
+      final blockedBackgroundDir =
+          p.split(backgroundRelativePath).where(skipDirs.contains).firstOrNull;
+      if (blockedBackgroundDir != null) {
+        throw PluginPackagerException(
+          'קובץ הרקע "$backgroundEntrypoint" נמצא בתוך תיקייה מוחרגת מאריזה '
+          '("$blockedBackgroundDir"). העבר אותו מחוץ לתיקיות: '
+          '${skipDirs.join(', ')}',
+        );
+      }
+      if (ignore.ignores(backgroundRelativePath.replaceAll('\\', '/'))) {
+        throw PluginPackagerException(
+          'קובץ הרקע "$backgroundEntrypoint" מוחרג ע"י $kOtzignoreFilename. '
+          'הסר את הכלל שמתאים לו מ-$kOtzignoreFilename כדי שייכלל באריזה.',
+        );
+      }
     }
 
     final resolvedOutPath = outputPath ??
@@ -159,18 +206,32 @@ class PluginPackager {
     // סריקה ידנית (לא רקורסיבית ב-OS) כדי לדלג לחלוטין על תיקיות מוחרגות
     // ולא לבזבז זמן על סריקת תוכנן (node_modules יכולה להכיל עשרות אלפי קבצים).
     final filesToPack = <File>[];
+    var excludedCount = 0;
     void collectFiles(Directory currentDir) {
       for (final entity in currentDir.listSync(recursive: false)) {
-        if (skipDirs.contains(p.basename(entity.path))) continue;
+        final base = p.basename(entity.path);
+        if (skipDirs.contains(base)) continue;
+        final rel =
+            p.relative(entity.path, from: dir.path).replaceAll('\\', '/');
         if (entity is Directory) {
+          // גזימת תיקייה מוחרגת בשלמותה. מדלגים על הקיצור כשיש כללי `!`,
+          // כי ייתכן שקובץ-צאצא צריך להיכלל בכל זאת.
+          if (!ignore.hasNegation && ignore.ignores('$rel/')) continue;
           collectFiles(entity);
         } else if (entity is File) {
+          // ה-.otzignore עצמו לעולם לא נארז.
+          if (base == kOtzignoreFilename) continue;
           final entityAbs = p.normalize(p.absolute(entity.path));
           if (entityAbs == normalizedOutPath) continue;
+          if (ignore.ignores(rel)) {
+            excludedCount++;
+            continue;
+          }
           filesToPack.add(entity);
         }
       }
     }
+
     collectFiles(dir);
 
     final encoder = ZipFileEncoder();
@@ -192,6 +253,7 @@ class PluginPackager {
     return PluginPackageResult(
       outputPath: resolvedOutPath,
       fileCount: fileCount,
+      excludedCount: excludedCount,
       bytes: bytes,
       manifest: manifest,
       validation: report,

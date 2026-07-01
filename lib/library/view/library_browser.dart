@@ -13,9 +13,7 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart';
-import 'package:otzaria/file_sync/bloc/file_sync_bloc.dart';
-import 'package:otzaria/file_sync/bloc/file_sync_event.dart';
-import 'package:otzaria/file_sync/bloc/file_sync_state.dart';
+import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 import 'package:otzaria/library/view/library_daf_yomi.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
@@ -52,7 +50,7 @@ const int _kScrollDebounceMs = 100;
 /// דיבאונס לחיפוש ספרים — מונע הרצת חיפוש כבד על כל אות.
 const Duration _kLibrarySearchDebounceDuration = Duration(milliseconds: 250);
 
-enum _LibraryListItemStyle { root, groupedRoot, grouped, search }
+enum _LibraryListItemStyle { root, grouped, search }
 
 /// מחשב רוחב תקין לחלונית התצוגה המקדימה לפי הרוחב הפנוי בספרייה.
 @visibleForTesting
@@ -823,52 +821,58 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   ActionButtonData _buildSyncActionButton({required bool compact}) {
     return ActionButtonData(
-      widget: BlocConsumer<FileSyncBloc, FileSyncState>(
-        listener: (ctx, s) {
-          if ((s.status == FileSyncStatus.completed ||
-                  s.status == FileSyncStatus.error) &&
-              s.hasNewSync) {
-            ctx.read<LibraryBloc>().add(RefreshLibrary());
-          }
-        },
-        builder: (ctx, syncState) {
-          final isSyncing = syncState.status == FileSyncStatus.syncing;
-          final icon = syncState.status == FileSyncStatus.completed
+      // ריענון הספרייה אחרי עדכון מטופל ב-MainWindowScreen (listener שתמיד
+      // mounted). כאן רק בונים את הכפתור.
+      widget: BlocBuilder<LibraryUpdateBloc, LibraryUpdateState>(
+        builder: (ctx, state) {
+          final isBusy = state.isBusy;
+          final icon = state.status == LibraryUpdateStatus.completed
               ? FluentIcons.checkmark_circle_24_regular
               : FluentIcons.arrow_sync_24_regular;
-          final tooltip = switch (syncState.status) {
-            FileSyncStatus.syncing => 'עצור סינכרון',
-            FileSyncStatus.completed =>
-              syncState.hasNewSync ? 'סנכרון הושלם' : 'אין עדכונים חדשים',
-            FileSyncStatus.error => 'שגיאה בסינכרון - לחץ לנסות שוב',
-            FileSyncStatus.initial => 'סינכרון',
+          final tooltip = switch (state.status) {
+            LibraryUpdateStatus.completed =>
+              state.hasUpdate ? 'העדכון הושלם' : 'הספרייה מעודכנת',
+            LibraryUpdateStatus.error => 'שגיאה בעדכון - לחץ לנסות שוב',
+            LibraryUpdateStatus.needsFullConfirmation => state.message,
+            LibraryUpdateStatus.blocked => state.message,
+            _ when isBusy => state.message,
+            _ => 'עדכון ספרייה',
           };
           return ToolbarActionButton(
             compact: compact,
             tooltip: tooltip,
             icon: icon,
-            selected: isSyncing,
+            // ספינר מסתובב בזמן עדכון — אינדיקציית פעילות רציפה (ticker עצמאי),
+            // כי בשלב ה-apply הארוך אין שינויי state שיבנו מחדש את הכפתור.
+            iconWidget: isBusy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                  )
+                : null,
+            selected: isBusy,
             onPressed: () {
-              final b = ctx.read<FileSyncBloc>();
-              switch (syncState.status) {
-                case FileSyncStatus.syncing:
-                  b.add(const StopSync());
-                case FileSyncStatus.completed:
-                case FileSyncStatus.error:
-                  b.add(const ResetState());
-                case FileSyncStatus.initial:
-                  b.add(const StartSync());
+              final b = ctx.read<LibraryUpdateBloc>();
+              if (isBusy) {
+                b.add(const CancelLibraryUpdate());
+              } else if (state.status == LibraryUpdateStatus.completed ||
+                  state.status == LibraryUpdateStatus.error ||
+                  state.status == LibraryUpdateStatus.blocked) {
+                b.add(const ResetLibraryUpdate());
+              } else {
+                b.add(const StartLibraryUpdate());
               }
             },
           );
         },
       ),
       icon: FluentIcons.arrow_sync_24_regular,
-      tooltip: 'סינכרון',
+      tooltip: 'עדכון ספרייה',
       onPressed: () {
-        final b = context.read<FileSyncBloc>();
-        if (b.state.status != FileSyncStatus.syncing) {
-          b.add(const StartSync());
+        final b = context.read<LibraryUpdateBloc>();
+        if (!b.state.isBusy) {
+          b.add(const StartLibraryUpdate());
         }
       },
     );
@@ -1222,44 +1226,21 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     }
     for (final sub in filteredSubs) {
       final isExpanded = _expandedCategories.contains(sub.path);
-      final isRootItem = level == 0;
-      if (isExpanded) {
-        final children = _buildCategoryTree(sub, level + 1);
-        if (isRootItem && children.isNotEmpty) {
-          widgets.addAll(
-            _buildGroupedListSectionItems([
-              _buildListCategoryItem(
-                sub,
-                level,
-                isExpanded,
-                itemStyle: _LibraryListItemStyle.groupedRoot,
-              ),
-              ...children,
-            ]),
-          );
-        } else {
-          widgets.add(
-            _buildListCategoryItem(
-              sub,
-              level,
-              isExpanded,
-              itemStyle: isRootItem
-                  ? _LibraryListItemStyle.root
-                  : _LibraryListItemStyle.grouped,
-            ),
-          );
-          widgets.addAll(children);
-        }
+      final subChildren =
+          isExpanded ? _buildCategoryTree(sub, level + 1) : <Widget>[];
+      if (level == 0) {
+        widgets.add(
+          ExpandableCard(
+            key: ValueKey(sub.path),
+            header: _buildCategoryHeaderRow(sub, level, isExpanded),
+            isExpanded: isExpanded,
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            children: subChildren,
+          ),
+        );
       } else {
         widgets.add(
-          _buildListCategoryItem(
-            sub,
-            level,
-            isExpanded,
-            itemStyle: isRootItem
-                ? _LibraryListItemStyle.root
-                : _LibraryListItemStyle.grouped,
-          ),
+          _buildNestedCategorySection(sub, level, isExpanded, subChildren),
         );
       }
     }
@@ -1281,7 +1262,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           onTap: () => _showAllBooksDialog(filteredBooks),
           child: Padding(
             padding: EdgeInsets.only(
-              right: 16.0 + level * 24,
+              right: 16.0 + level * 18,
               left: 16,
               top: 10,
               bottom: 10,
@@ -1299,45 +1280,30 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return widgets;
   }
 
-  List<Widget> _buildGroupedListSectionItems(List<Widget> children) {
-    return [
-      AppCard.section(
-        margin: const EdgeInsets.only(top: 2, bottom: 8),
-        children: children,
-      ),
-    ];
-  }
-
-  Widget _buildListCategoryItem(
+  /// שורת כותרת לתיקייה — ללא עטיפת כרטיס (נוסף ע"י [ExpandableCard]).
+  Widget _buildCategoryHeaderRow(
     Category category,
     int level,
-    bool isExpanded, {
-    _LibraryListItemStyle itemStyle = _LibraryListItemStyle.root,
-  }) {
+    bool isExpanded,
+  ) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final isGrouped = itemStyle == _LibraryListItemStyle.grouped;
-    final isGroupedRoot = itemStyle == _LibraryListItemStyle.groupedRoot;
-    final isInGroupedSection = isGrouped || isGroupedRoot;
     const double iconBoxSize = 26.0;
     const double iconSize = 14.0;
     const double horizontalPadding = 12.0;
     const double verticalPadding = 8.0;
-    final indent = isInGroupedSection ? level * 18.0 : level * 24.0;
+    final indent = level * 18.0;
     final titleStyle = theme.textTheme.titleMedium?.merge(
       AppTextStyles.settingTitle.copyWith(
-        fontWeight: isGrouped ? FontWeight.w600 : FontWeight.w700,
+        fontWeight: level == 0 ? FontWeight.w700 : FontWeight.w600,
         color: cs.onSurface,
-        height: isGrouped ? 1.15 : null,
+        height: level > 0 ? 1.15 : null,
       ),
     );
-    final rowBorderRadius = isInGroupedSection
-        ? BorderRadius.zero
-        : BorderRadius.circular(AppTokens.radiusXL);
 
-    final row = InkWell(
+    return InkWell(
       mouseCursor: SystemMouseCursors.click,
-      borderRadius: rowBorderRadius,
+      borderRadius: BorderRadius.zero,
       hoverDuration: Durations.medium1,
       onTap: () => setState(() {
         if (isExpanded) {
@@ -1381,10 +1347,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 style: titleStyle,
               ),
             ),
-            Icon(
-              isExpanded
-                  ? FluentIcons.chevron_up_24_regular
-                  : FluentIcons.chevron_down_24_regular,
+            ExpandingChevron(
+              isExpanded: isExpanded,
               color: cs.onSecondaryContainer,
               size: 18,
             ),
@@ -1392,14 +1356,22 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         ),
       ),
     );
+  }
 
-    if (isInGroupedSection) {
-      return row;
-    }
-
-    return AppCard(
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      child: row,
+  /// שורת תיקייה מקוננת — ללא גבול כרטיס, מיועדת לשימוש
+  /// בתוך [ExpandableCard.children] (רמה 1+).
+  Widget _buildNestedCategorySection(
+    Category category,
+    int level,
+    bool isExpanded,
+    List<Widget> children,
+  ) {
+    return ExpandableCard(
+      key: ValueKey(category.path),
+      header: _buildCategoryHeaderRow(category, level, isExpanded),
+      isExpanded: isExpanded,
+      wrapInCard: false,
+      children: children,
     );
   }
 

@@ -1,11 +1,7 @@
 import 'dart:convert';
-import 'dart:ffi';
 import 'dart:io';
-import 'dart:isolate';
 import 'package:archive/archive_io.dart';
 import 'package:bloc/bloc.dart';
-import 'package:ffi/ffi.dart';
-import 'package:zstandard_native/zstandard_native_bindings.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -15,9 +11,11 @@ import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
+import 'package:otzaria/search/magic_dictionary_downloader.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/download_eta_estimator.dart';
 import 'package:otzaria/utils/file/zip_extractor_service.dart';
+import 'package:otzaria/utils/file/zstd_stream_extractor.dart';
 import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -33,8 +31,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         extractTarArchive,
     String? defaultLibraryPathOverride,
   })  : _httpClient = httpClient ?? http.Client(),
-        _extractCompressedDatabase =
-            extractCompressedDatabase ?? _extractZstWithSystemProcess,
+        _extractCompressedDatabase = extractCompressedDatabase ?? _extractZst,
         _extractTarArchive = extractTarArchive ?? _extractTarZst,
         _defaultLibraryPathOverride = defaultLibraryPathOverride,
         super(const EmptyLibraryInitial(
@@ -751,6 +748,10 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       // ניקוי override Android — ה-DB החדש נמצא ישירות בספרייה
       await Settings.setValue(SettingsRepository.keyDbEffectivePath, '');
 
+      // שלב 3 — הורדת מילון המורפולוגיה (lexical.db) לחיפוש המקורב. רץ אחרי
+      // שמירת keyLibraryPath כי נתיב היעד נגזר ממנו (getMagicDictionaryPath).
+      await _downloadMagicDictionary(emit);
+
       emit(EmptyLibraryDirectorySelected(selectedPath: libraryPath));
     } catch (e) {
       // קבצי ה-temp נשמרים בכוונה — ישמשו ל-resume בניסיון הבא
@@ -758,6 +759,26 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         errorMessage:
             'שגיאה בהורדה: $e\nניתן ללחוץ שוב כדי להמשיך מהנקודה שנעצרה.',
       ));
+    }
+  }
+
+  /// מוריד את מילון המורפולוגיה (`lexical.db`) דרך [MagicDictionaryDownloader].
+  /// best-effort: כשל אינו עוצר את כניסת המשתמש לספרייה — החיפוש המקורב פשוט
+  /// יפעל ללא הרחבה מורפולוגית. משתף את ה-http client של ה-bloc (לא נסגר
+  /// ב-dispose כי הבעלות נשארת אצל ה-bloc).
+  Future<void> _downloadMagicDictionary(Emitter<EmptyLibraryState> emit) async {
+    const message = 'מוריד מילון מורפולוגי לחיפוש המקורב';
+    emit(const EmptyLibraryDownloading(progress: 0.0, message: message));
+    final downloader = MagicDictionaryDownloader(client: _httpClient);
+    try {
+      await downloader.ensureLatest(
+        onProgress: (progress) =>
+            emit(EmptyLibraryDownloading(progress: progress, message: message)),
+      );
+    } catch (e) {
+      debugPrint('הורדת המילון המורפולוגי נכשלה: $e');
+    } finally {
+      downloader.dispose();
     }
   }
 
@@ -933,18 +954,20 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     await File(tempPath).delete().catchError((_) => File(tempPath));
   }
 
-  /// מחלץ קובץ tar.zst לתיקיית היעד בזרימה נמוכת-זיכרון:
-  /// 1. חילוץ ה-zst לקובץ tar זמני דרך ZSTD streaming (ב-isolet, עם דיווח
-  ///    התקדמות). מחליף את `Zstandard().decompress` שטען את כל ה-tar ל-RAM
-  ///    וגרם ללחץ זיכרון/קפיאות על מכשירים חלשים.
-  /// 2. חילוץ ה-tar מהדיסק עם `extractFileToDisk` שקורא בזרימה מהקובץ.
+  /// חילוץ `.zst` יחיד (ל-DB) דרך השירות המשותף. עוטף כדי להתאים לחתימת
+  /// ה-positional של [_extractCompressedDatabase].
+  static Future<void> _extractZst(String archivePath, String outputPath,
+          void Function(double progress)? onProgress) =>
+      ZstdStreamExtractor.extractToFile(archivePath, outputPath,
+          onProgress: onProgress);
+
+  /// מחלץ tar.zst לתיקיית היעד בזרימה נמוכת-זיכרון: חילוץ ה-zst לקובץ tar
+  /// זמני דרך השירות המשותף, ואז `extractFileToDisk` שקורא בזרימה מהקובץ.
   static Future<void> _extractTarZst(String archivePath, String outputDir,
       void Function(double progress)? onProgress) async {
     final tarPath = '$archivePath.tar';
-    await _runWithProgress(
-      onProgress,
-      (port) => _decompressZstInIsolate(archivePath, tarPath, port),
-    );
+    await ZstdStreamExtractor.extractToFile(archivePath, tarPath,
+        onProgress: onProgress);
     try {
       await extractFileToDisk(tarPath, outputDir);
     } finally {
@@ -1029,248 +1052,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     }
 
     return null;
-  }
-
-  static Future<void> _extractZstWithSystemProcess(
-    String archivePath,
-    String outputPath,
-    void Function(double progress)? onProgress,
-  ) async {
-    // חילוץ streaming על כל הפלטפורמות. ה-DB הדחוס של הספרייה הוא
-    // 1.5 GB דחוס ו-6.5 GB פרוס; טעינה לזיכרון RAM ב-`Zstandard().decompress`
-    // קרסה ב-Microsoft Store certification על Surface Laptop 5 עם 8 GB RAM
-    // (FAST_FAIL 0xc0000409 בעת ההרצה של שלב "הורדת ספרייה"). שימוש ב-
-    // ZSTD_decompressStream דרך FFI מעבד נתחים של ~128 KB ולא חורג מ-
-    // כמה מאות KB של RAM. רץ ב-isolate נפרד כדי לא לחסום את ה-UI.
-    await _runWithProgress(
-      onProgress,
-      (port) => _decompressZstInIsolate(archivePath, outputPath, port),
-    );
-  }
-
-  /// מריץ את חילוץ ה-ZST streaming ב-isolet נפרד.
-  ///
-  /// מבודד בפונקציה עצמאית כדי שה-closure שנשלח ל-[Isolate.run] ילכוד
-  /// **רק** ערכים שליחים (מחרוזות + [SendPort]). אם ה-closure היה נוצר
-  /// באותו scope של ה-`ReceivePort`/ה-`onProgress`, Dart היה מנסה לשלוח
-  /// גם אותם — והם בלתי-שליחים (object is unsendable).
-  static Future<void> _decompressZstInIsolate(
-    String archivePath,
-    String outputPath,
-    SendPort progressPort,
-  ) {
-    return Isolate.run(
-      () => _decompressZstStreaming(archivePath, outputPath, progressPort),
-    );
-  }
-
-  /// מאזין לעדכוני התקדמות מ-isolet ומעביר אותם ל-UI.
-  ///
-  /// [runInIsolate] נקראת **מקומית** (לא נשלחת ל-isolet); היא עצמה אחראית
-  /// להפעיל את [Isolate.run]. ה-isolet שולח ערכי `double` (0.0–1.0) דרך
-  /// ה-[SendPort]; [Isolate.run] מטפל בהשלמה ובהפצת שגיאות.
-  static Future<void> _runWithProgress(
-    void Function(double progress)? onProgress,
-    Future<void> Function(SendPort progressPort) runInIsolate,
-  ) async {
-    final progressPort = ReceivePort();
-    final sub = progressPort.listen((message) {
-      if (message is double) onProgress?.call(message);
-    });
-    try {
-      await runInIsolate(progressPort.sendPort);
-    } finally {
-      await sub.cancel();
-      progressPort.close();
-    }
-  }
-
-  /// מחזיר את ה-DynamicLibrary של zstandard לפלטפורמה הנוכחית.
-  ///
-  /// כל פלאגין פלטפורמה של `zstandard` בונה DLL/dylib/SO עם זרות שונה;
-  /// השמות תואמים את `zstandard_<platform>` package.
-  static DynamicLibrary _openZstandardLib() {
-    if (Platform.isAndroid) {
-      return DynamicLibrary.open('libzstandard_android.so');
-    }
-    if (Platform.isWindows) {
-      return DynamicLibrary.open('zstandard_windows.dll');
-    }
-    if (Platform.isLinux) {
-      return DynamicLibrary.open('libzstandard_linux_plugin.so');
-    }
-    if (Platform.isMacOS) {
-      return DynamicLibrary.open('zstandard_macos.framework/zstandard_macos');
-    }
-    if (Platform.isIOS) {
-      return DynamicLibrary.open('zstandard_ios.framework/zstandard_ios');
-    }
-    throw UnsupportedError(
-        'Platform not supported: ${Platform.operatingSystem}');
-  }
-
-  /// חילוץ ZST streaming דרך ZSTD FFI — רץ ב-isolate נפרד.
-  /// מעבד את הקובץ בנתחים של ~128 KB ישירות לדיסק.
-  /// שימוש ב-RAM: כמה מאות KB בלבד (במקום ~8 GB).
-  static void _decompressZstStreaming(String archivePath, String outputPath,
-      [SendPort? progressPort]) {
-    try {
-      _decompressZstStreamingInner(archivePath, outputPath, progressPort);
-    } catch (_) {
-      // בכשל (קובץ קטוע, דיסק מלא וכו') מוחקים את קובץ הפלט החלקי. אחרת
-      // הוא נשאר בתיקיית הספרייה, ובעלייה הבאה SqliteDataProvider מנסה
-      // לפתוח DB חתוך ונכשל ב"database disk image is malformed" — מה שחוסם
-      // את האפליקציה במקום להחזיר אותה למסך בחירת/הורדת הספרייה.
-      try {
-        final partial = File(outputPath);
-        if (partial.existsSync()) partial.deleteSync();
-      } catch (_) {}
-      rethrow;
-    }
-  }
-
-  static void _decompressZstStreamingInner(
-      String archivePath, String outputPath,
-      [SendPort? progressPort]) {
-    final dylib = _openZstandardLib();
-    final bindings = ZstandardNativeBindings(dylib);
-
-    final inBufSize = bindings.ZSTD_DStreamInSize();
-    final outBufSize = bindings.ZSTD_DStreamOutSize();
-
-    final dStream = bindings.ZSTD_createDStream();
-    if (dStream == nullptr) throw Exception('ZSTD_createDStream נכשל');
-
-    // ממיר קוד שגיאה גולמי של ZSTD לתיאור טקסטואלי קריא (למשל קוד 16 →
-    // "Frame requires too much memory for decoding").
-    String zstdError(int code) =>
-        bindings.ZSTD_getErrorName(code).cast<Utf8>().toDartString();
-
-    try {
-      final initRet = bindings.ZSTD_initDStream(dStream);
-      if (bindings.ZSTD_isError(initRet) != 0) {
-        throw Exception('ZSTD_initDStream נכשל: ${zstdError(initRet)}');
-      }
-
-      // ברירת המחדל של ה-streaming decompressor מגבילה את חלון הדחיסה ל-
-      // 128MB (windowLog=27). קובץ ה-seforim.db.zst נדחס עם `--long` ולכן
-      // נכשל עם ZSTD_error_frameParameter_windowTooLarge (קוד 16). 31 =
-      // חלון עד 2GB, המקסימום הסטנדרטי של zstd. אין לזה השפעה על שימוש
-      // RAM בפועל — זו רק תקרה שמתירה לדקומפרסור להתאים את עצמו לחלון.
-      final paramRet = bindings.ZSTD_DCtx_setParameter(
-          dStream, ZSTD_dParameter.ZSTD_d_windowLogMax, 31);
-      if (bindings.ZSTD_isError(paramRet) != 0) {
-        throw Exception(
-            'ZSTD_DCtx_setParameter(windowLogMax) נכשל: ${zstdError(paramRet)}');
-      }
-
-      final inNative = malloc.allocate<Uint8>(inBufSize);
-      final outNative = malloc.allocate<Uint8>(outBufSize);
-      final inBuf = malloc<ZSTD_inBuffer_s>();
-      final outBuf = malloc<ZSTD_outBuffer_s>();
-
-      try {
-        final inputRaf = File(archivePath).openSync();
-        final outFile = File(outputPath);
-        if (outFile.existsSync()) outFile.deleteSync();
-        final outputRaf = outFile.openSync(mode: FileMode.writeOnly);
-
-        // גודל הקובץ הדחוס משמש בסיס לחישוב התקדמות. ZSTD קורא את הקלט
-        // באופן ליניארי, ולכן "בייטים שנקראו / סך הבייטים" הוא קירוב טוב.
-        final totalBytes = inputRaf.lengthSync();
-        var totalRead = 0;
-        var lastReported = 0.0;
-
-        try {
-          final inView = inNative.asTypedList(inBufSize);
-
-          // 0 = frame הושלם, >0 = עדיין נתונים בממתנה, <0 = שגיאה
-          int lastRet = 0;
-          // הגודל הלא-דחוס המוצהר ב-frame header (Frame_Content_Size).
-          // -1 (ZSTD_CONTENTSIZE_UNKNOWN) או -2 (ERROR) אם לא ניתן לקבוע.
-          int expectedSize = -1;
-          int totalWritten = 0;
-          var headerParsed = false;
-
-          while (true) {
-            final bytesRead = inputRaf.readIntoSync(inView);
-            if (bytesRead == 0) break;
-            totalRead += bytesRead;
-
-            // קריאת Frame_Content_Size מתוך תחילת ה-frame (פעם אחת).
-            if (!headerParsed) {
-              expectedSize =
-                  bindings.ZSTD_getFrameContentSize(inNative.cast(), bytesRead);
-              headerParsed = true;
-            }
-
-            inBuf.ref.src = inNative.cast();
-            inBuf.ref.size = bytesRead;
-            inBuf.ref.pos = 0;
-
-            while (inBuf.ref.pos < inBuf.ref.size) {
-              outBuf.ref.dst = outNative.cast();
-              outBuf.ref.size = outBufSize;
-              outBuf.ref.pos = 0;
-
-              lastRet = bindings.ZSTD_decompressStream(dStream, outBuf, inBuf);
-
-              if (bindings.ZSTD_isError(lastRet) != 0) {
-                throw Exception(
-                    'שגיאת ZSTD בחילוץ: ${zstdError(lastRet)} (קוד: $lastRet)');
-              }
-
-              if (outBuf.ref.pos > 0) {
-                outputRaf.writeFromSync(outNative.asTypedList(outBuf.ref.pos));
-                totalWritten += outBuf.ref.pos;
-              }
-            }
-
-            // דיווח התקדמות — רק כשהשתנתה ב-1% לפחות, כדי לא להציף את ה-UI
-            if (progressPort != null && totalBytes > 0) {
-              final progress = totalRead / totalBytes;
-              if (progress - lastReported >= 0.01) {
-                lastReported = progress;
-                progressPort.send(progress);
-              }
-            }
-          }
-
-          // לפי תיעוד ZSTD: ערך חזרה > 0 אחרי EOF = frame לא הושלם (קובץ קטוע/פגום)
-          if (lastRet != 0) {
-            throw Exception(
-              'קובץ ה-ZST קטוע או פגום: ה-frame לא הושלם (נותרו $lastRet bytes לפענוח)',
-            );
-          }
-
-          // flush מפורש כדי לאלץ כתיבה בפועל לדיסק. בלעדיו כתיבה דרך page
-          // cache עלולה "להצליח" ב-writeFromSync ולהיכשל בשקט מאוחר יותר על
-          // דיסק מלא (ENOSPC), ולהשאיר קובץ חתוך.
-          outputRaf.flushSync();
-
-          // אימות שלמות: גודל הפלט חייב להיות זהה לגודל המוצהר ב-frame.
-          // תופס דיסק מלא (ENOSPC) שנבלע ב-page cache והשאיר קובץ חתוך —
-          // התסמין שהוביל ל"database disk image is malformed" בעת הטעינה.
-          // expectedSize < 0 = הגודל לא הוצהר ב-frame; אז אין מה לאמת.
-          if (expectedSize >= 0 && totalWritten != expectedSize) {
-            throw Exception(
-              'החילוץ לא הושלם: נכתבו $totalWritten מתוך $expectedSize bytes. '
-              'ככל הנראה אזל מקום האחסון.',
-            );
-          }
-        } finally {
-          inputRaf.closeSync();
-          outputRaf.closeSync();
-        }
-      } finally {
-        malloc.free(inNative);
-        malloc.free(outNative);
-        malloc.free(inBuf);
-        malloc.free(outBuf);
-      }
-    } finally {
-      bindings.ZSTD_freeDStream(dStream);
-    }
   }
 
   @override

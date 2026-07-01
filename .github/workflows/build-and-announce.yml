@@ -38,20 +38,16 @@ jobs:
     if: github.event_name != 'release' && github.event_name != 'pull_request'
     runs-on: windows-2022
     env:
-      # גרסה קפואה של VC++ Redistributable. ה-URL הוא הקישור הישיר הקבוע
-      # של מיקרוסופט (download.visualstudio.microsoft.com) ולא aka.ms שזז,
-      # כך שכל בנייה — היום או בעוד שנה — מקבלת אותו vc_redist.x64.exe
-      # בדיוק. SHA-256 מאומת אחרי כל הורדה (תופס בלאי / שינוי תוכן ב-CDN).
-      # ה-VERSION משמש כ-assertion על System32 של ה-runner אחרי ההתקנה —
-      # ראה ההערה בשלב "Bundle latest VC++ Redistributable" להסבר מלא.
-      # לעדכון גרסה: לפתור את aka.ms/vc14/vc_redist.x64.exe ידנית (זה
-      # ה-permalink היציב לגרסה האחרונה הנתמכת של MSVC v14, כפי שמופיע
-      # בתיעוד הרשמי learn.microsoft.com/cpp/windows/latest-supported-vc-redist),
-      # להעתיק את ה-URL הסופי, את ה-SHA-256 (מופיע בנתיב ה-URL עצמו)
-      # ואת מספר הגרסה (מ-Get-Item ...VersionInfo.FileVersion).
-      VC_REDIST_URL: 'https://download.visualstudio.microsoft.com/download/pr/c1bd4f2c-3672-468e-8480-7ed419dbb641/90E48ADE404E4576D023ABFA374F323555F233982A8805EA9AC63DCA9491A16B/VC_redist.x64.exe'
-      VC_REDIST_SHA256: '90E48ADE404E4576D023ABFA374F323555F233982A8805EA9AC63DCA9491A16B'
-      VC_REDIST_VERSION: '14.51.36231.0'
+      # VC++ Redistributable מקובע ב-URL ישיר של מיקרוסופט (לא aka.ms שזז),
+      # עם אימות SHA-256 אחרי ההורדה. VC_REDIST_MIN_VERSION הוא *רף תחתון*:
+      # ה-runner של GitHub מגיע לרוב עם MSVC חדש מכל redist ציבורי, אז /install
+      # מחזיר 1638 (no-op) ו-System32 נשארת עם גרסת הראנר — לכן דורשים
+      # System32 >= MIN ולא שוויון, אחרת כל עדכון runner image שובר בנייה.
+      # לעדכון: לפתור aka.ms/vc14/vc_redist.x64.exe, ולהעתיק URL סופי, SHA-256
+      # (מופיע בנתיב), והגרסה (Get-Item ...VersionInfo.FileVersionRaw).
+      VC_REDIST_URL: 'https://download.visualstudio.microsoft.com/download/pr/ebdab8e5-1d7b-4d9f-a11b-cbb1720c3b12/843068991DAAA1F73AD9F6239BCE4D0F6A07A51F18C37EA2A867E9BECA71295C/VC_redist.x64.exe'
+      VC_REDIST_SHA256: '843068991DAAA1F73AD9F6239BCE4D0F6A07A51F18C37EA2A867E9BECA71295C'
+      VC_REDIST_MIN_VERSION: '14.51.36247.0'
     # env:
     #   RUSTUP_HOME: ${{ github.workspace }}\.rustup
     #   CARGO_HOME:  ${{ github.workspace }}\.cargo
@@ -150,22 +146,17 @@ jobs:
           # portable ZIP) — אף אחד מהם כבר לא מריץ vc_redist.x64.exe בהתקנה
           # (גם FULL הוסר אחרי שהוכח שה-bundling app-local מספיק).
           #
-          # הגרסה מקובעת ב-env (VC_REDIST_URL + VC_REDIST_SHA256 + VC_REDIST_VERSION)
+          # הגרסה מקובעת ב-env (VC_REDIST_URL + VC_REDIST_SHA256 + VC_REDIST_MIN_VERSION)
           # ולא מוורדת מ-aka.ms הזז, כך שאותו vc_redist.x64.exe יורד בכל
           # בנייה. אחרי ההורדה מתבצע אימות SHA-256. מתקינים אותו על ה-runner
           # (שהוא VM זמני) ואז מעתיקים את ה-DLLs מ-System32 ל-installer\vcredist\x64.
           # ה-install(DIRECTORY) ב-CMakeLists קולט אותם משם וממקם ליד otzaria.exe
           # בתיקיית Release; כל מסלולי ההפצה אחר כך מורידים מאותה Release\*.
           #
-          # נקודה עדינה: windows-2022 כבר מותקנת מראש עם VC Redist, ולפעמים
-          # היא חדשה משלנו. במצב כזה ה-/install שלנו מחזיר 1638
-          # (newer-already-installed) ו-System32 *לא* מתעדכנת — כלומר נעתיק
-          # DLLs של הגרסה שעל ה-runner, לא של ה-vc_redist שהורדנו ואימתנו.
-          # זה היה הופך את ה"קיבוע" ללא דטרמיניסטי. הפתרון: אחרי ההתקנה
-          # מבצעים assert שגרסת MSVCP140.dll ב-System32 שווה ל-VC_REDIST_VERSION;
-          # אם לא — fail loud, וצריך לעדכן את הפין (או לקבע את גרסת הראנר).
-          # כך התחייבות הקיבוע הופכת מהבטחה ריקה לאמת ניתנת לבדיקה: אם הבנייה
-          # עוברת, ה-DLLs הם בדיוק מהגרסה שב-env, ולא משהו שתלוי בראנר.
+          # windows-2022 מגיעה עם VC Redist חדש מכל redist ציבורי, אז /install
+          # מחזיר 1638 (no-op) ו-System32 נשארת עם גרסת הראנר. לכן לא דורשים
+          # שוויון אלא רף תחתון: System32 >= VC_REDIST_MIN_VERSION. ה-DLLs
+          # שמועתקים הם של הראנר (>= הרף), וזה בטוח.
           $ErrorActionPreference = 'Stop'
           if (-not (Test-Path "installer\vc_redist.x64.exe")) {
             Write-Host "Downloading pinned vc_redist.x64.exe ($env:VC_REDIST_URL)..."
@@ -186,32 +177,30 @@ jobs:
             throw "vc_redist.x64.exe install failed with exit code $($proc.ExitCode)"
           }
           Write-Host "vc_redist exit code: $($proc.ExitCode)"
-          # Assert ש-System32 באמת מחזיקה את הגרסה שאנחנו מקבעים. אם
-          # ה-runner היה כבר עם גרסה חדשה יותר, /install החזיר 1638 (legal
-          # ⇒ "no-op") אבל System32 נשארה ללא שינוי — כלומר נעתיק את הגרסה
-          # של ה-runner, לא של ה-pin. אז עוצרים כאן ומבקשים לעדכן את ה-env.
+          # רף תחתון: ודא ש-System32 לא ישן מ-VC_REDIST_MIN_VERSION. אם זה
+          # נכשל — או שה-/install נכשל בשקט, או שה-runner image ישן באופן
+          # בלתי צפוי — ואז עוצרים במקום לשלוח DLLs מתחת לרף.
           $msvcpPath = Join-Path $env:SystemRoot 'System32\msvcp140.dll'
           if (-not (Test-Path $msvcpPath)) {
             throw "msvcp140.dll missing from $msvcpPath after vc_redist install — something is wrong with the runner image"
           }
-          $actualMsvcpVersion = (Get-Item $msvcpPath).VersionInfo.FileVersion
-          if ($actualMsvcpVersion -ne $env:VC_REDIST_VERSION) {
+          $actualMsvcpVersion = (Get-Item $msvcpPath).VersionInfo.FileVersionRaw
+          if ($actualMsvcpVersion -lt [version]$env:VC_REDIST_MIN_VERSION) {
             $msg = @(
-              'VC++ runtime version mismatch on runner.',
-              "  System32\msvcp140.dll:  $actualMsvcpVersion",
-              "  pinned VC_REDIST_VERSION: $env:VC_REDIST_VERSION",
+              'VC++ runtime on runner is OLDER than the pinned minimum.',
+              "  System32\msvcp140.dll:          $actualMsvcpVersion",
+              "  required VC_REDIST_MIN_VERSION:  $env:VC_REDIST_MIN_VERSION",
               '',
-              'This usually means the windows-2022 runner image now ships with a newer',
-              'VC Redist than our pin, so /install returned 1638 (no-op) and the DLLs',
-              'we are about to bundle are NOT the ones we promised in the pin.',
+              'The pinned vc_redist.x64.exe should have raised System32 to at least',
+              'this version. If this fires, the download/install step likely failed,',
+              'or the runner image is unexpectedly old.',
               '',
-              'Either bump VC_REDIST_URL / VC_REDIST_SHA256 / VC_REDIST_VERSION to the',
-              "runner's newer version (after verifying it works), or pin the runner",
-              'image to an older sha (runs-on: ghcr.io/actions/runner-images@sha256:...).'
+              'To raise the floor: resolve aka.ms/vc14/vc_redist.x64.exe, then update',
+              'VC_REDIST_URL / VC_REDIST_SHA256 / VC_REDIST_MIN_VERSION together.'
             ) -join "`n"
             throw $msg
           }
-          Write-Host "System32 msvcp140.dll version matches pin: $actualMsvcpVersion"
+          Write-Host "System32 msvcp140.dll ($actualMsvcpVersion) meets minimum $env:VC_REDIST_MIN_VERSION"
           $destDir = "installer\vcredist\x64"
           New-Item -ItemType Directory -Path $destDir -Force | Out-Null
           $dlls = @(
@@ -1159,10 +1148,26 @@ jobs:
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
 
-      - name: Build Flutter macOS app (Universal Binary)
+      - name: Build Flutter macOS app (Universal Binary, with retry)
         run: |
           # Build Universal Binary that supports both Intel (x86_64) and Apple Silicon (arm64)
-          flutter build macos --release --verbose
+          # xcodebuild לעיתים נכשל ב-"Internal inconsistency error: never received
+          # target ended message" — מירוץ חולף במערכת הבנייה; retry פותר אותו
+          set -e
+          tries=0
+          until [ $tries -ge 3 ]
+          do
+            if flutter build macos --release --verbose; then
+              break
+            fi
+            tries=$((tries+1))
+            echo "flutter build macos failed. retry $tries/3 after short sleep..."
+            sleep 15
+          done
+          if [ $tries -ge 3 ]; then
+            echo "::error::flutter build macos failed after 3 attempts"
+            exit 1
+          fi
 
       - name: Download library assets for macOS FULL bundle
         if: true
@@ -1532,12 +1537,7 @@ jobs:
           >
           > אם אתם צריכים חבילה להפצה או להתקנה לא־מקוונת, בחרו **גרסת ספרייה מלאה (FULL)**.
           >
-          > קובצי הספרייה זמינים גם בנפרד כאן:
-          > [seforim.db.zst](https://github.com/Otzaria/SeforimLibrary/releases/latest/download/seforim.db.zst),
-          > [otzar-HB_catalog.db.zst](https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst)
-          >
-          > קובצי ה־PDF של תלמוד בבלי זמינים גם בנפרד כאן:
-          > [talmud_bavli_latest.tar.zst](https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst)
+          > את הספרייה מורידים מתוך התוכנה עצמה לאחר ההתקנה, או על־ידי הורדת המתקין המלא (FULL) להתקנה במחשב ללא אינטרנט.
 
           EOF
 

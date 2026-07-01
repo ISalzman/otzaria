@@ -151,6 +151,9 @@ class RenderSettings {
   /// האם להשתמש ברקע צהוב להדגשה (במקום צבע אדום)
   final bool highlightYellowBackground;
 
+  /// האם לאפשר הדגשת חלקי מילים (ללא דרישת גבולות אסימון)
+  final bool partialWordHighlight;
+
   const RenderSettings({
     this.removeNikud = false,
     this.removePunctuation = false,
@@ -172,6 +175,7 @@ class RenderSettings {
     this.formatParentheses = true,
     this.justifyText = true,
     this.highlightYellowBackground = false,
+    this.partialWordHighlight = false,
   });
 
   /// יוצר עותק עם שינויים
@@ -196,6 +200,7 @@ class RenderSettings {
     bool? formatParentheses,
     bool? justifyText,
     bool? highlightYellowBackground,
+    bool? partialWordHighlight,
   }) {
     return RenderSettings(
       removeNikud: removeNikud ?? this.removeNikud,
@@ -219,6 +224,7 @@ class RenderSettings {
       justifyText: justifyText ?? this.justifyText,
       highlightYellowBackground:
           highlightYellowBackground ?? this.highlightYellowBackground,
+      partialWordHighlight: partialWordHighlight ?? this.partialWordHighlight,
     );
   }
 
@@ -245,12 +251,13 @@ class RenderSettings {
         enableInlineLinks == other.enableInlineLinks &&
         formatParentheses == other.formatParentheses &&
         justifyText == other.justifyText &&
-        highlightYellowBackground == other.highlightYellowBackground;
+        highlightYellowBackground == other.highlightYellowBackground &&
+        partialWordHighlight == other.partialWordHighlight;
   }
 
   @override
   int get hashCode {
-    return Object.hash(
+    return Object.hashAll([
       removeNikud,
       removePunctuation,
       removeTeamim,
@@ -271,6 +278,7 @@ class RenderSettings {
       formatParentheses,
       justifyText,
       highlightYellowBackground,
-    );
+      partialWordHighlight,
+    ]);
   }
 }

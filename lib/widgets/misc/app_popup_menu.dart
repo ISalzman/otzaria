@@ -47,6 +47,51 @@ class AppMenuEntry<T> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// AppContextMenuIconAction — פעולת אייקון בודדת בשורת האייקונים העליונה
+// (סגנון Windows 11: שורת כפתורי אייקון בראש תפריט ההקשר)
+// ═══════════════════════════════════════════════════════════════════════════
+
+class AppContextMenuIconAction {
+  /// כיתוב קצר (מילה אחת) שמוצג מתחת לאייקון. בהיעדרו מוצג [tooltip].
+  final String? label;
+
+  /// טקסט הרחבה שמוצג בריחוף על האייקון. null/ריק → אין tooltip.
+  final String? tooltip;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool enabled;
+
+  /// כשמוגדר, האייקון פותח תת-תפריט (עם חץ למטה) במקום פעולה ישירה.
+  final List<AppContextMenuSubAction> Function()? submenuBuilder;
+
+  const AppContextMenuIconAction({
+    required this.icon,
+    this.label,
+    this.tooltip,
+    this.onTap,
+    this.enabled = true,
+    this.submenuBuilder,
+  });
+}
+
+/// פריט פעולה פשוט בתת-תפריט של כפתור אייקון בשורה העליונה.
+/// מכיל בדיוק את מה שתת-התפריט מרנדר — בלי divider/trailing/קינון של
+/// [AppContextMenuEntry] שלא נתמכים שם.
+class AppContextMenuSubAction {
+  final String label;
+  final IconData? icon;
+  final bool enabled;
+  final VoidCallback? onTap;
+
+  const AppContextMenuSubAction({
+    required this.label,
+    this.icon,
+    this.enabled = true,
+    this.onTap,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // AppContextMenuEntry — פריט בתפריט הקשר (right-click)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -62,25 +107,18 @@ class AppContextMenuEntry {
   final bool isHighlighted;
   final VoidCallback? onTap;
   final Widget? trailing;
-
-  /// תת-פריטים לתפריט משנה
+  // תת-פריטים לתפריט משנה
   final List<AppContextMenuEntry>? children;
-
-  /// בנייה עצלה של תת-פריטים לתפריט משנה.
+  // בנייה עצלה של תת-פריטים לתפריט משנה.
   final List<AppContextMenuEntry> Function()? childrenBuilder;
-
-  /// סטרים שכאשר הוא פולט, תת-התפריט נבנה מחדש מ-[childrenBuilder].
-  ///
-  /// מאפשר תת-תפריט תגובתי שמתעדכן בזמן אמת (למשל רשימת "כרטיסיות פתוחות"
-  /// שמסירה שורה כשכרטיסייה נסגרת). דורש [childrenBuilder] שקורא מקור נתונים
-  /// טרי בכל קריאה.
+  // תת-תפריט תגובתי שמתעדכן בזמן אמת (למשל רשימת כרטיסיות פתוחות)
   final Stream<Object?>? childrenRefreshStream;
-
-  /// בונה תוכן לחלונית תצוגה מקדימה צפה שנפתחת ברפרוף על הפריט.
-  ///
-  /// החלונית מוצגת לצד הפריט לאחר השהיה קצרה, ונעלמת כשהסמן עוזב גם את
-  /// הפריט וגם את החלונית עצמה. רלוונטי לפריטי עלה בלבד (ללא תת-תפריט).
+  // חלונית תצוגה מקדימה צפה שנפתחת ברפרוף על השורה בתפריט.
   final WidgetBuilder? hoverPreviewBuilder;
+
+  /// כשמוגדר, הערך מרונדר כשורה אופקית של כפתורי אייקון בראש התפריט
+  /// (סגנון Windows 11) במקום שורת טקסט רגילה.
+  final List<AppContextMenuIconAction>? iconRowActions;
 
   const AppContextMenuEntry({
     required this.label,
@@ -97,7 +135,28 @@ class AppContextMenuEntry {
     this.childrenBuilder,
     this.childrenRefreshStream,
     this.hoverPreviewBuilder,
-  }) : isDivider = false;
+  })  : iconRowActions = null,
+        isDivider = false;
+
+  /// שורת כפתורי אייקון בראש התפריט (סגנון Windows 11).
+  const AppContextMenuEntry.iconRow(List<AppContextMenuIconAction> actions)
+      : assert(actions.length > 0, 'iconRow דורש לפחות פעולה אחת'),
+        iconRowActions = actions,
+        key = null,
+        label = null,
+        labelWidget = null,
+        icon = null,
+        enabled = true,
+        isDivider = false,
+        isDestructive = false,
+        isSelected = false,
+        isHighlighted = false,
+        onTap = null,
+        trailing = null,
+        children = null,
+        childrenBuilder = null,
+        childrenRefreshStream = null,
+        hoverPreviewBuilder = null;
 
   const AppContextMenuEntry.divider()
       : key = null,
@@ -114,7 +173,8 @@ class AppContextMenuEntry {
         children = null,
         childrenBuilder = null,
         childrenRefreshStream = null,
-        hoverPreviewBuilder = null;
+        hoverPreviewBuilder = null,
+        iconRowActions = null;
 }
 
 bool hasEnabledAppContextMenuEntries(List<AppContextMenuEntry> entries) {
@@ -143,6 +203,10 @@ class AppPopupMenuButton<T> extends StatefulWidget {
   /// הערך [icon] (Widget) ישמש כ-iconWidget ב-ToolbarActionButton.
   final IconData? iconData;
 
+  /// כשמוגדר, הכפתור יוצג עם רקע טוני קבוע (secondaryContainer),
+  /// ובריחוף יוצג צבע מוגבר — שימושי לכפתורי מצב פעיל (כמו מיון).
+  final bool highlighted;
+
   const AppPopupMenuButton({
     super.key,
     this.entries,
@@ -158,6 +222,7 @@ class AppPopupMenuButton<T> extends StatefulWidget {
     this.enabled = true,
     this.initialValue,
     this.iconData,
+    this.highlighted = false,
   });
 
   @override
@@ -242,8 +307,7 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
         !_hasCompactConstraints) {
       trigger = TextButton.icon(
         onPressed: widget.enabled ? _showAdaptiveMenu : null,
-        icon:
-            widget.icon ?? const RtlIcon(FluentIcons.more_vertical_24_regular),
+        icon: widget.icon ?? const Icon(FluentIcons.more_vertical_24_regular),
         label: Text(
           widget.tooltip!,
         ),
@@ -265,14 +329,26 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
           ),
         ),
       );
+    } else if (widget.highlighted) {
+      final cs = Theme.of(context).colorScheme;
+      trigger = IconButton(
+        onPressed: widget.enabled ? _showAdaptiveMenu : null,
+        padding: widget.padding ?? EdgeInsets.zero,
+        constraints: widget.constraints,
+        tooltip: widget.tooltip,
+        style: IconButton.styleFrom(
+          backgroundColor: cs.secondaryContainer,
+          foregroundColor: cs.onSecondaryContainer,
+        ),
+        icon: widget.icon ?? const Icon(FluentIcons.more_vertical_24_regular),
+      );
     } else {
       trigger = IconButton(
         onPressed: widget.enabled ? _showAdaptiveMenu : null,
         padding: widget.padding ?? EdgeInsets.zero,
         constraints: widget.constraints,
         tooltip: widget.tooltip,
-        icon:
-            widget.icon ?? const RtlIcon(FluentIcons.more_vertical_24_regular),
+        icon: widget.icon ?? const Icon(FluentIcons.more_vertical_24_regular),
       );
     }
 
@@ -285,9 +361,12 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
       );
     }
 
-    return KeyedSubtree(
-      key: _anchorKey,
-      child: trigger,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: KeyedSubtree(
+        key: _anchorKey,
+        child: trigger,
+      ),
     );
   }
 }
@@ -835,7 +914,7 @@ Widget buildAppMenuRowContent(
           ),
         ),
         const SizedBox(width: 8),
-        RtlIcon(
+        Icon(
           FluentIcons.checkmark_circle_24_filled,
           size: metrics.iconSize,
           color: foregroundColor,
@@ -843,7 +922,7 @@ Widget buildAppMenuRowContent(
       ] else if (isSelected) ...[
         const Spacer(),
         const SizedBox(width: 6),
-        RtlIcon(
+        Icon(
           FluentIcons.checkmark_circle_24_filled,
           size: metrics.iconSize,
           color: foregroundColor,

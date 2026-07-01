@@ -115,7 +115,7 @@ class TourTooltipCard extends StatelessWidget {
               Row(
                 children: [
                   if (!isLastStep)
-                    NeutralActionButton(
+                    ActionButton.neutral(
                       icon: FluentIcons.dismiss_24_regular,
                       text: isRestartEntry
                           ? 'ביטול'

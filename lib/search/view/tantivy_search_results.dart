@@ -16,6 +16,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 
@@ -82,7 +83,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             ),
             if (showEditButton && widget.onEditSearch != null) ...[
               const SizedBox(height: 16),
-              NeutralActionButton(
+              ActionButton.neutral(
                 text: 'ערוך חיפוש',
                 onPressed: widget.onEditSearch!,
                 icon: FluentIcons.edit_24_regular,
@@ -310,7 +311,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 260),
-                child: NeutralActionButton(
+                child: ActionButton.neutral(
                   text: state.isLoading ? 'טוען...' : remainingText,
                   onPressed: () {
                     context.read<SearchBloc>().add(
@@ -465,6 +466,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                               alternativeWords: widget.tab.alternativeWords,
                               spacingValues: widget.tab.spacingValues,
                               searchMode: inBookMode,
+                              showPageShapeView: PageShapeSettingsManager
+                                  .getViewModePreference(result.title),
                               openLeftPane:
                                   (Settings.getValue<bool>('key-pin-sidebar') ??
                                           false) ||
@@ -511,7 +514,6 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // נתיב (כותרת + הפניה)
                             Row(
                               children: [
                                 if (result.isPdf)
@@ -520,24 +522,21 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                     child: Icon(
                                       FluentIcons.document_pdf_24_regular,
                                       size: 16,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
                                     ),
                                   ),
                                 Expanded(
                                   child: Text(
-                                    wrappedTitleText,
+                                    result.title,
                                     style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
                                     ),
                                     textAlign: TextAlign.right,
-                                    softWrap: true,
-                                    maxLines: 2,
+                                    maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -566,6 +565,23 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                 ),
                               ],
                             ),
+                            if (wrappedTitleText.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  wrappedTitleText,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                                  textAlign: TextAlign.right,
+                                  softWrap: true,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             const SizedBox(height: 8),
                             // הטקסט שנמצא
                             RichText(

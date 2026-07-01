@@ -807,6 +807,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       },
       additionalActions: const [],
       hintText: 'חפש כאן...',
+      onSubmitted: () => _moveBetweenResults(1),
       onAdvancedSearch: () async {
         // מטמיעים את ה-configuration ישירות ב-Bloc במקום events, כי events
         // אסינכרוניים עלולים לרוץ אחרי שה-dialog פותח חיפוש ראשון.

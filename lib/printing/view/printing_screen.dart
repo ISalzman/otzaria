@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/models/links.dart';
@@ -1424,6 +1425,8 @@ class _PrintingScreenState extends State<PrintingScreen> {
   }
 
   Future<void> _exportDocument() async {
+    if (!await verifyPasswordForAction(context)) return;
+    if (!mounted) return;
     try {
       final supportsWord = widget.createPdfOverride == null;
       final selectedFormat =
@@ -2939,13 +2942,13 @@ class _PrintingAppBar extends StatelessWidget {
         final printExportButtons = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            NeutralActionButton(
+            ActionButton.neutral(
               text: 'ייצא',
               icon: FluentIcons.arrow_export_ltr_24_regular,
               onPressed: onExport,
             ),
             const SizedBox(width: 8),
-            RecommendedActionButton(
+            ActionButton.recommended(
               text: 'הדפסה',
               icon: FluentIcons.print_24_regular,
               onPressed: onPrint,
@@ -2976,7 +2979,7 @@ class _PrintingAppBar extends StatelessWidget {
                   ),
                   Align(
                     alignment: AlignmentDirectional.centerEnd,
-                    child: NeutralActionButton(
+                    child: ActionButton.neutral(
                       text: 'ביטול',
                       onPressed: onClose,
                     ),

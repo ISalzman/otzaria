@@ -455,6 +455,31 @@ void main() {
     );
   });
 
+  test('Shift+Space מורשה לעבור כדי לאפשר גלילה אחורה', () {
+    final spaceDown = KeyDownEvent(
+      physicalKey: PhysicalKeyboardKey.space,
+      logicalKey: LogicalKeyboardKey.space,
+      timeStamp: Duration.zero,
+    );
+
+    // Shift+Space — חריג: מורשה לעבור (גלילה מסך אחד אחורה)
+    expect(
+      shouldHandlePageShapeNavigationKeyEvent(spaceDown, isShiftPressed: true),
+      isTrue,
+    );
+
+    // Shift+חץ — עדיין חסום
+    final arrowDown = KeyDownEvent(
+      physicalKey: PhysicalKeyboardKey.arrowDown,
+      logicalKey: LogicalKeyboardKey.arrowDown,
+      timeStamp: Duration.zero,
+    );
+    expect(
+      shouldHandlePageShapeNavigationKeyEvent(arrowDown, isShiftPressed: true),
+      isFalse,
+    );
+  });
+
   group('resolveCommentaryKeyAction', () {
     setUp(() => ShortcutHelper.isMacForTesting = false);
     tearDown(() => ShortcutHelper.isMacForTesting = null);
@@ -840,22 +865,23 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    expect(find.text('העתק'), findsOneWidget,
-        reason: 'תפריט הקשר חייב להכיל פריט "העתק"');
+    // בטקסט ראשי "העתק" הוא אייקון בשורה העליונה (כיתוב "העתקה").
+    expect(find.text('העתקה'), findsOneWidget,
+        reason: 'שורת האייקונים חייבת להכיל את אייקון ההעתקה');
 
-    final copyButton = tester.widget<MenuItemButton>(
+    final copyInkWell = tester.widget<InkWell>(
       find
           .ancestor(
-            of: find.text('העתק'),
-            matching: find.byType(MenuItemButton),
+            of: find.text('העתקה'),
+            matching: find.byType(InkWell),
           )
           .first,
     );
     expect(
-      copyButton.onPressed,
+      copyInkWell.onTap,
       isNull,
-      reason:
-          '"העתק" חייב להיות מנוטרל כשאין בחירה — capturedText=null בזמן הבנייה',
+      reason: 'אייקון ההעתקה חייב להיות מנוטרל כשאין בחירה — '
+          'capturedText=null בזמן הבנייה',
     );
   });
 

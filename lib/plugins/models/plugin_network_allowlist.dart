@@ -56,6 +56,9 @@ const List<String> pluginNetworkAllowlist = <String>[
   'https://api.github.com/repos/Y-PLONI/iyun_h-halacha_plugin',
   'https://github.com/Y-PLONI/iyun_h-halacha_plugin',
   'https://raw.githubusercontent.com/Y-PLONI/iyun_h-halacha_plugin',
+
+  // דיווח תוספים יאיר דניאל
+  'https://formsubmit.co/ajax/575cd25953ea11970a7a017b6913a3ee',
 ];
 
 /// דומייני ה-CDN שאליהם GitHub מפנה (redirect) בהורדת asset של release.
@@ -73,6 +76,11 @@ const Set<String> _loopbackHosts = <String>{'localhost', '127.0.0.1', '::1'};
 
 /// בודקת האם [host] הוא כתובת loopback מקומית.
 bool isLoopbackHost(String host) => _loopbackHosts.contains(host.toLowerCase());
+
+/// מחזירה את שם ההרשאה הנדרשת לגישת רשת אל [uri]:
+/// `network.localhost` ליעד loopback מקומי, אחרת `network.access`.
+String requiredNetworkPermissionFor(Uri uri) =>
+    isLoopbackHost(uri.host) ? 'network.localhost' : 'network.access';
 
 /// מחזירה את הצהרת ה-loopback מתוך [allowlist] שמתירה את [uri], או `null`.
 ///

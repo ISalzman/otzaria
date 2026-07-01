@@ -282,6 +282,19 @@ $iconLine    <glob pattern="$pattern"/>
 
       // ===== .otzplugin file association =====
       ['add', progIdRoot, '/ve', '/d', 'תוסף אוצריא', '/f'],
+      // התקנת תוסף היא פעולה חד-פעמית; הדגל FTA_NoRecentDocs (0x00100000)
+      // מונע מהמעטפת להוסיף את הקובץ ל"מסמכים אחרונים" / Jump List.
+      [
+        'add',
+        progIdRoot,
+        '/v',
+        'EditFlags',
+        '/t',
+        'REG_DWORD',
+        '/d',
+        '0x00100000',
+        '/f',
+      ],
       // האייקון הייעודי לתוסף משובץ ב-EXE כמשאב שני
       // (IDI_OTZPLUGIN_FILE_ICON ב-Runner.rc); index ‎1 מצביע עליו.
       ['add', '$progIdRoot\\DefaultIcon', '/ve', '/d', '$exePath,1', '/f'],

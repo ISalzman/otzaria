@@ -119,7 +119,7 @@ class _SelectionDialogState<T> extends State<SelectionDialog<T>>
           ),
         ),
         actions: [
-          NeutralActionButton(
+          ActionButton.neutral(
             text: 'ביטול',
             onPressed: () => Navigator.of(context).pop(),
           ),

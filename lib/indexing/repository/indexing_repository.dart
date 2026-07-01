@@ -596,6 +596,16 @@ class IndexingRepository {
     return catalogueOrderKey(book);
   }
 
+  /// האם רשומת הספר באינדקס מאוחסנת לפי נתיב מוחלט (ולכן תישבר בהעברת
+  /// הספרייה ותדרוש ניקוי). PDF תמיד; שאר ספרי הקובץ רק כשאין להם
+  /// id/externalLibraryId יציב — אחרת הם מאונדקסים לפי מפתח id ושורדים העברה.
+  static bool hasPathKeyedIndexEntry(Book book) {
+    if (book is PdfBook) return true;
+    if (book is! FileBook) return false;
+    return book.id == null &&
+        (book.externalLibraryId == null || book.externalLibraryId!.isEmpty);
+  }
+
   /// Indexes a specific list of books (e.g. newly added personal books).
   ///
   /// מבצע אינדוקס ומחזיר true אם הסתיים בהצלחה, false אם בוטל
@@ -750,6 +760,36 @@ class IndexingRepository {
   /// Clears the index and resets the list of indexed books.
   Future<void> clearIndex() async {
     await _tantivyDataProvider.clear();
+  }
+
+  /// מסיר מהאינדקס רשומות של ספרי-קובץ שנתיבם השתנה בהעברת הספרייה.
+  ///
+  /// רשומות אלו מאונדקסות לפי נתיב מוחלט (PDF, וספרי קובץ ללא id יציב),
+  /// ולכן אחרי העברה הן מצביעות לנתיב הישן. בלי הסרתן, האינדוקס האוטומטי
+  /// שלאחר הרענון מוסיף את אותם ספרים בנתיב החדש ⇒ כפילויות ותוצאות שבורות.
+  /// המחיקה לפי כותרת (ה-API היחיד), ולכן עשויה להסיר גם ספר רשמי בעל אותה
+  /// כותרת — הוא ייווצר מחדש באינדוקס שלאחר הרענון (האינדקס נטען מחדש בהפעלה).
+  Future<void> dropRelocatedFileBookEntries(
+      Iterable<Book> relocatedBooks) async {
+    final titles = <String>{
+      for (final book in relocatedBooks)
+        if (book.title.isNotEmpty) book.title,
+    };
+    if (titles.isEmpty) return;
+
+    final engine = await _tantivyDataProvider.engine;
+    for (final title in titles) {
+      try {
+        await engine.removeDocumentsByTitle(title: title);
+      } catch (e) {
+        debugPrint('⚠️ מחיקת רשומות אינדקס לכותרת "$title" נכשלה: $e');
+      }
+    }
+    try {
+      await engine.commit();
+    } catch (e) {
+      debugPrint('⚠️ commit אחרי מחיקת רשומות אינדקס שהועברו נכשל: $e');
+    }
   }
 
   /// Returns true for book types that the indexer actually processes.

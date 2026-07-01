@@ -21,6 +21,7 @@ import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_handler.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
+import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
@@ -29,7 +30,10 @@ import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
+import 'package:otzaria/find_ref/repository/find_ref_factory.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 
@@ -156,6 +160,7 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
                     '_${plugin.version}'
                     '_${plugin.installPath}'
                     '_${plugin.entrypointPath}'
+                    '_${plugin.backgroundEntrypointPath}'
                     '_${plugin.devRootPath ?? ""}',
                   ),
                   width: 1,
@@ -242,6 +247,8 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
           if (existing.version != plugin.version ||
               existing.installPath != plugin.installPath ||
               existing.entrypointPath != plugin.entrypointPath ||
+              existing.backgroundEntrypointPath !=
+                  plugin.backgroundEntrypointPath ||
               existing.devRootPath != plugin.devRootPath) {
             setState(() {
               _activeBackgroundPlugins[plugin.pluginId] = plugin;
@@ -284,9 +291,12 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
   void initState() {
     super.initState();
     _pluginSystemBloc = context.read<PluginSystemBloc>();
+    // ברקע טוענים את קובץ הרקע הקליל (אם הוצהר) במקום דף הכלים המלא —
+    // אין UI גלוי, רק רישומים והאזנה לאירועים. ב-localhost dev השרת מגיש
+    // את האפליקציה כולה, ולכן נשארים עם ה-root.
     _localHtmlPath = widget.plugin.isLocalhostDev
         ? widget.plugin.devRootPath!
-        : '${widget.plugin.resolvedRootPath}/${widget.plugin.entrypointPath}';
+        : '${widget.plugin.resolvedRootPath}/${widget.plugin.backgroundEntrypointPath}';
 
     final historyBloc = context.read<HistoryBloc>();
     final tabsBloc = context.read<TabsBloc>();
@@ -296,6 +306,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
     final searchRepository = SearchRepository();
     final personalNotesRepository = PersonalNotesRepository();
     final pluginRegistryRepository = PluginRegistryRepository();
+    final findRefRepository = buildFindRefRepository();
 
     final dependencies = PluginBridgeDependencies(
       historyBloc: historyBloc,
@@ -310,6 +321,13 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         historyBloc: historyBloc,
         navigationBloc: navigationBloc,
       ),
+      resolveReference: (reference) async {
+        final results = await findRefRepository.findRefs(reference);
+        return results
+            .map((r) =>
+                (title: r.title, index: r.segment.toInt(), isPdf: r.isPdf))
+            .toList();
+      },
       themePayloadBuilder: () {
         if (!mounted) {
           return {
@@ -356,6 +374,29 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
       },
       requestPluginInstall: (downloadUrl) {
         _pluginSystemBloc.add(InstallRemotePluginRequested(downloadUrl));
+      },
+      pickFolder: ({String? title}) async {
+        final ctx = navigatorKey.currentContext;
+        if (ctx == null) return null;
+        if (!await verifyPasswordForAction(ctx)) return null;
+        return FilePicker.getDirectoryPath(
+          lockParentWindow: true,
+          dialogTitle: title,
+        );
+      },
+      pickFile: ({List<String>? allowedExtensions, String? title}) async {
+        final ctx = navigatorKey.currentContext;
+        if (ctx == null) return null;
+        if (!await verifyPasswordForAction(ctx)) return null;
+        final hasExtensions =
+            allowedExtensions != null && allowedExtensions.isNotEmpty;
+        final result = await FilePicker.pickFiles(
+          dialogTitle: title,
+          lockParentWindow: true,
+          type: hasExtensions ? FileType.custom : FileType.any,
+          allowedExtensions: hasExtensions ? allowedExtensions : null,
+        );
+        return result?.files.single.path;
       },
     );
 
@@ -485,7 +526,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
             if (widget.plugin.manifest.networkEnabled) {
               final granted = await _pluginRegistryRepository.getPermission(
                 widget.plugin.pluginId,
-                'network.access',
+                requiredNetworkPermissionFor(uri),
               );
               final allowed = granted == true &&
                   await PluginNetworkAccessResolver.instance
@@ -524,7 +565,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
             if (widget.plugin.manifest.networkEnabled) {
               final granted = await _pluginRegistryRepository.getPermission(
                 widget.plugin.pluginId,
-                'network.access',
+                requiredNetworkPermissionFor(uri),
               );
               final allowed = granted == true &&
                   await PluginNetworkAccessResolver.instance

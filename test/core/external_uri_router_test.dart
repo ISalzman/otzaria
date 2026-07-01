@@ -172,6 +172,44 @@ void main() {
       });
     });
 
+    group('open/tab/<index>', () {
+      test('מחזיר SwitchToTabAction עם המיקום שנדרש', () {
+        final action =
+            ExternalUriRouter.parseUri(Uri.parse('otzaria://open/tab/4'));
+
+        expect(action, isA<SwitchToTabAction>());
+        expect((action as SwitchToTabAction).index, 4);
+      });
+
+      test('מיקום 0 תקף', () {
+        final action =
+            ExternalUriRouter.parseUri(Uri.parse('otzaria://open/tab/0'));
+
+        expect((action as SwitchToTabAction).index, 0);
+      });
+
+      test('המילה tab אינה רגישה לאותיות גדולות/קטנות', () {
+        final action =
+            ExternalUriRouter.parseUri(Uri.parse('otzaria://open/TAB/2'));
+
+        expect((action as SwitchToTabAction).index, 2);
+      });
+
+      test('דוחה מיקום שלילי', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/tab/-1')),
+          isNull,
+        );
+      });
+
+      test('דוחה מיקום לא-מספרי', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/tab/abc')),
+          isNull,
+        );
+      });
+    });
+
     group('open/book/<id>', () {
       test('פותחת ספר לפי מזהה DB', () {
         final action = ExternalUriRouter.parseUri(
@@ -390,14 +428,20 @@ void main() {
       test('ללא q — מחזיר null (אין טעם לפתוח דיאלוג ריק)', () {
         expect(
           ExternalUriRouter.parseUri(Uri.parse('otzaria://open/detection')),
-          isNull,
+          isA<RunDetectionAction>(),
+        );
+        expect(
+          (ExternalUriRouter.parseUri(Uri.parse('otzaria://open/detection'))
+                  as RunDetectionAction)
+              .query,
+          '',
         );
       });
 
       test('q ריק — מחזיר null', () {
         expect(
           ExternalUriRouter.parseUri(Uri.parse('otzaria://open/detection?q=')),
-          isNull,
+          isA<RunDetectionAction>(),
         );
       });
 
@@ -406,7 +450,15 @@ void main() {
           ExternalUriRouter.parseUri(
             Uri.parse('otzaria://open/detection?q=%20%20'),
           ),
-          isNull,
+          isA<RunDetectionAction>(),
+        );
+        // query מכיל רווחים — trim מחזיר ריק
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/detection?q=%20%20'),
+          ) as RunDetectionAction)
+              .query,
+          '',
         );
       });
 
@@ -815,14 +867,6 @@ void main() {
     });
 
     group('aliases חדשים לכלים מובנים', () {
-      test('daily → builtin.calendar', () {
-        final action = ExternalUriRouter.parseUri(
-          Uri.parse('otzaria://open/daily'),
-        );
-        expect(action, isA<OpenToolAction>());
-        expect((action as OpenToolAction).toolId, 'builtin.calendar');
-      });
-
       test('shamor_zachor → builtin.shamor_zachor', () {
         final action = ExternalUriRouter.parseUri(
           Uri.parse('otzaria://open/shamor_zachor'),
@@ -857,10 +901,6 @@ void main() {
       });
 
       test('aliases אינם רגישים לאותיות גדולות/קטנות', () {
-        expect(
-          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/DAILY')),
-          isA<OpenToolAction>(),
-        );
         expect(
           ExternalUriRouter.parseUri(Uri.parse('otzaria://open/SHAMOR_ZACHOR')),
           isA<OpenToolAction>(),
@@ -1003,6 +1043,79 @@ void main() {
           ) as OpenSettingsTabAction)
               .tab,
           SettingsTab.about,
+        );
+      });
+    });
+
+    group('open/detection ללא q (detection ריק)', () {
+      test('ללא q — מחזיר RunDetectionAction עם query ריק', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/detection'),
+        );
+        expect(action, isA<RunDetectionAction>());
+        expect((action as RunDetectionAction).query, '');
+      });
+
+      test('q ריק — מחזיר RunDetectionAction עם query ריק', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/detection?q='),
+        );
+        expect(action, isA<RunDetectionAction>());
+        expect((action as RunDetectionAction).query, '');
+      });
+
+      test('daily כבר לא alias — מחזיר null', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/daily')),
+          isNull,
+        );
+      });
+    });
+
+    group('open/inspection', () {
+      test('מחזיר OpenInspectionAction', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/inspection')),
+          isA<OpenInspectionAction>(),
+        );
+      });
+
+      test('אינו רגיש לאותיות גדולות/קטנות', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/INSPECTION')),
+          isA<OpenInspectionAction>(),
+        );
+      });
+    });
+
+    group('open/sdk', () {
+      test('מחזיר OpenSdkAction', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/sdk')),
+          isA<OpenSdkAction>(),
+        );
+      });
+
+      test('אינו רגיש לאותיות גדולות/קטנות', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/SDK')),
+          isA<OpenSdkAction>(),
+        );
+      });
+    });
+
+    group('open/daily_page', () {
+      test('daily_page → OpenDailyPageAction', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/daily_page'),
+        );
+        expect(action, isA<OpenDailyPageAction>());
+      });
+
+      test('אינו רגיש לאותיות גדולות/קטנות', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://open/DAILY_PAGE')),
+          isA<OpenDailyPageAction>(),
         );
       });
     });

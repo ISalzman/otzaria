@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1120,6 +1121,460 @@ void main() {
         expect(find.text('קישור א'), findsOneWidget,
             reason: 'התפריט עצמו נשאר פתוח להמשך בחירה');
       });
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // לחיצה ארוכה פותחת תפריט הקשר רק במגע/עט — בעכבר משתמשים בלחיצה ימנית
+  // ───────────────────────────────────────────────────────────────────────
+  group('לחיצה ארוכה פותחת תפריט הקשר רק במגע', () {
+    Future<void> pumpRegion(WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: AppContextMenuRegion(
+                menuBuilder: (_, __) => [
+                  AppContextMenuEntry(label: 'העתק', onTap: () {}),
+                ],
+                child: const SizedBox(
+                  width: 100,
+                  height: 100,
+                  child: ColoredBox(color: Colors.amber),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('לחיצה ארוכה במגע פותחת את התפריט', (tester) async {
+      await pumpRegion(tester);
+
+      final center = tester.getCenter(find.byType(AppContextMenuRegion));
+      final gesture =
+          await tester.startGesture(center, kind: PointerDeviceKind.touch);
+      addTearDown(() async => gesture.up());
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+
+      expect(find.text('העתק'), findsOneWidget,
+          reason: 'לחיצה ארוכה במגע צריכה לפתוח את תפריט ההקשר');
+    });
+
+    testWidgets('החזקת לחיצה שמאלית בעכבר אינה פותחת את התפריט',
+        (tester) async {
+      await pumpRegion(tester);
+
+      final center = tester.getCenter(find.byType(AppContextMenuRegion));
+      final gesture = await tester.startGesture(center,
+          kind: PointerDeviceKind.mouse, buttons: kPrimaryButton);
+      addTearDown(() async => gesture.up());
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+
+      expect(find.text('העתק'), findsNothing,
+          reason: 'החזקת לחיצה שמאלית בעכבר אסור שתפתח תפריט — רק לחיצה ימנית');
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // AppContextMenuEntry.iconRow — שורת כפתורי אייקון בראש התפריט (Windows 11)
+  // ───────────────────────────────────────────────────────────────────────
+
+  group('iconRow', () {
+    Future<void> pumpWithIconRow(
+      WidgetTester tester, {
+      required GlobalKey<AppContextMenuRegionState> key,
+      required List<AppContextMenuIconAction> actions,
+      List<AppContextMenuEntry> trailingEntries = const [],
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppContextMenuRegion(
+              key: key,
+              menuBuilder: (_, __) => [
+                AppContextMenuEntry.iconRow(actions),
+                const AppContextMenuEntry.divider(),
+                ...trailingEntries,
+              ],
+              child: const SizedBox(
+                width: 200,
+                height: 200,
+                child: ColoredBox(color: Colors.amber),
+              ),
+            ),
+          ),
+        ),
+      );
+      await key.currentState!.openMenuAt(const Offset(100, 100));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('כל האייקונים מרונדרים בראש התפריט', (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: const [
+          AppContextMenuIconAction(
+            label: 'חיפוש',
+            tooltip: 'חיפוש בכל המאגר',
+            icon: FluentIcons.library_24_regular,
+          ),
+          AppContextMenuIconAction(
+            label: 'העתקה',
+            tooltip: 'העתק',
+            icon: FluentIcons.copy_24_regular,
+          ),
+          AppContextMenuIconAction(
+            label: 'הערה',
+            tooltip: 'הוסף הערה אישית',
+            icon: FluentIcons.note_add_24_regular,
+          ),
+        ],
+        trailingEntries: [AppContextMenuEntry(label: 'פריט', onTap: () {})],
+      );
+
+      expect(find.byIcon(FluentIcons.library_24_regular), findsOneWidget);
+      expect(find.byIcon(FluentIcons.copy_24_regular), findsOneWidget);
+      expect(find.byIcon(FluentIcons.note_add_24_regular), findsOneWidget);
+      expect(find.text('פריט'), findsOneWidget,
+          reason: 'הרשימה הרגילה נשארת מתחת לשורת האייקונים');
+    });
+
+    test('AppContextMenuEntry.iconRow דורש לפחות פעולה אחת', () {
+      expect(
+        () => AppContextMenuEntry.iconRow(const []),
+        throwsAssertionError,
+        reason: 'שורת אייקונים ריקה חסרת משמעות — assert חוסם אותה',
+      );
+    });
+
+    testWidgets('שורת אייקונים עם פעולה אחת מרונדרת ונלחצת', (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      var tapped = false;
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: [
+          AppContextMenuIconAction(
+            label: 'יחיד',
+            icon: FluentIcons.copy_24_regular,
+            onTap: () => tapped = true,
+          ),
+        ],
+        trailingEntries: [AppContextMenuEntry(label: 'פריט', onTap: () {})],
+      );
+
+      expect(find.byIcon(FluentIcons.copy_24_regular), findsOneWidget);
+      await tester.tap(find.byIcon(FluentIcons.copy_24_regular));
+      await tester.pumpAndSettle();
+
+      expect(tapped, isTrue);
+      expect(find.text('פריט'), findsNothing,
+          reason: 'התפריט נסגר אחרי לחיצה על האייקון היחיד');
+    });
+
+    testWidgets('לחיצה על אייקון מפעילה רק את ה-onTap שלו עצמו',
+        (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      final tapped = <String>[];
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: [
+          AppContextMenuIconAction(
+            label: 'א',
+            icon: FluentIcons.library_24_regular,
+            onTap: () => tapped.add('a'),
+          ),
+          AppContextMenuIconAction(
+            label: 'ב',
+            icon: FluentIcons.copy_24_regular,
+            onTap: () => tapped.add('b'),
+          ),
+          AppContextMenuIconAction(
+            label: 'ג',
+            icon: FluentIcons.note_add_24_regular,
+            onTap: () => tapped.add('c'),
+          ),
+        ],
+      );
+
+      await tester.tap(find.byIcon(FluentIcons.copy_24_regular));
+      await tester.pumpAndSettle();
+
+      expect(tapped, ['b'], reason: 'רק ה-onTap של האייקון האמצעי שנלחץ הופעל');
+    });
+
+    testWidgets('בשורה מעורבת — אייקון מושבת אינו סוגר/מפעיל, מאופשר כן',
+        (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      var enabledTapped = false;
+      var disabledTapped = false;
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: [
+          AppContextMenuIconAction(
+            label: 'מאופשר',
+            icon: FluentIcons.copy_24_regular,
+            onTap: () => enabledTapped = true,
+          ),
+          AppContextMenuIconAction(
+            label: 'מושבת',
+            icon: FluentIcons.library_24_regular,
+            enabled: false,
+            onTap: () => disabledTapped = true,
+          ),
+        ],
+        trailingEntries: [AppContextMenuEntry(label: 'פריט', onTap: () {})],
+      );
+
+      await tester.tap(find.byIcon(FluentIcons.library_24_regular));
+      await tester.pumpAndSettle();
+      expect(disabledTapped, isFalse);
+      expect(find.text('פריט'), findsOneWidget,
+          reason: 'לחיצה על אייקון מושבת אינה סוגרת את התפריט');
+
+      await tester.tap(find.byIcon(FluentIcons.copy_24_regular));
+      await tester.pumpAndSettle();
+      expect(enabledTapped, isTrue);
+    });
+
+    testWidgets('label ארוך נחתך ואינו גורם ל-overflow', (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: const [
+          AppContextMenuIconAction(
+            label: 'כיתוב ארוך מאוד שלא נכנס לכפתור צר',
+            icon: FluentIcons.library_24_regular,
+          ),
+          AppContextMenuIconAction(
+            label: 'עוד כיתוב ארוך במיוחד לבדיקה',
+            icon: FluentIcons.copy_24_regular,
+          ),
+          AppContextMenuIconAction(
+            label: 'כיתוב שלישי ארוך מאוד מאוד',
+            icon: FluentIcons.note_add_24_regular,
+          ),
+        ],
+      );
+
+      expect(tester.takeException(), isNull,
+          reason: 'maxWidth חותך label ארוך במקום לגרום ל-RenderFlex overflow');
+      expect(find.byIcon(FluentIcons.copy_24_regular), findsOneWidget);
+    });
+
+    testWidgets('label מוצג ככיתוב מתחת לאייקון, נפרד מה-tooltip',
+        (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: const [
+          AppContextMenuIconAction(
+            label: 'חיפוש',
+            tooltip: 'חיפוש בכל המאגר',
+            icon: FluentIcons.library_24_regular,
+          ),
+        ],
+      );
+
+      expect(find.text('חיפוש'), findsOneWidget,
+          reason: 'label הקצר מוצג ככיתוב מתחת לאייקון');
+      expect(find.text('חיפוש בכל המאגר'), findsNothing,
+          reason: 'ה-tooltip המלא אינו מוצג ככיתוב (מופיע רק בריחוף)');
+    });
+
+    testWidgets('בהיעדר label, ה-tooltip משמש ככיתוב', (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: const [
+          AppContextMenuIconAction(
+            tooltip: 'העתק',
+            icon: FluentIcons.copy_24_regular,
+          ),
+        ],
+      );
+
+      expect(find.text('העתק'), findsOneWidget,
+          reason: 'בהיעדר label, ה-tooltip מוצג ככיתוב');
+    });
+
+    testWidgets('Tooltip נוצר רק לפעולה עם tooltip מוגדר', (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: const [
+          AppContextMenuIconAction(
+            label: 'הערה',
+            icon: FluentIcons.note_add_24_regular,
+          ),
+          AppContextMenuIconAction(
+            label: 'חיפוש',
+            tooltip: 'חיפוש בכל הספרים',
+            icon: FluentIcons.library_24_regular,
+          ),
+        ],
+      );
+
+      expect(find.byType(Tooltip), findsOneWidget,
+          reason: 'רק לאייקון עם tooltip מוגדר נוצר Tooltip; להערה אין');
+    });
+
+    testWidgets('לחיצה על כפתור אייקון מפעילה onTap וסוגרת את התפריט',
+        (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      var tapped = false;
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: [
+          AppContextMenuIconAction(
+            tooltip: 'העתק',
+            icon: FluentIcons.copy_24_regular,
+            onTap: () => tapped = true,
+          ),
+        ],
+        trailingEntries: [AppContextMenuEntry(label: 'פריט', onTap: () {})],
+      );
+
+      await tester.tap(find.byIcon(FluentIcons.copy_24_regular));
+      await tester.pumpAndSettle();
+
+      expect(tapped, isTrue,
+          reason: 'לחיצה על כפתור האייקון חייבת להפעיל את ה-onTap שלו');
+      expect(find.text('פריט'), findsNothing,
+          reason: 'התפריט חייב להיסגר אחרי לחיצה על כפתור בשורת האייקונים');
+    });
+
+    testWidgets('כפתור אייקון מושבת (enabled:false) אינו מפעיל onTap',
+        (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      var tapped = false;
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: [
+          AppContextMenuIconAction(
+            tooltip: 'חיפוש בכל המאגר',
+            icon: FluentIcons.library_24_regular,
+            enabled: false,
+            onTap: () => tapped = true,
+          ),
+        ],
+      );
+
+      await tester.tap(find.byIcon(FluentIcons.library_24_regular));
+      await tester.pumpAndSettle();
+
+      expect(tapped, isFalse,
+          reason: 'פעולת אייקון מושבתת לא צריכה להגיב ללחיצה');
+    });
+
+    Future<void> pumpFullScreenIconRow(
+      WidgetTester tester, {
+      required GlobalKey<AppContextMenuRegionState> key,
+      required Offset openAt,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppContextMenuRegion(
+              key: key,
+              menuBuilder: (_, __) => [
+                AppContextMenuEntry.iconRow(const [
+                  AppContextMenuIconAction(
+                    tooltip: 'העתק',
+                    icon: FluentIcons.copy_24_regular,
+                  ),
+                ]),
+                const AppContextMenuEntry.divider(),
+                AppContextMenuEntry(label: 'פריט', onTap: () {}),
+              ],
+              child: const SizedBox.expand(
+                child: ColoredBox(color: Colors.amber),
+              ),
+            ),
+          ),
+        ),
+      );
+      await key.currentState!.openMenuAt(openAt);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('בפתיחה כלפי מעלה שורת האייקונים עוברת לתחתית (צמודה לעכבר)',
+        (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      // פתיחה סמוך לתחתית (ברירת מחדל 800x600) — אין מקום מתחת, נפתח כלפי מעלה
+      await pumpFullScreenIconRow(tester,
+          key: key, openAt: const Offset(100, 590));
+
+      final iconDy =
+          tester.getCenter(find.byIcon(FluentIcons.copy_24_regular)).dy;
+      final itemDy = tester.getCenter(find.text('פריט')).dy;
+      expect(iconDy, greaterThan(itemDy),
+          reason: 'בפתיחה כלפי מעלה שורת האייקונים צריכה להיות מתחת לרשימה');
+    });
+
+    testWidgets('בפתיחה כלפי מטה שורת האייקונים נשארת בראש', (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      await pumpFullScreenIconRow(tester,
+          key: key, openAt: const Offset(100, 10));
+
+      final iconDy =
+          tester.getCenter(find.byIcon(FluentIcons.copy_24_regular)).dy;
+      final itemDy = tester.getCenter(find.text('פריט')).dy;
+      expect(iconDy, lessThan(itemDy),
+          reason: 'בפתיחה כלפי מטה שורת האייקונים נשארת בראש התפריט');
+    });
+
+    testWidgets('פעולת אייקון עם submenuBuilder מציגה חץ ופותחת תת-תפריט',
+        (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      var optionTapped = false;
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: [
+          AppContextMenuIconAction(
+            label: 'קישור ישיר',
+            tooltip: 'העתק קישור ישיר',
+            icon: FluentIcons.link_24_regular,
+            submenuBuilder: () => [
+              AppContextMenuSubAction(
+                label: 'העתק קישור למקטע',
+                onTap: () => optionTapped = true,
+              ),
+            ],
+          ),
+        ],
+        trailingEntries: [AppContextMenuEntry(label: 'פריט', onTap: () {})],
+      );
+
+      expect(find.byIcon(FluentIcons.chevron_down_12_regular), findsOneWidget,
+          reason: 'פעולה עם submenuBuilder מציגה חץ למטה');
+
+      await tester.tap(find.byIcon(FluentIcons.link_24_regular));
+      await tester.pumpAndSettle();
+      expect(find.text('העתק קישור למקטע'), findsOneWidget,
+          reason: 'לחיצה על הכפתור פותחת את תת-התפריט');
+
+      await tester.tap(find.text('העתק קישור למקטע'));
+      await tester.pumpAndSettle();
+      expect(optionTapped, isTrue,
+          reason: 'בחירת אפשרות מפעילה את ה-onTap שלה');
+      expect(find.text('פריט'), findsNothing,
+          reason: 'בחירת אפשרות סוגרת את כל תפריט ההקשר');
     });
   });
 }

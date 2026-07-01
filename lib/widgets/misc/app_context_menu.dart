@@ -67,9 +67,6 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
   Offset? _currentMenuOffset;
   double? _menuAnchorX;
 
-  // long-press פותח תפריט הקשר בכל הפלטפורמות — גם במגע וגם בעכבר/trackpad
-  bool get _supportsLongPressContextMenu => true;
-
   @override
   void dispose() {
     _removeContextMenuOverlay();
@@ -131,7 +128,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
     return menuRect.contains(globalPosition);
   }
 
-  Offset _calculateMenuOffset(
+  (Offset, bool) _calculateMenuOffset(
     RenderBox overlayRenderBox,
     Offset overlayPosition,
     List<AppContextMenuEntry> entries,
@@ -141,7 +138,12 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
           metrics.menuPadding.vertical,
           (sum, entry) =>
               sum +
-              (entry.isDivider ? metrics.dividerHeight : metrics.itemHeight),
+              (entry.isDivider
+                  ? metrics.dividerHeight
+                  // שורת אייקונים גבוהה מפריט רגיל (אייקון + כיתוב + ריפודים).
+                  : entry.iconRowActions != null
+                      ? metrics.iconSize + 28
+                      : metrics.itemHeight),
         ) +
         8;
     final spaceAbove = overlayPosition.dy;
@@ -162,7 +164,23 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
         .toDouble();
     final dy = rawDy.clamp(_contextMenuScreenPadding, maxDy).toDouble();
 
-    return Offset(dx, dy);
+    return (Offset(dx, dy), shouldOpenAbove);
+  }
+
+  /// כשהתפריט נפתח כלפי מעלה, שורת האייקונים (שמטבעה בראש) מתרחקת מהעכבר.
+  /// מעבירים אותה לתחתית כדי שתישאר צמודה לעכבר — כמו ב-Windows 11.
+  List<AppContextMenuEntry> _iconRowAtBottom(
+      List<AppContextMenuEntry> entries) {
+    final index = entries.indexWhere((e) => e.iconRowActions != null);
+    if (index < 0) return entries;
+    final iconRow = entries[index];
+    final rest = [
+      for (var i = 0; i < entries.length; i++)
+        if (i != index && !(i == index + 1 && entries[i].isDivider)) entries[i],
+    ];
+    final normalized = _normalizeEntries(rest);
+    if (normalized.isEmpty) return [iconRow];
+    return [...normalized, const AppContextMenuEntry.divider(), iconRow];
   }
 
   void _repositionContextMenuWithinOverlay(Size overlaySize) {
@@ -216,12 +234,13 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
     _menuAnchorX = overlayPosition.dx;
     final metrics = Theme.of(context).extension<AppMenuMetrics>() ??
         AppMenuMetrics.create(compactMenus: false);
-    final menuOffset = _calculateMenuOffset(
+    final (menuOffset, openAbove) = _calculateMenuOffset(
       overlayRenderObject,
       overlayPosition,
       entries,
       metrics,
     );
+    final orderedEntries = openAbove ? _iconRowAtBottom(entries) : entries;
     final menuStyle = _menuStyle(context, metrics);
     final maxMenuWidth = _resolveContextMenuMaxWidth(
       overlayRenderObject.size.width,
@@ -236,7 +255,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
 
     // Create controllers once per menu open — stable across overlay rebuilds
     final submenuControllers = <AppContextMenuEntry, MenuController>{
-      for (final entry in entries)
+      for (final entry in orderedEntries)
         if (((entry.children != null && entry.children!.isNotEmpty) ||
                 entry.childrenBuilder != null) &&
             entry.enabled)
@@ -277,7 +296,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
                   maintainState: true,
                   child: _AppContextMenuPanel(
                     key: _menuPanelKey,
-                    entries: entries,
+                    entries: orderedEntries,
                     metrics: metrics,
                     menuStyle: menuStyle,
                     maxWidth: maxMenuWidth,
@@ -321,11 +340,14 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
-      onLongPressStart: (details) {
-        if (_supportsLongPressContextMenu) {
-          _openContextMenu(details.globalPosition);
-        }
+      // לחיצה ארוכה פותחת תפריט הקשר רק במגע/עט; בעכבר/trackpad משתמשים בלחיצה
+      // ימנית (מטופלת ב-Listener למטה), אחרת החזקת הלחיצה הייתה פותחת תפריט.
+      supportedDevices: const {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
       },
+      onLongPressStart: (details) => _openContextMenu(details.globalPosition),
       child: RawGestureDetector(
         behavior: HitTestBehavior.translucent,
         gestures: <Type, GestureRecognizerFactory>{
@@ -374,6 +396,15 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
     // התווית לא יגלוש (כמו submenuContentMaxWidth בתת-התפריט).
     final contentMaxWidth = maxWidth - metrics.itemPadding.horizontal;
     return entries.map<Widget>((entry) {
+      if (entry.iconRowActions != null) {
+        return _AppContextMenuIconRow(
+          actions: entry.iconRowActions!,
+          metrics: metrics,
+          menuStyle: _menuStyle(context, metrics),
+          closeMenu: _closeContextMenu,
+        );
+      }
+
       if (entry.isDivider) {
         return SizedBox(
           height: metrics.dividerHeight,
@@ -1348,6 +1379,195 @@ class _HoverableHighlightedRow extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// _AppContextMenuIconRow — שורת כפתורי אייקון בראש התפריט (סגנון Windows 11)
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _AppContextMenuIconRow extends StatelessWidget {
+  final List<AppContextMenuIconAction> actions;
+  final AppMenuMetrics metrics;
+  final MenuStyle menuStyle;
+  final VoidCallback closeMenu;
+
+  const _AppContextMenuIconRow({
+    required this.actions,
+    required this.metrics,
+    required this.menuStyle,
+    required this.closeMenu,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      // Center ממרכז את שורת האייקונים בלי להפוך את ה-Row ל-mainAxisSize.max
+      // (max בתוך פאנל IntrinsicWidth שבר את הבחירה בעת פתיחת התפריט).
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final action in actions)
+              _IconRowButton(
+                action: action,
+                metrics: metrics,
+                menuStyle: menuStyle,
+                closeMenu: closeMenu,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IconRowButton extends StatelessWidget {
+  final AppContextMenuIconAction action;
+  final AppMenuMetrics metrics;
+  final MenuStyle menuStyle;
+  final VoidCallback closeMenu;
+
+  const _IconRowButton({
+    required this.action,
+    required this.metrics,
+    required this.menuStyle,
+    required this.closeMenu,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final hasSubmenu = action.submenuBuilder != null;
+    final enabled = action.enabled && (action.onTap != null || hasSubmenu);
+    final color =
+        enabled ? colorScheme.onSurface : Theme.of(context).disabledColor;
+
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(action.icon, size: metrics.iconSize, color: color),
+          const SizedBox(height: 2),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  action.label ?? action.tooltip ?? '',
+                  style: TextStyle(fontSize: 11, color: color),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (hasSubmenu)
+                Icon(FluentIcons.chevron_down_12_regular,
+                    size: 12, color: color),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    Widget button;
+    if (hasSubmenu) {
+      button = _IconRowSubmenu(
+        action: action,
+        metrics: metrics,
+        menuStyle: menuStyle,
+        closeMenu: closeMenu,
+        enabled: enabled,
+        // minWidth מאפשר גדילה עם textScaler; maxWidth מונע מ-label ארוך/טקסט
+        // מוגדל מאוד להרחיב את הכפתורים מעבר לרוחב התפריט (הכיתוב נחתך במקום).
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, maxWidth: 96),
+          child: content,
+        ),
+      );
+    } else {
+      button = InkWell(
+        onTap: enabled
+            ? () {
+                closeMenu();
+                action.onTap?.call();
+              }
+            : null,
+        borderRadius: BorderRadius.circular(8),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, maxWidth: 96),
+          child: content,
+        ),
+      );
+    }
+
+    final tooltip = action.tooltip;
+    if (tooltip != null && tooltip.isNotEmpty) {
+      button = Tooltip(message: tooltip, child: button);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: button,
+    );
+  }
+}
+
+/// כפתור אייקון בשורה העליונה שפותח תת-תפריט (סגנון Windows 11).
+/// משתמש ב-[MenuAnchor] שפותח את האפשרויות מתחת לכפתור; בחירת פריט סוגרת
+/// את כל תפריט ההקשר דרך [closeMenu].
+class _IconRowSubmenu extends StatelessWidget {
+  final AppContextMenuIconAction action;
+  final AppMenuMetrics metrics;
+  final MenuStyle menuStyle;
+  final VoidCallback closeMenu;
+  final bool enabled;
+  final Widget child;
+
+  const _IconRowSubmenu({
+    required this.action,
+    required this.metrics,
+    required this.menuStyle,
+    required this.closeMenu,
+    required this.enabled,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = action.submenuBuilder!();
+    return MenuAnchor(
+      style: menuStyle,
+      menuChildren: [
+        for (final entry in entries)
+          MenuItemButton(
+            requestFocusOnHover: false,
+            style: buildAppSubmenuItemStyle(context, metrics),
+            onPressed: entry.enabled
+                ? () {
+                    closeMenu();
+                    entry.onTap?.call();
+                  }
+                : null,
+            child: buildAppMenuRowContent(
+              context,
+              metrics,
+              label: entry.label,
+              icon: entry.icon,
+              enabled: entry.enabled,
+            ),
+          ),
+      ],
+      builder: (context, controller, _) => InkWell(
+        onTap: enabled
+            ? () => controller.isOpen ? controller.close() : controller.open()
+            : null,
+        borderRadius: BorderRadius.circular(8),
+        child: child,
       ),
     );
   }

@@ -91,6 +91,13 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# zstandard_linux 1.5.0 leaves its bundled_libraries empty, so the native
+# libzstandard_linux.so (a DT_NEEDED dependency of the plugin .so) is never
+# copied into the bundle and the app fails to load. Bundle it explicitly.
+if(TARGET zstandard_linux)
+  list(APPEND PLUGIN_BUNDLED_LIBRARIES $<TARGET_FILE:zstandard_linux>)
+endif()
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build

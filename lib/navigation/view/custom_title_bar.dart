@@ -24,7 +24,6 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
-import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
@@ -62,6 +61,12 @@ const double _kAppBarControlsWidth = 105.0;
 const double _kWindowCaptionButtonsWidth = 138.0;
 const double _kWindowCaptionButtonWidth = 46.0;
 
+/// רוחב מרבי לטאב בודד: טאב לא נמתח מעבר לזה גם כשיש מעט טאבים ומלא מקום.
+const double _kTabMaxWidth = 140.0;
+
+/// מתחת לרוחב הזה כפתור ה-X מוסתר ומופיע רק ב-hover/בטאב הנבחר (כמו כרום).
+const double _kTabCloseHideBelowWidth = 80.0;
+
 /// סגנון משותף לכפתורי האייקון בשורת הכותרת
 final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
   minimumSize: const Size(32, 32),
@@ -73,34 +78,26 @@ final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
 );
 
 class _CustomTitleBarState extends State<CustomTitleBar> {
-  // ScrollController לשורת הטאבים הראשית (ReorderableListView). הבחירה מנוהלת
-  // דרך TabsBloc (currentTabIndex) + onTap, ולא דרך TabController — האינדיקטור
-  // מצויר ידנית (CustomPaint) ולא ע"י ה-indicator של TabBar.
-  final ScrollController _tabsScrollController = ScrollController();
-
-  // GlobalKey לטאב הנבחר, לשם גלילה אוטומטית שלו לתצוגה (ראה
-  // _ensureSelectedTabVisible). עובר בין הטאבים כשהבחירה משתנה — בטוח כי רק
-  // טאב אחד נבחר בכל רגע, ורק מבנה אחד (רחב/צר) מרנדר טאבים בו-זמנית.
-  final GlobalKey _selectedTabKey = GlobalKey();
-
-  // חתימת המצב שאליו גללנו לאחרונה. כוללת זהות הטאב הנבחר, אינדקסו, מספר
-  // הטאבים, רוחב המסך והאוריינטציה — כך שגלילה-מחדש מתרחשת לא רק בבחירת טאב
-  // אחר אלא גם בשחזור workspace/ReplaceAllTabs (אותו אינדקס, טאב אחר), resize
-  // ומעבר portrait/landscape — בכולם הטאב הנבחר עלול לצאת מהתצוגה.
-  Object? _lastScrollSignature;
-  // הטאב שאליו גללנו לאחרונה, להבחנה בין שינוי-בחירה (מנפישים) לבין שינוי
-  // גודל/מבנה בלבד (גלילה מיידית, ללא אנימציה מיותרת).
-  OpenedTab? _lastScrolledTab;
-
   // נקבע ב-onDoubleTapDown (לפני onDoubleTap): האם הלחיצה הכפולה האחרונה באזור
   // הטאבים הייתה על טאב בפועל. אם כן — מדלגים על maximize/restore.
   bool _doubleTapOnTab = false;
 
-  @override
-  void dispose() {
-    _tabsScrollController.dispose();
-    super.dispose();
-  }
+  // האם העכבר נמצא כרגע מעל שורת הטאבים. בעת סגירת טאב כשהעכבר בפנים מקפיאים
+  // את רוחב הטאבים (ראה _pinnedTabWidth) כדי שכפתור ה-X של הטאב הבא יישאר תחת
+  // הסמן וסגירות רצופות יפעלו.
+  bool _pointerInsideTabStrip = false;
+
+  // כשאינו null, כל הטאבים מצוירים ברוחב הקפוא הזה במקום ברוחב המחושב. מוגדר
+  // בסגירה (כשהעכבר בפנים) ומשוחרר ביציאת העכבר מהשורה (כמו כרום).
+  double? _pinnedTabWidth;
+
+  // הרוחב המחושב האחרון לטאב, לשימוש כערך הקפיאה בסגירה.
+  double? _lastComputedTabWidth;
+
+  // רוחב אזור הטאבים שנמדד בפריים הקודם (ע"י LayoutBuilder נפרד). הרשימה
+  // נבנית עם הערך הזה ולא תחת ה-LayoutBuilder — אחרת Tooltip/OverlayPortal
+  // שבטאב מופעל בזמן layout וזורק "_RenderLayoutBuilder was mutated".
+  double? _tabsAreaWidth;
 
   /// בודק אם הנקודה הגלובלית פוגעת ברכיב של שורת הטאבים — טאב או חץ גלילה
   /// (מסומן ב-[_kTabHitMarker]). משמש כדי לדלג על maximize בלחיצה כפולה עליהם,
@@ -146,88 +143,6 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     } else {
       await windowManager.maximize();
     }
-  }
-
-  /// גולל את שורת הטאבים כך שהטאב הנבחר ייראה במלואו.
-  ///
-  /// נדרש כי שורת הטאבים בנויה על [ReorderableListView] (lazy, עם אינדיקטור
-  /// ידני) וללא [TabController] — ולכן אין גלילה אוטומטית לטאב הנבחר. בלעדי
-  /// פונקציה זו, בטעינה ראשונית עם הרבה טאבים ה-ScrollController נשאר ב-offset 0
-  /// והטאב הפעיל עלול להישאר גלול מחוץ לתצוגה.
-  ///
-  /// [animate] - האם להנפיש את הגלילה (false בטעינה ראשונית כדי למקם מיידית).
-  ///
-  /// [prevMax] - ה-maxScrollExtent מהניסיון הקודם. כל עוד הוא ממשיך לגדול
-  /// (ה-ListView ה-lazy מודד רוחבי טאבים נוספים ו-overflow מתגלה בהדרגה),
-  /// ממשיכים לנסות גם כשהטאב נראה כרגע — אחרת הוא נדחק החוצה אחרי שהחץ מופיע.
-  void _ensureSelectedTabVisible(
-      {required bool animate, int attempt = 0, double? prevMax}) {
-    if (attempt >= 12) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_tabsScrollController.hasClients) {
-        _ensureSelectedTabVisible(
-            animate: animate, attempt: attempt + 1, prevMax: prevMax);
-        return;
-      }
-      final pos = _tabsScrollController.position;
-      if (!pos.hasContentDimensions) {
-        // המידות עדיין לא נמדדו — ננסה שוב בפריים הבא.
-        _ensureSelectedTabVisible(
-            animate: animate, attempt: attempt + 1, prevMax: prevMax);
-        return;
-      }
-      final currentMax = pos.maxScrollExtent;
-      final maxGrew = prevMax == null || currentMax > prevMax + 0.5;
-      final ctx = _selectedTabKey.currentContext;
-      if (ctx == null) {
-        // הטאב הנבחר מחוץ לתחום הרינדור (ReorderableListView הוא lazy). קפיצה
-        // להערכה לינארית לפי האינדקס מכניסה אותו לתחום, ופריים נוסף מדייק.
-        final state = context.read<TabsBloc>().state;
-        if (state.tabs.length <= 1 || currentMax <= 0) return;
-        final estimate =
-            (currentMax * state.currentTabIndex / (state.tabs.length - 1))
-                .clamp(pos.minScrollExtent, currentMax);
-        if ((estimate - pos.pixels).abs() < 1.0) return; // כבר שם — מניעת לולאה
-        _tabsScrollController.jumpTo(estimate);
-        _ensureSelectedTabVisible(
-            animate: animate, attempt: attempt + 1, prevMax: currentMax);
-        return;
-      }
-      final renderObject = ctx.findRenderObject();
-      if (renderObject == null) return;
-      final viewport = RenderAbstractViewport.of(renderObject);
-      // ה-offsets שיביאו את הטאב לקצה ההתחלתי/הסופי של ה-viewport.
-      final leadingEdge = viewport.getOffsetToReveal(renderObject, 0.0).offset;
-      final trailingEdge = viewport.getOffsetToReveal(renderObject, 1.0).offset;
-      // גלילה מינימלית: רק אם הטאב חתוך, ולכיוון הקרוב. אם נראה במלואו — כלום.
-      final double? target = pos.pixels > leadingEdge
-          ? leadingEdge
-          : (pos.pixels < trailingEdge ? trailingEdge : null);
-      if (target == null) {
-        // הטאב נראה. אם המידות עדיין גדלות (overflow מתגלה), נמשיך לוודא בפריים
-        // הבא — אך רק במצב מיידי, כדי לא לקטוע אנימציית בחירה.
-        if (!animate && maxGrew) {
-          _ensureSelectedTabVisible(
-              animate: animate, attempt: attempt + 1, prevMax: currentMax);
-        }
-        return;
-      }
-      final clamped = target.clamp(pos.minScrollExtent, currentMax);
-      if (animate) {
-        _tabsScrollController.animateTo(
-          clamped,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOut,
-        );
-      } else {
-        _tabsScrollController.jumpTo(clamped);
-        // ייתכן ש-overflow נוסף יתגלה אחרי הקפיצה; נמשיך לוודא עד התייצבות.
-        if (maxGrew) {
-          _ensureSelectedTabVisible(
-              animate: animate, attempt: attempt + 1, prevMax: currentMax);
-        }
-      }
-    });
   }
 
   bool _useStackedTabs(BuildContext context, NavigationState navState) {
@@ -521,38 +436,58 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     );
   }
 
+  /// מחשב את רוחב הטאב כך שכל הטאבים יתחלקו בשווה במקום הפנוי, עד תקרה של
+  /// [_kTabMaxWidth]. אין רצפה: כשיש הרבה טאבים הם ממשיכים להצטמצם (ה-X/נעץ
+  /// מתחבאים והכותרת מתכווצת) כך שכולם תמיד נכנסים — ללא גלילה וללא חיתוך.
+  double _computeTabWidth(double available, int count) {
+    if (count <= 0) return _kTabMaxWidth;
+    final ideal = available / count;
+    return ideal < _kTabMaxWidth ? ideal : _kTabMaxWidth;
+  }
+
   Widget _buildScrollableTabsArea(TabsState state) {
-    // גלילה אוטומטית לטאב הנבחר כשמשהו שעלול להוציאו מהתצוגה משתנה: בחירת טאב,
-    // החלפת רשימת הטאבים (workspace/ReplaceAllTabs), resize או שינוי אוריינטציה.
-    // ה-MediaQuery נקרא רק לשם זיהוי השינוי; ערכו אינו חייב להיות מדויק.
-    final mq = MediaQuery.of(context);
-    final signature = (
-      state.currentTab,
-      state.currentTabIndex,
-      state.tabs.length,
-      mq.size.width.round(),
-      mq.orientation,
+    // LayoutBuilder נפרד מודד רק את הרוחב (ילדו SizedBox ריק) ושומר אותו ב-state;
+    // הרשימה — שמכילה Tooltip/OverlayPortal ומפתחות גלובליים — נבנית כאח שלו,
+    // לא תחתיו. אחרת רינדור-מחדש של טאב בזמן layout מפעיל את ה-OverlayPortal
+    // וזורק "_RenderLayoutBuilder was mutated".
+    return Stack(
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final w = constraints.maxWidth;
+            if (_tabsAreaWidth == null || (_tabsAreaWidth! - w).abs() > 0.5) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _tabsAreaWidth = w);
+              });
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+        _buildTabsContent(state),
+      ],
     );
-    // כניסה-מחדש של השורה לעץ (חזרה למסך עיון ממסך אחר) מאתחלת את ה-offset ל-0
-    // והטאב הנבחר נעלם, אך ה-signature זהה לזה שלפני היציאה — לכן בודקים גם
-    // hasClients: בפריים הראשון של הכניסה ה-ScrollController עדיין מנותק.
-    final reentering = !_tabsScrollController.hasClients;
-    if (reentering || signature != _lastScrollSignature) {
-      final isFirstScroll = _lastScrollSignature == null;
-      // מנפישים רק כשהבחירה עצמה השתנתה; שינוי גודל/מבנה/כניסה — גלילה מיידית.
-      final selectionChanged = !identical(state.currentTab, _lastScrolledTab);
-      _lastScrollSignature = signature;
-      _lastScrolledTab = state.currentTab;
-      _ensureSelectedTabVisible(
-          animate: selectionChanged && !isFirstScroll && !reentering);
-    }
-    // ReorderableListView מטפל במלוא הגרירה-לסידור: הרמת הטאב, ה-placeholder
-    // היחיד שזז, סידור שאר הטאבים לתצוגת התוצאה, והאנימציה — ללא לולאת ה-shift
-    // של hit-test ידני. הבחירה היא ב-onPointerDown (ב-_buildTab), כך שכל
-    // אינטראקציה בוחרת את הטאב; גרירה רגילה גוללת את שורת הטאבים, לחיצה ארוכה ואז גרירה מסדרת מחדש.
+  }
+
+  Widget _buildTabsContent(TabsState state) {
+    // בפריים הראשון עוד אין מדידה; אומדן לפי רוחב המסך, מתוקן בפריים הבא.
+    final available = _tabsAreaWidth ?? MediaQuery.sizeOf(context).width;
+    _lastComputedTabWidth = _computeTabWidth(available, state.tabs.length);
+    // בזמן סגירה רצופה (העכבר מעל השורה) הרוחב קפוא כדי שה-X של הטאב הבא יישאר
+    // תחת הסמן; אחרת מתחלקים בשווה במקום הפנוי.
+    final tabWidth = _pinnedTabWidth ?? _lastComputedTabWidth!;
+
+    // בדסקטופ גרירת-עכבר על טאב מסדרת אותו מיד (כמו כרום); בנייד נדרשת לחיצה
+    // ארוכה כדי שהחלקה/גלילה במגע לא תזיז טאב בטעות.
+    final platform = Theme.of(context).platform;
+    final isDesktop = platform == TargetPlatform.windows ||
+        platform == TargetPlatform.linux ||
+        platform == TargetPlatform.macOS;
+
+    // ReorderableListView מטפל בגרירה-לסידור. כל טאב ברוחב קבוע מחושב; אין גלילה
+    // (physics=Never) — גרירה על האזור הריק נופלת לגרירת החלון שב-GestureDetector.
     final reorderList = ReorderableListView.builder(
-      scrollController: _tabsScrollController,
       scrollDirection: Axis.horizontal,
+      physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: state.tabs.length,
       proxyDecorator: (child, index, animation) => Material(
@@ -568,108 +503,57 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       },
       itemBuilder: (context, index) {
         final tab = state.tabs[index];
-        return ReorderableDelayedDragStartListener(
-          key: ObjectKey(tab),
-          index: index,
-          // סימון שטח הטאב ל-hit-test, כדי שה-double-tap-to-maximize שבמסגרת
-          // (ראה _buildScrollableTabsArea) ידלג עליו. בליעה דרך GestureDetector
-          // מקונן אינה אמינה מול ה-DoubleTapGestureRecognizer של ה-DragToMoveArea
-          // (שני הזיהויים מתקיימים במקביל), ולכן מזהים "לחיצה על טאב" בבדיקת
-          // hit-test מפורשת ב-onDoubleTapDown.
-          child: MetaData(
-            metaData: _kTabHitMarker,
-            behavior: HitTestBehavior.opaque,
-            child: _buildTab(context, tab, state),
+        // סימון שטח הטאב ל-hit-test, כדי שה-double-tap-to-maximize שבמסגרת
+        // ידלג עליו (ראה onDoubleTapDown למטה).
+        final tabChild = MetaData(
+          metaData: _kTabHitMarker,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: tabWidth,
+            child: _buildTab(context, tab, state, tabWidth),
           ),
         );
+        return isDesktop
+            ? ReorderableDragStartListener(
+                key: ObjectKey(tab),
+                index: index,
+                child: tabChild,
+              )
+            : ReorderableDelayedDragStartListener(
+                key: ObjectKey(tab),
+                index: index,
+                child: tabChild,
+              );
       },
     );
 
     // מחליף את DragToMoveArea בגרסה ששולטת ב-onDoubleTap: גרירת חלון (onPanStart)
     // ו-maximize/restore (onDoubleTap) פעילים על האזור הריק שבשורת הטאבים, אך
-    // לחיצה כפולה *על טאב* מדלגת על ה-maximize. הזיהוי הוא ע"י hit-test מפורש
-    // (onDoubleTapDown) ולא ע"י arena/בליעה — שאינם אמינים ל-double-tap מקונן.
-    // זהו ה-מקבילה לאופן שבו ReorderableDelayedDragStartListener בולע את הגרירה על טאב:
-    // אזור ריק → גרירה/maximize של החלון; טאב → לא.
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onPanStart: (_) => windowManager.startDragging(),
-      onDoubleTapDown: (details) =>
-          _doubleTapOnTab = _hitTestTab(context, details.globalPosition),
-      onDoubleTap: _onTabsAreaDoubleTap,
-      child: KeyedSubtree(
-        key: tourReadingTabsTargetKey,
-        // חיצי גלילה מוצגים רק כשהטאבים גולשים מעבר לרוחב הזמין.
-        // ה-AnimatedBuilder מאזין ל-ScrollController לעדכון בזמן גלילה (offset),
-        // וה-NotificationListener תופס שינויי מידות התוכן (maxScrollExtent) —
-        // למשל בטעינה ראשונית או בהוספת/הסרת טאבים — שאינם מפעילים את ה-controller,
-        // ומאלץ הערכה מחדש של זמינות החיצים בפריים הבא.
-        child: NotificationListener<ScrollMetricsNotification>(
-          onNotification: (_) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) setState(() {});
-            });
-            return false;
-          },
-          child: AnimatedBuilder(
-            animation: _tabsScrollController,
-            builder: (context, _) {
-              final position = _tabsScrollController.hasClients &&
-                      _tabsScrollController.position.hasContentDimensions
-                  ? _tabsScrollController.position
-                  : null;
-              final canLeft = position != null &&
-                  position.pixels > position.minScrollExtent + 0.5;
-              final canRight = position != null &&
-                  position.pixels < position.maxScrollExtent - 0.5;
-              final hasOverflow = canLeft || canRight;
-
-              if (!hasOverflow) return reorderList;
-
-              return Row(
-                children: [
-                  _buildTabsScrollArrow(
-                      FluentIcons.chevron_left_24_regular, canLeft, -150),
-                  Expanded(child: reorderList),
-                  _buildTabsScrollArrow(
-                      FluentIcons.chevron_right_24_regular, canRight, 150),
-                ],
-              );
-            },
-          ),
+    // לחיצה כפולה *על טאב* מדלגת על ה-maximize. ה-MouseRegion משחרר את קפיאת
+    // הרוחב כשהעכבר עוזב את השורה.
+    return MouseRegion(
+      onEnter: (_) => _pointerInsideTabStrip = true,
+      onExit: (_) {
+        _pointerInsideTabStrip = false;
+        if (_pinnedTabWidth != null) {
+          setState(() => _pinnedTabWidth = null);
+        }
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        // גרירה על טאב מסדרת אותו (reorder); רק גרירה על האזור הריק גוררת חלון.
+        onPanStart: (details) {
+          if (_hitTestTab(context, details.globalPosition)) return;
+          windowManager.startDragging();
+        },
+        onDoubleTapDown: (details) =>
+            _doubleTapOnTab = _hitTestTab(context, details.globalPosition),
+        onDoubleTap: _onTabsAreaDoubleTap,
+        child: KeyedSubtree(
+          key: tourReadingTabsTargetKey,
+          child: reorderList,
         ),
       ),
-    );
-  }
-
-  Widget _buildTabsScrollArrow(IconData icon, bool enabled, double delta) {
-    // סימון כרכיב של שורת הטאבים כדי שלחיצה כפולה על החץ תיבלע ולא תפעיל
-    // maximize/restore של החלון (ראה _hitTestTab).
-    return MetaData(
-      metaData: _kTabHitMarker,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 32,
-        height: 32,
-        child: IconButton(
-          padding: EdgeInsets.zero,
-          iconSize: 18,
-          onPressed: enabled ? () => _scrollTabsBy(delta) : null,
-          icon: Icon(icon),
-        ),
-      ),
-    );
-  }
-
-  void _scrollTabsBy(double delta) {
-    if (!_tabsScrollController.hasClients) return;
-    final pos = _tabsScrollController.position;
-    final target = (_tabsScrollController.offset + delta)
-        .clamp(pos.minScrollExtent, pos.maxScrollExtent);
-    _tabsScrollController.animateTo(
-      target,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeInOut,
     );
   }
 
@@ -766,6 +650,12 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   }
 
   void closeTab(OpenedTab tab, BuildContext context) {
+    // קופאים את רוחב הטאבים כל עוד העכבר מעל השורה, כדי שכפתור ה-X של הטאב הבא
+    // יישאר בדיוק תחת הסמן וסגירות רצופות יפעלו (כמו כרום). נועלים רק בסגירה
+    // הראשונה (??=) — אחרת כל סגירה הייתה דורסת בערך הרחב יותר. השחרור ביציאת העכבר.
+    if (_pointerInsideTabStrip && _lastComputedTabWidth != null) {
+      _pinnedTabWidth ??= _lastComputedTabWidth;
+    }
     context.read<HistoryBloc>().add(AddHistory(tab));
     context.read<TabsBloc>().add(RemoveTab(tab));
   }
@@ -780,7 +670,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     }
   }
 
-  Widget _buildTab(BuildContext context, OpenedTab tab, TabsState state) {
+  Widget _buildTab(
+      BuildContext context, OpenedTab tab, TabsState state, double tabWidth) {
     final index = state.tabs.indexOf(tab);
     final isSelected = index == state.currentTabIndex;
     final closeTabShortcut =
@@ -789,18 +680,51 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     bool isTabActive(int tabIndex) => tabIndex == state.currentTabIndex;
     bool isTabHovered = false;
 
+    // כותרת בשורה אחת שמוצגת מההתחלה (RTL: מימין) ונדהית רק בקצה הסוף, כמו
+    // כרום. TextOverflow.fade/clip של פלאטר מציג בעברית את *סוף* הכותרת
+    // (הפוך מהרצוי), לכן מצמידים את הטקסט בעצמנו: OverflowBox ברוחב טבעי מיושר
+    // ל-start (ימין ב-RTL) → ההתחלה גלויה, הסוף גולש; ClipRect חותך אותו;
+    // ו-ShaderMask מדהה רק את קצה הסוף. בכותרת קצרה הקצה ריק והדהייה נעלמת.
+    Widget fadedTitle(String title) {
+      final isLtr = Directionality.of(context) == TextDirection.ltr;
+      return ClipRect(
+        child: ShaderMask(
+          blendMode: BlendMode.dstIn,
+          shaderCallback: (rect) => LinearGradient(
+            begin: isLtr ? Alignment.centerLeft : Alignment.centerRight,
+            end: isLtr ? Alignment.centerRight : Alignment.centerLeft,
+            stops: const [0.0, 0.82, 1.0],
+            colors: const [Colors.white, Colors.white, Colors.transparent],
+          ).createShader(rect),
+          child: OverflowBox(
+            alignment: AlignmentDirectional.centerStart,
+            minWidth: 0,
+            maxWidth: double.infinity,
+            child: Text(title, maxLines: 1, softWrap: false),
+          ),
+        ),
+      );
+    }
+
     Widget buildTabContent() {
       if (tab is CombinedTab) {
+        // תצוגה מפוצלת: כל ספר בחצי מרוחב הטאב, מציג את ההתחלה שלו עם דהייה
+        // בקצה. הימני (rightTab) ראשון ב-Row → מימין ב-RTL, כמו בתצוגה עצמה.
+        // פס מפריד דק בין השניים, אך רק כשהטאב רחב מספיק — אחרת רוחבו הקבוע
+        // היה גולש כשהטאב מצטמצם והחצאים מתאפסים.
         return Tooltip(
           message: tab.title,
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Icon(FluentIcons.panel_left_text_24_regular, size: 16),
-              ),
-              Text(truncate(tab.title, 20)),
+              Expanded(child: fadedTitle(tab.rightTab.title)),
+              if (tabWidth >= 100)
+                Container(
+                  width: 2,
+                  height: 14,
+                  margin: const EdgeInsets.symmetric(horizontal: 5),
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+              Expanded(child: fadedTitle(tab.leftTab.title)),
             ],
           ),
         );
@@ -809,10 +733,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       if (tab is SearchingTab) {
         return ValueListenableBuilder<String>(
           valueListenable: tab.titleNotifier,
-          builder: (context, title, child) => Tooltip(
-            message: title,
-            child: Text(truncate(title, 25)),
-          ),
+          builder: (context, title, child) =>
+              Tooltip(message: title, child: fadedTitle(title)),
         );
       }
 
@@ -824,18 +746,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                 ? '${tab.title}, $currentTitleValue'
                 : tab.title;
             return Tooltip(
-              message: tooltipMessage,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Icon(FluentIcons.document_pdf_24_regular, size: 16),
-                  ),
-                  Text(truncate(tab.title, 12)),
-                ],
-              ),
-            );
+                message: tooltipMessage, child: fadedTitle(tab.title));
           },
         );
       }
@@ -848,36 +759,13 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                 ? '${tab.title}, $currentTitleValue'
                 : tab.title;
             return Tooltip(
-              message: tooltipMessage,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Icon(FluentIcons.document_pdf_24_regular, size: 16),
-                  ),
-                  Text(truncate(tab.title, 12)),
-                ],
-              ),
-            );
+                message: tooltipMessage, child: fadedTitle(tab.title));
           },
         );
       }
 
       if (tab is CommentatorsTab) {
-        return Tooltip(
-          message: tab.title,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Icon(FluentIcons.book_24_regular, size: 16),
-              ),
-              Text(truncate(tab.title, 20)),
-            ],
-          ),
-        );
+        return Tooltip(message: tab.title, child: fadedTitle(tab.title));
       }
 
       final textTab = tab as TextBookTab;
@@ -887,21 +775,28 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           final tooltipMessage = currentTitleValue.isNotEmpty
               ? '${tab.title}, $currentTitleValue'
               : tab.title;
-          return Tooltip(
-            message: tooltipMessage,
-            child: Text(truncate(tab.title, 12)),
-          );
+          return Tooltip(message: tooltipMessage, child: fadedTitle(tab.title));
         },
       );
     }
 
     Widget buildTabAppearance(StateSetter? setState) {
-      final showLeadingDivider =
-          index > 0 && !isTabActive(index) && !isTabActive(index - 1);
+      // הטאב הראשון מקבל מפריד מול לחצני הפעולה שלפניו; שאר הטאבים מול הקודם.
+      final showLeadingDivider = index == 0
+          ? !isTabActive(index)
+          : !isTabActive(index) && !isTabActive(index - 1);
       final colorScheme = Theme.of(context).colorScheme;
 
+      // תקציב הרוחב לאלמנטים שאינם הכותרת (X/נעץ), אחרי ה-paddings הקבועים
+      // (~28px) ורווח הטאב הנבחר. מציגים X/נעץ רק אם נשאר מקום פיזי — אחרת הם
+      // היו גולשים בטאב צר. הכותרת תמיד ב-Expanded ומתכווצת לאפס בעת הצורך.
+      final extrasBudget = tabWidth - 28 - (isSelected ? 4 : 0);
+      final showClose = extrasBudget >= 25 &&
+          (tabWidth >= _kTabCloseHideBelowWidth || isSelected || isTabHovered);
+      final showPin =
+          tab.isPinned && (extrasBudget - (showClose ? 25 : 0)) >= 20;
+
       return Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           if (showLeadingDivider)
             Container(
@@ -910,58 +805,70 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
               margin: const EdgeInsets.only(top: 6, bottom: 6),
               color: colorScheme.outlineVariant,
             ),
-          Container(
-            constraints: const BoxConstraints(maxHeight: 32),
-            padding: EdgeInsets.only(
-              left: 6,
-              right: index == 0 ? 0 : 6,
-            ),
-            child: CustomPaint(
-              painter: isSelected
-                  ? _TabBackgroundPainter(AppSurfaces.topBarBackground(context))
-                  : null,
-              foregroundPainter: isTabHovered && !isSelected
-                  ? _TabBackgroundPainter(
-                      colorScheme.onSurface.withValues(alpha: 0.08))
-                  : null,
-              child: Tab(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: DefaultTextStyle(
-                    style: TextStyle(
-                      color: colorScheme.onSurface,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.normal,
-                      fontSize: 14,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        if (isSelected) const SizedBox(width: 4),
-                        _buildPinIconInline(context, tab),
-                        buildTabContent(),
-                        Tooltip(
-                          preferBelow: false,
-                          message: closeTabShortcut.toUpperCase(),
-                          child: MetaData(
-                            metaData: _kTabCloseButtonHitMarker,
-                            child: IconButton(
-                              constraints: const BoxConstraints(
-                                minWidth: 25,
-                                minHeight: 25,
-                                maxWidth: 25,
-                                maxHeight: 25,
-                              ),
-                              onPressed: () => closeTab(tab, context),
-                              icon: const Icon(
-                                FluentIcons.dismiss_24_regular,
-                                size: 10,
+          // הטאב ממלא את הרוחב הקבוע שמכתיב ה-SizedBox; הכותרת ב-Expanded כדי
+          // שתתכווץ ותטושטש לקראת הסוף. ה-X/נעץ מוצגים רק אם נשאר להם מקום.
+          Expanded(
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 32),
+              padding: EdgeInsets.only(
+                left: 6,
+                right: index == 0 ? 0 : 6,
+              ),
+              child: CustomPaint(
+                painter: isSelected
+                    ? _TabBackgroundPainter(
+                        AppSurfaces.topBarBackground(context))
+                    : null,
+                foregroundPainter: isTabHovered && !isSelected
+                    ? _TabBackgroundPainter(
+                        colorScheme.onSurface.withValues(alpha: 0.08))
+                    : null,
+                child: Tab(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: DefaultTextStyle(
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.normal,
+                        fontSize: 14,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          if (isSelected) const SizedBox(width: 4),
+                          if (showPin) _buildPinIconInline(context, tab),
+                          Expanded(child: buildTabContent()),
+                          if (showClose)
+                            Tooltip(
+                              preferBelow: false,
+                              message: closeTabShortcut.toUpperCase(),
+                              child: MetaData(
+                                metaData: _kTabCloseButtonHitMarker,
+                                child: IconButton(
+                                  // shrinkWrap + padding אפס: בלעדיהם שטח-המגע
+                                  // ברירת-המחדל (48px) גולש בטאב צר.
+                                  style: IconButton.styleFrom(
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 25,
+                                    minHeight: 25,
+                                    maxWidth: 25,
+                                    maxHeight: 25,
+                                  ),
+                                  onPressed: () => closeTab(tab, context),
+                                  icon: const Icon(
+                                    FluentIcons.dismiss_24_regular,
+                                    size: 10,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -972,41 +879,35 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       );
     }
 
-    return KeyedSubtree(
-      // ה-key על הטאב הנבחר בלבד, כדי שגלילה אוטומטית תוכל לאתר אותו (ראה
-      // _ensureSelectedTabVisible). הטאבים האחרים ללא key (null).
-      key: isSelected ? _selectedTabKey : null,
-      child: Listener(
-        // בחירת הטאב על pointer-down: לחצן אמצעי סוגר, לחצן ראשי (או תחילת
-        // גרירה) בוחר. לחצן ימני אינו בוחר — אחרת הבחירה גוררת rebuild שהורס את
-        // ה-AppContextMenuRegion לפני שתפריט ההקשר נפתח. משתמשים ב-Listener
-        // פסיבי כי הגרירה המיידית (ReorderableDragStartListener) זוכה ב-arena
-        // וחוסמת onTap.
-        onPointerDown: (PointerDownEvent event) {
-          if (event.buttons == 4) {
-            closeTab(tab, context);
-          } else if (event.buttons == 1 &&
-              index != state.currentTabIndex &&
-              !_hitTestCloseButton(context, event.position)) {
-            context.read<TabsBloc>().add(SetCurrentTab(index));
-          }
-        },
-        child: AppContextMenuRegion(
-          key: isSelected ? tourTabContextMenuTargetKey : null,
-          menuBuilder: (menuCtx, _) =>
-              _buildTabContextMenuEntries(menuCtx, tab, state),
-          menuItemKeysByLabel: isSelected
-              ? {'הצג לצד': tourTabSideBySideMenuItemTargetKey}
-              : null,
-          child: StatefulBuilder(
-            builder: (context, setLocalState) {
-              return MouseRegion(
-                onEnter: (_) => setLocalState(() => isTabHovered = true),
-                onExit: (_) => setLocalState(() => isTabHovered = false),
-                child: buildTabAppearance(setLocalState),
-              );
-            },
-          ),
+    return Listener(
+      // בחירת הטאב על pointer-down: לחצן אמצעי סוגר, לחצן ראשי (או תחילת
+      // גרירה) בוחר. לחצן ימני אינו בוחר — אחרת הבחירה גוררת rebuild שהורס את
+      // ה-AppContextMenuRegion לפני שתפריט ההקשר נפתח. משתמשים ב-Listener
+      // פסיבי כי הגרירה המיידית (ReorderableDragStartListener) זוכה ב-arena
+      // וחוסמת onTap.
+      onPointerDown: (PointerDownEvent event) {
+        if (event.buttons == 4) {
+          closeTab(tab, context);
+        } else if (event.buttons == 1 &&
+            index != state.currentTabIndex &&
+            !_hitTestCloseButton(context, event.position)) {
+          context.read<TabsBloc>().add(SetCurrentTab(index));
+        }
+      },
+      child: AppContextMenuRegion(
+        key: isSelected ? tourTabContextMenuTargetKey : null,
+        menuBuilder: (menuCtx, _) =>
+            _buildTabContextMenuEntries(menuCtx, tab, state),
+        menuItemKeysByLabel:
+            isSelected ? {'הצג לצד': tourTabSideBySideMenuItemTargetKey} : null,
+        child: StatefulBuilder(
+          builder: (context, setLocalState) {
+            return MouseRegion(
+              onEnter: (_) => setLocalState(() => isTabHovered = true),
+              onExit: (_) => setLocalState(() => isTabHovered = false),
+              child: buildTabAppearance(setLocalState),
+            );
+          },
         ),
       ),
     );
