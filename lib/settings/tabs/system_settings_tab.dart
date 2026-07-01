@@ -67,18 +67,10 @@ class SystemSettingsTab extends StatefulWidget {
     SettingsSearchEntry(
       id: 'system.versions.library',
       title: 'גרסת ספרייה',
-      subtitle: 'גרסת מאגר הספרים',
+      subtitle: 'גרסת מאגר הספרים וכמות הספרים בספרייה',
       tab: SettingsTab.system,
       cardId: 'system.versions',
-      keywords: ['גרסה', 'ספריה'],
-    ),
-    SettingsSearchEntry(
-      id: 'system.versions.book_count',
-      title: 'מספר ספרים',
-      subtitle: 'כמות הספרים בספרייה',
-      tab: SettingsTab.system,
-      cardId: 'system.versions',
-      keywords: ['ספרים', 'כמות'],
+      keywords: ['גרסה', 'ספריה', 'ספרים', 'כמות'],
     ),
     SettingsSearchEntry(
       id: 'system.updates.network_mode',
@@ -266,11 +258,11 @@ class SystemSettingsTab extends StatefulWidget {
       keywords: ['סיסמה', 'סייפר', 'password', 'שינוי סיסמה'],
     ),
     SettingsSearchEntry(
-      id: 'system.advanced.tour',
+      id: 'system.versions.tour',
       title: 'סיור מודרך להכרת התוכנה',
       subtitle: 'הפעל סיור מודרך להדרכה והכרת כל מסכי אוצריא',
       tab: SettingsTab.system,
-      cardId: 'system.advanced',
+      cardId: 'system.versions',
       keywords: ['סיור', 'הדרכה', 'tour', 'מודרך'],
     ),
     SettingsSearchEntry(
@@ -1271,19 +1263,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
         SettingsActionTile.text(
           icon: FluentIcons.library_24_regular,
-          title: 'גרסת ספרייה',
-          subtitle: _libraryVersion ?? 'טוען...',
-          subtitleLtr: _libraryVersion != null && _libraryVersion != 'לא ידוע',
-          actions: const [],
-          // trailing: TextButton.icon(
-          //   icon: const Icon(FluentIcons.history_24_regular, size: 16),
-          //   label: const Text('יומן שינויים'),
-          //   onPressed: () => _showLibraryChangelogDialog(context),
-          // ),
-        ),
-        SettingsActionTile.text(
-          icon: FluentIcons.book_24_regular,
-          title: 'מספר ספרים',
+          title: 'גרסת ספרייה ${_libraryVersion ?? 'טוען...'}',
           subtitle: _bookCount != null ? '${_bookCount!} ספרים' : 'טוען...',
           actions: [
             if (_bookCount != null)
@@ -1292,6 +1272,25 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 text: 'הצג רשימה',
                 onPressed: () => _openBooksListDialog(context),
               ),
+          ],
+        ),
+        SettingsActionTile.text(
+          icon: FluentIcons.sparkle_24_regular,
+          title: 'סיור מודרך להכרת התוכנה',
+          subtitle: 'הפעל סיור מודרך להדרכה והכרת כל מסכי אוצריא',
+          actions: [
+            ActionButton.recommended(
+              icon: FluentIcons.play_24_regular,
+              text: 'הפעל',
+              onPressed: () {
+                final libraryLoaded =
+                    !context.read<NavigationBloc>().state.isLibraryEmpty;
+                context.read<NavigationBloc>().add(
+                      const CheckLibrary(),
+                    );
+                context.read<TourCubit>().restart(libraryLoaded: libraryLoaded);
+              },
+            ),
           ],
         ),
       ],
@@ -1499,27 +1498,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       cardId: 'system.advanced',
       title: 'מתקדם',
       children: [
-        // ── סיור מודרך ──
-        SettingsActionTile.text(
-          icon: FluentIcons.sparkle_24_regular,
-          title: 'סיור מודרך להכרת התוכנה',
-          subtitle: 'הפעל סיור מודרך להדרכה והכרת כל מסכי אוצריא',
-          actions: [
-            ActionButton.recommended(
-              icon: FluentIcons.play_24_regular,
-              text: 'הפעל',
-              onPressed: () {
-                final libraryLoaded =
-                    !context.read<NavigationBloc>().state.isLibraryEmpty;
-                context.read<NavigationBloc>().add(
-                      const CheckLibrary(),
-                    );
-                context.read<TourCubit>().restart(libraryLoaded: libraryLoaded);
-              },
-            ),
-          ],
-        ),
-
         // ── גיבוי אוטומטי ──
         ExpandableSection(
           headerKey: tourBackupSettingsTargetKey,
@@ -1832,39 +1810,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       ),
     );
   }
-
-  // Future<void> _showLibraryChangelogDialog(BuildContext context) async {
-  //   final changelogPath = p.join(DatabaseConstants.getDatabaseDirectoryPath(),
-  //       'אודות התוכנה', 'עדכוני ספריה.md');
-  //   final file = File(changelogPath);
-  //   final changelog = (await file.exists())
-  //       ? await file.readAsString()
-  //       : 'קובץ יומן השינויים לא נמצא.';
-  //   if (!context.mounted) return;
-  //   showDialog(
-  //     context: context,
-  //     builder: (ctx) => Directionality(
-  //       textDirection: TextDirection.rtl,
-  //       child: AlertDialog(
-  //         title: const Text('יומן שינויים בספרייה'),
-  //         content: SizedBox(
-  //           width: 600,
-  //           height: 400,
-  //           child: Markdown(
-  //             data: changelog,
-  //             onTapLink: (text, href, title) {
-  //               if (href != null) launchUrl(Uri.parse(href));
-  //             },
-  //           ),
-  //         ),
-  //         actions: [
-  //           TextButton(
-  //               onPressed: () => Navigator.pop(ctx), child: const Text('סגור')),
-  //         ],
-  //       ),
-  //     ),
-  //   );
-  // }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
