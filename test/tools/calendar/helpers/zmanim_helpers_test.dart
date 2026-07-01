@@ -6,6 +6,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'package:otzaria/tools/calendar/helpers/zmanim_helpers.dart';
+import 'package:otzaria/tools/calendar/models/calendar_location.dart';
 
 void main() {
   setUpAll(() {
@@ -17,6 +18,46 @@ void main() {
   // שעות), ולכן קצה טוב להבחנה בין שיטות החישוב.
   final summerDate = DateTime(2026, 6, 15);
   const city = 'ירושלים';
+
+  group('הדלקת נרות — דקות לפי עיר', () {
+    test('קורא את מספר הדקות מטבלת הערים המקומית', () {
+      expect(getCandleLightingMinutes('אופקים'), 20);
+      expect(getCandleLightingMinutes('ביתר עילית'), 40);
+      expect(getCandleLightingMinutes('בני ברק'), 30);
+      expect(getCandleLightingMinutes('רכסים'), 25);
+      expect(getCandleLightingMinutes('ברוקלין'), 18);
+    });
+
+    test('כולל ערים חדשות מהטבלה בנתוני המיקום', () {
+      expect(getCityData('חריש'), isNotNull);
+      expect(getCityData('מירון'), isNotNull);
+      expect(getCityData('רמת בית שמש'), isNotNull);
+      expect(getCityData('ברוקלין'), isNotNull);
+    });
+
+    test('רשימת בחירת הערים כוללת ערים חדשות מהטבלה', () {
+      final cityNames = getCalendarCityNames();
+
+      expect(cityNames, contains('חריש'));
+      expect(cityNames, contains('מירון'));
+      expect(cityNames, contains('רמת בית שמש'));
+      expect(cityNames, contains('ברוקלין'));
+    });
+
+    test('מפחית מהשקיעה את מספר הדקות של העיר', () {
+      final context = buildZmanimCalendarContext(
+        DateTime(2026, 7, 3),
+        'אופקים',
+      )!;
+      final sunset = context.zmanimCalendar.getSunset()!;
+      final candleLighting = calculateCandleLightingTime(
+        context.zmanimCalendar,
+        'אופקים',
+      )!;
+
+      expect(sunset.difference(candleLighting), const Duration(minutes: 20));
+    });
+  });
 
   group('calculateDailyTimes — מפתחות עיקריים', () {
     test('מחזיר את כל וריאנטי עלות השחר (מעלות / שוות / זמניות, 72/90)', () {

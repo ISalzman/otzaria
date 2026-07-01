@@ -7,6 +7,7 @@ import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
+import 'package:otzaria/tools/calendar/models/calendar_location.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -122,8 +123,7 @@ class CalendarSettingsTab extends StatefulWidget {
 }
 
 class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
-  final List<String> _cityNames =
-      cityCoordinates.values.expand((cities) => cities.keys).toList()..sort();
+  final List<String> _cityNames = getCalendarCityNames();
 
   @override
   void initState() {

@@ -265,21 +265,7 @@ DateTime? calculateCandleLightingTime(
     ComplexZmanimCalendar zmanimCalendar, String city) {
   final sunset = zmanimCalendar.getSunset();
   if (sunset == null) return null;
-  int minutesBefore;
-  switch (city) {
-    case 'ירושלים':
-      minutesBefore = 40;
-      break;
-    case 'בני ברק':
-      minutesBefore = 22;
-      break;
-    case 'מודיעין עילית':
-      minutesBefore = 30;
-      break;
-    default:
-      minutesBefore = 30;
-      break;
-  }
+  final minutesBefore = getCandleLightingMinutes(city);
   return sunset.subtract(Duration(minutes: minutesBefore));
 }
 
@@ -1038,8 +1024,7 @@ final List<ZmanDefinition> kZmanimRegistry = [
     title: 'הדלקת נרות',
     category: 'שבת וחג',
     explanation:
-        '''זמן הדלקת נרות — מספר הדקות לפני השקיעה משתנה לפי מנהג העיר '
-        '(ירושלים 40, בני ברק 22, ברירת מחדל 30).''',
+        '''זמן הדלקת נרות — מספר הדקות לפני השקיעה משתנה לפי מנהג העיר; ברירת המחדל היא 30 דקות.''',
     isRelevant: _isErevShabbosOrYomTov,
     isHolidaySpecial: true,
     defaultEnabled: true,
