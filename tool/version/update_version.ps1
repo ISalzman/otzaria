@@ -208,6 +208,20 @@ if (Test-Path $mainDartFile) {
     Write-Warning "File '$mainDartFile' not found! Skipping main.dart update."
 }
 
+# Update macos/Runner.xcodeproj/project.pbxproj (MARKETING_VERSION and CURRENT_PROJECT_VERSION)
+$pbxprojFile = "macos/Runner.xcodeproj/project.pbxproj"
+if (Test-Path $pbxprojFile) {
+    $pbxprojContent = Get-Content $pbxprojFile
+    for ($i = 0; $i -lt $pbxprojContent.Length; $i++) {
+        $pbxprojContent[$i] = $pbxprojContent[$i] -replace 'MARKETING_VERSION = [0-9.]+;', "MARKETING_VERSION = $newVersion;"
+        $pbxprojContent[$i] = $pbxprojContent[$i] -replace 'CURRENT_PROJECT_VERSION = [0-9]+;', "CURRENT_PROJECT_VERSION = $versionCode;"
+    }
+    $pbxprojContent | Set-Content $pbxprojFile -Encoding $Utf8NoBom
+    Write-Host "Updated $pbxprojFile (MARKETING_VERSION=$newVersion, CURRENT_PROJECT_VERSION=$versionCode)"
+} else {
+    Write-Warning "File '$pbxprojFile' not found! Skipping macOS project update."
+}
+
 # Update assets/יומן שינויים.md (Add new version as first item)
 $changelogFile = "assets/יומן שינויים.md"
 # 1. REMOVE the leading `n` from the version line itself
@@ -235,5 +249,8 @@ $filesToStage = @(".gitignore", "pubspec.yaml", "installer/otzaria_full.iss", "i
 if (Test-Path $silentIssFile) { $filesToStage += $silentIssFile }
 if (Test-Path $fullSilentIssFile) { $filesToStage += $fullSilentIssFile }
 git add $filesToStage
+# project.pbxproj is tracked but lives under a path matched by .gitignore (macos/*),
+# so plain `git add` warns — -f forces the add for this already-tracked file.
+if (Test-Path $pbxprojFile) { git add -f $pbxprojFile }
 git commit -m "$newVersion"
 Write-Host "Git commit created for version: $newVersion"
