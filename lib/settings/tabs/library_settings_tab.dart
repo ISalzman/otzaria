@@ -13,8 +13,7 @@ import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
-import 'package:otzaria/settings/panels/library_settings_panel.dart';
-import 'package:otzaria/settings/services/custom_folders/custom_folders_tile.dart';
+import 'package:otzaria/settings/panels/settings_panels_exports.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/dialogs/zip_extraction_progress_dialog.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
@@ -399,7 +398,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                         subtitle:
                             'לאחר הוספת ספרים חדשים לתיקייה קיימת, יש ללחוץ על סמל הרענון.',
                         children: [
-                          const CustomFoldersTile(),
+                          const CustomFoldersPanel(),
                           SettingsActionTile.switchTile(
                             icon: FluentIcons.person_24_regular,
                             title: 'מיזוג ספרים אישיים לעץ הספרייה',

@@ -9,7 +9,7 @@ import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
-import 'package:otzaria/settings/services/custom_folders/custom_folders_tile.dart';
+import 'package:otzaria/settings/panels/custom_folders_panel.dart';
 
 import '../../../helpers/memory_settings_cache.dart';
 
@@ -42,7 +42,7 @@ void main() {
         home: Scaffold(
           body: BlocProvider.value(
             value: bloc,
-            child: const SingleChildScrollView(child: CustomFoldersTile()),
+            child: const SingleChildScrollView(child: CustomFoldersPanel()),
           ),
         ),
       ),
