@@ -384,14 +384,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     }
   }
 
-  Widget? _buildBackupSubtitle() {
+  String? _buildBackupSubtitle() {
     final status = _backupStatus;
     if (status == null) return null;
 
     if (status.lastBackupDate == null) {
-      return const Text(
-        'לא נמצא קובץ גיבוי במערכת. מומלץ ליצור גיבוי כדי לשמור על הנתונים שלך.',
-      );
+      return 'לא נמצא קובץ גיבוי במערכת. מומלץ ליצור גיבוי כדי לשמור על הנתונים שלך.';
     }
 
     final d = status.lastBackupDate!;
@@ -400,13 +398,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
     if (!status.hasSignificantChanges) {
-      return Text(
-        'הנתונים שמורים. הגיבוי האחרון נוצר ב$dateStr בשעה $timeStr.',
-      );
+      return 'הנתונים שמורים. הגיבוי האחרון נוצר ב$dateStr בשעה $timeStr.';
     }
-    return Text(
-      'הגיבוי האחרון מ-$dateStr. ואינו מעודכן, מומלץ ליצור גיבוי ולהגדיר מצב שבועי.',
-    );
+    return 'הגיבוי האחרון מ-$dateStr. ואינו מעודכן, מומלץ ליצור גיבוי ולהגדיר מצב שבועי.';
   }
 
   bool _shouldInclude(String key) =>
@@ -975,12 +969,10 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
             return ExpandableSection(
               icon: FluentIcons.task_list_ltr_24_regular,
-              title: const Text('ניהול דיווחים שמורים'),
-              subtitle: Text(
-                pendingCount == 0
-                    ? 'אין כרגע דיווחים שמורים בתור'
-                    : 'יש כרגע $pendingCount דיווחים שמורים בתור',
-              ),
+              title: 'ניהול דיווחים שמורים',
+              subtitle: pendingCount == 0
+                  ? 'אין כרגע דיווחים שמורים בתור'
+                  : 'יש כרגע $pendingCount דיווחים שמורים בתור',
               hasContent: hasReports,
               onTap: () => setState(
                 () => _isPendingReportsExpanded = !_isPendingReportsExpanded,
@@ -1083,13 +1075,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
             return ExpandableSection(
               icon: FluentIcons.checkmark_circle_24_regular,
-              title: const Text('דיווחים שנשלחו'),
+              title: 'דיווחים שנשלחו',
               hasContent: sentReports.isNotEmpty,
-              subtitle: Text(
-                sentReports.isEmpty
-                    ? 'עדיין אין דיווחים שנשלחו דרך המערכת'
-                    : 'נשמרו ${sentReports.length} דיווחים שנשלחו',
-              ),
+              subtitle: sentReports.isEmpty
+                  ? 'עדיין אין דיווחים שנשלחו דרך המערכת'
+                  : 'נשמרו ${sentReports.length} דיווחים שנשלחו',
               onTap: () => setState(
                 () => _isSentReportsExpanded = !_isSentReportsExpanded,
               ),
@@ -1502,7 +1492,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ExpandableSection(
           headerKey: tourBackupSettingsTargetKey,
           icon: FluentIcons.calendar_clock_24_regular,
-          title: const Text('גיבוי הגדרות ונתונים אישיים'),
+          title: 'גיבוי הגדרות ונתונים אישיים',
           subtitle: _buildBackupSubtitle(),
           onTap: () => setState(() => _isBackupExpanded = !_isBackupExpanded),
           isExpanded: _isBackupExpanded,
@@ -1686,8 +1676,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           iconColor: state.protectedModeEnabled
               ? Theme.of(context).colorScheme.primary
               : null,
-          title: const Text('מצב סייפר'),
-          subtitle: const Text('נעילת הגדרות'),
+          title: 'מצב סייפר',
+          subtitle: 'נעילת הגדרות',
           onTap: () => setState(() => _isCypherExpanded = !_isCypherExpanded),
           isExpanded: _isCypherExpanded,
           children: [

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:otzaria/widgets/misc/expanding_chevron.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 /// שורת כותרת מורחבת עם תוכן המוסתר/מוצג בלחיצה, לשימוש ב-[AppCard.section].
+///
+/// הכותרת נבנית דרך [SettingsActionTile] — כך היא יורשת את אותה גלישת טקסט
+/// (title בשורה אחת עם ellipsis, subtitle גולש לכמה שורות) ואת אותה נפילה
+/// ל-layout אנכי כש-actions לא נכנסים לצד הטקסט.
 ///
 /// מוסיף divider בין הכותרת לתוכן בעת פתיחה, ונמנע מהפער הכפול (3 px)
 /// שנוצר כאשר [AnimatedSize] מכווץ ל-0 בין שני ילדים של [AppCard.section].
@@ -21,8 +25,8 @@ class ExpandableSection extends StatelessWidget {
   /// צבע אופציונלי לאייקון.
   final Color? iconColor;
 
-  final Widget title;
-  final Widget? subtitle;
+  final String title;
+  final String? subtitle;
 
   /// ווידג'ט אופציונלי לפני הצ'בֺרן (לדוגמה: [AppSegmentedControl]).
   final Widget? trailing;
@@ -50,43 +54,35 @@ class ExpandableSection extends StatelessWidget {
   }) : assert(icon == null || rtlIcon == null,
             'העבר icon או rtlIcon — לא שניהם יחד');
 
-  Widget? _buildIcon() {
-    if (rtlIcon != null) return RtlIcon(rtlIcon!, color: iconColor);
-    if (icon != null) return Icon(icon!, color: iconColor);
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final header = ListTile(
+    // onTap לא מועבר ל-tile עצמו — ה-InkWell החיצוני מכסה את כל השורה
+    // (כולל הצ'בֺרן) כדי שהריחוף ייראה כמו ListTile יחיד, בדיוק כמו קודם.
+    final tile = SettingsActionTile.text(
       key: headerKey,
-      leading: _buildIcon(),
-      title: DefaultTextStyle.merge(
-        style: AppTextStyles.settingTitle,
-        child: title,
-      ),
-      subtitle: subtitle != null
-          ? DefaultTextStyle.merge(
-              style: AppTextStyles.settingSubtitle,
-              child: subtitle!,
-            )
-          : null,
-      trailing: trailing != null
-          ? Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                trailing!,
-                if (hasContent) ...[
-                  const SizedBox(width: 12),
-                  ExpandingChevron(isExpanded: isExpanded),
-                ],
-              ],
-            )
-          : hasContent
-              ? ExpandingChevron(isExpanded: isExpanded)
-              : null,
-      onTap: hasContent ? onTap : null,
+      icon: icon,
+      rtlIcon: rtlIcon,
+      iconColor: iconColor,
+      title: title,
+      subtitle: subtitle,
+      actions: trailing != null ? [trailing!] : const [],
     );
+
+    // הצ'בֺרן נשאר מחוץ ל-actions כדי שיישאר קבוע לצד הטקסט (במרכז אנכי),
+    // ולא יגלוש מתחתיו יחד עם trailing כש-SettingsActionTile נופל ל-layout אנכי.
+    final row = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: tile),
+        if (hasContent)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(start: 8, end: 16),
+            child: ExpandingChevron(isExpanded: isExpanded),
+          ),
+      ],
+    );
+
+    final header = hasContent ? InkWell(onTap: onTap, child: row) : row;
 
     return Column(
       mainAxisSize: MainAxisSize.min,

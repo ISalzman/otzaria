@@ -188,9 +188,9 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                   children: [
                     ExpandableSection(
                       icon: FluentIcons.apps_24_regular,
-                      title: const Text('רשימת הכלים'),
-                      subtitle: const Text(
-                          'הסתר כלים מהממשק או הצמד אותם לסרגל הניווט הראשי.'),
+                      title: 'רשימת הכלים',
+                      subtitle:
+                          'הסתר כלים מהממשק או הצמד אותם לסרגל הניווט הראשי.',
                       isExpanded: _builtInExpanded,
                       onTap: () =>
                           setState(() => _builtInExpanded = !_builtInExpanded),

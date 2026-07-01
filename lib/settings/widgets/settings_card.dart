@@ -400,7 +400,7 @@ class SettingsActionTile extends StatelessWidget {
 
   Widget _buildColumnLayout() {
     final iconWidget = _buildIcon();
-    return Padding(
+    final content = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -439,6 +439,14 @@ class SettingsActionTile extends StatelessWidget {
           ],
         ],
       ),
+    );
+    if (onTap == null) return content;
+    // _buildListTile מעביר onTap ל-ListTile; ב-layout האנכי אין ListTile,
+    // אז ה-InkWell הוא מה שמאפשר ללחוץ על השורה (למשל לפתוח ExpandableSection).
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      focusNode: focusNode,
+      child: content,
     );
   }
 
