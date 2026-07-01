@@ -14,7 +14,7 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/services/plugin_installer_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/settings/widgets/custom_switch.dart';
+import 'package:otzaria/widgets/controls/custom_switch.dart';
 
 // ────────────────────────────────────────────────
 // Fakes & helpers
