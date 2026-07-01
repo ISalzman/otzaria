@@ -190,11 +190,8 @@ class MyDatabase {
     // Enable WAL for concurrent read/write access (uniform across all platforms).
     // May fail if another process holds the DB lock (e.g. second instance or stale lock).
     // WAL is an optimisation only — safe to skip on failure.
-    //try {
-    //  db.execute('PRAGMA journal_mode=WAL');
-    //} catch (_) {}
     try {
-      db.execute('PRAGMA journal_mode=TRUNCATE');
+      db.execute('PRAGMA journal_mode=WAL');
     } catch (_) {}
 
     // Ensure schema exists (all scripts use CREATE TABLE/INDEX IF NOT EXISTS).
