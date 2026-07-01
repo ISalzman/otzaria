@@ -38,7 +38,7 @@ class LibrarySettingsTab extends StatefulWidget {
     SettingsSearchEntry(
       id: 'library.location.path',
       title: 'מיקום הספרייה והאינדקס',
-      subtitle: 'התיקייה הראשית שמכילה את הספרים ואת אינדקס החיפוש',
+      subtitle: 'התיקיה שבה נמצאים תיקיות הספרים והאינדקס',
       tab: SettingsTab.library,
       cardId: 'library.repository',
       keywords: ['נתיב', 'תיקיה', 'מאגר', 'אינדקס', 'חיפוש', 'שורש'],
@@ -378,6 +378,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                       SettingsCard(
                         cardId: 'library.repository',
                         title: 'מאגר הספרים',
+                        subtitle: 'התיקיה שבה נמצאים תיקיות הספרים והאינדקס',
                         children: [
                           _buildLibraryLocationWidget(context),
                         ],
