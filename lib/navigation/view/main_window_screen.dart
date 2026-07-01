@@ -2375,6 +2375,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                   message: 'התוכנה בתהליך אינדוקס',
                   detail: 'התקדמות: $processed/$total',
                   progress: progress,
+                  onTap: _openIndexingSettings,
                 ));
               } else {
                 cubit.remove('indexing');
@@ -3117,9 +3118,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                             ),
                           ],
                         ),
-                        WorkStatusOverlay(
-                          onTap: _openIndexingSettings,
-                        ),
+                        const WorkStatusOverlay(),
                         // host נסתר לתוספים שביקשו לרוץ ברקע עם עליית
                         // האפליקציה. הוא חי כל זמן שה-MainWindowScreen קיים,
                         // ולא תלוי במסך "כלים".

@@ -86,6 +86,79 @@ void main() {
       cubit.close();
     });
 
+    testWidgets('לחיצה על פריט עם onTap מפעילה את הפעולה', (tester) async {
+      final cubit = WorkStatusCubit();
+      var tapped = false;
+      cubit.upsert(WorkStatusItem(
+        id: 'indexing',
+        title: 'אינדוקס ספרים',
+        message: 'בתהליך',
+        onTap: () => tapped = true,
+      ));
+
+      await tester.pumpWidget(_wrap(const WorkStatusOverlay(), cubit));
+      await tester.pump();
+
+      await tester.tap(find.text('אינדוקס ספרים'));
+      await tester.pump();
+
+      expect(tapped, isTrue);
+      cubit.close();
+    });
+
+    testWidgets('לחיצה על פריט ללא onTap אינה מנווטת', (tester) async {
+      final cubit = WorkStatusCubit();
+      cubit.upsert(const WorkStatusItem(
+        id: 'library_update',
+        title: 'עדכון ספרייה',
+        message: 'מאמת את הספרייה הנוכחית',
+      ));
+
+      await tester.pumpWidget(_wrap(const WorkStatusOverlay(), cubit));
+      await tester.pump();
+
+      // ה-InkWell העוטף את השורה מושבת (onTap == null) לפריט לא-לחיץ
+      final inkWell = tester.widget<InkWell>(
+        find.ancestor(
+          of: find.text('עדכון ספרייה'),
+          matching: find.byType(InkWell),
+        ),
+      );
+      expect(inkWell.onTap, isNull);
+      cubit.close();
+    });
+
+    testWidgets('לחיצה על שורה לא-לחיצה אינה מפעילה פעולה של פריט אחר',
+        (tester) async {
+      final cubit = WorkStatusCubit();
+      var indexingTapped = false;
+      cubit.upsert(WorkStatusItem(
+        id: 'indexing',
+        title: 'אינדוקס ספרים',
+        message: 'בתהליך',
+        onTap: () => indexingTapped = true,
+      ));
+      cubit.upsert(const WorkStatusItem(
+        id: 'library_update',
+        title: 'עדכון ספרייה',
+        message: 'מאמת',
+      ));
+
+      await tester.pumpWidget(_wrap(const WorkStatusOverlay(), cubit));
+      await tester.pump();
+
+      // לחיצה על השורה של עדכון הספרייה (משנית, ללא onTap) לא מנווטת
+      await tester.tap(find.text('עדכון ספרייה: מאמת'));
+      await tester.pump();
+      expect(indexingTapped, isFalse);
+
+      // לחיצה על שורת האינדוקס כן מפעילה את הפעולה שלה
+      await tester.tap(find.text('אינדוקס ספרים'));
+      await tester.pump();
+      expect(indexingTapped, isTrue);
+      cubit.close();
+    });
+
     testWidgets('dismiss מסתיר את הכרטיס מבלי למחוק משימות', (tester) async {
       final cubit = WorkStatusCubit();
       cubit.upsert(const WorkStatusItem(
