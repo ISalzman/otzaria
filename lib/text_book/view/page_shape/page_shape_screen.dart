@@ -46,6 +46,7 @@ import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
+import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 
 /// קבועים לחישוב רוחב חלוניות המפרשים
 const double _kCommentaryPaneWidthFactor = 0.17;
@@ -108,6 +109,14 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     'bottom': true,
     'bottomRight': true,
   };
+
+  String? get _activeWorkspaceId {
+    try {
+      return context.read<WorkspaceBloc>().state.activeWorkspaceId;
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -267,7 +276,10 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     }
 
     context.read<TextBookBloc>().add(
-          RefreshLinksForCurrentWindow(reason: reason),
+          RefreshLinksForCurrentWindow(
+            reason: reason,
+            workspaceId: _activeWorkspaceId,
+          ),
         );
   }
 
@@ -282,8 +294,10 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       heCategories: state.book.heCategories,
     );
 
-    _columnVisibility =
-        PageShapeSettingsManager.getColumnVisibility(state.book.title);
+    _columnVisibility = PageShapeSettingsManager.getColumnVisibility(
+      state.book.title,
+      workspaceId: _activeWorkspaceId,
+    );
 
     final Map<String, String?> commentators;
     if (config != null) {
@@ -446,7 +460,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
               PageShapeSettingsManager.saveColumnVisibility(
                 blocState.book.title,
                 _columnVisibility,
-                saveAsGlobal: false,
+                scope: _activeDisplaySettingsScope(blocState.book.title),
+                workspaceId: _activeWorkspaceId,
               );
             }
             _openCommentatorSelector('right');
@@ -460,6 +475,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         return _CommentaryPane(
           commentatorName: resolvedSingle,
           openBookCallback: widget.openBookCallback,
+          workspaceId: _activeWorkspaceId,
           selectionSyncController: _selectionSyncController,
           onLoadFailed: () => _hideColumn(
             'right',
@@ -497,7 +513,25 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     );
   }
 
-  /// הסתרת טור - ניתן לבחור אם לשמור גלובלית או רק לספר הנוכחי
+  PageShapeDisplaySettingsScope _activeDisplaySettingsScope(String bookTitle) {
+    return PageShapeSettingsManager.getDisplaySettingsScope(
+      bookTitle,
+      workspaceId: _activeWorkspaceId,
+    );
+  }
+
+  String _hiddenColumnMessage(PageShapeDisplaySettingsScope scope) {
+    switch (scope) {
+      case PageShapeDisplaySettingsScope.book:
+        return 'הטור הוסתר בספר זה. ניתן לשנות בהגדרות צורת הדף.';
+      case PageShapeDisplaySettingsScope.workspace:
+        return 'הטור הוסתר בשולחן העבודה הזה. ניתן לשנות בהגדרות צורת הדף.';
+      case PageShapeDisplaySettingsScope.global:
+        return 'הטור הוסתר בכל הספרים. ניתן לשנות בהגדרות צורת הדף.';
+    }
+  }
+
+  /// הסתרת טור לפי תחום השמירה הפעיל בהגדרות צורת הדף.
   void _hideColumn(
     String column, {
     bool global = true,
@@ -512,13 +546,21 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     });
 
     if (persist) {
+      final scope = global
+          ? _activeDisplaySettingsScope(state.book.title)
+          : PageShapeDisplaySettingsScope.book;
       PageShapeSettingsManager.saveColumnVisibility(
-          state.book.title, _columnVisibility,
-          saveAsGlobal: global);
+        state.book.title,
+        _columnVisibility,
+        scope: scope,
+        workspaceId: _activeWorkspaceId,
+      );
     }
 
     if (showSnack && global && persist) {
-      UiSnack.show('הטור הוסתר בכל הספרים. ניתן לשנות בהגדרות צורת הדף.');
+      UiSnack.show(_hiddenColumnMessage(
+        _activeDisplaySettingsScope(state.book.title),
+      ));
     }
 
     _refreshLinksForCurrentConfiguration(
@@ -714,6 +756,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         currentRight: _rightCommentator,
         currentBottom: _bottomCommentator,
         currentBottomRight: _bottomRightCommentator,
+        currentWorkspaceId: _activeWorkspaceId,
         // עדכון חי: כל שינוי בדיאלוג נטען מיד למסך שמאחוריו
         onSettingsChanged: () => _loadConfiguration(),
       ),
@@ -854,6 +897,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                     _leftCommentator!,
                                                 openBookCallback:
                                                     widget.openBookCallback,
+                                                workspaceId: _activeWorkspaceId,
                                                 selectionSyncController:
                                                     _selectionSyncController,
                                                 onLoadFailed: () => _hideColumn(
@@ -886,7 +930,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                         .saveColumnVisibility(
                                                       state.book.title,
                                                       _columnVisibility,
-                                                      saveAsGlobal: false,
+                                                      scope:
+                                                          _activeDisplaySettingsScope(
+                                                        state.book.title,
+                                                      ),
+                                                      workspaceId:
+                                                          _activeWorkspaceId,
                                                     );
                                                   }
                                                   _openCommentatorSelector(
@@ -1042,7 +1091,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                         .saveColumnVisibility(
                                                       state.book.title,
                                                       _columnVisibility,
-                                                      saveAsGlobal: false,
+                                                      scope:
+                                                          _activeDisplaySettingsScope(
+                                                        state.book.title,
+                                                      ),
+                                                      workspaceId:
+                                                          _activeWorkspaceId,
                                                     );
                                                   }
                                                   _openCommentatorSelector(
@@ -1118,6 +1172,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                                 _bottomCommentator!,
                                                             openBookCallback: widget
                                                                 .openBookCallback,
+                                                            workspaceId:
+                                                                _activeWorkspaceId,
                                                             isBottom: true,
                                                             selectionSyncController:
                                                                 _selectionSyncController,
@@ -1170,6 +1226,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                               _bottomRightCommentator!,
                                                           openBookCallback: widget
                                                               .openBookCallback,
+                                                          workspaceId:
+                                                              _activeWorkspaceId,
                                                           isBottom: true,
                                                           selectionSyncController:
                                                               _selectionSyncController,
@@ -1224,6 +1282,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                               _bottomCommentator!,
                                                           openBookCallback: widget
                                                               .openBookCallback,
+                                                          workspaceId:
+                                                              _activeWorkspaceId,
                                                           isBottom: true,
                                                           selectionSyncController:
                                                               _selectionSyncController,
@@ -1271,6 +1331,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 class _CommentaryPane extends StatefulWidget {
   final String commentatorName;
   final Function(OpenedTab) openBookCallback;
+  final String? workspaceId;
   final bool isBottom; // האם זה מפרש תחתון (גופן ייעודי מדיאלוג ההגדרות)
   final VoidCallback? onLoadFailed;
   final SelectionSyncController? selectionSyncController;
@@ -1278,6 +1339,7 @@ class _CommentaryPane extends StatefulWidget {
   const _CommentaryPane({
     required this.commentatorName,
     required this.openBookCallback,
+    this.workspaceId,
     this.isBottom = false,
     this.onLoadFailed,
     this.selectionSyncController,
@@ -1348,6 +1410,9 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       // אם המפרש לא השתנה, רק עדכן הדגשות
       _updateHighlightSettings();
     }
+    if (oldWidget.workspaceId != widget.workspaceId) {
+      _updateHighlightSettings();
+    }
   }
 
   @override
@@ -1360,8 +1425,10 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   void _updateHighlightSettings() {
     final state = context.read<TextBookBloc>().state;
     if (state is TextBookLoaded) {
-      final newHighlightEnabled =
-          PageShapeSettingsManager.getHighlightSetting(state.book.title);
+      final newHighlightEnabled = PageShapeSettingsManager.getHighlightSetting(
+        state.book.title,
+        workspaceId: widget.workspaceId,
+      );
       final highlightChanged = newHighlightEnabled != _highlightEnabled;
       _highlightEnabled = newHighlightEnabled;
       // עדכון הדגשות - גם בטעינה ראשונית וגם כשההגדרה משתנה

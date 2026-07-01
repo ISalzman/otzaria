@@ -114,6 +114,49 @@ void main() {
       );
     });
 
+    test('resolveFileBookPathForTesting מתקן נתיב PDF ישן לפי הספרייה הפעילה',
+        () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_pdf_path');
+      final activeLibrary = path.join(tempDir.path, 'new', 'books');
+      final stalePath = path.join(
+        tempDir.path,
+        'old',
+        'books',
+        DatabaseConstants.talmudBavliFolderName,
+        'ברכות.pdf',
+      );
+      final activePath = path.join(
+        activeLibrary,
+        DatabaseConstants.talmudBavliFolderName,
+        'ברכות.pdf',
+      );
+      final previousLibraryPath =
+          Settings.getValue<String>(SettingsRepository.keyLibraryPath);
+
+      addTearDown(() async {
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryPath,
+          previousLibraryPath ?? '',
+        );
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      await Directory(path.dirname(activePath)).create(recursive: true);
+      await File(activePath).writeAsBytes([1]);
+      await Settings.setValue<String>(
+        SettingsRepository.keyLibraryPath,
+        activeLibrary,
+      );
+
+      final resolved = DatabaseLibraryProvider.instance
+          .resolveFileBookPathForTesting(stalePath);
+
+      expect(resolved, activePath);
+    });
+
     test('loadBookLinksRowsForTesting טוען קישורים דרך sqlite ב-isolate worker',
         () async {
       final tempDir = await Directory.systemTemp.createTemp('otzaria_db_links');
@@ -221,7 +264,7 @@ void main() {
         db.execute(
             'CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT, orderIndex INTEGER)');
         db.execute(
-            'CREATE TABLE line (id INTEGER PRIMARY KEY, lineIndex INTEGER, heRef TEXT)');
+            'CREATE TABLE line (id INTEGER PRIMARY KEY, bookId INTEGER, lineIndex INTEGER, heRef TEXT)');
         db.execute(
             'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
         db.execute(
@@ -234,13 +277,13 @@ void main() {
         db.execute(
             "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (3, 'מפרש ב', 8, 'txt', 2)");
         db.execute(
-            "INSERT INTO line (id, lineIndex, heRef) VALUES (10, 4, 'ד')");
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (10, 1, 4, 'ד')");
         db.execute(
-            "INSERT INTO line (id, lineIndex, heRef) VALUES (11, 40, 'מ')");
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (11, 1, 40, 'מ')");
         db.execute(
-            "INSERT INTO line (id, lineIndex, heRef) VALUES (20, 0, 'א')");
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (20, 2, 0, 'א')");
         db.execute(
-            "INSERT INTO line (id, lineIndex, heRef) VALUES (21, 1, 'ב')");
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (21, 3, 1, 'ב')");
         db.execute(
             "INSERT INTO connection_type (id, name) VALUES (5, 'reference')");
         db.execute(
@@ -276,7 +319,7 @@ void main() {
         db.execute(
             'CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT, orderIndex INTEGER)');
         db.execute(
-            'CREATE TABLE line (id INTEGER PRIMARY KEY, lineIndex INTEGER, heRef TEXT)');
+            'CREATE TABLE line (id INTEGER PRIMARY KEY, bookId INTEGER, lineIndex INTEGER, heRef TEXT)');
         db.execute(
             'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
         db.execute(
@@ -289,13 +332,13 @@ void main() {
         db.execute(
             "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (3, 'מפרש ב', 8, 'txt', 2)");
         db.execute(
-            "INSERT INTO line (id, lineIndex, heRef) VALUES (10, 4, 'ד')");
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (10, 1, 4, 'ד')");
         db.execute(
-            "INSERT INTO line (id, lineIndex, heRef) VALUES (11, 5, 'ה')");
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (11, 1, 5, 'ה')");
         db.execute(
-            "INSERT INTO line (id, lineIndex, heRef) VALUES (20, 0, 'א')");
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (20, 2, 0, 'א')");
         db.execute(
-            "INSERT INTO line (id, lineIndex, heRef) VALUES (21, 1, 'ב')");
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (21, 3, 1, 'ב')");
         db.execute(
             "INSERT INTO connection_type (id, name) VALUES (5, 'COMMENTARY')");
         db.execute(

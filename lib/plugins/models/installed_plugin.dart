@@ -73,8 +73,8 @@ class InstalledPlugin {
   String get resolvedRootPath =>
       sourceType == 'development' ? devRootPath! : installPath;
 
-  /// האם התוסף מצהיר על שימוש ברשת. תוסף כזה מוסתר מהממשק כאשר אוצריא נמצאת
-  /// במצב 'מנותק' (`SettingsState.isOfflineMode`).
+  /// האם התוסף מצהיר על שימוש ברשת. תוסף כזה מוסתר מהממשק במצב 'מנותק'
+  /// (`SettingsState.isOfflineMode`) רק אם [networkAccessGranted] דלוק.
   bool get requiresNetwork => manifest.networkEnabled;
 
   InstalledPlugin({
@@ -118,10 +118,8 @@ class InstalledPlugin {
           ((map['allow_order_before_built_ins_granted'] as int?) ??
                   (manifest.allowOrderBeforeBuiltIns ? 1 : 0)) !=
               0,
-      networkAccessGranted:
-          ((map['network_access_granted'] as int?) ?? 0) != 0,
-      runOnStartupGranted:
-          ((map['run_on_startup_granted'] as int?) ?? 0) != 0,
+      networkAccessGranted: ((map['network_access_granted'] as int?) ?? 0) != 0,
+      runOnStartupGranted: ((map['run_on_startup_granted'] as int?) ?? 0) != 0,
       manifest: manifest,
       installedAt: DateTime.parse(map['installed_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
@@ -202,11 +200,12 @@ class InstalledPlugin {
   }
 }
 
-/// סינון תוספים לפי מצב 'מנותק' של אוצריא — תוספים שדורשים אינטרנט מוסתרים
-/// מהממשק כאשר המשתמש הפעיל את מצב 'מנותק'.
+/// סינון תוספים לפי מצב 'מנותק' של אוצריא — תוסף שדורש אינטרנט מוסתר מהממשק
+/// במצב 'מנותק' רק אם הרשאת הרשת שלו הוענקה בפועל; אם המשתמש כיבה אותה
+/// התוסף אינו ניגש לרשת, ולכן ממשיך להופיע.
 extension OfflineModePluginFilter on List<InstalledPlugin> {
   List<InstalledPlugin> filterForOfflineMode(bool isOfflineMode) {
     if (!isOfflineMode) return this;
-    return where((p) => !p.requiresNetwork).toList();
+    return where((p) => !p.requiresNetwork || !p.networkAccessGranted).toList();
   }
 }

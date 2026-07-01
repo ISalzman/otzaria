@@ -11,7 +11,6 @@ import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
-import 'package:otzaria/search/magic_dictionary_downloader.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/download_eta_estimator.dart';
 import 'package:otzaria/utils/file/zip_extractor_service.dart';
@@ -677,6 +676,19 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           isTar: false,
           outputFileName: DatabaseConstants.externalCatalogDatabaseFileName,
         ),
+        // מילון החיפוש המקורב — אינו דחוס ו-best-effort: כשל אינו חוסם כניסה
+        // לספרייה (החיפוש המקורב יפעל ללא הרחבה מורפולוגית).
+        _DownloadAsset(
+          url:
+              'https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db',
+          tempFileName: 'otzaria_lexical.db',
+          downloadTitle: 'מוריד מילון לחיפוש המקורב',
+          extractTitle: 'מתקין מילון לחיפוש המקורב',
+          isTar: false,
+          outputFileName: 'lexical.db',
+          isCompressed: false,
+          optional: true,
+        ),
       ];
 
       emit(const EmptyLibraryDownloading(
@@ -687,9 +699,15 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       // פתרון redirect-ים מראש (package:http מאבד את ה-Range בעת redirect) +
       // קריאת גודל כל קובץ דחוס, לחישוב פס התקדמות וזמן משוער מאוחדים.
       for (final asset in assets) {
-        final resolved = await _resolveRedirectWithSize(asset.url);
-        asset.resolvedUrl = resolved.url;
-        asset.compressedSize = resolved.size;
+        try {
+          final resolved = await _resolveRedirectWithSize(asset.url);
+          asset.resolvedUrl = resolved.url;
+          asset.compressedSize = resolved.size;
+        } catch (e) {
+          if (!asset.optional) rethrow;
+          debugPrint('פתרון כתובת ${asset.tempFileName} (אופציונלי) נכשל: $e');
+          asset.skipped = true;
+        }
       }
       final grandTotal =
           assets.fold<int>(0, (sum, a) => sum + a.compressedSize);
@@ -710,30 +728,54 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         await libraryDir.create(recursive: true);
       }
 
-      // שלב 1 — הורדת שלושת הקבצים יחד (פס וזמן משוער מאוחדים)
+      // שלב 1 — הורדת כל הקבצים יחד (פס וזמן משוער מאוחדים)
       final etaEstimator = DownloadEtaEstimator();
       var downloadedBase = 0;
       for (final asset in assets) {
-        await _downloadAsset(
-          asset: asset,
-          cumulativeBase: downloadedBase,
-          grandTotal: grandTotal,
-          estimator: etaEstimator,
-          emit: emit,
-        );
+        if (!asset.skipped) {
+          try {
+            await _downloadAsset(
+              asset: asset,
+              cumulativeBase: downloadedBase,
+              grandTotal: grandTotal,
+              estimator: etaEstimator,
+              emit: emit,
+            );
+          } catch (e) {
+            if (!asset.optional) rethrow;
+            debugPrint('הורדת ${asset.tempFileName} (אופציונלי) נכשלה: $e');
+            asset.skipped = true;
+          }
+        }
         downloadedBase += asset.compressedSize;
+        // נכס אופציונלי שדולג/נכשל לא פלט את המשקל שלו — משלימים את הפס כדי
+        // שלא ייתקע מתחת ל-100% לפני המעבר לחילוץ (best-effort: שקוף למשתמש).
+        if (asset.skipped && grandTotal > 0) {
+          emit(EmptyLibraryDownloading(
+            progress: (downloadedBase / grandTotal).clamp(0.0, 1.0),
+            message: asset.downloadTitle,
+          ));
+        }
       }
 
-      // שלב 2 — חילוץ שלושת הקבצים יחד (פס מאוחד, משוקלל לפי הגודל הדחוס)
+      // שלב 2 — חילוץ כל הקבצים יחד (פס מאוחד, משוקלל לפי הגודל הדחוס)
       var extractBase = 0;
       for (final asset in assets) {
-        await _extractAsset(
-          asset: asset,
-          weightBase: extractBase,
-          totalWeight: grandTotal,
-          outputDir: libraryPath,
-          emit: emit,
-        );
+        if (!asset.skipped) {
+          try {
+            await _extractAsset(
+              asset: asset,
+              weightBase: extractBase,
+              totalWeight: grandTotal,
+              outputDir: libraryPath,
+              emit: emit,
+            );
+          } catch (e) {
+            if (!asset.optional) rethrow;
+            debugPrint('חילוץ ${asset.tempFileName} (אופציונלי) נכשל: $e');
+            asset.skipped = true;
+          }
+        }
         extractBase += asset.compressedSize;
       }
 
@@ -748,10 +790,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       // ניקוי override Android — ה-DB החדש נמצא ישירות בספרייה
       await Settings.setValue(SettingsRepository.keyDbEffectivePath, '');
 
-      // שלב 3 — הורדת מילון המורפולוגיה (lexical.db) לחיפוש המקורב. רץ אחרי
-      // שמירת keyLibraryPath כי נתיב היעד נגזר ממנו (getMagicDictionaryPath).
-      await _downloadMagicDictionary(emit);
-
       emit(EmptyLibraryDirectorySelected(selectedPath: libraryPath));
     } catch (e) {
       // קבצי ה-temp נשמרים בכוונה — ישמשו ל-resume בניסיון הבא
@@ -759,26 +797,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         errorMessage:
             'שגיאה בהורדה: $e\nניתן ללחוץ שוב כדי להמשיך מהנקודה שנעצרה.',
       ));
-    }
-  }
-
-  /// מוריד את מילון המורפולוגיה (`lexical.db`) דרך [MagicDictionaryDownloader].
-  /// best-effort: כשל אינו עוצר את כניסת המשתמש לספרייה — החיפוש המקורב פשוט
-  /// יפעל ללא הרחבה מורפולוגית. משתף את ה-http client של ה-bloc (לא נסגר
-  /// ב-dispose כי הבעלות נשארת אצל ה-bloc).
-  Future<void> _downloadMagicDictionary(Emitter<EmptyLibraryState> emit) async {
-    const message = 'מוריד מילון מורפולוגי לחיפוש המקורב';
-    emit(const EmptyLibraryDownloading(progress: 0.0, message: message));
-    final downloader = MagicDictionaryDownloader(client: _httpClient);
-    try {
-      await downloader.ensureLatest(
-        onProgress: (progress) =>
-            emit(EmptyLibraryDownloading(progress: progress, message: message)),
-      );
-    } catch (e) {
-      debugPrint('הורדת המילון המורפולוגי נכשלה: $e');
-    } finally {
-      downloader.dispose();
     }
   }
 
@@ -925,6 +943,10 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
     if (asset.isTar) {
       await _extractTarArchive(tempPath, outputDir, report);
+    } else if (!asset.isCompressed) {
+      // קובץ לא דחוס (lexical.db) — מועתק מ-temp ליעד ללא חילוץ.
+      await File(tempPath).copy(path.join(outputDir, asset.outputFileName!));
+      report(1.0);
     } else {
       final outputPath = path.join(outputDir, asset.outputFileName!);
 
@@ -1080,6 +1102,8 @@ class _DownloadAsset {
     required this.isTar,
     this.outputFileName,
     this.isMainDb = false,
+    this.isCompressed = true,
+    this.optional = false,
   });
 
   /// כתובת ההורדה (לפני פתרון redirect).
@@ -1104,11 +1128,20 @@ class _DownloadAsset {
   /// קבצי WAL/SHM ישנים לפני החילוץ.
   final bool isMainDb;
 
+  /// `false` → הקובץ אינו דחוס (lexical.db); בשלב החילוץ הוא רק מועתק ליעד.
+  final bool isCompressed;
+
+  /// `true` → best-effort: כשל בהורדה/חילוץ אינו מפיל את כל התהליך.
+  final bool optional;
+
   /// ה-URL הסופי לאחר פתרון redirect (נקבע בזמן ריצה).
   String? resolvedUrl;
 
   /// גודל הקובץ הדחוס בבייטים (נקבע בזמן ריצה מ-Content-Length).
   int compressedSize = 0;
+
+  /// סומן לדילוג לאחר כשל best-effort (resolve/download) — מונע ניסיון חילוץ.
+  bool skipped = false;
 }
 
 /// מייצג asset של DB דחוס מתוך GitHub Release.

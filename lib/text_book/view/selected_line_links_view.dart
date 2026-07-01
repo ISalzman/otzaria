@@ -52,12 +52,18 @@ String normalizeSelectedLinkText(String text) {
 
 @visibleForTesting
 String buildSelectedLinkContentKey(Link link) {
-  return '${link.path2}_${link.index2}';
+  // זהות היעד (אישי/רשמי+קטגוריה) נכללת כדי שלא יתערבב תוכן בין שני קישורים
+  // לאותה כותרת ואינדקס — אחד אישי ואחד רשמי.
+  final target =
+      '${link.targetIsUserBook ? 'u' : 'o'}_${link.targetCategoryId ?? ''}';
+  return '${link.path2}_${link.index2}_$target';
 }
 
 @visibleForTesting
 String buildSelectedLinkInstanceKey(Link link) {
-  return '${link.path2}_${link.index1}_${link.index2}_${link.heRef}_${link.start}_${link.end}_${link.connectionType}';
+  final target =
+      '${link.targetIsUserBook ? 'u' : 'o'}_${link.targetCategoryId ?? ''}';
+  return '${link.path2}_${link.index1}_${link.index2}_${link.heRef}_${link.start}_${link.end}_${link.connectionType}_$target';
 }
 
 @visibleForTesting
@@ -564,6 +570,9 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
                     TextBookTab(
                       book: TextBook(
                         title: utils.getTitleFromPath(link.path2),
+                        isUserBook: link.targetIsUserBook,
+                        categoryId: link.targetCategoryId,
+                        fileType: link.targetFileType,
                       ),
                       index: link.index2 - 1,
                       openLeftPane:

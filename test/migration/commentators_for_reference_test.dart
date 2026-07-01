@@ -94,13 +94,14 @@ void main() {
     required int sourceLineId,
     required int targetBookId,
     required int targetLineId,
+    String connectionTypeName = 'COMMENTARY',
   }) async {
     // עוקפים את `repository.insertLink` הציבורי: הוא משתמש ב-`enum.name`
     // (lowercase "commentary") בעוד `initializeConnectionTypes` מכניס
     // "COMMENTARY" (uppercase) — שזה מה שהשאילתה מחפשת. אנו מחברים את
-    // ה-link ישירות ל-id של "COMMENTARY" שכבר קיים.
+    // ה-link ישירות ל-id של סוג הקישור הרצוי.
     final connectionTypeId =
-        await repository.getOrCreateConnectionType('COMMENTARY');
+        await repository.getOrCreateConnectionType(connectionTypeName);
     await database.linkDao.insertLink(
       Link(
         id: 0,
@@ -251,6 +252,31 @@ void main() {
       );
 
       expect(rows, isEmpty);
+    });
+
+    test('עין משפט אינו חוזר כמפרש', () async {
+      final source = await buildSourceBook();
+      final rashi = await buildRashiBook();
+
+      await insertCommentaryLink(
+        sourceBookId: source.bookId,
+        sourceLineId: source.lineIds[0],
+        targetBookId: rashi.bookId,
+        targetLineId: rashi.lineIds[0],
+        connectionTypeName: 'EIN_MISHPAT',
+      );
+
+      final dafDLineId = await tocLineIdByText(source.bookId, "דף ד");
+      final rows = await repository.getCommentatorsForReference(
+        bookId: source.bookId,
+        bookTitle: 'ברכות',
+        sourceLineId: dafDLineId,
+        startLineIndex: 0,
+        level: 2,
+      );
+
+      expect(rows, isEmpty,
+          reason: 'עין משפט צריך להופיע בפאנל הקישורים, לא ברשימת המפרשים');
     });
 
     test('ספר עם כותרות פנימיות + sourceLineId=0 → ריק (יש לבחור דף)',

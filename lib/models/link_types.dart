@@ -18,7 +18,7 @@ class LinkTypes {
   static const String other = 'OTHER';
 
   /// סוגי קישור תלויי-טקסט — טקסטים שתלויים בטקסט הבסיס (פירוש/תרגום/מדרש
-  /// וכד׳) ומוצגים בפאנל המפרשים. תואם את הסינון של היוצר ל-SOURCE ההפוך.
+  /// וכד׳) ומוצגים בפאנל המפרשים. "עין משפט" הוא כלי הפניה ולכן מוצג בקישורים.
   static const Set<String> dependentTextTypes = {
     commentary,
     superCommentary,
@@ -26,7 +26,6 @@ class LinkTypes {
     midrash,
     parshanut,
     diburHamatchil,
-    einMishpat,
   };
 
   /// האם הקישור הוא תלוי-טקסט (מפרש) — מוצג בפאנל המפרשים ולא כהפניה צדדית.
@@ -39,7 +38,8 @@ class LinkTypes {
   }
 
   /// האם הקישור הוא קשר עיון/הפניה (לא מפרש ולא SOURCE הווירטואלי):
-  /// reference, quotation, mesorat hashas, mishnah in talmud, related, other.
+  /// reference, quotation, mesorat hashas, ein mishpat, mishnah in talmud,
+  /// related, other.
   static bool isReferenceLikeLink(String? connectionType) {
     if (connectionType == null) return false;
     final upper = connectionType.toUpperCase();

@@ -389,6 +389,19 @@ jobs:
             Remove-Item -Path "installer\7zip_tmp" -Recurse -Force
             Remove-Item -Path "installer\7zr.exe" -Force
             Write-Host "zstd.exe and 7za.exe prepared successfully"
+
+            # מילון המורפולוגיה (lexical.db) של החיפוש המקורב. ב-release הוא אינו
+            # דחוס, לכן דוחסים כאן עם zstd שכבר הוכן, כדי שה-installer יחלץ אותו
+            # כמו שאר מסדי הנתונים.
+            Write-Host "Downloading morphology dictionary (lexical.db) from Otzaria/SeforimMagicIndexer..."
+            Invoke-WebRequest -Uri "https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db" -OutFile "installer\library_db\lexical.db" -UseBasicParsing
+            & "installer\zstd.exe" -19 --long=31 -T0 -f "installer\library_db\lexical.db" -o "installer\library_db\lexical.db.zst"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::Failed to compress lexical.db"
+              exit 1
+            }
+            Remove-Item -Path "installer\library_db\lexical.db" -Force
+            Write-Host "Morphology dictionary compressed successfully"
           }
           catch {
             Write-Host "::error::Failed to download library: $_"
@@ -595,6 +608,7 @@ jobs:
           curl -L --fail https://github.com/Otzaria/SeforimLibrary/releases/latest/download/seforim.db.zst -o full_installer/library_db/seforim.db.zst
           curl -L --fail https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst -o full_installer/library_db/otzar-HB_catalog.db.zst
           curl -L --fail https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o full_installer/library_db/talmud_bavli_latest.tar.zst
+          curl -L --fail https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o full_installer/library_db/lexical.db
       
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
@@ -778,6 +792,8 @@ jobs:
           zstd -d -c --long=31 --memory=2048MB full_installer/library_db/seforim.db.zst > "$BUNDLE_ROOT/אוצריא/seforim.db"
           zstd -d -c --long=31 --memory=2048MB full_installer/library_db/otzar-HB_catalog.db.zst > "$BUNDLE_ROOT/אוצריא/otzar-HB_catalog.db"
           zstd -d -c --long=31 --memory=2048MB full_installer/library_db/talmud_bavli_latest.tar.zst | tar -xf - -C "$BUNDLE_ROOT/אוצריא"
+          # מילון החיפוש המקורב (lexical.db) — אינו דחוס, מועתק כמות שהוא ליד seforim.db.
+          cp full_installer/library_db/lexical.db "$BUNDLE_ROOT/אוצריא/lexical.db"
           # קובץ marker שמסמן לאפליקציה שהתיקייה היא ספרייה מצורפת של חבילת FULL.
           # ראה lib/core/app_paths.dart → _detectBundledLibraryPath.
           touch "$BUNDLE_ROOT/אוצריא/.otzaria_bundled_library"
@@ -1007,6 +1023,7 @@ jobs:
           curl -L --fail https://github.com/Otzaria/SeforimLibrary/releases/latest/download/seforim.db.zst -o full_installer/library_db/seforim.db.zst
           curl -L --fail https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst -o full_installer/library_db/otzar-HB_catalog.db.zst
           curl -L --fail https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o full_installer/library_db/talmud_bavli_latest.tar.zst
+          curl -L --fail https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o full_installer/library_db/lexical.db
       
       - name: Build Android APK
         env:
@@ -1178,6 +1195,7 @@ jobs:
           curl -L --fail https://github.com/Otzaria/SeforimLibrary/releases/latest/download/seforim.db.zst -o full_installer/library_db/seforim.db.zst
           curl -L --fail https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst -o full_installer/library_db/otzar-HB_catalog.db.zst
           curl -L --fail https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o full_installer/library_db/talmud_bavli_latest.tar.zst
+          curl -L --fail https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o full_installer/library_db/lexical.db
 
       - name: Verify Universal Binary
         run: |
@@ -1265,6 +1283,8 @@ jobs:
           zstd -d -c --long=31 --memory=2048MB full_installer/library_db/seforim.db.zst > "$BUNDLE_ROOT/אוצריא/seforim.db"
           zstd -d -c --long=31 --memory=2048MB full_installer/library_db/otzar-HB_catalog.db.zst > "$BUNDLE_ROOT/אוצריא/otzar-HB_catalog.db"
           zstd -d -c --long=31 --memory=2048MB full_installer/library_db/talmud_bavli_latest.tar.zst | tar -xf - -C "$BUNDLE_ROOT/אוצריא"
+          # מילון החיפוש המקורב (lexical.db) — אינו דחוס, מועתק כמות שהוא ליד seforim.db.
+          cp full_installer/library_db/lexical.db "$BUNDLE_ROOT/אוצריא/lexical.db"
           # קובץ marker שמסמן לאפליקציה שהתיקייה היא ספרייה מצורפת של חבילת FULL.
           # ראה lib/core/app_paths.dart → _detectBundledLibraryPath.
           touch "$BUNDLE_ROOT/אוצריא/.otzaria_bundled_library"

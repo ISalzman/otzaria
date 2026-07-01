@@ -28,6 +28,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/utils/file/docx_to_otzaria.dart';
 import 'package:otzaria/utils/file/docx_cache.dart';
+import 'package:otzaria/utils/file/file_book_path_resolver.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -279,11 +280,44 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
   final types = LinkTypes.dependentTextTypes.toList();
   final typePlaceholders = List.filled(types.length, '?').join(', ');
   final hasRange = startLineIndex != null && endLineIndex != null;
-  final params = <Object?>[
-    bookId,
-    if (hasRange) ...[startLineIndex, endLineIndex],
-    ...types,
-  ];
+
+  if (hasRange) {
+    // כשיש טווח: מוצאים תחילה את ה-line IDs בטווח דרך idx_line_book_index,
+    // ואז מחפשים links לפי targetLineId דרך idx_link_target_line — הרבה יותר
+    // יעיל מאשר לסרוק את כל ה-links של הספר (עשרות אלפים לספרי בסיס כגון
+    // תורה / ש"ס) ולסנן לפי lineIndex בדיעבד.
+    final params = <Object?>[
+      bookId,
+      startLineIndex,
+      endLineIndex,
+      bookId,
+      ...types,
+    ];
+    return db.select('''
+        SELECT
+          tl.lineIndex as sourceLineIndex,
+          sl.lineIndex as targetLineIndex,
+          sl.heRef as targetLineHeRef,
+          sb.title as targetBookTitle,
+          sb.categoryId as targetCategoryId,
+          NULL as targetFileType,
+          'SOURCE' as connectionTypeName
+        FROM link l
+        JOIN line tl ON l.targetLineId = tl.id
+        JOIN line sl ON l.sourceLineId = sl.id
+        JOIN book sb ON l.sourceBookId = sb.id
+        JOIN connection_type ct ON l.connectionTypeId = ct.id
+        WHERE l.targetLineId IN (
+          SELECT id FROM line WHERE bookId = ? AND lineIndex BETWEEN ? AND ?
+        )
+          AND l.targetBookId = ?
+          AND ct.name IN ($typePlaceholders)
+          AND l.sourceBookId != l.targetBookId
+        ORDER BY tl.lineIndex
+      ''', params).toMapList();
+  }
+
+  final params = <Object?>[bookId, ...types];
   return db.select('''
       SELECT
         tl.lineIndex as sourceLineIndex,
@@ -299,7 +333,6 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
       JOIN book sb ON l.sourceBookId = sb.id
       JOIN connection_type ct ON l.connectionTypeId = ct.id
       WHERE l.targetBookId = ?
-        ${hasRange ? 'AND tl.lineIndex BETWEEN ? AND ?' : ''}
         AND ct.name IN ($typePlaceholders)
         AND l.sourceBookId != l.targetBookId
       ORDER BY tl.lineIndex
@@ -391,7 +424,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
       parameters.addAll(targetBookTitles);
     }
 
-    // תנאי הפילטר ("מפרש" = אחד מ-7 הסוגים התלויים, כולל SUPER_COMMENTARY/
+    // תנאי הפילטר ("מפרש" = אחד מסוגי הטקסט התלויים, כולל SUPER_COMMENTARY/
     // MIDRASH וכו', לא רק COMMENTARY/TARGUM):
     // null     → ללא פילטר (כל הקישורים)
     // ריק      → רק קישורים שאינם מפרשים (REFERENCE וכד׳)
@@ -2361,11 +2394,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
 
     if (filePath != null && fileType == 'pdf') {
+      final resolvedFilePath = resolveMovedFileBookPath(filePath);
       return PdfBook(
         id: id,
         title: title,
         category: category,
-        path: filePath,
+        path: resolvedFilePath,
+        filePath: resolvedFilePath,
         author: author,
         heShortDesc: metaHeShortDesc,
         pubDate: pubDate,
@@ -2379,11 +2414,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
 
     if (filePath != null && fileType == 'docx') {
+      final resolvedFilePath = resolveMovedFileBookPath(filePath);
       return DocxBook(
         id: id,
         title: title,
         category: category,
-        path: filePath,
+        path: resolvedFilePath,
+        filePath: resolvedFilePath,
         author: author,
         heShortDesc: metaHeShortDesc,
         pubDate: pubDate,
@@ -2411,6 +2448,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
       isUserBook: isUserBook,
     );
   }
+
+  @visibleForTesting
+  String resolveFileBookPathForTesting(String filePath) =>
+      resolveMovedFileBookPath(filePath);
 
   /// Counts the total number of categories in the tree.
   int _countCategories(Category category) {
@@ -2569,6 +2610,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     try {
       final resolvedBook = await BookDatabaseResolver.resolveBook(
         title: targetTitle,
+        preferUserBooks: link.targetIsUserBook,
       );
       if (resolvedBook == null) return 'שגיאה: הספר לא נמצא במסד הנתונים';
 

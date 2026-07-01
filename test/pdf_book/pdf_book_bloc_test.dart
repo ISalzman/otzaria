@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/memory_settings_cache.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
@@ -15,6 +16,7 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:path/path.dart' as path;
 import 'package:pdfrx/pdfrx.dart';
 
 // ─── fakes ───────────────────────────────────────────────────────────────────
@@ -141,6 +143,57 @@ void main() {
         expect(s.book.title, 'ספר בדיקה');
       },
     );
+
+    test('מתקן נתיב PDF ישן לפי הספרייה הפעילה לפני בדיקת קיום', () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_pdf_bloc_path');
+      final activeLibrary = path.join(tempDir.path, 'new', 'books');
+      final stalePath = path.join(
+        tempDir.path,
+        'old',
+        'books',
+        DatabaseConstants.talmudBavliFolderName,
+        'ברכות.pdf',
+      );
+      final activePath = path.join(
+        activeLibrary,
+        DatabaseConstants.talmudBavliFolderName,
+        'ברכות.pdf',
+      );
+      final previousLibraryPath =
+          Settings.getValue<String>(SettingsRepository.keyLibraryPath);
+
+      addTearDown(() async {
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryPath,
+          previousLibraryPath ?? '',
+        );
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      await Directory(path.dirname(activePath)).create(recursive: true);
+      await File(activePath).writeAsBytes([1]);
+      await Settings.setValue<String>(
+        SettingsRepository.keyLibraryPath,
+        activeLibrary,
+      );
+
+      final tab = PdfBookTab(
+        book: PdfBook(title: 'ברכות', path: stalePath),
+        pageNumber: 1,
+      );
+      final bloc = _makeBloc(tab);
+      addTearDown(bloc.close);
+
+      bloc.add(const LoadPdfDocument());
+      final loading = await bloc.stream.firstWhere(
+        (state) => state is PdfBookLoading,
+      ) as PdfBookLoading;
+
+      expect(loading.book.path, activePath);
+    });
 
     blocTest<PdfBookBloc, PdfBookState>(
       'LoadPdfDocument מוזנח כשהמצב הוא כבר Loaded',

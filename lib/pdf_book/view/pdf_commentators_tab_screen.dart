@@ -25,6 +25,7 @@ import 'package:otzaria/pdf_book/utils/pdf_spread_layout.dart';
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -91,6 +92,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
 
   /// קבוצות המפרשים ללשונית הבחירה (נטענות מתוך links של ה-sourceTab)
   List<CommentatorGroup> _commentatorGroups = [];
+
+  /// מפרשים "נדירים" שמוסתרים מלשונית הבחירה (ספרים גדולים בלבד).
+  Set<String> _rareCommentators = {};
 
   /// משקף את מצב "הכל מורחב" מתוך PdfCommentaryPanel (לכפתור כיווץ/הרחבה בסרגל).
   final _allExpandedInChild = ValueNotifier<bool>(true);
@@ -301,6 +305,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       setState(() {
         _textLines = text.split('\n');
       });
+      // כעת יש מספר שורות אמיתי — מרעננים כדי לחשב את המפרשים הנדירים.
+      _loadCommentatorGroups();
     } catch (e) {
       debugPrint('שגיאה בטעינת תוכן טקסט: $e');
     }
@@ -395,12 +401,21 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   /// לחישוב שב-[PdfCommentaryPanel], לצורך לשונית "מפרשים".
   Future<void> _loadCommentatorGroups() async {
     final commentatorsSet = <String>{};
+    final linkCountByTitle = <String, int>{};
     for (final link in widget.tab.sourceTab.links) {
       if (LinkTypes.isDependentTextLink(link.connectionType)) {
-        commentatorsSet.add(utils.getTitleFromPath(link.path2));
+        final title = utils.getTitleFromPath(link.path2);
+        commentatorsSet.add(title);
+        linkCountByTitle[title] = (linkCountByTitle[title] ?? 0) + 1;
       }
     }
     final available = commentatorsSet.toList();
+    // מספר שורות הספר נלקח מהטקסט המלווה שנטען ל-_textLines. כל עוד הוא לא
+    // נטען (0) אין הסתרה, והחישוב יחזור לאחר טעינת הטקסט.
+    final rare = computeRareCommentators(
+      bookTotalLines: _textLines?.length ?? 0,
+      linkCountByCommentator: linkCountByTitle,
+    );
     await _applyDefaultCommentatorsIfNeeded(available);
     final eras = await utils.splitByEra(available);
     final known = <String>{
@@ -416,6 +431,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
         .toList();
     if (!mounted) return;
     setState(() {
+      _rareCommentators = rare;
       _commentatorGroups = [
         CommentatorGroup(
             title: 'תורה שבכתב', commentators: eras['תורה שבכתב'] ?? const []),
@@ -998,6 +1014,29 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     );
   }
 
+  /// מפרשים נדירים שכן יוצגו בלשונית הבחירה כי הטווח הנוכחי (הכותרת/הפסקה
+  /// הנבחרת + ריבוי-הבחירה) כולל קישור מהם.
+  Set<String> _lineRelevantRareCommentators() {
+    if (_rareCommentators.isEmpty) return const {};
+    final paragraphs = _getParagraphs(_selectedHeadingIdx);
+    final safeParaIdx = _selectedParagraphIdx == _kAllPara || paragraphs.isEmpty
+        ? _kAllPara
+        : _selectedParagraphIdx.clamp(0, paragraphs.length - 1);
+    final range =
+        _getLineRangeForPara(_selectedHeadingIdx, paragraphs, safeParaIdx);
+    final relevant = <String>{};
+    for (final link in widget.tab.sourceTab.links) {
+      if (!LinkTypes.isDependentTextLink(link.connectionType)) continue;
+      final inScope =
+          (link.index1 >= range.start && link.index1 <= range.end) ||
+              _extraLines.contains(link.index1);
+      if (!inScope) continue;
+      final title = utils.getTitleFromPath(link.path2);
+      if (_rareCommentators.contains(title)) relevant.add(title);
+    }
+    return relevant;
+  }
+
   /// לשונית "מפרשים" — בחירת המפרשים להצגה (זהה לכרטיסיית הטקסט).
   Widget _buildCommentatorsSelectionTab() {
     if (_commentatorGroups.isEmpty) {
@@ -1015,6 +1054,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       groups: _commentatorGroups,
       selectedCommentators: widget.tab.sourceTab.activeCommentators.toList(),
       bookTitle: widget.tab.sourceTab.book.title,
+      rareCommentators: _rareCommentators,
+      lineRelevantCommentators: _lineRelevantRareCommentators(),
       onSelectionChanged: (list) async {
         setState(() {
           widget.tab.sourceTab.activeCommentators

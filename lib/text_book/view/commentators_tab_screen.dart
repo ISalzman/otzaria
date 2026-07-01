@@ -4,6 +4,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/toc_unit_label.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -1192,10 +1193,19 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         ),
       );
     }
+    final chapters = _getChapters(state.tableOfContents);
+    final indexes =
+        _effectiveIndexes(chapters, state.content.length) ?? const <int>[];
     return CommentatorsSelectionPanel(
       groups: groups,
       selectedCommentators: selected,
       bookTitle: state.book.title,
+      rareCommentators: state.rareCommentators,
+      lineRelevantCommentators: lineRelevantRareCommentators(
+        rareCommentators: state.rareCommentators,
+        currentIndexes: indexes,
+        linksByLine: state.linksByLine,
+      ),
       onSelectionChanged: (list) {
         setState(() => _selectedCommentatorsOverride = list);
       },

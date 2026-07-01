@@ -114,9 +114,9 @@ class FindRefRepository {
   final Map<String, List<DbCommentatorEntry>> _commentatorsCache = {};
 
   /// חיתוך בסיס של רשימת התוצאות. מורחב ע"י [_rankResults] לכל מי שחולק את
-  /// מפתח-הרלוונטיות של התוצאה ה-15, כך שתוצאות שווֹת-רלוונטיות לא נחתכות
+  /// מפתח-הרלוונטיות של התוצאה ה-20, כך שתוצאות שווֹת-רלוונטיות לא נחתכות
   /// באמצע (ראה גם [_maxResultCap]).
-  static const int _baseResultCap = 15;
+  static const int _baseResultCap = 20;
 
   /// תקרת-ביטחון מוחלטת על מספר התוצאות — רשת מפני קבוצת-רלוונטיות פתולוגית
   /// (למשל נושא רחב במצב era). הסט הלגיטימי הגדול בפועל קטן בהרבה.

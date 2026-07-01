@@ -265,4 +265,75 @@ void main() {
       );
     });
   });
+
+  group('pending tab content focus', () {
+    testWidgets('בקשה לפני רישום — מתבצעת ברגע שהתוכן נרשם', (tester) async {
+      final tab = Object();
+      int calls = 0;
+
+      expect(repo.requestTabContentFocus(tab), false);
+
+      repo.registerTabContentFocusRequester(tab, () => calls++);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+
+      expect(calls, 1, reason: 'בקשה ממתינה צריכה לירות עם רישום התוכן');
+    });
+
+    testWidgets('מעבר לטאב אחר לפני טעינה — רק האחרון מקבל פוקוס',
+        (tester) async {
+      final tabA = Object();
+      final tabB = Object();
+      int aCalls = 0, bCalls = 0;
+
+      repo.requestTabContentFocus(tabA);
+      repo.requestTabContentFocus(tabB);
+
+      repo.registerTabContentFocusRequester(tabA, () => aCalls++);
+      repo.registerTabContentFocusRequester(tabB, () => bCalls++);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+
+      expect(aCalls, 0, reason: 'הטאב הקודם לא אמור לחטוף פוקוס');
+      expect(bCalls, 1, reason: 'רק הטאב האחרון שביקש מקבל פוקוס');
+    });
+
+    test('תוכן רשום — מתבצע מיד ללא המתנה', () {
+      final tab = Object();
+      int calls = 0;
+      repo.registerTabContentFocusRequester(tab, () => calls++);
+
+      expect(repo.requestTabContentFocus(tab), true);
+      expect(calls, 1);
+    });
+
+    testWidgets('ביטול רישום של הטאב הממתין מנקה את הבקשה', (tester) async {
+      final tab = Object();
+      int calls = 0;
+
+      repo.requestTabContentFocus(tab);
+      repo.unregisterTabContentFocusRequester(tab);
+
+      repo.registerTabContentFocusRequester(tab, () => calls++);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+
+      expect(calls, 0);
+    });
+
+    testWidgets('הטאב הוסר בין התזמון להרצה — לא נקרא requester ישן',
+        (tester) async {
+      final tab = Object();
+      int calls = 0;
+
+      repo.requestTabContentFocus(tab);
+      repo.registerTabContentFocusRequester(tab, () => calls++);
+      repo.unregisterTabContentFocusRequester(tab);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+
+      expect(calls, 0, reason: 'requester של widget שב-dispose לא אמור לרוץ');
+    });
+  });
 }

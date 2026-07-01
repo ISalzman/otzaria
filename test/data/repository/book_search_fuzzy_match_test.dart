@@ -251,7 +251,8 @@ void main() {
   group('buildBookSearchEntry - בידוד מרחבי id של ספר אישי', () {
     // ה-lookups מדמים מאגר רשמי שבו id=7 שייך לספר רשמי זר עם כינוי ודור מוקדם.
     List<String>? acronymsForId(int id) => id == 7 ? const ['רמבם'] : null;
-    int eraOrderForId(int? id) => id == 7 ? 2 : 5;
+    int eraOrderForId(int? id, bool isUserBook) =>
+        (!isUserBook && id == 7) ? 2 : 5;
 
     test('ספר אישי עם id מתנגש מקבל כינויים ריקים ודור ברירת מחדל', () {
       final userBook = TextBook(id: 7, title: 'הספר שלי', isUserBook: true);

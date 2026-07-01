@@ -81,7 +81,7 @@ void main() {
               'schemaVersion': 1,
               'id': 'test.user.email.plugin',
               'version': '1.0.0',
-              'name': 'User Email Plugin',
+              'name': 'User Email',
               'entrypoint': 'index.html',
               'permissions': ['app.user_email.read'],
             }),
@@ -109,11 +109,11 @@ void main() {
               'schemaVersion': 1,
               'id': 'test.invalid.icon.name',
               'version': '1.0.0',
-              'name': 'Invalid Icon Name',
+              'name': 'Invalid Icon',
               'entrypoint': 'index.html',
               'contributes': {
                 'toolTab': {
-                  'title': 'Bad Icon',
+                  'title': 'Invalid Icon',
                   'iconName': 'calendar_24_light',
                 },
               },
@@ -178,7 +178,7 @@ void main() {
         () async {
       repository.plugin = InstalledPlugin(
         pluginId: 'test.prerelease.plugin',
-        name: 'Prerelease Plugin',
+        name: 'Prerelease',
         version: '1.0.0-beta',
         installPath: tempDir.path,
         entrypointPath: 'index.html',
@@ -187,7 +187,7 @@ void main() {
         manifest: _buildInstalledManifest(
           id: 'test.prerelease.plugin',
           version: '1.0.0',
-          name: 'Prerelease Plugin',
+          name: 'Prerelease',
         ),
         installedAt: DateTime(2024),
         updatedAt: DateTime(2024),
@@ -202,7 +202,7 @@ void main() {
               'schemaVersion': 1,
               'id': 'test.prerelease.plugin',
               'version': '1.0.1',
-              'name': 'Prerelease Plugin',
+              'name': 'Prerelease',
               'entrypoint': 'index.html',
             }),
           ),
@@ -224,7 +224,7 @@ void main() {
       const pluginId = 'test.reorder.persist';
       repository.plugin = InstalledPlugin(
         pluginId: pluginId,
-        name: 'Reorder Persist',
+        name: 'Reorder Pers',
         version: '1.0.0',
         installPath: tempDir.path,
         entrypointPath: 'index.html',
@@ -233,7 +233,7 @@ void main() {
         manifest: _buildInstalledManifest(
           id: pluginId,
           version: '1.0.0',
-          name: 'Reorder Persist',
+          name: 'Reorder Pers',
         ),
         installedAt: DateTime(2024),
         updatedAt: DateTime(2024),
@@ -248,7 +248,7 @@ void main() {
           'schemaVersion': 1,
           'id': pluginId,
           'version': '1.0.1',
-          'name': 'Reorder Persist',
+          'name': 'Reorder Pers',
           'entrypoint': 'index.html',
         }),
       );
@@ -258,7 +258,7 @@ void main() {
         'schemaVersion': 1,
         'id': pluginId,
         'version': '1.0.1',
-        'name': 'Reorder Persist',
+        'name': 'Reorder Pers',
         'entrypoint': 'index.html',
       });
 

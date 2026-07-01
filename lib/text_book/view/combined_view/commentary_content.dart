@@ -109,7 +109,12 @@ class _CommentaryContentState extends State<CommentaryContent> {
     return GestureDetector(
       onDoubleTap: () {
         widget.openBookCallback(TextBookTab(
-          book: TextBook(title: utils.getTitleFromPath(widget.link.path2)),
+          book: TextBook(
+            title: utils.getTitleFromPath(widget.link.path2),
+            isUserBook: widget.link.targetIsUserBook,
+            categoryId: widget.link.targetCategoryId,
+            fileType: widget.link.targetFileType,
+          ),
           index: widget.link.index2 - 1,
           openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
               (Settings.getValue<bool>('key-default-sidebar-open') ?? false),

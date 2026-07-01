@@ -72,6 +72,7 @@ InstalledPlugin _pluginFor({
   required String id,
   required String name,
   bool networkEnabled = false,
+  bool networkAccessGranted = false,
   bool showInTools = true,
 }) {
   return InstalledPlugin(
@@ -83,6 +84,7 @@ InstalledPlugin _pluginFor({
     enabled: true,
     pinned: true,
     showInTools: showInTools,
+    networkAccessGranted: networkAccessGranted,
     manifest: _manifestFor(
       id: id,
       name: name,
@@ -97,6 +99,19 @@ class _StaticPluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState>
     implements PluginSystemBloc {
   _StaticPluginSystemBloc(super.initial) {
     on<PluginSystemEvent>((_, __) {});
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+/// כמו [_StaticPluginSystemBloc] אך מתעד את האירועים שנשלחו, לאימות פעולות.
+class _RecordingPluginSystemBloc
+    extends Bloc<PluginSystemEvent, PluginSystemState>
+    implements PluginSystemBloc {
+  final List<PluginSystemEvent> recorded = [];
+  _RecordingPluginSystemBloc(super.initial) {
+    on<PluginSystemEvent>((event, _) => recorded.add(event));
   }
 
   @override
@@ -281,8 +296,7 @@ void main() {
 
     // Step 2: Simulate dialog confirmation — dispatch ConfirmDevPluginInstall
     // with the manifest the BLoC already fetched and stored in the state.
-    final permState =
-        bloc.state as PluginSystemDevInstallRequiresPermissions;
+    final permState = bloc.state as PluginSystemDevInstallRequiresPermissions;
 
     final loadedExpectation = expectLater(
       bloc.stream,
@@ -333,10 +347,15 @@ void main() {
       expect(find.text('תוסף ענן'), findsOneWidget);
     });
 
-    testWidgets('במצב מנותק מסתיר תוספים שדורשים אינטרנט', (tester) async {
+    testWidgets('במצב מנותק מסתיר תוספים שדורשים אינטרנט והרשאתם דלוקה',
+        (tester) async {
       final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
         _pluginFor(id: 'local.plugin', name: 'תוסף מקומי'),
-        _pluginFor(id: 'cloud.plugin', name: 'תוסף ענן', networkEnabled: true),
+        _pluginFor(
+            id: 'cloud.plugin',
+            name: 'תוסף ענן',
+            networkEnabled: true,
+            networkAccessGranted: true),
       ]));
       addTearDown(pluginBloc.close);
 
@@ -351,10 +370,35 @@ void main() {
     });
 
     testWidgets(
+        'במצב מנותק תוסף רשת שהמשתמש כיבה בו את הרשאת הרשת ממשיך להופיע',
+        (tester) async {
+      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
+        _pluginFor(
+            id: 'cloud.plugin',
+            name: 'תוסף ענן',
+            networkEnabled: true,
+            networkAccessGranted: false),
+      ]));
+      addTearDown(pluginBloc.close);
+
+      await tester.pumpWidget(_wrap(
+        pluginBloc: pluginBloc,
+        settingsBloc: _FakeSettingsBloc(isOfflineMode: true),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('תוסף ענן'), findsOneWidget);
+    });
+
+    testWidgets(
         'במצב מנותק כשכל התוספים דורשים אינטרנט - מציג הודעת empty state ייעודית',
         (tester) async {
       final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(id: 'cloud.plugin', name: 'תוסף ענן', networkEnabled: true),
+        _pluginFor(
+            id: 'cloud.plugin',
+            name: 'תוסף ענן',
+            networkEnabled: true,
+            networkAccessGranted: true),
       ]));
       addTearDown(pluginBloc.close);
 
@@ -405,7 +449,8 @@ void main() {
 
       expect(find.text('תוסף גלוי'), findsOneWidget);
       expect(find.text('תוסף לא בכלים'), findsOneWidget,
-          reason: 'showInTools only hides from tools screen, not from side panel');
+          reason:
+              'showInTools only hides from tools screen, not from side panel');
     });
   });
 
@@ -418,11 +463,23 @@ void main() {
       expect(plugins.filterForOfflineMode(false), equals(plugins));
     });
 
-    test('במצב מנותק מסנן רק תוספים עם networkEnabled=true', () {
+    test('במצב מנותק מסנן רק תוספי רשת שהרשאתם הוענקה בפועל', () {
       final local = _pluginFor(id: 'a', name: 'A');
-      final cloud = _pluginFor(id: 'b', name: 'B', networkEnabled: true);
+      final cloud = _pluginFor(
+          id: 'b', name: 'B', networkEnabled: true, networkAccessGranted: true);
       final filtered = [local, cloud].filterForOfflineMode(true);
       expect(filtered, [local]);
+    });
+
+    test('במצב מנותק תוסף רשת ללא הרשאת רשת מוענקת אינו מסונן', () {
+      final local = _pluginFor(id: 'a', name: 'A');
+      final cloudRevoked = _pluginFor(
+          id: 'b',
+          name: 'B',
+          networkEnabled: true,
+          networkAccessGranted: false);
+      final filtered = [local, cloudRevoked].filterForOfflineMode(true);
+      expect(filtered, [local, cloudRevoked]);
     });
 
     test('רשימה ריקה מוחזרת כרשימה ריקה', () {
@@ -440,6 +497,51 @@ void main() {
     test('מחזיר false כאשר manifest.networkEnabled=false', () {
       final plugin = _pluginFor(id: 'a', name: 'A');
       expect(plugin.requiresNetwork, isFalse);
+    });
+  });
+
+  group('תפריט פעולות', () {
+    testWidgets('פתיחת התפריט מציגה את כל הפעולות', (tester) async {
+      final pluginBloc = _StaticPluginSystemBloc(
+          PluginSystemLoaded([_pluginFor(id: 'a', name: 'תוסף א')]));
+      addTearDown(pluginBloc.close);
+
+      await tester.pumpWidget(_wrap(
+        pluginBloc: pluginBloc,
+        settingsBloc: _FakeSettingsBloc(),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('פעולות'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ניהול הרשאות'), findsOneWidget);
+      expect(find.text('הצמד לסרגל הניווט'), findsOneWidget);
+      expect(find.text('הסתר מהממשק'), findsOneWidget);
+      expect(find.text('השבת'), findsOneWidget);
+      expect(find.text('מחק תוסף'), findsOneWidget);
+    });
+
+    testWidgets('לחיצה על "השבת" שולחת DisablePluginRequested', (tester) async {
+      final pluginBloc = _RecordingPluginSystemBloc(
+          PluginSystemLoaded([_pluginFor(id: 'a', name: 'תוסף א')]));
+      addTearDown(pluginBloc.close);
+
+      await tester.pumpWidget(_wrap(
+        pluginBloc: pluginBloc,
+        settingsBloc: _FakeSettingsBloc(),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('פעולות'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('השבת'));
+      await tester.pumpAndSettle();
+
+      expect(
+        pluginBloc.recorded.whereType<DisablePluginRequested>().single.pluginId,
+        'a',
+      );
     });
   });
 
@@ -489,6 +591,5 @@ void main() {
       expect(find.text('B'), findsOneWidget);
       expect(find.text('C'), findsOneWidget);
     });
-
   });
 }

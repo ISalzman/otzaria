@@ -2375,6 +2375,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                   message: 'התוכנה בתהליך אינדוקס',
                   detail: 'התקדמות: $processed/$total',
                   progress: progress,
+                  onTap: _openIndexingSettings,
                 ));
               } else {
                 cubit.remove('indexing');
@@ -2656,6 +2657,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 current is PluginSystemDevInstallRequiresPermissions ||
                 current is PluginSystemOverwriteRequired,
             listener: (context, state) {
+              final isOfflineMode =
+                  context.read<SettingsBloc>().state.isOfflineMode;
               if (state is PluginSystemInstallRequiresPermissions) {
                 showDialog(
                   context: context,
@@ -2667,6 +2670,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                       previousVersion: state.previousVersion,
                       previousAllowOrderBeforeBuiltInsGranted:
                           state.previousAllowOrderBeforeBuiltInsGranted,
+                      isOfflineMode: isOfflineMode,
                     ),
                   ),
                 );
@@ -2680,6 +2684,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                     previousVersion: state.previousVersion,
                     previousAllowOrderBeforeBuiltInsGranted:
                         state.previousAllowOrderBeforeBuiltInsGranted,
+                    isOfflineMode: isOfflineMode,
                     onConfirm: (perms, allowOrder) => bloc.add(
                       ConfirmDevPluginInstall(
                         manifest: state.manifest,
@@ -3113,9 +3118,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                             ),
                           ],
                         ),
-                        WorkStatusOverlay(
-                          onTap: _openIndexingSettings,
-                        ),
+                        const WorkStatusOverlay(),
                         // host נסתר לתוספים שביקשו לרוץ ברקע עם עליית
                         // האפליקציה. הוא חי כל זמן שה-MainWindowScreen קיים,
                         // ולא תלוי במסך "כלים".

@@ -32,6 +32,9 @@ class PluginInstallScreen extends StatefulWidget {
   /// כאשר מסופק, נקרא במקום שליחת CancelPluginInstall לבלוק.
   final VoidCallback? onCancel;
 
+  /// האם אוצריא במצב 'מנותק' בעת ההתקנה. אם כן, הרשאת הרשת מתחילה כבויה.
+  final bool isOfflineMode;
+
   const PluginInstallScreen({
     super.key,
     required this.manifest,
@@ -40,6 +43,7 @@ class PluginInstallScreen extends StatefulWidget {
     this.previousAllowOrderBeforeBuiltInsGranted,
     this.onConfirm,
     this.onCancel,
+    this.isOfflineMode = false,
   });
 
   bool get isUpdate => previousVersion != null;
@@ -50,7 +54,8 @@ class PluginInstallScreen extends StatefulWidget {
 
 class _PluginInstallScreenState extends State<PluginInstallScreen> {
   /// מצב toggle לכל הרשאה — ברירת מחדל: הכל מופעל, פרט להרשאות רגישות
-  /// (למשל [pluginRunOnStartupPermission]) שמתחילות כבויות.
+  /// ([pluginRunOnStartupPermission]) שמתחילות כבויות, ול-network.access
+  /// שמתחיל כבוי בהתקנה במצב 'מנותק'.
   late Map<String, bool> _permissionToggles;
   late bool _allowOrderBeforeBuiltInsGranted;
 
@@ -58,12 +63,19 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
   void initState() {
     super.initState();
     _permissionToggles = {
-      for (final p in widget.manifest.permissions)
-        p: p != pluginRunOnStartupPermission,
+      for (final p in widget.manifest.permissions) p: _defaultGrantFor(p),
     };
     _allowOrderBeforeBuiltInsGranted =
         widget.previousAllowOrderBeforeBuiltInsGranted ??
             widget.manifest.allowOrderBeforeBuiltIns;
+  }
+
+  bool _defaultGrantFor(String permission) {
+    if (permission == pluginRunOnStartupPermission) return false;
+    if (widget.isOfflineMode && permission == pluginNetworkAccessPermission) {
+      return false;
+    }
+    return true;
   }
 
   bool get _requestsRunOnStartup =>

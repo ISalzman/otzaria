@@ -9,6 +9,7 @@ import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
@@ -120,15 +121,151 @@ Future<({Set<String> include, List<Book> relocated})> _scanLibraryMove(
   return (include: include, relocated: relocated);
 }
 
+Future<void> remapMovedFileBookPaths(
+  Iterable<Book> books,
+  String from,
+  String to,
+) async {
+  final movedBooks = books.where((book) {
+    if (book is! FileBook || book.id == null) {
+      return false;
+    }
+    return p.equals(from, book.path) || p.isWithin(from, book.path);
+  }).cast<FileBook>();
+
+  if (movedBooks.isEmpty) return;
+
+  final userBooks = movedBooks.where((book) => book.isUserBook).toList();
+  if (userBooks.isEmpty) return;
+
+  final repository = await UserBooksDatabaseHolder.instance.repository;
+  for (final book in userBooks) {
+    final storage = await _movedStorage(book, from, to);
+    await repository.updateBookStorage(
+      book.id!,
+      storage.path,
+      storage.fileSize,
+      storage.lastModified,
+    );
+  }
+}
+
+Future<({String path, int? fileSize, int? lastModified})> _movedStorage(
+  FileBook book,
+  String from,
+  String to,
+) async {
+  final newPath = p.join(to, p.relative(book.path, from: from));
+  final file = File(newPath);
+  final exists = await file.exists();
+  return (
+    path: newPath,
+    fileSize: exists ? await file.length() : null,
+    lastModified:
+        exists ? (await file.lastModified()).millisecondsSinceEpoch : null,
+  );
+}
+
+@visibleForTesting
+bool shouldCopyIndexDuringLibraryMove({
+  required bool indexNeedsMove,
+  required bool indexingActive,
+}) =>
+    indexNeedsMove && !indexingActive;
+
+Future<bool> _pathExists(String path) async =>
+    await Directory(path).exists() ||
+    await File(path).exists() ||
+    await Link(path).exists();
+
+Future<void> _ensureMoveTargetAvailable(String path) async {
+  if (await _pathExists(path)) {
+    throw FileSystemException('יעד ההעברה כבר קיים', path);
+  }
+}
+
+Future<void> _deleteIfExists(String path) async {
+  if (await Directory(path).exists()) {
+    await Directory(path).delete(recursive: true);
+  } else if (await File(path).exists()) {
+    await File(path).delete();
+  } else if (await Link(path).exists()) {
+    await Link(path).delete();
+  }
+}
+
+Future<void> _restoreMoveSettings({
+  required String? libraryPath,
+  required String? libraryFolderName,
+  required String? dbEffectivePath,
+  required String? indexPath,
+}) async {
+  await Settings.setValue<String?>(
+      SettingsRepository.keyLibraryPath, libraryPath);
+  await Settings.setValue<String?>(
+      SettingsRepository.keyLibraryFolderName, libraryFolderName);
+  await Settings.setValue<String?>(
+      SettingsRepository.keyDbEffectivePath, dbEffectivePath);
+  await Settings.setValue<String?>(SettingsRepository.keyIndexPath, indexPath);
+}
+
+Future<void> _cleanupCreatedMoveTargets({
+  String? stagingRoot,
+  required String newLibrary,
+  required String newIndex,
+  required bool finalLibraryCreated,
+  required bool finalIndexCreated,
+}) async {
+  if (stagingRoot != null) {
+    try {
+      await _deleteIfExists(stagingRoot);
+    } catch (e) {
+      debugPrint('[performLibraryMove] staging cleanup failed: $e');
+    }
+  }
+  if (finalLibraryCreated) {
+    try {
+      await _deleteIfExists(newLibrary);
+    } catch (e) {
+      debugPrint('[performLibraryMove] library cleanup failed: $e');
+    }
+  }
+  if (finalIndexCreated) {
+    try {
+      await _deleteIfExists(newIndex);
+    } catch (e) {
+      debugPrint('[performLibraryMove] index cleanup failed: $e');
+    }
+  }
+}
+
+@visibleForTesting
+Future<void> ensureLibraryMoveTargetAvailableForTesting(String path) =>
+    _ensureMoveTargetAvailable(path);
+
+@visibleForTesting
+Future<void> cleanupCreatedMoveTargetsForTesting({
+  String? stagingRoot,
+  required String newLibrary,
+  required String newIndex,
+  required bool finalLibraryCreated,
+  required bool finalIndexCreated,
+}) =>
+    _cleanupCreatedMoveTargets(
+      stagingRoot: stagingRoot,
+      newLibrary: newLibrary,
+      newIndex: newIndex,
+      finalLibraryCreated: finalLibraryCreated,
+      finalIndexCreated: finalIndexCreated,
+    );
+
 /// מעביר את ספריית אוצריא למיקום חדש. [to] היא התיקייה שהמשתמש בחר, ותחתיה
 /// נוצרות `<to>/books` (הספרייה) ו-`<to>/index` (אינדקס החיפוש), כך שמבנה
 /// התיקיות נשמר ולא נשפך לתיקיית האב.
 ///
-/// סדר בטוח שמתמודד עם נעילת הקבצים ע"י Windows (seforim.db, אינדקס, וקובצי
-/// PDF פתוחים): מעתיק את תיקיית `books` (קבצים מזוהים בלבד) ואת תיקיית `index`
-/// במלואה, מעדכן את ההגדרות, ממפה את נתיבי הטאבים הפתוחים, סוגר את ה-DB ופותח
-/// מחדש את האינדקס בנתיב החדש (משחרר נעילות), וטוען את התוכנה מחדש — ורק לאחר
-/// הרענון מוחק את הקבצים הישנים.
+/// סדר בטוח שמתמודד עם נעילת קבצים: מעתיק קודם ל-staging, מקדם ליעד הסופי
+/// רק אחרי הצלחה, מעדכן הגדרות, סוגר חיבורים, ורק אחרי רענון מוחק את המקור.
+/// אינדקס חי בזמן אינדוקס לא מועתק; הוא נפתח/נבנה מחדש במיקום החדש.
 Future<void> performLibraryMove({
   required BuildContext context,
   required String from,
@@ -151,25 +288,72 @@ Future<void> performLibraryMove({
   final include = scan.include;
   final oldIndex = await AppPaths.getIndexPath();
   final newIndex = p.join(to, p.basename(oldIndex));
-  final shouldMoveIndex =
+  final indexNeedsMove =
       !p.equals(oldIndex, newIndex) && await Directory(oldIndex).exists();
+  final indexingActive = TantivyDataProvider.instance.isIndexing.value;
+  final shouldCopyIndex = shouldCopyIndexDuringLibraryMove(
+    indexNeedsMove: indexNeedsMove,
+    indexingActive: indexingActive,
+  );
+  if (indexingActive) {
+    IndexingRepository(TantivyDataProvider.instance).cancelIndexing();
+  }
+
+  final previousLibraryPath =
+      Settings.getValue<String>(SettingsRepository.keyLibraryPath);
+  final previousLibraryFolderName =
+      Settings.getValue<String>(SettingsRepository.keyLibraryFolderName);
+  final previousDbEffectivePath =
+      Settings.getValue<String>(SettingsRepository.keyDbEffectivePath);
+  final previousIndexPath =
+      Settings.getValue<String>(SettingsRepository.keyIndexPath);
+
+  String? stagingRoot;
+  var finalLibraryCreated = false;
+  var finalIndexCreated = false;
+  var settingsUpdated = false;
+
   try {
-    // 1. העתקת תיקיית הספרייה (קבצים מזוהים בלבד) לתת-התיקייה החדשה.
-    await copyDirectoryEntries(from, newLibrary, includeOnly: include);
-    // 2. העתקת תיקיית האינדקס במלואה (ללא סינון).
-    if (shouldMoveIndex) {
-      await copyDirectoryEntries(oldIndex, newIndex);
+    await _ensureMoveTargetAvailable(newLibrary);
+    if (indexNeedsMove) {
+      await _ensureMoveTargetAvailable(newIndex);
     }
+
+    final staging = await Directory(
+      p.join(to, '.otzaria_move_${DateTime.now().millisecondsSinceEpoch}'),
+    ).create(recursive: true);
+    stagingRoot = staging.path;
+    final stagedLibrary = p.join(staging.path, p.basename(newLibrary));
+    final stagedIndex = p.join(staging.path, p.basename(newIndex));
+
+    // 1. מעתיקים ל-staging בלבד. אם ההעתקה נכשלת, היעד הסופי נשאר נקי.
+    await copyDirectoryEntries(from, stagedLibrary, includeOnly: include);
+    if (shouldCopyIndex) {
+      await copyDirectoryEntries(oldIndex, stagedIndex);
+    }
+    await Directory(stagedLibrary).rename(newLibrary);
+    finalLibraryCreated = true;
+    if (shouldCopyIndex) {
+      await Directory(stagedIndex).rename(newIndex);
+      finalIndexCreated = true;
+    }
+    await _deleteIfExists(staging.path);
+    stagingRoot = null;
+
+    // 2. עדכון נתיבי ספרי קובץ שהועברו יחד עם הספרייה.
+    await remapMovedFileBookPaths(scan.relocated, from, newLibrary);
     // 3. עדכון הגדרות המיקום בקבצי המשתמש.
     await Settings.setValue<String>(
         SettingsRepository.keyLibraryPath, newLibrary);
     await Settings.setValue<String>(
         SettingsRepository.keyLibraryFolderName, '');
     await Settings.setValue<String>(SettingsRepository.keyDbEffectivePath, '');
-    if (shouldMoveIndex) {
+    if (indexNeedsMove) {
+      // בזמן אינדוקס פעיל לא מעתיקים אינדקס חי; הרענון יפתח/יבנה אינדקס חדש.
       await Settings.setValue<String>(
           SettingsRepository.keyIndexPath, newIndex);
     }
+    settingsUpdated = true;
     // 4. מיפוי נתיבי הספרים הפתוחים *בזיכרון* (לא רק ב-Hive), אחרת שמירת
     //    הטאבים בעת הרענון תדרוס את המיפוי וה-PDF ייפתח מהנתיב הישן.
     //    awaited בכוונה: חובה שהמיפוי יושלם לפני ה-reset/restart, אחרת יש race.
@@ -185,6 +369,11 @@ Future<void> performLibraryMove({
       // כשל בפתיחת האינדקס אינו עוצר את ההעברה — הרענון/אינדוקס מחדש יתקן.
       debugPrint('[performLibraryMove] reopenIndex failed: $e');
     }
+    if (indexNeedsMove &&
+        !shouldCopyIndex &&
+        await Directory(newIndex).exists()) {
+      finalIndexCreated = true;
+    }
     // 7. ניקוי רשומות אינדקס של ספרי קובץ שנתיבם השתנה (PDF וכו'), כדי
     //    שהאינדוקס שלאחר הרענון יוסיף אותם בנתיב החדש בלי כפילויות. ספרי
     //    הטקסט מ-DB מאונדקסים לפי id ושורדים את ההעברה — אינם נוגעים בזה.
@@ -197,6 +386,21 @@ Future<void> performLibraryMove({
       }
     }
   } catch (e) {
+    if (settingsUpdated) {
+      await _restoreMoveSettings(
+        libraryPath: previousLibraryPath,
+        libraryFolderName: previousLibraryFolderName,
+        dbEffectivePath: previousDbEffectivePath,
+        indexPath: previousIndexPath,
+      );
+    }
+    await _cleanupCreatedMoveTargets(
+      stagingRoot: stagingRoot,
+      newLibrary: newLibrary,
+      newIndex: newIndex,
+      finalLibraryCreated: finalLibraryCreated,
+      finalIndexCreated: finalIndexCreated,
+    );
     if (navigator.canPop()) navigator.pop();
     UiSnack.showError('שגיאה בהעברת הספרייה: $e');
     return;
@@ -223,7 +427,7 @@ Future<void> performLibraryMove({
       await Future<void>.delayed(const Duration(milliseconds: 800));
       final leftover = await deleteMovedEntries(from, includeOnly: include);
       var indexDeleteFailed = false;
-      if (shouldMoveIndex && await Directory(oldIndex).exists()) {
+      if (indexNeedsMove && await Directory(oldIndex).exists()) {
         try {
           await Directory(oldIndex).delete(recursive: true);
         } catch (_) {

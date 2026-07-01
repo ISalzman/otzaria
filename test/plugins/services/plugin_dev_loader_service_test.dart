@@ -84,7 +84,7 @@ void main() {
         'schemaVersion': 1,
         'id': 'test.dev.repo.plugin',
         'version': '1.0.0',
-        'name': 'Real Loader Test',
+        'name': 'Real Loader',
         'entrypoint': 'index.html',
         'permissions': ['app.info.read'] // valid permission
       }));
@@ -104,7 +104,7 @@ void main() {
       await devLoader.loadDevelopmentPlugin(tempDir.path);
       expect(fakeRepo.savedPlugin, isNotNull);
       expect(fakeRepo.savedPlugin!.pluginId, 'test.dev.repo.plugin');
-      expect(fakeRepo.savedPlugin!.name, 'Real Loader Test');
+      expect(fakeRepo.savedPlugin!.name, 'Real Loader');
       expect(fakeRepo.savedPlugin!.sourceType, 'development');
       expect(fakeRepo.savedPlugin!.devRootPath, tempDir.path);
       expect(fakeRepo.savedPlugin!.isDevelopment, isTrue);
@@ -123,7 +123,7 @@ void main() {
         'schemaVersion': 1,
         'id': 'test.future.version.plugin',
         'version': '1.0.0',
-        'name': 'Future Version Plugin',
+        'name': 'Future Ver',
         'entrypoint': 'index.html',
         'minAppVersion': '99.0.0', // גרסה עתידית גבוהה מהמותקנת (1.0.0)
         'permissions': ['app.info.read'],
@@ -168,7 +168,7 @@ void main() {
       // Create a mocked packaged plugin with same ID
       fakeRepo.mockExistingPlugin = InstalledPlugin(
         pluginId: 'test.dev.repo.plugin',
-        name: 'Existing Packaged Plugin',
+        name: 'Existing Pkg',
         version: '1.0.0',
         installPath: tempDir.path,
         entrypointPath: 'dummy.html',
@@ -179,7 +179,7 @@ void main() {
           id: 'test.dev.repo.plugin',
           version: '1.0.0',
           minAppVersion: '1.0.0',
-          name: 'Existing Packaged Plugin',
+          name: 'Existing Pkg',
           entrypoint: 'dummy.html',
           defaultPinned: true,
           permissions: [],
@@ -235,7 +235,7 @@ void main() {
         'name': 'Bad Icon Name',
         'entrypoint': 'index.html',
         'contributes': {
-          'toolTab': {'title': 'Bad Icon', 'iconName': 'not-a-valid-icon'}
+          'toolTab': {'title': 'Bad Icon Name', 'iconName': 'not-a-valid-icon'}
         }
       }));
 
@@ -299,7 +299,7 @@ void main() {
         'schemaVersion': 1,
         'id': 'test.grants.plugin',
         'version': '1.0.1',
-        'name': 'Grants Plugin Update',
+        'name': 'Grants Update',
         'entrypoint': 'index.html',
         'permissions': ['app.info.read']
       }));
@@ -332,7 +332,7 @@ void main() {
         () async {
       fakeRepo.mockExistingPlugin = InstalledPlugin(
         pluginId: 'test.dev.repo.plugin',
-        name: 'Real Loader Test',
+        name: 'Real Loader',
         version: '0.9.0',
         installPath: tempDir.path,
         entrypointPath: 'index.html',
@@ -343,7 +343,7 @@ void main() {
           id: 'test.dev.repo.plugin',
           version: '0.9.0',
           minAppVersion: '1.0.0',
-          name: 'Real Loader Test',
+          name: 'Real Loader',
           entrypoint: 'index.html',
           defaultPinned: true,
           permissions: ['app.info.read'],

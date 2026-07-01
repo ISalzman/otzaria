@@ -170,6 +170,9 @@ class PluginBridgeHandler {
         if (action == 'getUserEmail') {
           return 'app.user_email.read';
         }
+        if (action == 'openUrl') {
+          return 'app.open_url';
+        }
         return 'app.info.read';
       case 'library':
         if (action == 'getBookContent' || action == 'getBookToc') {

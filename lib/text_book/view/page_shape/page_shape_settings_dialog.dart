@@ -8,6 +8,8 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_mana
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
+import 'package:otzaria/widgets/controls/segmented_control.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 /// סוג שמירת הגדרות מפרשים
@@ -25,6 +27,7 @@ class PageShapeSettingsDialog extends StatefulWidget {
   final String? currentRight;
   final String? currentBottom;
   final String? currentBottomRight;
+  final String? currentWorkspaceId;
 
   /// נקרא אחרי כל שמירת שינוי, כדי שהמסך שמתחת לדיאלוג יתעדכן מיידית
   /// (עדכון חי) בלי להמתין לסגירת הדיאלוג.
@@ -39,6 +42,7 @@ class PageShapeSettingsDialog extends StatefulWidget {
     this.currentRight,
     this.currentBottom,
     this.currentBottomRight,
+    this.currentWorkspaceId,
     this.onSettingsChanged,
   });
 
@@ -68,8 +72,8 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     'bottomRight': true,
   };
 
-  // הגדרה חדשה: האם לשמור לספר הנוכחי בלבד (להגדרות תצוגה)
-  bool _saveForCurrentBookOnly = false;
+  PageShapeDisplaySettingsScope _displaySettingsScope =
+      PageShapeDisplaySettingsScope.global;
 
   // הגדרה חדשה: היכן לשמור את בחירת המפרשים
   CommentatorSaveScope _commentatorSaveScope = CommentatorSaveScope.book;
@@ -84,9 +88,10 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   }
 
   void _loadCurrentSettings() {
-    // בדיקה אם יש הגדרות פר-ספר
-    _saveForCurrentBookOnly =
-        PageShapeSettingsManager.hasBookSpecificSettings(widget.bookTitle);
+    _displaySettingsScope = PageShapeSettingsManager.getDisplaySettingsScope(
+      widget.bookTitle,
+      workspaceId: widget.currentWorkspaceId,
+    );
 
     // טעינת קטגוריות זמינות
     _availableCategories =
@@ -148,9 +153,14 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
           AppFonts.defaultFont;
       _commentaryFontSize = PageShapeSettingsManager.getCommentaryFontSize();
       _highlightRelatedCommentators =
-          PageShapeSettingsManager.getHighlightSetting(widget.bookTitle);
-      _columnVisibility =
-          PageShapeSettingsManager.getColumnVisibility(widget.bookTitle);
+          PageShapeSettingsManager.getHighlightSetting(
+        widget.bookTitle,
+        workspaceId: widget.currentWorkspaceId,
+      );
+      _columnVisibility = PageShapeSettingsManager.getColumnVisibility(
+        widget.bookTitle,
+        workspaceId: widget.currentWorkspaceId,
+      );
     });
   }
 
@@ -247,14 +257,16 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     await PageShapeSettingsManager.saveHighlightSetting(
       widget.bookTitle,
       _highlightRelatedCommentators,
-      saveAsGlobal: !_saveForCurrentBookOnly,
+      scope: _displaySettingsScope,
+      workspaceId: widget.currentWorkspaceId,
     );
 
     // שמירת הגדרות visibility - גלובלי או פר-ספר לפי הבחירה
     await PageShapeSettingsManager.saveColumnVisibility(
       widget.bookTitle,
       _columnVisibility,
-      saveAsGlobal: !_saveForCurrentBookOnly,
+      scope: _displaySettingsScope,
+      workspaceId: widget.currentWorkspaceId,
     );
 
     // עדכון חי: מודיעים למסך שמתחת לדיאלוג לטעון מחדש את ההגדרות
@@ -318,9 +330,42 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     _saveSettings();
   }
 
-  /// איפוס הגדרות תצוגה פר-ספר וחזרה לגלובלי (לא משפיע על בחירת מפרשים)
+  Future<void> _onDisplayScopeChanged(
+      PageShapeDisplaySettingsScope scope) async {
+    if (scope == _displaySettingsScope) return;
+
+    if (scope == PageShapeDisplaySettingsScope.global) {
+      final confirm = await showWarningDialog(
+        context: context,
+        title: 'חזרה להגדרות גלובליות',
+        content: 'האם לאפס את הגדרות התצוגה המקומיות ולחזור להגדרות הגלובליות?',
+        confirmText: 'אפס',
+      );
+      if (confirm == true) {
+        await _resetDisplaySettingsToGlobal();
+      }
+      return;
+    }
+
+    if (scope == PageShapeDisplaySettingsScope.workspace) {
+      await PageShapeSettingsManager.resetBookDisplaySettings(
+        widget.bookTitle,
+      );
+    }
+
+    setState(() {
+      _displaySettingsScope = scope;
+      _hasChanges = true;
+    });
+    await _saveSettings();
+  }
+
+  /// איפוס הגדרות תצוגה מקומיות וחזרה לגלובלי (לא משפיע על בחירת מפרשים)
   Future<void> _resetDisplaySettingsToGlobal() async {
     await PageShapeSettingsManager.resetBookDisplaySettings(widget.bookTitle);
+    await PageShapeSettingsManager.resetWorkspaceDisplaySettings(
+      widget.currentWorkspaceId,
+    );
     // טעינה מחדש של הגדרות התצוגה הגלובליות (לא מפרשים!)
     final highlight =
         PageShapeSettingsManager.getHighlightSetting(widget.bookTitle);
@@ -328,12 +373,61 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
         PageShapeSettingsManager.getColumnVisibility(widget.bookTitle);
     if (!mounted) return;
     setState(() {
-      _saveForCurrentBookOnly = false;
+      _displaySettingsScope = PageShapeDisplaySettingsScope.global;
       _hasChanges = true;
       _highlightRelatedCommentators = highlight;
       _columnVisibility = visibility;
     });
     widget.onSettingsChanged?.call();
+  }
+
+  String get _displaySettingsTitle {
+    switch (_displaySettingsScope) {
+      case PageShapeDisplaySettingsScope.book:
+        return 'הגדרות תצוגה לספר זה';
+      case PageShapeDisplaySettingsScope.workspace:
+        return 'הגדרות תצוגה לשולחן עבודה זה';
+      case PageShapeDisplaySettingsScope.global:
+        return 'הגדרות תצוגה גלובליות';
+    }
+  }
+
+  String get _displaySettingsSubtitle {
+    switch (_displaySettingsScope) {
+      case PageShapeDisplaySettingsScope.book:
+        return 'הדגשה והצגת טורים יחולו רק על "${widget.bookTitle}"';
+      case PageShapeDisplaySettingsScope.workspace:
+        return 'הדגשה והצגת טורים יחולו רק בשולחן העבודה הנוכחי';
+      case PageShapeDisplaySettingsScope.global:
+        return 'הדגשה והצגת טורים יחולו על כל הספרים';
+    }
+  }
+
+  IconData get _displaySettingsIcon {
+    switch (_displaySettingsScope) {
+      case PageShapeDisplaySettingsScope.book:
+        return FluentIcons.book_24_regular;
+      case PageShapeDisplaySettingsScope.workspace:
+        return FluentIcons.window_24_regular;
+      case PageShapeDisplaySettingsScope.global:
+        return FluentIcons.globe_24_regular;
+    }
+  }
+
+  Widget _buildDisplaySettingsIcon(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    if (_displaySettingsScope == PageShapeDisplaySettingsScope.book) {
+      return RtlIcon(
+        FluentIcons.book_24_regular,
+        size: 20,
+        color: color,
+      );
+    }
+    return Icon(
+      _displaySettingsIcon,
+      size: 20,
+      color: color,
+    );
   }
 
   @override
@@ -350,7 +444,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // בחירה בין גלובלי לפר-ספר (להגדרות תצוגה בלבד)
+              // בחירת תחום השמירה של הגדרות התצוגה בלבד.
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -360,75 +454,52 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                       .withValues(alpha: 0.5),
                   borderRadius: AppTokens.borderRadiusAll,
                 ),
-                // Material שקוף: ListTile מצייר רקע ו-ink על ה-Material הקרוב,
-                // ובלעדיו ה-DecoratedBox של ה-Container מסתיר אותם (אזהרת דיבוג)
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            _saveForCurrentBookOnly
-                                ? FluentIcons.book_24_regular
-                                : FluentIcons.globe_24_regular,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _saveForCurrentBookOnly
-                                  ? 'הגדרות תצוגה לספר הנוכחי בלבד'
-                                  : 'הגדרות תצוגה גלובליות',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _buildDisplaySettingsIcon(context),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _displaySettingsTitle,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      SwitchListTile(
-                        title: Text(
-                          _saveForCurrentBookOnly
-                              ? 'שמירה לספר הנוכחי בלבד'
-                              : 'שמירה גלובלית (לכל הספרים)',
                         ),
-                        subtitle: Text(
-                          _saveForCurrentBookOnly
-                              ? 'הדגשה והצגת טורים יחולו רק על "${widget.bookTitle}"'
-                              : 'הדגשה והצגת טורים יחולו על כל הספרים',
-                          style: const TextStyle(fontSize: 12),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    AppSegmentedControl<PageShapeDisplaySettingsScope>(
+                      options: const [
+                        SegmentOption(
+                          value: PageShapeDisplaySettingsScope.book,
+                          label: 'ספר זה',
                         ),
-                        value: _saveForCurrentBookOnly,
-                        onChanged: (value) async {
-                          if (!value && _saveForCurrentBookOnly) {
-                            final confirm = await showWarningDialog(
-                              context: context,
-                              title: 'חזרה להגדרות גלובליות',
-                              content:
-                                  'האם לאפס את הגדרות התצוגה הספציפיות לספר זה ולחזור להגדרות הגלובליות?',
-                              confirmText: 'אפס',
-                            );
-                            if (confirm == true) {
-                              await _resetDisplaySettingsToGlobal();
-                            }
-                          } else {
-                            setState(() {
-                              _saveForCurrentBookOnly = value;
-                              _hasChanges = true;
-                            });
-                            await _saveSettings();
-                          }
-                        },
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                      ),
-                    ],
-                  ),
+                        SegmentOption(
+                          value: PageShapeDisplaySettingsScope.workspace,
+                          label: 'שולחן עבודה זה',
+                        ),
+                        SegmentOption(
+                          value: PageShapeDisplaySettingsScope.global,
+                          label: 'גלובלי',
+                        ),
+                      ],
+                      currentValue: _displaySettingsScope,
+                      onChanged: _onDisplayScopeChanged,
+                      expandToFillWidth: true,
+                      showSelectedIcon: false,
+                      height: 40,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _displaySettingsSubtitle,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
               ),
 

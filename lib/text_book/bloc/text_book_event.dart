@@ -393,21 +393,28 @@ class SetLinksLoading extends TextBookEvent {
 class UpdateAvailableCommentators extends TextBookEvent {
   final List<String> availableCommentators;
   final List<dynamic> commentatorGroups;
+  final Set<String> rareCommentators;
 
   const UpdateAvailableCommentators(
-      this.availableCommentators, this.commentatorGroups);
+      this.availableCommentators, this.commentatorGroups,
+      [this.rareCommentators = const {}]);
 
   @override
-  List<Object?> get props => [availableCommentators, commentatorGroups];
+  List<Object?> get props =>
+      [availableCommentators, commentatorGroups, rareCommentators];
 }
 
 class RefreshLinksForCurrentWindow extends TextBookEvent {
   final String reason;
+  final String? workspaceId;
 
-  const RefreshLinksForCurrentWindow({this.reason = 'manual'});
+  const RefreshLinksForCurrentWindow({
+    this.reason = 'manual',
+    this.workspaceId,
+  });
 
   @override
-  List<Object?> get props => [reason];
+  List<Object?> get props => [reason, workspaceId];
 }
 
 class OpenFullFileEditor extends TextBookEvent {

@@ -36,6 +36,7 @@ class AppSegmentedControl<T> extends StatelessWidget {
   final T currentValue;
   final ValueChanged<T> onChanged;
   final bool expandToFillWidth;
+  final bool showSelectedIcon;
   final double? height;
 
   const AppSegmentedControl({
@@ -44,6 +45,7 @@ class AppSegmentedControl<T> extends StatelessWidget {
     required this.currentValue,
     required this.onChanged,
     this.expandToFillWidth = false,
+    this.showSelectedIcon = true,
     this.height,
   });
 
@@ -102,7 +104,7 @@ class AppSegmentedControl<T> extends StatelessWidget {
       onSelectionChanged: (Set<T> selection) {
         if (selection.isNotEmpty) onChanged(selection.first);
       },
-      showSelectedIcon: true,
+      showSelectedIcon: showSelectedIcon,
       selectedIcon: const Icon(FluentIcons.checkmark_24_regular, size: 16),
       style: isFixed
           ? _buttonStyle(cs).copyWith(
