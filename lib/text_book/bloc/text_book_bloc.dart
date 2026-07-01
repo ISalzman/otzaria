@@ -1234,6 +1234,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   Future<List<String>?> _resolvePageShapeTargetBookTitlesForLinks(
     TextBookLoaded state,
+    String? workspaceId,
   ) async {
     final candidateCommentators = {
       ...state.availableCommentators,
@@ -1249,11 +1250,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       state.book.title,
       heCategories: state.book.heCategories,
     );
-    final columnVisibility =
-        PageShapeSettingsManager.getColumnVisibility(state.book.title);
+    final columnVisibility = PageShapeSettingsManager.getColumnVisibility(
+      state.book.title,
+      workspaceId: workspaceId,
+    );
     final cacheKey = [
       state.book.title,
       state.book.heCategories ?? '',
+      workspaceId ?? '',
       candidateCommentators.join('||'),
       _serializePageShapeConfiguration(storedConfiguration),
       _serializeColumnVisibility(columnVisibility),
@@ -1294,10 +1298,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   Future<List<String>?> _resolveTargetBookTitlesForLinks(
     TextBookLoaded state,
+    String? workspaceId,
   ) async {
     if (state.showPageShapeView) {
       final pageShapeTargets =
-          await _resolvePageShapeTargetBookTitlesForLinks(state);
+          await _resolvePageShapeTargetBookTitlesForLinks(state, workspaceId);
       return pageShapeTargets ?? const <String>[];
     }
 
@@ -2082,6 +2087,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     bool force = false,
     Iterable<String>? targetBookTitlesOverride,
     bool forceLoadAll = false,
+    String? workspaceId,
   }) async {
     final runtimeStateBeforeWindowCheck = state;
     if (!force &&
@@ -2114,7 +2120,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     } else {
       final runtimeState = state;
       if (runtimeState is TextBookLoaded) {
-        targetBookTitles = await _resolveTargetBookTitlesForLinks(runtimeState);
+        targetBookTitles = await _resolveTargetBookTitlesForLinks(
+          runtimeState,
+          workspaceId,
+        );
         targetBookTitlesSignature =
             _targetBookTitlesSignature(targetBookTitles);
       }
@@ -2207,6 +2216,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             _loadLinksInBackground(
               latestState.book,
               latestState.visibleIndices,
+              workspaceId: workspaceId,
             );
           }
         }
@@ -2310,6 +2320,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       currentState.book,
       currentState.visibleIndices,
       force: true,
+      workspaceId: event.workspaceId,
     );
   }
 
