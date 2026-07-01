@@ -34,14 +34,14 @@ enum _FolderContentKind {
 }
 
 /// Widget להוספה וניהול תיקיות מותאמות אישית
-class CustomFoldersTile extends StatefulWidget {
-  const CustomFoldersTile({super.key});
+class CustomFoldersPanel extends StatefulWidget {
+  const CustomFoldersPanel({super.key});
 
   @override
-  State<CustomFoldersTile> createState() => _CustomFoldersTileState();
+  State<CustomFoldersPanel> createState() => _CustomFoldersPanelState();
 }
 
-class _CustomFoldersTileState extends State<CustomFoldersTile> {
+class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
   bool _isExpanded = false;
 
   /// תוצאות סיווג הרכב הקבצים לכל תיקייה (לפי נתיב). מתמלא בעצלתיים
