@@ -114,6 +114,49 @@ void main() {
       );
     });
 
+    test('resolveFileBookPathForTesting מתקן נתיב PDF ישן לפי הספרייה הפעילה',
+        () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_pdf_path');
+      final activeLibrary = path.join(tempDir.path, 'new', 'books');
+      final stalePath = path.join(
+        tempDir.path,
+        'old',
+        'books',
+        DatabaseConstants.talmudBavliFolderName,
+        'ברכות.pdf',
+      );
+      final activePath = path.join(
+        activeLibrary,
+        DatabaseConstants.talmudBavliFolderName,
+        'ברכות.pdf',
+      );
+      final previousLibraryPath =
+          Settings.getValue<String>(SettingsRepository.keyLibraryPath);
+
+      addTearDown(() async {
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryPath,
+          previousLibraryPath ?? '',
+        );
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      await Directory(path.dirname(activePath)).create(recursive: true);
+      await File(activePath).writeAsBytes([1]);
+      await Settings.setValue<String>(
+        SettingsRepository.keyLibraryPath,
+        activeLibrary,
+      );
+
+      final resolved = DatabaseLibraryProvider.instance
+          .resolveFileBookPathForTesting(stalePath);
+
+      expect(resolved, activePath);
+    });
+
     test('loadBookLinksRowsForTesting טוען קישורים דרך sqlite ב-isolate worker',
         () async {
       final tempDir = await Directory.systemTemp.createTemp('otzaria_db_links');

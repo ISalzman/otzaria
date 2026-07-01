@@ -18,6 +18,7 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/utils/ui/commentary_pane_policy.dart';
+import 'package:otzaria/utils/file/file_book_path_resolver.dart';
 import 'package:otzaria/models/links.dart' as otz_links;
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/services/commentary_service.dart';
@@ -280,6 +281,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   late final PdfViewerController pdfController;
   late final PdfBookBloc _bloc;
+  late final String _resolvedPdfPath;
   late final bool _pdfFileExists;
   // שמור reference יציב ל-PdfDocumentRefFile כדי למנוע race-condition ב-pdfrx:
   // כל parent-rebuild יוצר widget חדש עם PdfDocumentRefFile חדש (object שונה).
@@ -501,6 +503,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _initialPageNumber = widget.tab.pageNumber;
     pdfController = PdfViewerController();
     widget.tab.pdfViewerController = pdfController;
+    _resolvedPdfPath = resolveMovedFileBookPath(widget.tab.book.path);
     _pdfDocumentRef = _createDocumentRef();
 
     final settingsBloc = context.read<SettingsBloc>();
@@ -530,8 +533,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     );
 
     _loadInitialLayoutMode();
-
-    // PDF is always a file on the file system — use book.path directly
 
     // הגדרת ערכים התחלתיים מ-Settings
     _settingsSub = settingsBloc.stream.listen((state) {
@@ -575,7 +576,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _loadActiveCommentators();
 
     // בדיקת קיום הקובץ — פעם אחת ב-initState, לפני הבנייה הראשונה
-    _pdfFileExists = File(widget.tab.book.path).existsSync();
+    _pdfFileExists = File(_resolvedPdfPath).existsSync();
 
     // הגדרת Bloc לטיפול בקיום הקובץ ושאר מצבים
     _bloc.add(const pdf_events.LoadPdfDocument());
@@ -1383,7 +1384,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // לסדר ההפעלה של onViewerReady / onDocumentLoadFinished.
     _documentFullyLoaded = false;
     return PdfDocumentRefFile(
-      widget.tab.book.path,
+      _resolvedPdfPath,
       // תמיד progressive: pdfrx מציג את העמוד הראשון מיד במקום
       // להמתין למטא-דאטה של כל העמודים. המעבר ל"stable" מטופל ב-screen
       // עם debounce timer, ולכן אין צורך לכבות progressive loading.
@@ -3221,7 +3222,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       ),
                       child: Stack(
                         children: [
-                          _buildPdfViewerFromFile(widget.tab.book.path),
+                          _buildPdfViewerFromFile(_resolvedPdfPath),
                           BlocBuilder<PdfBookBloc, PdfBookState>(
                             buildWhen: (prev, curr) {
                               if (prev is PdfBookLoaded &&
@@ -3454,7 +3455,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                         bookTitle: widget.tab.book.title,
                         bookTopics: widget.tab.book.topics,
                         bookCategoryPath: widget.tab.book.categoryPath,
-                        pdfFilePath: widget.tab.book.path,
+                        pdfFilePath: _resolvedPdfPath,
                         initialSearchText: widget.tab.searchText,
                         initialSearchOptions: widget.tab.searchOptions,
                         initialAlternativeWords: widget.tab.alternativeWords,
@@ -4146,7 +4147,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   Future<void> _handlePrintPress(BuildContext context) async {
     if (!context.mounted) return;
-    final file = File(widget.tab.book.path);
+    final file = File(_resolvedPdfPath);
     final currentPage = widget.tab.pdfViewerController.isReady
         ? (widget.tab.pdfViewerController.pageNumber ?? widget.tab.pageNumber)
         : widget.tab.pageNumber;

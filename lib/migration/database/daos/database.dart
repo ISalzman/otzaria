@@ -197,9 +197,43 @@ class MyDatabase {
     // Ensure schema exists (all scripts use CREATE TABLE/INDEX IF NOT EXISTS).
     for (final script in _getCreateScripts()) {
       db.execute(script);
+      if (script.contains('CREATE TABLE IF NOT EXISTS generation')) {
+        _ensureGenerationSchema(db);
+      } else if (script.contains('CREATE TABLE IF NOT EXISTS author')) {
+        _ensureAuthorSchema(db);
+      }
     }
 
     return db;
+  }
+
+  void _ensureGenerationSchema(sqlite3.Database db) {
+    final columns = db
+        .select('PRAGMA table_info(generation)')
+        .map((row) => row['name'] as String)
+        .toSet();
+
+    if (!columns.contains('startYear')) {
+      db.execute('ALTER TABLE generation ADD COLUMN startYear INTEGER');
+    }
+    if (!columns.contains('endYear')) {
+      db.execute('ALTER TABLE generation ADD COLUMN endYear INTEGER');
+    }
+    if (!columns.contains('parentGenerationId')) {
+      db.execute(
+          'ALTER TABLE generation ADD COLUMN parentGenerationId INTEGER');
+    }
+  }
+
+  void _ensureAuthorSchema(sqlite3.Database db) {
+    final columns = db
+        .select('PRAGMA table_info(author)')
+        .map((row) => row['name'] as String)
+        .toSet();
+
+    if (!columns.contains('generationId')) {
+      db.execute('ALTER TABLE author ADD COLUMN generationId INTEGER');
+    }
   }
 
   void close() {

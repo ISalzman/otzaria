@@ -349,7 +349,10 @@ class AppPaths {
   ///
   /// יושב לצד `seforim.db`. בהיעדרו החיפוש המקורב נופל חזרה ל-fuzzy רגיל.
   static Future<String> getMagicDictionaryPath() async {
-    return p.join(DatabaseConstants.getDatabaseDirectoryPath(), 'lexical.db');
+    return p.join(
+      DatabaseConstants.getDatabaseDirectoryPath(),
+      DatabaseConstants.lexicalDatabaseFileName,
+    );
   }
 
   /// מחזיר רשימת נתיבי ברירת מחדל לאינדקס שאינם הנתיב הפעיל כעת.

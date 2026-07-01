@@ -1,7 +1,16 @@
+import 'dart:io';
+
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
+import 'package:otzaria/migration/models/book.dart' as migration_models;
+import 'package:otzaria/migration/models/category.dart' as migration_models;
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/dialogs/change_location_dialog.dart';
+import 'package:path/path.dart' as p;
 
 Widget _openButton(void Function(BuildContext) onOpen) => MaterialApp(
       home: Scaffold(
@@ -225,4 +234,254 @@ void main() {
       expect(find.text('מיקום ברירת מחדל'), findsOneWidget);
     });
   });
+
+  group('remapMovedFileBookPaths', () {
+    test('מדלג על PDF רשמי כי seforim.db לא מחזיק עמודות נתיב', () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria-move-official-pdf-');
+      final from = p.join(tempDir.path, 'old', 'books');
+      final to = p.join(tempDir.path, 'new', 'books');
+      final oldPath = p.join(from, 'תלמוד בבלי', 'ברכות.pdf');
+
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      await expectLater(
+        remapMovedFileBookPaths(
+          [
+            PdfBook(
+              id: 1,
+              title: 'ברכות',
+              path: oldPath,
+            ),
+          ],
+          from,
+          to,
+        ),
+        completes,
+      );
+    });
+
+    test('מעדכן נתיב PDF אישי שהועבר יחד עם הספרייה', () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria-move-user-pdf-');
+      final previousDataRoot = AppPaths.cachedDataRootPath;
+      final dataRoot = p.join(tempDir.path, 'data-root');
+      final from = p.join(tempDir.path, 'old', 'books');
+      final to = p.join(tempDir.path, 'new', 'books');
+      final oldPath = p.join(from, 'אישי', 'ספר.pdf');
+      final newPath = p.join(to, 'אישי', 'ספר.pdf');
+
+      addTearDown(() async {
+        await UserBooksDatabaseHolder.instance.close();
+        AppPaths.debugOverrideDataRootPath(previousDataRoot);
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+      AppPaths.debugOverrideDataRootPath(dataRoot);
+      await UserBooksDatabaseHolder.instance.close();
+
+      await Directory(p.dirname(oldPath)).create(recursive: true);
+      await Directory(p.dirname(newPath)).create(recursive: true);
+      await File(oldPath).writeAsBytes([1, 2]);
+      await File(newPath).writeAsBytes([1, 2, 3]);
+
+      final repository = await UserBooksDatabaseHolder.instance.repository;
+      final sourceId = await repository.insertSource('user-test', -20);
+      final categoryId = await repository.insertCategory(
+        const migration_models.Category(title: 'אישי'),
+      );
+      final bookId = await repository.insertBook(
+        migration_models.Book(
+          categoryId: categoryId,
+          sourceId: sourceId,
+          title: 'ספר',
+          filePath: oldPath,
+          fileType: 'pdf',
+          isPersonal: true,
+        ),
+      );
+
+      await remapMovedFileBookPaths(
+        [
+          PdfBook(
+            id: bookId,
+            title: 'ספר',
+            path: oldPath,
+            isUserBook: true,
+          ),
+        ],
+        from,
+        to,
+      );
+
+      expect(await repository.getExternalBookByFilePath(oldPath), isNull);
+
+      final updated = await repository.getExternalBookByFilePath(newPath);
+      expect(updated, isNotNull);
+      expect(updated!.fileSize, 3);
+    });
+  });
+
+  group('shouldCopyIndexDuringLibraryMove', () {
+    test('מדלג על העתקת אינדקס בזמן אינדוקס פעיל', () {
+      expect(
+        shouldCopyIndexDuringLibraryMove(
+          indexNeedsMove: true,
+          indexingActive: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('מעתיק אינדקס רק כשצריך ואין אינדוקס פעיל', () {
+      expect(
+        shouldCopyIndexDuringLibraryMove(
+          indexNeedsMove: true,
+          indexingActive: false,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldCopyIndexDuringLibraryMove(
+          indexNeedsMove: false,
+          indexingActive: false,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('library move rollback helpers', () {
+    test('חוסם העברה כשיעד הספרייה כבר קיים', () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria-move-target-');
+      final target = p.join(tempDir.path, 'books');
+
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      await Directory(target).create(recursive: true);
+
+      await expectLater(
+        ensureLibraryMoveTargetAvailableForTesting(target),
+        throwsA(isA<FileSystemException>()),
+      );
+    });
+
+    test('מנקה staging ויעדים שנוצרו אחרי כשל בהעברה', () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria-move-cleanup-');
+      final stagingRoot = p.join(tempDir.path, '.otzaria_move_test');
+      final newLibrary = p.join(tempDir.path, 'books');
+      final newIndex = p.join(tempDir.path, 'index');
+
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      await Directory(stagingRoot).create(recursive: true);
+      await Directory(newLibrary).create(recursive: true);
+      await Directory(newIndex).create(recursive: true);
+      await File(p.join(stagingRoot, 'tmp')).writeAsString('tmp');
+      await File(p.join(newLibrary, 'book')).writeAsString('book');
+      await File(p.join(newIndex, 'idx')).writeAsString('idx');
+
+      await cleanupCreatedMoveTargetsForTesting(
+        stagingRoot: stagingRoot,
+        newLibrary: newLibrary,
+        newIndex: newIndex,
+        finalLibraryCreated: true,
+        finalIndexCreated: true,
+      );
+
+      expect(await Directory(stagingRoot).exists(), isFalse);
+      expect(await Directory(newLibrary).exists(), isFalse);
+      expect(await Directory(newIndex).exists(), isFalse);
+    });
+  });
+}
+
+class _MemoryCacheProvider extends CacheProvider {
+  final Map<String, Object?> _values = {};
+
+  @override
+  Future<void> init() async {}
+
+  @override
+  bool containsKey(String key) => _values.containsKey(key);
+
+  @override
+  Set getKeys() => _values.keys.toSet();
+
+  @override
+  bool? getBool(String key, {bool? defaultValue}) =>
+      _values[key] as bool? ?? defaultValue;
+
+  @override
+  double? getDouble(String key, {double? defaultValue}) =>
+      _values[key] as double? ?? defaultValue;
+
+  @override
+  int? getInt(String key, {int? defaultValue}) =>
+      _values[key] as int? ?? defaultValue;
+
+  @override
+  String? getString(String key, {String? defaultValue}) =>
+      _values[key] as String? ?? defaultValue;
+
+  @override
+  T? getValue<T>(String key, {T? defaultValue}) {
+    final value = _values[key];
+    if (value is T) {
+      return value;
+    }
+    return defaultValue;
+  }
+
+  @override
+  Future<void> remove(String key) async {
+    _values.remove(key);
+  }
+
+  @override
+  Future<void> removeAll() async {
+    _values.clear();
+  }
+
+  @override
+  Future<void> setBool(String key, bool? value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> setDouble(String key, double? value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> setInt(String key, int? value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> setObject<T>(String key, T? value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> setString(String key, String? value) async {
+    _values[key] = value;
+  }
 }
