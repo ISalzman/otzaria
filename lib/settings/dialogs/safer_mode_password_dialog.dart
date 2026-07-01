@@ -4,14 +4,15 @@ import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 
-/// דיאלוג לאימות סיסמה למצב סייפר
-class PasswordVerificationDialog extends StatefulWidget {
+/// דיאלוג לאימות סיסמה במצב סייפר
+class SaferModePasswordDialog extends StatefulWidget {
   final Future<bool> Function(String password) onVerify;
   final String title;
   final String? hint;
 
-  const PasswordVerificationDialog({
+  const SaferModePasswordDialog({
     super.key,
     required this.onVerify,
     this.title = 'הזן סיסמה',
@@ -19,16 +20,18 @@ class PasswordVerificationDialog extends StatefulWidget {
   });
 
   @override
-  State<PasswordVerificationDialog> createState() =>
-      _PasswordVerificationDialogState();
+  State<SaferModePasswordDialog> createState() =>
+      _SaferModePasswordDialogState();
 }
 
-class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
+class _SaferModePasswordDialogState extends State<SaferModePasswordDialog>
     with
         DialogNavigationMixin,
-        DialogFocusRestorerMixin<PasswordVerificationDialog> {
+        DialogFocusRestorerMixin<SaferModePasswordDialog> {
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _textFieldFocusNode = FocusNode();
+  final FocusNode _cancelFocusNode = FocusNode();
+  final FocusNode _confirmFocusNode = FocusNode();
   bool _isObscured = true;
   bool _isVerifying = false;
 
@@ -46,6 +49,8 @@ class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
   void dispose() {
     _passwordController.dispose();
     _textFieldFocusNode.dispose();
+    _cancelFocusNode.dispose();
+    _confirmFocusNode.dispose();
     super.dispose();
   }
 
@@ -142,86 +147,54 @@ class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
           ),
         ),
         actions: [
-          _buildButton(
+          ActionButton.neutral(
             text: 'ביטול',
-            isFocused: focusedButtonIndex == 0,
-            onPressed: () => Navigator.of(context).pop(false),
-            enabled: !_isVerifying,
+            focusNode: _cancelFocusNode,
+            onPressed:
+                !_isVerifying ? () => Navigator.of(context).pop(false) : null,
           ),
-          _buildButton(
+          ActionButton.recommended(
             text: 'אישור',
-            isFocused: focusedButtonIndex == 1,
-            isConfirm: true,
-            onPressed: _handleVerify,
-            enabled: !_isVerifying,
+            focusNode: _confirmFocusNode,
+            onPressed: !_isVerifying ? _handleVerify : null,
             isLoading: _isVerifying,
           ),
         ],
       ),
     );
   }
-
-  Widget _buildButton({
-    required String text,
-    required bool isFocused,
-    required VoidCallback onPressed,
-    required bool enabled,
-    bool isConfirm = false,
-    bool isLoading = false,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    final showHover = isFocused && !_textFieldFocusNode.hasFocus;
-
-    if (isConfirm) {
-      return FilledButton(
-        onPressed: enabled ? onPressed : null,
-        style: FilledButton.styleFrom(
-          backgroundColor:
-              showHover ? cs.primary.withValues(alpha: 0.9) : cs.primary,
-          foregroundColor: cs.onPrimary,
-        ),
-        child: isLoading
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Text(text),
-      );
-    } else {
-      return FilledButton.tonal(
-        onPressed: enabled ? onPressed : null,
-        style: FilledButton.styleFrom(
-          backgroundColor: showHover
-              ? cs.secondaryContainer.withValues(alpha: 0.9)
-              : cs.secondaryContainer,
-          foregroundColor: cs.onSecondaryContainer,
-        ),
-        child: Text(text),
-      );
-    }
-  }
 }
 
-/// דיאלוג להגדרת סיסמה חדשה
-class SetPasswordDialog extends StatefulWidget {
+/// דיאלוג להגדרת סיסמה למצב סייפר — הגדרה, שינוי, או הסרה
+class SaferModeSetPasswordDialog extends StatefulWidget {
   final Future<void> Function(String password) onSetPassword;
+  final Future<void> Function()? onClearPassword;
 
-  const SetPasswordDialog({
+  /// כשמצב הסייפר פעיל אי אפשר להסיר את הסיסמה - יש להשבית אותו קודם.
+  final bool isSaferModeEnabled;
+
+  const SaferModeSetPasswordDialog({
     super.key,
     required this.onSetPassword,
+    this.onClearPassword,
+    this.isSaferModeEnabled = false,
   });
 
   @override
-  State<SetPasswordDialog> createState() => _SetPasswordDialogState();
+  State<SaferModeSetPasswordDialog> createState() =>
+      _SaferModeSetPasswordDialogState();
 }
 
-class _SetPasswordDialogState extends State<SetPasswordDialog>
-    with DialogNavigationMixin, DialogFocusRestorerMixin<SetPasswordDialog> {
+class _SaferModeSetPasswordDialogState extends State<SaferModeSetPasswordDialog>
+    with
+        DialogNavigationMixin,
+        DialogFocusRestorerMixin<SaferModeSetPasswordDialog> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
   final FocusNode _passwordFocusNode = FocusNode();
   final FocusNode _confirmFocusNode = FocusNode();
+  final FocusNode _cancelButtonFocusNode = FocusNode();
+  final FocusNode _saveButtonFocusNode = FocusNode();
   bool _isObscured1 = true;
   bool _isObscured2 = true;
   bool _isSaving = false;
@@ -242,6 +215,8 @@ class _SetPasswordDialogState extends State<SetPasswordDialog>
     _confirmController.dispose();
     _passwordFocusNode.dispose();
     _confirmFocusNode.dispose();
+    _cancelButtonFocusNode.dispose();
+    _saveButtonFocusNode.dispose();
     super.dispose();
   }
 
@@ -275,6 +250,36 @@ class _SetPasswordDialogState extends State<SetPasswordDialog>
     } catch (e) {
       if (!mounted) return;
       UiSnack.showError('שגיאה בשמירת הסיסמה: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleClear() async {
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: 'הסרת סיסמה',
+      content: 'לא תידרש עוד סיסמה לגישה להגדרות.',
+      confirmText: 'הסר סיסמה',
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await widget.onClearPassword!();
+      if (!mounted) return;
+      UiSnack.show('הסיסמה הוסרה');
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      UiSnack.showError('שגיאה בהסרת הסיסמה: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -366,69 +371,38 @@ class _SetPasswordDialogState extends State<SetPasswordDialog>
                 ),
                 onSubmitted: (_) => _handleSave(),
               ),
+              if (widget.onClearPassword != null) ...[
+                const SizedBox(height: 16),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: ActionButton.ghost(
+                    text: widget.isSaferModeEnabled
+                        ? 'לא ניתן למחוק את הסיסמה כשמצב סייפר פעיל'
+                        : 'מחיקת סיסמה',
+                    onPressed: (!_isSaving && !widget.isSaferModeEnabled)
+                        ? _handleClear
+                        : null,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
         actions: [
-          _buildButton(
+          ActionButton.neutral(
             text: 'ביטול',
-            isFocused: focusedButtonIndex == 0,
-            onPressed: () => Navigator.of(context).pop(false),
-            enabled: !_isSaving,
+            focusNode: _cancelButtonFocusNode,
+            onPressed:
+                !_isSaving ? () => Navigator.of(context).pop(false) : null,
           ),
-          _buildButton(
+          ActionButton.recommended(
             text: 'שמור',
-            isFocused: focusedButtonIndex == 1,
-            isConfirm: true,
-            onPressed: _handleSave,
-            enabled: !_isSaving,
+            focusNode: _saveButtonFocusNode,
+            onPressed: !_isSaving ? _handleSave : null,
             isLoading: _isSaving,
           ),
         ],
       ),
     );
-  }
-
-  Widget _buildButton({
-    required String text,
-    required bool isFocused,
-    required VoidCallback onPressed,
-    required bool enabled,
-    bool isConfirm = false,
-    bool isLoading = false,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    final showHover = isFocused &&
-        !_passwordFocusNode.hasFocus &&
-        !_confirmFocusNode.hasFocus;
-
-    if (isConfirm) {
-      return FilledButton(
-        onPressed: enabled ? onPressed : null,
-        style: FilledButton.styleFrom(
-          backgroundColor:
-              showHover ? cs.primary.withValues(alpha: 0.9) : cs.primary,
-          foregroundColor: cs.onPrimary,
-        ),
-        child: isLoading
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Text(text),
-      );
-    } else {
-      return FilledButton.tonal(
-        onPressed: enabled ? onPressed : null,
-        style: FilledButton.styleFrom(
-          backgroundColor: showHover
-              ? cs.secondaryContainer.withValues(alpha: 0.9)
-              : cs.secondaryContainer,
-          foregroundColor: cs.onSecondaryContainer,
-        ),
-        child: Text(text),
-      );
-    }
   }
 }

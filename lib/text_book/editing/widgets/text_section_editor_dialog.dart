@@ -18,7 +18,7 @@ import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'markdown_toolbar.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
-import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 
 /// Full-screen dialog for editing text sections with split-pane interface
 ///
@@ -219,7 +219,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog>
 
   void _save() async {
     // במצב סייפר, נדרוש סיסמה לפני שמירה
-    if (!await verifyPasswordForAction(context)) {
+    if (!await verifySaferModePassword(context)) {
       return;
     }
 

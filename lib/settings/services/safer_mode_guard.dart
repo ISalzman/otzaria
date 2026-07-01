@@ -3,23 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
-import 'package:otzaria/settings/services/safer_mode/password_verification_dialog.dart';
+import 'package:otzaria/settings/dialogs/safer_mode_password_dialog.dart';
 
-/// Wrapper שבודק סיסמה לפני כניסה למסך מוגן
-class ProtectedSettingsWrapper extends StatefulWidget {
+/// Wrapper שבודק סיסמה לפני כניסה למסך מוגן במצב סייפר
+class SaferModeGuard extends StatefulWidget {
   final Widget child;
 
-  const ProtectedSettingsWrapper({
+  const SaferModeGuard({
     super.key,
     required this.child,
   });
 
   @override
-  State<ProtectedSettingsWrapper> createState() =>
-      _ProtectedSettingsWrapperState();
+  State<SaferModeGuard> createState() => _SaferModeGuardState();
 }
 
-class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
+class _SaferModeGuardState extends State<SaferModeGuard> {
   bool _isVerified = false;
   bool _isChecking = true;
   bool _dialogShown = false;
@@ -70,7 +69,7 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
     final verified = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
-      builder: (dialogContext) => PasswordVerificationDialog(
+      builder: (dialogContext) => SaferModePasswordDialog(
         title: 'הזן סיסמה',
         hint: 'הנך במצב סייפר.\nהזן את הסיסמה כדי לגשת להגדרות',
         onVerify: (password) async {
@@ -187,16 +186,16 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
   }
 }
 
-/// פונקציה עוזרת לבדיקה האם צריך הגנה
-bool shouldProtectSettings(BuildContext context) {
+/// פונקציה עוזרת לבדיקה האם צריך אימות סיסמה במצב סייפר
+bool shouldRequireSaferModePassword(BuildContext context) {
   final state = context.read<SettingsBloc>().state;
   final repository = context.read<SettingsRepository>();
   return state.protectedModeEnabled && repository.hasProtectedModePassword();
 }
 
-/// פונקציה עוזרת לאימות סיסמה
-Future<bool> verifyPasswordForAction(BuildContext context) async {
-  if (!shouldProtectSettings(context)) {
+/// פונקציה עוזרת לאימות סיסמה לפני ביצוע פעולה מוגנת במצב סייפר
+Future<bool> verifySaferModePassword(BuildContext context) async {
+  if (!shouldRequireSaferModePassword(context)) {
     return true; // אין הגנה - מאושר
   }
 
@@ -204,7 +203,7 @@ Future<bool> verifyPasswordForAction(BuildContext context) async {
 
   final verified = await showDialog<bool>(
     context: context,
-    builder: (context) => PasswordVerificationDialog(
+    builder: (context) => SaferModePasswordDialog(
       title: 'אמת סיסמה',
       hint: 'הנך במצב סייפר.\nהזן את הסיסמה כדי לבצע פעולה זו',
       onVerify: (password) async {

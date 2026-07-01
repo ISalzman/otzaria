@@ -33,7 +33,7 @@ import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/find_ref/repository/find_ref_factory.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 
@@ -378,7 +378,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
       pickFolder: ({String? title}) async {
         final ctx = navigatorKey.currentContext;
         if (ctx == null) return null;
-        if (!await verifyPasswordForAction(ctx)) return null;
+        if (!await verifySaferModePassword(ctx)) return null;
         return FilePicker.getDirectoryPath(
           lockParentWindow: true,
           dialogTitle: title,
@@ -387,7 +387,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
       pickFile: ({List<String>? allowedExtensions, String? title}) async {
         final ctx = navigatorKey.currentContext;
         if (ctx == null) return null;
-        if (!await verifyPasswordForAction(ctx)) return null;
+        if (!await verifySaferModePassword(ctx)) return null;
         final hasExtensions =
             allowedExtensions != null && allowedExtensions.isNotEmpty;
         final result = await FilePicker.pickFiles(
