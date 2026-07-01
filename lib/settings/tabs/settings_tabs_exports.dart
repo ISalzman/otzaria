@@ -5,4 +5,4 @@ export 'library_settings_tab.dart';
 export 'tools_settings_tab.dart';
 export 'shortcuts_settings_tab.dart';
 export 'system_settings_tab.dart';
-export 'about_dev_tab.dart';
+export 'about_settings_tab.dart';

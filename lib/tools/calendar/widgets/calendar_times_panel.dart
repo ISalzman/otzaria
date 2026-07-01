@@ -837,9 +837,6 @@ class _ZmanCard extends StatelessWidget {
       elevation: 0,
       color: bgColor,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-      ),
       // minHeight במקום height קבוע: כרטיסי composite עם שתי אפשרויות התראה
       // צריכים ~133px (Row של שני _buildCompositeSegment עם כפתור התראה),
       // ולכן height: 118 גרם ל-overflow של 11-15px בתחתית. הגבלה מינימלית
@@ -1151,7 +1148,7 @@ class _OverflowAwareTooltipText extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 320),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppTokens.borderRadiusAll,
             border: Border.all(
               color: scheme.outlineVariant.withValues(alpha: 0.65),
             ),
@@ -1243,7 +1240,6 @@ class _MoladCard extends StatelessWidget {
     final scheme = theme.colorScheme;
 
     return AppCard(
-      radius: AppTokens.radiusMD,
       padding: const EdgeInsets.all(10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

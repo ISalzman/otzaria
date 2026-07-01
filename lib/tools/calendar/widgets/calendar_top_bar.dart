@@ -14,6 +14,7 @@
 // החיצים ותאריך תמיד בשורה עליונה, במיקום קבוע שלא זז עם שינוי אורך התאריך.
 
 import 'dart:math' as math;
+import 'package:otzaria/theme/app_tokens.dart';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
@@ -405,7 +406,7 @@ class _CalendarTopBarState extends State<CalendarTopBar>
               child: Material(
                 elevation: 8,
                 shadowColor: cs.shadow,
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: AppTokens.borderRadiusAll,
                 color: cs.surfaceContainerHigh,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
@@ -530,7 +531,7 @@ class _CalendarTopBarState extends State<CalendarTopBar>
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
             color: backgroundColor,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: AppTokens.borderRadiusAll,
             border: Border.all(
               color: foregroundColor.withValues(alpha: 0.18),
             ),
@@ -844,12 +845,12 @@ class _ViewBtn extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: AppTokens.borderRadiusAll,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: AppTokens.borderRadiusAll,
             border: Border.all(color: borderColor, width: 1),
             boxShadow: [
               BoxShadow(

@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
@@ -209,7 +210,7 @@ class _PluginListTile extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.tertiary,
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: AppTokens.borderRadiusAll,
                   ),
                   child: Text(
                     'DEV',

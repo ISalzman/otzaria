@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/models/books.dart';
@@ -174,7 +175,7 @@ class _ItemsListViewState extends State<ItemsListView> {
       ),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppTokens.borderRadiusAll,
         border: Border.all(
           color: cs.outlineVariant.withValues(alpha: 0.55),
         ),
@@ -391,7 +392,8 @@ class _ItemsListViewState extends State<ItemsListView> {
 
   void _activateFocusedItem(BuildContext context) {
     if (_focusedOriginalIndex == -1) return;
-    final matches = _displayEntries.where((e) => e.key == _focusedOriginalIndex);
+    final matches =
+        _displayEntries.where((e) => e.key == _focusedOriginalIndex);
     if (matches.isEmpty) return;
     final entry = matches.first;
     widget.onItemTap(context, entry.value, entry.key);
@@ -401,7 +403,8 @@ class _ItemsListViewState extends State<ItemsListView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = _itemKeys[_focusedOriginalIndex]?.currentContext;
       if (ctx != null) {
-        Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 150));
+        Scrollable.ensureVisible(ctx,
+            duration: const Duration(milliseconds: 150));
       }
     });
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/theme/app_fonts.dart';
@@ -357,7 +358,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                       .colorScheme
                       .surfaceContainerHighest
                       .withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppTokens.borderRadiusAll,
                 ),
                 // Material שקוף: ListTile מצייר רקע ו-ink על ה-Material הקרוב,
                 // ובלעדיו ה-DecoratedBox של ה-Container מסתיר אותם (אזהרת דיבוג)
@@ -440,7 +441,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                       .colorScheme
                       .primaryContainer
                       .withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppTokens.borderRadiusAll,
                   border: Border.all(
                     color: Theme.of(context)
                         .colorScheme
@@ -1082,7 +1083,7 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
                       : null,
                   isDense: true,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8.0),
+                    borderRadius: AppTokens.borderRadiusAll,
                   ),
                 ),
                 onChanged: (_) => _updateFilteredList(),

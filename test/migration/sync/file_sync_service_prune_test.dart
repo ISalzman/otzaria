@@ -289,7 +289,7 @@ void main() {
   });
 
   // Regression test for bug introduced in commit 72ca3b4aa:
-  // When a folder was added via UI (custom_folders_tile.dart → _scanAndAddExternalBooks),
+  // When a folder was added via UI (custom_folders_panel.dart → _scanAndAddExternalBooks),
   // insertCategory was called without rebuildCategoryClosure.
   // Then RefreshLibrary → _pruneRemovedCustomFoldersIfNeeded ran immediately,
   // and _categoryBelongsToAnyConfiguredFolder returned false (empty closure table),

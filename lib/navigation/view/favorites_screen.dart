@@ -1,6 +1,7 @@
 // a widget that contains two tabs: history and bookmarks.
 // The bookmarks tab is BookmarkView and the history is HistoryView.
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/history/view/history_screen.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
@@ -24,7 +25,7 @@ class _FavouritesScreenState extends State<FavouritesScreen>
       length: 2,
       child: Scaffold(
         appBar: TabBar(
-          splashBorderRadius: BorderRadius.circular(12),
+          splashBorderRadius: AppTokens.borderRadiusAll,
           tabs: const [
             Tab(
               text: 'סימניות',

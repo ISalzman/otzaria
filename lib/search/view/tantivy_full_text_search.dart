@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
@@ -725,7 +726,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
             ),
             decoration: BoxDecoration(
               color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: AppTokens.borderRadiusAll,
               border: Border.all(
                 color: cs.outlineVariant.withValues(alpha: 0.55),
               ),

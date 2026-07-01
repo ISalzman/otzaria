@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
@@ -122,125 +123,124 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
         ),
       ],
       child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ===== כרטיס מידע על התוסף =====
-            SettingsCard(
-              title: 'מידע על התוסף',
-              children: [
-                if (widget.manifest.description.isNotEmpty)
-                  SettingsActionTile.text(
-                    icon: FluentIcons.info_24_regular,
-                    title: 'תכונות',
-                    subtitle: widget.manifest.description,
-                  ),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ===== כרטיס מידע על התוסף =====
+          SettingsCard(
+            title: 'מידע על התוסף',
+            children: [
+              if (widget.manifest.description.isNotEmpty)
                 SettingsActionTile.text(
-                  icon: FluentIcons.person_24_regular,
-                  title: 'מחבר: ${widget.manifest.author}',
-                  subtitle: isUpdate
-                      ? 'עדכון גרסה ${widget.previousVersion}  ←  ${widget.manifest.version}'
-                      : 'גרסה ${widget.manifest.version}',
-                  subtitleLtr: true,
+                  icon: FluentIcons.info_24_regular,
+                  title: 'תכונות',
+                  subtitle: widget.manifest.description,
+                ),
+              SettingsActionTile.text(
+                icon: FluentIcons.person_24_regular,
+                title: 'מחבר: ${widget.manifest.author}',
+                subtitle: isUpdate
+                    ? 'עדכון גרסה ${widget.previousVersion}  ←  ${widget.manifest.version}'
+                    : 'גרסה ${widget.manifest.version}',
+                subtitleLtr: true,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // ===== באנר בולט: בקשת טעינה אוטומטית עם עליית האפליקציה =====
+          if (_requestsRunOnStartup) ...[
+            _RunOnStartupBanner(colorScheme: colorScheme),
+            const SizedBox(height: 16),
+          ],
+
+          if (_requestsOrderBeforeBuiltIns) ...[
+            SettingsCard(
+              title: 'מיקום במסך כלים',
+              subtitle: 'התוסף מבקש להופיע לפני הכלים המובנים במסך "כלים".',
+              children: [
+                SettingsActionTile.switchTile(
+                  icon: _allowOrderBeforeBuiltInsGranted
+                      ? FluentIcons.arrow_sort_up_24_regular
+                      : FluentIcons.arrow_sort_24_regular,
+                  iconColor: _allowOrderBeforeBuiltInsGranted
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                  title: 'אפשר לתוסף להופיע לפני הכלים המובנים',
+                  subtitle: 'אם תכבה את האפשרות, התוסף עדיין יותקן כרגיל, אבל '
+                      'יופיע רק אחרי הכלים המובנים גם אם המניפסט שלו ביקש אחרת.',
+                  value: _allowOrderBeforeBuiltInsGranted,
+                  onChanged: (value) {
+                    setState(() {
+                      _allowOrderBeforeBuiltInsGranted = value;
+                    });
+                  },
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
+          ],
 
-            // ===== באנר בולט: בקשת טעינה אוטומטית עם עליית האפליקציה =====
-            if (_requestsRunOnStartup) ...[
-              _RunOnStartupBanner(colorScheme: colorScheme),
-              const SizedBox(height: 16),
-            ],
-
-            if (_requestsOrderBeforeBuiltIns) ...[
-              SettingsCard(
-                title: 'מיקום במסך כלים',
-                subtitle: 'התוסף מבקש להופיע לפני הכלים המובנים במסך "כלים".',
-                children: [
-                  SettingsActionTile.switchTile(
-                    icon: _allowOrderBeforeBuiltInsGranted
-                        ? FluentIcons.arrow_sort_up_24_regular
-                        : FluentIcons.arrow_sort_24_regular,
-                    iconColor: _allowOrderBeforeBuiltInsGranted
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-                    title: 'אפשר לתוסף להופיע לפני הכלים המובנים',
-                    subtitle:
-                        'אם תכבה את האפשרות, התוסף עדיין יותקן כרגיל, אבל '
-                        'יופיע רק אחרי הכלים המובנים גם אם המניפסט שלו ביקש אחרת.',
-                    value: _allowOrderBeforeBuiltInsGranted,
-                    onChanged: (value) {
+          // ===== הרשאות =====
+          if (!hasPermissions)
+            SettingsCard(
+              title: 'הרשאות',
+              children: [
+                SettingsActionTile.text(
+                  icon: FluentIcons.shield_checkmark_24_regular,
+                  iconColor: colorScheme.primary,
+                  title: 'אין הרשאות מיוחדות נדרשות',
+                  subtitle: 'תוסף זה אינו מבקש גישה למשאבים רגישים',
+                ),
+              ],
+            )
+          else ...[
+            SettingsCard(
+              title: 'הרשאות נדרשות',
+              subtitle:
+                  'בחר אילו הרשאות להעניק לתוסף זה (ברירת מחדל: הכל מופעל)',
+              children: [
+                ...widget.manifest.permissions.map((permission) {
+                  final info = getPermissionInfo(permission);
+                  final isGranted = _permissionToggles[permission] ?? true;
+                  final isSensitive =
+                      permission == pluginRunOnStartupPermission;
+                  final iconData = isSensitive
+                      ? (isGranted
+                          ? FluentIcons.warning_24_filled
+                          : FluentIcons.warning_24_regular)
+                      : (isGranted
+                          ? FluentIcons.shield_checkmark_24_regular
+                          : FluentIcons.shield_error_24_regular);
+                  final iconColor = isSensitive
+                      ? colorScheme.tertiary
+                      : (isGranted ? colorScheme.primary : colorScheme.error);
+                  return SettingsActionTile.switchTile(
+                    icon: iconData,
+                    iconColor: iconColor,
+                    title: info.label,
+                    subtitle: info.description,
+                    value: isGranted,
+                    onChanged: (val) {
                       setState(() {
-                        _allowOrderBeforeBuiltInsGranted = value;
+                        _permissionToggles[permission] = val;
                       });
                     },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // ===== הרשאות =====
-            if (!hasPermissions)
-              SettingsCard(
-                title: 'הרשאות',
-                children: [
-                  SettingsActionTile.text(
-                    icon: FluentIcons.shield_checkmark_24_regular,
-                    iconColor: colorScheme.primary,
-                    title: 'אין הרשאות מיוחדות נדרשות',
-                    subtitle: 'תוסף זה אינו מבקש גישה למשאבים רגישים',
-                  ),
-                ],
-              )
-            else ...[
-              SettingsCard(
-                title: 'הרשאות נדרשות',
-                subtitle:
-                    'בחר אילו הרשאות להעניק לתוסף זה (ברירת מחדל: הכל מופעל)',
-                children: [
-                  ...widget.manifest.permissions.map((permission) {
-                    final info = getPermissionInfo(permission);
-                    final isGranted = _permissionToggles[permission] ?? true;
-                    final isSensitive =
-                        permission == pluginRunOnStartupPermission;
-                    final iconData = isSensitive
-                        ? (isGranted
-                            ? FluentIcons.warning_24_filled
-                            : FluentIcons.warning_24_regular)
-                        : (isGranted
-                            ? FluentIcons.shield_checkmark_24_regular
-                            : FluentIcons.shield_error_24_regular);
-                    final iconColor = isSensitive
-                        ? colorScheme.tertiary
-                        : (isGranted ? colorScheme.primary : colorScheme.error);
-                    return SettingsActionTile.switchTile(
-                      icon: iconData,
-                      iconColor: iconColor,
-                      title: info.label,
-                      subtitle: info.description,
-                      value: isGranted,
-                      onChanged: (val) {
-                        setState(() {
-                          _permissionToggles[permission] = val;
-                        });
-                      },
-                    );
-                  }),
-                  SettingsActionTile.text(
-                    icon: FluentIcons.info_24_regular,
-                    iconColor: colorScheme.onSurfaceVariant,
-                    title: 'ניתן לשנות הרשאות בכל עת מהגדרות התוסף',
-                  ),
-                ],
-              ),
-            ],
-
-            const SizedBox(height: 32),
+                  );
+                }),
+                SettingsActionTile.text(
+                  icon: FluentIcons.info_24_regular,
+                  iconColor: colorScheme.onSurfaceVariant,
+                  title: 'ניתן לשנות הרשאות בכל עת מהגדרות התוסף',
+                ),
+              ],
+            ),
           ],
-        ),
+
+          const SizedBox(height: 32),
+        ],
+      ),
     );
   }
 }
@@ -260,7 +260,7 @@ class _RunOnStartupBanner extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colorScheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppTokens.borderRadiusAll,
         border: Border.all(
           color: colorScheme.tertiary,
           width: 1.5,

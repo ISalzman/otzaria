@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -270,7 +271,7 @@ class _OutlineViewState extends State<OutlineView>
                     )
                   : null,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8.0),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16.0,

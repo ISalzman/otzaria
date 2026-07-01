@@ -169,7 +169,7 @@ class _SidebarTabHeaderState extends State<SidebarTabHeader> {
           Expanded(
             child: TabBar(
               controller: widget.controller,
-              splashBorderRadius: BorderRadius.circular(AppTokens.radiusMD),
+              splashBorderRadius: AppTokens.borderRadiusAll,
               tabs: [
                 for (var i = 0; i < widget.tabs.length; i++)
                   _tab(widget.tabs[i], i == sel),
@@ -237,7 +237,7 @@ class PanelTabHeader extends StatelessWidget {
             child: TabBar(
               controller: controller,
               tabs: tabs,
-              splashBorderRadius: BorderRadius.circular(AppTokens.radiusMD),
+              splashBorderRadius: AppTokens.borderRadiusAll,
               onTap: onTap,
             ),
           ),

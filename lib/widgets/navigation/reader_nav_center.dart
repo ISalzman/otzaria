@@ -39,6 +39,8 @@ class ReaderNavCenter extends StatelessWidget {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     const gap = 4.0;
     const minTitleWidth = 80.0;
+    // כל ToolbarActionButton עטוף ב-Padding(horizontal:2) → 4px לרוחב הכולל.
+    const buttonPadding = 4.0;
     return LayoutBuilder(
       builder: (context, constraints) {
         final available =
@@ -46,7 +48,7 @@ class ReaderNavCenter extends StatelessWidget {
 
         // כשהמרחב צר, עוברים ל-compact (36px לכפתור במקום 40px).
         final forceCompact = available < 240 || isCompact;
-        final buttonWidth = forceCompact ? 36.0 : 40.0;
+        final buttonWidth = (forceCompact ? 36.0 : 40.0) + buttonPadding;
 
         // כפתורי major מוסתרים כשאין מקום ל-4 כפתורים + כותרת מינימלית.
         final showMajor =

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -971,7 +972,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                     unselectedLabelColor: colorScheme.onSurfaceVariant,
                     indicatorColor: colorScheme.primary,
                     dividerColor: Colors.transparent,
-                    splashBorderRadius: BorderRadius.circular(12),
+                    splashBorderRadius: AppTokens.borderRadiusAll,
                   ),
                 ),
                 AnimatedPinButton(
@@ -1064,7 +1065,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                       : null,
                   isDense: true,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8.0),
+                    borderRadius: AppTokens.borderRadiusAll,
                   ),
                 ),
               ),

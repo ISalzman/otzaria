@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:otzaria/theme/app_tokens.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -610,11 +611,11 @@ class SearchResultTile extends StatelessWidget {
                     .withValues(alpha: 0.3),
                 width: 1,
               ),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppTokens.borderRadiusAll,
             ),
             child: InkWell(
               onTap: onTap,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppTokens.borderRadiusAll,
               child: Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

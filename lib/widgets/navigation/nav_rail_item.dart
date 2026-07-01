@@ -22,6 +22,7 @@
 // ```
 
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 class NavRailItem extends StatelessWidget {
@@ -132,7 +133,7 @@ class NavRailItem extends StatelessWidget {
                       : isTourHighlighted
                           ? cs.primary.withAlpha((0.08 * 255).round())
                           : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppTokens.borderRadiusAll,
                 ),
                 child: IconButton(
                   key: tourTargetKey,
@@ -141,7 +142,7 @@ class NavRailItem extends StatelessWidget {
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: AppTokens.borderRadiusAll,
                     ),
                     minimumSize: const Size(56, 25),
                   ),

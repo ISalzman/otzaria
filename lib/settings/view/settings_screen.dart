@@ -266,7 +266,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
       label: 'אודות',
       icon: FluentIcons.people_team_24_regular,
       iconFilled: FluentIcons.people_team_24_filled,
-      pageBuilder: () => const AboutDevTab(),
+      pageBuilder: () => const AboutSettingsTab(),
     ),
   ];
 
