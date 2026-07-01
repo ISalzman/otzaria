@@ -244,9 +244,8 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                             subtitle: _isSelectionMode
                                 ? '${_selectedIds.length} נבחרו'
                                 : 'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
-                            // LayoutBuilder inside SettingsActionTile crashes when
-                            // plugin rows with Tooltip (OverlayPortal) re-activate
-                            // during drag reorder — disable responsive layout.
+                            // LayoutBuilder + Tooltip(OverlayPortal) reactivation
+                            // during drag reorder crashes here.
                             responsiveActions: false,
                             actions: _isSelectionMode
                                 ? [
