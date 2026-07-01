@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 enum WorkStatusKind { running, failed, cancelled }
 
 class WorkStatusItem {
@@ -8,6 +10,9 @@ class WorkStatusItem {
   final double? progress;
   final WorkStatusKind kind;
 
+  /// פעולה בלחיצה על החיווי. פריט ללא ערך אינו לחיץ.
+  final VoidCallback? onTap;
+
   const WorkStatusItem({
     required this.id,
     required this.title,
@@ -15,6 +20,7 @@ class WorkStatusItem {
     this.detail,
     this.progress,
     this.kind = WorkStatusKind.running,
+    this.onTap,
   });
 
   WorkStatusItem copyWith({
@@ -24,6 +30,7 @@ class WorkStatusItem {
     String? detail,
     Object? progress = _sentinel,
     WorkStatusKind? kind,
+    Object? onTap = _sentinel,
   }) {
     return WorkStatusItem(
       id: id ?? this.id,
@@ -32,6 +39,7 @@ class WorkStatusItem {
       detail: detail ?? this.detail,
       progress: progress == _sentinel ? this.progress : progress as double?,
       kind: kind ?? this.kind,
+      onTap: onTap == _sentinel ? this.onTap : onTap as VoidCallback?,
     );
   }
 
@@ -45,7 +53,8 @@ class WorkStatusItem {
           message == other.message &&
           detail == other.detail &&
           progress == other.progress &&
-          kind == other.kind;
+          kind == other.kind &&
+          onTap == other.onTap;
 
   @override
   int get hashCode =>
@@ -54,7 +63,8 @@ class WorkStatusItem {
       message.hashCode ^
       detail.hashCode ^
       progress.hashCode ^
-      kind.hashCode;
+      kind.hashCode ^
+      onTap.hashCode;
 }
 
 const Object _sentinel = Object();
