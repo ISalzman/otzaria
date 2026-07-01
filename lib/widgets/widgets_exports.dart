@@ -18,6 +18,7 @@
 
 export 'package:otzaria/widgets/dialogs/app_dialogs.dart';
 export 'package:otzaria/widgets/controls/action_buttons.dart';
+export 'package:otzaria/widgets/controls/custom_switch.dart';
 export 'package:otzaria/widgets/controls/segmented_control.dart';
 export 'package:otzaria/widgets/misc/tool_ui_helpers.dart';
 export 'package:otzaria/widgets/layout/app_card.dart';

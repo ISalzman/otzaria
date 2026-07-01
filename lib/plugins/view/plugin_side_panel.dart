@@ -11,7 +11,7 @@ import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/plugins/view/plugin_actions.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
-import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 
@@ -28,7 +28,7 @@ class PluginSidePanel extends StatelessWidget {
   });
 
   Future<void> _installPlugin(BuildContext context) async {
-    final verified = await verifyPasswordForAction(context);
+    final verified = await verifySaferModePassword(context);
     if (!verified || !context.mounted) return;
 
     final result = await FilePicker.pickFiles(
@@ -46,7 +46,7 @@ class PluginSidePanel extends StatelessWidget {
   }
 
   Future<void> _loadDevPlugin(BuildContext context) async {
-    final verified = await verifyPasswordForAction(context);
+    final verified = await verifySaferModePassword(context);
     if (!verified || !context.mounted) return;
 
     final rootPath = await FilePicker.getDirectoryPath(lockParentWindow: true);
@@ -60,7 +60,7 @@ class PluginSidePanel extends StatelessWidget {
   }
 
   Future<void> _loadLocalhostPlugin(BuildContext context) async {
-    final verified = await verifyPasswordForAction(context);
+    final verified = await verifySaferModePassword(context);
     if (!verified || !context.mounted) return;
 
     final bloc = context.read<PluginSystemBloc>();

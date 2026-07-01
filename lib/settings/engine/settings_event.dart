@@ -407,6 +407,13 @@ class UpdateProtectedModePassword extends SettingsEvent {
   List<Object?> get props => [password];
 }
 
+class ClearProtectedModePassword extends SettingsEvent {
+  const ClearProtectedModePassword();
+
+  @override
+  List<Object?> get props => [];
+}
+
 class UpdateHiddenBuiltInToolIds extends SettingsEvent {
   final Set<String> hiddenBuiltInToolIds;
 
