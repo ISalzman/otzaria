@@ -103,6 +103,18 @@ const Map<String, Map<String, Map<String, dynamic>>> cityCoordinates = {
       'elevation': 30.0,
       'timezone': 'Asia/Jerusalem'
     },
+    'חצור הגלילית': {
+      'lat': 32.9789,
+      'lng': 35.5419,
+      'elevation': 300.0,
+      'timezone': 'Asia/Jerusalem'
+    },
+    'חריש': {
+      'lat': 32.4641,
+      'lng': 35.0438,
+      'elevation': 130.0,
+      'timezone': 'Asia/Jerusalem'
+    },
     'חולון': {
       'lat': 32.0117,
       'lng': 34.7689,
@@ -145,6 +157,12 @@ const Map<String, Map<String, Map<String, dynamic>>> cityCoordinates = {
       'elevation': 50.0,
       'timezone': 'Asia/Jerusalem'
     },
+    'מודיעין': {
+      'lat': 31.8942,
+      'lng': 35.0104,
+      'elevation': 300.0,
+      'timezone': 'Asia/Jerusalem'
+    },
     'מודיעין עילית': {
       'lat': 31.9254,
       'lng': 35.0364,
@@ -163,6 +181,12 @@ const Map<String, Map<String, Map<String, dynamic>>> cityCoordinates = {
       'elevation': 740.0,
       'timezone': 'Asia/Jerusalem'
     },
+    'מירון': {
+      'lat': 32.9842,
+      'lng': 35.4397,
+      'elevation': 700.0,
+      'timezone': 'Asia/Jerusalem'
+    },
     'נתיבות': {
       'lat': 31.4214,
       'lng': 34.5911,
@@ -179,6 +203,18 @@ const Map<String, Map<String, Map<String, dynamic>>> cityCoordinates = {
       'lat': 32.6992,
       'lng': 35.3289,
       'elevation': 400.0,
+      'timezone': 'Asia/Jerusalem'
+    },
+    'נוף הגליל': {
+      'lat': 32.7036,
+      'lng': 35.3033,
+      'elevation': 500.0,
+      'timezone': 'Asia/Jerusalem'
+    },
+    'עמנואל': {
+      'lat': 32.1611,
+      'lng': 35.1344,
+      'elevation': 450.0,
       'timezone': 'Asia/Jerusalem'
     },
     'עפולה': {
@@ -223,6 +259,12 @@ const Map<String, Map<String, Map<String, dynamic>>> cityCoordinates = {
       'elevation': 68.0,
       'timezone': 'Asia/Jerusalem'
     },
+    'קרית יערים (טלז-סטון)': {
+      'lat': 31.8100,
+      'lng': 35.1000,
+      'elevation': 600.0,
+      'timezone': 'Asia/Jerusalem'
+    },
     'קרית מלאכי': {
       'lat': 31.7289,
       'lng': 34.7456,
@@ -247,10 +289,22 @@ const Map<String, Map<String, Map<String, dynamic>>> cityCoordinates = {
       'elevation': 89.0,
       'timezone': 'Asia/Jerusalem'
     },
+    'רכסים': {
+      'lat': 32.7447,
+      'lng': 35.0808,
+      'elevation': 240.0,
+      'timezone': 'Asia/Jerusalem'
+    },
     'רמלה': {
       'lat': 31.9297,
       'lng': 34.8667,
       'elevation': 108.0,
+      'timezone': 'Asia/Jerusalem'
+    },
+    'רמת בית שמש': {
+      'lat': 31.7300,
+      'lng': 34.9900,
+      'elevation': 320.0,
       'timezone': 'Asia/Jerusalem'
     },
     'רמת גן': {
@@ -295,6 +349,12 @@ const Map<String, Map<String, Map<String, dynamic>>> cityCoordinates = {
       'lat': 39.2904,
       'lng': -76.6122,
       'elevation': 10.0,
+      'timezone': 'America/New_York'
+    },
+    'ברוקלין': {
+      'lat': 40.6782,
+      'lng': -73.9442,
+      'elevation': 16.0,
       'timezone': 'America/New_York'
     },
     'דטרויט': {
@@ -787,6 +847,66 @@ const Map<String, Map<String, Map<String, dynamic>>> cityCoordinates = {
     },
   },
 };
+
+/// דקות הדלקת נרות לפני השקיעה לפי מנהג העיר.
+const Map<String, int> candleLightingMinutesByCity = {
+  'אופקים': 20,
+  'אילת': 18,
+  'אלעד': 30,
+  'אשדוד': 18,
+  'אשקלון': 18,
+  'באר שבע': 18,
+  'בית שמש': 30,
+  'ביתר עילית': 40,
+  'בני ברק': 30,
+  'ברוקלין': 18,
+  'גבעת זאב': 40,
+  'הרצליה': 18,
+  'חיפה': 30,
+  'חצור הגלילית': 25,
+  'חריש': 20,
+  'טבריה': 18,
+  'טורונטו': 18,
+  'ירושלים': 40,
+  'כרמיאל': 25,
+  'לוד': 30,
+  'לונדון': 18,
+  'לוס אנג\'לס': 18,
+  'מודיעין': 30,
+  'מודיעין עילית': 30,
+  'מיאמי': 18,
+  'מירון': 30,
+  'מלבורן': 18,
+  'נוף הגליל': 40,
+  'ניו יורק': 18,
+  'נתיבות': 20,
+  'נתניה': 18,
+  'סידני': 18,
+  'עמנואל': 20,
+  'עפולה': 18,
+  'ערד': 18,
+  'פריז': 18,
+  'פתח תקווה': 18,
+  'צפת': 30,
+  'קרית יערים (טלז-סטון)': 30,
+  'קרית שמונה': 18,
+  'ראשון לציון': 18,
+  'רחובות': 18,
+  'רכסים': 25,
+  'רמת בית שמש': 30,
+  'רמת גן': 18,
+  'רעננה': 18,
+  'תל אביב': 18,
+  'תפרח': 20,
+};
+
+/// מחזיר את מספר דקות הדלקת הנרות לפני השקיעה לעיר נתונה.
+int getCandleLightingMinutes(String cityName) =>
+    candleLightingMinutesByCity[cityName] ?? 30;
+
+/// מחזיר את כל שמות הערים המוגדרות בלוח, ממוינים לפי א-ב.
+List<String> getCalendarCityNames() =>
+    cityCoordinates.values.expand((cities) => cities.keys).toList()..sort();
 
 /// בודק אם עיר נמצאת בארץ ישראל
 bool isCityInIsrael(String cityName) {
