@@ -148,15 +148,17 @@ bool _referencesAreRelated(String resolvedDisplay, String fallbackDisplay) {
       resolvedDisplay.contains(fallbackDisplay);
 }
 
-/// מחלץ מילים משמעותיות (>2 תווים, בלי מקפים ופיסוק).
-/// משמש לזיהוי שמות ספר שמנוסחים אחרת (למשל "חברותא על בכורות" מול "חברותא - בכורות").
-Set<String> _significantWords(String s) {
+/// מחלץ מילים משמעותיות (>2 תווים) לפי סדר, ללא ניקוד/גרשיים/פיסוק.
+/// כך "רמבם" (בשם הספר) תואם "רמב"ם" (בערך TOC), ו"חברותא על X" תואם "חברותא - X".
+List<String> _significantWordList(String s) {
   return s
-      .replaceAll(RegExp(r'[-–,.]'), ' ')
+      .replaceAll(RegExp(r'\p{Mn}', unicode: true), '') // ניקוד וטעמים
+      .replaceAll(RegExp('''['"״׳’”“`]'''), '') // גרשיים — השם נשמר בלעדיהם
+      .replaceAll(RegExp(r'[-–־,.]'), ' ') // מפרידים
       .split(RegExp(r'\s+'))
       .map((w) => w.trim())
       .where((w) => w.length > 2)
-      .toSet();
+      .toList();
 }
 
 /// מוסיף את שם הספר לכותרת אם הוא לא מופיע
@@ -172,11 +174,23 @@ String addBookTitleToRef(String ref, String bookTitle) {
     return bookTitle;
   }
 
-  // אם כל המילים המשמעותיות של שם הספר כלולות בכותרת, שם הספר כבר מיוצג
+  final bookWordList = _significantWordList(bookTitle);
+  final bookWords = bookWordList.toSet();
+  final refWordList = _significantWordList(ref);
+  final refWords = refWordList.toSet();
+
+  // אם כל מילות שם הספר כלולות בכותרת, שם הספר כבר מיוצג
   // (למשל "חברותא - בכורות" מכסה את "חברותא על בכורות")
-  final bookWords = _significantWords(bookTitle);
-  if (bookWords.isNotEmpty && _significantWords(ref).containsAll(bookWords)) {
+  if (bookWords.isNotEmpty && refWords.containsAll(bookWords)) {
     return ref;
+  }
+
+  // כיוון הפוך: כותרת מקוצרת מהשם (כל מילותיה בשם + אותה מילה מובילה) —
+  // השם המלא מייצג אותה, כמו "בית מאיר אורח חיים" מול "בית מאיר על שו"ע אורח חיים"
+  if (refWordList.isNotEmpty &&
+      bookWords.containsAll(refWords) &&
+      refWordList.first == bookWordList.first) {
+    return bookTitle;
   }
 
   // אחרת, נוסיף את שם הספר עם פסיק
