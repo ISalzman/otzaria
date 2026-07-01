@@ -212,7 +212,7 @@ const aboutAdditionalSources = <Map<String, String>>[
     'logo': 'assets/logo_books/tashma.svg',
   },
   {
-    'name': 'פרויקט בן יהודה',
+    'name': 'פרויקט בן י.',
     'url': 'https://github.com/projectbenyehuda/public_domain_dump'
   },
 ];
