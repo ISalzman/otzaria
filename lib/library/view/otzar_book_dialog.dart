@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import '../../models/books.dart';
 import '../../utils/navigation/otzar_utils.dart';
@@ -34,7 +35,7 @@ class OtzarBookDialog extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Theme.of(context).dialogTheme.backgroundColor ??
                     Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: AppTokens.borderRadiusAll,
                 boxShadow: [
                   BoxShadow(
                     color: Theme.of(context)

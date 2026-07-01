@@ -32,16 +32,16 @@ class ToolResultCardShell extends StatelessWidget {
     return Container(
       margin: margin,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+        borderRadius: AppTokens.borderRadiusAll,
         border: Border.all(color: borderColor, width: borderWidth),
       ),
       child: Material(
         color: AppSurfaces.card(context),
-        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+        borderRadius: AppTokens.borderRadiusAll,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+          borderRadius: AppTokens.borderRadiusAll,
           focusColor: Colors.transparent,
           child: SelectionArea(
             child: Padding(

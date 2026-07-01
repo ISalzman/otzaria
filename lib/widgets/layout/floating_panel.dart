@@ -22,11 +22,10 @@
 // )
 // ```
 //
-// **עם ריפוד ו-borderRadius מותאם:**
+// **עם ריפוד:**
 // ```dart
 // FloatingPanel(
 //   elevation: 4,
-//   borderRadius: BorderRadius.circular(AppTokens.radiusLG),
 //   padding: const EdgeInsets.all(AppTokens.spaceMD),
 //   child: Column(...),
 // )
@@ -38,7 +37,7 @@
 // ```dart
 // InkWell(
 //   onTap: onTap,
-//   borderRadius: BorderRadius.circular(AppTokens.radiusXL),
+//   borderRadius: AppTokens.borderRadiusAll,
 //   overlayColor: WidgetStateProperty.resolveWith((states) {
 //     if (states.contains(WidgetState.hovered)) {
 //       return cs.primary.withValues(alpha: 0.08);
@@ -75,9 +74,6 @@ class FloatingPanel extends StatelessWidget {
   /// התוכן בתוך הפאנל
   final Widget child;
 
-  /// רדיוס פינות — ברירת מחדל: [AppTokens.radiusMD] (12px)
-  final BorderRadius? borderRadius;
-
   /// גובה ה-elevation (M3 tonal + shadow) — ברירת מחדל: 2
   final double elevation;
 
@@ -93,7 +89,6 @@ class FloatingPanel extends StatelessWidget {
   const FloatingPanel({
     super.key,
     required this.child,
-    this.borderRadius,
     this.elevation = 2,
     this.padding,
     this.color,
@@ -102,9 +97,6 @@ class FloatingPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveBorderRadius =
-        borderRadius ?? BorderRadius.circular(AppTokens.radiusMD);
-
     // M3: panelBackground (כמו settings_screen ו-measurement_converter)
     final panelColor = color ?? AppSurfaces.panelBackground(context);
 
@@ -117,7 +109,7 @@ class FloatingPanel extends StatelessWidget {
       shadowColor: shadowColor ??
           Theme.of(context).colorScheme.shadow.withValues(alpha: 0.10),
       surfaceTintColor: Colors.transparent,
-      borderRadius: effectiveBorderRadius,
+      borderRadius: AppTokens.borderRadiusAll,
       clipBehavior: Clip.antiAlias,
       child: content,
     );

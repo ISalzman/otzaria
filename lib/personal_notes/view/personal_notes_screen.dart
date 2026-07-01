@@ -1033,7 +1033,7 @@ class _PersonalNotesManagerScreenState
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Row(
         children: [
@@ -1082,7 +1082,6 @@ class _PersonalNotesManagerScreenState
           );
 
     return AppCard(
-      radius: AppTokens.radiusMD,
       onTap: isMissing ? () => _repositionMissing(note) : null,
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -1359,7 +1358,7 @@ class _InfoChip extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

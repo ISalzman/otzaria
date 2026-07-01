@@ -24,7 +24,6 @@ class ExpandableCard extends StatefulWidget {
     required this.isExpanded,
     this.children = const [],
     this.margin,
-    this.radius,
     this.wrapInCard = true,
   });
 
@@ -34,9 +33,6 @@ class ExpandableCard extends StatefulWidget {
 
   /// רווח חיצוני סביב הכרטיס. מוחל רק כש-[wrapInCard] הוא true.
   final EdgeInsetsGeometry? margin;
-
-  /// רדיוס פינות. ברירת מחדל: [AppTokens.radiusXL]. מוחל רק כש-[wrapInCard] הוא true.
-  final double? radius;
 
   /// כשהוא false, מוחזר Column חשוף ללא עטיפת Material — לשימוש בתוך כרטיס קיים.
   final bool wrapInCard;
@@ -121,8 +117,7 @@ class _ExpandableCardState extends State<ExpandableCard>
 
     if (!widget.wrapInCard) return content;
 
-    final resolvedRadius =
-        BorderRadius.circular(widget.radius ?? AppTokens.radiusXL);
+    final resolvedRadius = AppTokens.borderRadiusAll;
 
     Widget card = Material(
       color: cardColor,

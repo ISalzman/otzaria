@@ -16,7 +16,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
-import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/dialogs/books_list_dialog.dart';
@@ -68,18 +67,10 @@ class SystemSettingsTab extends StatefulWidget {
     SettingsSearchEntry(
       id: 'system.versions.library',
       title: 'גרסת ספרייה',
-      subtitle: 'גרסת מאגר הספרים',
+      subtitle: 'גרסת מאגר הספרים וכמות הספרים בספרייה',
       tab: SettingsTab.system,
       cardId: 'system.versions',
-      keywords: ['גרסה', 'ספריה'],
-    ),
-    SettingsSearchEntry(
-      id: 'system.versions.book_count',
-      title: 'מספר ספרים',
-      subtitle: 'כמות הספרים בספרייה',
-      tab: SettingsTab.system,
-      cardId: 'system.versions',
-      keywords: ['ספרים', 'כמות'],
+      keywords: ['גרסה', 'ספריה', 'ספרים', 'כמות'],
     ),
     SettingsSearchEntry(
       id: 'system.updates.network_mode',
@@ -267,12 +258,12 @@ class SystemSettingsTab extends StatefulWidget {
       keywords: ['סיסמה', 'סייפר', 'password', 'שינוי סיסמה'],
     ),
     SettingsSearchEntry(
-      id: 'system.tour',
-      title: 'הפעל סיור מחדש',
-      subtitle: 'סיור מודרך לחלקי האפליקציה',
+      id: 'system.versions.tour',
+      title: 'סיור מודרך להכרת התוכנה',
+      subtitle: 'הפעל סיור מודרך להדרכה והכרת כל מסכי אוצריא',
       tab: SettingsTab.system,
-      cardId: 'system.tour',
-      keywords: ['סיור', 'הדרכה', 'tour'],
+      cardId: 'system.versions',
+      keywords: ['סיור', 'הדרכה', 'tour', 'מודרך'],
     ),
     SettingsSearchEntry(
       id: 'system.reset',
@@ -813,39 +804,19 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // 1. גרסאות + נתיב ספרייה
-                  SettingsAnchor(
-                    cardId: 'system.versions',
-                    child: _buildVersionAndPathSection(context, state),
-                  ),
+                  _buildVersionAndPathSection(context, state),
 
                   // 2. עדכוני מערכת (רשת + עדכון מפתחים)
-                  SettingsAnchor(
-                    cardId: 'system.updates',
-                    child: _buildSystemUpdatesSection(context, state),
-                  ),
+                  _buildSystemUpdatesSection(context, state),
 
                   // 3. דיווחי טעויות
-                  SettingsAnchor(
-                    cardId: 'system.reports',
-                    child: _buildErrorReportsSection(context, state),
-                  ),
+                  _buildErrorReportsSection(context, state),
 
                   // 4. מתקדם (גיבוי + מצב סייפר)
-                  SettingsAnchor(
-                    cardId: 'system.advanced',
-                    child: _buildAdvancedSection(context, state),
-                  ),
-
-                  SettingsAnchor(
-                    cardId: 'system.tour',
-                    child: _buildGuidedTourSection(context),
-                  ),
+                  _buildAdvancedSection(context, state),
 
                   // 6. איפוס
-                  SettingsAnchor(
-                    cardId: 'system.reset',
-                    child: _buildResetSection(context),
-                  ),
+                  _buildResetSection(context),
                 ],
               ),
             ),
@@ -861,6 +832,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   Widget _buildSystemUpdatesSection(BuildContext context, SettingsState state) {
     return SettingsCard(
+      cardId: 'system.updates',
       title: 'עדכוני מערכת',
       children: [
         KeyedSubtree(
@@ -959,6 +931,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final queueWhenOffline = reportService.queueWhenOfflineEnabled;
 
     return SettingsCard(
+      cardId: 'system.reports',
       title: 'דיווחי טעויות',
       subtitle: 'שליחה ישירה לצוות אוצריא, כולל תור אוטומטי במצב אופליין.',
       children: [
@@ -1272,6 +1245,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   Widget _buildVersionAndPathSection(
       BuildContext context, SettingsState state) {
     return SettingsCard(
+      cardId: 'system.versions',
       title: 'מערכת אוצריא',
       children: [
         SettingsActionTile.text(
@@ -1289,19 +1263,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
         SettingsActionTile.text(
           icon: FluentIcons.library_24_regular,
-          title: 'גרסת ספרייה',
-          subtitle: _libraryVersion ?? 'טוען...',
-          subtitleLtr: _libraryVersion != null && _libraryVersion != 'לא ידוע',
-          actions: const [],
-          // trailing: TextButton.icon(
-          //   icon: const Icon(FluentIcons.history_24_regular, size: 16),
-          //   label: const Text('יומן שינויים'),
-          //   onPressed: () => _showLibraryChangelogDialog(context),
-          // ),
-        ),
-        SettingsActionTile.text(
-          icon: FluentIcons.book_24_regular,
-          title: 'מספר ספרים',
+          title: 'גרסת ספרייה ${_libraryVersion ?? 'טוען...'}',
           subtitle: _bookCount != null ? '${_bookCount!} ספרים' : 'טוען...',
           actions: [
             if (_bookCount != null)
@@ -1310,6 +1272,25 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 text: 'הצג רשימה',
                 onPressed: () => _openBooksListDialog(context),
               ),
+          ],
+        ),
+        SettingsActionTile.text(
+          icon: FluentIcons.sparkle_24_regular,
+          title: 'סיור מודרך להכרת התוכנה',
+          subtitle: 'הפעל סיור מודרך להדרכה והכרת כל מסכי אוצריא',
+          actions: [
+            ActionButton.recommended(
+              icon: FluentIcons.play_24_regular,
+              text: 'הפעל',
+              onPressed: () {
+                final libraryLoaded =
+                    !context.read<NavigationBloc>().state.isLibraryEmpty;
+                context.read<NavigationBloc>().add(
+                      const CheckLibrary(),
+                    );
+                context.read<TourCubit>().restart(libraryLoaded: libraryLoaded);
+              },
+            ),
           ],
         ),
       ],
@@ -1514,6 +1495,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final hasPassword = state.protectedModePasswordSet;
 
     return SettingsCard(
+      cardId: 'system.advanced',
       title: 'מתקדם',
       children: [
         // ── גיבוי אוטומטי ──
@@ -1740,44 +1722,13 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     );
   }
 
-  Widget _buildGuidedTourSection(BuildContext context) {
-    return SettingsCard(
-      title: 'סיור מודרך',
-      subtitle: 'היכרות מהירה עם החלקים המרכזיים באוצריא.',
-      children: [
-        ListTile(
-          leading: const Icon(FluentIcons.sparkle_24_regular),
-          title: const Text(
-            'הפעל סיור מחדש',
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: const Text(
-            'הסיור יוצג מההתחלה וידריך אותך במסכי האפליקציה.',
-            style: kSettingsSubtitleStyle,
-          ),
-          trailing: ActionButton.recommended(
-            icon: FluentIcons.play_24_regular,
-            text: 'הפעל',
-            onPressed: () {
-              final libraryLoaded =
-                  !context.read<NavigationBloc>().state.isLibraryEmpty;
-              context.read<NavigationBloc>().add(
-                    const CheckLibrary(),
-                  );
-              context.read<TourCubit>().restart(libraryLoaded: libraryLoaded);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
   // ════════════════════════════════════════════════════════════════════════════
   //  6. איפוס
   // ════════════════════════════════════════════════════════════════════════════
 
   Widget _buildResetSection(BuildContext context) {
     return SettingsCard(
+      cardId: 'system.reset',
       title: 'איפוס',
       children: [
         ListTile(
@@ -1859,39 +1810,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       ),
     );
   }
-
-  // Future<void> _showLibraryChangelogDialog(BuildContext context) async {
-  //   final changelogPath = p.join(DatabaseConstants.getDatabaseDirectoryPath(),
-  //       'אודות התוכנה', 'עדכוני ספריה.md');
-  //   final file = File(changelogPath);
-  //   final changelog = (await file.exists())
-  //       ? await file.readAsString()
-  //       : 'קובץ יומן השינויים לא נמצא.';
-  //   if (!context.mounted) return;
-  //   showDialog(
-  //     context: context,
-  //     builder: (ctx) => Directionality(
-  //       textDirection: TextDirection.rtl,
-  //       child: AlertDialog(
-  //         title: const Text('יומן שינויים בספרייה'),
-  //         content: SizedBox(
-  //           width: 600,
-  //           height: 400,
-  //           child: Markdown(
-  //             data: changelog,
-  //             onTapLink: (text, href, title) {
-  //               if (href != null) launchUrl(Uri.parse(href));
-  //             },
-  //           ),
-  //         ),
-  //         actions: [
-  //           TextButton(
-  //               onPressed: () => Navigator.pop(ctx), child: const Text('סגור')),
-  //         ],
-  //       ),
-  //     ),
-  //   );
-  // }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

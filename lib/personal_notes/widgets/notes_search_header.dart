@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -100,7 +101,7 @@ class _NotesSearchHeaderState extends State<NotesSearchHeader> {
                             .read<PersonalNotesBloc>()
                             .add(const ToggleShowOnlyVisible());
                       },
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: AppTokens.borderRadiusAll,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(

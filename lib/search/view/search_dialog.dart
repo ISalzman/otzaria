@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -192,7 +193,7 @@ class _SearchDialogState extends State<SearchDialog> {
           constraints: const BoxConstraints(maxHeight: 200),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppTokens.borderRadiusAll,
             border: Border.all(
               color:
                   Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
@@ -465,7 +466,7 @@ class _SearchDialogState extends State<SearchDialog> {
         color: isSpecific
             ? colorScheme.primaryContainer.withValues(alpha: 0.6)
             : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -513,7 +514,7 @@ class _SearchDialogState extends State<SearchDialog> {
                 );
             _searchTab.searchFieldFocusNode.requestFocus();
           },
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppTokens.borderRadiusAll,
           child: Container(
             width: 72,
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -521,7 +522,7 @@ class _SearchDialogState extends State<SearchDialog> {
               color: isSelected
                   ? Theme.of(context).colorScheme.secondaryContainer
                   : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppTokens.borderRadiusAll,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -561,7 +562,6 @@ class _SearchDialogState extends State<SearchDialog> {
     return BlocProvider.value(
       value: _searchTab.searchBloc,
       child: Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: FocusScope(
           onKeyEvent: (node, event) {
             // תפיסת Enter ברמת הדיאלוג - FocusScope תופס אירועים מכל הילדים

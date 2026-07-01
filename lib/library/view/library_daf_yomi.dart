@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 
@@ -111,13 +112,13 @@ class LibraryDafYomi extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Tooltip(
         message: 'פתח דף יומי',
         child: InkWell(
           onTap: () => onDafYomiTap(tractate, formatAmud(dafAmud)),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppTokens.borderRadiusAll,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Column(
@@ -221,7 +222,7 @@ class LibraryDafYomi extends StatelessWidget {
       message: 'פתח דף יומי: $dafText',
       child: InkWell(
         onTap: () => onDafYomiTap(tractate, formatAmud(dafAmud)),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: AppTokens.borderRadiusAll,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: textWidget,

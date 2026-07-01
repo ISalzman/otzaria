@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -73,7 +74,7 @@ final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
   padding: EdgeInsets.zero,
   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
   shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(8),
+    borderRadius: AppTokens.borderRadiusAll,
   ),
 );
 

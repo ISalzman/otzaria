@@ -200,7 +200,6 @@ class _BookCardWidgetState extends State<BookCardWidget> {
       },
       child: AppCard(
         margin: const EdgeInsets.symmetric(vertical: 4),
-        radius: AppTokens.radiusMD,
         onTap: () => _onCardTap(context),
         child: SingleChildScrollView(
           child: Padding(
@@ -344,7 +343,7 @@ class _BookCardWidgetState extends State<BookCardWidget> {
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
         decoration: BoxDecoration(
           color: cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: AppTokens.borderRadiusAll,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -378,7 +377,7 @@ class _BookCardWidgetState extends State<BookCardWidget> {
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: AppTokens.borderRadiusAll,
         border: Border.all(
           color: cs.outline.withValues(alpha: 0.3),
         ),
@@ -398,7 +397,7 @@ class _BookCardWidgetState extends State<BookCardWidget> {
           ),
           const SizedBox(height: 1),
           ClipRRect(
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: AppTokens.borderRadiusAll,
             child: LinearProgressIndicator(
               minHeight: 3,
               value: progress,
@@ -430,7 +429,7 @@ class _BookCardWidgetState extends State<BookCardWidget> {
         Row(children: [
           Expanded(
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: AppTokens.borderRadiusAll,
               child: LinearProgressIndicator(
                 minHeight: 8,
                 value: learnProgress.isFinite ? learnProgress : 0.0,
@@ -516,7 +515,7 @@ class _BookMetaChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

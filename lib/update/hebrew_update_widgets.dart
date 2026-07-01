@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:otzaria/theme/app_tokens.dart';
 
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -13,7 +14,7 @@ Widget _updateChipSurface(BuildContext context, Widget child) {
   return Material(
     color: colorScheme.primaryContainer,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppTokens.borderRadiusAll,
       side: BorderSide(color: colorScheme.primary, width: 1.2),
     ),
     clipBehavior: Clip.antiAlias,

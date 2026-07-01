@@ -156,7 +156,7 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               color: lineColor,
-                              borderRadius: BorderRadius.circular(999),
+                              borderRadius: AppTokens.borderRadiusAll,
                             ),
                             child: SizedBox(
                               width: widget.isVertical
@@ -175,13 +175,13 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
                         height: widget.isVertical ? gripLength : thickness + 10,
                         decoration: BoxDecoration(
                           color: highlightColor,
-                          borderRadius: BorderRadius.circular(999),
+                          borderRadius: AppTokens.borderRadiusAll,
                         ),
                         alignment: Alignment.center,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             color: lineColor,
-                            borderRadius: BorderRadius.circular(999),
+                            borderRadius: AppTokens.borderRadiusAll,
                           ),
                           child: SizedBox(
                             width: widget.isVertical ? thickness : gripLength,

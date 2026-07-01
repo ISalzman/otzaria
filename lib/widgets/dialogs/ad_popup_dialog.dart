@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/services/ad_popup_service.dart';
@@ -138,9 +139,6 @@ class _AdPopupDialogState extends State<AdPopupDialog>
         scale: _entryScale,
         child: Dialog(
           backgroundColor: AppSurfaces.panelBackground(context),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
           child: Container(
             constraints: BoxConstraints(
               maxWidth: 600,
@@ -661,7 +659,7 @@ class _OrganizationsList extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: AppTokens.borderRadiusAll,
         border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
       ),
       child: Text(
@@ -757,7 +755,7 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
       // צבע הכרטיס מערכת הנושא (במקום לבן קשיח) כדי שיתאים לרקע הפופאפ
       color: colorScheme.surfaceContainerHighest,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppTokens.borderRadiusAll,
         side: BorderSide(
           color: widget.isEmergency
               ? Colors.red.withValues(alpha: 0.15)
@@ -769,7 +767,7 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
         children: [
           InkWell(
             onTap: () => setState(() => _isExpanded = !_isExpanded),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppTokens.borderRadiusAll,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: LayoutBuilder(
@@ -779,10 +777,10 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
                     height: 50,
                     decoration: BoxDecoration(
                       color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppTokens.borderRadiusAll,
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppTokens.borderRadiusAll,
                       child: Image.asset(
                         widget.org['logo'],
                         fit: BoxFit.cover,

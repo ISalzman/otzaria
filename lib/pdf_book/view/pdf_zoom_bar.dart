@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 class PdfZoomBar extends StatelessWidget {
@@ -22,12 +23,12 @@ class PdfZoomBar extends StatelessWidget {
 
     return Material(
       elevation: 4,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: AppTokens.borderRadiusAll,
       color: isDark ? Colors.grey[850] : Colors.white,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: AppTokens.borderRadiusAll,
           border: Border.all(
             color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
             width: 1,

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
@@ -11,6 +14,7 @@ import 'package:otzaria/widgets/dialogs/confirmation_dialog.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/dialogs/zip_extraction_progress_dialog.dart';
+import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 
 /// סיווג הרכב הקבצים בתיקייה מותאמת אישית — קובע אילו אפשרויות אחסון
@@ -30,14 +34,14 @@ enum _FolderContentKind {
 }
 
 /// Widget להוספה וניהול תיקיות מותאמות אישית
-class CustomFoldersTile extends StatefulWidget {
-  const CustomFoldersTile({super.key});
+class CustomFoldersPanel extends StatefulWidget {
+  const CustomFoldersPanel({super.key});
 
   @override
-  State<CustomFoldersTile> createState() => _CustomFoldersTileState();
+  State<CustomFoldersPanel> createState() => _CustomFoldersPanelState();
 }
 
-class _CustomFoldersTileState extends State<CustomFoldersTile> {
+class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
   bool _isExpanded = false;
 
   /// תוצאות סיווג הרכב הקבצים לכל תיקייה (לפי נתיב). מתמלא בעצלתיים
@@ -196,6 +200,62 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
     bloc.add(ToggleAddToDatabase(folder, toDatabase));
   }
 
+  /// פותח נתיב במנהל הקבצים של מערכת ההפעלה.
+  void _openInFileManager(String path) {
+    if (path.isEmpty) return;
+    if (Platform.isWindows) {
+      unawaited(Process.run('explorer', [path]));
+    } else if (Platform.isMacOS) {
+      unawaited(Process.run('open', [path]));
+    } else if (Platform.isLinux) {
+      unawaited(Process.run('xdg-open', [path]));
+    }
+  }
+
+  /// תפריט אפשרויות לתיקייה — פתיחה במנהל הקבצים, העתקת נתיב והסרה.
+  Future<void> _showFolderMenu(
+      BuildContext anchorContext, CustomFolder folder) async {
+    const entries = <AppMenuEntry<_FolderMenuAction>>[
+      AppMenuEntry(
+        value: _FolderMenuAction.openFolder,
+        label: 'פתח תיקייה',
+        icon: FluentIcons.folder_open_24_regular,
+      ),
+      AppMenuEntry(
+        value: _FolderMenuAction.copyPath,
+        label: 'העתק נתיב',
+        icon: FluentIcons.copy_24_regular,
+      ),
+      AppMenuEntry(
+        value: _FolderMenuAction.remove,
+        label: 'הסר תיקייה',
+        icon: FluentIcons.delete_24_regular,
+        isDestructive: true,
+      ),
+    ];
+
+    final selected = await showAnchoredAppMenu<_FolderMenuAction>(
+      context: context,
+      anchorContext: anchorContext,
+      itemsBuilder: (m) => entries
+          .map((e) =>
+              buildAppPopupMenuItem<_FolderMenuAction>(context, e, m, null))
+          .toList(),
+    );
+
+    if (selected == null || !mounted) return;
+
+    switch (selected) {
+      case _FolderMenuAction.openFolder:
+        _openInFileManager(folder.path);
+      case _FolderMenuAction.copyPath:
+        await Clipboard.setData(ClipboardData(text: folder.path));
+        UiSnack.showSuccess('הנתיב הועתק ללוח');
+      case _FolderMenuAction.remove:
+        await _removeFolder(folder);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<CustomFoldersBloc, CustomFoldersState>(
@@ -262,7 +322,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
               margin: const EdgeInsets.only(right: 16, left: 16, bottom: 8),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
               child: Column(
                 children: [
@@ -350,10 +410,15 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
-              IconButton(
-                icon: const Icon(FluentIcons.delete_24_regular, size: 18),
-                onPressed: isSyncing ? null : () => _removeFolder(folder),
-                tooltip: 'הסר תיקייה',
+              Builder(
+                builder: (buttonContext) => IconButton(
+                  icon: const Icon(FluentIcons.more_vertical_24_regular,
+                      size: 18),
+                  onPressed: isSyncing
+                      ? null
+                      : () => _showFolderMenu(buttonContext, folder),
+                  tooltip: 'אפשרויות',
+                ),
               ),
             ],
           ),
@@ -452,3 +517,5 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
     );
   }
 }
+
+enum _FolderMenuAction { openFolder, copyPath, remove }

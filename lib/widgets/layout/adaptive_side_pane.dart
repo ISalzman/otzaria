@@ -84,14 +84,13 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
   // אחרי הפתיחה הראשונה, התוכן נשמר במגדל הוויידג'טים גם בזמן סגירה כדי לשמור state.
   bool _paneEverOpened = false;
 
-  static const BorderRadius _kPanelRadius =
-      BorderRadius.all(Radius.circular(AppTokens.radiusPanel));
   static const double _kWideTopGap = 14;
   static const double _kWideBottomGap = 10;
   static const double _kWideOuterSideGap = 10;
   static const double _kWideInnerSideGap = 12;
   static const double _kNarrowTopGap = 14;
   static const double _kNarrowBottomGap = 10;
+  static const double _kNarrowSideGap = 10;
 
   @override
   void initState() {
@@ -176,9 +175,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
       ),
       child: ScrollConfiguration(
         behavior: _OuterEdgePaneScrollBehavior(
-          paneOnRight
-              ? ScrollbarOrientation.right
-              : ScrollbarOrientation.left,
+          paneOnRight ? ScrollbarOrientation.right : ScrollbarOrientation.left,
         ),
         child: child,
       ),
@@ -189,7 +186,6 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         color: paneColor,
         elevation: 8,
         shadowColor: shadowColor,
-        borderRadius: _kPanelRadius,
         child: scrollbarWrapped,
       );
     }
@@ -199,7 +195,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
       elevation: 4,
       shadowColor: shadowColor,
       surfaceTintColor: Colors.transparent,
-      borderRadius: _kPanelRadius,
+      borderRadius: AppTokens.borderRadiusAll,
       clipBehavior: Clip.hardEdge,
       child: scrollbarWrapped,
     );
@@ -284,6 +280,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         return _buildNarrowLayout(
           context,
           paneOnRight: paneOnRight,
+          maxWidth: constraints.maxWidth,
         );
       },
     );
@@ -390,7 +387,11 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
   Widget _buildNarrowLayout(
     BuildContext context, {
     required bool paneOnRight,
+    required double maxWidth,
   }) {
+    // בחלון צר מצמצמים את רוחב הפאנל כדי להשאיר שוליים משני הצדדים
+    final maxPaneWidth =
+        (maxWidth - _kNarrowSideGap * 2).clamp(0.0, double.infinity);
     // אופטימיזציית ביצועים: לא לבנות את תוכן הפאנל לפני שנפתח לראשונה.
     // אחרי הפתיחה הראשונה התוכן נשמר במגדל גם בסגירה כדי לשמור state.
     final Widget narrowPane = _paneEverOpened
@@ -430,7 +431,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
               ValueListenableBuilder<double>(
                 valueListenable: _livePaneWidth,
                 builder: (context, liveWidth, _) {
-                  final currentWidth = liveWidth;
+                  final currentWidth =
+                      liveWidth > maxPaneWidth ? maxPaneWidth : liveWidth;
                   final overhang =
                       showHandle ? handleHitOverhang(context) : 0.0;
 
@@ -439,8 +441,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                       Positioned(
                         top: _kNarrowTopGap,
                         bottom: _kNarrowBottomGap,
-                        right: paneOnRight ? 0 : null,
-                        left: paneOnRight ? null : 0,
+                        right: paneOnRight ? _kNarrowSideGap : null,
+                        left: paneOnRight ? null : _kNarrowSideGap,
                         width: currentWidth,
                         child: AnimatedOpacity(
                           duration: AppTokens.animPanelOpacity,
@@ -457,8 +459,12 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                         Positioned(
                           top: _kNarrowTopGap,
                           bottom: _kNarrowBottomGap,
-                          right: paneOnRight ? currentWidth - overhang : null,
-                          left: paneOnRight ? null : currentWidth - overhang,
+                          right: paneOnRight
+                              ? _kNarrowSideGap + currentWidth - overhang
+                              : null,
+                          left: paneOnRight
+                              ? null
+                              : _kNarrowSideGap + currentWidth - overhang,
                           child: AnimatedOpacity(
                             duration: AppTokens.animPanelOpacity,
                             opacity: widget.isOpen ? 1.0 : 0.0,

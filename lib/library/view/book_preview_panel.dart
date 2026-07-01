@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -509,7 +510,7 @@ class _SkeletonLine extends StatelessWidget {
       width: MediaQuery.of(context).size.width * width,
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
     );
   }
@@ -534,7 +535,7 @@ class _PreviewToolbar extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Material(
       color: cs.surfaceContainerHigh,
-      shape: const StadiumBorder(),
+      shape: AppTokens.roundedShape,
       elevation: 2,
       child: Row(
         mainAxisSize: MainAxisSize.min,

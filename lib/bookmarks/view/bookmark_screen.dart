@@ -319,17 +319,20 @@ class _BookmarkViewState extends State<BookmarkView> {
   }
 
   Widget _buildSortButton(BuildContext context) {
-    return AppPopupMenuButton<BookmarkSortMode>(
-      icon: const Icon(FluentIcons.arrow_sort_24_regular),
-      tooltip: 'מיון',
-      highlighted: true,
-      initialValue: _sortMode,
-      onSelected: _onSortModeChanged,
-      entries: const [
-        AppMenuEntry(value: BookmarkSortMode.category, label: 'לפי קטגוריה'),
-        AppMenuEntry(
-            value: BookmarkSortMode.dateAdded, label: 'לפי תאריך הוספה'),
-      ],
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 8),
+      child: AppPopupMenuButton<BookmarkSortMode>(
+        icon: const Icon(FluentIcons.arrow_sort_24_regular),
+        tooltip: 'מיון',
+        highlighted: true,
+        initialValue: _sortMode,
+        onSelected: _onSortModeChanged,
+        entries: const [
+          AppMenuEntry(value: BookmarkSortMode.category, label: 'לפי קטגוריה'),
+          AppMenuEntry(
+              value: BookmarkSortMode.dateAdded, label: 'לפי תאריך הוספה'),
+        ],
+      ),
     );
   }
 }

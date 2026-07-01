@@ -46,7 +46,6 @@ class ReaderSidePanelShell extends StatelessWidget {
         elevation: 8,
         shadowColor:
             Theme.of(context).colorScheme.shadow.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(18),
         child: child,
       ),
     );

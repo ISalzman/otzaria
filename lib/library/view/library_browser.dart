@@ -67,7 +67,7 @@ enum _LibraryListItemStyle { root, grouped, search }
   final previewWidth = viewMode == 'list'
       ? availableWidth * previewWidthFactorList
       : availableWidth * previewWidthFactorGrid;
-  final maxPaneWidth = max(minPaneWidth, availableWidth - 350);
+  final maxPaneWidth = max(minPaneWidth, availableWidth - 230);
   final paneWidth = (paneWidthOverride ?? previewWidth)
       .clamp(minPaneWidth, maxPaneWidth)
       .toDouble();
@@ -761,7 +761,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           mainContent: RepaintBoundary(child: mainContent),
           paneContent: _buildPreviewPane(settingsState),
           paneWidth: previewPaneWidths.paneWidth,
-          minMainContentWidth: 420,
+          minMainContentWidth: 200,
           onClose: () => _hidePreviewPanel(settingsState),
           onOpen: () => _showPreviewPanel(settingsState),
           paneColor: Theme.of(ctx).colorScheme.surface,
@@ -799,7 +799,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             height: 80,
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppTokens.borderRadiusAll,
               boxShadow: [
                 BoxShadow(
                   color: Theme.of(
@@ -1326,7 +1326,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               height: iconBoxSize,
               decoration: BoxDecoration(
                 color: cs.secondaryContainer,
-                borderRadius: BorderRadius.circular(AppTokens.radiusSM),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
               child: Center(
                 child: Icon(
@@ -1443,9 +1443,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       child: InkWell(
         focusNode: focusNode,
         mouseCursor: SystemMouseCursors.click,
-        borderRadius: isGrouped
-            ? BorderRadius.zero
-            : BorderRadius.circular(AppTokens.radiusXL),
+        borderRadius: isGrouped ? BorderRadius.zero : AppTokens.borderRadiusAll,
         hoverDuration: Durations.medium1,
         onTap: onTap,
         onDoubleTap: onDoubleTap,
@@ -1515,7 +1513,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       height: iconBoxSize,
       decoration: BoxDecoration(
         color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(AppTokens.radiusSM),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Center(
         child: _buildListRowIconChild(book, cs, iconSize),
@@ -1576,7 +1574,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       height: iconBoxSize,
       decoration: BoxDecoration(
         color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(AppTokens.radiusSM),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Center(
         child: Row(
@@ -1947,8 +1945,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
                   childAspectRatio: 2,
-                  crossAxisSpacing: 4,
-                  mainAxisSpacing: 4),
+                  crossAxisSpacing: kLibraryGridSpacing,
+                  mainAxisSpacing: kLibraryGridSpacing),
               itemCount: displayLimit,
               itemBuilder: (context, index) {
                 final orderIndex = index;
@@ -2109,7 +2107,7 @@ class _LibraryBrowserList extends StatelessWidget {
   Widget build(BuildContext context) {
     final padding = forPanel
         ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
-        : const EdgeInsets.symmetric(horizontal: 45, vertical: 8);
+        : const EdgeInsets.symmetric(horizontal: 16, vertical: 8);
 
     if (children != null) {
       return ListView(

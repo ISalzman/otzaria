@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:logging/logging.dart';
@@ -145,7 +146,7 @@ class _ErrorBoundaryState extends State<ErrorBoundary> {
                           padding: const EdgeInsets.all(12.0),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: AppTokens.borderRadiusAll,
                           ),
                           child: SelectableText(
                             'Type: ${error.type}\n\nMessage: ${error.message}\n\nDetails: ${error.details}\n\nStackTrace: ${error.stackTrace ?? 'N/A'}', // הוספנו את ה-StackTrace

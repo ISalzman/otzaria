@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
@@ -342,7 +343,7 @@ class _CommentatorsSelectionPanelState
                         : null,
                     isDense: true,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8.0),
+                      borderRadius: AppTokens.borderRadiusAll,
                     ),
                   ),
                   onChanged: (_) => _update(),

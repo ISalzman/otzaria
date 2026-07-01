@@ -429,17 +429,20 @@ class ToolbarActionButton extends StatelessWidget {
       );
     }
 
-    return Tooltip(
-      message: tooltip,
-      child: AnimatedContainer(
-        duration: AppTokens.animFast,
-        curve: Curves.easeInOut,
-        decoration: BoxDecoration(
-          color: bg,
-          shape: label != null ? BoxShape.rectangle : BoxShape.circle,
-          borderRadius: label != null ? BorderRadius.circular(100) : null,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Tooltip(
+        message: tooltip,
+        child: AnimatedContainer(
+          duration: AppTokens.animFast,
+          curve: Curves.easeInOut,
+          decoration: BoxDecoration(
+            color: bg,
+            shape: label != null ? BoxShape.rectangle : BoxShape.circle,
+            borderRadius: label != null ? BorderRadius.circular(100) : null,
+          ),
+          child: button,
         ),
-        child: button,
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/models/phone_report_data.dart';
@@ -136,7 +137,7 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             border: Border.all(color: Theme.of(context).dividerColor),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppTokens.borderRadiusAll,
           ),
           child: SingleChildScrollView(
             child: Text(
@@ -306,7 +307,7 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
                       decoration: BoxDecoration(
                         color: Theme.of(context).colorScheme.surface,
                         borderRadius:
-                            BorderRadius.circular(20), // עיגול כמו כפתור רגיל
+                            AppTokens.borderRadiusAll, // עיגול כמו כפתור רגיל
                       ),
                       child: TextButton(
                         onPressed: widget.onCancel,

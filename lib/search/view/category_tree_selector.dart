@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
@@ -170,7 +171,7 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppTokens.borderRadiusAll,
             border: Border.all(
               color: colorScheme.outline.withValues(alpha: 0.2),
             ),
@@ -355,10 +356,10 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
               color:
                   Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
             ),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppTokens.borderRadiusAll,
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppTokens.borderRadiusAll,
             child: _hasActiveSearch
                 ? _buildSearchResultsView(context, searchResults)
                 : SingleChildScrollView(
@@ -426,7 +427,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                     Theme.of(context).colorScheme.secondaryContainer,
                 foregroundColor:
                     Theme.of(context).colorScheme.onSecondaryContainer,
-                shape: const CircleBorder(),
+                shape: AppTokens.roundedShape,
               ),
             ),
           ),
@@ -465,7 +466,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                 icon: const Icon(FluentIcons.dismiss_24_regular),
               ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppTokens.borderRadiusAll,
         ),
         isDense: true,
       ),
@@ -972,7 +973,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                           _expansionState[category.path] = !isExpanded;
                         })
                     : null,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: AppTokens.borderRadiusAll,
                 child: Icon(
                   hasChildren
                       ? (isExpanded
@@ -1011,7 +1012,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                   onTap: () => setState(() {
                     _expansionState[category.path] = !isExpanded;
                   }),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: AppTokens.borderRadiusAll,
                   child: Padding(
                     padding: const EdgeInsets.all(4.0),
                     child: Icon(
