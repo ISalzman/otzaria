@@ -103,15 +103,19 @@ class TextBookRepository {
     // ספרי seforim.db בלבד: השאילתה וה-split רצים ב-isolate (כמו הקישורים),
     // כדי שלא יחסמו את ה-UI thread בזמן גלילה. ה-isolate פותח רק את seforim.db,
     // לכן ספרי משתמש נשארים במסלול ה-drift, וכישלון נופל אליו (file-backed וכו').
-    final provider = LibraryProviderManager.instance.getProviderForBook(
-      book.title,
-      categoryId: categoryId,
-      fileType: fileType,
-    );
-    if (provider is DatabaseLibraryProvider &&
-        categoryId != null &&
-        !book.isUserBook) {
-      final range = await provider.getBookTextRange(
+    if (categoryId != null && !book.isUserBook) {
+      // getProviderForBook מסתכל רק ב-_bookToProvider שמתמלא אחרי buildLibraryCatalog.
+      // בסטרטאפ (לפני buildLibraryCatalog) הוא מחזיר null — ולכן פונים ישירות
+      // ל-DatabaseLibraryProvider שיכול לפתוח seforim.db ב-isolate גם בלי catalog.
+      final dbProvider = DatabaseLibraryProvider.instance;
+      final provider = LibraryProviderManager.instance.getProviderForBook(
+        book.title,
+        categoryId: categoryId,
+        fileType: fileType,
+      );
+      final resolvedProvider =
+          (provider is DatabaseLibraryProvider) ? provider : dbProvider;
+      final range = await resolvedProvider.getBookTextRange(
         book.title,
         categoryId,
         fileType,
