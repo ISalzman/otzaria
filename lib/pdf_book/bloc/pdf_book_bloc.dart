@@ -538,6 +538,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     pdfController.setZoom(
       pdfController.centerPosition,
       newZoom,
+      duration: Duration.zero,
     );
 
     tab.savedZoom = newZoom;
@@ -559,6 +560,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     pdfController.setZoom(
       pdfController.centerPosition,
       newZoom,
+      duration: Duration.zero,
     );
 
     tab.savedZoom = newZoom;
@@ -579,6 +581,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     pdfController.setZoom(
       pdfController.centerPosition,
       1.0,
+      duration: Duration.zero,
     );
 
     tab.savedZoom = 1.0;
