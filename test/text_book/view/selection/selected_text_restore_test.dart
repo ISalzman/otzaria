@@ -31,6 +31,47 @@ void main() {
 
       expect(restored, 'טקסט לא קיים');
     });
+
+    test('משחזר מעברי שורה גם כששורת אמצע חסרה מהתצוגה', () {
+      // 'דהו' נגללה מחוץ לתצוגה — לא קיימת ב-visibleLines אך קיימת בבחירה.
+      final restored = restoreSelectedTextLineBreaks(
+        selectedText: 'אבגדהוזחט',
+        visibleLines: const ['אבג', 'זחט'],
+      );
+
+      expect(restored, 'אבג\nדהו\nזחט');
+      expect(restored.replaceAll('\n', ''), 'אבגדהוזחט');
+    });
+
+    test('משחזר מעברי שורה גם כששורת אמצע רונדרה שונה', () {
+      // 'דXו' שונה מהתוכן האמיתי 'דהו' — ההתאמה המדויקת נכשלת.
+      final restored = restoreSelectedTextLineBreaks(
+        selectedText: 'אבגדהוזחט',
+        visibleLines: const ['אבג', 'דXו', 'זחט'],
+      );
+
+      expect(restored, 'אבג\nדהו\nזחט');
+      expect(restored.replaceAll('\n', ''), 'אבגדהוזחט');
+    });
+
+    test('משחזר בחירה שמתחילה באמצע השורה הראשונה עם שורת אמצע לא-תואמת', () {
+      final restored = restoreSelectedTextLineBreaks(
+        selectedText: 'עולםדהוטוב',
+        visibleLines: const ['שלום עולם', 'דXו', 'טוב'],
+      );
+
+      expect(restored, 'עולם\nדהו\nטוב');
+      expect(restored.replaceAll('\n', ''), 'עולםדהוטוב');
+    });
+
+    test('שחזור סלחני לעולם אינו משנה את תווי הבחירה', () {
+      final restored = restoreSelectedTextLineBreaks(
+        selectedText: 'אבגדהוזחט',
+        visibleLines: const ['אבג', 'זחט'],
+      );
+
+      expect(restored.replaceAll('\n', ''), 'אבגדהוזחט');
+    });
   });
 
   group('renderSelectionLine', () {
