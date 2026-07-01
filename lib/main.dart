@@ -51,7 +51,6 @@ import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 import 'package:otzaria/library_update/repository/library_update_repository.dart';
 import 'package:seforim_library_updater/seforim_library_updater.dart';
-import 'package:sqlite3/sqlite3.dart' as sqlite3;
 import 'package:zstandard/zstandard.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
@@ -583,12 +582,11 @@ Future<void> _recoverInterruptedLibraryUpdate() async {
       case RecoveryAction.restored:
         debugPrint('📦 ${result.detail}');
       case RecoveryAction.blockedMissingBackup:
-        debugPrint('⚠️ ${result.detail}');
-        // לא מוחקים בשקט. מוודאים תקינות מלאה (quick_check) של ה-DB — רץ רק
-        // במצב חריג ונדיר זה. אם תקין — הסימון שריד וניתן לנקותו; אם פגום —
-        // משאירים evidence; נדרשת הורדה מלאה.
-        if (_isLocalDbHealthy(dbPath)) {
-          debugPrint('   ה-DB עבר quick_check; מנקה סימון שריד');
+        // עדכון דלתא שנקטע: ה-apply אטומי (transaction), אז ה-DB תקין — מקור או
+        // יעד. הבדיקה פותחת RW כדי לגלגל hot journal שנשאר מהקריסה, ומריצה
+        // quick_check. פגום (נדיר, לא-SQLite) → הורדה מלאה.
+        if (recovery.checkDbHealthAfterCrash(dbPath)) {
+          debugPrint('📦 ${result.detail}: ה-DB עבר quick_check; מנקה סימון');
           recovery.clearStaleArtifacts(dbPath);
         } else {
           debugPrint('   ⚠️ ה-DB פגום/לא קריא — נדרשת הורדה מלאה; משאיר סימון');
@@ -598,22 +596,6 @@ Future<void> _recoverInterruptedLibraryUpdate() async {
     }
   } catch (e) {
     debugPrint('library update recovery failed: $e');
-  }
-}
-
-/// בדיקת תקינות מלאה (PRAGMA quick_check) של ה-DB, read-only. כבדה — נקראת
-/// רק במצב blockedMissingBackup הנדיר, לא בעלייה הרגילה.
-bool _isLocalDbHealthy(String dbPath) {
-  try {
-    final db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
-    try {
-      final result = db.select('PRAGMA quick_check');
-      return result.isNotEmpty && result.first.values.first?.toString() == 'ok';
-    } finally {
-      db.close();
-    }
-  } catch (_) {
-    return false;
   }
 }
 
