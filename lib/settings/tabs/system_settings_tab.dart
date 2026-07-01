@@ -47,7 +47,6 @@ import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:otzaria/settings/dialogs/change_location_dialog.dart';
 
 /// טאב "אוצריא" — גרסאות, נתיב ספרייה, גיבוי, מצב סייפר, איפוס.
 class SystemSettingsTab extends StatefulWidget {
@@ -1731,45 +1730,41 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       cardId: 'system.reset',
       title: 'איפוס',
       children: [
-        ListTile(
-          leading: const Icon(FluentIcons.arrow_reset_24_regular),
-          title: const Text(
-            'איפוס הגדרות',
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: const Text(
-            'מחיקת כל ההגדרות וחזרה למצב ההתחלתי',
-            style: kSettingsSubtitleStyle,
-          ),
-          trailing: ActionButton.ghost(
-            icon: FluentIcons.arrow_reset_24_regular,
-            text: 'אפס הגדרות',
-            onPressed: () async {
-              if (shouldRequireSaferModePassword(context)) {
-                final verified = await verifySaferModePassword(context);
-                if (!verified || !context.mounted) return;
-              }
-              if (!context.mounted) return;
+        SettingsActionTile.text(
+          icon: FluentIcons.arrow_reset_24_regular,
+          title: 'איפוס הגדרות',
+          subtitle: 'מחיקת כל ההגדרות וחזרה למצב ההתחלתי',
+          actions: [
+            ActionButton.ghost(
+              icon: FluentIcons.arrow_reset_24_regular,
+              text: 'אפס הגדרות',
+              onPressed: () async {
+                if (shouldRequireSaferModePassword(context)) {
+                  final verified = await verifySaferModePassword(context);
+                  if (!verified || !context.mounted) return;
+                }
+                if (!context.mounted) return;
 
-              final confirmed = await showWarningDialog(
-                context: context,
-                title: 'איפוס הגדרות?',
-                content: 'כל ההגדרות האישיות שלך ימחקו.',
-                subtitle: 'פעולה זו אינה הפיכה!',
-                cancelText: 'ביטול',
-                confirmText: 'אפס',
-              );
-              if (confirmed == true && mounted) {
-                Settings.clearCache();
-                await resetRuntimeStateAfterSettingsReset();
-                if (!mounted) return;
-                RestartWidget.restartApp(
-                  this.context,
-                  afterRestart: WebViewEnvironmentHolder.disposeForAppRestart,
+                final confirmed = await showWarningDialog(
+                  context: context,
+                  title: 'איפוס הגדרות?',
+                  content: 'כל ההגדרות האישיות שלך ימחקו.',
+                  subtitle: 'פעולה זו אינה הפיכה!',
+                  cancelText: 'ביטול',
+                  confirmText: 'אפס',
                 );
-              }
-            },
-          ),
+                if (confirmed == true && mounted) {
+                  Settings.clearCache();
+                  await resetRuntimeStateAfterSettingsReset();
+                  if (!mounted) return;
+                  RestartWidget.restartApp(
+                    this.context,
+                    afterRestart: WebViewEnvironmentHolder.disposeForAppRestart,
+                  );
+                }
+              },
+            ),
+          ],
         ),
       ],
     );
