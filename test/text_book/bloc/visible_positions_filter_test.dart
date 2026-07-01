@@ -73,9 +73,10 @@ void main() {
       expect(filtered.map((p) => p.index), [10, 11]);
     });
 
-    test('שומר על שורה קצרה הגלויה במלואה גם אם תופסת מעט מה-viewport', () {
-      // במצב לא-רציף, שורה קצרה תופסת רק ~3% מה-viewport. כל ה-extent גלוי,
-      // visibilityRatio = 100% > 15% - תיכלל.
+    test('מסיר שורה קצרה שנגמרת בקו העוגן (0.05) - שייר של הסעיף הקודם', () {
+      // שורה קצרה הגלויה במלואה ב-5% העליונים (trailingEdge=0.05) היא שייר
+      // של הסעיף הקודם שאליו הניווט מיישר - נסיר אותה כדי שההדגשה בסרגל
+      // הניווט תזוהה לפי הסעיף שאליו ניווטו (index 51), ולא לפי השייר.
       final positions = [
         const ItemPosition(
           index: 50,
@@ -92,7 +93,53 @@ void main() {
       final filtered =
           TextBookBloc.filterBarelyVisiblePositionsForTesting(positions);
 
-      expect(filtered.length, 2);
+      expect(filtered.map((p) => p.index), [51]);
+    });
+
+    test('שומר על סגמנט קצר שמתחיל בקו העוגן - יעד ניווט אמיתי', () {
+      // סגמנט קצר שגללו אליו בפועל מתחיל ב-0.05 (קו העוגן) ונגמר ב-0.058.
+      // למרות שנוכחותו זעירה הוא היעד עצמו, לא שייר של הסעיף הקודם (שמגיע
+      // מלמעלה) - ולכן נשמר וההדגשה תזוהה לפיו (index 50).
+      final positions = [
+        const ItemPosition(
+          index: 50,
+          itemLeadingEdge: 0.05,
+          itemTrailingEdge: 0.058,
+        ),
+        const ItemPosition(
+          index: 51,
+          itemLeadingEdge: 0.058,
+          itemTrailingEdge: 0.95,
+        ),
+      ];
+
+      final filtered =
+          TextBookBloc.filterBarelyVisiblePositionsForTesting(positions);
+
+      expect(filtered.map((p) => p.index), [50, 51]);
+    });
+
+    test('מסיר שורה קצרה שנגמרת מעט מתחת לקו העוגן (רעש מדידה)', () {
+      // אחרי גלילה ורעש מדידה (כמו "overflowed by 2px") הקצה התחתון של השייר
+      // עלול לנחות מעט מתחת ל-0.05 (0.058). נוכחותו מתחת לקו העוגן זניחה,
+      // ולכן נסיר אותו כדי שההדגשה תזוהה לפי הסעיף שאליו ניווטו (index 51).
+      final positions = [
+        const ItemPosition(
+          index: 50,
+          itemLeadingEdge: 0.02,
+          itemTrailingEdge: 0.058,
+        ),
+        const ItemPosition(
+          index: 51,
+          itemLeadingEdge: 0.058,
+          itemTrailingEdge: 0.95,
+        ),
+      ];
+
+      final filtered =
+          TextBookBloc.filterBarelyVisiblePositionsForTesting(positions);
+
+      expect(filtered.map((p) => p.index), [51]);
     });
 
     test('מסיר גם position שמתחיל ב-95% התחתונים של ה-viewport', () {

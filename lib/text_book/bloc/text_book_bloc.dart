@@ -27,6 +27,7 @@ import 'package:otzaria/text_book/utils/link_processing.dart';
 import 'package:otzaria/text_book/utils/he_categories_enricher.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as notes;
+import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -1393,12 +1394,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     );
   }
 
-  /// סינון item positions שגלויים מאוד מעט (פחות מ-15% מה-segment גלוי). כך
-  /// "שיירי" הסעיף הקודם, שגלויים לרוב 5% מה-viewport אחרי גלילה עם
-  /// alignment: 0.05, לא נספרים כחלק מהמיקום הנוכחי בספר.
+  /// סינון item positions שאינם חלק מ"המיקום הנוכחי" בספר:
+  /// - קטע שנוכחותו מתחת לקו העוגן זניחה הוא שייר של הסעיף הקודם שאליו הניווט
+  ///   מיישר (isRemnantAbovePositionAnchor) - גם אם הוא שורה קצרה הגלויה
+  ///   במלואה סביב קו העוגן.
+  /// - קטע שגלוי פחות מ-15% מה-extent שלו (שייר בתחתית ה-viewport).
   ///
-  /// אם הסינון מותיר רשימה ריקה (כל ה-positions גלויים פחות מהסף - לא צפוי
-  /// בפועל), חוזרים לרשימה המקורית כ-fallback.
+  /// אם הסינון מותיר רשימה ריקה (לא צפוי בפועל), חוזרים לרשימה המקורית.
   @visibleForTesting
   static List<ItemPosition> filterBarelyVisiblePositionsForTesting(
     List<ItemPosition> positions,
@@ -1412,6 +1414,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     final filtered = positions.where((p) {
       final extent = p.itemTrailingEdge - p.itemLeadingEdge;
       if (extent <= 0) return false;
+      if (isRemnantAbovePositionAnchor(p.itemLeadingEdge, p.itemTrailingEdge)) {
+        return false;
+      }
       final visibleTop = p.itemLeadingEdge.clamp(0.0, 1.0);
       final visibleBottom = p.itemTrailingEdge.clamp(0.0, 1.0);
       final visiblePortion = visibleBottom - visibleTop;
