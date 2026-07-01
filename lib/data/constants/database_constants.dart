@@ -9,6 +9,9 @@ class DatabaseConstants {
   /// The name of the compressed main database archive (as published on releases).
   static const String databaseArchiveFileName = 'seforim.db.zst';
 
+  /// The morphology dictionary used by fuzzy search.
+  static const String lexicalDatabaseFileName = 'lexical.db';
+
   /// The name of the external catalogs database file
   static const String externalCatalogDatabaseFileName = 'otzar-HB_catalog.db';
 
@@ -37,6 +40,7 @@ class DatabaseConstants {
         '$databaseFileName-wal',
         '$databaseFileName-shm',
         databaseArchiveFileName,
+        lexicalDatabaseFileName,
         externalCatalogDatabaseFileName,
         '$externalCatalogDatabaseFileName-wal',
         '$externalCatalogDatabaseFileName-shm',

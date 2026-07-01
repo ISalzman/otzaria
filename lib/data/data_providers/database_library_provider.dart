@@ -28,6 +28,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/utils/file/docx_to_otzaria.dart';
 import 'package:otzaria/utils/file/docx_cache.dart';
+import 'package:otzaria/utils/file/file_book_path_resolver.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -2361,11 +2362,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
 
     if (filePath != null && fileType == 'pdf') {
+      final resolvedFilePath = resolveMovedFileBookPath(filePath);
       return PdfBook(
         id: id,
         title: title,
         category: category,
-        path: filePath,
+        path: resolvedFilePath,
+        filePath: resolvedFilePath,
         author: author,
         heShortDesc: metaHeShortDesc,
         pubDate: pubDate,
@@ -2379,11 +2382,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
 
     if (filePath != null && fileType == 'docx') {
+      final resolvedFilePath = resolveMovedFileBookPath(filePath);
       return DocxBook(
         id: id,
         title: title,
         category: category,
-        path: filePath,
+        path: resolvedFilePath,
+        filePath: resolvedFilePath,
         author: author,
         heShortDesc: metaHeShortDesc,
         pubDate: pubDate,
@@ -2411,6 +2416,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
       isUserBook: isUserBook,
     );
   }
+
+  @visibleForTesting
+  String resolveFileBookPathForTesting(String filePath) =>
+      resolveMovedFileBookPath(filePath);
 
   /// Counts the total number of categories in the tree.
   int _countCategories(Category category) {
