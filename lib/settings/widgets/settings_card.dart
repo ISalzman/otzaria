@@ -4,11 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
-import 'package:otzaria/settings/widgets/custom_switch.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/controls/action_buttons.dart';
-import 'package:otzaria/widgets/controls/segmented_control.dart';
-import 'package:otzaria/widgets/layout/app_card.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
