@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -14,6 +15,12 @@ class CommentatorsSelectionPanel extends StatefulWidget {
   final String bookTitle;
   final Widget? emptyState;
 
+  /// מפרשים "נדירים" שמוסתרים מהרשימה, אלא אם הם ב-[lineRelevantCommentators].
+  final Set<String> rareCommentators;
+
+  /// מפרשים נדירים שכן יוצגו כי השורה הנוכחית כוללת קישור מהם.
+  final Set<String> lineRelevantCommentators;
+
   const CommentatorsSelectionPanel({
     super.key,
     required this.groups,
@@ -22,6 +29,8 @@ class CommentatorsSelectionPanel extends StatefulWidget {
     required this.bookTitle,
     this.onSelectionApplied,
     this.emptyState,
+    this.rareCommentators = const {},
+    this.lineRelevantCommentators = const {},
   });
 
   @override
@@ -64,9 +73,18 @@ class _CommentatorsSelectionPanelState
   void didUpdateWidget(CommentatorsSelectionPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.groups != widget.groups ||
-        oldWidget.bookTitle != widget.bookTitle) {
+        oldWidget.bookTitle != widget.bookTitle ||
+        !setEquals(oldWidget.rareCommentators, widget.rareCommentators) ||
+        !setEquals(oldWidget.lineRelevantCommentators,
+            widget.lineRelevantCommentators)) {
       _update();
     }
+  }
+
+  /// מפרש נדיר מוסתר מהרשימה אלא אם השורה הנוכחית כוללת קישור מהם.
+  bool _isCommentatorVisible(String title) {
+    if (!widget.rareCommentators.contains(title)) return true;
+    return widget.lineRelevantCommentators.contains(title);
   }
 
   @override
@@ -76,8 +94,9 @@ class _CommentatorsSelectionPanelState
   }
 
   Future<List<String>> _filterGroup(List<String> group) async {
-    final filteredByQuery =
-        group.where((title) => title.contains(_searchController.text));
+    final filteredByQuery = group
+        .where(_isCommentatorVisible)
+        .where((title) => title.contains(_searchController.text));
 
     if (_selectedTopics.isEmpty) {
       return filteredByQuery.toList();

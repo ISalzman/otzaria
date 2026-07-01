@@ -14,6 +14,7 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/utils/file/file_book_path_resolver.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -147,14 +148,15 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     final initial = state;
     if (initial is! PdfBookInitial) return;
 
-    if (!File(initial.book.path).existsSync()) {
-      emit(PdfBookError(book: initial.book, message: 'הספר איננו קיים'));
+    final book = _resolvePdfBookPath(initial.book);
+    if (!File(book.path).existsSync()) {
+      emit(PdfBookError(book: book, message: 'הספר איננו קיים'));
       return;
     }
 
     _watchdogFiredCount = 0;
     emit(PdfBookLoading(
-      book: initial.book,
+      book: book,
       searchText: initial.searchText,
       searchOptions: initial.searchOptions,
       alternativeWords: initial.alternativeWords,
@@ -176,7 +178,38 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     _startLoadWatchdog();
 
     // Load headings and links in background
-    _loadHeadingsAndLinks(initial.book);
+    _loadHeadingsAndLinks(book);
+  }
+
+  PdfBook _resolvePdfBookPath(PdfBook book) {
+    final resolvedPath = resolveMovedFileBookPath(book.path);
+    if (resolvedPath == book.path) return book;
+
+    return PdfBook(
+      id: book.id,
+      title: book.title,
+      category: book.category,
+      path: resolvedPath,
+      topics: book.topics,
+      author: book.author,
+      heCategories: book.heCategories,
+      heEra: book.heEra,
+      compDateStringHe: book.compDateStringHe,
+      compPlaceStringHe: book.compPlaceStringHe,
+      pubDateStringHe: book.pubDateStringHe,
+      pubPlaceStringHe: book.pubPlaceStringHe,
+      heShortDesc: book.heShortDesc,
+      heDesc: book.heDesc,
+      pubDate: book.pubDate,
+      pubPlace: book.pubPlace,
+      filePath: resolvedPath,
+      categoryPath: book.categoryPath,
+      categoryId: book.categoryId,
+      fileType: book.fileType,
+      order: book.order,
+      isUserBook: book.isUserBook,
+      externalLibraryId: book.externalLibraryId,
+    );
   }
 
   Future<void> _loadHeadingsAndLinks(PdfBook book) async {
@@ -304,8 +337,9 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     final current = state;
     if (current is! PdfBookError) return;
 
-    if (!File(current.book.path).existsSync()) {
-      emit(PdfBookError(book: current.book, message: 'הספר איננו קיים'));
+    final book = _resolvePdfBookPath(current.book);
+    if (!File(book.path).existsSync()) {
+      emit(PdfBookError(book: book, message: 'הספר איננו קיים'));
       return;
     }
 
@@ -317,7 +351,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     }
 
     emit(PdfBookLoading(
-      book: current.book,
+      book: book,
       searchText: tab.searchText,
       searchOptions: tab.searchOptions,
       alternativeWords: tab.alternativeWords,
@@ -327,7 +361,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       layoutMode: tab.savedLayoutMode ?? PdfLayoutMode.regularView,
     ));
     _startLoadWatchdog();
-    _loadHeadingsAndLinks(current.book);
+    _loadHeadingsAndLinks(book);
   }
 
   void _onDocumentLoadFailed(
@@ -504,6 +538,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     pdfController.setZoom(
       pdfController.centerPosition,
       newZoom,
+      duration: Duration.zero,
     );
 
     tab.savedZoom = newZoom;
@@ -525,6 +560,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     pdfController.setZoom(
       pdfController.centerPosition,
       newZoom,
+      duration: Duration.zero,
     );
 
     tab.savedZoom = newZoom;
@@ -545,6 +581,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     pdfController.setZoom(
       pdfController.centerPosition,
       1.0,
+      duration: Duration.zero,
     );
 
     tab.savedZoom = 1.0;

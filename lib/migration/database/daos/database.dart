@@ -197,9 +197,43 @@ class MyDatabase {
     // Ensure schema exists (all scripts use CREATE TABLE/INDEX IF NOT EXISTS).
     for (final script in _getCreateScripts()) {
       db.execute(script);
+      if (script.contains('CREATE TABLE IF NOT EXISTS generation')) {
+        _ensureGenerationSchema(db);
+      } else if (script.contains('CREATE TABLE IF NOT EXISTS author')) {
+        _ensureAuthorSchema(db);
+      }
     }
 
     return db;
+  }
+
+  void _ensureGenerationSchema(sqlite3.Database db) {
+    final columns = db
+        .select('PRAGMA table_info(generation)')
+        .map((row) => row['name'] as String)
+        .toSet();
+
+    if (!columns.contains('startYear')) {
+      db.execute('ALTER TABLE generation ADD COLUMN startYear INTEGER');
+    }
+    if (!columns.contains('endYear')) {
+      db.execute('ALTER TABLE generation ADD COLUMN endYear INTEGER');
+    }
+    if (!columns.contains('parentGenerationId')) {
+      db.execute(
+          'ALTER TABLE generation ADD COLUMN parentGenerationId INTEGER');
+    }
+  }
+
+  void _ensureAuthorSchema(sqlite3.Database db) {
+    final columns = db
+        .select('PRAGMA table_info(author)')
+        .map((row) => row['name'] as String)
+        .toSet();
+
+    if (!columns.contains('generationId')) {
+      db.execute('ALTER TABLE author ADD COLUMN generationId INTEGER');
+    }
   }
 
   void close() {
@@ -648,6 +682,38 @@ class MyDatabase {
       ''',
       'CREATE INDEX IF NOT EXISTS idx_default_targum_book ON default_targum(bookId);',
       'CREATE INDEX IF NOT EXISTS idx_default_targum_target ON default_targum(targumBookId);',
+
+      // Book ↔ generation (זהה ל-seforim.db). ב-seforim.db נבנה חיצונית;
+      // כאן נוצר עבור user_books.db כדי שספר אישי יקבל דור דרך אותו מסלול.
+      '''
+      CREATE TABLE IF NOT EXISTS book_generation (
+          bookId INTEGER NOT NULL,
+          generationId INTEGER NOT NULL,
+          PRIMARY KEY (bookId, generationId),
+          FOREIGN KEY (bookId) REFERENCES book(id) ON DELETE CASCADE,
+          FOREIGN KEY (generationId) REFERENCES generation(id) ON DELETE CASCADE
+      );
+      ''',
+      'CREATE INDEX IF NOT EXISTS idx_book_generation_generation ON book_generation(generationId);',
+
+      // קישורי-משתמש שיובאו מ-CSV. מזוהה היעד לפי כותרת+ref (לא FK שלם),
+      // כדי לתמוך גם בקישור חוצה-DB אל ספר רשמי (FK חוצה-קבצים אינו אפשרי).
+      '''
+      CREATE TABLE IF NOT EXISTS user_link (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          sourceBookId INTEGER NOT NULL,
+          sourceLineIndex INTEGER NOT NULL,
+          targetTitle TEXT NOT NULL,
+          targetCategoryId INTEGER,
+          targetIsUserBook INTEGER NOT NULL DEFAULT 0,
+          targetRef TEXT,
+          targetLineIndex INTEGER,
+          connectionType TEXT NOT NULL,
+          FOREIGN KEY (sourceBookId) REFERENCES book(id) ON DELETE CASCADE
+      );
+      ''',
+      'CREATE INDEX IF NOT EXISTS idx_user_link_source ON user_link(sourceBookId, sourceLineIndex);',
+      'CREATE INDEX IF NOT EXISTS idx_user_link_target ON user_link(targetTitle, targetIsUserBook);',
     ];
   }
 }

@@ -161,9 +161,10 @@ void main() {
     });
   });
 
-  group('name vs toolTab.title (allowed to differ — per official docs)', () {
-    test('accepts different name and title without errors or warnings', () {
-      // הדוגמה הרשמית במדריך הפיתוח עצמה משתמשת בשמות שונים.
+  group('name vs toolTab.title (enforced upstream in validateManifest)', () {
+    test(
+        'extended validator stays silent — the rule is a blocking error in '
+        'validateManifest, so this layer does not re-flag a mismatch', () {
       final report = _runOn(
         tempDir,
         manifestOverride: _baseManifest(

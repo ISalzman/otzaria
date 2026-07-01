@@ -60,6 +60,16 @@ class Category {
     return books;
   }
 
+  /// האם הקטגוריה מכילה ספר כלשהו, ישירות או בתת-קטגוריה.
+  /// עוצר בספר הראשון שנמצא — זול מ-[getAllBooks] לבדיקת ריקנות בלבד.
+  bool get hasBooks {
+    if (books.isNotEmpty) return true;
+    for (final category in subCategories) {
+      if (category.hasBooks) return true;
+    }
+    return false;
+  }
+
   List<Category> getAllCategories() {
     List<Category> categories = [];
     categories.addAll(subCategories);

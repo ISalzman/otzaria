@@ -2,9 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/search/search_query_builder.dart';
-import 'package:otzaria/data/book_locator.dart';
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 
 /// רגקס להסרת תגי HTML וישויות.
 final RegExp _htmlStripper = RegExp(r'<[^>]*>|&[^;]+;');
@@ -618,25 +617,6 @@ String highLight(
   return result;
 }
 
-/// מנרמל נתיב קטגוריה לפורמט אחיד מופרד בפסיקים.
-///
-/// ממיר נתיבי קבצים (\\ ו /) לפסיקים, מסיר סיומות קבצים
-/// ומחזיר מחרוזת נקייה בפורמט "a, b, c".
-String normalizeCategoryPath(String rawPath) {
-  if (rawPath.isEmpty) return rawPath;
-  final normalized = rawPath
-      .replaceAll('\\', ', ')
-      .replaceAll('/', ', ')
-      .replaceAll('.txt', '')
-      .replaceAll('.docx', '')
-      .replaceAll('.pdf', '');
-  return normalized
-      .split(',')
-      .map((part) => part.trim())
-      .where((part) => part.isNotEmpty && part != '.')
-      .join(', ');
-}
-
 String getTitleFromPath(String path) {
   path = path
       .replaceAll('/', Platform.pathSeparator)
@@ -705,14 +685,8 @@ Future<bool> hasTopic(String title, String topic) async {
         .any((g) => _mapGenerationToCategory(g.trim()) == topic);
   }
 
-  // Book not found in CSV, it's "מפרשים נוספים"
-  if (topic == _defaultCategory) {
-    return true;
-  }
-
-  // Fallback to original path-based logic
-  final location = await BookLocator.locateBook(title);
-  return location?.filePath?.contains(topic) ?? false;
+  // ספר שאינו מתויג ב-DB משויך ל"מפרשים נוספים" בלבד
+  return topic == _defaultCategory;
 }
 
 /// טוען את ה-cache של תקופות מפרשים מה-DB
@@ -727,7 +701,20 @@ Future<void> _loadCsvCache() async {
     }
     final db = provider.repository?.database;
     if (db != null) {
-      _csvCache = await db.authorDao.getAllBookTitleToGeneration();
+      final map = await db.authorDao.getAllBookTitleToGeneration();
+      // מיזוג דורות ספרי-משתמש (אם user_books.db פתוח) — כדי שמפרש-משתמש
+      // ימוין לפי דורו. בהתנגשות כותרת נשמר הערך הרשמי.
+      final userRepo = UserBooksDatabaseHolder.instance.repositoryIfInitialized;
+      if (userRepo != null) {
+        try {
+          final userMap =
+              await userRepo.database.authorDao.getAllBookTitleToGeneration();
+          userMap.forEach((k, v) => map.putIfAbsent(k, () => v));
+        } catch (e) {
+          debugPrint('⚠️ user_books era cache skipped: $e');
+        }
+      }
+      _csvCache = map;
     } else {
       _csvCache = {};
       debugPrint('⚠️ SqliteDataProvider repository is null');
@@ -1242,9 +1229,6 @@ Future<Map<String, List<String>>> splitByEra(
     await (_csvCacheLoading ??= _loadCsvCache());
   }
 
-  // טעינת titleToPath פעם אחת (לא בכל איטרציה)
-  final titleToPath = await FileSystemData.instance.titleToPath;
-
   // יוצרים מבנה נתונים ריק לכל הקטגוריות
   final Map<String, List<String>> byEra = {
     for (var category in _eraCategories) category: [],
@@ -1253,7 +1237,7 @@ Future<Map<String, List<String>>> splitByEra(
 
   // ממיינים כל פרשן לקטגוריה הראשונה שמתאימה לו (סינכרוני!)
   for (final t in titles) {
-    final category = _getTopicSync(t, titleToPath);
+    final category = _getTopicSync(t);
     byEra[category]!.add(t);
   }
 
@@ -1262,8 +1246,8 @@ Future<Map<String, List<String>>> splitByEra(
 }
 
 /// גרסה סינכרונית של hasTopic - משתמשת ב-cache שכבר נטען
-String _getTopicSync(String title, Map<String, String> titleToPath) {
-  // בדיקה ב-DB cache
+String _getTopicSync(String title) {
+  // הדור נלקח מטבלת book_generation ב-DB; ספר שאינו מתויג -> "מפרשים נוספים"
   if (_csvCache != null && _csvCache!.containsKey(title)) {
     final generationRaw = _csvCache![title]!;
     final parsedCategories = generationRaw
@@ -1278,15 +1262,6 @@ String _getTopicSync(String title, Map<String, String> titleToPath) {
       }
     }
     return parsedCategories.first;
-  }
-
-  // Fallback לפי נתיב
-  final path = titleToPath[title];
-  if (path != null) {
-    final normalizedPath = normalizeCategoryPath(path);
-    for (var category in _eraCategories) {
-      if (normalizedPath.contains(category)) return category;
-    }
   }
 
   return _defaultCategory;

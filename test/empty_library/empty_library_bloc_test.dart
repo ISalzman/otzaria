@@ -179,6 +179,7 @@ void main() {
       final downloadedBytes = utf8.encode('compressed-db');
       final talmudBytes = utf8.encode('compressed-talmud');
       final catalogBytes = utf8.encode('compressed-catalog');
+      final lexicalBytes = utf8.encode('lexical-dictionary');
       final client = MockClient((request) async {
         if (request.url.path.endsWith('/releases/latest')) {
           return http.Response(
@@ -214,6 +215,11 @@ void main() {
         if (request.url.host == 'github.com' &&
             request.url.path.endsWith('otzar-HB_catalog.db.zst')) {
           return http.Response.bytes(catalogBytes, 200);
+        }
+
+        if (request.url.host == 'github.com' &&
+            request.url.path.endsWith('/lexical.db')) {
+          return http.Response.bytes(lexicalBytes, 200);
         }
 
         return http.Response('not found', 404);
@@ -276,9 +282,14 @@ void main() {
             .existsSync(),
         isFalse,
       );
+      // מילון החיפוש המקורב (לא דחוס) הועתק לתיקיית הספרייה ליד seforim.db.
+      expect(
+        File(path.join(tempDir.path, 'lexical.db')).existsSync(),
+        isTrue,
+      );
     });
 
-    test('פס ההתקדמות מאוחד על פני שלושת הקבצים — רק הכותרת מתחלפת', () async {
+    test('פס ההתקדמות מאוחד על פני כל הקבצים — רק הכותרת מתחלפת', () async {
       final tempDir = await Directory.systemTemp.createTemp(
         'otzaria-combined-progress-',
       );
@@ -293,10 +304,11 @@ void main() {
       await Settings.setValue<String>(
           SettingsRepository.keyLibraryFolderName, '');
 
-      // גדלים שונים בכוונה, כדי לוודא ששלושתם נספרים יחד.
+      // גדלים שונים בכוונה, כדי לוודא שכולם נספרים יחד.
       final seforimBytes = utf8.encode('A' * 100);
       final talmudBytes = utf8.encode('B' * 200);
       final catalogBytes = utf8.encode('C' * 700);
+      final lexicalBytes = utf8.encode('D' * 300);
       final client = MockClient((request) async {
         if (request.url.path.endsWith('/releases/latest')) {
           return http.Response(
@@ -325,6 +337,10 @@ void main() {
             request.url.path.endsWith('otzar-HB_catalog.db.zst')) {
           return http.Response.bytes(catalogBytes, 200);
         }
+        if (request.url.host == 'github.com' &&
+            request.url.path.endsWith('/lexical.db')) {
+          return http.Response.bytes(lexicalBytes, 200);
+        }
         return http.Response('not found', 404);
       });
 
@@ -349,7 +365,7 @@ void main() {
       bloc.add(DownloadLibraryRequested());
       await done.timeout(const Duration(seconds: 5));
 
-      // כל שלוש הכותרות הופיעו (רק הכותרת מתחלפת בין הקבצים).
+      // כל הכותרות הופיעו (רק הכותרת מתחלפת בין הקבצים).
       final titles =
           downloading.map((s) => s.message.split('\n').first).toSet();
       expect(
@@ -358,6 +374,7 @@ void main() {
             'מוריד את ספריית אוצריא',
             'מוריד את התלמוד הבבלי',
             'מוריד את הקטלוגים',
+            'מוריד מילון לחיפוש המקורב',
           ]));
 
       // הפס מאוחד: בזמן הצגת הכותרת של הקובץ הראשון הוא לא מגיע ל-100%
@@ -370,16 +387,100 @@ void main() {
         lessThan(0.5),
       );
 
-      // ההתקדמות לא יורדת לאורך הורדת הספרייה, ומגיעה ל-100% בסוף. הורדת
-      // המילון המורפולוגי היא שלב נפרד שפותח פס חדש מ-0, מחוץ לפס המאוחד.
-      final progresses = downloading
-          .where((s) => !s.message.contains('מילון מורפולוגי'))
-          .map((s) => s.progress)
-          .toList();
+      // ההתקדמות לא יורדת ומגיעה ל-100% בסוף — כולל מילון החיפוש המקורב,
+      // שהוא כעת חלק מהפס המאוחד ולא שלב נפרד.
+      final progresses = downloading.map((s) => s.progress).toList();
       for (var i = 1; i < progresses.length; i++) {
         expect(progresses[i], greaterThanOrEqualTo(progresses[i - 1]));
       }
       expect(progresses.last, closeTo(1.0, 1e-9));
+    });
+
+    test(
+        'כשל בהורדת המילון (best-effort) — ההורדה מסתיימת והפס עדיין מגיע ל-100%',
+        () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'otzaria-lexical-fail-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+      await Settings.setValue<String>(SettingsRepository.keyLibraryPath, '');
+      await Settings.setValue<String>(
+          SettingsRepository.keyLibraryFolderName, '');
+
+      final seforimBytes = utf8.encode('A' * 100);
+      final talmudBytes = utf8.encode('B' * 200);
+      final catalogBytes = utf8.encode('C' * 700);
+      // המילון מחזיר 404 (מדמה release לא זמין). resolve מצליח אך ההורדה נכשלת.
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/releases/latest')) {
+          return http.Response(
+            jsonEncode({
+              'assets': [
+                {
+                  'name': 'seforim.db.zst',
+                  'browser_download_url':
+                      'https://example.com/releases/seforim.db.zst',
+                },
+              ],
+            }),
+            200,
+            headers: const {'content-type': 'application/json'},
+          );
+        }
+        if (request.url.toString() ==
+            'https://example.com/releases/seforim.db.zst') {
+          return http.Response.bytes(seforimBytes, 200);
+        }
+        if (request.url.host == 'github.com' &&
+            request.url.path.endsWith('talmud_bavli_latest.tar.zst')) {
+          return http.Response.bytes(talmudBytes, 200);
+        }
+        if (request.url.host == 'github.com' &&
+            request.url.path.endsWith('otzar-HB_catalog.db.zst')) {
+          return http.Response.bytes(catalogBytes, 200);
+        }
+        // lexical.db (וכל היתר) — 404
+        return http.Response('not found', 404);
+      });
+
+      final bloc = EmptyLibraryBloc(
+        httpClient: client,
+        defaultLibraryPathOverride: tempDir.path,
+        extractCompressedDatabase: (archivePath, outputPath, onProgress) async {
+          await File(outputPath).writeAsBytes(const [1], flush: true);
+        },
+        extractTarArchive: (archivePath, outputDir, onProgress) async {},
+      );
+      addTearDown(bloc.close);
+
+      final downloading = <EmptyLibraryDownloading>[];
+      final sub = bloc.stream.listen((state) {
+        if (state is EmptyLibraryDownloading) downloading.add(state);
+      });
+      addTearDown(sub.cancel);
+
+      final done =
+          bloc.stream.where((s) => s is EmptyLibraryDirectorySelected).first;
+      bloc.add(DownloadLibraryRequested());
+      await done.timeout(const Duration(seconds: 5));
+
+      // כשל המילון לא חסם — הספרייה נבחרה.
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyLibraryPath),
+        tempDir.path,
+      );
+      // המילון לא הותקן (הורדתו נכשלה), אך פס ההורדה עדיין הגיע ל-100%.
+      expect(
+        File(path.join(tempDir.path, 'lexical.db')).existsSync(),
+        isFalse,
+      );
+      expect(downloading.last.progress, closeTo(1.0, 1e-9));
     });
   });
 }

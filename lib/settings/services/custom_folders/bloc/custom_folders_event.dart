@@ -39,3 +39,18 @@ class RescanCustomFolders extends CustomFoldersEvent {
   @override
   List<Object> get props => [showNoChangesMessage];
 }
+
+/// ייבוא ידני של קבצי דורות/קישורים שהמשתמש בחר (לצמיתות, בדריסה מצטברת).
+class ImportUserContentFiles extends CustomFoldersEvent {
+  const ImportUserContentFiles(this.paths);
+  final List<String> paths;
+  @override
+  List<Object> get props => [paths];
+}
+
+/// מחיקת כל הדורות והקישורים המיובאים.
+class ClearUserContent extends CustomFoldersEvent {
+  const ClearUserContent();
+  @override
+  List<Object> get props => [];
+}

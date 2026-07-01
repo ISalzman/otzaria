@@ -41,6 +41,7 @@ import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/text_book/view/widgets/book_source_banner.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
@@ -346,6 +347,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   late final ItemPositionsListener _positionsListener;
   FocusNode? _keyboardFocusNode;
   bool _shouldPreserveKeyboardFocus = false;
+
+  // האם להציג את שורת "יד הרמב"ם" מעל השורה הראשונה (נטען פעם אחת לכל ספר).
+  bool _showSourceBanner = false;
   bool _pendingKeyboardFocusRestore = false;
   bool _wasMenuFocused = false;
   String? _savedSelectedText;
@@ -524,6 +528,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
+      _loadSourceBanner();
       FocusManager.instance.addListener(_handleGlobalFocusChange);
       // רישום למנגנון הפוקוס הפר-טאבי כדי שמעבר *חזרה* לטאב צורת-הדף ימקד את
       // אזור הקריאה דרך reading_screen (גלילה בחצים עובדת מיד).
@@ -624,6 +629,24 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           ?.removeListener(_handleExternalSelectionChange);
       widget.selectionSyncController
           ?.addListener(_handleExternalSelectionChange);
+    }
+    // side-by-side אינו ממפתח לפי identity — מעבר ספר עלול לשמר את ה-State.
+    final oldTab = oldWidget.tab;
+    final newTab = widget.tab;
+    if (widget.isMainText &&
+        oldTab is TextBookTab &&
+        newTab is TextBookTab &&
+        !sameSourceIdentity(oldTab.book, newTab.book)) {
+      _loadSourceBanner();
+    }
+  }
+
+  Future<void> _loadSourceBanner() async {
+    final tab = widget.tab;
+    if (tab is! TextBookTab) return;
+    final show = await isBookFromNationalLibrary(tab.book);
+    if (mounted && show != _showSourceBanner) {
+      setState(() => _showSourceBanner = show);
     }
   }
 
@@ -1202,7 +1225,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             link: link,
             onTap: () => widget.openBookCallback(
               TextBookTab(
-                book: TextBook(title: utils.getTitleFromPath(link.path2)),
+                book: TextBook(
+                  title: utils.getTitleFromPath(link.path2),
+                  isUserBook: link.targetIsUserBook,
+                  categoryId: link.targetCategoryId,
+                  fileType: link.targetFileType,
+                ),
                 index: link.index2 - 1,
                 openLeftPane:
                     (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
@@ -1863,17 +1891,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                                         : null,
                                     itemCount: itemCount,
                                     padding: const EdgeInsets.all(4),
-                                    itemBuilder: (context, index) => _buildLine(
-                                      index,
-                                      state,
-                                      context,
-                                      noteMap,
-                                      segments.isNotEmpty &&
-                                              index < segments.length
-                                          ? segments[index]
-                                          : null,
-                                      continuous,
-                                    ),
+                                    itemBuilder: (context, index) =>
+                                        _buildLineItem(context, index, state,
+                                            noteMap, segments, continuous),
                                   ),
                                 )
                               : ListView.builder(
@@ -1881,17 +1901,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                                   physics: const NeverScrollableScrollPhysics(),
                                   itemCount: itemCount,
                                   padding: const EdgeInsets.all(4),
-                                  itemBuilder: (context, index) => _buildLine(
-                                    index,
-                                    state,
-                                    context,
-                                    noteMap,
-                                    segments.isNotEmpty &&
-                                            index < segments.length
-                                        ? segments[index]
-                                        : null,
-                                    continuous,
-                                  ),
+                                  itemBuilder: (context, index) =>
+                                      _buildLineItem(context, index, state,
+                                          noteMap, segments, continuous),
                                 ),
                         ),
                       ),
@@ -1904,6 +1916,32 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         ),
       ],
     );
+  }
+
+  /// עוטף את [_buildLine]; מוסיף את שורת "יד הרמב"ם" מעל השורה הראשונה.
+  Widget _buildLineItem(
+    BuildContext context,
+    int index,
+    TextBookLoaded state,
+    Map<int, List<PersonalNote>> noteMap,
+    List<ReadingSegment> segments,
+    bool continuous,
+  ) {
+    final line = _buildLine(
+      index,
+      state,
+      context,
+      noteMap,
+      segments.isNotEmpty && index < segments.length ? segments[index] : null,
+      continuous,
+    );
+    if (index == 0 && _showSourceBanner) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [BookSourceBanner(fontSize: widget.fontSize), line],
+      );
+    }
+    return line;
   }
 
   Widget _buildLine(

@@ -34,6 +34,10 @@ class Link {
   /// The file type of the target book when known.
   final String? targetFileType;
 
+  /// Whether the target book lives in user_books.db (separate id space).
+  /// Set for user-authored links so the target resolves to the right DB.
+  final bool targetIsUserBook;
+
   /// The start character position of the link in the text (optional, for character-based links).
   final int? start;
 
@@ -49,6 +53,7 @@ class Link {
     required this.connectionType,
     this.targetCategoryId,
     this.targetFileType,
+    this.targetIsUserBook = false,
     this.start,
     this.end,
   });
@@ -64,7 +69,10 @@ class Link {
         StateError('Invalid link reference for commentary content'),
       );
     }
-    final key = '$path2:$index2';
+    // המפתח כולל את זהות היעד (אישי/רשמי+קטגוריה) כדי ששני קישורים לאותה
+    // כותרת ואינדקס — אחד אישי ואחד רשמי — לא יחזירו זה את תוכן זה.
+    final key = '$path2:$index2:${targetIsUserBook ? 'u' : 'o'}:'
+        '${targetCategoryId ?? ''}';
     final cached = _contentCache.remove(key);
     if (cached != null) {
       _contentCache[key] = cached;
@@ -90,7 +98,8 @@ class Link {
 
   /// מחזירה כתובת תצוגה מלאה של ספר היעד, עם מטמון לפי ספר ואינדקס.
   Future<String> get displayReference {
-    final cacheKey = '${path2}_$index2';
+    final cacheKey = '${path2}_${index2}_${targetIsUserBook ? 'u' : 'o'}_'
+        '${targetCategoryId ?? ''}';
     return _displayReferenceCache.putIfAbsent(cacheKey, () async {
       final targetTitle = utils.getTitleFromPath(path2);
       final targetFileType = _resolveTargetFileType();
@@ -109,6 +118,7 @@ class Link {
                 targetTitle,
                 categoryId: targetCategoryId,
                 fileType: targetFileType,
+                preferUserBooks: targetIsUserBook,
               )
               .then((toc) => toc ?? const <TocEntry>[]),
         );
@@ -163,6 +173,7 @@ class Link {
             ? int.tryParse(json['category_id_2'].toString())
             : null,
         targetFileType = json['file_type_2']?.toString(),
+        targetIsUserBook = false,
         start = json['start'] != null
             ? int.tryParse(json['start'].toString())
             : null,

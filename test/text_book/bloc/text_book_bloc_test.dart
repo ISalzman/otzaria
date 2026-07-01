@@ -463,6 +463,88 @@ void main() {
       await bloc.close();
     });
 
+    test('בצורת הדף רענון קישורים מכבד הגדרות טורים לפי שולחן עבודה', () async {
+      final repository = _FakeTextBookRepository();
+      await PageShapeSettingsManager.saveConfiguration(
+        'בראשית',
+        {
+          'left': 'אבן עזרא על בראשית',
+          'right': 'תרגום אונקלוס על בראשית',
+          'bottom': 'אברבנאל על תורה',
+          'bottomRight': 'בעל הטורים על בראשית',
+        },
+      );
+      await PageShapeSettingsManager.saveColumnVisibility(
+        'בראשית',
+        {
+          'left': true,
+          'right': false,
+          'bottom': false,
+          'bottomRight': false,
+        },
+        scope: PageShapeDisplaySettingsScope.workspace,
+        workspaceId: 'workspace-1',
+      );
+      await PageShapeSettingsManager.saveColumnVisibility(
+        'בראשית',
+        {
+          'left': false,
+          'right': true,
+          'bottom': false,
+          'bottomRight': false,
+        },
+        scope: PageShapeDisplaySettingsScope.workspace,
+        workspaceId: 'workspace-2',
+      );
+
+      final bloc = _createBloc(
+        repository: repository,
+        showPageShapeView: true,
+        commentators: const [
+          'אבן עזרא על בראשית',
+          'תרגום אונקלוס על בראשית',
+          'אברבנאל על תורה',
+          'בעל הטורים על בראשית',
+        ],
+      );
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await _waitFor(
+        () => repository.getBookLinksInRangeCalls >= 1,
+        description: 'initial links load',
+      );
+
+      bloc.add(const RefreshLinksForCurrentWindow(
+        reason: 'workspace-1',
+        workspaceId: 'workspace-1',
+      ));
+      await _waitFor(
+        () => repository.getBookLinksInRangeCalls >= 2,
+        description: 'workspace-1 links reload',
+      );
+      expect(repository.lastTargetBookTitles, ['אבן עזרא על בראשית']);
+
+      bloc.add(const RefreshLinksForCurrentWindow(
+        reason: 'workspace-2',
+        workspaceId: 'workspace-2',
+      ));
+      await _waitFor(
+        () => repository.getBookLinksInRangeCalls >= 3,
+        description: 'workspace-2 links reload',
+      );
+      expect(repository.lastTargetBookTitles, ['תרגום אונקלוס על בראשית']);
+
+      await bloc.close();
+    });
+
     test('במצב מפוצל טוען קישורים רק למפרשים הפעילים', () async {
       final repository = _FakeTextBookRepository();
       final bloc = _createBloc(

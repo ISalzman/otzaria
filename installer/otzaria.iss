@@ -513,8 +513,9 @@ begin
   if DirExists(Path) then
     DelTree(Path, True, True, True);
 
-  // נתיבים ישנים: מזהה חבילה לפני שינוי (com.example) ושמות עבריים.
-  Path := ExpandConstant('{userappdata}\com.example');
+  // com.example הוא מזהה ברירת המחדל של Flutter — מוחקים רק את תת-תיקיית
+  // otzaria, אחרת נמחקים נתונים של אפליקציות Flutter אחרות.
+  Path := ExpandConstant('{userappdata}\com.example\otzaria');
   if DirExists(Path) then
     DelTree(Path, True, True, True);
 
@@ -609,8 +610,9 @@ begin
       if DirExists(AppDataPath) then
         DelTreeExceptBooks(AppDataPath);
         
-      // הגדרות ישנות בשם com.example (לפני שינוי מזהה החבילה)
-      AppDataPath := ExpandConstant('{userappdata}\com.example');
+      // com.example הוא מזהה ברירת המחדל של Flutter — רק תת-תיקיית otzaria
+      // שייכת לנו; מחיקת כל com.example תמחק נתונים של אפליקציות אחרות.
+      AppDataPath := ExpandConstant('{userappdata}\com.example\otzaria');
       if DirExists(AppDataPath) then
         DelTreeExceptBooks(AppDataPath);
 
