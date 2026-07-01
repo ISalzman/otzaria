@@ -65,7 +65,7 @@ void main() {
         addTearDown(() => tester.binding.setSurfaceSize(null));
 
         await tester.pumpWidget(buildScreen());
-        await tester.pump(); // ProtectedSettingsWrapper postFrame
+        await tester.pump(); // SaferModeGuard postFrame
         await tester.pump();
 
         // הקלדה לשדה החיפוש

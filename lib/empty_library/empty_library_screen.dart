@@ -8,7 +8,7 @@ import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 class EmptyLibraryScreen extends StatelessWidget {
@@ -422,14 +422,14 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
   }
 
   Future<void> _pickDirectory(BuildContext context) async {
-    if (!await verifyPasswordForAction(context)) return;
+    if (!await verifySaferModePassword(context)) return;
     if (context.mounted) {
       BlocProvider.of<EmptyLibraryBloc>(context).add(PickDirectoryRequested());
     }
   }
 
   Future<void> _pickArchiveFile(BuildContext context) async {
-    if (!await verifyPasswordForAction(context)) return;
+    if (!await verifySaferModePassword(context)) return;
     if (context.mounted) {
       BlocProvider.of<EmptyLibraryBloc>(context)
           .add(PickArchiveFileRequested());

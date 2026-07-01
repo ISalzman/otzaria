@@ -18,9 +18,8 @@ import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
-import 'package:otzaria/settings/dialogs/books_list_dialog.dart';
-import 'package:otzaria/settings/services/safer_mode/password_verification_dialog.dart';
-import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/dialogs/settings_dialogs_exports.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
@@ -295,9 +294,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   static const _keyAutoBackupFrequency = 'key-auto-backup-frequency';
 
   _BackupMode _selectedBackupMode = _BackupMode.all;
-
-  // ── מצב סייפר (expandable) ────────────────────────────────────────────────
-  bool _isCypherExpanded = false;
 
   // ── גיבוי (expandable) ─────────────────────────────────────────────────────
   bool _isBackupExpanded = false;
@@ -673,7 +669,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   }
 
   Future<void> _exportPendingReportsScript() async {
-    final verified = await verifyPasswordForAction(context);
+    final verified = await verifySaferModePassword(context);
     if (!verified) {
       return;
     }
@@ -1413,7 +1409,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   ) async {
     final verified = await showDialog<bool>(
       context: context,
-      builder: (context) => PasswordVerificationDialog(
+      builder: (context) => SaferModePasswordDialog(
         title: 'אמת סיסמה',
         hint: newValue
             ? 'הזן את הסיסמה כדי להפעיל את המצב המוגן'
@@ -1433,11 +1429,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     BuildContext context,
     SettingsRepository repository,
     bool hasExistingPassword,
+    bool isSaferModeEnabled,
   ) async {
     if (hasExistingPassword) {
       final verified = await showDialog<bool>(
         context: context,
-        builder: (context) => PasswordVerificationDialog(
+        builder: (context) => SaferModePasswordDialog(
           title: 'אמת סיסמה נוכחית',
           hint: 'הזן את הסיסמה הנוכחית כדי לשנות אותה',
           onVerify: (password) async =>
@@ -1449,12 +1446,20 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     if (!context.mounted) return;
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => SetPasswordDialog(
+      builder: (context) => SaferModeSetPasswordDialog(
         onSetPassword: (password) async {
           context
               .read<SettingsBloc>()
               .add(UpdateProtectedModePassword(password));
         },
+        onClearPassword: hasExistingPassword
+            ? () async {
+                context
+                    .read<SettingsBloc>()
+                    .add(const ClearProtectedModePassword());
+              }
+            : null,
+        isSaferModeEnabled: isSaferModeEnabled,
       ),
     );
     if (result == true && context.mounted && !hasExistingPassword) {
@@ -1669,45 +1674,50 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ),
 
         // ── מצב סייפר ──
-        ExpandableSection(
-          icon: state.protectedModeEnabled
-              ? FluentIcons.shield_lock_24_filled
-              : FluentIcons.shield_lock_24_regular,
-          iconColor: state.protectedModeEnabled
-              ? Theme.of(context).colorScheme.primary
-              : null,
-          title: 'מצב סייפר',
-          subtitle: 'נעילת הגדרות',
-          onTap: () => setState(() => _isCypherExpanded = !_isCypherExpanded),
-          isExpanded: _isCypherExpanded,
-          children: [
-            SettingsActionTile.switchTile(
-              icon: state.protectedModeEnabled
-                  ? FluentIcons.lock_closed_24_filled
-                  : FluentIcons.lock_open_24_regular,
-              title: 'הפעל מצב סייפר',
-              subtitle: hasPassword ? 'סיסמה הוגדרה' : 'יש להגדיר סיסמה תחילה',
-              value: state.protectedModeEnabled,
-              onChanged: hasPassword
-                  ? (value) =>
-                      _handleToggleProtectedMode(context, repository, value)
-                  : null,
-            ),
-            ListTile(
-              leading: const Icon(FluentIcons.key_24_regular),
-              title: const Text(
-                'סיסמה',
-                style: kSettingsTitleStyle,
-              ),
-              trailing: ActionButton.recommended(
+        if (hasPassword)
+          SettingsActionTile.switchTile(
+            icon: state.protectedModeEnabled
+                ? FluentIcons.shield_lock_24_filled
+                : FluentIcons.shield_lock_24_regular,
+            iconColor: state.protectedModeEnabled
+                ? Theme.of(context).colorScheme.primary
+                : null,
+            title: 'מצב סייפר',
+            subtitle: state.protectedModeEnabled
+                ? 'נעילת ההגדרות וסייר הקבצים פעילה'
+                : 'נעילת ההגדרות וסייר הקבצים מושבתת',
+            value: state.protectedModeEnabled,
+            onChanged: (value) =>
+                _handleToggleProtectedMode(context, repository, value),
+          )
+        else
+          SettingsActionTile.text(
+            icon: FluentIcons.shield_lock_24_regular,
+            title: 'מצב סייפר',
+            subtitle: 'נעילת הגדרות וסייר הקבצים, יש להגדיר סיסמה תחילה',
+            actions: [
+              ActionButton.recommended(
                 icon: FluentIcons.key_24_regular,
-                text: hasPassword ? 'שנה סיסמה' : 'בחר סיסמה',
-                onPressed: () =>
-                    _handleSetPassword(context, repository, hasPassword),
+                text: 'בחר סיסמה',
+                onPressed: () => _handleSetPassword(context, repository,
+                    hasPassword, state.protectedModeEnabled),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        if (hasPassword)
+          SettingsActionTile.text(
+            icon: FluentIcons.key_24_regular,
+            title: 'סיסמה',
+            subtitle: 'סיסמה הוגדרה, ניתן לשנות או למחוק את הסיסמה',
+            actions: [
+              ActionButton.recommended(
+                icon: FluentIcons.key_24_regular,
+                text: 'אפשרויות',
+                onPressed: () => _handleSetPassword(context, repository,
+                    hasPassword, state.protectedModeEnabled),
+              ),
+            ],
+          ),
       ],
     );
   }
@@ -1735,8 +1745,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             icon: FluentIcons.arrow_reset_24_regular,
             text: 'אפס הגדרות',
             onPressed: () async {
-              if (shouldProtectSettings(context)) {
-                final verified = await verifyPasswordForAction(context);
+              if (shouldRequireSaferModePassword(context)) {
+                final verified = await verifySaferModePassword(context);
                 if (!verified || !context.mounted) return;
               }
               if (!context.mounted) return;
