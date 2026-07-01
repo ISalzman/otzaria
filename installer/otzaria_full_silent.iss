@@ -7,7 +7,7 @@
 ; מוחלפת בחבילה החדשה — זהה ל-FULL הרגיל. סיום ההתקנה משיק את אוצריא.
 
 #define MyAppName "אוצריא"
-#define MyAppVersion "0.9.94"
+#define MyAppVersion "0.9.95"
 #define MyAppPublisher "sivan22"
 #define MyAppURL "https://github.com/otzaria/otzaria"
 #define MyAppExeName "otzaria.exe"
