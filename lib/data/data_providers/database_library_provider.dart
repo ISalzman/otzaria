@@ -280,11 +280,44 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
   final types = LinkTypes.dependentTextTypes.toList();
   final typePlaceholders = List.filled(types.length, '?').join(', ');
   final hasRange = startLineIndex != null && endLineIndex != null;
-  final params = <Object?>[
-    bookId,
-    if (hasRange) ...[startLineIndex, endLineIndex],
-    ...types,
-  ];
+
+  if (hasRange) {
+    // כשיש טווח: מוצאים תחילה את ה-line IDs בטווח דרך idx_line_book_index,
+    // ואז מחפשים links לפי targetLineId דרך idx_link_target_line — הרבה יותר
+    // יעיל מאשר לסרוק את כל ה-links של הספר (עשרות אלפים לספרי בסיס כגון
+    // תורה / ש"ס) ולסנן לפי lineIndex בדיעבד.
+    final params = <Object?>[
+      bookId,
+      startLineIndex,
+      endLineIndex,
+      bookId,
+      ...types,
+    ];
+    return db.select('''
+        SELECT
+          tl.lineIndex as sourceLineIndex,
+          sl.lineIndex as targetLineIndex,
+          sl.heRef as targetLineHeRef,
+          sb.title as targetBookTitle,
+          sb.categoryId as targetCategoryId,
+          NULL as targetFileType,
+          'SOURCE' as connectionTypeName
+        FROM link l
+        JOIN line tl ON l.targetLineId = tl.id
+        JOIN line sl ON l.sourceLineId = sl.id
+        JOIN book sb ON l.sourceBookId = sb.id
+        JOIN connection_type ct ON l.connectionTypeId = ct.id
+        WHERE l.targetLineId IN (
+          SELECT id FROM line WHERE bookId = ? AND lineIndex BETWEEN ? AND ?
+        )
+          AND l.targetBookId = ?
+          AND ct.name IN ($typePlaceholders)
+          AND l.sourceBookId != l.targetBookId
+        ORDER BY tl.lineIndex
+      ''', params).toMapList();
+  }
+
+  final params = <Object?>[bookId, ...types];
   return db.select('''
       SELECT
         tl.lineIndex as sourceLineIndex,
@@ -300,7 +333,6 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
       JOIN book sb ON l.sourceBookId = sb.id
       JOIN connection_type ct ON l.connectionTypeId = ct.id
       WHERE l.targetBookId = ?
-        ${hasRange ? 'AND tl.lineIndex BETWEEN ? AND ?' : ''}
         AND ct.name IN ($typePlaceholders)
         AND l.sourceBookId != l.targetBookId
       ORDER BY tl.lineIndex
