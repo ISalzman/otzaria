@@ -148,6 +148,17 @@ bool _referencesAreRelated(String resolvedDisplay, String fallbackDisplay) {
       resolvedDisplay.contains(fallbackDisplay);
 }
 
+/// מחלץ מילים משמעותיות (>2 תווים, בלי מקפים ופיסוק).
+/// משמש לזיהוי שמות ספר שמנוסחים אחרת (למשל "חברותא על בכורות" מול "חברותא - בכורות").
+Set<String> _significantWords(String s) {
+  return s
+      .replaceAll(RegExp(r'[-–,.]'), ' ')
+      .split(RegExp(r'\s+'))
+      .map((w) => w.trim())
+      .where((w) => w.length > 2)
+      .toSet();
+}
+
 /// מוסיף את שם הספר לכותרת אם הוא לא מופיע
 /// ומטפל במקרים מיוחדים כמו כותרת ריקה או פסיק מיותר
 String addBookTitleToRef(String ref, String bookTitle) {
@@ -159,6 +170,13 @@ String addBookTitleToRef(String ref, String bookTitle) {
   // אם הכותרת ריקה, נחזיר רק את שם הספר
   if (ref.trim().isEmpty) {
     return bookTitle;
+  }
+
+  // אם כל המילים המשמעותיות של שם הספר כלולות בכותרת, שם הספר כבר מיוצג
+  // (למשל "חברותא - בכורות" מכסה את "חברותא על בכורות")
+  final bookWords = _significantWords(bookTitle);
+  if (bookWords.isNotEmpty && _significantWords(ref).containsAll(bookWords)) {
+    return ref;
   }
 
   // אחרת, נוסיף את שם הספר עם פסיק
