@@ -6,6 +6,7 @@ import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
+import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 /// פאנל הגדרות תצוגת ספרייה
@@ -34,28 +35,21 @@ class LibrarySettingsPanel extends StatelessWidget {
       keywords: ['תצוגה מקדימה', 'preview', 'מופעל', 'לא מופעל'],
     ),
     SettingsSearchEntry(
-      id: 'library.external.show',
-      title: 'הצגת ספרים מאתרים חיצוניים',
-      subtitle: 'הצגת קטלוגים חיצוניים בתצוגת הספרייה',
+      id: 'library.external.source_mode',
+      title: 'מקורות אחרים לספרים',
+      subtitle: 'הצגת ספרים מאוצר החכמה ו/או מהיברובוקס בספרייה',
       tab: SettingsTab.library,
       cardId: 'library.external',
-      keywords: ['חיצוניים', 'קטלוגים', 'מופעל', 'לא מופעל'],
-    ),
-    SettingsSearchEntry(
-      id: 'library.external.otzar',
-      title: 'הצג ספרים מאוצר החכמה',
-      subtitle: 'ספרים מאתר אוצר החכמה',
-      tab: SettingsTab.library,
-      cardId: 'library.external',
-      keywords: ['אוצר החכמה', 'otzar', 'מופעל', 'לא מופעל'],
-    ),
-    SettingsSearchEntry(
-      id: 'library.external.hebrewbooks',
-      title: 'הצג ספרים מהיברובוקס',
-      subtitle: 'ספרים מאתר HebrewBooks',
-      tab: SettingsTab.library,
-      cardId: 'library.external',
-      keywords: ['hebrewbooks', 'היברובוקס', 'מופעל', 'לא מופעל'],
+      keywords: [
+        'חיצוניים',
+        'קטלוגים',
+        'אוצר החכמה',
+        'otzar',
+        'hebrewbooks',
+        'היברובוקס',
+        'מופעל',
+        'לא מופעל',
+      ],
     ),
     SettingsSearchEntry(
       id: 'library.external.auto_sync',
@@ -123,50 +117,52 @@ class LibrarySettingsPanel extends StatelessWidget {
             // ספרים נוספים (משלב מיקום היברובוקס וספרים חיצוניים)
             SettingsCard(
               cardId: 'library.external',
-              title: 'ספרים נוספים',
+              title: 'ספריות חיצוניות',
+              subtitle:
+                  'ניתן להציג ספרים מהאתר או תיקיית ספרים של אוצר החכמה והיברובוקס\n'
+                  'ספרים מהאתר מוצגים מתוך קטלוג שנשמר עם ספריית אוצריא',
               children: [
                 // מיקום היברובוקס (יוצג ראשון במידה והועבר לו ווידג'ט - דסקטופ בלבד)
                 if (hebrewBooksPathWidget != null) hebrewBooksPathWidget!,
 
-                SettingsActionTile.switchTile(
+                SettingsActionTile.dropdownTile<String>(
                   icon: FluentIcons.globe_24_regular,
-                  title: 'הצגת ספרים מאתרים חיצוניים',
-                  subtitle: state.showExternalBooks
-                      ? 'יוצגו גם ספרים מאתרים חיצוניים'
-                      : 'יוצגו רק ספרים מספריית אוצריא',
-                  value: state.showExternalBooks,
-                  onChanged: (value) async {
-                    await ExternalCatalogSettingsHelper.updateExternalBooks(
-                      context,
-                      value,
-                    );
+                  title: 'מקורות אחרים לספרים',
+                  value: _externalSourceMode(state),
+                  entries: const [
+                    AppMenuEntry(
+                      value: 'none',
+                      label: 'אל תציג',
+                      subtitle:
+                          'ספרים חיצוניים לא יוצגו בתוצאות החיפוש במסך הספרייה',
+                    ),
+                    AppMenuEntry(
+                      value: 'all',
+                      label: 'הצג הכל',
+                      subtitle:
+                          'יוצגו ספרים מאוצר החכמה ומהיברובוקס בתוצאות החיפוש במסך הספרייה',
+                    ),
+                    AppMenuEntry(
+                      value: 'otzar',
+                      label: 'אוצר החכמה בלבד',
+                      subtitle:
+                          'יוצגו ספרים מאוצר החכמה בתוצאות החיפוש במסך הספרייה',
+                    ),
+                    AppMenuEntry(
+                      value: 'hebrewbooks',
+                      label: 'היברובוקס בלבד',
+                      subtitle:
+                          'יוצגו ספרים מהיברובוקס בתוצאות החיפוש במסך הספרייה',
+                    ),
+                  ],
+                  onSelected: (value) async {
+                    if (value != null) {
+                      await ExternalCatalogSettingsHelper
+                          .updateExternalSourceMode(context, value);
+                    }
                   },
                 ),
                 if (state.showExternalBooks) ...[
-                  SettingsActionTile.switchTile(
-                    icon: FluentIcons.library_24_regular,
-                    title: 'הצג ספרים מאוצר החכמה',
-                    subtitle: 'ספרים מאתר אוצר החכמה',
-                    value: state.showOtzarHachochma,
-                    onChanged: (value) async {
-                      await ExternalCatalogSettingsHelper.updateOtzarBooks(
-                        context,
-                        value,
-                      );
-                    },
-                  ),
-                  SettingsActionTile.switchTile(
-                    icon: FluentIcons.book_open_24_regular,
-                    title: 'הצג ספרים מהיברובוקס',
-                    subtitle: 'ספרים מאתר HebrewBooks',
-                    value: state.showHebrewBooks,
-                    onChanged: (value) async {
-                      await ExternalCatalogSettingsHelper.updateHebrewBooks(
-                        context,
-                        value,
-                      );
-                    },
-                  ),
                   SettingsActionTile.switchTile(
                     icon: FluentIcons.arrow_sync_24_regular,
                     title: 'סנכרון קטלוגים אוטומטי',
@@ -185,5 +181,14 @@ class LibrarySettingsPanel extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// ערך התפריט הנוכחי לפי מצב הספרים החיצוניים.
+  static String _externalSourceMode(SettingsState state) {
+    if (!state.showExternalBooks) return 'none';
+    if (state.showOtzarHachochma && state.showHebrewBooks) return 'all';
+    if (state.showOtzarHachochma) return 'otzar';
+    if (state.showHebrewBooks) return 'hebrewbooks';
+    return 'none';
   }
 }
