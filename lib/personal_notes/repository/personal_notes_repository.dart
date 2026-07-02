@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
@@ -138,7 +139,11 @@ class PersonalNotesRepository {
       }
 
       return await _fileSystem.getBookText(bookId);
-    } catch (_) {
+    } catch (e) {
+      // ספרי PDF (וספרים שנמחקו) מגיעים לכאן דרך חריגה — '' הוא הסיגנל
+      // לעיגון-לפי-עמוד ב-_reconcileLocation, ולכן אין rethrow. הלוג מבחין
+      // כשל קריאה אמיתי ממצב ה-PDF הלגיטימי.
+      debugPrint('[PersonalNotes] book content load failed for "$bookId": $e');
       return '';
     }
   }

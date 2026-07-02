@@ -522,7 +522,9 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       }
       windowManager.addListener(_windowListener);
       _windowCloseHookInstalled = true;
-    } catch (_) {
+    } catch (e) {
+      // בלי ה-hook העדכון לא יותקן בסגירת החלון — הכשל חייב להיות גלוי בלוג
+      debugPrint('[Update] window close hook install failed: $e');
       _windowCloseHookInstalled = false;
     }
   }
@@ -608,8 +610,16 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         _latestVersion = latestVersion;
         _status = UpdatStatus.upToDate;
       });
-    } catch (_) {
-      _showUpdateError('שגיאה בחיבור לרשת במהלך בדיקת עדכונים');
+    } catch (e, st) {
+      debugPrint('[Update] update check failed: $e\n$st');
+      // כשל רשת ≠ כשל parsing של תשובת GitHub — הודעת 'רשת' על באג parsing
+      // הסתירה את הבעיה האמיתית.
+      final isNetwork = e is SocketException ||
+          e is TimeoutException ||
+          e is http.ClientException;
+      _showUpdateError(isNetwork
+          ? 'שגיאה בחיבור לרשת במהלך בדיקת עדכונים'
+          : 'שגיאה בבדיקת עדכונים');
     }
   }
 
@@ -763,7 +773,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         _installerIsSilent = isSilentWindowsInstallerUrl(url);
         _status = UpdatStatus.readyToInstall;
       });
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[Update] download failed: $e\n$st');
       _showUpdateError('שגיאה בהורדת העדכון');
     }
   }

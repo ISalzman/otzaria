@@ -306,8 +306,10 @@ class ExternalCatalogRepository {
       return rows
           .map((row) => mapper(row as Map<String, Object?>))
           .toList(growable: false);
-    } catch (e) {
-      debugPrint('Error loading external catalog table $tableName: $e');
+    } catch (e, st) {
+      // דגרדציה מכוונת: כשל כאן (DB פגום/סכמה) לא מפיל את חיפוש הספרים
+      // כולו — רק הספרים החיצוניים חסרים. הלוג המלא נדרש לאבחון.
+      debugPrint('Error loading external catalog table $tableName: $e\n$st');
       return <T>[];
     } finally {
       db?.close();

@@ -373,7 +373,9 @@ class SqliteDataProvider {
         fileType: fileType,
       );
       return resolvedBook != null;
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[SqliteDataProvider] isBookInDatabase failed for "$title": '
+          '$e\n$st');
       return false;
     }
   }
@@ -408,7 +410,9 @@ class SqliteDataProvider {
       final lines =
           await resolvedBook.repository.getLines(book.id, startLine, endLine);
       return migrationLinesToText(lines);
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[SqliteDataProvider] getBookQuickPreview failed for '
+          '"$title": $e\n$st');
       return null;
     }
   }
@@ -450,7 +454,9 @@ class SqliteDataProvider {
         totalLines: book.totalLines,
         text: migrationLinesToText(lines),
       );
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[SqliteDataProvider] getBookTextRangeFromDb failed for '
+          '"$title": $e\n$st');
       return null;
     }
   }
@@ -476,7 +482,9 @@ class SqliteDataProvider {
       final lines = await resolvedBook.repository
           .getLines(book.id, 0, book.totalLines - 1);
       return migrationLinesToText(lines);
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[SqliteDataProvider] getBookTextFromDb failed for '
+          '"$title": $e\n$st');
       return null;
     }
   }
@@ -523,7 +531,9 @@ class SqliteDataProvider {
       }
 
       return rootEntries;
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[SqliteDataProvider] getBookTocFromDb failed for '
+          '"$title": $e\n$st');
       return null;
     }
   }
@@ -546,7 +556,9 @@ class SqliteDataProvider {
       final source = await resolvedBook.repository
           .getSourceById(resolvedBook.book.sourceId);
       return source?.name;
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[SqliteDataProvider] getBookSourceNameFromDb failed for '
+          '"$title": $e\n$st');
       return null;
     }
   }

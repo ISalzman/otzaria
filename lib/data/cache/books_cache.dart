@@ -99,10 +99,11 @@ class BooksCache {
           '[BooksCache] Loaded ${_books.length} books into shared cache');
     } catch (e) {
       debugPrint('[BooksCache] Warmup failed: $e');
+      // לא מסמנים loaded: כשל זמני (למשל DB locked בעלייה) יאופשר retry
+      // ב-warmUp הבא, במקום ספרייה ריקה לכל ה-session.
       if (myGen == _generation) {
         _books.clear();
         _booksById.clear();
-        _isLoaded = true; // Mark as loaded to avoid repeated attempts
       }
     }
   }

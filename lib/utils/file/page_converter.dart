@@ -38,9 +38,11 @@ Future<int?> textToPdfPage(TextBook textBook, int textIndex) async {
     }
 
     return map.textToPdf(textIndex);
-  } catch (e) {
-    // If PDF is password protected or cannot be opened, return null
-    // The PDF will open with password dialog when user clicks the button
+  } catch (e, st) {
+    // null = אין מיפוי (הקוראים מסתמכים על כך). נבלע כאן גם PDF מוגן
+    // בסיסמה (לגיטימי) וגם כשל בבניית המפה — הלוג מבחין ביניהם.
+    debugPrint('[PageConverter] textToPdfPage failed for '
+        '"${pdfBook.path}": $e\n$st');
     return null;
   }
 }
