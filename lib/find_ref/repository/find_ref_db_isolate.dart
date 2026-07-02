@@ -314,6 +314,7 @@ void _workerMain(_Bootstrap bootstrap) {
     } catch (e) {
       // כשל פתיחה (DB חסר/נעול רגעית) — מחזירים null; הקריאה תחזיר רשימה ריקה,
       // בדיוק כפי שמסלול ה-main isolate היה מתנהג מול repository == null.
+      debugPrint('[FindRef isolate] DB open failed for $dbPath: $e');
       return null;
     }
   }
