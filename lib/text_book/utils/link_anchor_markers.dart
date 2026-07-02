@@ -97,7 +97,9 @@ String injectLinkAnchorMarkers({
     }
   }
   // טווחים קודם (על אופסטים גולמיים של השורה המקורית); סמני הנקודה מוזרקים
-  // אחר-כך לפי אופסטים גלויים, שהתגים שנוספו לא משנים.
+  // אחר-כך לפי אופסטים גלויים, שהתגים שנוספו לא משנים. טווחים חופפים:
+  // wrapHtmlRanges שומר את הראשון ומדלג על החופף לו — ויתור מכוון על
+  // הדגשה כפולה כדי לא לייצר HTML מוצלב.
   var result = ranges.isEmpty ? rawLine : wrapHtmlRanges(rawLine, ranges);
   return _injectAtVisibleOffsets(result, points);
 }

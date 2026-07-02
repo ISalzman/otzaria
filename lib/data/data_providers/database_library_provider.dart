@@ -374,6 +374,9 @@ String _anchorSelectColumns(bool hasLinkAnchor) => hasLinkAnchor
 /// עוגני הקישור מקובצים לשורה אחת לכל קישור וצד: העוגן הראשון (MIN) לאות
 /// שבפאנל, ו-spans מקודד את כולם ("start:end:label;...", ראו
 /// [_parseAnchorSpans]) כך שקישור עם כמה עוגנים באותה שורה מציג את כולם.
+/// דטרמיניזם: charEnd/label הלא-אגרגטיביים מגיעים לפי חוזה SQLite משורת
+/// ה-MIN, ושורת ה-MIN יחידה — (linkId, side, charStart) הוא ה-PK של
+/// link_anchor, כך שאין שני עוגנים לאותו קישור/צד עם אותו charStart.
 String _anchorJoinClause(bool hasLinkAnchor, {required int displayedSide}) =>
     hasLinkAnchor
         ? '''LEFT JOIN (
