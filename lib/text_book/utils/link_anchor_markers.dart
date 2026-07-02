@@ -1,4 +1,5 @@
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/personal_notes/utils/note_anchor_utils.dart';
 
 /// סמני עוגן-מילה (טבלת link_anchor שבמסד): הזרקת אות סימון קטנה, למשל (א),
 /// בנקודה המדויקת בשורת המקור שבה יושבת הערת המפרש.
@@ -14,8 +15,10 @@ const int kLinkAnchorStyleCount = 6;
 /// אות הסימון של קישור מעוגן: התווית ששמורה במסד, ואם אין — הרכיב האחרון של
 /// ה-heRef של ההערה (מספר ההערה בגימטריה, כפי שמודפס). מחזיר null כשאין אות
 /// לתצוגה — קישור כזה לא מקבל סמן.
-String? anchorMarkerLetter(Link link) {
-  final label = link.anchorLabel?.trim();
+String? anchorMarkerLetter(Link link) => _letterFor(link, link.anchorLabel);
+
+String? _letterFor(Link link, String? storedLabel) {
+  final label = storedLabel?.trim();
   if (label != null && label.isNotEmpty) return label;
   final tail = link.heRef.split(',').last.trim();
   final letters = tail.replaceAll(RegExp(r'["׳״]'), '');
@@ -43,45 +46,64 @@ Map<String, int> anchorStyleIndexByCommentator(Iterable<Link> links) {
 /// אופסט התווים-הגלויים לנקודת ההזרקה: לפני התו הגלוי הבא אחרי מיקום העוגן
 /// (כך שהסמן לא ייכנס לתוך תג פתוח).
 ///
-/// שני סוגי עוגנים:
-///  - עוגן-נקודה (anchorEnd == null): סמן אות מורם, למשל (א).
-///  - עוגן-טווח (anchorEnd != null, ציטוטים מ-charLevelData): עטיפת הטווח
-///    ב-span עם קו תחתון, באותו וריאנט סגנון של המפרש.
+/// שני סוגי עוגנים (קישור יכול לשאת כמה, דרך anchorSpans):
+///  - עוגן-נקודה (end == null): סמן אות מורם, למשל (א).
+///  - עוגן-טווח (end != null, ציטוטים מ-charLevelData): עטיפת הטווח דרך
+///    [wrapHtmlRanges] — שסוגר/פותח סביב תגים לא-מאוזנים כדי לשמור קינון
+///    תקין — באותו וריאנט סגנון של המפרש.
 String injectLinkAnchorMarkers({
   required String rawLine,
   required List<Link> anchorLinks,
   required Map<String, int> styleIndexByCommentator,
 }) {
-  // order בתוך אותו אופסט: סגירת טווח (0) לפני סמני אות (1) לפני פתיחת טווח (2),
-  // כדי שטווחים צמודים לא יקוננו זה בזה.
-  final markers = <({int at, int order, String html})>[];
+  final points = <({int at, int order, String html})>[];
+  final ranges = <HtmlWrapRange>[];
   for (final link in anchorLinks) {
-    final start = link.anchorStart;
-    if (start == null || start < 0) continue;
+    final spans = link.anchorSpans.isNotEmpty
+        ? link.anchorSpans
+        : [
+            if (link.anchorStart != null)
+              LinkAnchorSpan(
+                start: link.anchorStart!,
+                end: link.anchorEnd,
+                label: link.anchorLabel,
+              ),
+          ];
     final styleIndex = styleIndexByCommentator[link.path2] ?? 0;
-    final end = link.anchorEnd;
-    if (end != null && end > start) {
-      markers.add((
-        at: start,
-        order: 2,
-        html: '<span class="link-anchor-range link-anchor-$styleIndex">',
-      ));
-      markers.add((at: end, order: 0, html: '</span>'));
-    } else {
-      final letter = anchorMarkerLetter(link);
-      if (letter == null) continue;
-      markers.add((
-        at: start,
-        order: 1,
-        html:
-            '<sup class="link-anchor link-anchor-$styleIndex">($letter)</sup>',
-      ));
+    for (final span in spans) {
+      if (span.start < 0) continue;
+      final end = span.end;
+      if (end != null && end > span.start) {
+        final rawStart = _rawStartOfVisible(rawLine, span.start);
+        final rawEnd = _rawEndOfVisible(rawLine, end);
+        if (rawStart < rawEnd) {
+          ranges.add(HtmlWrapRange(
+            start: rawStart,
+            end: rawEnd,
+            openTag: '<span class="link-anchor-range link-anchor-$styleIndex">',
+            closeTag: '</span>',
+          ));
+        }
+      } else {
+        final letter = _letterFor(link, span.label);
+        if (letter == null) continue;
+        points.add((
+          at: span.start,
+          order: 1,
+          html:
+              '<sup class="link-anchor link-anchor-$styleIndex">($letter)</sup>',
+        ));
+      }
     }
   }
-  return _injectAtVisibleOffsets(rawLine, markers);
+  // טווחים קודם (על אופסטים גולמיים של השורה המקורית); סמני הנקודה מוזרקים
+  // אחר-כך לפי אופסטים גלויים, שהתגים שנוספו לא משנים.
+  var result = ranges.isEmpty ? rawLine : wrapHtmlRanges(rawLine, ranges);
+  return _injectAtVisibleOffsets(result, points);
 }
 
-/// עוטף טווח תווים-גלויים [start, end) של שורת HTML בתגי פתיחה/סגירה.
+/// עוטף טווח תווים-גלויים [start, end) של שורת HTML בתגי פתיחה/סגירה, תוך
+/// שמירת קינון תקין סביב תגים לא-מאוזנים (דרך [wrapHtmlRanges]).
 /// משמש להדגשת הציטוט (linkedAnchor) בתוך קטע המפרש בפאנל.
 String wrapVisibleRange({
   required String html,
@@ -91,10 +113,70 @@ String wrapVisibleRange({
   required String closeTag,
 }) {
   if (start < 0 || end <= start) return html;
-  return _injectAtVisibleOffsets(html, [
-    (at: start, order: 2, html: openTag),
-    (at: end, order: 0, html: closeTag),
+  final rawStart = _rawStartOfVisible(html, start);
+  final rawEnd = _rawEndOfVisible(html, end);
+  if (rawStart >= rawEnd) return html;
+  return wrapHtmlRanges(html, [
+    HtmlWrapRange(
+      start: rawStart,
+      end: rawEnd,
+      openTag: openTag,
+      closeTag: closeTag,
+    ),
   ]);
+}
+
+/// אינדקס גולמי של תחילת התו הגלוי מספר [visibleOffset] (אחרי תגים קודמים);
+/// אורך המחרוזת כשהאופסט מעבר לסוף.
+int _rawStartOfVisible(String html, int visibleOffset) {
+  var visible = 0;
+  var i = 0;
+  final len = html.length;
+  while (i < len) {
+    if (html[i] == '<') {
+      final close = html.indexOf('>', i);
+      if (close < 0) return len;
+      i = close + 1;
+    } else {
+      if (visible == visibleOffset) return i;
+      if (html[i] == '&') {
+        final end = (i + 10 < len) ? i + 10 : len;
+        final j = html.indexOf(';', i + 1);
+        i = (j > 0 && j < end) ? j + 1 : i + 1;
+      } else {
+        i++;
+      }
+      visible++;
+    }
+  }
+  return len;
+}
+
+/// אינדקס גולמי מיד אחרי התו הגלוי מספר [visibleOffset]-1 — סוף טווח
+/// אקסקלוסיבי שאינו בולע תגים עוקבים.
+int _rawEndOfVisible(String html, int visibleOffset) {
+  if (visibleOffset <= 0) return 0;
+  var visible = 0;
+  var i = 0;
+  final len = html.length;
+  while (i < len) {
+    if (html[i] == '<') {
+      final close = html.indexOf('>', i);
+      if (close < 0) return len;
+      i = close + 1;
+    } else {
+      if (html[i] == '&') {
+        final end = (i + 10 < len) ? i + 10 : len;
+        final j = html.indexOf(';', i + 1);
+        i = (j > 0 && j < end) ? j + 1 : i + 1;
+      } else {
+        i++;
+      }
+      visible++;
+      if (visible == visibleOffset) return i;
+    }
+  }
+  return len;
 }
 
 String _injectAtVisibleOffsets(

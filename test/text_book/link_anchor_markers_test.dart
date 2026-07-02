@@ -186,7 +186,7 @@ void main() {
       );
     });
 
-    test('עוגן-טווח מדלג על תגים בספירת התווים הגלויים', () {
+    test('עוגן-טווח שחוצה גבול תג נסגר ונפתח מחדש (קינון תקין)', () {
       final quote = Link(
         heRef: 'תהלים פרק כג',
         index1: 4,
@@ -201,9 +201,39 @@ void main() {
         anchorLinks: [quote],
         styleIndexByCommentator: const {'תהלים': 0},
       );
+      // הטווח [1,3) מתחיל בתוך <b> ומסתיים אחריו — העטיפה נסגרת לפני </b>
+      // ונפתחת מחדש, כך שה-HTML נשאר מקונן כדין.
       expect(
         result,
-        'א<span class="link-anchor-range link-anchor-0"><b>ב</b>ג</span>ד',
+        'א<b><span class="link-anchor-range link-anchor-0">ב</span></b>'
+        '<span class="link-anchor-range link-anchor-0">ג</span>ד',
+      );
+    });
+
+    test('קישור עם כמה עוגנים (anchorSpans) מציג את כולם', () {
+      final link = Link(
+        heRef: 'שערי תשובה על שולחן ערוך אורח חיים רצ, א',
+        index1: 4,
+        path2: 'שערי תשובה על שולחן ערוך אורח חיים',
+        index2: 1,
+        connectionType: 'commentary',
+        anchorStart: 2,
+        anchorLabel: 'א',
+        anchorSpans: const [
+          LinkAnchorSpan(start: 2, label: 'א'),
+          LinkAnchorSpan(start: 5, label: 'א'),
+        ],
+      );
+      final result = injectLinkAnchorMarkers(
+        rawLine: 'אב גד הו',
+        anchorLinks: [link],
+        styleIndexByCommentator: const {
+          'שערי תשובה על שולחן ערוך אורח חיים': 1,
+        },
+      );
+      expect(
+        RegExp('link-anchor-1">\\(א\\)</sup>').allMatches(result).length,
+        2,
       );
     });
 
