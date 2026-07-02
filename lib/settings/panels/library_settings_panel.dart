@@ -81,19 +81,18 @@ class LibrarySettingsPanel extends StatelessWidget {
               children: [
                 SettingsActionTile.segmentedTile<String>(
                   title: 'סוג תצוגה',
-                  subtitle: state.libraryViewMode == 'list'
-                      ? 'תצוגת רשימה (עץ מתרחב)'
-                      : 'תצוגת רשת',
                   options: const [
                     SegmentOption(
                       value: 'grid',
                       label: 'רשת',
                       icon: FluentIcons.grid_24_regular,
+                      subtitle: 'התיקיות והספרים יוצגו בתוך כרטיסים ברשת',
                     ),
                     SegmentOption(
                       value: 'list',
                       label: 'רשימה',
                       rtlIcon: FluentIcons.list_24_regular,
+                      subtitle: 'התיקיות והספרים יוצגו ברשימה נפתחת (עץ מתרחב)',
                     ),
                   ],
                   currentValue: state.libraryViewMode,
