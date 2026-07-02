@@ -1671,7 +1671,8 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
               )
               .timeout(const Duration(seconds: 5));
         } catch (e) {
-          // Timeout בהמתנה ל־TextBookLoaded
+          // הספר לא נטען תוך 5 שניות — ממשיכים בלי רענון קישורים
+          debugPrint('[PageShape] timeout waiting for TextBookLoaded: $e');
         }
       }
 
