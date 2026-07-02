@@ -93,7 +93,7 @@ class LibrarySettingsPanel extends StatelessWidget {
                     SegmentOption(
                       value: 'list',
                       label: 'רשימה',
-                      icon: FluentIcons.list_24_regular,
+                      rtlIcon: FluentIcons.list_24_regular,
                     ),
                   ],
                   currentValue: state.libraryViewMode,

@@ -127,7 +127,7 @@ const _kSegMinWidth = 180.0;
 const _kSegMaxWidth = 400.0;
 
 double _segGroupWidth(List<SegmentOption<dynamic>> options) {
-  final hasIcons = options.any((o) => o.icon != null);
+  final hasIcons = options.any((o) => o.icon != null || o.rtlIcon != null);
   final maxLen =
       options.map((o) => o.label.length).reduce((a, b) => a > b ? a : b);
   final btnW = (hasIcons ? _kSegBaseWithIcon : _kSegBaseNoIcon) +
@@ -660,16 +660,23 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
   }
 
   // כשלאפשרויות יש אייקונים משלהן, אייקון הכרטיס עוקב אחרי הבחירה הנוכחית
-  // (כמו בהתראות לוח שנה) — במקום להישאר קבוע לפי [SettingsActionTile.icon].
-  bool get _iconTracksSelection => widget.options.any((o) => o.icon != null);
+  // (כמו בהתראות לוח שנה) — במקום להישאר קבוע לפי [SettingsActionTile.icon]/[rtlIcon].
+  bool get _iconTracksSelection =>
+      widget.options.any((o) => o.icon != null || o.rtlIcon != null);
 
-  IconData? get _leadingIcon {
-    if (!_iconTracksSelection) return widget.icon;
+  ({IconData? icon, IconData? rtlIcon}) get _leadingIcons {
+    if (!_iconTracksSelection) {
+      return (icon: widget.icon, rtlIcon: widget.rtlIcon);
+    }
     final selected = widget.options.firstWhere(
       (o) => o.value == widget.currentValue,
       orElse: () => widget.options.first,
     );
-    return selected.icon ?? widget.icon;
+    if (selected.rtlIcon != null) {
+      return (icon: null, rtlIcon: selected.rtlIcon);
+    }
+    if (selected.icon != null) return (icon: selected.icon, rtlIcon: null);
+    return (icon: widget.icon, rtlIcon: widget.rtlIcon);
   }
 
   @override
@@ -722,8 +729,8 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
             skipTraversal: true,
             onKeyEvent: _handleKeyEvent,
             child: SettingsActionTile.text(
-              icon: _leadingIcon,
-              rtlIcon: _iconTracksSelection ? null : widget.rtlIcon,
+              icon: _leadingIcons.icon,
+              rtlIcon: _leadingIcons.rtlIcon,
               title: widget.title,
               subtitle: widget.subtitle,
               actions: [
@@ -746,10 +753,8 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               ListTile(
-                leading: _buildSettingIcon(
-                    _leadingIcon,
-                    _iconTracksSelection ? null : widget.rtlIcon,
-                    widget.iconColor),
+                leading: _buildSettingIcon(_leadingIcons.icon,
+                    _leadingIcons.rtlIcon, widget.iconColor),
                 title: _settingTitle(widget.title),
                 subtitle: widget.subtitle != null
                     ? _settingSubtitle(widget.subtitle!)

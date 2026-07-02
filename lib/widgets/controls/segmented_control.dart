@@ -1,18 +1,26 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 /// אפשרות יחידה ב-[AppSegmentedControl]
+///
+/// [icon] — אייקון סטטי, לא מתהפך ב-RTL.
+/// [rtlIcon] — אייקון כיווני, מוצג דרך [RtlIcon] ומתהפך ב-RTL לפי הרישום
+/// ב-`lib/widgets/misc/rtl_icon.dart`.
 class SegmentOption<T> {
   final T value;
   final String label;
   final IconData? icon;
+  final IconData? rtlIcon;
 
   const SegmentOption({
     required this.value,
     required this.label,
     this.icon,
-  });
+    this.rtlIcon,
+  }) : assert(icon == null || rtlIcon == null,
+            'העבר icon או rtlIcon — לא שניהם יחד');
 }
 
 /// פקד סגמנטד גנרי לשימוש בסרגלי כלים ובהגדרות.
@@ -50,7 +58,7 @@ class AppSegmentedControl<T> extends StatelessWidget {
   });
 
   List<ButtonSegment<T>> _segments() {
-    final hasIcons = options.any((o) => o.icon != null);
+    final hasIcons = options.any((o) => o.icon != null || o.rtlIcon != null);
     return options
         .map(
           (o) => ButtonSegment<T>(
@@ -62,14 +70,16 @@ class AppSegmentedControl<T> extends StatelessWidget {
                 style: AppTextStyles.settingTitle,
               ),
             ),
-            icon: hasIcons
-                ? (o.icon != null
-                    ? Icon(o.icon, size: 18)
-                    : const SizedBox(width: 18))
-                : null,
+            icon: hasIcons ? _buildOptionIcon(o) : null,
           ),
         )
         .toList();
+  }
+
+  Widget _buildOptionIcon(SegmentOption<T> o) {
+    if (o.rtlIcon != null) return RtlIcon(o.rtlIcon!, size: 18);
+    if (o.icon != null) return Icon(o.icon, size: 18);
+    return const SizedBox(width: 18);
   }
 
   static ButtonStyle _buttonStyle(ColorScheme cs) => ButtonStyle(
