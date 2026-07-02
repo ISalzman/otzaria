@@ -1736,10 +1736,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               icon: FluentIcons.arrow_reset_24_regular,
               text: 'אפס הגדרות',
               onPressed: () async {
-                if (shouldRequireSaferModePassword(context)) {
-                  final verified = await verifySaferModePassword(context);
-                  if (!verified || !context.mounted) return;
-                }
+                if (!await verifySaferModePassword(context)) return;
                 if (!context.mounted) return;
 
                 final confirmed = await showWarningDialog(
