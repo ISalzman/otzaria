@@ -245,6 +245,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
           _commentatorsByRef[key] = entries;
         });
       } catch (e) {
+        debugPrint('[FindRef] commentators load failed: $e');
         if (!mounted) return;
         setState(() {
           _commentatorsByRef[key] = const [];
