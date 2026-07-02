@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 /// מודל לתיקייה מותאמת אישית שהמשתמש הוסיף
 class CustomFolder {
   /// נתיב התיקייה במערכת הקבצים
@@ -67,10 +69,18 @@ class CustomFoldersManager {
     }
     try {
       final List<dynamic> jsonList = jsonDecode(jsonString);
-      return jsonList
-          .map((json) => CustomFolder.fromJson(json as Map<String, dynamic>))
-          .toList();
+      // פרסור פר-פריט: רשומה פגומה אחת לא מאבדת את שאר תיקיות המשתמש
+      final folders = <CustomFolder>[];
+      for (final json in jsonList) {
+        try {
+          folders.add(CustomFolder.fromJson(json as Map<String, dynamic>));
+        } catch (e) {
+          debugPrint('[CustomFolders] skipping corrupt folder entry: $e');
+        }
+      }
+      return folders;
     } catch (e) {
+      debugPrint('[CustomFolders] folders JSON parse failed: $e');
       return [];
     }
   }
