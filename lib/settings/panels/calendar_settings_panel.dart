@@ -223,7 +223,6 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
               title: 'אירועים ותזכורות',
               children: [
                 SettingsActionTile.segmentedTile<CalendarNotificationMode>(
-                  icon: _notificationModeIcon(state.notificationMode),
                   title: 'התראות',
                   subtitle: _notificationModeSubtitle(state.notificationMode),
                   options: const [
@@ -460,17 +459,6 @@ String _calendarNotificationTimeSubtitle(int minutes) {
   final label = _notificationTimeLabels[minutes];
   if (label != null) return 'ההתראה תופיע $label לפני מועד האירוע';
   return 'ההתראה תופיע לפני מועד האירוע';
-}
-
-IconData _notificationModeIcon(CalendarNotificationMode mode) {
-  switch (mode) {
-    case CalendarNotificationMode.sound:
-      return FluentIcons.alert_urgent_24_regular;
-    case CalendarNotificationMode.silent:
-      return FluentIcons.alert_24_regular;
-    case CalendarNotificationMode.off:
-      return FluentIcons.alert_off_24_regular;
-  }
 }
 
 String _notificationModeSubtitle(CalendarNotificationMode mode) {

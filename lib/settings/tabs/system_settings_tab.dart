@@ -827,7 +827,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         KeyedSubtree(
           key: _networkModeTileKey,
           child: SettingsActionTile.segmentedTile<bool>(
-            icon: FluentIcons.globe_24_regular,
             title: 'סינכרון ומצב רשת',
             subtitle: state.isOfflineMode
                 ? 'התוכנה מנותקת לגמרי מהרשת'
