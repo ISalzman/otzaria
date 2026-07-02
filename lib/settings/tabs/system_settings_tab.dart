@@ -1443,19 +1443,16 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       if (verified != true) return;
     }
     if (!context.mounted) return;
+    final settingsBloc = context.read<SettingsBloc>();
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => SaferModeSetPasswordDialog(
         onSetPassword: (password) async {
-          context
-              .read<SettingsBloc>()
-              .add(UpdateProtectedModePassword(password));
+          settingsBloc.add(UpdateProtectedModePassword(password));
         },
         onClearPassword: hasExistingPassword
             ? () async {
-                context
-                    .read<SettingsBloc>()
-                    .add(const ClearProtectedModePassword());
+                settingsBloc.add(const ClearProtectedModePassword());
               }
             : null,
         isSaferModeEnabled: isSaferModeEnabled,
