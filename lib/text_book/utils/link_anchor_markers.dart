@@ -42,25 +42,70 @@ Map<String, int> anchorStyleIndexByCommentator(Iterable<Link> links) {
 /// מזריק את סמני העוגן לשורת ה-HTML הגולמית. הליכה אחת על השורה ממירה את
 /// אופסט התווים-הגלויים לנקודת ההזרקה: לפני התו הגלוי הבא אחרי מיקום העוגן
 /// (כך שהסמן לא ייכנס לתוך תג פתוח).
+///
+/// שני סוגי עוגנים:
+///  - עוגן-נקודה (anchorEnd == null): סמן אות מורם, למשל (א).
+///  - עוגן-טווח (anchorEnd != null, ציטוטים מ-charLevelData): עטיפת הטווח
+///    ב-span עם קו תחתון, באותו וריאנט סגנון של המפרש.
 String injectLinkAnchorMarkers({
   required String rawLine,
   required List<Link> anchorLinks,
   required Map<String, int> styleIndexByCommentator,
 }) {
-  final markers = <({int at, String html})>[];
+  // order בתוך אותו אופסט: סגירת טווח (0) לפני סמני אות (1) לפני פתיחת טווח (2),
+  // כדי שטווחים צמודים לא יקוננו זה בזה.
+  final markers = <({int at, int order, String html})>[];
   for (final link in anchorLinks) {
     final start = link.anchorStart;
     if (start == null || start < 0) continue;
-    final letter = anchorMarkerLetter(link);
-    if (letter == null) continue;
     final styleIndex = styleIndexByCommentator[link.path2] ?? 0;
-    markers.add((
-      at: start,
-      html: '<sup class="link-anchor link-anchor-$styleIndex">($letter)</sup>',
-    ));
+    final end = link.anchorEnd;
+    if (end != null && end > start) {
+      markers.add((
+        at: start,
+        order: 2,
+        html: '<span class="link-anchor-range link-anchor-$styleIndex">',
+      ));
+      markers.add((at: end, order: 0, html: '</span>'));
+    } else {
+      final letter = anchorMarkerLetter(link);
+      if (letter == null) continue;
+      markers.add((
+        at: start,
+        order: 1,
+        html:
+            '<sup class="link-anchor link-anchor-$styleIndex">($letter)</sup>',
+      ));
+    }
   }
+  return _injectAtVisibleOffsets(rawLine, markers);
+}
+
+/// עוטף טווח תווים-גלויים [start, end) של שורת HTML בתגי פתיחה/סגירה.
+/// משמש להדגשת הציטוט (linkedAnchor) בתוך קטע המפרש בפאנל.
+String wrapVisibleRange({
+  required String html,
+  required int start,
+  required int end,
+  required String openTag,
+  required String closeTag,
+}) {
+  if (start < 0 || end <= start) return html;
+  return _injectAtVisibleOffsets(html, [
+    (at: start, order: 2, html: openTag),
+    (at: end, order: 0, html: closeTag),
+  ]);
+}
+
+String _injectAtVisibleOffsets(
+  String rawLine,
+  List<({int at, int order, String html})> markers,
+) {
   if (markers.isEmpty) return rawLine;
-  markers.sort((a, b) => a.at.compareTo(b.at));
+  markers.sort((a, b) {
+    final byAt = a.at.compareTo(b.at);
+    return byAt != 0 ? byAt : a.order.compareTo(b.order);
+  });
 
   final out = StringBuffer();
   var visible = 0;
@@ -78,6 +123,9 @@ String injectLinkAnchorMarkers({
   while (i < len) {
     final c = rawLine[i];
     if (c == '<') {
+      // אירועים שהגיע זמנם נכנסים לפני התג — כך פתיחת/סגירת טווח לא חוצה
+      // תגים סמוכים (<b>, itags) והקינון נשאר תקין.
+      flushMarkersAt(visible);
       final close = rawLine.indexOf('>', i);
       if (close < 0) {
         out.write(rawLine.substring(i));

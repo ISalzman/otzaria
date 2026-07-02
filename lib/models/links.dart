@@ -55,6 +55,11 @@ class Link {
   /// אות הסימון המודפסת (למשל "א") כשהמקור סיפק אותה.
   final String? anchorLabel;
 
+  /// עוגן בצד המקושר (path2/index2) — הטווח המצוטט בתוך קטע-הפאנל, באותה
+  /// מוסכמת תווים-גלויים. משמש להדגשת הציטוט בתוך תוכן הקישור המוצג.
+  final int? linkedAnchorStart;
+  final int? linkedAnchorEnd;
+
   /// Creates a new instance of [Link] with the provided parameters.
   Link({
     required this.heRef,
@@ -70,6 +75,8 @@ class Link {
     this.anchorStart,
     this.anchorEnd,
     this.anchorLabel,
+    this.linkedAnchorStart,
+    this.linkedAnchorEnd,
   });
 
   static final LinkedHashMap<String, Future<String>> _contentCache =
@@ -195,7 +202,9 @@ class Link {
         // עוגני-מילה מגיעים רק ממסד הנתונים (link_anchor), לא מקבצי JSON.
         anchorStart = null,
         anchorEnd = null,
-        anchorLabel = null;
+        anchorLabel = null,
+        linkedAnchorStart = null,
+        linkedAnchorEnd = null;
 }
 
 /// Retrieves a list of [Link] objects for the given list of [indexes] and the [links] to be processed.
