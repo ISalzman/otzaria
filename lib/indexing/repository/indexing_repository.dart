@@ -370,6 +370,11 @@ class IndexingRepository {
       if (_hasUsablePdfText(pages)) return pages;
     } catch (e) {
       debugPrint('❌ שגיאה בפתיחת PDF לאינדוקס: ${book.title}: $e');
+      // כשל בטעינת ה-PDF עצמו (להבדיל מטקסט סרוק): בלי sidecar מפיצים את
+      // השגיאה, אחרת הספר היה נרשם כ"ריק" לצמיתות ולא מנוסה שוב.
+      final sidecarPages = await _loadPdfSidecar(book, outline);
+      if (sidecarPages.isEmpty) rethrow;
+      return sidecarPages;
     }
 
     return _loadPdfSidecar(book, outline);
