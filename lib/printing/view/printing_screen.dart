@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/models/links.dart';
@@ -1425,7 +1425,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
   }
 
   Future<void> _exportDocument() async {
-    if (!await verifyPasswordForAction(context)) return;
+    if (!await verifySaferModePassword(context)) return;
     if (!mounted) return;
     try {
       final supportsWord = widget.createPdfOverride == null;
@@ -2409,10 +2409,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     final cells = rows * cols;
 
     return ClipRRect(
-      borderRadius: const BorderRadius.only(
-        topRight: Radius.circular(12),
-        topLeft: Radius.circular(12),
-      ),
+      borderRadius: AppTokens.borderRadiusAll,
       child: ValueListenableBuilder<
           ({
             List<Uint8List> pages,
@@ -2775,7 +2772,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return AppCard(
-      radius: 12,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2830,7 +2826,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
               child: Text(
                 displayValue,

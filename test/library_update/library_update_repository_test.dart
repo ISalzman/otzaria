@@ -131,7 +131,7 @@ void main() {
 
       // רגרסיה: לפני התיקון ה-spawn נכשל ב-ArgumentError "object is unsendable"
       // (ה-closure לכד את ה-repository או את onStage→onProgress). אחרי התיקון
-      // ה-apply רץ ב-isolate ומגיע ל-verifyFromHash → PatchApplyException.
+      // ה-apply רץ ב-isolate ונכשל על ה-patch הריק → PatchApplyException.
       await expectLater(
         repository.applyDeltaPlan(
           _deltaPlan(),

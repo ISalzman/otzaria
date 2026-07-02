@@ -4,11 +4,13 @@ import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/user_content_import/services/user_links_loader.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/file/docx_cache.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
+import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -102,15 +104,19 @@ class TextBookRepository {
     // ספרי seforim.db בלבד: השאילתה וה-split רצים ב-isolate (כמו הקישורים),
     // כדי שלא יחסמו את ה-UI thread בזמן גלילה. ה-isolate פותח רק את seforim.db,
     // לכן ספרי משתמש נשארים במסלול ה-drift, וכישלון נופל אליו (file-backed וכו').
-    final provider = LibraryProviderManager.instance.getProviderForBook(
-      book.title,
-      categoryId: categoryId,
-      fileType: fileType,
-    );
-    if (provider is DatabaseLibraryProvider &&
-        categoryId != null &&
-        !book.isUserBook) {
-      final range = await provider.getBookTextRange(
+    if (categoryId != null && !book.isUserBook) {
+      // getProviderForBook מסתכל רק ב-_bookToProvider שמתמלא אחרי buildLibraryCatalog.
+      // בסטרטאפ (לפני buildLibraryCatalog) הוא מחזיר null — ולכן פונים ישירות
+      // ל-DatabaseLibraryProvider שיכול לפתוח seforim.db ב-isolate גם בלי catalog.
+      final dbProvider = DatabaseLibraryProvider.instance;
+      final provider = LibraryProviderManager.instance.getProviderForBook(
+        book.title,
+        categoryId: categoryId,
+        fileType: fileType,
+      );
+      final resolvedProvider =
+          (provider is DatabaseLibraryProvider) ? provider : dbProvider;
+      final range = await resolvedProvider.getBookTextRange(
         book.title,
         categoryId,
         fileType,
@@ -163,6 +169,34 @@ class TextBookRepository {
         .toList()
       ?..sort();
 
+    final base = await _loadBaseLinks(
+      book,
+      normalizedStart,
+      normalizedEnd,
+      normalizedTargetBookTitles,
+    );
+
+    // מיזוג קישורי-משתמש (מ-user_books.db) — forward (כשקוראים ספר אישי)
+    // ו-inverse (מפרש-משתמש שמצביע אל הספר הזה, גם אם הוא רשמי).
+    final userLinks = await loadUserLinksForBook(
+      bookTitle: book.title,
+      bookCategoryId: book.categoryId,
+      isUserBook: book.isUserBook,
+      startLineIndex: normalizedStart,
+      endLineIndex: normalizedEnd,
+      targetBookTitles: normalizedTargetBookTitles,
+    );
+    if (userLinks.isEmpty) return base;
+    return [...base, ...userLinks];
+  }
+
+  /// טוען את קישורי המאגר (seforim.db / קובץ) בלבד — בלי קישורי-משתמש.
+  Future<List<Link>> _loadBaseLinks(
+    TextBook book,
+    int normalizedStart,
+    int normalizedEnd,
+    List<String>? normalizedTargetBookTitles,
+  ) async {
     final title = book.title;
     final categoryId = book.categoryId;
     final fileType = book.fileType ?? 'txt';
@@ -284,13 +318,21 @@ class TextBookRepository {
 
   /// מחזיר רשימת פרשנים זמינים לספר מה-DB
   Future<List<String>> getAvailableCommentators(TextBook book) async {
+    return (await getCommentatorsWithRarity(book)).all;
+  }
+
+  /// מחזיר את מפרשי הספר ([all]) יחד עם קבוצת המפרשים ה"נדירים" ([rare]) שיש
+  /// להסתיר מרשימת הבחירה הכללית (בספרים גדולים בלבד). ראה
+  /// [computeRareCommentators].
+  Future<({List<String> all, Set<String> rare})> getCommentatorsWithRarity(
+      TextBook book) async {
     // ספרים אישיים אינם כוללים קישורי מפרשים במסד הנתונים הרשמי.
     // חיפוש לפי book.id ב-seforim.db יחזיר מפרשים של ספר רשמי עם אותו ID.
-    if (book.isUserBook) return [];
+    if (book.isUserBook) return (all: const <String>[], rare: const <String>{});
 
     final repository = _sqliteProvider.repository;
     if (repository == null) {
-      return [];
+      return (all: const <String>[], rare: const <String>{});
     }
 
     // מקבל את ה-book ישירות מה-repository (אותו DB שממנו נשלוף את המפרשים)
@@ -299,21 +341,30 @@ class TextBookRepository {
             book.title, book.categoryId!)
         : await repository.getBookByTitle(book.title);
     if (dbBook == null) {
-      return [];
+      return (all: const <String>[], rare: const <String>{});
     }
 
-    // שולף את הפרשנים ישירות מה-DB
+    // שולף את הפרשנים ישירות מה-DB, כולל מספר הקישורים של כל מפרש
     final commentatorsData =
         await repository.database.linkDao.selectCommentatorsByBook(dbBook.id);
 
-    // ממפה לרשימת שמות ייחודיים
-    final commentatorTitles = commentatorsData
-        .map((row) => row['targetBookTitle'] as String)
-        .toSet()
-        .toList();
+    // מפרש עשוי להופיע בכמה שורות (מחבר לכל שורה) עם אותו linkCount; לוקחים
+    // את הערך המרבי כמספר הקישורים לספר.
+    final linkCountByTitle = <String, int>{};
+    for (final row in commentatorsData) {
+      final title = row['targetBookTitle'] as String;
+      final count = (row['linkCount'] as int?) ?? 0;
+      if (count > (linkCountByTitle[title] ?? 0)) {
+        linkCountByTitle[title] = count;
+      }
+    }
 
-    commentatorTitles.sort((a, b) => a.compareTo(b));
-    return commentatorTitles;
+    final all = linkCountByTitle.keys.toList()..sort((a, b) => a.compareTo(b));
+    final rare = computeRareCommentators(
+      bookTotalLines: dbBook.totalLines,
+      linkCountByCommentator: linkCountByTitle,
+    );
+    return (all: all, rare: rare);
   }
 
   Future<bool> bookExists(String title) async {

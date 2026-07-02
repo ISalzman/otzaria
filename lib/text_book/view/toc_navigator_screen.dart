@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -136,9 +137,33 @@ class _TocViewerState extends State<TocViewer>
               flat.indexWhere((item) => item.entry.index == activeIndex);
           if (flatIndex < 0) return;
 
+          final positions = _virtualPositionsListener.itemPositions.value;
+          ItemPosition? current;
+          for (final p in positions) {
+            if (p.index == flatIndex) {
+              current = p;
+              break;
+            }
+          }
+          // כבר גלוי במלואו - לא גוללים.
+          if (current != null &&
+              current.itemLeadingEdge >= 0 &&
+              current.itemTrailingEdge <= 1) {
+            _lastScrolledTocIndex = activeIndex;
+            return;
+          }
+
+          // לא גלוי - מביאים לקצה הקרוב (עליון/תחתון), לא למרכז.
+          final bool below = current != null
+              ? current.itemLeadingEdge >= 1
+              : (positions.isNotEmpty &&
+                  flatIndex >
+                      positions
+                          .map((p) => p.index)
+                          .reduce((a, b) => a > b ? a : b));
           _virtualScrollController.scrollTo(
             index: flatIndex,
-            alignment: 0.4, // קרוב למרכז, מעט מעל
+            alignment: below ? 0.85 : 0.0,
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
           );
@@ -164,10 +189,20 @@ class _TocViewerState extends State<TocViewer>
         final viewportHeight = scrollableBox.size.height;
         final itemHeight = itemRenderObject.size.height;
 
-        final target = _tocScrollController.offset +
-            itemOffset -
-            (viewportHeight / 2) +
-            (itemHeight / 2);
+        final itemBottom = itemOffset + itemHeight;
+        // כבר גלוי במלואו - לא גוללים.
+        if (itemOffset >= 0 && itemBottom <= viewportHeight) {
+          _lastScrolledTocIndex = activeIndex;
+          return;
+        }
+
+        // לא גלוי - גוללים לקצה הקרוב (עליון/תחתון), לא למרכז.
+        const double margin = 8.0;
+        final double target = itemOffset < 0
+            ? _tocScrollController.offset + itemOffset - margin
+            : _tocScrollController.offset +
+                (itemBottom - viewportHeight) +
+                margin;
 
         _tocScrollController.animateTo(
           target.clamp(
@@ -540,7 +575,7 @@ class _TocViewerState extends State<TocViewer>
                           : null,
                       isDense: true,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.0),
+                        borderRadius: AppTokens.borderRadiusAll,
                       ),
                     ),
                   ),

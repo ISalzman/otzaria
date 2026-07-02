@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -501,7 +502,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
                   : null,
               isDense: true,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8.0),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
             ),
           ),

@@ -2,6 +2,34 @@ import 'package:flutter/widgets.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
+/// קו העוגן (חלק מ-0..1 מגובה ה-viewport) שאליו הניווט מיישר את תחילת הקטע,
+/// וגם הקו שלפיו נקבע "המיקום הנוכחי" בספר (ההדגשה בסרגל הניווט). שני הצדדים
+/// חייבים להשתמש באותו ערך כדי שההדגשה תתאים בדיוק למקום שהניווט מוביל אליו.
+const double kReadingAnchorAlignment = 0.05;
+
+/// נוכחות מינימלית (חלק מה-viewport) שקטע חייב להשתרע מתחת לקו העוגן כדי
+/// להיחשב כמיקום הנוכחי. סופג רעש מדידה (עד ~כמה פיקסלים) כך ששייר של הסעיף
+/// הקודם שנגמר ממש סביב קו העוגן לא נספר כמיקום הנוכחי.
+const double _anchorRemnantTolerance = 0.02;
+
+/// כמה מהקטע (חלק מה-viewport) נמצא ב"אזור הקריאה" - מתחת לקו העוגן.
+double _readingZonePresence(double leadingEdge, double trailingEdge) {
+  final top = leadingEdge < kReadingAnchorAlignment
+      ? kReadingAnchorAlignment
+      : leadingEdge;
+  final bottom = trailingEdge > 1.0 ? 1.0 : trailingEdge;
+  final presence = bottom - top;
+  return presence < 0 ? 0 : presence;
+}
+
+/// האם קטע ([leadingEdge]..[trailingEdge], חלק מה-viewport) הוא שייר של הסעיף
+/// הקודם: מתחיל מעל קו העוגן (מגיע מלמעלה) ונוכחותו מתחת לעוגן זניחה, כלומר
+/// נגמר בקו העוגן (או ממש סביבו, בגבול רעש המדידה) - המקום שאליו הניווט מיישר
+/// את הסעיף הבא. קטע קצר שמתחיל *בקו העוגן עצמו* הוא יעד הניווט, לא שייר.
+bool isRemnantAbovePositionAnchor(double leadingEdge, double trailingEdge) =>
+    leadingEdge < kReadingAnchorAlignment &&
+    _readingZonePresence(leadingEdge, trailingEdge) <= _anchorRemnantTolerance;
+
 ItemPosition? _findPosition(ItemPositionsListener listener, int segmentIndex) {
   for (final position in listener.itemPositions.value) {
     if (position.index == segmentIndex) {
@@ -23,7 +51,7 @@ Future<void> scrollToSourceLine({
   required List<ReadingSegment> segments,
   required int lineIndex,
   required double viewportExtent,
-  double alignment = 0.05,
+  double alignment = kReadingAnchorAlignment,
   double intraLineFraction = 0,
   Duration duration = const Duration(milliseconds: 250),
   Curve curve = Curves.ease,

@@ -5,7 +5,7 @@
 ; ההתקנה משמרת את ההגדרות הקודמות, וסיומה משיק את אוצריא אוטומטית.
 
 #define MyAppName "אוצריא"
-#define MyAppVersion "0.9.94"
+#define MyAppVersion "0.9.95"
 #define MyAppPublisher "sivan22"
 #define MyAppURL "https://github.com/otzaria/otzaria"
 #define MyAppExeName "otzaria.exe"
@@ -578,8 +578,9 @@ begin
   if DirExists(Path) then
     DelTree(Path, True, True, True);
 
-  // נתיבים ישנים: מזהה חבילה לפני שינוי (com.example) ושמות עבריים.
-  Path := ExpandConstant('{userappdata}\com.example');
+  // com.example הוא מזהה ברירת המחדל של Flutter — מוחקים רק את תת-תיקיית
+  // otzaria, אחרת נמחקים נתונים של אפליקציות Flutter אחרות.
+  Path := ExpandConstant('{userappdata}\com.example\otzaria');
   if DirExists(Path) then
     DelTree(Path, True, True, True);
 

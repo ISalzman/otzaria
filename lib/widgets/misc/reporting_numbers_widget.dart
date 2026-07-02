@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
@@ -96,7 +97,7 @@ class ReportingNumbersWidget extends StatelessWidget {
           color: Theme.of(context).dividerColor,
           width: 1,
         ),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -110,7 +111,7 @@ class ReportingNumbersWidget extends StatelessWidget {
           const SizedBox(width: 6),
           InkWell(
             onTap: enabled ? () => _copyToClipboard(context, value) : null,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: AppTokens.borderRadiusAll,
             child: Padding(
               padding: const EdgeInsets.all(2),
               child: Icon(
@@ -151,7 +152,7 @@ class ReportingNumbersWidget extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppTokens.borderRadiusAll,
                 border: Border.all(
                   color: Theme.of(context)
                       .colorScheme

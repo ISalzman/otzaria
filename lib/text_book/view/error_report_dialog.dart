@@ -1069,9 +1069,6 @@ class _TabbedReportDialogState extends State<TabbedReportDialog>
     final minHeight = maxHeight < 400 ? maxHeight : 400.0;
 
     return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -1092,7 +1089,7 @@ class _TabbedReportDialogState extends State<TabbedReportDialog>
             ),
             TabBar(
               controller: _tabController,
-              splashBorderRadius: BorderRadius.circular(AppTokens.radiusMD),
+              splashBorderRadius: AppTokens.borderRadiusAll,
               tabs: const [
                 Tab(text: 'שליחת דיווח'),
                 Tab(text: 'דיווח דרך קו אוצריא'),
@@ -1265,7 +1262,7 @@ class _RegularReportTabState extends State<RegularReportTab> {
                   decoration: BoxDecoration(
                     border:
                         Border.all(color: Colors.grey.withValues(alpha: 0.3)),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: AppTokens.borderRadiusAll,
                   ),
                   child: SingleChildScrollView(
                     child: Text(

@@ -45,6 +45,7 @@ const Set<String> _knownApiMethods = {
   'app.getLocale',
   'app.getUserEmail',
   'app.getGrantedPermissions',
+  'app.openUrl',
   'library.findBooks',
   'library.getBookMetadata',
   'library.listRecentBooks',
@@ -146,6 +147,7 @@ const Map<String, String> _methodRequiredPermission = {
   'app.getLocale': 'app.info.read',
   'app.getGrantedPermissions': 'app.info.read',
   'app.getUserEmail': 'app.user_email.read',
+  'app.openUrl': 'app.open_url',
   'library.findBooks': 'library.books.read',
   'library.getBookMetadata': 'library.books.read',
   'library.listRecentBooks': 'library.books.read',
@@ -304,6 +306,8 @@ const Map<String, String> _methodMinVersion = {
   'fs.readTextFile': '0.9.94',
   'fs.resolveFileUrl': '0.9.94',
   'fs.revokeFile': '0.9.94',
+  // 0.9.95
+  'app.openUrl': '0.9.95',
 };
 
 /// שדות שמורים שאינם API methods (כדי שלא ייתפסו ב-shorthand scanner).
@@ -498,17 +502,13 @@ class PluginExtendedValidator {
     }
   }
 
-  /// `contributes.toolTab.title` הוא שדה אופציונלי שברירת המחדל שלו היא
-  /// שם התוסף; הדוגמה הרשמית עצמה משתמשת בשמות שונים. לכן אי-התאמה אינה
-  /// שגיאה — לכל היותר אזהרה אינפורמטיבית, וגם זאת רק כשהמפתח **התעלם**
-  /// מההמלצה (כלומר הגדיר title שזהה לגמרי לשם, מה שמיותר). למעשה אין כאן
-  /// מה לאסור — אם בעתיד יוחלט להוסיף אזהרה, להוסיף כאן.
+  /// זהות `contributes.toolTab.title` ל-name נאכפת כשגיאה חוסמת ב-
+  /// `PluginManifestValidator.validateManifest` (רץ גם בהתקנה וגם באריזה),
+  /// לכן אין כאן בדיקה נוספת. נשמר כ-hook עתידי לאזהרות עיצוב סביב הטאב.
   static void _checkNameVsToolTabTitle(
     Map<String, dynamic> manifestJson,
     List<String> warnings,
   ) {
-    // לפי התיעוד הרשמי, השדות עצמאיים. אין ולידציה נוספת כרגע.
-    // הפונקציה נשמרת כ-hook עתידי.
     return;
   }
 

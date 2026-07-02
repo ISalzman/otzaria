@@ -14,7 +14,7 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/services/plugin_installer_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/settings/widgets/custom_switch.dart';
+import 'package:otzaria/widgets/controls/custom_switch.dart';
 
 // ────────────────────────────────────────────────
 // Fakes & helpers
@@ -102,6 +102,7 @@ Future<void> _openDialog(
   PluginManifest manifest, {
   String? previousVersion,
   bool? previousAllowOrderBeforeBuiltInsGranted,
+  bool isOfflineMode = false,
   double screenHeight = 900,
 }) async {
   // רוחב 1400 מדמה דסקטופ — הדיאלוג מקבל width = 1400 * 0.5 = 700px,
@@ -130,6 +131,7 @@ Future<void> _openDialog(
                     previousVersion: previousVersion,
                     previousAllowOrderBeforeBuiltInsGranted:
                         previousAllowOrderBeforeBuiltInsGranted,
+                    isOfflineMode: isOfflineMode,
                   ),
                 ),
               ),
@@ -377,6 +379,68 @@ void main() {
       find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
     );
     expect(sw.value, isTrue);
+  });
+
+  // ── הרשאת network.access במצב מנותק ──
+
+  testWidgets('במצב מקוון — הרשאת גישה לאינטרנט מתחילה דלוקה', (tester) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(permissions: [pluginNetworkAccessPermission]),
+    );
+
+    final rowFinder = find.ancestor(
+      of: find.text('גישה לאינטרנט'),
+      matching: find.byType(ListTile),
+    );
+    expect(rowFinder, findsOneWidget);
+    final sw = tester.widget<CustomSwitch>(
+      find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
+    );
+    expect(sw.value, isTrue);
+  });
+
+  testWidgets('במצב מנותק — הרשאת גישה לאינטרנט מתחילה כבויה ברירת מחדל',
+      (tester) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(permissions: [pluginNetworkAccessPermission]),
+      isOfflineMode: true,
+    );
+
+    final rowFinder = find.ancestor(
+      of: find.text('גישה לאינטרנט'),
+      matching: find.byType(ListTile),
+    );
+    expect(rowFinder, findsOneWidget);
+    final sw = tester.widget<CustomSwitch>(
+      find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
+    );
+    expect(sw.value, isFalse);
+  });
+
+  testWidgets(
+      'במצב מנותק — לחיצה על התקן שולחת ConfirmPluginInstall עם network.access=false',
+      (tester) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(permissions: [pluginNetworkAccessPermission]),
+      isOfflineMode: true,
+    );
+
+    await tester.ensureVisible(find.text('התקן'));
+    await tester.tap(find.text('התקן'));
+    await tester.pumpAndSettle();
+
+    final confirmEvents = bloc.capturedEvents.whereType<ConfirmPluginInstall>();
+    expect(confirmEvents, isNotEmpty);
+    expect(
+        confirmEvents.first.grantedPermissions[pluginNetworkAccessPermission],
+        isFalse,
+        reason: 'network.access חייב להיות false ברירת מחדל בהתקנה במצב מנותק');
   });
 
   testWidgets(

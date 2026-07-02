@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/settings/search/settings_search_registry.dart';
 
 /// עוטף SettingsCard (או כל ווידג'ט אחר) ומאפשר ניווט/הדגשה ממנגנון החיפוש.
@@ -100,7 +101,7 @@ class _SettingsAnchorState extends State<SettingsAnchor>
           if (t == 0.0) return child!;
           return Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: AppTokens.borderRadiusAll,
               boxShadow: [
                 BoxShadow(
                   color: colorScheme.primary.withValues(alpha: 0.35 * t),

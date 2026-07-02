@@ -100,7 +100,7 @@ Decoration _libraryTooltipDecoration(BuildContext context) {
   final cs = Theme.of(context).colorScheme;
   return BoxDecoration(
     color: cs.surfaceContainerHigh,
-    borderRadius: BorderRadius.circular(12),
+    borderRadius: AppTokens.borderRadiusAll,
   );
 }
 
@@ -296,7 +296,7 @@ class CategoryGridItem extends StatelessWidget {
               height: 32,
               decoration: BoxDecoration(
                 color: cs.secondaryContainer,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
               child: Icon(
                 FluentIcons.folder_24_regular,
@@ -400,7 +400,7 @@ class _BookGridMediaColumn extends StatelessWidget {
       height: iconBoxSize,
       decoration: BoxDecoration(
         color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Center(
         child: _buildBookIconChild(book, cs, iconSize),
@@ -606,6 +606,9 @@ class _BookGridActionColumn extends StatelessWidget {
 //  • FocusTraversalGroup כדי לנווט Tab בסדר קריאה (ולא קפיצה ציגזג)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// ריווח אחיד בין כרטיסי הרשת — משותף לתצוגת הספרייה ולתוצאות החיפוש.
+const double kLibraryGridSpacing = 14;
+
 class MyGridView extends StatelessWidget {
   final List<Widget> items;
 
@@ -633,13 +636,13 @@ class MyGridView extends StatelessWidget {
           child: Padding(
             // top: 8 או מרווח מתאים; horizontal: 45 או רוחב אף
             padding:
-                const EdgeInsets.only(top: 8, left: 45, right: 45, bottom: 0),
+                const EdgeInsets.only(top: 8, left: 30, right: 30, bottom: 8),
             child: GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: max(1, min(constraints.maxWidth ~/ 250, 5)),
                 childAspectRatio: childAspectRatio,
-                crossAxisSpacing: 4,
-                mainAxisSpacing: 4,
+                crossAxisSpacing: kLibraryGridSpacing,
+                mainAxisSpacing: kLibraryGridSpacing,
               ),
               itemCount: items.length,
               itemBuilder: (context, index) => items[index],

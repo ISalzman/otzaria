@@ -227,10 +227,17 @@ class SqliteDataProvider {
         await raf.close();
       }
 
-      if (!isWal) return;
+      // יומן rollback "חם": קובץ -journal לא-ריק שנותר מכתיבה שנקטעה (סגירת
+      // התוכנה באמצע עדכון ספרייה). פתיחת RO על מצב כזה נכשלת ב-
+      // SQLITE_READONLY_ROLLBACK (776) כי RO אינו יכול להריץ את ה-rollback.
+      final journal = File('$dbPath-journal');
+      final hasHotJournal =
+          await journal.exists() && (await journal.length()) > 0;
 
-      // התקנה ישנה במצב WAL: המרה חד-פעמית ל-DELETE (דורשת פתיחת RW זמנית).
-      // לאחר ההמרה, פתיחות עתידיות יזהו rollback וידלגו על השלב הזה.
+      if (!isWal && !hasHotJournal) return;
+
+      // פתיחת RW זמנית: ממירה WAL→DELETE, וגישתה הראשונה למסד מריצה את
+      // ה-rollback של יומן חם — שניהם מאפשרים את הפתיחה ה-RO שאחריה.
       final db = sqlite3.open(dbPath);
       try {
         try {

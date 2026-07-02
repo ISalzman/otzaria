@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
+import 'package:otzaria/widgets/layout/floating_panel.dart';
+import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
+
 class _OverlayHarness extends StatefulWidget {
   final bool deferChildBuildOnOpen;
   final bool preserveChildStateOnClose;
@@ -138,7 +141,8 @@ void main() {
       await tester.pump();
 
       expect(find.byType(Scrollbar), findsOneWidget,
-          reason: 'ContextOverlayPanel עם scrollable=true חייב להכיל Scrollbar');
+          reason:
+              'ContextOverlayPanel עם scrollable=true חייב להכיל Scrollbar');
       expect(find.byType(ScrollbarTheme), findsOneWidget,
           reason:
               'ScrollbarTheme מגדיר crossAxisMargin=2 — זהה ל-adaptive_side_pane');
@@ -150,8 +154,8 @@ void main() {
       await tester.pumpWidget(buildPanel(scrollable: true));
       await tester.pump();
 
-      final scrollView = tester.widget<SingleChildScrollView>(
-          find.byType(SingleChildScrollView));
+      final scrollView = tester
+          .widget<SingleChildScrollView>(find.byType(SingleChildScrollView));
       expect(
         scrollView.padding,
         equals(const EdgeInsets.symmetric(horizontal: 16)),
@@ -181,7 +185,8 @@ void main() {
       );
     });
 
-    testWidgets('scrollable=false (ברירת מחדל) — אין Scrollbar ואין SingleChildScrollView',
+    testWidgets(
+        'scrollable=false (ברירת מחדל) — אין Scrollbar ואין SingleChildScrollView',
         (tester) async {
       await tester.pumpWidget(buildPanel(scrollable: false));
       await tester.pump();
@@ -213,6 +218,96 @@ void main() {
         lessThan(contentRect.top),
         reason: 'הכותרת נמצאת מעל אזור הגלילה',
       );
+    });
+  });
+
+  group('ContextOverlayPanel — כפתור סגירה (X)', () {
+    testWidgets('הכפתור מוצג כשיש title ולחיצה עליו קוראת ל-onClose',
+        (tester) async {
+      var closed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Scaffold(
+              body: Stack(
+                children: [
+                  const SizedBox.expand(),
+                  ContextOverlayPanel(
+                    isOpen: true,
+                    onClose: () => closed = true,
+                    title: 'כותרת',
+                    child: const Text('תוכן'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byTooltip('סגור'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('סגור'));
+      await tester.pump();
+
+      expect(closed, isTrue);
+    });
+  });
+
+  group('ContextOverlayPanel — שוליים בחלון צר', () {
+    Widget buildSizedPanel({required double containerWidth}) {
+      return MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: containerWidth,
+                height: 600,
+                child: Stack(
+                  children: [
+                    const SizedBox.expand(),
+                    ContextOverlayPanel(
+                      isOpen: true,
+                      onClose: () {},
+                      width: 520,
+                      child: const Text('תוכן'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('הרוחב מצומצם לרוחב החלון ונשמרים שוליים משני הצדדים',
+        (tester) async {
+      await tester.pumpWidget(buildSizedPanel(containerWidth: 300));
+      await tester.pumpAndSettle();
+
+      final containerRect = tester.getRect(find.byType(ContextOverlayPanel));
+      final panelRect = tester.getRect(find.byType(FloatingPanel));
+
+      // 300 - 10*2 = 280 → הרוחב מצומצם לרוחב הזמין פחות השוליים
+      expect(panelRect.width, closeTo(280, 0.5));
+      expect(panelRect.left - containerRect.left, closeTo(10, 0.5));
+      expect(containerRect.right - panelRect.right, closeTo(10, 0.5));
+    });
+
+    testWidgets('גרירה בחלון צר מ-minWidth לא זורקת (טווח clamp חוקי)',
+        (tester) async {
+      // רוחב זמין 180 (< minWidth 200) — הטווח היה מתהפך לולא effectiveDragMax
+      await tester.pumpWidget(buildSizedPanel(containerWidth: 180));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(ResizableDragHandle), const Offset(-30, 0));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
     });
   });
 }

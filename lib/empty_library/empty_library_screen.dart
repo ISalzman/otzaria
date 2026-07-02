@@ -1,13 +1,14 @@
 ﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 class EmptyLibraryScreen extends StatelessWidget {
@@ -209,7 +210,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
                 LinearProgressIndicator(
                   value: state.progress > 0 ? state.progress : null,
                   minHeight: 8,
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: AppTokens.borderRadiusAll,
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -257,7 +258,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
                 LinearProgressIndicator(
                   value: state.progress,
                   minHeight: 8,
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: AppTokens.borderRadiusAll,
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -313,7 +314,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
               child: Text(
                 state.selectedPath!,
@@ -364,7 +365,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
                   BlocProvider.of<EmptyLibraryBloc>(context)
                       .add(DownloadLibraryRequested());
                 },
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: AppTokens.borderRadiusAll,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Text(
@@ -385,7 +386,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.errorContainer,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppTokens.borderRadiusAll,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -421,14 +422,14 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
   }
 
   Future<void> _pickDirectory(BuildContext context) async {
-    if (!await verifyPasswordForAction(context)) return;
+    if (!await verifySaferModePassword(context)) return;
     if (context.mounted) {
       BlocProvider.of<EmptyLibraryBloc>(context).add(PickDirectoryRequested());
     }
   }
 
   Future<void> _pickArchiveFile(BuildContext context) async {
-    if (!await verifyPasswordForAction(context)) return;
+    if (!await verifySaferModePassword(context)) return;
     if (context.mounted) {
       BlocProvider.of<EmptyLibraryBloc>(context)
           .add(PickArchiveFileRequested());

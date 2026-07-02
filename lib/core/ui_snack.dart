@@ -13,9 +13,6 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 // טוקנים פנימיים
 // ─────────────────────────────────────────────────────────────────────────────
 abstract class _ToastTokens {
-  /// פינות בצורת גלולה — כמו שורת החיפוש
-  static const double radius = 28.0;
-
   static const double padH = AppTokens.spaceMD; // 16
   static const double padV = AppTokens.spaceSM; // 8
 
@@ -375,7 +372,7 @@ class _SnackToastState extends State<_SnackToast>
               ),
               child: IntrinsicWidth(
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(_ToastTokens.radius),
+                  borderRadius: AppTokens.borderRadiusAll,
                   child: BackdropFilter(
                     filter: ImageFilter.blur(
                       sigmaX: _ToastTokens.blurSigma,
@@ -386,8 +383,7 @@ class _SnackToastState extends State<_SnackToast>
                       child: Container(
                         decoration: BoxDecoration(
                           color: bgColor,
-                          borderRadius:
-                              BorderRadius.circular(_ToastTokens.radius),
+                          borderRadius: AppTokens.borderRadiusAll,
                           //  ללא border — רק צל עדין לעומק
                           boxShadow: [
                             BoxShadow(

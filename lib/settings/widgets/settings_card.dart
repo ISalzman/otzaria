@@ -3,36 +3,58 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/settings/widgets/custom_switch.dart';
+import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/controls/action_buttons.dart';
-import 'package:otzaria/widgets/controls/segmented_control.dart';
-import 'package:otzaria/widgets/layout/app_card.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 // ── SettingsCard ──────────────────────────────────────────────────────────────
 
 /// כרטיס הגדרות מעוצב בסגנון Material 3 / Google Account.
+///
+/// [cardId] — כשנתון, הכרטיס משמש גם כאנכור חיפוש: נרשם ב-registry, נגלל
+/// אליו ומבהב בעת ניווט מתוצאת חיפוש (ראה [SettingsAnchor]).
 class SettingsCard extends StatelessWidget {
   final dynamic title; // String או Widget
   final String? subtitle;
   final List<Widget> children;
+  final String? cardId;
 
   const SettingsCard({
     super.key,
-    required this.title,
+    this.title,
     this.subtitle,
     required this.children,
+    this.cardId,
   });
 
-  @override
-  Widget build(BuildContext context) {
+  // כשאין title (null או מחרוזת ריקה) הכותרת מוגדרת בתוך children — בלי כותרת חיצונית.
+  bool get _hasTitle =>
+      title != null && !(title is String && (title as String).isEmpty);
+
+  /// סגנון כותרת הכרטיס — מקור אמת יחיד, גם לשורות שרוצות להיראות ככותרת.
+  static TextStyle? titleStyleOf(BuildContext context) {
     final theme = Theme.of(context);
-    final titleStyle = theme.textTheme.titleMedium?.copyWith(
+    return theme.textTheme.titleMedium?.copyWith(
       fontWeight: FontWeight.bold,
       color: theme.colorScheme.primary,
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final card = _buildCard(context);
+    if (cardId != null) return SettingsAnchor(cardId: cardId!, child: card);
+    return card;
+  }
+
+  Widget _buildCard(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (!_hasTitle) return AppCard.section(children: children);
+
+    final titleStyle = titleStyleOf(context);
 
     final header = Container(
       width: double.infinity,
@@ -378,7 +400,7 @@ class SettingsActionTile extends StatelessWidget {
 
   Widget _buildColumnLayout() {
     final iconWidget = _buildIcon();
-    return Padding(
+    final content = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -417,6 +439,14 @@ class SettingsActionTile extends StatelessWidget {
           ],
         ],
       ),
+    );
+    if (onTap == null) return content;
+    // _buildListTile מעביר onTap ל-ListTile; ב-layout האנכי אין ListTile,
+    // אז ה-InkWell הוא מה שמאפשר ללחוץ על השורה (למשל לפתוח ExpandableSection).
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      focusNode: focusNode,
+      child: content,
     );
   }
 

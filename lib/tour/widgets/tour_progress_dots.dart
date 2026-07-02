@@ -1,6 +1,7 @@
 // לתחזוקת התקדמות הסיור המודרך ראו: docs/guided_tour_developer_guide.md
 
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 
 class TourProgressDots extends StatelessWidget {
   final int currentIndex;
@@ -34,7 +35,7 @@ class TourProgressDots extends StatelessWidget {
                 color: i == currentIndex
                     ? colorScheme.primary
                     : colorScheme.outlineVariant,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
             ),
           ),

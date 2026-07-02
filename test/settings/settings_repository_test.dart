@@ -596,5 +596,26 @@ void main() {
         reason: 'parser must trim whitespace and drop empty entries',
       );
     });
+
+    // ─── מצב סייפר — הסרת סיסמה ───────────────────────────────────────────
+
+    test('clearProtectedModePassword removes the stored password hash key',
+        () async {
+      await repository.clearProtectedModePassword();
+
+      verify(mockSettingsWrapper
+              .remove(SettingsRepository.keyProtectedModePasswordHash))
+          .called(1);
+    });
+
+    test('hasProtectedModePassword returns false after the hash is cleared',
+        () async {
+      when(mockSettingsWrapper.getValue<String>(
+        SettingsRepository.keyProtectedModePasswordHash,
+        defaultValue: '',
+      )).thenReturn('');
+
+      expect(repository.hasProtectedModePassword(), isFalse);
+    });
   });
 }

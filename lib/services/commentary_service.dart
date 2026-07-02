@@ -1,6 +1,5 @@
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/link_types.dart';
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'dart:isolate';
@@ -133,7 +132,7 @@ class CommentaryService {
   ///
   /// מחזיר את הדור המתאים, או [CommentaryEra.other] אם לא נמצא.
   /// משמש למיון קבוצות מפרשים ([sortGroupsByEra]). למיון קישורים רגילים
-  /// יש להשתמש ב-[preloadEras] + [getCachedBookEra] שתומכים גם בספרי מקור.
+  /// יש להשתמש ב-[preloadEras] + [getCachedBookEra].
   static Future<CommentaryEra> getBookEra(String bookTitle) async {
     try {
       final repo = SqliteDataProvider.instance.repository;
@@ -163,8 +162,8 @@ class CommentaryService {
 
   /// טוען מראש את דורות הקישורים אל המטמון (לשימוש [sortLinksByEraSync])
   ///
-  /// משתמש ב-[utils.splitByEra] (אותו מנגנון שמסווג מפרשים לדורות), ובנוסף
-  /// מסווג ספרי מקור (תנ"ך, תלמוד) לפי קטגוריית המקור שבנתיב שלהם.
+  /// הדור נלקח מ-[utils.splitByEra] (טבלת book_generation ב-DB). ספר שאינו
+  /// מתויג ב-DB מסווג כ"שאר מפרשים".
   ///
   /// [bookTitles] - שמות הספרים לטעינה (כפילויות מסוננות אוטומטית)
   static Future<void> preloadEras(Iterable<String> bookTitles) async {
@@ -174,25 +173,10 @@ class CommentaryService {
 
     try {
       final byEra = await utils.splitByEra(missing);
-      final unresolved = <String>[];
       for (final entry in byEra.entries) {
         final era = _eraFromCategory(entry.key);
         for (final title in entry.value) {
-          // ספרים שלא סווגו דרך המפרשים - ננסה לפי קטגוריית המקור (תנ"ך/תלמוד)
-          if (era == CommentaryEra.other) {
-            unresolved.add(title);
-          } else {
-            _eraCache[title] = era;
-          }
-        }
-      }
-
-      // ספרי מקור (תנ"ך, תלמוד, משנה) אין להם דור מתויג ב-DB ולא בשם הנתיב,
-      // לכן מסווגים אותם לפי קטגוריית המקור שבנתיב הספר.
-      if (unresolved.isNotEmpty) {
-        final titleToPath = await FileSystemData.instance.titleToPath;
-        for (final title in unresolved) {
-          _eraCache[title] = _eraFromSourcePath(titleToPath[title] ?? '');
+          _eraCache[title] = era;
         }
       }
     } catch (_) {
@@ -207,20 +191,6 @@ class CommentaryService {
       if (era.hebrewName == category) return era;
     }
     // 'מפרשים נוספים' וכל קטגוריה לא מוכרת -> שאר מפרשים
-    return CommentaryEra.other;
-  }
-
-  /// מסווג ספר מקור לדור לפי קטגוריית המקור שבנתיב שלו
-  ///
-  /// תנ"ך -> תורה שבכתב; משנה/תלמוד/מדרש -> חז"ל; אחרת -> שאר מפרשים
-  static CommentaryEra _eraFromSourcePath(String path) {
-    // קטגוריות מקרא (כולן תחת שורש "תנ"ך")
-    const torahKeywords = ['תנ"ך', 'נביאים', 'כתובים'];
-    // קטגוריות חז"ל - שמות שורש ייחודיים שאינם מופיעים בשמות ספרים אחרים
-    const chazalKeywords = ['תלמוד', 'תוספתא', 'מדרש', 'משנה'];
-
-    if (torahKeywords.any(path.contains)) return CommentaryEra.torahShebichtav;
-    if (chazalKeywords.any(path.contains)) return CommentaryEra.chazal;
     return CommentaryEra.other;
   }
 

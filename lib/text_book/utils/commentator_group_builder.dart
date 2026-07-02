@@ -1,4 +1,49 @@
+import 'package:otzaria/models/links.dart';
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart'
+    show getTitleFromPath;
+
+/// ספרים גדולים (מעל [kRareCommentatorMinBookLines] שורות) מסתירים מרשימת
+/// בחירת המפרשים מפרשים "נדירים" — כאלה עם פחות מ-[kRareCommentatorMinLinks]
+/// קישורים לספר. הם מוצגים ברשימה רק כשהשורה הנוכחית כוללת קישור מהם.
+const int kRareCommentatorMinBookLines = 100;
+const int kRareCommentatorMinLinks = 10;
+
+/// מחזיר את שמות המפרשים הנדירים שיש להסתיר מרשימת הבחירה הכללית.
+/// בספרים עד [kRareCommentatorMinBookLines] שורות מוחזרת קבוצה ריקה (אין הסתרה).
+Set<String> computeRareCommentators({
+  required int bookTotalLines,
+  required Map<String, int> linkCountByCommentator,
+}) {
+  if (bookTotalLines <= kRareCommentatorMinBookLines) return const <String>{};
+  return {
+    for (final entry in linkCountByCommentator.entries)
+      if (entry.value < kRareCommentatorMinLinks) entry.key,
+  };
+}
+
+/// מחזיר מתוך [rareCommentators] את אלו שיש להם קישור-מפרש על אחת השורות
+/// הנוכחיות ([currentIndexes], 0-based), לפי [linksByLine] (ממופתח 1-based).
+/// אלו המפרשים הנדירים שכן יוצגו ברשימה כי הם רלוונטיים לשורה שהמשתמש עליה.
+Set<String> lineRelevantRareCommentators({
+  required Set<String> rareCommentators,
+  required Iterable<int> currentIndexes,
+  required Map<int, List<Link>> linksByLine,
+}) {
+  if (rareCommentators.isEmpty) return const <String>{};
+  final relevant = <String>{};
+  for (final idx in currentIndexes) {
+    final lineLinks = linksByLine[idx + 1];
+    if (lineLinks == null) continue;
+    for (final link in lineLinks) {
+      if (!LinkTypes.isDependentTextLink(link.connectionType)) continue;
+      final title = getTitleFromPath(link.path2);
+      if (rareCommentators.contains(title)) relevant.add(title);
+    }
+  }
+  return relevant;
+}
 
 /// בונה את קבוצות המפרשים לפי דורות.
 ///

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/search/search_query_builder.dart';
@@ -292,7 +293,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
           color: useGlobal
               ? colorScheme.primaryContainer.withValues(alpha: 0.6)
               : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppTokens.borderRadiusAll,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         child: Row(
@@ -344,7 +345,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
               color: isEnabled
                   ? Theme.of(context).colorScheme.primaryContainer
                   : Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppTokens.borderRadiusAll,
             ),
             child: Text(
               isEnabled ? _currentWord! : 'בחר מילה',
@@ -486,7 +487,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
         border: Border.all(
           color: Theme.of(context).colorScheme.outlineVariant,
         ),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: ListView.builder(
         shrinkWrap: true,
@@ -576,7 +577,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                   widget.tab.searchOptionsChanged.value++;
                 }
               : null,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: AppTokens.borderRadiusAll,
           child: Align(
             alignment: Alignment.centerRight,
             child: Padding(

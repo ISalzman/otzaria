@@ -5,6 +5,7 @@ import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:path/path.dart' as p;
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
@@ -272,6 +273,10 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       // ניקוי override Android — DB החדש נמצא ישירות בספרייה
       await Settings.setValue<String>(
           SettingsRepository.keyDbEffectivePath, '');
+      // האינדקס יושב לצד הספרייה; בלי הצמדה מפורשת getIndexPath נופל ל-fallback
+      // ה-legacy וממשיך לכתוב אינדקס במיקום הישן.
+      await Settings.setValue<String>(SettingsRepository.keyIndexPath,
+          p.join(p.dirname(event.path), 'index'));
 
       FileSystemData.instance.libraryPath = event.path;
       DataRepository.instance.library = FileSystemData.instance.getLibrary();

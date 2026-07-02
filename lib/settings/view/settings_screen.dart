@@ -10,7 +10,7 @@ import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/search/settings_search_registry.dart';
 import 'package:otzaria/settings/search/settings_search_results_view.dart';
 import 'package:otzaria/settings/tabs/settings_tabs_exports.dart';
-import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/widgets/navigation/keyboard_navigator.dart';
 import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -266,7 +266,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
       label: 'אודות',
       icon: FluentIcons.people_team_24_regular,
       iconFilled: FluentIcons.people_team_24_filled,
-      pageBuilder: () => const AboutDevTab(),
+      pageBuilder: () => const AboutSettingsTab(),
     ),
   ];
 
@@ -287,7 +287,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
     // הלשונית האחרונה ואף לשונית בצד אינה "פעילה".
     final isSearching = _searchQuery.trim().isNotEmpty;
 
-    return ProtectedSettingsWrapper(
+    return SaferModeGuard(
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < LayoutBreakpoints.compact;

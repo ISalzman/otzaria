@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
@@ -78,7 +79,7 @@ class _PluginCrashedViewState extends State<PluginCrashedView> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppTokens.borderRadiusAll,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

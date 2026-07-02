@@ -13,14 +13,14 @@ void main() {
         {
           'name': 'readme.txt',
           'browser_download_url':
-              'https://github.com/kdroidFilter/SeforimMagicIndexer/releases/download/$tag/readme.txt',
+              'https://github.com/Otzaria/SeforimMagicIndexer/releases/download/$tag/readme.txt',
           'size': 12,
         },
         if (withAsset)
           {
             'name': 'lexical.db',
             'browser_download_url':
-                'https://github.com/kdroidFilter/SeforimMagicIndexer/releases/download/$tag/lexical.db',
+                'https://github.com/Otzaria/SeforimMagicIndexer/releases/download/$tag/lexical.db',
             'size': 57122816,
           },
       ],

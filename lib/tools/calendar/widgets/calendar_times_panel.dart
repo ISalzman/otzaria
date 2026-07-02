@@ -6,8 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart'
-    hide cityCoordinates;
+import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/tools/calendar/models/calendar_location.dart';
 import 'package:otzaria/tools/calendar/models/zman_definition.dart';
 import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart';
@@ -374,8 +373,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
   @override
   void initState() {
     super.initState();
-    _cityNames = cityCoordinates.values.expand((cities) => cities.keys).toList()
-      ..sort();
+    _cityNames = getCalendarCityNames();
   }
 
   @override
@@ -837,9 +835,6 @@ class _ZmanCard extends StatelessWidget {
       elevation: 0,
       color: bgColor,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-      ),
       // minHeight במקום height קבוע: כרטיסי composite עם שתי אפשרויות התראה
       // צריכים ~133px (Row של שני _buildCompositeSegment עם כפתור התראה),
       // ולכן height: 118 גרם ל-overflow של 11-15px בתחתית. הגבלה מינימלית
@@ -1151,7 +1146,7 @@ class _OverflowAwareTooltipText extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 320),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppTokens.borderRadiusAll,
             border: Border.all(
               color: scheme.outlineVariant.withValues(alpha: 0.65),
             ),
@@ -1243,7 +1238,6 @@ class _MoladCard extends StatelessWidget {
     final scheme = theme.colorScheme;
 
     return AppCard(
-      radius: AppTokens.radiusMD,
       padding: const EdgeInsets.all(10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

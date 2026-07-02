@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/utils/move_directory.dart';
 import 'package:path/path.dart' as p;
 
@@ -165,6 +166,35 @@ void main() {
       await moveDirectory(source, dest, includeOnly: {'תלמוד בבלי'});
 
       expect(await File(p.join(dest, 'תלמוד בבלי', 'a.pdf')).exists(), isTrue);
+    });
+
+    test('רשימת קבצי הספרייה המנוהלים כוללת lexical.db', () async {
+      final source = src('from');
+      final dest = src('to');
+      await Directory(source).create();
+      await File(p.join(source, DatabaseConstants.databaseFileName))
+          .writeAsString('db');
+      await File(p.join(source, DatabaseConstants.lexicalDatabaseFileName))
+          .writeAsString('lexical');
+      await File(p.join(source, 'my_notes.txt')).writeAsString('נשאר');
+
+      await moveDirectory(
+        source,
+        dest,
+        includeOnly: DatabaseConstants.libraryManagedEntryNames(),
+      );
+
+      expect(
+        await File(p.join(dest, DatabaseConstants.databaseFileName)).exists(),
+        isTrue,
+      );
+      expect(
+        await File(p.join(dest, DatabaseConstants.lexicalDatabaseFileName))
+            .exists(),
+        isTrue,
+      );
+      expect(await File(p.join(dest, 'my_notes.txt')).exists(), isFalse);
+      expect(await File(p.join(source, 'my_notes.txt')).exists(), isTrue);
     });
   });
 

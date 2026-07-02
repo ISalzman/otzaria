@@ -3,7 +3,7 @@ import 'package:otzaria/models/link_types.dart';
 
 void main() {
   group('LinkTypes.isDependentTextLink', () {
-    test('מזהה את 7 הסוגים התלויים (מפרשים) כפי שמגדיר היוצר', () {
+    test('מזהה את סוגי הקישורים התלויים שמוצגים כמפרשים', () {
       for (final type in const [
         'COMMENTARY',
         'SUPER_COMMENTARY',
@@ -11,7 +11,6 @@ void main() {
         'MIDRASH',
         'PARSHANUT',
         'DIBUR_HAMATCHIL',
-        'EIN_MISHPAT',
       ]) {
         expect(LinkTypes.isDependentTextLink(type), isTrue, reason: type);
       }
@@ -22,6 +21,7 @@ void main() {
         'REFERENCE',
         'QUOTATION',
         'MESORAT_HASHAS',
+        'EIN_MISHPAT',
         'MISHNAH_IN_TALMUD',
         'RELATED',
         'OTHER',
@@ -42,6 +42,7 @@ void main() {
     test('מזהה קשרי עיון/הפניה אך לא מפרשים או SOURCE', () {
       expect(LinkTypes.isReferenceLikeLink('REFERENCE'), isTrue);
       expect(LinkTypes.isReferenceLikeLink('QUOTATION'), isTrue);
+      expect(LinkTypes.isReferenceLikeLink('EIN_MISHPAT'), isTrue);
       expect(LinkTypes.isReferenceLikeLink('OTHER'), isTrue);
       expect(LinkTypes.isReferenceLikeLink('COMMENTARY'), isFalse);
       expect(LinkTypes.isReferenceLikeLink('SOURCE'), isFalse);

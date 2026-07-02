@@ -27,6 +27,7 @@ import 'package:otzaria/text_book/utils/link_processing.dart';
 import 'package:otzaria/text_book/utils/he_categories_enricher.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as notes;
+import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -1233,6 +1234,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   Future<List<String>?> _resolvePageShapeTargetBookTitlesForLinks(
     TextBookLoaded state,
+    String? workspaceId,
   ) async {
     final candidateCommentators = {
       ...state.availableCommentators,
@@ -1248,11 +1250,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       state.book.title,
       heCategories: state.book.heCategories,
     );
-    final columnVisibility =
-        PageShapeSettingsManager.getColumnVisibility(state.book.title);
+    final columnVisibility = PageShapeSettingsManager.getColumnVisibility(
+      state.book.title,
+      workspaceId: workspaceId,
+    );
     final cacheKey = [
       state.book.title,
       state.book.heCategories ?? '',
+      workspaceId ?? '',
       candidateCommentators.join('||'),
       _serializePageShapeConfiguration(storedConfiguration),
       _serializeColumnVisibility(columnVisibility),
@@ -1293,10 +1298,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   Future<List<String>?> _resolveTargetBookTitlesForLinks(
     TextBookLoaded state,
+    String? workspaceId,
   ) async {
     if (state.showPageShapeView) {
       final pageShapeTargets =
-          await _resolvePageShapeTargetBookTitlesForLinks(state);
+          await _resolvePageShapeTargetBookTitlesForLinks(state, workspaceId);
       return pageShapeTargets ?? const <String>[];
     }
 
@@ -1393,12 +1399,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     );
   }
 
-  /// סינון item positions שגלויים מאוד מעט (פחות מ-15% מה-segment גלוי). כך
-  /// "שיירי" הסעיף הקודם, שגלויים לרוב 5% מה-viewport אחרי גלילה עם
-  /// alignment: 0.05, לא נספרים כחלק מהמיקום הנוכחי בספר.
+  /// סינון item positions שאינם חלק מ"המיקום הנוכחי" בספר:
+  /// - קטע שנוכחותו מתחת לקו העוגן זניחה הוא שייר של הסעיף הקודם שאליו הניווט
+  ///   מיישר (isRemnantAbovePositionAnchor) - גם אם הוא שורה קצרה הגלויה
+  ///   במלואה סביב קו העוגן.
+  /// - קטע שגלוי פחות מ-15% מה-extent שלו (שייר בתחתית ה-viewport).
   ///
-  /// אם הסינון מותיר רשימה ריקה (כל ה-positions גלויים פחות מהסף - לא צפוי
-  /// בפועל), חוזרים לרשימה המקורית כ-fallback.
+  /// אם הסינון מותיר רשימה ריקה (לא צפוי בפועל), חוזרים לרשימה המקורית.
   @visibleForTesting
   static List<ItemPosition> filterBarelyVisiblePositionsForTesting(
     List<ItemPosition> positions,
@@ -1412,6 +1419,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     final filtered = positions.where((p) {
       final extent = p.itemTrailingEdge - p.itemLeadingEdge;
       if (extent <= 0) return false;
+      if (isRemnantAbovePositionAnchor(p.itemLeadingEdge, p.itemTrailingEdge)) {
+        return false;
+      }
       final visibleTop = p.itemLeadingEdge.clamp(0.0, 1.0);
       final visibleBottom = p.itemTrailingEdge.clamp(0.0, 1.0);
       final visiblePortion = visibleBottom - visibleTop;
@@ -2077,6 +2087,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     bool force = false,
     Iterable<String>? targetBookTitlesOverride,
     bool forceLoadAll = false,
+    String? workspaceId,
   }) async {
     final runtimeStateBeforeWindowCheck = state;
     if (!force &&
@@ -2109,7 +2120,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     } else {
       final runtimeState = state;
       if (runtimeState is TextBookLoaded) {
-        targetBookTitles = await _resolveTargetBookTitlesForLinks(runtimeState);
+        targetBookTitles = await _resolveTargetBookTitlesForLinks(
+          runtimeState,
+          workspaceId,
+        );
         targetBookTitlesSignature =
             _targetBookTitlesSignature(targetBookTitles);
       }
@@ -2202,6 +2216,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             _loadLinksInBackground(
               latestState.book,
               latestState.visibleIndices,
+              workspaceId: workspaceId,
             );
           }
         }
@@ -2283,6 +2298,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final updatedState = _withInlineNotesCommentator(currentState.copyWith(
         availableCommentators: event.availableCommentators,
         commentatorGroups: event.commentatorGroups.cast<CommentatorGroup>(),
+        rareCommentators: event.rareCommentators,
       ));
       emit(updatedState);
 
@@ -2305,6 +2321,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       currentState.book,
       currentState.visibleIndices,
       force: true,
+      workspaceId: event.workspaceId,
     );
   }
 
@@ -2324,8 +2341,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   Future<void> _loadCommentatorsInBackground(TextBook book) async {
     try {
-      final availableCommentators =
-          await repository.getAvailableCommentators(book);
+      final commentatorsData = await repository.getCommentatorsWithRarity(book);
+      final availableCommentators = commentatorsData.all;
+      final rareCommentators = commentatorsData.rare;
       final baseCommentators =
           await DefaultCommentators.getBaseCommentators(book);
 
@@ -2348,7 +2366,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       // הזיהוי של 'הערות' כמפרש וירטואלי נעשה בנפרד דרך
       // _withInlineNotesCommentator שמופעל בכל עדכון של ה-content.
       if (isClosed) return;
-      add(UpdateAvailableCommentators(availableCommentators, groups));
+      add(UpdateAvailableCommentators(
+          availableCommentators, groups, rareCommentators));
 
       // בחירה שמורה פר-ספר גוברת על ברירת המחדל: אם המשתמש בחר בעבר (כולל
       // בחירה ריקה) — משחזרים אותה; אחרת בוחרים את מפרשי ברירת המחדל.

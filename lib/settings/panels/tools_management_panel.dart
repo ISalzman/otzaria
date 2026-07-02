@@ -10,11 +10,11 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
+import 'package:otzaria/plugins/view/plugin_actions.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
-import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/search/settings_search_registry.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
@@ -100,14 +100,14 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
   bool _isSelectionMode = false;
 
   /// מפתחות גלובליים לעטיפות האנימציה — מאפשרים לקרוא ל-playAnimation ישירות.
-  final Map<String, GlobalKey<_AnimatedPluginMoveWrapperState>> _moveWrapperKeys = {};
+  final Map<String, GlobalKey<_AnimatedPluginMoveWrapperState>>
+      _moveWrapperKeys = {};
 
   /// מצב פתיחה/סגירה של אזור הכלים המובנים — סגור כברירת מחדל.
   bool _builtInExpanded = false;
 
   // הרחבה אוטומטית בניווט מחיפוש לכלים המובנים.
   late final ValueListenable<bool> _builtInFlash;
-
 
   @override
   void initState() {
@@ -168,37 +168,6 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
     context.read<SettingsBloc>().add(UpdateBuiltInToolsPinnedToNavRail(next));
   }
 
-  // ── פעולות תוסף בודד (לחצן בשורה) ───────────────────────────────────────────
-
-  void _togglePluginHide(InstalledPlugin plugin) {
-    context.read<PluginSystemBloc>().add(SetPluginShowInToolsRequested(
-          pluginId: plugin.pluginId,
-          showInTools: !plugin.showInTools,
-        ));
-  }
-
-  void _togglePluginPinNavRail(InstalledPlugin plugin) {
-    final bloc = context.read<PluginSystemBloc>();
-    if (plugin.pinnedToNavRail) {
-      bloc.add(UnpinPluginFromNavRailRequested(plugin.pluginId));
-    } else {
-      bloc.add(PinPluginToNavRailRequested(plugin.pluginId));
-    }
-  }
-
-  void _togglePluginEnabled(InstalledPlugin plugin) {
-    final bloc = context.read<PluginSystemBloc>();
-    if (plugin.enabled) {
-      bloc.add(DisablePluginRequested(plugin.pluginId));
-    } else {
-      bloc.add(EnablePluginRequested(plugin.pluginId));
-    }
-  }
-
-  Future<void> _deletePlugin(InstalledPlugin plugin) async {
-    await showDeletePluginDialog(context, plugin);
-  }
-
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<PluginSystemBloc, PluginSystemState>(
@@ -213,97 +182,91 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                SettingsAnchor(
+                SettingsCard(
                   cardId: _builtInCardId,
-                  child: SettingsCard(
-                    title: 'כלים מובנים',
-                    children: [
-                      ExpandableSection(
-                        icon: FluentIcons.apps_24_regular,
-                        title: const Text('רשימת הכלים'),
-                        subtitle: const Text(
-                            'הסתר כלים מהממשק או הצמד אותם לסרגל הניווט הראשי.'),
-                        isExpanded: _builtInExpanded,
-                        onTap: () => setState(
-                            () => _builtInExpanded = !_builtInExpanded),
-                        children: _builtInToolRows(settingsState),
-                      ),
-                    ],
-                  ),
+                  title: 'כלים מובנים',
+                  children: [
+                    ExpandableSection(
+                      icon: FluentIcons.apps_24_regular,
+                      title: 'רשימת הכלים',
+                      subtitle:
+                          'הסתר כלים מהממשק או הצמד אותם לסרגל הניווט הראשי.',
+                      isExpanded: _builtInExpanded,
+                      onTap: () =>
+                          setState(() => _builtInExpanded = !_builtInExpanded),
+                      children: _builtInToolRows(settingsState),
+                    ),
+                  ],
                 ),
                 if (plugins.isNotEmpty) ...[
                   kSettingsCardSpacing,
-                  SettingsAnchor(
+                  SettingsCard(
                     cardId: _pluginsCardId,
-                    child: SettingsCard(
-                      title: 'תוספים מותקנים',
-                      children: [
-                        // כותרת + סרגל פעולות כילד אחד כדי ש-divider יופיע רק בין הכותרת לשורות.
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SettingsActionTile.text(
-                              icon: FluentIcons.puzzle_piece_24_regular,
-                              title: 'רשימת התוספים',
-                              subtitle: _isSelectionMode
-                                  ? '${_selectedIds.length} נבחרו'
-                                  : 'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
-                              // LayoutBuilder inside SettingsActionTile crashes when
-                              // plugin rows with Tooltip (OverlayPortal) re-activate
-                              // during drag reorder — disable responsive layout.
-                              responsiveActions: false,
-                              actions: _isSelectionMode
-                                  ? [
-                                      ActionButton.ghost(
-                                        icon: FluentIcons
-                                            .checkbox_checked_24_regular,
-                                        text: 'בחר הכל',
-                                        onPressed:
-                                            _selectedIds.length == plugins.length
-                                                ? null
-                                                : () =>
-                                                    _selectAllPlugins(plugins),
+                    title: 'תוספים מותקנים',
+                    children: [
+                      // כותרת + סרגל פעולות כילד אחד כדי ש-divider יופיע רק בין הכותרת לשורות.
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SettingsActionTile.text(
+                            icon: FluentIcons.puzzle_piece_24_regular,
+                            title: 'רשימת התוספים',
+                            subtitle: _isSelectionMode
+                                ? '${_selectedIds.length} נבחרו'
+                                : 'נהל את התוספים שלך: השבתה, הסתרה, הצמדה, הרשאות ומחיקה. גרור לשינוי סדר.',
+                            // LayoutBuilder + Tooltip(OverlayPortal) reactivation
+                            // during drag reorder crashes here.
+                            responsiveActions: false,
+                            actions: _isSelectionMode
+                                ? [
+                                    ActionButton.ghost(
+                                      icon: FluentIcons
+                                          .checkbox_checked_24_regular,
+                                      text: 'בחר הכל',
+                                      onPressed: _selectedIds.length ==
+                                              plugins.length
+                                          ? null
+                                          : () => _selectAllPlugins(plugins),
+                                    ),
+                                    ActionButton.neutral(
+                                      icon:
+                                          FluentIcons.dismiss_circle_24_regular,
+                                      text: 'ביטול',
+                                      onPressed: _exitSelectionMode,
+                                    ),
+                                  ]
+                                : [
+                                    ActionButton.neutral(
+                                      icon: FluentIcons
+                                          .multiselect_rtl_24_regular,
+                                      text: 'בחירה',
+                                      onPressed: _enterSelectionMode,
+                                    ),
+                                  ],
+                          ),
+                          AnimatedSize(
+                            duration: AppTokens.animNormal,
+                            curve: Curves.easeInOut,
+                            child: _isSelectionMode
+                                ? Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Builder(
+                                        builder: (ctx) =>
+                                            AppCard.sectionDivider(ctx),
                                       ),
-                                      ActionButton.neutral(
-                                        icon: FluentIcons
-                                            .dismiss_circle_24_regular,
-                                        text: 'ביטול',
-                                        onPressed: _exitSelectionMode,
-                                      ),
-                                    ]
-                                  : [
-                                      ActionButton.neutral(
-                                        icon: FluentIcons
-                                            .multiselect_rtl_24_regular,
-                                        text: 'בחירה',
-                                        onPressed: _enterSelectionMode,
+                                      _ActionBar(
+                                        selectedIds: _selectedIds.toSet(),
+                                        plugins: plugins,
                                       ),
                                     ],
-                            ),
-                            AnimatedSize(
-                              duration: AppTokens.animNormal,
-                              curve: Curves.easeInOut,
-                              child: _isSelectionMode
-                                  ? Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Builder(
-                                          builder: (ctx) =>
-                                              AppCard.sectionDivider(ctx),
-                                        ),
-                                        _ActionBar(
-                                          selectedIds: _selectedIds.toSet(),
-                                          plugins: plugins,
-                                        ),
-                                      ],
-                                    )
-                                  : const SizedBox.shrink(),
-                            ),
-                          ],
-                        ),
-                        ..._pluginRows(plugins),
-                      ],
-                    ),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ],
+                      ),
+                      ..._pluginRows(plugins),
+                    ],
                   ),
                 ],
               ],
@@ -351,10 +314,11 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
               sourcePluginId: sourceId,
               targetPluginId: plugins[i].pluginId,
             ),
-            onToggleHide: () => _togglePluginHide(plugins[i]),
-            onTogglePinNavRail: () => _togglePluginPinNavRail(plugins[i]),
-            onToggleEnabled: () => _togglePluginEnabled(plugins[i]),
-            onDelete: () => _deletePlugin(plugins[i]),
+            onToggleHide: () => togglePluginShowInTools(context, plugins[i]),
+            onTogglePinNavRail: () =>
+                togglePluginPinnedToNavRail(context, plugins[i]),
+            onToggleEnabled: () => togglePluginEnabled(context, plugins[i]),
+            onDelete: () => showDeletePluginDialog(context, plugins[i]),
           ),
         ),
     ];
@@ -376,7 +340,9 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
       context.read<PluginSystemBloc>().add(ReorderPluginsRequested(ids));
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _moveWrapperKeys[movedId]?.currentState?.playAnimation(movedUp: movedUp);
+        _moveWrapperKeys[movedId]
+            ?.currentState
+            ?.playAnimation(movedUp: movedUp);
       });
     });
   }
@@ -387,15 +353,7 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
     required String sourcePluginId,
     required String targetPluginId,
   }) {
-    final sourceIdx =
-        allPlugins.indexWhere((p) => p.pluginId == sourcePluginId);
-    final targetIdx =
-        allPlugins.indexWhere((p) => p.pluginId == targetPluginId);
-    if (sourceIdx < 0 || targetIdx < 0) return;
-    final reordered = List.of(allPlugins);
-    final src = reordered.removeAt(sourceIdx);
-    reordered.insert(targetIdx, src);
-    final ids = reordered.map((p) => p.pluginId).toList();
+    final ids = reorderedPluginIds(allPlugins, sourcePluginId, targetPluginId);
     // Same deferral as _handleMove: prevents LayoutBuilder + BlocBuilder
     // dirty collision that causes OverlayPortal reactivation crash.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -486,54 +444,57 @@ class _ActionBar extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-          ActionButton.neutral(
-            icon: _allSelectedHiddenFromTools
-                ? FluentIcons.eye_24_regular
-                : FluentIcons.eye_off_24_regular,
-            text: _allSelectedHiddenFromTools ? 'הצג' : 'הסתר',
-            onPressed: hasSelection ? () => _onToggleShowInTools(context) : null,
-          ),
-          ActionButton.neutral(
-            icon: _allSelectedArePinnedToNav
-                ? FluentIcons.pin_24_filled
-                : FluentIcons.pin_24_regular,
-            text: _allSelectedArePinnedToNav ? 'הסר מניווט' : 'הצמד לניווט',
-            onPressed:
-                hasSelection ? () => _onTogglePinNavRail(context) : null,
-          ),
-          ActionButton.neutral(
-            icon: _allSelectedPluginsEnabled
-                ? FluentIcons.pause_circle_24_regular
-                : FluentIcons.play_circle_24_regular,
-            text: _allSelectedPluginsEnabled ? 'השבת' : 'הפעל',
-            onPressed: hasSelection ? () => _onToggleEnabled(context) : null,
-          ),
-          ActionButton.neutral(
-            icon: _allSelectedHaveNetworkAccess
-                ? FluentIcons.globe_prohibited_24_regular
-                : FluentIcons.globe_24_regular,
-            text: _allSelectedHaveNetworkAccess ? 'דחיה מהרשת' : 'גישה לרשת',
-            onPressed: hasSelection && _anySelectedHasNetworkPermission
-                ? () => _setNetworkAccess(context,
-                    granted: !_allSelectedHaveNetworkAccess)
-                : null,
-          ),
-          ActionButton.neutral(
-            icon: _allSelectedHaveStartupEnabled
-                ? FluentIcons.power_24_filled
-                : FluentIcons.power_24_regular,
-            text: _allSelectedHaveStartupEnabled ? 'טעינה רגילה' : 'טעינה בעליה',
-            onPressed: hasSelection && _anySelectedHasStartupPermission
-                ? () => _setRunOnStartup(context,
-                    granted: !_allSelectedHaveStartupEnabled)
-                : null,
-          ),
-          ActionButton.ghost(
-            icon: FluentIcons.delete_24_regular,
-            text: 'מחק',
-            onPressed: hasSelection ? () => _onDelete(context) : null,
-          ),
-        ],
+            ActionButton.neutral(
+              icon: _allSelectedHiddenFromTools
+                  ? FluentIcons.eye_24_regular
+                  : FluentIcons.eye_off_24_regular,
+              text: _allSelectedHiddenFromTools ? 'הצג' : 'הסתר',
+              onPressed:
+                  hasSelection ? () => _onToggleShowInTools(context) : null,
+            ),
+            ActionButton.neutral(
+              icon: _allSelectedArePinnedToNav
+                  ? FluentIcons.pin_24_filled
+                  : FluentIcons.pin_24_regular,
+              text: _allSelectedArePinnedToNav ? 'הסר מניווט' : 'הצמד לניווט',
+              onPressed:
+                  hasSelection ? () => _onTogglePinNavRail(context) : null,
+            ),
+            ActionButton.neutral(
+              icon: _allSelectedPluginsEnabled
+                  ? FluentIcons.pause_circle_24_regular
+                  : FluentIcons.play_circle_24_regular,
+              text: _allSelectedPluginsEnabled ? 'השבת' : 'הפעל',
+              onPressed: hasSelection ? () => _onToggleEnabled(context) : null,
+            ),
+            ActionButton.neutral(
+              icon: _allSelectedHaveNetworkAccess
+                  ? FluentIcons.globe_prohibited_24_regular
+                  : FluentIcons.globe_24_regular,
+              text: _allSelectedHaveNetworkAccess ? 'דחיה מהרשת' : 'גישה לרשת',
+              onPressed: hasSelection && _anySelectedHasNetworkPermission
+                  ? () => _setNetworkAccess(context,
+                      granted: !_allSelectedHaveNetworkAccess)
+                  : null,
+            ),
+            ActionButton.neutral(
+              icon: _allSelectedHaveStartupEnabled
+                  ? FluentIcons.power_24_filled
+                  : FluentIcons.power_24_regular,
+              text: _allSelectedHaveStartupEnabled
+                  ? 'טעינה רגילה'
+                  : 'טעינה בעליה',
+              onPressed: hasSelection && _anySelectedHasStartupPermission
+                  ? () => _setRunOnStartup(context,
+                      granted: !_allSelectedHaveStartupEnabled)
+                  : null,
+            ),
+            ActionButton.ghost(
+              icon: FluentIcons.delete_24_regular,
+              text: 'מחק',
+              onPressed: hasSelection ? () => _onDelete(context) : null,
+            ),
+          ],
         ),
       ),
     );
@@ -647,7 +608,6 @@ class _ActionBar extends StatelessWidget {
   }
 }
 
-
 // ──────────────────────────────────────────────────────────────────────────────
 // שורות הטבלה
 // ──────────────────────────────────────────────────────────────────────────────
@@ -695,8 +655,7 @@ class _BuiltInToolRow extends StatelessWidget {
             onPressed: onToggleHide,
           ),
           AnimatedPinButton(
-            tooltip:
-                pinnedToNavRail ? 'הסר מסרגל הניווט' : 'הצמד לסרגל הניווט',
+            tooltip: pinnedToNavRail ? 'הסר מסרגל הניווט' : 'הצמד לסרגל הניווט',
             isPinned: pinnedToNavRail,
             onPressed: onTogglePin,
           ),
@@ -1009,7 +968,7 @@ class _SettingsDragFeedback extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppTokens.borderRadiusAll,
           boxShadow: [
             BoxShadow(
               color: cs.shadow.withValues(alpha: 0.3),
@@ -1035,7 +994,6 @@ class _SettingsDragFeedback extends StatelessWidget {
   }
 }
 
-
 /// תגיות סטטוס לשורת כלי/תוסף — אייקונים בלבד; ההסבר מופיע ב-tooltip בריחוף.
 class _StatusBadges extends StatelessWidget {
   final String? version;
@@ -1056,7 +1014,11 @@ class _StatusBadges extends StatelessWidget {
   });
 
   bool get hasAny =>
-      hidden || pinnedToNavRail || disabled || networkDeclared || networkRevoked;
+      hidden ||
+      pinnedToNavRail ||
+      disabled ||
+      networkDeclared ||
+      networkRevoked;
 
   @override
   Widget build(BuildContext context) {
@@ -1066,8 +1028,8 @@ class _StatusBadges extends StatelessWidget {
       chips.add(Text('v$version', style: AppTextStyles.settingSubtitle));
     }
     if (disabled) {
-      chips.add(_badge(context, 'מושבת', cs.errorContainer,
-          cs.onErrorContainer, FluentIcons.pause_circle_24_regular));
+      chips.add(_badge(context, 'מושבת', cs.errorContainer, cs.onErrorContainer,
+          FluentIcons.pause_circle_24_regular));
     }
     if (hidden) {
       chips.add(_badge(context, 'מוסתר', cs.surfaceContainerHighest,

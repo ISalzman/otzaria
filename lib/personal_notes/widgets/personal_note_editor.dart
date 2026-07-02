@@ -1,5 +1,6 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
+import 'package:otzaria/theme/app_tokens.dart';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/gestures.dart';
@@ -210,10 +211,7 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(6),
-                topRight: Radius.circular(6),
-              ),
+              borderRadius: AppTokens.borderRadiusAll,
             ),
             child: ConstrainedBox(
               constraints: BoxConstraints(maxHeight: referenceMaxHeight),
@@ -233,7 +231,7 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
               color: colorScheme.outline.withValues(alpha: 0.6),
               width: 1.2,
             ),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: AppTokens.borderRadiusAll,
           ),
           child: Column(
             children: [

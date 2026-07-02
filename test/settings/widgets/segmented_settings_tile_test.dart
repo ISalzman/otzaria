@@ -99,4 +99,31 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('AppSegmentedControl can hide the selected check icon',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: AppSegmentedControl<String>(
+              options: const [
+                SegmentOption(value: 'book', label: 'ספר זה'),
+                SegmentOption(value: 'workspace', label: 'שולחן עבודה זה'),
+                SegmentOption(value: 'global', label: 'גלובלי'),
+              ],
+              currentValue: 'workspace',
+              onChanged: (_) {},
+              expandToFillWidth: true,
+              showSelectedIcon: false,
+              height: 40,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(FluentIcons.checkmark_24_regular), findsNothing);
+  });
 }

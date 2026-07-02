@@ -22,6 +22,7 @@ void main() {
   Future<void> pumpDialog(
     WidgetTester tester, {
     VoidCallback? onSettingsChanged,
+    String? currentWorkspaceId,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -30,6 +31,7 @@ void main() {
           child: PageShapeSettingsDialog(
             availableCommentators: const ['רש"י על בראשית'],
             bookTitle: 'בראשית',
+            currentWorkspaceId: currentWorkspaceId,
             onSettingsChanged: onSettingsChanged,
           ),
         ),
@@ -49,6 +51,39 @@ void main() {
 
     // הדרופדאון הסגור מציג את התווית העברית של AppFonts.defaultFont
     expect(find.text('פרנק-רוהל'), findsOneWidget);
+  });
+
+  testWidgets('תחום שמירת התצוגה מוצג כשלוש בחירות', (tester) async {
+    await pumpDialog(tester, currentWorkspaceId: 'workspace-1');
+
+    expect(find.text('ספר זה'), findsOneWidget);
+    expect(find.text('שולחן עבודה זה'), findsOneWidget);
+    expect(find.text('גלובלי'), findsOneWidget);
+  });
+
+  testWidgets('בחירת שולחן עבודה שומרת הגדרות תצוגה ל-workspace',
+      (tester) async {
+    await pumpDialog(tester, currentWorkspaceId: 'workspace-1');
+
+    await tester.tap(find.text('שולחן עבודה זה'));
+    await tester.pump();
+
+    final highlightSwitch =
+        find.widgetWithText(SwitchListTile, 'הדגש פרשנים קשורים');
+    await tester.ensureVisible(highlightSwitch);
+    await tester.pump();
+    await tester.tap(highlightSwitch);
+    await tester.pump();
+
+    expect(
+      Settings.getValue<bool>('page_shape_use_workspace_settings_workspace-1'),
+      isTrue,
+    );
+    expect(
+      Settings.getValue<bool>('page_shape_workspace_highlight_workspace-1'),
+      isTrue,
+    );
+    expect(Settings.getValue<bool>('page_shape_global_highlight'), isNull);
   });
 
   testWidgets('בחירת גופן נשמרת מיידית ומפעילה עדכון חי', (tester) async {

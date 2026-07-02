@@ -178,12 +178,10 @@ class LibraryUpdateRepository implements LibraryUpdateService {
           stepIndex: i,
           totalSteps: steps.length,
         ));
-        // step ראשון בלבד מאמת fromHash; אחריו ה-toHash הקודם כבר הבטיח אותו.
         await _applyStepInQueue(
           dbPath: dbPath,
           patchPath: patchPath,
           step: step,
-          verifyFromHash: i == 0,
           onStage: (stage) => onProgress?.call(LibraryUpdateProgress(
             phase: LibraryUpdatePhase.applying,
             stepIndex: i,
@@ -335,23 +333,24 @@ class LibraryUpdateRepository implements LibraryUpdateService {
     required String dbPath,
     required String patchPath,
     required PatchEdge step,
-    required bool verifyFromHash,
     void Function(String stage)? onStage,
   }) {
     return DatabaseLibraryProvider.operationQueue.enqueue(() async {
       await SqliteDataProvider.instance.closeForExternalWrite();
       try {
+        // ללא גיבוי מלא: ה-apply עטוף ב-transaction יחיד של SQLite, אז קריסה
+        // באמצע מתגלגלת אחורה אוטומטית — ה-DB תמיד נשאר תקין (מקור או יעד).
         await recovery.beginApply(
           dbPath: dbPath,
           fromVersion: step.fromVersion,
           toVersion: step.toVersion,
           timestamp: nowTimestamp(),
+          createBackup: false,
         );
         await _applyPatchInIsolate(
           dbPath: dbPath,
           patchPath: patchPath,
           manifest: step.manifest,
-          verifyFromHash: verifyFromHash,
           onStage: onStage,
         );
         recovery.finishSuccess(dbPath);
@@ -370,7 +369,6 @@ class LibraryUpdateRepository implements LibraryUpdateService {
     required String dbPath,
     required String patchPath,
     required DeltaManifest manifest,
-    required bool verifyFromHash,
     void Function(String stage)? onStage,
   }) async {
     final port = ReceivePort();
@@ -382,7 +380,6 @@ class LibraryUpdateRepository implements LibraryUpdateService {
         dbPath: dbPath,
         patchPath: patchPath,
         manifest: manifest,
-        verifyFromHash: verifyFromHash,
         sendPort: port.sendPort,
       );
     } finally {
@@ -398,14 +395,16 @@ class LibraryUpdateRepository implements LibraryUpdateService {
     required String dbPath,
     required String patchPath,
     required DeltaManifest manifest,
-    required bool verifyFromHash,
     required SendPort sendPort,
   }) {
     return Isolate.run(() => const PatchApplier().apply(
           dbPath: dbPath,
           patchPath: patchPath,
           manifest: manifest,
-          verifyFromHash: verifyFromHash,
+          // verifyFromHash=false: verifyToHash אחרי ה-apply הוא הערובה האמיתית —
+          // אם המקור שונה, ה-toHash ייכשל וה-transaction יתגלגל אחורה. הבדיקה
+          // המקדימה רק כפילה קריאה של כל ה-DB (5.5GB) לחינם.
+          verifyFromHash: false,
           // checkForeignKeys=false: verifyToHash מאמת את כל 28 הטבלאות (וכל ה-FK
           // שביניהן) מול ה-DB התקין, אז התאמת hash כבר שוללת הפרות FK — חוסך ~60ש.
           checkForeignKeys: false,

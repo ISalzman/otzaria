@@ -1,4 +1,5 @@
 import 'package:collection/collection.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/focus_repository.dart';
@@ -268,7 +269,7 @@ class _EmailFieldWithAutocompleteState extends State<EmailFieldWithAutocomplete>
         child: Material(
           elevation: 4,
           color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppTokens.borderRadiusAll,
           clipBehavior: Clip.antiAlias,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 220),

@@ -29,7 +29,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
@@ -466,7 +466,7 @@ class _PersonalNotesManagerScreenState
   }
 
   Future<void> _exportNotes() async {
-    if (!await verifyPasswordForAction(context)) return;
+    if (!await verifySaferModePassword(context)) return;
     if (!mounted) return;
     final selection = await showDialog<NotesExportSelection>(
       context: context,
@@ -500,7 +500,7 @@ class _PersonalNotesManagerScreenState
   }
 
   Future<void> _exportNotesToText() async {
-    if (!await verifyPasswordForAction(context)) return;
+    if (!await verifySaferModePassword(context)) return;
     if (!mounted) return;
     final selection = await showDialog<NotesExportSelection>(
       context: context,
@@ -534,7 +534,7 @@ class _PersonalNotesManagerScreenState
   }
 
   Future<void> _importNotes() async {
-    if (!await verifyPasswordForAction(context)) return;
+    if (!await verifySaferModePassword(context)) return;
     if (!mounted) return;
     final picked = await FilePicker.pickFiles(
       dialogTitle: 'בחר קובץ ייבוא',
@@ -1033,7 +1033,7 @@ class _PersonalNotesManagerScreenState
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Row(
         children: [
@@ -1082,7 +1082,6 @@ class _PersonalNotesManagerScreenState
           );
 
     return AppCard(
-      radius: AppTokens.radiusMD,
       onTap: isMissing ? () => _repositionMissing(note) : null,
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -1359,7 +1358,7 @@ class _InfoChip extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

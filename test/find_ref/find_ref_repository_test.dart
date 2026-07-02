@@ -729,7 +729,7 @@ void main() {
       expect(results.single.segment, equals(0));
     });
 
-    test('מילה בודדת מוגבלת ל-15 תוצאות', () async {
+    test('מילה בודדת מוגבלת ל-20 תוצאות', () async {
       final repo = FindRefRepository(
         dataRepository: MockDataRepository(),
         isReferenceBooksCacheLoaded: () => true,
@@ -752,8 +752,8 @@ void main() {
       );
 
       final results = await repo.findRefs('פירוש');
-      expect(results, hasLength(15),
-          reason: 'התוצאות חתוכות ל-15 גם כשיש יותר ספרים');
+      expect(results, hasLength(20),
+          reason: 'התוצאות חתוכות ל-20 גם כשיש יותר ספרים');
     });
   });
 
@@ -1677,7 +1677,7 @@ void main() {
         () async {
       // התרחיש: שאילתה "בבא קמא" מתאימה גם ל-L2 "פסקי בבא קמא" וגם
       // ל-L3 שתחתיה ("סימן א", "סימן ב", ...). ה-L3 רק מרחיבים את ה-L2
-      // ולכן מציפים את 15 התוצאות בפירוט שאותו המשתמש לא ביקש.
+      // ולכן מציפים את 20 התוצאות בפירוט שאותו המשתמש לא ביקש.
       final repo = FindRefRepository(
         dataRepository: MockDataRepository(),
         isReferenceBooksCacheLoaded: () => true,
@@ -1806,7 +1806,7 @@ void main() {
         refs.where((r) => r.contains('סימן')).toList(),
         isEmpty,
         reason: 'ערכי L1 של "סימן X" שמרחיבים את ה-parent מודחקים — אסור '
-            'שיוצפו 15 התוצאות בפירוט פנימי שלא נדרש',
+            'שיוצפו 20 התוצאות בפירוט פנימי שלא נדרש',
       );
     });
 
@@ -1949,7 +1949,7 @@ void main() {
         'per-book מצא TOC L2+ — global fallback מדולג (רגרסיה: "ברכות ב" עם PDF)',
         () async {
       // הבאג ההיסטורי: ה-fallback רץ גם כש-per-book החזיר תוצאות פנימיות,
-      // והוסיף false-positives שדחפו החוצה את ה-PDF של ברכות מתוך 15 התוצאות
+      // והוסיף false-positives שדחפו החוצה את ה-PDF של ברכות מתוך 20 התוצאות
       // הראשונות (כי `orderIndex` נבדק לפני `tocLevel`).
       // התיקון: התנאי החדש בודק `tocLevel >= 2 || isAltToc` — אם המסלול
       // ה-per-book כבר החזיר משהו ספציפי, הגלובלי לא רץ.
@@ -1999,7 +1999,7 @@ void main() {
       expect(flatCacheCalled, isFalse,
           reason: 'per-book החזיר TOC L2 → הגלובלי חייב להידלג');
       expect(results.any((r) => r.isPdf && r.title == 'ברכות'), isTrue,
-          reason: 'PDF של ברכות נשאר ב-15 התוצאות הראשונות');
+          reason: 'PDF של ברכות נשאר ב-20 התוצאות הראשונות');
     });
 
     test('per-book מצא AltToc — global fallback מדולג', () async {
@@ -2526,7 +2526,7 @@ void main() {
 
       expect([mishnaIdx, bavliIdx, yerushalmiIdx, rambamIdx],
           everyElement(isNot(-1)),
-          reason: 'כל ארבעת הספרים חייבים להופיע ב-15 התוצאות הראשונות');
+          reason: 'כל ארבעת הספרים חייבים להופיע ב-20 התוצאות הראשונות');
       expect(mishnaIdx, lessThan(bavliIdx),
           reason: 'tier 2 (משנה) לפני tier 3 (בבלי)');
       expect(bavliIdx, lessThan(yerushalmiIdx),
@@ -3264,26 +3264,26 @@ void main() {
           reason: 'התוצאה הגיעה מהמסלול הרגיל אחרי שמצב era החזיר ריק');
     });
 
-    test('cap מודע-רלוונטיות: תוצאות era שווֹת-רלוונטיות אינן נחתכות ב-15',
+    test('cap מודע-רלוונטיות: תוצאות era שווֹת-רלוונטיות אינן נחתכות ב-20',
         () async {
       final repo = buildEraRepo(
         eraSearch: (era, topic) => List.generate(
-          20,
+          25,
           (i) => _hit(bookId: 100 + i, title: 'ספר ראשון $i', orderIndex: 999),
         ),
       );
 
       final results = await repo.findRefs('ראשונים סנהדרין');
-      expect(results, hasLength(20),
+      expect(results, hasLength(25),
           reason:
-              'כל 20 שווי-רלוונטיות (אותו tier ו-orderIndex) → כולם מוצגים');
+              'כל 25 שווי-רלוונטיות (אותו tier ו-orderIndex) → כולם מוצגים');
     });
   });
 
   // ─── cap מודע-רלוונטיות במסלול הרגיל (גלובלי) ──────────────────────────────
 
   group('FindRef — cap מודע-רלוונטיות גלובלי', () {
-    test('תוצאות TOC שווֹת-רלוונטיות מאותו ספר אינן נחתכות ב-15', () async {
+    test('תוצאות TOC שווֹת-רלוונטיות מאותו ספר אינן נחתכות ב-20', () async {
       final repo = FindRefRepository(
         dataRepository: MockDataRepository(),
         isReferenceBooksCacheLoaded: () => true,
@@ -3298,9 +3298,9 @@ void main() {
         },
         getTocEntriesForReference: (bookId, title, {queryTokens}) async {
           if (bookId == 1) {
-            // 20 ערכי TOC רמה-2 — זהים בכל מפתחות-הרלוונטיות, נבדלים רק בטקסט.
+            // 25 ערכי TOC רמה-2 — זהים בכל מפתחות-הרלוונטיות, נבדלים רק בטקסט.
             return List.generate(
-              20,
+              25,
               (i) => {
                 'reference': 'ברכות פרק ${20 + i}',
                 'segment': i,
@@ -3313,8 +3313,8 @@ void main() {
       );
 
       final results = await repo.findRefs('ברכות פרק');
-      expect(results.length, greaterThan(15),
-          reason: 'הכלל הגלובלי מציג את כל שווי-הרלוונטיות, לא רק 15');
+      expect(results.length, greaterThan(20),
+          reason: 'הכלל הגלובלי מציג את כל שווי-הרלוונטיות, לא רק 20');
     });
   });
 }

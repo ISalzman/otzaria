@@ -1002,7 +1002,7 @@ class _AppContextMenuPanel extends StatelessWidget {
               3,
           shape: menuStyle?.shape?.resolve(const <WidgetState>{}) ??
               RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(metrics.menuBorderRadius),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
           clipBehavior: Clip.antiAlias,
           child: IntrinsicWidth(
@@ -1288,7 +1288,7 @@ class _MenuItemHoverPreviewState extends State<_MenuItemHoverPreview> {
       color: colorScheme.surfaceContainer,
       elevation: 6,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(widget.metrics.menuBorderRadius),
+        borderRadius: AppTokens.borderRadiusAll,
         side: BorderSide(color: colorScheme.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
@@ -1352,13 +1352,13 @@ class _HoverableHighlightedRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppTokens.borderRadiusAll,
         child: Ink(
           height: metrics.itemHeight,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
             border: Border.all(color: primary, width: 1.5),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppTokens.borderRadiusAll,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.max,

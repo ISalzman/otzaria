@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/toc_unit_label.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -1146,7 +1148,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     unselectedLabelColor: colorScheme.onSurfaceVariant,
                     indicatorColor: colorScheme.primary,
                     dividerColor: Colors.transparent,
-                    splashBorderRadius: BorderRadius.circular(12),
+                    splashBorderRadius: AppTokens.borderRadiusAll,
                   ),
                 ),
                 AnimatedPinButton(
@@ -1191,10 +1193,19 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         ),
       );
     }
+    final chapters = _getChapters(state.tableOfContents);
+    final indexes =
+        _effectiveIndexes(chapters, state.content.length) ?? const <int>[];
     return CommentatorsSelectionPanel(
       groups: groups,
       selectedCommentators: selected,
       bookTitle: state.book.title,
+      rareCommentators: state.rareCommentators,
+      lineRelevantCommentators: lineRelevantRareCommentators(
+        rareCommentators: state.rareCommentators,
+        currentIndexes: indexes,
+        linksByLine: state.linksByLine,
+      ),
       onSelectionChanged: (list) {
         setState(() => _selectedCommentatorsOverride = list);
       },
@@ -1347,12 +1358,12 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                       : Theme.of(context).colorScheme.outlineVariant,
                   width: 1,
                 ),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppTokens.borderRadiusAll,
               ),
               child: InkWell(
                 onTap: () => _commentaryKey.currentState
                     ?.navigateToGlobalIndex(snippet.globalIndex),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppTokens.borderRadiusAll,
                 child: Padding(
                   padding: const EdgeInsets.all(10),
                   child: Text.rich(
@@ -1400,7 +1411,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     : null,
                 isDense: true,
                 border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    OutlineInputBorder(borderRadius: AppTokens.borderRadiusAll),
                 contentPadding:
                     const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
               ),

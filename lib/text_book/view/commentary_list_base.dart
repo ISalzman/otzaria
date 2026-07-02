@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,6 +14,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/text_book/view/combined_view/commentary_content.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/view/commentators_list_screen.dart';
 import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
 import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
@@ -243,6 +245,20 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     return widget.bookTitleOverride ?? state.book.title;
   }
 
+  /// אינדקסי השורות הנוכחיים (בחירה מרובה אם יש, אחרת הנראות) — לקביעת אילו
+  /// מפרשים נדירים כן להציג ברשימת הבחירה.
+  List<int> _currentIndexes(TextBookLoaded state) {
+    final raw = widget.indexes ??
+        (state.selectedIndices.isNotEmpty
+            ? state.selectedIndices.toList()
+            : state.visibleIndices);
+    if (raw.isNotEmpty) return raw;
+    return [
+      state.selectedIndex ??
+          (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0)
+    ];
+  }
+
   int _getItemSearchIndex(Link link) {
     // מחשב את האינדקס המצטבר עד ל-link הנוכחי
     int cumulativeIndex = 0;
@@ -378,7 +394,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppTokens.borderRadiusAll,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
@@ -590,7 +606,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                           ),
                           isDense: true,
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8.0),
+                            borderRadius: AppTokens.borderRadiusAll,
                           ),
                         ),
                         onChanged: (value) {
@@ -1605,6 +1621,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                           customSelection(list);
                         },
                         bookTitle: _bookTitle(state),
+                        rareCommentators: state.rareCommentators,
+                        lineRelevantCommentators: lineRelevantRareCommentators(
+                          rareCommentators: state.rareCommentators,
+                          currentIndexes: _currentIndexes(state),
+                          linksByLine: state.linksByLine,
+                        ),
                       )
                     : CommentatorsListView(
                         onCommentatorSelected: _closeCommentatorsFilter,
@@ -1755,7 +1777,7 @@ class _SkeletonLine extends StatelessWidget {
       width: MediaQuery.of(context).size.width * width,
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
     );
   }

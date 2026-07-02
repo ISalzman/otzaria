@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/utils/file/zip_extractor_service.dart';
 
 /// ווידג'ט לטיפול בהצגת דיאלוג התקדמות חילוץ ZIP
@@ -39,7 +40,7 @@ class ZipExtractionProgressDialog {
                         return LinearProgressIndicator(
                           value: progress,
                           minHeight: 8,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: AppTokens.borderRadiusAll,
                         );
                       },
                     ),

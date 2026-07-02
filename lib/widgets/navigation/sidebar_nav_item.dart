@@ -29,6 +29,7 @@
 // ```
 
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 class SidebarNavItem extends StatelessWidget {
@@ -97,10 +98,10 @@ class SidebarNavItem extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: verticalPadding),
       child: Material(
         color: isSelected ? cs.secondaryContainer : Colors.transparent,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppTokens.borderRadiusAll,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppTokens.borderRadiusAll,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
@@ -212,10 +213,10 @@ class TopNavItem extends StatelessWidget {
       width: width,
       child: Material(
         color: isSelected ? cs.secondaryContainer : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: AppTokens.borderRadiusAll,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: AppTokens.borderRadiusAll,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 64, minHeight: 36),
             child: Padding(

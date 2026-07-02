@@ -185,7 +185,7 @@ class _NumberBadge extends StatelessWidget {
       height: 26,
       decoration: BoxDecoration(
         color: cs.primaryContainer,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Center(
         child: Text(

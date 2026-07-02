@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/external_catalog/view/external_catalog_settings_helper.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
-import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
@@ -76,117 +75,113 @@ class LibrarySettingsPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // הגדרות תצוגה
-            SettingsAnchor(
+            SettingsCard(
               cardId: 'library.display',
-              child: SettingsCard(
-                title: 'תצוגת ספרייה',
-                children: [
-                  SettingsActionTile.segmentedTile<String>(
-                    icon: FluentIcons.grid_24_regular,
-                    title: 'סוג תצוגה',
-                    subtitle: state.libraryViewMode == 'list'
-                        ? 'תצוגת רשימה (עץ מתרחב)'
-                        : 'תצוגת רשת',
-                    options: const [
-                      SegmentOption(
-                        value: 'grid',
-                        label: 'רשת',
-                        icon: FluentIcons.grid_24_regular,
-                      ),
-                      SegmentOption(
-                        value: 'list',
-                        label: 'רשימה',
-                        icon: FluentIcons.list_24_regular,
-                      ),
-                    ],
-                    currentValue: state.libraryViewMode,
-                    onChanged: (value) {
-                      context
-                          .read<SettingsBloc>()
-                          .add(UpdateLibraryViewMode(value));
-                    },
-                  ),
-                  SettingsActionTile.switchTile(
-                    icon: FluentIcons.eye_24_regular,
-                    title: 'הצג תצוגה מקדימה',
-                    subtitle: state.libraryShowPreview
-                        ? 'תצוגה מקדימה מוצגת'
-                        : 'תצוגה מקדימה מוסתרת',
-                    value: state.libraryShowPreview,
-                    onChanged: (value) {
-                      context
-                          .read<SettingsBloc>()
-                          .add(UpdateLibraryShowPreview(value));
-                    },
-                  ),
-                ],
-              ),
+              title: 'תצוגת ספרייה',
+              children: [
+                SettingsActionTile.segmentedTile<String>(
+                  icon: FluentIcons.grid_24_regular,
+                  title: 'סוג תצוגה',
+                  subtitle: state.libraryViewMode == 'list'
+                      ? 'תצוגת רשימה (עץ מתרחב)'
+                      : 'תצוגת רשת',
+                  options: const [
+                    SegmentOption(
+                      value: 'grid',
+                      label: 'רשת',
+                      icon: FluentIcons.grid_24_regular,
+                    ),
+                    SegmentOption(
+                      value: 'list',
+                      label: 'רשימה',
+                      icon: FluentIcons.list_24_regular,
+                    ),
+                  ],
+                  currentValue: state.libraryViewMode,
+                  onChanged: (value) {
+                    context
+                        .read<SettingsBloc>()
+                        .add(UpdateLibraryViewMode(value));
+                  },
+                ),
+                SettingsActionTile.switchTile(
+                  icon: FluentIcons.eye_24_regular,
+                  title: 'הצג תצוגה מקדימה',
+                  subtitle: state.libraryShowPreview
+                      ? 'תצוגה מקדימה מוצגת'
+                      : 'תצוגה מקדימה מוסתרת',
+                  value: state.libraryShowPreview,
+                  onChanged: (value) {
+                    context
+                        .read<SettingsBloc>()
+                        .add(UpdateLibraryShowPreview(value));
+                  },
+                ),
+              ],
             ),
 
             kSettingsCardSpacing,
 
             // ספרים נוספים (משלב מיקום היברובוקס וספרים חיצוניים)
-            SettingsAnchor(
+            SettingsCard(
               cardId: 'library.external',
-              child: SettingsCard(
-                title: 'ספרים נוספים',
-                children: [
-                  // מיקום היברובוקס (יוצג ראשון במידה והועבר לו ווידג'ט - דסקטופ בלבד)
-                  if (hebrewBooksPathWidget != null) hebrewBooksPathWidget!,
+              title: 'ספרים נוספים',
+              children: [
+                // מיקום היברובוקס (יוצג ראשון במידה והועבר לו ווידג'ט - דסקטופ בלבד)
+                if (hebrewBooksPathWidget != null) hebrewBooksPathWidget!,
 
+                SettingsActionTile.switchTile(
+                  icon: FluentIcons.globe_24_regular,
+                  title: 'הצגת ספרים מאתרים חיצוניים',
+                  subtitle: state.showExternalBooks
+                      ? 'יוצגו גם ספרים מאתרים חיצוניים'
+                      : 'יוצגו רק ספרים מספריית אוצריא',
+                  value: state.showExternalBooks,
+                  onChanged: (value) async {
+                    await ExternalCatalogSettingsHelper.updateExternalBooks(
+                      context,
+                      value,
+                    );
+                  },
+                ),
+                if (state.showExternalBooks) ...[
                   SettingsActionTile.switchTile(
-                    icon: FluentIcons.globe_24_regular,
-                    title: 'הצגת ספרים מאתרים חיצוניים',
-                    subtitle: state.showExternalBooks
-                        ? 'יוצגו גם ספרים מאתרים חיצוניים'
-                        : 'יוצגו רק ספרים מספריית אוצריא',
-                    value: state.showExternalBooks,
+                    icon: FluentIcons.library_24_regular,
+                    title: 'הצג ספרים מאוצר החכמה',
+                    subtitle: 'ספרים מאתר אוצר החכמה',
+                    value: state.showOtzarHachochma,
                     onChanged: (value) async {
-                      await ExternalCatalogSettingsHelper.updateExternalBooks(
+                      await ExternalCatalogSettingsHelper.updateOtzarBooks(
                         context,
                         value,
                       );
                     },
                   ),
-                  if (state.showExternalBooks) ...[
-                    SettingsActionTile.switchTile(
-                      icon: FluentIcons.library_24_regular,
-                      title: 'הצג ספרים מאוצר החכמה',
-                      subtitle: 'ספרים מאתר אוצר החכמה',
-                      value: state.showOtzarHachochma,
-                      onChanged: (value) async {
-                        await ExternalCatalogSettingsHelper.updateOtzarBooks(
-                          context,
-                          value,
-                        );
-                      },
-                    ),
-                    SettingsActionTile.switchTile(
-                      icon: FluentIcons.book_open_24_regular,
-                      title: 'הצג ספרים מהיברובוקס',
-                      subtitle: 'ספרים מאתר HebrewBooks',
-                      value: state.showHebrewBooks,
-                      onChanged: (value) async {
-                        await ExternalCatalogSettingsHelper.updateHebrewBooks(
-                          context,
-                          value,
-                        );
-                      },
-                    ),
-                    SettingsActionTile.switchTile(
-                      icon: FluentIcons.arrow_sync_24_regular,
-                      title: 'סנכרון קטלוגים אוטומטי',
-                      subtitle: 'עדכן קטלוגים חיצוניים אוטומטית',
-                      value: state.autoSyncCatalogs,
-                      onChanged: (value) {
-                        context
-                            .read<SettingsBloc>()
-                            .add(UpdateAutoSyncCatalogs(value));
-                      },
-                    ),
-                  ],
+                  SettingsActionTile.switchTile(
+                    icon: FluentIcons.book_open_24_regular,
+                    title: 'הצג ספרים מהיברובוקס',
+                    subtitle: 'ספרים מאתר HebrewBooks',
+                    value: state.showHebrewBooks,
+                    onChanged: (value) async {
+                      await ExternalCatalogSettingsHelper.updateHebrewBooks(
+                        context,
+                        value,
+                      );
+                    },
+                  ),
+                  SettingsActionTile.switchTile(
+                    icon: FluentIcons.arrow_sync_24_regular,
+                    title: 'סנכרון קטלוגים אוטומטי',
+                    subtitle: 'עדכן קטלוגים חיצוניים אוטומטית',
+                    value: state.autoSyncCatalogs,
+                    onChanged: (value) {
+                      context
+                          .read<SettingsBloc>()
+                          .add(UpdateAutoSyncCatalogs(value));
+                    },
+                  ),
                 ],
-              ),
+              ],
             ),
           ],
         );

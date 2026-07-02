@@ -91,10 +91,10 @@ build/
 fonts/
 external/
 # Generated Windows installers
-installer/otzaria-0.9.94-windows.exe
-installer/otzaria-0.9.94-windows-full.exe
-installer/otzaria-0.9.94-windows-silent.exe
-installer/otzaria-0.9.94-windows-full-silent.exe
+installer/otzaria-0.9.95-windows.exe
+installer/otzaria-0.9.95-windows-full.exe
+installer/otzaria-0.9.95-windows-silent.exe
+installer/otzaria-0.9.95-windows-full-silent.exe
 # End generated Windows installers
 
 pubspec.lock

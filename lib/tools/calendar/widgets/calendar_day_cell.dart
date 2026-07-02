@@ -76,12 +76,12 @@ Widget buildDayCell(
             elevation: elevation,
             color: Colors.transparent,
             shadowColor: cs.shadow.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppTokens.borderRadiusAll,
             child: Container(
               margin: const EdgeInsets.all(2),
               decoration: BoxDecoration(
                 color: tintedBackground,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppTokens.borderRadiusAll,
                 border: Border.all(
                   color: isSelected
                       ? cs.primary

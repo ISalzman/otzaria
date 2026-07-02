@@ -1,5 +1,6 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
@@ -613,7 +614,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                   margin: const EdgeInsets.only(top: 16.0, bottom: 4.0),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppTokens.borderRadiusAll,
                   ),
                   child: Text(
                     partName,

@@ -28,6 +28,7 @@
 
 import 'dart:async';
 
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/layout/floating_panel.dart';
@@ -184,16 +185,18 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
     });
   }
 
-  Widget _buildChildWithTitle(BuildContext context, EdgeInsets horizontal) {
-    return Column(
-      children: [
-        Padding(
-          padding: EdgeInsets.only(
-            left: horizontal.left,
-            right: horizontal.right,
-            bottom: 8,
-          ),
-          child: Center(
+  /// כותרת הפאנל עם כפתור סגירה (X) בקצה
+  Widget _buildTitleBar(BuildContext context, EdgeInsets horizontal) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: horizontal.left,
+        right: horizontal.right,
+        bottom: 8,
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Center(
             child: Text(
               widget.title!,
               style: Theme.of(context)
@@ -202,7 +205,24 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
-        ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: IconButton(
+              icon: const Icon(FluentIcons.dismiss_24_regular, size: 20),
+              tooltip: 'סגור',
+              visualDensity: VisualDensity.compact,
+              onPressed: widget.onClose,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChildWithTitle(BuildContext context, EdgeInsets horizontal) {
+    return Column(
+      children: [
+        _buildTitleBar(context, horizontal),
         widget.child,
       ],
     );
@@ -211,8 +231,7 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
   /// בונה את אזור התוכן עם [PanelScrollableContent].
   /// ה-padding האנכי נשאר בחוץ; האופקי עובר לתוך ה-ScrollView.
   Widget _buildScrollableContent(BuildContext context) {
-    final resolved =
-        widget.contentPadding.resolve(Directionality.of(context));
+    final resolved = widget.contentPadding.resolve(Directionality.of(context));
     final verticalPadding =
         EdgeInsets.only(top: resolved.top, bottom: resolved.bottom);
     final horizontalPadding =
@@ -229,22 +248,7 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
           ? Column(
               children: [
                 // כותרת בלבד (ה-child עצמו יופיע בתוך PanelScrollableContent)
-                Padding(
-                  padding: EdgeInsets.only(
-                    left: horizontalPadding.left,
-                    right: horizontalPadding.right,
-                    bottom: 8,
-                  ),
-                  child: Center(
-                    child: Text(
-                      widget.title!,
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
+                _buildTitleBar(context, horizontalPadding),
                 Expanded(child: scrollableChild),
               ],
             )
@@ -254,6 +258,12 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => _buildPanel(context, constraints),
+    );
+  }
+
+  Widget _buildPanel(BuildContext context, BoxConstraints constraints) {
     final cs = Theme.of(context).colorScheme;
     final effectiveBackgroundColor =
         widget.backgroundColor ?? cs.surfaceContainerHigh;
@@ -261,6 +271,16 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
     final isLeft = widget.alignment == AlignmentDirectional.centerEnd;
     final showHandle = widget.isOpen;
     final overhang = showHandle ? handleHitOverhang(context) : 0.0;
+    // בחלון צר מצמצמים את הרוחב כדי להשאיר שוליים משני הצדדים
+    const sideMargin = 10.0;
+    final maxPanelWidth =
+        (constraints.maxWidth - sideMargin * 2).clamp(0.0, double.infinity);
+    final effectiveWidth =
+        _currentWidth > maxPanelWidth ? maxPanelWidth : _currentWidth;
+    // בחלון צר מ-minWidth הטווח היה מתהפך ו-clamp היה זורק בזמן גרירה
+    final dragMaxWidth = widget.maxWidth ?? maxPanelWidth;
+    final effectiveDragMax =
+        dragMaxWidth < widget.minWidth ? widget.minWidth : dragMaxWidth;
 
     return IgnorePointer(
       ignoring: !widget.isOpen,
@@ -283,8 +303,8 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
           Positioned(
             top: 10,
             bottom: 12,
-            left: isLeft ? 10 : null,
-            right: isLeft ? null : 10,
+            left: isLeft ? sideMargin : null,
+            right: isLeft ? null : sideMargin,
             child: AnimatedOpacity(
               duration: AppTokens.animPanelOpacity,
               opacity: widget.isOpen ? 1.0 : 0.0,
@@ -297,9 +317,8 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
                 child: FloatingPanel(
                   elevation: 8,
                   color: effectiveBackgroundColor,
-                  borderRadius: BorderRadius.circular(AppTokens.radiusPanel),
                   child: SizedBox(
-                    width: _currentWidth,
+                    width: effectiveWidth,
                     child: SafeArea(
                       child: widget.scrollable
                           ? (_shouldBuildChild
@@ -325,16 +344,16 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
             Positioned(
               top: 10,
               bottom: 12,
-              left: isLeft ? 10 + _currentWidth - overhang : null,
-              right: isLeft ? null : 10 + _currentWidth - overhang,
+              left: isLeft ? sideMargin + effectiveWidth - overhang : null,
+              right: isLeft ? null : sideMargin + effectiveWidth - overhang,
               child: ResizableDragHandle(
                 isVertical: true,
                 showDivider: false,
                 onDragDelta: (delta) {
                   final d = isLeft ? delta : -delta;
                   setState(() {
-                    _currentWidth = (_currentWidth + d).clamp(
-                        widget.minWidth, widget.maxWidth ?? double.infinity);
+                    _currentWidth = (_currentWidth + d)
+                        .clamp(widget.minWidth, effectiveDragMax);
                   });
                 },
               ),

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:otzaria/theme/app_tokens.dart';
 
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -131,7 +132,7 @@ class _SourceCredit extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: InkWell(
         onTap: _open,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: AppTokens.borderRadiusAll,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
           child: Text.rich(
@@ -309,7 +310,7 @@ class _ZmanInfoButton extends StatelessWidget {
       textStyle: TextStyle(color: scheme.onSurface, fontSize: 13),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppTokens.borderRadiusAll,
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: IconButton(

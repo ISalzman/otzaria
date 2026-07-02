@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 
@@ -134,7 +135,7 @@ class _SearchOptionsRowState extends State<SearchOptionsRow> {
             }
           });
         },
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: AppTokens.borderRadiusAll,
         canRequestFocus: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),

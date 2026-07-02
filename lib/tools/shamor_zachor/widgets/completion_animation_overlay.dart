@@ -90,7 +90,7 @@ class _CompletionAnimationState extends State<_CompletionAnimation>
                   margin: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
                     color: AppSurfaces.card(context),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppTokens.borderRadiusAll,
                     boxShadow: [
                       BoxShadow(
                         color: cs.shadow.withValues(alpha: 0.24),

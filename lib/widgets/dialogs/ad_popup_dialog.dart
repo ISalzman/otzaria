@@ -1,8 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/services/ad_popup_service.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// פופאפ פרסומת עם אנימציה מתקדמת
 class AdPopupDialog extends StatefulWidget {
@@ -114,11 +118,7 @@ class _AdPopupDialogState extends State<AdPopupDialog>
     await _textController.forward();
     if (!mounted) return;
 
-    // שהייה קצרה לקריאת הכותרת
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
-
-    // הכותרת מתכווצת למעלה והרשימה מופיעה ברציפות
+    // הכותרת מתכווצת למעלה והרשימה מופיעה מיד, ללא שהייה
     await _collapseController.forward();
   }
 
@@ -138,9 +138,6 @@ class _AdPopupDialogState extends State<AdPopupDialog>
         scale: _entryScale,
         child: Dialog(
           backgroundColor: AppSurfaces.panelBackground(context),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
           child: Container(
             constraints: BoxConstraints(
               maxWidth: 600,
@@ -351,6 +348,7 @@ class _OrganizationsList extends StatelessWidget {
       'name': 'צבע שחור',
       'phone': '073-888-1234',
       'logo': 'assets/logos/tzeva_shahor.png',
+      'matching': true,
       'phones': [
         '073-888-1250 (דיווח)',
         '073-888-1245 (הרשמה)',
@@ -661,7 +659,7 @@ class _OrganizationsList extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: AppTokens.borderRadiusAll,
         border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
       ),
       child: Text(
@@ -757,7 +755,7 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
       // צבע הכרטיס מערכת הנושא (במקום לבן קשיח) כדי שיתאים לרקע הפופאפ
       color: colorScheme.surfaceContainerHighest,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppTokens.borderRadiusAll,
         side: BorderSide(
           color: widget.isEmergency
               ? Colors.red.withValues(alpha: 0.15)
@@ -769,7 +767,7 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
         children: [
           InkWell(
             onTap: () => setState(() => _isExpanded = !_isExpanded),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppTokens.borderRadiusAll,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: LayoutBuilder(
@@ -779,10 +777,10 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
                     height: 50,
                     decoration: BoxDecoration(
                       color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppTokens.borderRadiusAll,
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppTokens.borderRadiusAll,
                       child: Image.asset(
                         widget.org['logo'],
                         fit: BoxFit.cover,
@@ -860,6 +858,11 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
               ),
             ),
           ),
+          // שורת מצ'ינג — שייכת לכרטיס "צבע שחור", קטנה יותר משורת הארגון.
+          // מוצגת רק בטווח ימי הקמפיין (ראה AdPopupService.isMatchingBannerActive)
+          if (widget.org['matching'] == true &&
+              AdPopupService.isMatchingBannerActive)
+            _MatchingBanner(),
           // מידע מורחב
           if (_isExpanded) ...[
             const Divider(height: 1),
@@ -917,4 +920,138 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
       ),
     );
   }
+}
+
+/// שורת "מצ'ינג" תחת "צבע שחור": טקסט שחור מהבהב, מוקף פס בצבעים מתחלפים.
+/// בלחיצה נפתח דיאלוג הסבר על ההוצאות עם קישור לתרומה.
+class _MatchingBanner extends StatefulWidget {
+  @override
+  State<_MatchingBanner> createState() => _MatchingBannerState();
+}
+
+class _MatchingBannerState extends State<_MatchingBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final t = _controller.value;
+          // צבע המסגרת נע על גלגל הגוונים ומתחלף ברציפות (רוויה+בהירות מלאות)
+          final borderColor =
+              HSVColor.fromAHSV(1, (t * 360) % 360, 1.0, 1.0).toColor();
+          // הבהוב הטקסט: אטימות נעה בין 0.45 ל-1
+          final textOpacity = 0.45 + 0.55 * (0.5 + 0.5 * (t * 2 - 1).abs());
+          // המסגרת "נושמת" — מתקרבת ומתרחקת (pulse); שתי פעימות במחזור
+          final scale = 1.0 + 0.06 * (0.5 + 0.5 * math.sin(t * 4 * math.pi));
+          return InkWell(
+            onTap: () => _showMatchingDialog(context),
+            borderRadius: BorderRadius.circular(10),
+            child: Transform.scale(
+              scale: scale,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: borderColor, width: 2),
+                ),
+                child: child != null
+                    ? Opacity(opacity: textOpacity, child: child)
+                    : const SizedBox.shrink(),
+              ),
+            ),
+          );
+        },
+        child: const Text(
+          "ימי התרמה ל'צבע שחור - נותנים גב', בימים שני-שלישי - תרום כעת!",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// דיאלוג "הידעת?" — הסבר על הוצאות "צבע שחור" עם קישור לתרומה.
+Future<void> _showMatchingDialog(BuildContext context) {
+  const donateUrl = 'https://www.liveraiser.co.il/gav/88888';
+  return showDialog(
+    context: context,
+    builder: (context) => Dialog(
+      backgroundColor: AppSurfaces.panelBackground(context),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'הידעת?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'הוצאת מבזק צבע שחור באזור ירושלים - כ3,000 ש"ח!\n'
+              'באזור הפריפריה זול יותר - אך יש לשלם לדרייברים...\n'
+              'ועוד המון המון הוצאות, פעילויות, חוברות מידע והסברה, ועוד...',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                height: 1.6,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 20),
+            InkWell(
+              onTap: () async {
+                final uri = Uri.parse(donateUrl);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+              child: const Text(
+                'ההוצאות עצומות - ומימון אין, עזרתך דרושה, לחץ כאן כעת!!!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

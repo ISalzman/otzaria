@@ -334,6 +334,46 @@ void main() {
       );
     });
 
+    group('ClearProtectedModePassword', () {
+      blocTest<SettingsBloc, SettingsState>(
+        'כשמצב סייפר כבוי: מוחק את הסיסמה ב-repository ומעדכן protectedModePasswordSet=false',
+        build: () {
+          when(mockRepository.clearProtectedModePassword())
+              .thenAnswer((_) async {});
+          return settingsBloc;
+        },
+        seed: () => SettingsState.initial().copyWith(
+          protectedModeEnabled: false,
+          protectedModePasswordSet: true,
+        ),
+        act: (bloc) => bloc.add(const ClearProtectedModePassword()),
+        expect: () => [
+          isA<SettingsState>().having(
+            (s) => s.protectedModePasswordSet,
+            'protectedModePasswordSet',
+            isFalse,
+          ),
+        ],
+        verify: (_) {
+          verify(mockRepository.clearProtectedModePassword()).called(1);
+        },
+      );
+
+      blocTest<SettingsBloc, SettingsState>(
+        'כשמצב סייפר פעיל: לא מוחק את הסיסמה ולא פולט state חדש',
+        build: () => settingsBloc,
+        seed: () => SettingsState.initial().copyWith(
+          protectedModeEnabled: true,
+          protectedModePasswordSet: true,
+        ),
+        act: (bloc) => bloc.add(const ClearProtectedModePassword()),
+        expect: () => <SettingsState>[],
+        verify: (_) {
+          verifyNever(mockRepository.clearProtectedModePassword());
+        },
+      );
+    });
+
     group('UpdateMergeUserBooksIntoLibrary', () {
       blocTest<SettingsBloc, SettingsState>(
         'emits state עם mergeUserBooksIntoLibrary=true ושומר ב-repository',

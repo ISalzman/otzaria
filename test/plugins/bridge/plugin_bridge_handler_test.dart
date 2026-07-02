@@ -106,6 +106,14 @@ List<dynamic> _shortcutCreateRequest() => [
       }
     ];
 
+/// בקשת RPC ל-app.openUrl.
+List<dynamic> _openUrlRequest() => [
+      {
+        'method': 'app.openUrl',
+        'payload': {'url': 'https://example.com'},
+      }
+    ];
+
 void main() {
   group('PluginBridgeHandler.isRateLimitExempt', () {
     test('library.getBookContent מוחרג ממגביל הקצב', () {
@@ -229,6 +237,41 @@ void main() {
       expect(resp['success'], isFalse);
       expect(resp['error']['code'], 'permission_denied');
       expect(adapter.executeCalls, 0);
+    });
+
+    test(
+        'app.openUrl ללא app.open_url במניפסט → permission_denied, '
+        'execute לא נקרא', () async {
+      final adapter = _FakeAdapter();
+      final handler = buildHandler(
+        declaredPermissions: const [],
+        granted: true,
+        adapter: adapter,
+      );
+
+      final resp = await handler.handleRpcForTesting(_openUrlRequest())
+          as Map<String, dynamic>;
+
+      expect(resp['success'], isFalse);
+      expect(resp['error']['code'], 'permission_denied');
+      expect(adapter.executeCalls, 0);
+    });
+
+    test('app.openUrl עם app.open_url מוצהרת ומוענקת → execute נקרא', () async {
+      final adapter = _FakeAdapter(result: true);
+      final handler = buildHandler(
+        declaredPermissions: const ['app.open_url'],
+        granted: true,
+        adapter: adapter,
+      );
+
+      final resp = await handler.handleRpcForTesting(_openUrlRequest())
+          as Map<String, dynamic>;
+
+      expect(resp['success'], isTrue);
+      expect(adapter.executeCalls, 1);
+      expect(adapter.lastDomain, 'app');
+      expect(adapter.lastAction, 'openUrl');
     });
 
     test('הרשאה הוצהרה והוענקה → הצלחה, adapter.execute נקרא', () async {
