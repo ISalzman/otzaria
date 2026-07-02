@@ -78,6 +78,7 @@ jobs:
           curl -Lf https://github.com/Otzaria/SeforimLibrary/releases/latest/download/seforim.db.zst -o $LIBRARY/seforim.db.zst
           curl -Lf https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst -o $LIBRARY/otzar-HB_catalog.db.zst
           curl -Lf https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o $LIBRARY/talmud_bavli_latest.tar.zst
+          curl -Lf https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o $LIBRARY/lexical.db
 
           rm -rf FULL_DIR
           cp -rf $BUNDLE_DIR $FULL_DIR
@@ -86,6 +87,9 @@ jobs:
           zstd -d -c --long=31 --memory=2048MB $LIBRARY/seforim.db.zst > $FULL_DIR/$BOOKS_DIR/seforim.db
           zstd -d -c --long=31 --memory=2048MB $LIBRARY/otzar-HB_catalog.db.zst > $FULL_DIR/$BOOKS_DIR/otzar-HB_catalog.db
           zstd -d -c --long=31 --memory=2048MB $LIBRARY/talmud_bavli_latest.tar.zst | tar -xf - -C $FULL_DIR/$BOOKS_DIR
+
+          # The related search dictionary (lexical.db) is not compressed, copy it as is next to seforim.db.
+          cp $LIBRARY/lexical.db $FULL_DIR/$BOOKS_DIR/lexical.db
 
           # The FULL package is not portable (user data remains in the user folder)
           # Remove the marker file from the linux build
