@@ -522,7 +522,9 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       }
       windowManager.addListener(_windowListener);
       _windowCloseHookInstalled = true;
-    } catch (_) {
+    } catch (e) {
+      // בלי ה-hook העדכון לא יותקן בסגירת החלון — הכשל חייב להיות גלוי בלוג
+      debugPrint('[Update] window close hook install failed: $e');
       _windowCloseHookInstalled = false;
     }
   }
