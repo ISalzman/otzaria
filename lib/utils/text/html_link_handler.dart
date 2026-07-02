@@ -376,14 +376,8 @@ class HtmlLinkHandler {
   /// בכוונה אין התאמת substring — כותרת קצרה (כמו "ב") התאימה כמעט לכל
   /// שורה וניווטה למקום שגוי; עדיף "לא נמצא" גלוי עם פתיחת תחילת הספר.
   static bool isHeaderMatch(String text, String headerName) {
-    final cleanText = text.trim().replaceAll(RegExp(r'\s+'), ' ');
-    final cleanHeader = headerName.trim().replaceAll(RegExp(r'\s+'), ' ');
-
-    if (cleanText == cleanHeader) {
-      return true;
-    }
-
-    // השוואה ללא רגישות לרווחים
-    return cleanText.replaceAll(' ', '') == cleanHeader.replaceAll(' ', '');
+    final cleanText = text.trim().replaceAll(RegExp(r'\s+'), '');
+    final cleanHeader = headerName.trim().replaceAll(RegExp(r'\s+'), '');
+    return cleanText == cleanHeader;
   }
 }
