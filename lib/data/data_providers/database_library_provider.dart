@@ -339,6 +339,31 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
     ''', params).toMapList();
 }
 
+/// עוגני-מילה (link_anchor) — קיים רק במסדים חדשים; במסד ישן השאילתות חוזרות
+/// לעמודות NULL. side=0 = העוגן יושב בשורת המקור (צד הבסיס).
+bool _hasLinkAnchorTable(sqlite3.Database db) => db
+    .select(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='link_anchor' LIMIT 1",
+    )
+    .isNotEmpty;
+
+String _anchorSelectColumns(bool hasLinkAnchor) => hasLinkAnchor
+    ? '''la.charStart as anchorCharStart,
+          la.charEnd as anchorCharEnd,
+          la.label as anchorLabel,'''
+    : '''NULL as anchorCharStart,
+          NULL as anchorCharEnd,
+          NULL as anchorLabel,''';
+
+/// עוגן אחד לכל קישור (MIN(charStart)) — קישור עם עוגן כפול (נדיר) לא יכפיל
+/// את שורת הקישור בפאנל.
+String _anchorJoinClause(bool hasLinkAnchor) => hasLinkAnchor
+    ? '''LEFT JOIN (
+          SELECT linkId, MIN(charStart) AS charStart, charEnd, label
+          FROM link_anchor WHERE side = 0 GROUP BY linkId
+        ) la ON la.linkId = l.id'''
+    : '';
+
 List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
   required String dbPath,
   required String title,
@@ -359,6 +384,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
     }
 
     final bookId = bookResults.first['id'] as int;
+    final hasLinkAnchor = _hasLinkAnchorTable(db);
 
     final forwardRows = db.select('''
         SELECT
@@ -370,12 +396,14 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
           NULL as targetFileType,
+          ${_anchorSelectColumns(hasLinkAnchor)}
           ct.name as connectionTypeName
         FROM link l
         JOIN line sl ON l.sourceLineId = sl.id
         JOIN line tl ON l.targetLineId = tl.id
         JOIN book tb ON l.targetBookId = tb.id
         LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
+        ${_anchorJoinClause(hasLinkAnchor)}
         WHERE l.sourceBookId = ?
         ORDER BY sl.lineIndex
       ''', [bookId]).toMapList();
@@ -437,6 +465,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
             ? 'AND (ct.name IS NULL OR ct.name NOT IN ($depTypesIn) OR tb.title IN ($targetBookPlaceholders))'
             : 'AND (ct.name IS NULL OR ct.name NOT IN ($depTypesIn))';
 
+    final hasLinkAnchor = _hasLinkAnchorTable(db);
     final rows = db.select('''
         SELECT
           sl.lineIndex as sourceLineIndex,
@@ -445,12 +474,14 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
           NULL as targetFileType,
+          ${_anchorSelectColumns(hasLinkAnchor)}
           ct.name as connectionTypeName
         FROM link l
         JOIN line sl ON l.sourceLineId = sl.id
         JOIN line tl ON l.targetLineId = tl.id
         JOIN book tb ON l.targetBookId = tb.id
         LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
+        ${_anchorJoinClause(hasLinkAnchor)}
         WHERE l.sourceBookId = ?
           AND sl.lineIndex BETWEEN ? AND ?
           $commentaryFilterClause
@@ -2495,6 +2526,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
           connectionType: connectionType,
           targetCategoryId: row['targetCategoryId'] as int?,
           targetFileType: row['targetFileType'] as String?,
+          anchorStart: row['anchorCharStart'] as int?,
+          anchorEnd: row['anchorCharEnd'] as int?,
+          anchorLabel: row['anchorLabel'] as String?,
         );
       }).toList();
 
@@ -2554,6 +2588,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
           connectionType: connectionType,
           targetCategoryId: row['targetCategoryId'] as int?,
           targetFileType: row['targetFileType'] as String?,
+          anchorStart: row['anchorCharStart'] as int?,
+          anchorEnd: row['anchorCharEnd'] as int?,
+          anchorLabel: row['anchorLabel'] as String?,
         );
       }).toList();
       return links;

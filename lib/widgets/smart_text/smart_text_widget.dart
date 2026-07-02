@@ -69,6 +69,33 @@ class SmartTextWidget extends StatelessWidget {
             'top': '-0.55em',
           };
         }
+        // סמני עוגן-מילה (link_anchor): אות קטנה מורמת, עם וריאנט טיפוגרפי
+        // קבוע לכל מפרש (ראו anchorStyleIndexByCommentator).
+        if (element.localName == 'sup' &&
+            element.classes.contains('link-anchor')) {
+          final style = <String, String>{
+            'font-size': '0.7em',
+            'position': 'relative',
+            'top': '-0.55em',
+            'white-space': 'nowrap',
+          };
+          if (element.classes.contains('link-anchor-0')) {
+            style['font-weight'] = 'bold';
+          } else if (element.classes.contains('link-anchor-1')) {
+            style['font-style'] = 'italic';
+          } else if (element.classes.contains('link-anchor-2')) {
+            style['font-weight'] = 'bold';
+            style['font-style'] = 'italic';
+          } else if (element.classes.contains('link-anchor-3')) {
+            style['font-family'] = 'NotoRashiHebrew';
+          } else if (element.classes.contains('link-anchor-4')) {
+            style['font-family'] = 'NotoRashiHebrew';
+            style['font-weight'] = 'bold';
+          } else if (element.classes.contains('link-anchor-5')) {
+            style['text-decoration'] = 'underline';
+          }
+          return style;
+        }
         return null;
       },
       onTapUrl: (onOpenBook != null || onNoteTap != null)
