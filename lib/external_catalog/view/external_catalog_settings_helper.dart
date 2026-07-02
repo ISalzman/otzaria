@@ -9,49 +9,35 @@ import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 class ExternalCatalogSettingsHelper {
   static bool _isAutoSyncInProgress = false;
 
-  static Future<void> updateExternalBooks(
+  /// מעדכן במקשה אחת אילו מקורות ספרים חיצוניים יוצגו.
+  /// [mode] אחד מ: 'none', 'all', 'otzar', 'hebrewbooks'.
+  static Future<void> updateExternalSourceMode(
     BuildContext context,
-    bool enabled,
+    String mode,
   ) async {
     final settingsBloc = context.read<SettingsBloc>();
-    if (enabled && !await _ensureCatalogDatabaseAvailable(context)) {
+
+    if (mode == 'none') {
+      settingsBloc.add(const UpdateShowExternalBooks(false));
+      settingsBloc.add(const UpdateShowOtzarHachochma(false));
+      settingsBloc.add(const UpdateShowHebrewBooks(false));
+      settingsBloc.add(const UpdateAutoSyncCatalogs(false));
       return;
     }
 
-    settingsBloc.add(UpdateShowExternalBooks(enabled));
-    settingsBloc.add(UpdateShowHebrewBooks(enabled));
-    settingsBloc.add(UpdateShowOtzarHachochma(enabled));
-    settingsBloc.add(UpdateAutoSyncCatalogs(enabled));
-  }
-
-  static Future<void> updateOtzarBooks(
-    BuildContext context,
-    bool enabled,
-  ) async {
-    final settingsBloc = context.read<SettingsBloc>();
-    if (enabled && !await _ensureCatalogDatabaseAvailable(context)) {
+    final wasEnabled = settingsBloc.state.showExternalBooks;
+    if (!await _ensureCatalogDatabaseAvailable(context)) {
       return;
     }
 
-    if (enabled) {
-      settingsBloc.add(const UpdateShowExternalBooks(true));
+    settingsBloc.add(const UpdateShowExternalBooks(true));
+    settingsBloc
+        .add(UpdateShowOtzarHachochma(mode == 'all' || mode == 'otzar'));
+    settingsBloc
+        .add(UpdateShowHebrewBooks(mode == 'all' || mode == 'hebrewbooks'));
+    if (!wasEnabled) {
+      settingsBloc.add(const UpdateAutoSyncCatalogs(true));
     }
-    settingsBloc.add(UpdateShowOtzarHachochma(enabled));
-  }
-
-  static Future<void> updateHebrewBooks(
-    BuildContext context,
-    bool enabled,
-  ) async {
-    final settingsBloc = context.read<SettingsBloc>();
-    if (enabled && !await _ensureCatalogDatabaseAvailable(context)) {
-      return;
-    }
-
-    if (enabled) {
-      settingsBloc.add(const UpdateShowExternalBooks(true));
-    }
-    settingsBloc.add(UpdateShowHebrewBooks(enabled));
   }
 
   static Future<bool> _ensureCatalogDatabaseAvailable(
