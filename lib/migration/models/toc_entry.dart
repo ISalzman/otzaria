@@ -45,18 +45,12 @@ class TocEntry {
 
   /// Creates a TocEntry instance from a map (e.g., a database row).
   factory TocEntry.fromMap(Map<String, dynamic> map) {
-    String text = "";
-    try {
-      text = map['text'] as String;
-    } catch (e) {
-      text = "---צריך תיקון--";
-    }
     return TocEntry(
       id: map['id'] as int,
       bookId: map['bookId'] as int,
       parentId: map['parentId'] as int?,
       textId: map['textId'] as int?,
-      text: text,
+      text: map['text'] as String? ?? '',
       level: map['level'] as int,
       lineId: map['lineId'] as int?,
       lineIndex: map['lineIndex'] as int?,
