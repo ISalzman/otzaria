@@ -88,9 +88,10 @@ class AcronymsCache {
       );
     } catch (e) {
       debugPrint('[AcronymsCache] Warmup failed: $e');
+      // לא מסמנים loaded: כשל זמני (למשל DB locked בעלייה) יאופשר retry
+      // ב-warmUp הבא, במקום ראשי-תיבות ריקים לכל ה-session.
       if (myGen == _generation) {
         _acronymsByBookId.clear();
-        _isLoaded = true; // Mark as loaded to avoid repeated attempts
       }
     }
   }
