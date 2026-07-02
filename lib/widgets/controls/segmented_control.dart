@@ -14,11 +14,16 @@ class SegmentOption<T> {
   final IconData? icon;
   final IconData? rtlIcon;
 
+  /// תת-כותרת המשויכת לאפשרות זו — נלקחת אוטומטית ע"י
+  /// [SettingsActionTile.segmentedTile] כשלא סופק subtitle מפורש.
+  final String? subtitle;
+
   const SegmentOption({
     required this.value,
     required this.label,
     this.icon,
     this.rtlIcon,
+    this.subtitle,
   }) : assert(icon == null || rtlIcon == null,
             'העבר icon או rtlIcon — לא שניהם יחד');
 }

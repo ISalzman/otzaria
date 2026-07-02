@@ -33,6 +33,10 @@ class AppMenuEntry<T> {
   /// 0 = ברירת מחדל (iconSize + 8).
   final double trailingReservedWidth;
 
+  /// תת-כותרת המשויכת לאפשרות זו — נלקחת אוטומטית ע"י
+  /// [SettingsActionTile.dropdownTile] כשלא סופק subtitle מפורש.
+  final String? subtitle;
+
   const AppMenuEntry({
     required this.value,
     required this.label,
@@ -43,6 +47,7 @@ class AppMenuEntry<T> {
     this.labelWidget,
     this.reserveTrailingGap = false,
     this.trailingReservedWidth = 0,
+    this.subtitle,
   });
 }
 

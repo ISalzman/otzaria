@@ -828,19 +828,18 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           key: _networkModeTileKey,
           child: SettingsActionTile.segmentedTile<bool>(
             title: 'סינכרון ומצב רשת',
-            subtitle: state.isOfflineMode
-                ? 'התוכנה מנותקת לגמרי מהרשת'
-                : 'התוכנה יכולה להתחבר לרשת',
             options: const [
               SegmentOption<bool>(
                 value: false,
                 label: 'מקוון',
                 icon: FluentIcons.wifi_1_24_regular,
+                subtitle: 'התוכנה יכולה להתחבר לרשת',
               ),
               SegmentOption<bool>(
                 value: true,
                 label: 'מנותק',
                 icon: FluentIcons.wifi_off_24_regular,
+                subtitle: 'התוכנה מנותקת לגמרי מהרשת',
               ),
             ],
             currentValue: state.isOfflineMode,
@@ -1549,18 +1548,28 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             SettingsActionTile.dropdownTile<String>(
               icon: FluentIcons.calendar_clock_24_regular,
               title: 'גיבוי אוטומטי',
-              subtitle: switch (autoFrequency) {
-                'daily' => 'יתבצע גיבוי בכל יום',
-                'weekly' => 'יתבצע גיבוי כל שבוע',
-                'monthly' => 'יתבצע גיבוי כל חודש',
-                _ => 'גיבוי אוטומטי מושבת',
-              },
               value: autoFrequency,
               entries: const [
-                AppMenuEntry(value: 'none', label: 'ללא'),
-                AppMenuEntry(value: 'daily', label: 'יומי'),
-                AppMenuEntry(value: 'weekly', label: 'שבועי'),
-                AppMenuEntry(value: 'monthly', label: 'חודשי'),
+                AppMenuEntry(
+                  value: 'none',
+                  label: 'ללא',
+                  subtitle: 'גיבוי אוטומטי מושבת',
+                ),
+                AppMenuEntry(
+                  value: 'daily',
+                  label: 'יומי',
+                  subtitle: 'יתבצע גיבוי בכל יום',
+                ),
+                AppMenuEntry(
+                  value: 'weekly',
+                  label: 'שבועי',
+                  subtitle: 'יתבצע גיבוי כל שבוע',
+                ),
+                AppMenuEntry(
+                  value: 'monthly',
+                  label: 'חודשי',
+                  subtitle: 'יתבצע גיבוי כל חודש',
+                ),
               ],
               onSelected: (value) {
                 if (value == null) return;
