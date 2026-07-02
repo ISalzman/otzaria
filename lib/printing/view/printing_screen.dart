@@ -1575,8 +1575,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
       final located = all.where((n) => n.hasLocation).toList();
       _personalNotesCache = located;
       return located;
-    } catch (_) {
-      _personalNotesCache = const <PersonalNote>[];
+    } catch (e) {
+      // לא שומרים בקאש — כשל חולף לא ישמיט את ההערות מכל ההדפסות בדיאלוג
+      debugPrint('[Print] personal notes load failed for "$bookId": $e');
       return const <PersonalNote>[];
     } finally {
       _isLoadingNotes = false;
