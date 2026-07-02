@@ -361,20 +361,24 @@ String _anchorSelectColumns(bool hasLinkAnchor) => hasLinkAnchor
     ? '''la.charStart as anchorCharStart,
           la.charEnd as anchorCharEnd,
           la.label as anchorLabel,
+          la.spans as anchorSpans,
           lal.charStart as anchorLinkedCharStart,
           lal.charEnd as anchorLinkedCharEnd,'''
     : '''NULL as anchorCharStart,
           NULL as anchorCharEnd,
           NULL as anchorLabel,
+          NULL as anchorSpans,
           NULL as anchorLinkedCharStart,
           NULL as anchorLinkedCharEnd,''';
 
-/// עוגן אחד לכל קישור וצד (MIN(charStart)) — קישור עם עוגן כפול (נדיר) לא
-/// יכפיל את שורת הקישור בפאנל.
+/// עוגני הקישור מקובצים לשורה אחת לכל קישור וצד: העוגן הראשון (MIN) לאות
+/// שבפאנל, ו-spans מקודד את כולם ("start:end:label;...", ראו
+/// [_parseAnchorSpans]) כך שקישור עם כמה עוגנים באותה שורה מציג את כולם.
 String _anchorJoinClause(bool hasLinkAnchor, {required int displayedSide}) =>
     hasLinkAnchor
         ? '''LEFT JOIN (
-          SELECT linkId, MIN(charStart) AS charStart, charEnd, label
+          SELECT linkId, MIN(charStart) AS charStart, charEnd, label,
+                 GROUP_CONCAT(charStart || ':' || COALESCE(charEnd, '') || ':' || COALESCE(label, ''), ';') AS spans
           FROM link_anchor WHERE side = $displayedSide GROUP BY linkId
         ) la ON la.linkId = l.id
         LEFT JOIN (
@@ -382,6 +386,26 @@ String _anchorJoinClause(bool hasLinkAnchor, {required int displayedSide}) =>
           FROM link_anchor WHERE side = ${1 - displayedSide} GROUP BY linkId
         ) lal ON lal.linkId = l.id'''
         : '';
+
+/// מפענח את מחרוזת ה-spans מהשאילתה לרשימת עוגנים ממוינת לפי מיקום.
+List<LinkAnchorSpan> _parseAnchorSpans(String? spans) {
+  if (spans == null || spans.isEmpty) return const [];
+  final result = <LinkAnchorSpan>[];
+  for (final part in spans.split(';')) {
+    final fields = part.split(':');
+    final start = int.tryParse(fields.first);
+    if (start == null) continue;
+    final end = fields.length > 1 ? int.tryParse(fields[1]) : null;
+    final label = fields.length > 2 ? fields.sublist(2).join(':') : '';
+    result.add(LinkAnchorSpan(
+      start: start,
+      end: end,
+      label: label.isEmpty ? null : label,
+    ));
+  }
+  result.sort((a, b) => a.start.compareTo(b.start));
+  return result;
+}
 
 List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
   required String dbPath,
@@ -2550,6 +2574,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           anchorLabel: row['anchorLabel'] as String?,
           linkedAnchorStart: row['anchorLinkedCharStart'] as int?,
           linkedAnchorEnd: row['anchorLinkedCharEnd'] as int?,
+          anchorSpans: _parseAnchorSpans(row['anchorSpans'] as String?),
         );
       }).toList();
 
@@ -2614,6 +2639,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           anchorLabel: row['anchorLabel'] as String?,
           linkedAnchorStart: row['anchorLinkedCharStart'] as int?,
           linkedAnchorEnd: row['anchorLinkedCharEnd'] as int?,
+          anchorSpans: _parseAnchorSpans(row['anchorSpans'] as String?),
         );
       }).toList();
       return links;
