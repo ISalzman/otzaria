@@ -52,6 +52,46 @@ void main() {
 
       expect(match, same(second));
     });
+
+    test('מחזיר null כשיש כמה ספרים באותה כותרת ואף מזהה לא הכריע', () {
+      final first = TextBook(
+        id: 11,
+        title: 'שבת',
+        categoryPath: '/תלמוד בבלי/סדר מועד',
+        fileType: 'txt',
+      );
+      final second = TextBook(
+        id: 22,
+        title: 'שבת',
+        categoryPath: '/הלכה',
+        fileType: 'txt',
+      );
+
+      final match = BookFacet.findMatchingBook(
+        [first, second],
+        title: 'שבת',
+        type: TextBook,
+      );
+
+      expect(match, isNull);
+    });
+
+    test('מחזיר מועמד יחיד גם ללא מזהים נוספים', () {
+      final only = TextBook(
+        id: 11,
+        title: 'שבת',
+        categoryPath: '/תלמוד בבלי/סדר מועד',
+        fileType: 'txt',
+      );
+
+      final match = BookFacet.findMatchingBook(
+        [only],
+        title: 'שבת',
+        type: TextBook,
+      );
+
+      expect(match, same(only));
+    });
   });
 
   group('BookFacet.resolveTopics fallback normalization', () {

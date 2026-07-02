@@ -400,15 +400,20 @@ class CalendarCubit extends Cubit<CalendarState> {
     final Map<String, ZmanAlertPreference> zmanAlerts =
         _parseZmanAlertPreferences(zmanAlertsJson);
 
-    // טעינת אירועים מהאחסון
+    // טעינת אירועים מהאחסון. פרסור פר-פריט: אירוע פגום אחד לא מאבד
+    // את כל האירועים שהמשתמש שמר.
     List<CustomEvent> events = [];
     try {
       final List<dynamic> eventsList = jsonDecode(eventsJson);
-      events =
-          eventsList.map((eventMap) => CustomEvent.fromJson(eventMap)).toList();
+      for (final eventMap in eventsList) {
+        try {
+          events.add(CustomEvent.fromJson(eventMap));
+        } catch (e) {
+          debugPrint('[Calendar] skipping corrupt saved event: $e');
+        }
+      }
     } catch (e) {
-      // אם יש שגיאה בטעינה, נתחיל עם רשימה ריקה
-      events = [];
+      debugPrint('[Calendar] failed to load saved events: $e');
     }
 
     if (isClosed) return;

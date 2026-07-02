@@ -1155,7 +1155,11 @@ class _PrintingScreenState extends State<PrintingScreen> {
           endLineIndex: selectedEnd,
           targetBookTitles: widget.activeCommentators,
         );
-      } catch (_) {}
+      } catch (e) {
+        // נופלים לנתיב הקבצים — הלוג נדרש כי המפרשים עלולים לצאת שונים
+        debugPrint('[Print] getLinksForBookRange failed for '
+            '"${book.title}": $e');
+      }
     }
 
     // ספרים מבוססי-קבצים: טעינת כל הקישורים וסינון לפי טווח
@@ -1168,7 +1172,10 @@ class _PrintingScreenState extends State<PrintingScreen> {
             .where((l) => l.index1 >= rangeStart && l.index1 <= rangeEnd)
             .toList();
       }
-    } catch (_) {}
+    } catch (e) {
+      // widget.links אינו מסונן לטווח שנבחר — הכשל חייב להיות גלוי בלוג
+      debugPrint('[Print] file links load failed for "${book.title}": $e');
+    }
 
     return widget.links;
   }
@@ -1568,8 +1575,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
       final located = all.where((n) => n.hasLocation).toList();
       _personalNotesCache = located;
       return located;
-    } catch (_) {
-      _personalNotesCache = const <PersonalNote>[];
+    } catch (e) {
+      // לא שומרים בקאש — כשל חולף לא ישמיט את ההערות מכל ההדפסות בדיאלוג
+      debugPrint('[Print] personal notes load failed for "$bookId": $e');
       return const <PersonalNote>[];
     } finally {
       _isLoadingNotes = false;
