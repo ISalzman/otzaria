@@ -304,4 +304,30 @@ void main() {
       expect(back, equals(const CommentatorsVerseStep(0, 2)));
     });
   });
+
+  group('computeVerseStep — חוזה חישוב עצל (רק הנוכחי והשכן מלאים)', () {
+    // _navigateVerse ממלא רק את הפרק הנוכחי ואת השכן בכיוון; שאר הפרקים
+    // ריקים לחיסכון. כאן מוודאים שהחישוב תקין תחת אילוץ זה.
+    test('קדימה: רק הפרק הנוכחי והבא מלאים — חצייה לפרק הבא', () {
+      final lazy = [
+        <int>[], // פרק לפני — לא רלוונטי לכיוון קדימה
+        [0, 1], // נוכחי
+        [0, 1, 2], // שכן בכיוון
+        <int>[], // אחרי — לא רלוונטי
+      ];
+      expect(computeVerseStep(lazy, 1, 1, forward: true),
+          equals(const CommentatorsVerseStep(2, 0)));
+    });
+
+    test('אחורה: רק הפרק הנוכחי והקודם מלאים — חצייה לפרק הקודם', () {
+      final lazy = [
+        <int>[], // לפני — לא רלוונטי
+        [0, 1, 2], // שכן בכיוון (קודם)
+        [0, 1], // נוכחי
+        <int>[], // אחרי — לא רלוונטי
+      ];
+      expect(computeVerseStep(lazy, 2, 0, forward: false),
+          equals(const CommentatorsVerseStep(1, 2)));
+    });
+  });
 }

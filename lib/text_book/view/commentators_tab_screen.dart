@@ -554,10 +554,22 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     _initialChapterResolved = true;
     // בחירת הקטע הספציפי שנפתח (ולא "כל הפרק"), כדי שניווט 'קטע קודם'
     // יתחיל מהקטע הנוכחי ולא מקצה הפרק.
-    if (pos.verseIdx == _kAllChapter) {
-      _onChapterSelected(pos.chapter!, chapters);
+    final chapter = pos.chapter!;
+    var verseIdx = pos.verseIdx;
+    // בפרק ללא תת-פרקים _findPos מחזיר תמיד "כל הפרק"; נגזור את היסט הפסקה
+    // הנפתחת, אך רק אם הוא ניתן לבחירה (אחרת נשאר "כל הפרק").
+    if (verseIdx == _kAllChapter && chapter.children.isEmpty) {
+      final content = state.content;
+      final paraIdx = lineIndex - chapter.index;
+      if (_selectableParagraphOffsets(chapters, chapter, content)
+          .contains(paraIdx)) {
+        verseIdx = paraIdx;
+      }
+    }
+    if (verseIdx == _kAllChapter) {
+      _onChapterSelected(chapter, chapters);
     } else {
-      _selectInChapter(pos.verseIdx, pos.chapter!, chapters);
+      _selectInChapter(verseIdx, chapter, chapters);
     }
   }
 
@@ -821,9 +833,15 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     final content = currentState is TextBookLoaded
         ? currentState.content
         : const <String>[];
-    final selectablePerChapter = [
-      for (final ch in chapters) _selectableForChapter(ch, chapters, content),
-    ];
+    // computeVerseStep נוגע רק בפרק הנוכחי ובשכן בכיוון — שאר הפרקים ריקים
+    // כדי לא לחשב selectable לכל הספר בכל לחיצה (חוסך O(N) בספרים גדולים).
+    final neighborIndex = forward ? ci + 1 : ci - 1;
+    final selectablePerChapter = List<List<int>>.generate(
+      chapters.length,
+      (i) => (i == ci || i == neighborIndex)
+          ? _selectableForChapter(chapters[i], chapters, content)
+          : const [],
+    );
     final step = computeVerseStep(selectablePerChapter, ci, _selectedVerseIdx,
         forward: forward);
     if (step == null) return;
