@@ -116,8 +116,12 @@ void _openDafYomiBookInCategory(
 }
 
 Future<void> _openBook(BuildContext context, Book book, String daf) async {
-  final index = await findReference(book, 'דף ${daf.trim()}') ?? 0;
+  final index = await findReference(book, 'דף ${daf.trim()}');
   if (!context.mounted) return;
+  if (index == null) {
+    UiSnack.showError(UiSnack.sectionNotFound);
+    return;
+  }
   openBook(
     context,
     book,
