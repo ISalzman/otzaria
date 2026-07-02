@@ -80,7 +80,6 @@ class LibrarySettingsPanel extends StatelessWidget {
               title: 'תצוגת ספרייה',
               children: [
                 SettingsActionTile.segmentedTile<String>(
-                  icon: FluentIcons.grid_24_regular,
                   title: 'סוג תצוגה',
                   subtitle: state.libraryViewMode == 'list'
                       ? 'תצוגת רשימה (עץ מתרחב)'

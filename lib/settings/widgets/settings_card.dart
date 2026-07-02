@@ -328,6 +328,8 @@ class SettingsActionTile extends StatelessWidget {
 
   /// שורה עם [AppSegmentedControl].
   /// במסך רחב: מוגבל ל-400px. במסך צר: מתרחב לכל הרוחב.
+  /// כשלאפשרויות ([SegmentOption.icon]) יש אייקונים, אייקון השורה עוקב
+  /// אוטומטית אחרי הבחירה הנוכחית ([icon] משמש רק כברירת מחדל).
   static Widget segmentedTile<T>({
     Key? key,
     IconData? icon,
@@ -657,6 +659,19 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
     _focusedIndex = idx < 0 ? 0 : idx;
   }
 
+  // כשלאפשרויות יש אייקונים משלהן, אייקון הכרטיס עוקב אחרי הבחירה הנוכחית
+  // (כמו בהתראות לוח שנה) — במקום להישאר קבוע לפי [SettingsActionTile.icon].
+  bool get _iconTracksSelection => widget.options.any((o) => o.icon != null);
+
+  IconData? get _leadingIcon {
+    if (!_iconTracksSelection) return widget.icon;
+    final selected = widget.options.firstWhere(
+      (o) => o.value == widget.currentValue,
+      orElse: () => widget.options.first,
+    );
+    return selected.icon ?? widget.icon;
+  }
+
   @override
   void dispose() {
     _focusNode.dispose();
@@ -707,8 +722,8 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
             skipTraversal: true,
             onKeyEvent: _handleKeyEvent,
             child: SettingsActionTile.text(
-              icon: widget.icon,
-              rtlIcon: widget.rtlIcon,
+              icon: _leadingIcon,
+              rtlIcon: _iconTracksSelection ? null : widget.rtlIcon,
               title: widget.title,
               subtitle: widget.subtitle,
               actions: [
@@ -732,7 +747,9 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
             children: [
               ListTile(
                 leading: _buildSettingIcon(
-                    widget.icon, widget.rtlIcon, widget.iconColor),
+                    _leadingIcon,
+                    _iconTracksSelection ? null : widget.rtlIcon,
+                    widget.iconColor),
                 title: _settingTitle(widget.title),
                 subtitle: widget.subtitle != null
                     ? _settingSubtitle(widget.subtitle!)
