@@ -69,32 +69,25 @@ class SmartTextWidget extends StatelessWidget {
             'top': '-0.55em',
           };
         }
-        // סמני עוגן-מילה (link_anchor): אות קטנה מורמת, עם וריאנט טיפוגרפי
-        // קבוע לכל מפרש (ראו anchorStyleIndexByCommentator).
+        // סמני עוגן-מילה (link_anchor): אות קטנה מורמת (עוגן-נקודה) או קו
+        // תחתון על טווח מצוטט (עוגן-טווח), עם וריאנט טיפוגרפי קבוע לכל מפרש
+        // (ראו anchorStyleIndexByCommentator).
         if (element.localName == 'sup' &&
             element.classes.contains('link-anchor')) {
-          final style = <String, String>{
+          return <String, String>{
             'font-size': '0.7em',
             'position': 'relative',
             'top': '-0.55em',
             'white-space': 'nowrap',
+            ..._linkAnchorVariantStyle(element),
           };
-          if (element.classes.contains('link-anchor-0')) {
-            style['font-weight'] = 'bold';
-          } else if (element.classes.contains('link-anchor-1')) {
-            style['font-style'] = 'italic';
-          } else if (element.classes.contains('link-anchor-2')) {
-            style['font-weight'] = 'bold';
-            style['font-style'] = 'italic';
-          } else if (element.classes.contains('link-anchor-3')) {
-            style['font-family'] = 'NotoRashiHebrew';
-          } else if (element.classes.contains('link-anchor-4')) {
-            style['font-family'] = 'NotoRashiHebrew';
-            style['font-weight'] = 'bold';
-          } else if (element.classes.contains('link-anchor-5')) {
-            style['text-decoration'] = 'underline';
-          }
-          return style;
+        }
+        if (element.localName == 'span' &&
+            element.classes.contains('link-anchor-range')) {
+          return <String, String>{
+            'text-decoration': 'underline',
+            ..._linkAnchorVariantStyle(element),
+          };
         }
         return null;
       },
@@ -119,6 +112,29 @@ class SmartTextWidget extends StatelessWidget {
           : null,
     );
   }
+}
+
+/// הווריאנט הטיפוגרפי של סמן/טווח עוגן-מילה לפי מחלקת ה-style שהוקצתה למפרש.
+Map<String, String> _linkAnchorVariantStyle(dom.Element element) {
+  if (element.classes.contains('link-anchor-0')) {
+    return const {'font-weight': 'bold'};
+  }
+  if (element.classes.contains('link-anchor-1')) {
+    return const {'font-style': 'italic'};
+  }
+  if (element.classes.contains('link-anchor-2')) {
+    return const {'font-weight': 'bold', 'font-style': 'italic'};
+  }
+  if (element.classes.contains('link-anchor-3')) {
+    return const {'font-family': 'NotoRashiHebrew'};
+  }
+  if (element.classes.contains('link-anchor-4')) {
+    return const {'font-family': 'NotoRashiHebrew', 'font-weight': 'bold'};
+  }
+  if (element.classes.contains('link-anchor-5')) {
+    return const {'text-decoration': 'underline'};
+  }
+  return const {};
 }
 
 /// גרסה פשוטה יותר של SmartTextWidget שמקבלת פרמטרים בודדים

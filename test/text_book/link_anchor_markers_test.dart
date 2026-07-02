@@ -87,7 +87,8 @@ void main() {
         result,
         contains('<sup class="link-anchor link-anchor-0">(א)</sup>'),
       );
-      // הסמן נכנס צמוד לפני "יתגבר" — אחרי תגי ה-itag הבלתי-נראים.
+      // הסמן נכנס צמוד לפני "יתגבר" — בלי אף תו גלוי בין הסמן למילה
+      // (רק תגי itag בלתי-נראים מותרים בתווך).
       final markerIndex = result.indexOf('<sup class="link-anchor');
       final wordIndex = result.indexOf('יתגבר');
       expect(markerIndex, lessThan(wordIndex));
@@ -95,7 +96,7 @@ void main() {
           markerIndex +
               '<sup class="link-anchor link-anchor-0">(א)</sup>'.length,
           wordIndex);
-      expect(between, isEmpty);
+      expect(between.replaceAll(RegExp(r'<[^>]*>'), ''), isEmpty);
     });
 
     test('כמה מפרשים באותה שורה — סגנון שונה לכל אחד', () {
@@ -162,6 +163,62 @@ void main() {
         styleIndexByCommentator: const {'ספר כלשהו': 0},
       );
       expect(result, 'אבג<sup class="link-anchor link-anchor-0">(ג)</sup>');
+    });
+
+    test('עוגן-טווח (ציטוט) נעטף בקו תחתון בגבולות מדויקים', () {
+      final quote = Link(
+        heRef: 'בראשית פרק א פסוק א',
+        index1: 4,
+        path2: 'בראשית',
+        index2: 1,
+        connectionType: 'quotation',
+        anchorStart: 2,
+        anchorEnd: 5,
+      );
+      final result = injectLinkAnchorMarkers(
+        rawLine: 'אבג דה',
+        anchorLinks: [quote],
+        styleIndexByCommentator: const {'בראשית': 1},
+      );
+      expect(
+        result,
+        'אב<span class="link-anchor-range link-anchor-1">ג ד</span>ה',
+      );
+    });
+
+    test('עוגן-טווח מדלג על תגים בספירת התווים הגלויים', () {
+      final quote = Link(
+        heRef: 'תהלים פרק כג',
+        index1: 4,
+        path2: 'תהלים',
+        index2: 1,
+        connectionType: 'quotation',
+        anchorStart: 1,
+        anchorEnd: 3,
+      );
+      final result = injectLinkAnchorMarkers(
+        rawLine: 'א<b>ב</b>גד',
+        anchorLinks: [quote],
+        styleIndexByCommentator: const {'תהלים': 0},
+      );
+      expect(
+        result,
+        'א<span class="link-anchor-range link-anchor-0"><b>ב</b>ג</span>ד',
+      );
+    });
+
+    test('wrapVisibleRange עוטף טווח בקטע פאנל (הדגשת ציטוט)', () {
+      final result = wrapVisibleRange(
+        html: 'אמר רבי ותלד בן ששי ליעקב',
+        start: 8,
+        end: 19,
+        openTag: '<span class="link-anchor-range">',
+        closeTag: '</span>',
+      );
+      expect(
+        result,
+        'אמר רבי <span class="link-anchor-range">ותלד בן ששי</span> ליעקב',
+      );
     });
 
     test('שורה בלי עוגנים חוזרת כמות שהיא', () {

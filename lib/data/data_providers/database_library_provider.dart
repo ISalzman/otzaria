@@ -280,6 +280,10 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
   final types = LinkTypes.dependentTextTypes.toList();
   final typePlaceholders = List.filled(types.length, '?').join(', ');
   final hasRange = startLineIndex != null && endLineIndex != null;
+  // בשאילתה ההפוכה השורה המוצגת היא צד היעד של הקישור השמור.
+  final hasLinkAnchor = _hasLinkAnchorTable(db);
+  final anchorSelect = _anchorSelectColumns(hasLinkAnchor);
+  final anchorJoin = _anchorJoinClause(hasLinkAnchor, displayedSide: 1);
 
   if (hasRange) {
     // כשיש טווח: מוצאים תחילה את ה-line IDs בטווח דרך idx_line_book_index,
@@ -301,12 +305,14 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
           sb.title as targetBookTitle,
           sb.categoryId as targetCategoryId,
           NULL as targetFileType,
+          $anchorSelect
           'SOURCE' as connectionTypeName
         FROM link l
         JOIN line tl ON l.targetLineId = tl.id
         JOIN line sl ON l.sourceLineId = sl.id
         JOIN book sb ON l.sourceBookId = sb.id
         JOIN connection_type ct ON l.connectionTypeId = ct.id
+        $anchorJoin
         WHERE l.targetLineId IN (
           SELECT id FROM line WHERE bookId = ? AND lineIndex BETWEEN ? AND ?
         )
@@ -326,12 +332,14 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
         sb.title as targetBookTitle,
         sb.categoryId as targetCategoryId,
         NULL as targetFileType,
+        $anchorSelect
         'SOURCE' as connectionTypeName
       FROM link l
       JOIN line tl ON l.targetLineId = tl.id
       JOIN line sl ON l.sourceLineId = sl.id
       JOIN book sb ON l.sourceBookId = sb.id
       JOIN connection_type ct ON l.connectionTypeId = ct.id
+      $anchorJoin
       WHERE l.targetBookId = ?
         AND ct.name IN ($typePlaceholders)
         AND l.sourceBookId != l.targetBookId
@@ -340,7 +348,9 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
 }
 
 /// עוגני-מילה (link_anchor) — קיים רק במסדים חדשים; במסד ישן השאילתות חוזרות
-/// לעמודות NULL. side=0 = העוגן יושב בשורת המקור (צד הבסיס).
+/// לעמודות NULL. side=0 = העוגן יושב בשורת המקור של הקישור, side=1 = בשורת
+/// היעד. `displayedSide` הוא הצד שהשורה שלו מוצגת בגוף הטקסט (הסמן/הטווח
+/// מוזרקים אליה), והצד הנגדי הוא קטע-הפאנל (anchorLinked*).
 bool _hasLinkAnchorTable(sqlite3.Database db) => db
     .select(
       "SELECT 1 FROM sqlite_master WHERE type='table' AND name='link_anchor' LIMIT 1",
@@ -350,19 +360,28 @@ bool _hasLinkAnchorTable(sqlite3.Database db) => db
 String _anchorSelectColumns(bool hasLinkAnchor) => hasLinkAnchor
     ? '''la.charStart as anchorCharStart,
           la.charEnd as anchorCharEnd,
-          la.label as anchorLabel,'''
+          la.label as anchorLabel,
+          lal.charStart as anchorLinkedCharStart,
+          lal.charEnd as anchorLinkedCharEnd,'''
     : '''NULL as anchorCharStart,
           NULL as anchorCharEnd,
-          NULL as anchorLabel,''';
+          NULL as anchorLabel,
+          NULL as anchorLinkedCharStart,
+          NULL as anchorLinkedCharEnd,''';
 
-/// עוגן אחד לכל קישור (MIN(charStart)) — קישור עם עוגן כפול (נדיר) לא יכפיל
-/// את שורת הקישור בפאנל.
-String _anchorJoinClause(bool hasLinkAnchor) => hasLinkAnchor
-    ? '''LEFT JOIN (
+/// עוגן אחד לכל קישור וצד (MIN(charStart)) — קישור עם עוגן כפול (נדיר) לא
+/// יכפיל את שורת הקישור בפאנל.
+String _anchorJoinClause(bool hasLinkAnchor, {required int displayedSide}) =>
+    hasLinkAnchor
+        ? '''LEFT JOIN (
           SELECT linkId, MIN(charStart) AS charStart, charEnd, label
-          FROM link_anchor WHERE side = 0 GROUP BY linkId
-        ) la ON la.linkId = l.id'''
-    : '';
+          FROM link_anchor WHERE side = $displayedSide GROUP BY linkId
+        ) la ON la.linkId = l.id
+        LEFT JOIN (
+          SELECT linkId, MIN(charStart) AS charStart, charEnd
+          FROM link_anchor WHERE side = ${1 - displayedSide} GROUP BY linkId
+        ) lal ON lal.linkId = l.id'''
+        : '';
 
 List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
   required String dbPath,
@@ -403,7 +422,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
         JOIN line tl ON l.targetLineId = tl.id
         JOIN book tb ON l.targetBookId = tb.id
         LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
-        ${_anchorJoinClause(hasLinkAnchor)}
+        ${_anchorJoinClause(hasLinkAnchor, displayedSide: 0)}
         WHERE l.sourceBookId = ?
         ORDER BY sl.lineIndex
       ''', [bookId]).toMapList();
@@ -481,7 +500,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
         JOIN line tl ON l.targetLineId = tl.id
         JOIN book tb ON l.targetBookId = tb.id
         LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
-        ${_anchorJoinClause(hasLinkAnchor)}
+        ${_anchorJoinClause(hasLinkAnchor, displayedSide: 0)}
         WHERE l.sourceBookId = ?
           AND sl.lineIndex BETWEEN ? AND ?
           $commentaryFilterClause
@@ -2529,6 +2548,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
           anchorStart: row['anchorCharStart'] as int?,
           anchorEnd: row['anchorCharEnd'] as int?,
           anchorLabel: row['anchorLabel'] as String?,
+          linkedAnchorStart: row['anchorLinkedCharStart'] as int?,
+          linkedAnchorEnd: row['anchorLinkedCharEnd'] as int?,
         );
       }).toList();
 
@@ -2591,6 +2612,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
           anchorStart: row['anchorCharStart'] as int?,
           anchorEnd: row['anchorCharEnd'] as int?,
           anchorLabel: row['anchorLabel'] as String?,
+          linkedAnchorStart: row['anchorLinkedCharStart'] as int?,
+          linkedAnchorEnd: row['anchorLinkedCharEnd'] as int?,
         );
       }).toList();
       return links;
