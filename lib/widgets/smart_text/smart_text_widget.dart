@@ -72,7 +72,7 @@ class SmartTextWidget extends StatelessWidget {
         // סמני עוגן-מילה (link_anchor): אות קטנה מורמת (עוגן-נקודה) או קו
         // תחתון על טווח מצוטט (עוגן-טווח), עם וריאנט טיפוגרפי קבוע לכל מפרש
         // (ראו anchorStyleIndexByCommentator).
-        if (element.localName == 'sup' &&
+        if (element.localName == 'span' &&
             element.classes.contains('link-anchor')) {
           return <String, String>{
             'font-size': '0.7em',

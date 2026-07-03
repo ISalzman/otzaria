@@ -252,9 +252,10 @@ class _CombinedViewState extends State<CombinedView> {
     int lineIndex0,
     TextBookLoaded state,
   ) {
-    final anchorLinks = state.links
-        .where(
-            (link) => link.index1 == lineIndex0 + 1 && link.anchorStart != null)
+    // linksByLine ולא state.links: סינון על כל קישורי הספר (עשרות אלפים)
+    // פר-שורה פר-build מקרטע את הגלילה.
+    final anchorLinks = (state.linksByLine[lineIndex0 + 1] ?? const <Link>[])
+        .where((link) => link.anchorStart != null)
         .toList();
     if (anchorLinks.isEmpty) return rawLine;
     return injectLinkAnchorMarkers(
