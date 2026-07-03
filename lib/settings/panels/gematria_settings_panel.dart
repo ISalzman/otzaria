@@ -138,7 +138,7 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
           children: [
             SettingsActionTile.dropdownTile<int>(
               icon: FluentIcons.number_row_24_regular,
-              title: 'מספר תוצאות מקסימלי',
+              title: 'מספר תוצאות',
               subtitle: 'כמות התוצאות המקסימלית להצגה',
               value: maxResults,
               entries: [50, 100, 200, 500, 1000]

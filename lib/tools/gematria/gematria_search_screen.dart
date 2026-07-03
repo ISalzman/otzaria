@@ -26,7 +26,7 @@ class GematriaSearchScreen extends StatefulWidget {
 }
 
 class GematriaSearchScreenState extends State<GematriaSearchScreen> {
-  static const double _settingsPanelWidth = 360;
+  static const double _settingsPanelWidth = 400;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
