@@ -85,16 +85,16 @@ void main() {
       );
       expect(
         result,
-        contains('<sup class="link-anchor link-anchor-0">(א)</sup>'),
+        contains('<span class="link-anchor link-anchor-0">(א)</span>'),
       );
       // הסמן נכנס צמוד לפני "יתגבר" — בלי אף תו גלוי בין הסמן למילה
       // (רק תגי itag בלתי-נראים מותרים בתווך).
-      final markerIndex = result.indexOf('<sup class="link-anchor');
+      final markerIndex = result.indexOf('<span class="link-anchor');
       final wordIndex = result.indexOf('יתגבר');
       expect(markerIndex, lessThan(wordIndex));
       final between = result.substring(
           markerIndex +
-              '<sup class="link-anchor link-anchor-0">(א)</sup>'.length,
+              '<span class="link-anchor link-anchor-0">(א)</span>'.length,
           wordIndex);
       expect(between.replaceAll(RegExp(r'<[^>]*>'), ''), isEmpty);
     });
@@ -119,14 +119,14 @@ void main() {
         anchorLinks: [bhg, baerHetev],
         styleIndexByCommentator: styles,
       );
-      expect(result, contains('link-anchor-${styles[bhg.path2]}">(א)</sup>'));
+      expect(result, contains('link-anchor-${styles[bhg.path2]}">(א)</span>'));
       expect(
         result,
-        contains('link-anchor-${styles[baerHetev.path2]}">(א)</sup>'),
+        contains('link-anchor-${styles[baerHetev.path2]}">(א)</span>'),
       );
       // העוגן של באר היטב (41) יושב אחרי "יתגבר " — לפני "כארי".
       final hetevMarker =
-          '<sup class="link-anchor link-anchor-${styles[baerHetev.path2]}">(א)</sup>';
+          '<span class="link-anchor link-anchor-${styles[baerHetev.path2]}">(א)</span>';
       expect(result.indexOf(hetevMarker), lessThan(result.indexOf('כארי')));
       expect(result.indexOf(hetevMarker), greaterThan(result.indexOf('יתגבר')));
     });
@@ -146,7 +146,7 @@ void main() {
       );
       expect(
         result,
-        'אב&nbsp;<sup class="link-anchor link-anchor-1">(ב)</sup>גד',
+        'אב&nbsp;<span class="link-anchor link-anchor-1">(ב)</span>גד',
       );
     });
 
@@ -162,7 +162,50 @@ void main() {
         anchorLinks: [link],
         styleIndexByCommentator: const {'ספר כלשהו': 0},
       );
-      expect(result, 'אבג<sup class="link-anchor link-anchor-0">(ג)</sup>');
+      expect(result, 'אבג<span class="link-anchor link-anchor-0">(ג)</span>');
+    });
+
+    test('סמן על גבול אלמנט נכנס אחרי תג הסגירה, לא בתוכו', () {
+      final link = _anchorLink(
+        heRef: 'ספר כלשהו א, א',
+        path2: 'ספר כלשהו',
+        anchorStart: 2,
+        anchorLabel: 'א',
+      );
+      final result = injectLinkAnchorMarkers(
+        rawLine: '<b>אב</b>גד',
+        anchorLinks: [link],
+        styleIndexByCommentator: const {'ספר כלשהו': 0},
+      );
+      // הסמן שייך ל"ג" שמחוץ ל-<b> — בתוך התג הוא היה יורש את ההדגשה
+      // (או את הקליק, אם התג הסוגר הוא <a>).
+      expect(
+        result,
+        '<b>אב</b><span class="link-anchor link-anchor-0">(א)</span>גד',
+      );
+    });
+
+    test('הסמנים נפלטים כ-span ולא כ-sup (כמה sup בפסקת RTL מתהפכים)', () {
+      final first = _anchorLink(
+        heRef: 'ספר ראשון א, א',
+        path2: 'ספר ראשון',
+        anchorStart: 0,
+        anchorLabel: 'א',
+      );
+      final second = _anchorLink(
+        heRef: 'ספר שני א, ב',
+        path2: 'ספר שני',
+        anchorStart: 3,
+        anchorLabel: 'ב',
+      );
+      final result = injectLinkAnchorMarkers(
+        rawLine: 'אב גד',
+        anchorLinks: [first, second],
+        styleIndexByCommentator: const {'ספר ראשון': 0, 'ספר שני': 1},
+      );
+      expect(result, isNot(contains('<sup')));
+      // סדר האותיות הלוגי נשמר: (א) לפני (ב).
+      expect(result.indexOf('(א)'), lessThan(result.indexOf('(ב)')));
     });
 
     test('עוגן-טווח (ציטוט) נעטף בקו תחתון בגבולות מדויקים', () {
@@ -232,7 +275,7 @@ void main() {
         },
       );
       expect(
-        RegExp('link-anchor-1">\\(א\\)</sup>').allMatches(result).length,
+        RegExp('link-anchor-1">\\(א\\)</span>').allMatches(result).length,
         2,
       );
     });

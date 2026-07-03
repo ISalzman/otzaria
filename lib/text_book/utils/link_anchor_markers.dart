@@ -87,11 +87,13 @@ String injectLinkAnchorMarkers({
       } else {
         final letter = _letterFor(link, span.label);
         if (letter == null) continue;
+        // span ולא sup: HtmlWidget מממש sup כ-WidgetSpan, ושניים+ בפסקת RTL
+        // מוצגים בסדר תוכן הפוך. ההגבהה נעשית ב-CSS (customStylesBuilder).
         points.add((
           at: span.start,
           order: 1,
           html:
-              '<sup class="link-anchor link-anchor-$styleIndex">($letter)</sup>',
+              '<span class="link-anchor link-anchor-$styleIndex">($letter)</span>',
         ));
       }
     }
@@ -207,9 +209,12 @@ String _injectAtVisibleOffsets(
   while (i < len) {
     final c = rawLine[i];
     if (c == '<') {
-      // אירועים שהגיע זמנם נכנסים לפני התג — כך פתיחת/סגירת טווח לא חוצה
-      // תגים סמוכים (<b>, itags) והקינון נשאר תקין.
-      flushMarkersAt(visible);
+      // הסמן שייך לתו הגלוי *הבא*: לפני תג פתיחה הוא נכנס עכשיו, אבל תג
+      // סגירה נכתב קודם — אחרת הסמן נבלע בתוך האלמנט הנסגר ויורש את עיצובו.
+      final isClosingTag = i + 1 < len && rawLine[i + 1] == '/';
+      if (!isClosingTag) {
+        flushMarkersAt(visible);
+      }
       final close = rawLine.indexOf('>', i);
       if (close < 0) {
         out.write(rawLine.substring(i));
