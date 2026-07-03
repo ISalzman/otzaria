@@ -1723,16 +1723,12 @@ class _CombinedViewState extends State<CombinedView> {
                         // איסוף קישורי inline (start/end מתייחסים לטקסט המקורי)
                         List<Link> linksForLine = const [];
                         if (settingsState.enableHtmlLinks) {
-                          try {
-                            linksForLine = state.links
-                                .where((link) =>
-                                    link.index1 == primaryLineIndex + 1 &&
-                                    link.start != null &&
-                                    link.end != null)
-                                .toList();
-                          } catch (e) {
-                            linksForLine = const [];
-                          }
+                          linksForLine =
+                              (state.linksByLine[primaryLineIndex + 1] ??
+                                      const <Link>[])
+                                  .where((link) =>
+                                      link.start != null && link.end != null)
+                                  .toList();
                         }
 
                         // הזרקת סימוני הערות אישיות (וקישורי inline) ל-HTML.
@@ -1950,18 +1946,13 @@ class _CombinedViewState extends State<CombinedView> {
     // מתקיימים יחד איתם: start/end מגיעים רק מקבצי ספרייה, עוגנים רק מהמסד).
     var textWithLinks = _injectAnchorMarkersForLine(rawText, lineIndex, state);
     if (settingsState.enableHtmlLinks) {
-      try {
-        final linksForLine = state.links
-            .where((link) =>
-                link.index1 == lineIndex + 1 &&
-                link.start != null &&
-                link.end != null)
-            .toList();
-        if (linksForLine.isNotEmpty) {
-          textWithLinks = addInlineLinksToText(textWithLinks, linksForLine);
-        }
-      } catch (_) {
-        // הזרקת קישורי inline נכשלה — נשארים עם הטקסט (כולל סמני העוגן).
+      // linksByLine ולא state.links: שליפה ב-O(1) במקום סינון כל קישורי הספר
+      // פר-שורה. מוזרק על textWithLinks (שכבר כולל סמני עוגן) כדי לשמרם.
+      final linksForLine = (state.linksByLine[lineIndex + 1] ?? const <Link>[])
+          .where((link) => link.start != null && link.end != null)
+          .toList();
+      if (linksForLine.isNotEmpty) {
+        textWithLinks = addInlineLinksToText(textWithLinks, linksForLine);
       }
     }
 
