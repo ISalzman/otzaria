@@ -224,7 +224,9 @@ class BookFacet {
     );
     if (byFileType != null) return byFileType;
 
-    return candidates.first;
+    // כמה ספרים באותה כותרת ואף מזהה לא הכריע — בחירה שרירותית הייתה
+    // משבצת את התוצאה תחת facet שגוי; עדיף null והקורא ימשיך ל-fallback.
+    return candidates.length == 1 ? candidates.first : null;
   }
 
   static Future<String> _buildCategoryPath(

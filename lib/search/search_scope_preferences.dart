@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 
 class SearchScopePreferencesData {
@@ -48,10 +49,12 @@ class SearchScopePreferences {
         searchAllCategories: searchAll,
         manualFacets: facets,
       );
-    } catch (_) {
-      return const SearchScopePreferencesData(
-        searchAllCategories: true,
-        manualFacets: {},
+    } catch (e) {
+      // JSON פגום מאפס רק את ה-facets — לא את העדפת 'חפש בהכל' שנקראה
+      debugPrint('[SearchScope] manual facets JSON parse failed: $e');
+      return _canonicalize(
+        searchAllCategories: searchAll,
+        manualFacets: const {},
       );
     }
   }

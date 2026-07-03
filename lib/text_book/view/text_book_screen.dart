@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:async';
 import 'dart:ui' as ui;
+import 'package:collection/collection.dart' show IterableExtension;
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -314,41 +315,20 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         debugPrint('  ... and ${learnableItems.length - 10} more items');
       }
 
-      try {
-        // חיפוש לפי displayLabel או partName שמכיל את שם הכותרת
-        targetItem = learnableItems.firstWhere(
-          (item) {
-            // בדיקה לפי displayLabel
-            if (item.displayLabel != null &&
-                item.displayLabel!.contains(searchTitle)) {
-              return true;
-            }
-            // בדיקה לפי partName
-            if (item.partName.contains(searchTitle)) {
-              return true;
-            }
-            // בדיקה לפי hierarchyPath
-            if (item.hierarchyPath.any((path) => path.contains(searchTitle))) {
-              return true;
-            }
-            return false;
-          },
-        );
-      } catch (e) {
-        // אם לא מצאנו בחיפוש מדויק, ננסה חיפוש חלקי
-        try {
-          targetItem = learnableItems.firstWhere(
-            (item) {
-              final itemTitle = item.displayLabel ?? item.partName;
-              final searchWords = searchTitle.split(' ');
-              return searchWords
-                  .any((word) => word.length > 2 && itemTitle.contains(word));
-            },
-          );
-        } catch (e2) {
-          targetItem = null;
-        }
-      }
+      // חיפוש לפי displayLabel או partName שמכיל את שם הכותרת. בכוונה אין
+      // התאמה חלקית לפי מילים בודדות — היא סימנה התקדמות על פריט שגוי.
+      targetItem = learnableItems.firstWhereOrNull(
+        (item) {
+          if (item.displayLabel != null &&
+              item.displayLabel!.contains(searchTitle)) {
+            return true;
+          }
+          if (item.partName.contains(searchTitle)) {
+            return true;
+          }
+          return item.hierarchyPath.any((path) => path.contains(searchTitle));
+        },
+      );
 
       if (targetItem == null) {
         throw Exception('$searchTitle לא נמצא בשמור וזכור');

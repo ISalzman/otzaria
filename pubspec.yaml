@@ -115,6 +115,12 @@ dependency_overrides:
   # quill_native_bridge_windows 0.0.2, מה ששבר את בניית Windows.
   # 5.15.0 מחזירה את הקבוע. ראה quill_native_bridge_windows.dart:138.
   win32: ^5.15.0
+  # flutter_inappwebview_windows היא תלות עקיפה שנמשכת מ-pub.dev, וחסר בה
+  # תיקון גלילת הטאצ'פד; מכריחים את גרסת ה-fork כדי שתיכנס לכל הבילדים.
+  flutter_inappwebview_windows:
+    git:
+      url: https://github.com/Otzaria/flutter_inappwebview
+      path: flutter_inappwebview_windows
 
 flutter_launcher_icons:
   android: true

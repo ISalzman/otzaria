@@ -189,7 +189,12 @@ void _clearErrorLogOnVersionChange() {
       if (logFile.existsSync()) {
         logFile.deleteSync();
       }
-    } catch (_) {}
+    } catch (error) {
+      // ניקוי לא-קריטי: הלוג הישן יישאר, אבל שלא בשקט מוחלט.
+      if (kDebugMode) {
+        debugPrint('Failed to clear old error log: $error');
+      }
+    }
   }
   Settings.setValue(_kLastSeenVersion, currentVersion);
 }
@@ -522,7 +527,11 @@ Future<void> _initializeProcessSingletons() async {
   Future<void> initSettingsAndWindow() async {
     try {
       await Settings.init(cacheProvider: HiveCache());
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // ה-fallback משנה את מקור ההגדרות; קוד אחר (גיבוי, טיוטות) ניגש
+      // ישירות ל-Hive box ויקבל ריק — חובה שהכשל יהיה גלוי בלוג.
+      _logNonFatalInitializationError(
+          'Settings.init with HiveCache', error, stackTrace);
       await Settings.init(cacheProvider: SharePreferenceCache());
     }
 

@@ -4039,6 +4039,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     if (!context.mounted) return;
 
+    if (index == null) {
+      UiSnack.show('לא נמצא מיקום תואם בטקסט — הספר נפתח מתחילתו');
+    }
     openBook(context, textBook, index ?? 0, '',
         ignoreHistory: true, insertAdjacent: true);
   }
@@ -4219,6 +4222,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
                 if (!context.mounted) return;
 
+                if (index == null) {
+                  UiSnack.show('לא נמצא מיקום תואם בטקסט — הספר נפתח מתחילתו');
+                }
                 openBook(context, snapshot.data!, index ?? 0, '',
                     ignoreHistory: true, insertAdjacent: true);
               })

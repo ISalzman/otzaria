@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/printing/print_content_models.dart';
 import 'package:otzaria/services/commentary_service.dart';
@@ -31,7 +32,10 @@ Future<List<PrintBlock>> buildCommentaryPrintBlocks(
       String text;
       try {
         text = stripHtmlIfNeeded(await resolve(link)).trim();
-      } catch (_) {
+      } catch (e) {
+        // הקטע יושמט מהפלט המודפס — לוג כדי שהחוסר יהיה ניתן לאבחון
+        debugPrint('[Print] commentary resolve failed for '
+            '"${group.bookTitle}" (${link.path2}): $e');
         continue;
       }
       if (text.isEmpty) continue;

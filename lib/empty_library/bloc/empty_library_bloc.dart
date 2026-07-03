@@ -444,9 +444,10 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       emit(EmptyLibraryDirectorySelected(selectedPath: event.libraryPath));
     } catch (e) {
       // זיהוי שגיאת חוסר מקום (ENOSPC / No space left)
-      final isNoSpace = e.toString().contains('No space') ||
-          e.toString().contains('ENOSPC') ||
-          e.toString().contains('28');
+      final isNoSpace =
+          (e is FileSystemException && e.osError?.errorCode == 28) ||
+              e.toString().contains('No space') ||
+              e.toString().contains('ENOSPC');
       final msg = isNoSpace
           ? 'אין מספיק מקום פנוי. בחר "העבר" (מחיקת מקור) כדי לפנות מקום, '
               'או פנה מקום ידנית ונסה שוב.'
