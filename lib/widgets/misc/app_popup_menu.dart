@@ -452,6 +452,7 @@ Future<T?> showAnchoredAppSearchMenu<T>({
   Offset offset = const Offset(0, 4),
   List<String>? filterLabels,
   List<bool Function(AppMenuEntry<T>)?>? filterPredicates,
+  int initialFilter = 0,
   double? menuMinWidth,
 }) async {
   if (entries.isEmpty) return null;
@@ -493,15 +494,25 @@ Future<T?> showAnchoredAppSearchMenu<T>({
       ? targetRect.bottom + offset.dy
       : targetRect.top - menuHeight - offset.dy;
 
-  // הרוחב הוא הגדול מבין: הרוחב שהמפעיל ביקש (menuMinWidth), הרוחב
-  // הדרוש כדי להציג את הפריט הארוך ביותר בלי קיצוץ, ורוחב השדה המפעיל.
-  // מוגבל לרוחב ה-overlay כדי שה-clamp לא יקבל גבול עליון שלילי.
+  // הרוחב הוא הגדול מבין: הרוחב שהמפעיל ביקש (menuMinWidth), הרוחב הדרוש
+  // לפריט הארוך ביותר, רוחב שורת צ'יפי הסינון (כדי שכולם ייראו בלי גלילה),
+  // ורוחב השדה המפעיל. מוגבל לרוחב ה-overlay כדי שה-clamp לא יקבל גבול שלילי.
   final preferredWidth = calculateAppMenuPreferredWidth(metrics, entries);
-  final effectiveWidth = [menuMinWidth ?? 0.0, preferredWidth, targetRect.width]
-      .reduce(max)
-      .clamp(0.0, overlay.size.width);
+  final filterRowWidth =
+      hasFilters ? _calculateFilterRowWidth(metrics, filterLabels) : 0.0;
+  final effectiveWidth = [
+    menuMinWidth ?? 0.0,
+    preferredWidth,
+    filterRowWidth,
+    targetRect.width
+  ].reduce(max).clamp(0.0, overlay.size.width);
+  // ברירת מחדל (RTL): הקצה הימני של התפריט מיושר לקצה הימני של הכפתור,
+  // והתפריט מתרחב שמאלה. אם ההתרחבות שמאלה חורגת מקצה החלון — מיישרים לקצה
+  // השמאלי של הכפתור ומתרחבים ימינה (פנימה), כדי שהתפריט לא יבלוט מהחלון.
   final rawMenuLeft = targetRect.right - effectiveWidth;
-  final menuLeft = rawMenuLeft.clamp(0.0, overlay.size.width - effectiveWidth);
+  final maxLeft = max(0.0, overlay.size.width - effectiveWidth);
+  final menuLeft =
+      (rawMenuLeft >= 0 ? rawMenuLeft : targetRect.left).clamp(0.0, maxLeft);
 
   return Navigator.of(context).push<T>(
     _AnchoredSearchMenuRoute<T>(
@@ -517,6 +528,7 @@ Future<T?> showAnchoredAppSearchMenu<T>({
       metrics: metrics,
       filterLabels: filterLabels,
       filterPredicates: filterPredicates,
+      initialFilter: initialFilter,
     ),
   );
 }
@@ -529,6 +541,7 @@ class _AnchoredSearchMenuRoute<T> extends PopupRoute<T> {
   final AppMenuMetrics metrics;
   final List<String>? filterLabels;
   final List<bool Function(AppMenuEntry<T>)?>? filterPredicates;
+  final int initialFilter;
 
   _AnchoredSearchMenuRoute({
     required this.anchorRect,
@@ -538,6 +551,7 @@ class _AnchoredSearchMenuRoute<T> extends PopupRoute<T> {
     required this.metrics,
     this.filterLabels,
     this.filterPredicates,
+    this.initialFilter = 0,
   });
 
   @override
@@ -567,6 +581,7 @@ class _AnchoredSearchMenuRoute<T> extends PopupRoute<T> {
       animation: animation,
       filterLabels: filterLabels,
       filterPredicates: filterPredicates,
+      initialFilter: initialFilter,
     );
   }
 }
@@ -580,6 +595,7 @@ class _AnchoredSearchMenuContent<T> extends StatefulWidget {
   final Animation<double> animation;
   final List<String>? filterLabels;
   final List<bool Function(AppMenuEntry<T>)?>? filterPredicates;
+  final int initialFilter;
 
   const _AnchoredSearchMenuContent({
     required this.anchorRect,
@@ -590,6 +606,7 @@ class _AnchoredSearchMenuContent<T> extends StatefulWidget {
     required this.animation,
     this.filterLabels,
     this.filterPredicates,
+    this.initialFilter = 0,
   });
 
   @override
@@ -603,11 +620,14 @@ class _AnchoredSearchMenuContentState<T>
   late final FocusNode _searchFocus;
   late final ScrollController _scrollController;
   String _query = '';
-  int _activeFilter = 0;
+  late int _activeFilter;
 
   @override
   void initState() {
     super.initState();
+    final filterCount = widget.filterLabels?.length ?? 0;
+    _activeFilter =
+        filterCount == 0 ? 0 : widget.initialFilter.clamp(0, filterCount - 1);
     _searchController = TextEditingController();
     _searchFocus = FocusNode();
     _scrollController = ScrollController();
@@ -1029,6 +1049,34 @@ double calculateAppMenuPreferredWidth<T>(
       _kCheckmarkGap;
 
   return max(metrics.menuMinWidth, maxLabelWidth + occupiedWidth);
+}
+
+/// מחשב את רוחב שורת צ'יפי הסינון (סכום כל הצ'יפים + רווחים + ריפוד השורה),
+/// כדי שרוחב התפריט יבטיח שכל הצ'יפים ייראו בלי גלילה אופקית.
+/// הקבועים תואמים את רינדור הצ'יפים ב-[_AnchoredSearchMenuContent].
+double _calculateFilterRowWidth(AppMenuMetrics metrics, List<String> labels) {
+  // ריפוד ה-Padding העוטף (EdgeInsets.fromLTRB(8, 0, 8, 4)) + רווח בין צ'יפים.
+  const double rowHorizontalPadding = 16.0;
+  const double chipGap = 6.0;
+  // מסגרת הצ'יפ: labelPadding (8+8) + padding (2+2) בניכוי צמצום compact, עם מרווח ביטחון.
+  const double chipChrome = 22.0;
+
+  final chipTextStyle = TextStyle(
+    fontFamily: 'Roboto',
+    fontSize: metrics.fontSize - 1,
+  );
+
+  var total = rowHorizontalPadding;
+  for (var i = 0; i < labels.length; i++) {
+    if (i > 0) total += chipGap;
+    final painter = TextPainter(
+      text: TextSpan(text: labels[i], style: chipTextStyle),
+      textDirection: TextDirection.rtl,
+      maxLines: 1,
+    )..layout();
+    total += painter.width + chipChrome;
+  }
+  return total;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

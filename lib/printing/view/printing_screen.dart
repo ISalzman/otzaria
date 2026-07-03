@@ -34,7 +34,23 @@ import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/printing/view/widgets/printing_widgets.dart';
 
-enum _PrintRangeMode { headers, altHeaders, lines }
+enum _AnchorKind { header, altHeader, line }
+
+/// נקודת קצה לטווח ההדפסה — כותרת, כותרת משנה, או מספר שורה.
+/// שתי נקודות הקצה (התחלה/עד) עצמאיות בסוגן, כך שניתן להתחיל בכותרת ולסיים בשורה.
+@immutable
+class _RangeAnchor {
+  final _AnchorKind kind;
+  final int index;
+  const _RangeAnchor(this.kind, this.index);
+
+  @override
+  bool operator ==(Object other) =>
+      other is _RangeAnchor && other.kind == kind && other.index == index;
+
+  @override
+  int get hashCode => Object.hash(kind, index);
+}
 
 class PrintingScreen extends StatefulWidget {
   final Future<String> data;
@@ -151,14 +167,15 @@ class _PrintingScreenState extends State<PrintingScreen> {
   bool _isLoadingNotes = false;
   Timer? _previewRefreshTimer;
 
-  // מצב בחירה: שורות, כותרות, או כותרות משנה
-  _PrintRangeMode _rangeMode = _PrintRangeMode.headers;
-  int? _startHeaderIndex;
-  int? _endHeaderIndex;
+  // נקודות הקצה של טווח ההדפסה — כל אחת עצמאית בסוגה (כותרת/כותרת משנה/שורה).
+  _RangeAnchor? _startAnchor;
+  _RangeAnchor? _endAnchor;
   List<TocEntry> _flatHeaders = [];
-  int? _startAltHeaderIndex;
-  int? _endAltHeaderIndex;
   List<TocEntry> _flatAltHeaders = [];
+
+  // מטמון פריטי התפריט (כותרות + כותרות משנה + שורות) — נבנה פעם אחת כדי
+  // לא לבנות אלפי פריטי שורה בכל build.
+  List<AppMenuEntry<_RangeAnchor>>? _anchorEntries;
 
   // הגדרות ניקוד וטעמים - ברירת מחדל לפי תצוגת הספר
   late bool _removeNikud;
@@ -200,7 +217,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
     // במצב PDF חיצוני (כמו "צורת הדף") אין טווח שורות/כותרות.
     if (widget.createPdfOverride != null) {
-      _rangeMode = _PrintRangeMode.lines;
       _flatHeaders = const [];
       _pageLabels = buildPdfPageLabels(widget.pdfOutline);
       if (widget.initialPage != null) {
@@ -214,7 +230,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
     // מצב בלוקים מוכנים (כרטיסיית מפרשים): אין טווח שורות/כותרות.
     if (widget.prebuiltBlocks != null) {
-      _rangeMode = _PrintRangeMode.lines;
       _flatHeaders = const [];
       _renderPreview();
       return;
@@ -223,19 +238,18 @@ class _PrintingScreenState extends State<PrintingScreen> {
     // יצירת רשימה שטוחה של כל הכותרות
     _flatHeaders = _flattenHeaders(widget.tableOfContents);
 
-    // אם יש כותרות, אתחל את מצב הכותרות -
-    // ברירת המחדל היא הכותרת האחרונה שמופיעה לפני השורה הראשונה הנראית
-    // (ועד הכותרת הבאה, באמצעות _applyHeaderRange)
+    // ברירת המחדל היא הכותרת האחרונה שלפני השורה הנראית (ועד סוף אותה כותרת);
+    // בלי כותרות — טווח שורות מסביב לשורה הראשונה הנראית.
     if (_flatHeaders.isNotEmpty) {
       final lastHeader = findLastHeaderIndexAtOrBefore(
         _flatHeaders,
         widget.startLine,
       );
-      _startHeaderIndex = lastHeader;
-      _endHeaderIndex = lastHeader;
+      _startAnchor = _RangeAnchor(_AnchorKind.header, lastHeader);
+      _endAnchor = _RangeAnchor(_AnchorKind.header, lastHeader);
     } else {
-      // אם אין כותרות, עבור למצב שורות
-      _rangeMode = _PrintRangeMode.lines;
+      _startAnchor = _RangeAnchor(_AnchorKind.line, widget.startLine);
+      _endAnchor = _RangeAnchor(_AnchorKind.line, widget.startLine + 2);
     }
 
     _initPreviewRange();
@@ -249,6 +263,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
       _dataFuture = widget.data;
       _cachedBasePdf = null;
       _cachedBaseKey = null;
+      _anchorEntries = null; // מספר השורות עשוי להשתנות — נבנה מחדש
       _initPreviewRange();
     }
   }
@@ -264,52 +279,58 @@ class _PrintingScreenState extends State<PrintingScreen> {
   Future<int> _totalLineCount() async => (await _dataFuture).split('\n').length;
 
   Future<void> _applyCurrentRange() async {
-    if (_rangeMode == _PrintRangeMode.headers) {
-      await _applyHeaderRange();
-      return;
-    }
-    if (_rangeMode == _PrintRangeMode.altHeaders) {
-      await _applyAltHeaderRange();
-      return;
-    }
     final totalLines = await _totalLineCount();
-    if (endLine <= startLine) {
-      endLine = min(startLine + 3, totalLines);
-    } else {
+    if (!mounted) return;
+
+    final s = _anchorStartLine(_startAnchor, totalLines);
+    final e = _anchorEndLine(_endAnchor, totalLines);
+    // מצב PDF/בלוקים — אין עוגנים, משאירים את הטווח כפי שהוא (מוגבל לגבולות).
+    if (s == null || e == null) {
       startLine = startLine.clamp(0, totalLines);
       endLine = endLine.clamp(startLine, totalLines);
+      return;
+    }
+    startLine = s.clamp(0, totalLines);
+    endLine = e.clamp(startLine, totalLines);
+  }
+
+  /// שורת ההתחלה של עוגן: כותרת/כותרת משנה → שורת הכותרת; שורה → השורה עצמה.
+  int? _anchorStartLine(_RangeAnchor? anchor, int totalLines) {
+    if (anchor == null) return null;
+    switch (anchor.kind) {
+      case _AnchorKind.header:
+        if (_flatHeaders.isEmpty) return null;
+        return _flatHeaders[anchor.index.clamp(0, _flatHeaders.length - 1)]
+            .index;
+      case _AnchorKind.altHeader:
+        if (_flatAltHeaders.isEmpty) return null;
+        return _flatAltHeaders[
+                anchor.index.clamp(0, _flatAltHeaders.length - 1)]
+            .index;
+      case _AnchorKind.line:
+        return anchor.index;
     }
   }
 
-  Future<void> _applyAltHeaderRange() async {
-    if (_startAltHeaderIndex == null || _endAltHeaderIndex == null) return;
-    if (_flatAltHeaders.isEmpty) return;
-
-    final startEntry = _flatAltHeaders[_startAltHeaderIndex!];
-    final totalLines = await _totalLineCount();
-    if (!mounted) return;
-
-    startLine = startEntry.index;
-    if (_endAltHeaderIndex! < _flatAltHeaders.length - 1) {
-      endLine = _flatAltHeaders[_endAltHeaderIndex! + 1].index;
-    } else {
-      endLine = totalLines;
-    }
-  }
-
-  Future<void> _applyHeaderRange() async {
-    if (_startHeaderIndex == null || _endHeaderIndex == null) return;
-    if (_flatHeaders.isEmpty) return;
-
-    final startHeader = _flatHeaders[_startHeaderIndex!];
-    final totalLines = await _totalLineCount();
-    if (!mounted) return;
-
-    startLine = startHeader.index;
-    if (_endHeaderIndex! < _flatHeaders.length - 1) {
-      endLine = _flatHeaders[_endHeaderIndex! + 1].index;
-    } else {
-      endLine = totalLines;
+  /// שורת הסיום (בלעדית) של עוגן: כותרת → תחילת הכותרת הבאה (או סוף הספר);
+  /// שורה → השורה שאחריה, כך שהשורה הנבחרת נכללת.
+  int? _anchorEndLine(_RangeAnchor? anchor, int totalLines) {
+    if (anchor == null) return null;
+    switch (anchor.kind) {
+      case _AnchorKind.header:
+        if (_flatHeaders.isEmpty) return null;
+        final i = anchor.index.clamp(0, _flatHeaders.length - 1);
+        return i < _flatHeaders.length - 1
+            ? _flatHeaders[i + 1].index
+            : totalLines;
+      case _AnchorKind.altHeader:
+        if (_flatAltHeaders.isEmpty) return null;
+        final i = anchor.index.clamp(0, _flatAltHeaders.length - 1);
+        return i < _flatAltHeaders.length - 1
+            ? _flatAltHeaders[i + 1].index
+            : totalLines;
+      case _AnchorKind.line:
+        return anchor.index + 1;
     }
   }
 
@@ -334,12 +355,12 @@ class _PrintingScreenState extends State<PrintingScreen> {
       );
       setState(() {
         _flatAltHeaders = altEntries;
-        _startAltHeaderIndex = lastAlt;
-        _endAltHeaderIndex = lastAlt;
-        // אם אין ניווט רגיל, עבור אוטומטית למצב כותרות משנה
+        _anchorEntries = null; // נבנה מחדש עם כותרות המשנה
+        // בלי ניווט רגיל — ברירת המחדל היא כותרות המשנה.
         if (_flatHeaders.isEmpty) {
-          _rangeMode = _PrintRangeMode.altHeaders;
-          _updateRangeByAltHeaders();
+          _startAnchor = _RangeAnchor(_AnchorKind.altHeader, lastAlt);
+          _endAnchor = _RangeAnchor(_AnchorKind.altHeader, lastAlt);
+          _updateRangeFromAnchors();
         }
       });
     } catch (e) {
@@ -347,13 +368,12 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
   }
 
-  void _updateRangeByAltHeaders() async {
-    if (_startAltHeaderIndex != null && _endAltHeaderIndex != null) {
-      await _applyAltHeaderRange();
-      if (!mounted) return;
-      _refreshPreview(immediate: true);
-      setState(() {});
-    }
+  /// מעדכן את טווח השורות מהעוגנים ומרענן את התצוגה המקדימה.
+  void _updateRangeFromAnchors() async {
+    await _applyCurrentRange();
+    if (!mounted) return;
+    _refreshPreview(immediate: true);
+    setState(() {});
   }
 
   @override
@@ -394,16 +414,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
       }
     }
     return result;
-  }
-
-  // עדכון טווח השורות לפי כותרות נבחרות
-  void _updateRangeByHeaders() async {
-    if (_startHeaderIndex != null && _endHeaderIndex != null) {
-      await _applyHeaderRange();
-      if (!mounted) return;
-      _refreshPreview(immediate: true);
-      setState(() {});
-    }
   }
 
   void _refreshPreview({bool immediate = false}) {
@@ -1634,6 +1644,135 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
   }
 
+  /// שם הצ'יפ (סוג העוגן) — לתוויות הסינון בתפריט ולבחירת הצ'יפ הפעיל בפתיחתו.
+  String _kindChipLabel(_AnchorKind kind) => switch (kind) {
+        _AnchorKind.header => 'כותרות',
+        _AnchorKind.altHeader => 'כותרות משנה',
+        _AnchorKind.line => 'שורות',
+      };
+
+  /// התווית המוצגת בשדה הסגור עבור עוגן (חישוב O(1), בלי סריקת כל הפריטים).
+  String _anchorLabel(_RangeAnchor? anchor) {
+    if (anchor == null) return '';
+    switch (anchor.kind) {
+      case _AnchorKind.header:
+        return anchor.index < _flatHeaders.length
+            ? _flatHeaders[anchor.index].fullText
+            : '';
+      case _AnchorKind.altHeader:
+        return anchor.index < _flatAltHeaders.length
+            ? _flatAltHeaders[anchor.index].fullText
+            : '';
+      case _AnchorKind.line:
+        return 'שורה ${anchor.index + 1}';
+    }
+  }
+
+  /// בונה (ושומר במטמון) את פריטי התפריט: כל הכותרות, כותרות המשנה והשורות.
+  List<AppMenuEntry<_RangeAnchor>> _anchorMenuEntries(int totalLines) {
+    final cached = _anchorEntries;
+    if (cached != null) return cached;
+
+    final entries = <AppMenuEntry<_RangeAnchor>>[];
+    for (var i = 0; i < _flatHeaders.length; i++) {
+      entries.add(AppMenuEntry(
+        value: _RangeAnchor(_AnchorKind.header, i),
+        label: _flatHeaders[i].fullText,
+      ));
+    }
+    for (var i = 0; i < _flatAltHeaders.length; i++) {
+      entries.add(AppMenuEntry(
+        value: _RangeAnchor(_AnchorKind.altHeader, i),
+        label: _flatAltHeaders[i].fullText,
+      ));
+    }
+    for (var i = 0; i < totalLines; i++) {
+      entries.add(AppMenuEntry(
+        value: _RangeAnchor(_AnchorKind.line, i),
+        label: 'שורה ${i + 1}',
+      ));
+    }
+    _anchorEntries = entries;
+    return entries;
+  }
+
+  /// תוויות הסינון (הצ'יפים) והפרדיקטים שלהן — רק לסוגים שקיימים בספר.
+  (List<String>, List<bool Function(AppMenuEntry<_RangeAnchor>)?>)
+      _anchorFilters() {
+    final labels = <String>[];
+    final predicates = <bool Function(AppMenuEntry<_RangeAnchor>)?>[];
+    if (_flatHeaders.isNotEmpty) {
+      labels.add(_kindChipLabel(_AnchorKind.header));
+      predicates.add((e) => e.value.kind == _AnchorKind.header);
+    }
+    if (_flatAltHeaders.isNotEmpty) {
+      labels.add(_kindChipLabel(_AnchorKind.altHeader));
+      predicates.add((e) => e.value.kind == _AnchorKind.altHeader);
+    }
+    labels.add(_kindChipLabel(_AnchorKind.line));
+    predicates.add((e) => e.value.kind == _AnchorKind.line);
+    return (labels, predicates);
+  }
+
+  /// שורת בורר עבור נקודת קצה אחת (התחלה/עד). התפריט מאחד כותרות/כותרות
+  /// משנה/שורות עם צ'יפים לסינון, ונפתח על הצ'יפ שמתאים לסוג הבחירה הנוכחית.
+  Widget _buildAnchorDropdownRow({
+    required String label,
+    required _RangeAnchor? anchor,
+    required bool isStart,
+    required int totalLines,
+  }) {
+    final (labels, predicates) = _anchorFilters();
+    final initialFilter = anchor == null
+        ? 0
+        : max(0, labels.indexOf(_kindChipLabel(anchor.kind)));
+
+    return PrintingDropdownRow(
+      label: label,
+      child: AppDropdownField<_RangeAnchor>(
+        value: anchor,
+        enableSearch: true,
+        entries: _anchorMenuEntries(totalLines),
+        filterLabels: labels,
+        filterPredicates: predicates,
+        initialFilter: initialFilter,
+        selectedBuilder: (context, value) => Text(
+          _anchorLabel(value),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        onSelected: (value) {
+          if (value == null) return;
+          _onAnchorSelected(
+            isStart: isStart,
+            anchor: value,
+            totalLines: totalLines,
+          );
+        },
+      ),
+    );
+  }
+
+  /// מעדכן את נקודת הקצה שנבחרה, ומיישר את הקצה השני אם הטווח התהפך.
+  void _onAnchorSelected({
+    required bool isStart,
+    required _RangeAnchor anchor,
+    required int totalLines,
+  }) {
+    if (isStart) {
+      _startAnchor = anchor;
+      final s = _anchorStartLine(anchor, totalLines);
+      final e = _anchorEndLine(_endAnchor, totalLines);
+      if (s != null && e != null && s > e) _endAnchor = anchor;
+    } else {
+      _endAnchor = anchor;
+      final s = _anchorStartLine(_startAnchor, totalLines);
+      final e = _anchorEndLine(anchor, totalLines);
+      if (s != null && e != null && e < s) _startAnchor = anchor;
+    }
+    _updateRangeFromAnchors();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -1832,391 +1971,30 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                           children: [
                                             Padding(
                                               padding: kPrintingRowPadding,
-                                              child: Column(
-                                                children: [
-                                                  // תפריט בחירה: שורות/כותרות/כותרות משנה
-                                                  if (_flatHeaders.isNotEmpty ||
-                                                      _flatAltHeaders
-                                                          .isNotEmpty)
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                              bottom: 16),
-                                                      child: Row(
-                                                        children: [
-                                                          Expanded(
-                                                            child: SegmentedButton<
-                                                                _PrintRangeMode>(
-                                                              showSelectedIcon:
-                                                                  false,
-                                                              segments: [
-                                                                if (_flatHeaders
-                                                                    .isNotEmpty)
-                                                                  const ButtonSegment<
-                                                                      _PrintRangeMode>(
-                                                                    value: _PrintRangeMode
-                                                                        .headers,
-                                                                    label: Text(
-                                                                        'כותרות'),
-                                                                  ),
-                                                                if (_flatAltHeaders
-                                                                    .isNotEmpty)
-                                                                  ButtonSegment<
-                                                                      _PrintRangeMode>(
-                                                                    value: _PrintRangeMode
-                                                                        .altHeaders,
-                                                                    label:
-                                                                        Column(
-                                                                      mainAxisSize:
-                                                                          MainAxisSize
-                                                                              .min,
-                                                                      children: const [
-                                                                        Text(
-                                                                            'כותרות',
-                                                                            style:
-                                                                                TextStyle(fontSize: 11)),
-                                                                        Text(
-                                                                            'משנה',
-                                                                            style:
-                                                                                TextStyle(fontSize: 11)),
-                                                                      ],
-                                                                    ),
-                                                                  ),
-                                                                const ButtonSegment<
-                                                                    _PrintRangeMode>(
-                                                                  value:
-                                                                      _PrintRangeMode
-                                                                          .lines,
-                                                                  label: Text(
-                                                                      'שורות'),
-                                                                ),
-                                                              ],
-                                                              selected: {
-                                                                _rangeMode
-                                                              },
-                                                              onSelectionChanged:
-                                                                  (Set<_PrintRangeMode>
-                                                                      newSelection) {
-                                                                setState(() {
-                                                                  _rangeMode =
-                                                                      newSelection
-                                                                          .first;
-                                                                  if (_rangeMode ==
-                                                                          _PrintRangeMode
-                                                                              .headers &&
-                                                                      _flatHeaders
-                                                                          .isNotEmpty) {
-                                                                    _startHeaderIndex =
-                                                                        0;
-                                                                    _endHeaderIndex = min(
-                                                                        2,
-                                                                        _flatHeaders.length -
-                                                                            1);
-                                                                    _updateRangeByHeaders();
-                                                                  } else if (_rangeMode ==
-                                                                          _PrintRangeMode
-                                                                              .altHeaders &&
-                                                                      _flatAltHeaders
-                                                                          .isNotEmpty) {
-                                                                    _startAltHeaderIndex =
-                                                                        0;
-                                                                    _endAltHeaderIndex = min(
-                                                                        2,
-                                                                        _flatAltHeaders.length -
-                                                                            1);
-                                                                    _updateRangeByAltHeaders();
-                                                                  } else {
-                                                                    _refreshPreview();
-                                                                  }
-                                                                });
-                                                              },
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-
-                                                  // בחירת טווח לפי שורות
-                                                  if (_rangeMode ==
-                                                      _PrintRangeMode
-                                                          .lines) ...[
-                                                    Row(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .spaceBetween,
-                                                      children: [
-                                                        Text(
-                                                          'שורה ${startLine + 1}',
-                                                          style: TextStyle(
-                                                            color: colorScheme
-                                                                .onSurfaceVariant,
-                                                            fontSize: 12,
-                                                          ),
-                                                        ),
-                                                        Text(
-                                                          'שורה ${endLine + 1}',
-                                                          style: TextStyle(
-                                                            color: colorScheme
-                                                                .onSurfaceVariant,
-                                                            fontSize: 12,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    RangeSlider(
-                                                      min: 0.0,
-                                                      max:
-                                                          totalLines.toDouble(),
-                                                      values: RangeValues(
-                                                          startLine.toDouble(),
-                                                          endLine.toDouble()),
-                                                      onChanged: (value) {
-                                                        setState(() {
-                                                          startLine = value
-                                                              .start
-                                                              .toInt();
-                                                          endLine =
-                                                              value.end.toInt();
-                                                        });
-                                                      },
-                                                      onChangeEnd: (value) {
-                                                        startLine =
-                                                            value.start.toInt();
-                                                        endLine =
-                                                            value.end.toInt();
-                                                        setState(
-                                                            _refreshPreview);
-                                                      },
-                                                    ),
-                                                    Text(
-                                                      '${endLine - startLine} שורות נבחרו מתוך $totalLines',
-                                                      style: TextStyle(
-                                                        color:
-                                                            colorScheme.primary,
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                      ),
-                                                    ),
-                                                  ],
-
-                                                  // בחירת טווח לפי כותרות
-                                                  if (_rangeMode ==
-                                                          _PrintRangeMode
-                                                              .headers &&
-                                                      _flatHeaders
-                                                          .isNotEmpty) ...[
-                                                    PrintingDropdownRow(
-                                                      label: 'מ-',
-                                                      child:
-                                                          AppDropdownField<int>(
-                                                        value:
-                                                            _startHeaderIndex,
-                                                        enableSearch: true,
-                                                        entries: _flatHeaders
-                                                            .asMap()
-                                                            .entries
-                                                            .where((entry) =>
-                                                                _endHeaderIndex ==
-                                                                    null ||
-                                                                entry.key <=
-                                                                    _endHeaderIndex!)
-                                                            .map(
-                                                              (entry) =>
-                                                                  AppMenuEntry(
-                                                                value:
-                                                                    entry.key,
-                                                                label: entry
-                                                                    .value
-                                                                    .fullText,
-                                                              ),
-                                                            )
-                                                            .toList(),
-                                                        onSelected:
-                                                            (int? value) {
-                                                          setState(() {
-                                                            _startHeaderIndex =
-                                                                value;
-                                                            if (_endHeaderIndex !=
-                                                                    null &&
-                                                                value != null &&
-                                                                value >
-                                                                    _endHeaderIndex!) {
-                                                              _endHeaderIndex =
-                                                                  value;
-                                                            }
-                                                            _updateRangeByHeaders();
-                                                          });
-                                                        },
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 12),
-                                                    PrintingDropdownRow(
-                                                      label: 'עד-',
-                                                      child:
-                                                          AppDropdownField<int>(
-                                                        value: _endHeaderIndex,
-                                                        enableSearch: true,
-                                                        entries: _flatHeaders
-                                                            .asMap()
-                                                            .entries
-                                                            .where((entry) =>
-                                                                _startHeaderIndex ==
-                                                                    null ||
-                                                                entry.key >=
-                                                                    _startHeaderIndex!)
-                                                            .map(
-                                                              (entry) =>
-                                                                  AppMenuEntry(
-                                                                value:
-                                                                    entry.key,
-                                                                label: entry
-                                                                    .value
-                                                                    .fullText,
-                                                              ),
-                                                            )
-                                                            .toList(),
-                                                        onSelected:
-                                                            (int? value) {
-                                                          setState(() {
-                                                            _endHeaderIndex =
-                                                                value;
-                                                            if (_startHeaderIndex !=
-                                                                    null &&
-                                                                value != null &&
-                                                                value <
-                                                                    _startHeaderIndex!) {
-                                                              _startHeaderIndex =
-                                                                  value;
-                                                            }
-                                                            _updateRangeByHeaders();
-                                                          });
-                                                        },
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    Text(
-                                                      '${(_endHeaderIndex ?? 0) - (_startHeaderIndex ?? 0) + 1} כותרות נבחרו',
-                                                      style: TextStyle(
-                                                        color:
-                                                            colorScheme.primary,
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                      ),
-                                                    ),
-                                                  ],
-
-                                                  // בחירת טווח לפי כותרות משנה
-                                                  if (_rangeMode ==
-                                                          _PrintRangeMode
-                                                              .altHeaders &&
-                                                      _flatAltHeaders
-                                                          .isNotEmpty) ...[
-                                                    PrintingDropdownRow(
-                                                      label: 'מ-',
-                                                      child:
-                                                          AppDropdownField<int>(
-                                                        value:
-                                                            _startAltHeaderIndex,
-                                                        enableSearch: true,
-                                                        entries: _flatAltHeaders
-                                                            .asMap()
-                                                            .entries
-                                                            .where((entry) =>
-                                                                _endAltHeaderIndex ==
-                                                                    null ||
-                                                                entry.key <=
-                                                                    _endAltHeaderIndex!)
-                                                            .map(
-                                                              (entry) =>
-                                                                  AppMenuEntry(
-                                                                value:
-                                                                    entry.key,
-                                                                label: entry
-                                                                    .value
-                                                                    .fullText,
-                                                              ),
-                                                            )
-                                                            .toList(),
-                                                        onSelected:
-                                                            (int? value) {
-                                                          setState(() {
-                                                            _startAltHeaderIndex =
-                                                                value;
-                                                            if (_endAltHeaderIndex !=
-                                                                    null &&
-                                                                value != null &&
-                                                                value >
-                                                                    _endAltHeaderIndex!) {
-                                                              _endAltHeaderIndex =
-                                                                  value;
-                                                            }
-                                                            _updateRangeByAltHeaders();
-                                                          });
-                                                        },
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 12),
-                                                    PrintingDropdownRow(
-                                                      label: 'עד-',
-                                                      child:
-                                                          AppDropdownField<int>(
-                                                        value:
-                                                            _endAltHeaderIndex,
-                                                        enableSearch: true,
-                                                        entries: _flatAltHeaders
-                                                            .asMap()
-                                                            .entries
-                                                            .where((entry) =>
-                                                                _startAltHeaderIndex ==
-                                                                    null ||
-                                                                entry.key >=
-                                                                    _startAltHeaderIndex!)
-                                                            .map(
-                                                              (entry) =>
-                                                                  AppMenuEntry(
-                                                                value:
-                                                                    entry.key,
-                                                                label: entry
-                                                                    .value
-                                                                    .fullText,
-                                                              ),
-                                                            )
-                                                            .toList(),
-                                                        onSelected:
-                                                            (int? value) {
-                                                          setState(() {
-                                                            _endAltHeaderIndex =
-                                                                value;
-                                                            if (_startAltHeaderIndex !=
-                                                                    null &&
-                                                                value != null &&
-                                                                value <
-                                                                    _startAltHeaderIndex!) {
-                                                              _startAltHeaderIndex =
-                                                                  value;
-                                                            }
-                                                            _updateRangeByAltHeaders();
-                                                          });
-                                                        },
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    Text(
-                                                      '${(_endAltHeaderIndex ?? 0) - (_startAltHeaderIndex ?? 0) + 1} כותרות משנה נבחרו',
-                                                      style: TextStyle(
-                                                        color:
-                                                            colorScheme.primary,
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ],
+                                              child: Align(
+                                                alignment: AlignmentDirectional
+                                                    .centerStart,
+                                                child: Text(
+                                                  '${(endLine - startLine).clamp(0, totalLines)} שורות נבחרו מתוך $totalLines',
+                                                  style: TextStyle(
+                                                    color: colorScheme.primary,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
                                               ),
+                                            ),
+                                            _buildAnchorDropdownRow(
+                                              label: 'התחלה',
+                                              anchor: _startAnchor,
+                                              isStart: true,
+                                              totalLines: totalLines,
+                                            ),
+                                            _buildAnchorDropdownRow(
+                                              label: 'עד',
+                                              anchor: _endAnchor,
+                                              isStart: false,
+                                              totalLines: totalLines,
                                             ),
                                             PrintingSwitchRow(
                                               label: 'כלול מפרשים',
