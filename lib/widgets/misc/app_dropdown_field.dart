@@ -18,6 +18,9 @@ class AppDropdownField<T> extends StatefulWidget {
   final String Function(T value)? labelBuilder;
   final List<String>? filterLabels;
   final List<bool Function(AppMenuEntry<T>)?>? filterPredicates;
+
+  /// אינדקס הצ'יפ שנבחר בפתיחת התפריט (למשל להתאים את הסינון לערך הנוכחי).
+  final int initialFilter;
   final double? menuMinWidth;
 
   const AppDropdownField({
@@ -33,6 +36,7 @@ class AppDropdownField<T> extends StatefulWidget {
     this.labelBuilder,
     this.filterLabels,
     this.filterPredicates,
+    this.initialFilter = 0,
     this.menuMinWidth,
   });
 
@@ -99,6 +103,7 @@ class _AppDropdownFieldState<T> extends State<AppDropdownField<T>> {
                 'חיפוש',
             filterLabels: widget.filterLabels,
             filterPredicates: widget.filterPredicates,
+            initialFilter: widget.initialFilter,
             menuMinWidth: widget.menuMinWidth,
           )
         : await showAnchoredAppMenu<T>(
