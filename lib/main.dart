@@ -1077,9 +1077,9 @@ class _AppBootstrapState extends State<AppBootstrap> {
                   Settings.getValue<bool>(
                       SettingsRepository.keySoftwareAndBookUpdatesEnabled) ??
                   true,
-              allowPrerelease: () =>
-                  Settings.getValue<bool>(SettingsRepository.keyDevChannel) ??
-                  false,
+              // עדכוני ספרייה תמיד ליציב בלבד — מנותק מערוץ הפיתוח, שמשפיע רק
+              // על עדכוני התוכנה.
+              allowPrerelease: () => false,
             ),
           ),
           BlocProvider<PluginSystemBloc>(
