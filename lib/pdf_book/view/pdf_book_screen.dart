@@ -1927,6 +1927,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             .toDouble()
         : spreadRect.center.dy;
 
+    // כשאין תיקון ממשי חובה להחזיר את המטריצה המקורית: calcMatrixFor מייצר
+    // מטריצה שונה-במקצת (עיגול צף) בכל פריים, וההבדל הזעיר מניע לולאת
+    // repaint אינסופית (~48fps) בזמן מנוחה בתצוגת ספר.
+    if ((targetCenterX - candidateVisibleRect.center.dx).abs() < 0.1 &&
+        (targetCenterY - candidateVisibleRect.center.dy).abs() < 0.1) {
+      return matrix;
+    }
+
     return controller.calcMatrixFor(
       Offset(targetCenterX, targetCenterY),
       zoom: newZoom,
