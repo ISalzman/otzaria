@@ -2417,6 +2417,17 @@ class MainWindowScreenState extends State<MainWindowScreen>
                   message: state.message,
                   progress: progress,
                 ));
+              } else if (state.status == LibraryUpdateStatus.error) {
+                cubit.upsert(WorkStatusItem(
+                  id: 'library_update',
+                  title: 'עדכון ספרייה',
+                  message: state.message,
+                  detail: 'לחץ לניסיון חוזר',
+                  kind: WorkStatusKind.failed,
+                  onTap: () => context
+                      .read<LibraryUpdateBloc>()
+                      .add(const StartLibraryUpdate()),
+                ));
               } else {
                 cubit.remove('library_update');
               }
