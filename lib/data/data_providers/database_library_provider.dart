@@ -271,6 +271,8 @@ void _flattenRawRecursive(
 
 /// טוען קישורי "מקור" (SOURCE וירטואלי) לספר כ-target: הופך source↔target כדי
 /// שספר מפרש יציג את מקורו. ב-v3 הקישור נשמר בכיוון קנוני אחד בלבד.
+/// שורות ה-anchors כוללות גם שורות מכוסות של קישורי-טווח (link_coverage,
+/// side=1) — כך קישור שהצד התלוי שלו משתרע על כמה שורות מופיע בכל שורה בטווח.
 List<Map<String, dynamic>> _loadInverseSourceRows(
   sqlite3.Database db,
   int bookId, {
@@ -282,22 +284,43 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
   final hasRange = startLineIndex != null && endLineIndex != null;
   // בשאילתה ההפוכה השורה המוצגת היא צד היעד של הקישור השמור.
   final hasLinkAnchor = _hasLinkAnchorTable(db);
+  final hasLinkRanges = _hasLinkRangeTables(db);
   final anchorSelect = _anchorSelectColumns(hasLinkAnchor);
   final anchorJoin = _anchorJoinClause(hasLinkAnchor, displayedSide: 1);
+  // בפאנל של תצוגת המקור מוצג צד ה-source של הקישור (side=0).
+  final rangeEndSelect = _rangeEndSelectColumns(hasLinkRanges);
+  final rangeEndJoin = _rangeEndJoinClause(hasLinkRanges, panelSide: 0);
 
   if (hasRange) {
     // כשיש טווח: מוצאים תחילה את ה-line IDs בטווח דרך idx_line_book_index,
     // ואז מחפשים links לפי targetLineId דרך idx_link_target_line — הרבה יותר
     // יעיל מאשר לסרוק את כל ה-links של הספר (עשרות אלפים לספרי בסיס כגון
     // תורה / ש"ס) ולסנן לפי lineIndex בדיעבד.
+    final coverageArm = hasLinkRanges
+        ? '''
+          UNION ALL
+          SELECT lc.linkId, lc.lineId FROM link_coverage lc
+          WHERE lc.side = 1 AND lc.lineId IN (
+            SELECT id FROM line WHERE bookId = ? AND lineIndex BETWEEN ? AND ?
+          )'''
+        : '';
     final params = <Object?>[
       bookId,
       startLineIndex,
       endLineIndex,
       bookId,
+      if (hasLinkRanges) ...[bookId, startLineIndex, endLineIndex],
       ...types,
     ];
     return db.select('''
+        WITH anchors(linkId, anchorLineId) AS (
+          SELECT l.id, l.targetLineId FROM link l
+          WHERE l.targetLineId IN (
+            SELECT id FROM line WHERE bookId = ? AND lineIndex BETWEEN ? AND ?
+          )
+            AND l.targetBookId = ?
+          $coverageArm
+        )
         SELECT
           tl.lineIndex as sourceLineIndex,
           sl.lineIndex as targetLineIndex,
@@ -305,26 +328,40 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
           sb.title as targetBookTitle,
           sb.categoryId as targetCategoryId,
           NULL as targetFileType,
+          $rangeEndSelect
           $anchorSelect
           'SOURCE' as connectionTypeName
-        FROM link l
-        JOIN line tl ON l.targetLineId = tl.id
+        FROM anchors a
+        JOIN link l ON l.id = a.linkId
+        JOIN line tl ON tl.id = a.anchorLineId
         JOIN line sl ON l.sourceLineId = sl.id
         JOIN book sb ON l.sourceBookId = sb.id
         JOIN connection_type ct ON l.connectionTypeId = ct.id
+        $rangeEndJoin
         $anchorJoin
-        WHERE l.targetLineId IN (
-          SELECT id FROM line WHERE bookId = ? AND lineIndex BETWEEN ? AND ?
-        )
-          AND l.targetBookId = ?
-          AND ct.name IN ($typePlaceholders)
+        WHERE ct.name IN ($typePlaceholders)
           AND l.sourceBookId != l.targetBookId
         ORDER BY tl.lineIndex
       ''', params).toMapList();
   }
 
-  final params = <Object?>[bookId, ...types];
+  final coverageArm = hasLinkRanges
+      ? '''
+        UNION ALL
+        SELECT lc.linkId, lc.lineId FROM link_coverage lc
+        JOIN link cl ON cl.id = lc.linkId
+        WHERE lc.side = 1 AND cl.targetBookId = ?'''
+      : '';
+  final params = <Object?>[
+    bookId,
+    if (hasLinkRanges) bookId,
+    ...types,
+  ];
   return db.select('''
+      WITH anchors(linkId, anchorLineId) AS (
+        SELECT id, targetLineId FROM link WHERE targetBookId = ?
+        $coverageArm
+      )
       SELECT
         tl.lineIndex as sourceLineIndex,
         sl.lineIndex as targetLineIndex,
@@ -332,16 +369,18 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
         sb.title as targetBookTitle,
         sb.categoryId as targetCategoryId,
         NULL as targetFileType,
+        $rangeEndSelect
         $anchorSelect
         'SOURCE' as connectionTypeName
-      FROM link l
-      JOIN line tl ON l.targetLineId = tl.id
+      FROM anchors a
+      JOIN link l ON l.id = a.linkId
+      JOIN line tl ON tl.id = a.anchorLineId
       JOIN line sl ON l.sourceLineId = sl.id
       JOIN book sb ON l.sourceBookId = sb.id
       JOIN connection_type ct ON l.connectionTypeId = ct.id
+      $rangeEndJoin
       $anchorJoin
-      WHERE l.targetBookId = ?
-        AND ct.name IN ($typePlaceholders)
+      WHERE ct.name IN ($typePlaceholders)
         AND l.sourceBookId != l.targetBookId
       ORDER BY tl.lineIndex
     ''', params).toMapList();
@@ -356,6 +395,30 @@ bool _hasLinkAnchorTable(sqlite3.Database db) => db
       "SELECT 1 FROM sqlite_master WHERE type='table' AND name='link_anchor' LIMIT 1",
     )
     .isNotEmpty;
+
+/// קישורי-טווח (link_range/link_coverage) — קיימים רק במסדים חדשים; במסד ישן
+/// השאילתות חוזרות לעמודות NULL ולשורת העוגן הראשונה בלבד. שתי הטבלאות
+/// נשלחות יחד, לכן די בבדיקת link_coverage.
+bool _hasLinkRangeTables(sqlite3.Database db) => db
+    .select(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='link_coverage' LIMIT 1",
+    )
+    .isNotEmpty;
+
+/// עמודות קצה-הטווח של צד-הפאנל: heRef של השורה האחרונה בטווח + האינדקס שלה
+/// (0-based), או NULL כשאין טווח / כשהמסד ישן.
+String _rangeEndSelectColumns(bool hasLinkRanges) => hasLinkRanges
+    ? '''rl.heRef as targetRangeEndHeRef,
+          lr.endLineIndex as targetRangeEndLineIndex,'''
+    : '''NULL as targetRangeEndHeRef,
+          NULL as targetRangeEndLineIndex,''';
+
+/// JOIN לקצה-הטווח של צד-הפאנל (`panelSide`: 0 = צד המקור השמור, 1 = היעד).
+String _rangeEndJoinClause(bool hasLinkRanges, {required int panelSide}) =>
+    hasLinkRanges
+        ? '''LEFT JOIN link_range lr ON lr.linkId = l.id AND lr.side = $panelSide
+        LEFT JOIN line rl ON rl.id = lr.endLineId'''
+        : '';
 
 String _anchorSelectColumns(bool hasLinkAnchor) => hasLinkAnchor
     ? '''la.charStart as anchorCharStart,
@@ -377,18 +440,24 @@ String _anchorSelectColumns(bool hasLinkAnchor) => hasLinkAnchor
 /// דטרמיניזם: charEnd/label הלא-אגרגטיביים מגיעים לפי חוזה SQLite משורת
 /// ה-MIN, ושורת ה-MIN יחידה — (linkId, side, charStart) הוא ה-PK של
 /// link_anchor, כך שאין שני עוגנים לאותו קישור/צד עם אותו charStart.
-String _anchorJoinClause(bool hasLinkAnchor, {required int displayedSide}) =>
-    hasLinkAnchor
-        ? '''LEFT JOIN (
+/// ה-la מוצמד רק לשורת העוגן המקורית של הקישור (a.anchorLineId = שורת הצד
+/// המוצג): אופסטי העוגן חושבו מול הטקסט של אותה שורה, ובקישור-טווח אסור
+/// שידלפו לשורות coverage. ה-lal (הצד המקושר, קטע-הפאנל) נשאר לפי linkId —
+/// שורת הפאנל היא תמיד שורת ההתחלה של הקישור.
+String _anchorJoinClause(bool hasLinkAnchor, {required int displayedSide}) {
+  if (!hasLinkAnchor) return '';
+  final displayedSideLine =
+      displayedSide == 0 ? 'l.sourceLineId' : 'l.targetLineId';
+  return '''LEFT JOIN (
           SELECT linkId, MIN(charStart) AS charStart, charEnd, label,
                  GROUP_CONCAT(charStart || ':' || COALESCE(charEnd, '') || ':' || COALESCE(label, ''), ';') AS spans
           FROM link_anchor WHERE side = $displayedSide GROUP BY linkId
-        ) la ON la.linkId = l.id
+        ) la ON la.linkId = l.id AND a.anchorLineId = $displayedSideLine
         LEFT JOIN (
           SELECT linkId, MIN(charStart) AS charStart, charEnd
           FROM link_anchor WHERE side = ${1 - displayedSide} GROUP BY linkId
-        ) lal ON lal.linkId = l.id'''
-        : '';
+        ) lal ON lal.linkId = l.id''';
+}
 
 /// מפענח את מחרוזת ה-spans מהשאילתה לרשימת עוגנים ממוינת לפי מיקום.
 List<LinkAnchorSpan> _parseAnchorSpans(String? spans) {
@@ -431,8 +500,22 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
 
     final bookId = bookResults.first['id'] as int;
     final hasLinkAnchor = _hasLinkAnchorTable(db);
+    final hasLinkRanges = _hasLinkRangeTables(db);
 
+    // שורות ה-anchors כוללות גם שורות מכוסות של קישורי-טווח (side=0), כך
+    // שקישור שהמקור שלו משתרע על כמה שורות מופיע בכל שורה שהוא מכסה.
+    final coverageArm = hasLinkRanges
+        ? '''
+          UNION ALL
+          SELECT lc.linkId, lc.lineId FROM link_coverage lc
+          JOIN link cl ON cl.id = lc.linkId
+          WHERE lc.side = 0 AND cl.sourceBookId = ?'''
+        : '';
     final forwardRows = db.select('''
+        WITH anchors(linkId, anchorLineId) AS (
+          SELECT id, sourceLineId FROM link WHERE sourceBookId = ?
+          $coverageArm
+        )
         SELECT
           l.sourceLineId,
           l.targetLineId,
@@ -442,17 +525,19 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
           NULL as targetFileType,
+          ${_rangeEndSelectColumns(hasLinkRanges)}
           ${_anchorSelectColumns(hasLinkAnchor)}
           ct.name as connectionTypeName
-        FROM link l
-        JOIN line sl ON l.sourceLineId = sl.id
+        FROM anchors a
+        JOIN link l ON l.id = a.linkId
+        JOIN line sl ON sl.id = a.anchorLineId
         JOIN line tl ON l.targetLineId = tl.id
         JOIN book tb ON l.targetBookId = tb.id
         LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
+        ${_rangeEndJoinClause(hasLinkRanges, panelSide: 1)}
         ${_anchorJoinClause(hasLinkAnchor, displayedSide: 0)}
-        WHERE l.sourceBookId = ?
         ORDER BY sl.lineIndex
-      ''', [bookId]).toMapList();
+      ''', [bookId, if (hasLinkRanges) bookId]).toMapList();
     return [...forwardRows, ..._loadInverseSourceRows(db, bookId)];
   } finally {
     db?.close();
@@ -482,9 +567,12 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
     }
 
     final bookId = bookResults.first['id'] as int;
+    final hasLinkAnchor = _hasLinkAnchorTable(db);
+    final hasLinkRanges = _hasLinkRangeTables(db);
 
     final parameters = <Object?>[
       bookId,
+      if (hasLinkRanges) ...[bookId, startLineIndex, endLineIndex],
       startLineIndex,
       endLineIndex,
     ];
@@ -511,8 +599,24 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
             ? 'AND (ct.name IS NULL OR ct.name NOT IN ($depTypesIn) OR tb.title IN ($targetBookPlaceholders))'
             : 'AND (ct.name IS NULL OR ct.name NOT IN ($depTypesIn))';
 
-    final hasLinkAnchor = _hasLinkAnchorTable(db);
+    // שורות ה-anchors כוללות גם שורות מכוסות של קישורי-טווח (side=0). הזרוע
+    // מסוננת לחלון כבר כאן דרך ה-PK של link_coverage (lineId ראשון) — שורות
+    // coverage של side=0 הן תמיד שורות ספר-המקור עצמו, כך שסינון לפי שורות
+    // הספר בחלון מייתר JOIN ל-link (ספרי בסיס גדולים נושאים מאות אלפי שורות
+    // coverage, וסריקה מלאה שלהן בכל חלון גלילה יקרה מדי).
+    final coverageArm = hasLinkRanges
+        ? '''
+          UNION ALL
+          SELECT lc.linkId, lc.lineId FROM link_coverage lc
+          WHERE lc.side = 0 AND lc.lineId IN (
+            SELECT id FROM line WHERE bookId = ? AND lineIndex BETWEEN ? AND ?
+          )'''
+        : '';
     final rows = db.select('''
+        WITH anchors(linkId, anchorLineId) AS (
+          SELECT id, sourceLineId FROM link WHERE sourceBookId = ?
+          $coverageArm
+        )
         SELECT
           sl.lineIndex as sourceLineIndex,
           tl.lineIndex as targetLineIndex,
@@ -520,16 +624,18 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
           NULL as targetFileType,
+          ${_rangeEndSelectColumns(hasLinkRanges)}
           ${_anchorSelectColumns(hasLinkAnchor)}
           ct.name as connectionTypeName
-        FROM link l
-        JOIN line sl ON l.sourceLineId = sl.id
+        FROM anchors a
+        JOIN link l ON l.id = a.linkId
+        JOIN line sl ON sl.id = a.anchorLineId
         JOIN line tl ON l.targetLineId = tl.id
         JOIN book tb ON l.targetBookId = tb.id
         LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
+        ${_rangeEndJoinClause(hasLinkRanges, panelSide: 1)}
         ${_anchorJoinClause(hasLinkAnchor, displayedSide: 0)}
-        WHERE l.sourceBookId = ?
-          AND sl.lineIndex BETWEEN ? AND ?
+        WHERE sl.lineIndex BETWEEN ? AND ?
           $commentaryFilterClause
         ORDER BY sl.lineIndex, tb.orderIndex
       ''', parameters).toMapList();
@@ -2578,6 +2684,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
           linkedAnchorStart: row['anchorLinkedCharStart'] as int?,
           linkedAnchorEnd: row['anchorLinkedCharEnd'] as int?,
           anchorSpans: _parseAnchorSpans(row['anchorSpans'] as String?),
+          heRefEnd:
+              (row['targetRangeEndHeRef'] as String?)?.trim().isNotEmpty == true
+                  ? (row['targetRangeEndHeRef'] as String).trim()
+                  : null,
+          index2End: row['targetRangeEndLineIndex'] != null
+              ? (row['targetRangeEndLineIndex'] as int) + 1
+              : null,
         );
       }).toList();
 
@@ -2643,6 +2756,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
           linkedAnchorStart: row['anchorLinkedCharStart'] as int?,
           linkedAnchorEnd: row['anchorLinkedCharEnd'] as int?,
           anchorSpans: _parseAnchorSpans(row['anchorSpans'] as String?),
+          heRefEnd:
+              (row['targetRangeEndHeRef'] as String?)?.trim().isNotEmpty == true
+                  ? (row['targetRangeEndHeRef'] as String).trim()
+                  : null,
+          index2End: row['targetRangeEndLineIndex'] != null
+              ? (row['targetRangeEndLineIndex'] as int) + 1
+              : null,
         );
       }).toList();
       return links;
@@ -2708,7 +2828,16 @@ class DatabaseLibraryProvider implements LibraryProvider {
           .getLineByIndex(resolvedBook.book.id, link.index2 - 1);
       if (line == null) return 'שגיאה: אינדקס מחוץ לטווח';
 
-      return line.content;
+      // קישור-טווח: מצרפים את כל שורות הטווח עד index2End (1-based, כולל).
+      final end0 = (link.index2End ?? link.index2) - 1;
+      if (end0 <= link.index2 - 1) return line.content;
+      final parts = <String>[line.content];
+      for (var idx0 = link.index2; idx0 <= end0; idx0++) {
+        final extra = await resolvedBook.repository
+            .getLineByIndex(resolvedBook.book.id, idx0);
+        if (extra != null) parts.add(extra.content);
+      }
+      return parts.join('<br>');
     } catch (e) {
       debugPrint('⚠️ Error in getLinkContent: $e');
       return 'שגיאה בטעינת תוכן המפרש';

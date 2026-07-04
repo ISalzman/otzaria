@@ -171,7 +171,7 @@ void main() {
         db.execute(
             'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
         db.execute(
-            'CREATE TABLE link (sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+            'CREATE TABLE link (id INTEGER PRIMARY KEY, sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
 
         db.execute(
             "INSERT INTO book (id, title, categoryId, fileType) VALUES (1, 'בראשית', 7, 'txt')");
@@ -219,7 +219,7 @@ void main() {
         db.execute(
             'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
         db.execute(
-            'CREATE TABLE link (sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+            'CREATE TABLE link (id INTEGER PRIMARY KEY, sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
 
         // בראשית (1) הוא הבסיס ורש"י (2) המפרש. הקישור נשמר בכיוון קנוני
         // base→commentary (כמו ב-v3), בלי שורה הפוכה.
@@ -268,7 +268,7 @@ void main() {
         db.execute(
             'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
         db.execute(
-            'CREATE TABLE link (sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+            'CREATE TABLE link (id INTEGER PRIMARY KEY, sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
 
         db.execute(
             "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (1, 'בראשית', 7, 'txt', 1)");
@@ -323,7 +323,7 @@ void main() {
         db.execute(
             'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
         db.execute(
-            'CREATE TABLE link (sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+            'CREATE TABLE link (id INTEGER PRIMARY KEY, sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
 
         db.execute(
             "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (1, 'בראשית', 7, 'txt', 1)");
@@ -359,6 +359,178 @@ void main() {
         expect(rows, hasLength(1));
         expect(rows.first['sourceLineIndex'], 5);
         expect(rows.first['targetBookTitle'], 'מפרש ב');
+      } finally {
+        db.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('קישורי-טווח: שורה מכוסה מקבלת את הקישור וקצה הטווח נחשף', () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_ranged');
+      final dbPath = path.join(tempDir.path, 'db.sqlite');
+      final db = sqlite3.sqlite3.open(dbPath);
+
+      try {
+        db.execute(
+            'CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT, orderIndex INTEGER)');
+        db.execute(
+            'CREATE TABLE line (id INTEGER PRIMARY KEY, bookId INTEGER, lineIndex INTEGER, heRef TEXT)');
+        db.execute(
+            'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
+        db.execute(
+            'CREATE TABLE link (id INTEGER PRIMARY KEY, sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+        db.execute(
+            'CREATE TABLE link_range (linkId INTEGER, side INTEGER, endLineId INTEGER, endLineIndex INTEGER, PRIMARY KEY (linkId, side))');
+        db.execute(
+            'CREATE TABLE link_coverage (lineId INTEGER, linkId INTEGER, side INTEGER, PRIMARY KEY (lineId, linkId, side))');
+
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (1, 'בראשית', 7, 'txt', 1)");
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (2, 'ילקוט', 8, 'txt', 1)");
+        // בראשית: שורות 4-6; הקישור מעוגן ב-4 ומכסה גם את 5 ו-6.
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (10, 1, 4, 'בראשית א, ה')");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (11, 1, 5, 'בראשית א, ו')");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (12, 1, 6, 'בראשית א, ז')");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (20, 2, 0, 'ילקוט א')");
+        db.execute(
+            "INSERT INTO connection_type (id, name) VALUES (5, 'reference')");
+        db.execute(
+            'INSERT INTO link (id, sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (100, 1, 10, 20, 2, 5)');
+        // טווח בצד המקור (side=0): בראשית א, ה - א, ז.
+        db.execute(
+            'INSERT INTO link_range (linkId, side, endLineId, endLineIndex) VALUES (100, 0, 12, 6)');
+        db.execute(
+            'INSERT INTO link_coverage (lineId, linkId, side) VALUES (11, 100, 0)');
+        db.execute(
+            'INSERT INTO link_coverage (lineId, linkId, side) VALUES (12, 100, 0)');
+
+        // חלון שכולל רק שורה מכוסה (5) ולא את עוגן-ההתחלה (4).
+        final coveredOnly =
+            DatabaseLibraryProvider.loadBookLinksRowsInRangeForTesting(
+          dbPath: dbPath,
+          title: 'בראשית',
+          categoryId: 7,
+          fileType: 'txt',
+          startLineIndex: 5,
+          endLineIndex: 5,
+        );
+        expect(coveredOnly, hasLength(1));
+        expect(coveredOnly.first['sourceLineIndex'], 5);
+        expect(coveredOnly.first['targetBookTitle'], 'ילקוט');
+
+        // חלון שמכסה את כל הטווח: שורת העוגן + שתי המכוסות, בלי כפילויות.
+        final wholeRange =
+            DatabaseLibraryProvider.loadBookLinksRowsInRangeForTesting(
+          dbPath: dbPath,
+          title: 'בראשית',
+          categoryId: 7,
+          fileType: 'txt',
+          startLineIndex: 0,
+          endLineIndex: 10,
+        );
+        expect(wholeRange, hasLength(3));
+        expect(
+          wholeRange.map((r) => r['sourceLineIndex']).toList()..sort(),
+          [4, 5, 6],
+        );
+      } finally {
+        db.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('קישורי-טווח: צד הפאנל חושף את קצה הטווח של היעד', () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_ranged_end');
+      final dbPath = path.join(tempDir.path, 'db.sqlite');
+      final db = sqlite3.sqlite3.open(dbPath);
+
+      try {
+        db.execute(
+            'CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT, orderIndex INTEGER)');
+        db.execute(
+            'CREATE TABLE line (id INTEGER PRIMARY KEY, bookId INTEGER, lineIndex INTEGER, heRef TEXT)');
+        db.execute(
+            'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
+        db.execute(
+            'CREATE TABLE link (id INTEGER PRIMARY KEY, sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+        db.execute(
+            'CREATE TABLE link_range (linkId INTEGER, side INTEGER, endLineId INTEGER, endLineIndex INTEGER, PRIMARY KEY (linkId, side))');
+        db.execute(
+            'CREATE TABLE link_coverage (lineId INTEGER, linkId INTEGER, side INTEGER, PRIMARY KEY (lineId, linkId, side))');
+        db.execute(
+            'CREATE TABLE link_anchor (linkId INTEGER, side INTEGER, charStart INTEGER, charEnd INTEGER, label TEXT, PRIMARY KEY (linkId, side, charStart))');
+
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (1, 'בראשית', 7, 'txt', 1)");
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (2, 'פירוש', 8, 'txt', 1)");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (10, 1, 0, 'בראשית א, א')");
+        // הפירוש: שלוש פסקאות, הקישור מעוגן בראשונה ומשתרע עד השלישית.
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (20, 2, 0, 'פירוש א, א, א')");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (21, 2, 1, 'פירוש א, א, ב')");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (22, 2, 2, 'פירוש א, א, ג')");
+        db.execute(
+            "INSERT INTO connection_type (id, name) VALUES (5, 'COMMENTARY')");
+        db.execute(
+            'INSERT INTO link (id, sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (200, 1, 10, 20, 2, 5)');
+        // טווח בצד היעד (side=1): הפירוש משתרע על שלוש פסקאות.
+        db.execute(
+            'INSERT INTO link_range (linkId, side, endLineId, endLineIndex) VALUES (200, 1, 22, 2)');
+        db.execute(
+            'INSERT INTO link_coverage (lineId, linkId, side) VALUES (21, 200, 1)');
+        db.execute(
+            'INSERT INTO link_coverage (lineId, linkId, side) VALUES (22, 200, 1)');
+        // עוגן-מילה בשורת ההתחלה של צד היעד — אסור שידלוף לשורות המכוסות.
+        db.execute(
+            "INSERT INTO link_anchor (linkId, side, charStart, charEnd, label) VALUES (200, 1, 3, NULL, 'א')");
+
+        // תצוגת ספר הבסיס: צד-הפאנל (היעד) חושף את קצה הטווח.
+        final forward = DatabaseLibraryProvider.loadBookLinksRowsForTesting(
+          dbPath: dbPath,
+          title: 'בראשית',
+          categoryId: 7,
+          fileType: 'txt',
+        );
+        final commentaryRow =
+            forward.firstWhere((r) => r['connectionTypeName'] == 'COMMENTARY');
+        expect(commentaryRow['targetRangeEndHeRef'], 'פירוש א, א, ג');
+        expect(commentaryRow['targetRangeEndLineIndex'], 2);
+
+        // תצוגת ספר הפירוש: שורות 1-2 המכוסות מקבלות שורת SOURCE משלהן.
+        final inverse = DatabaseLibraryProvider.loadBookLinksRowsForTesting(
+          dbPath: dbPath,
+          title: 'פירוש',
+          categoryId: 8,
+          fileType: 'txt',
+        );
+        final sourceRows =
+            inverse.where((r) => r['connectionTypeName'] == 'SOURCE').toList();
+        expect(sourceRows, hasLength(3));
+        expect(
+          sourceRows.map((r) => r['sourceLineIndex']).toList()..sort(),
+          [0, 1, 2],
+        );
+        // העוגן מוצמד רק לשורת ההתחלה — לא דולף לשורות המכוסות.
+        for (final row in sourceRows) {
+          if (row['sourceLineIndex'] == 0) {
+            expect(row['anchorCharStart'], 3);
+            expect(row['anchorLabel'], 'א');
+          } else {
+            expect(row['anchorCharStart'], isNull,
+                reason: 'עוגן של שורת ההתחלה דלף לשורה מכוסה');
+          }
+        }
       } finally {
         db.close();
         await tempDir.delete(recursive: true);
