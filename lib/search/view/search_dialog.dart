@@ -17,6 +17,8 @@ import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
+import 'package:otzaria/search/utils/category_query_parser.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/search/view/enhanced_search_field.dart';
 import 'package:otzaria/search/view/advanced_search_controls.dart';
 import 'package:otzaria/search/view/full_text_settings_widgets.dart';
@@ -320,6 +322,22 @@ class _SearchDialogState extends State<SearchDialog> {
       return;
     }
 
+    // תחביר קטגוריה: `מונח@קטגוריה` מצמצם את החיפוש לקטגוריה לפי שם.
+    final parsedCategory = parseCategoryQuery(
+      query,
+      context.read<LibraryBloc>().state.library,
+    );
+    if (parsedCategory.hasCategoryToken && !parsedCategory.categoryFound) {
+      UiSnack.showError(
+          'הקטגוריה או הספר "${parsedCategory.categoryName}" לא נמצאו');
+      return;
+    }
+    query = parsedCategory.query;
+    if (query.isEmpty) {
+      UiSnack.show('נא להזין טקסט לחיפוש');
+      return;
+    }
+
     // החיפוש עובד תמיד על טקסט ללא ניקוד.
     if (utils.hasNikud(query)) {
       query = utils.removeVolwels(query);
@@ -400,13 +418,19 @@ class _SearchDialogState extends State<SearchDialog> {
     newSearchTab.searchBloc
         .add(UpdateDistance(_searchTab.searchBloc.state.distance));
 
-    // הוספה להיסטוריה
-    context.read<HistoryBloc>().add(AddHistory(newSearchTab));
+    // ה-facets שנבחרו לחיפוש. תחביר `@קטגוריה`/`@ספר` גובר על הבחירה הידנית.
+    final facetsToSearch = parsedCategory.categoryFound
+        ? parsedCategory.facets!
+        : _selectedCategoryFacets.isEmpty
+            ? ['/']
+            : _selectedCategoryFacets.toList();
 
-    // הגדרת ה-facets שנבחרו לפני ביצוע החיפוש
-    final facetsToSearch = _selectedCategoryFacets.isEmpty
-        ? ['/']
-        : _selectedCategoryFacets.toList();
+    // מעבירים את ה-scope במפורש להיסטוריה — SetFacetsWithoutSearch מעדכן את
+    // state אסינכרונית, ובלי זה החיפוש היה נשמר בלי ה-scope שנבחר.
+    context
+        .read<HistoryBloc>()
+        .add(AddHistory(newSearchTab, scopeFacets: facetsToSearch));
+
     newSearchTab.searchBloc.add(SetFacetsWithoutSearch(facetsToSearch));
 
     // ביצוע החיפוש בטאב החדש

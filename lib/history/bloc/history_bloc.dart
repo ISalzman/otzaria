@@ -82,7 +82,10 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
     return updatedHistory;
   }
 
-  Future<Bookmark?> _bookmarkFromTab(OpenedTab tab) async {
+  Future<Bookmark?> _bookmarkFromTab(
+    OpenedTab tab, {
+    List<String>? scopeFacetsOverride,
+  }) async {
     final workspaceName = _currentWorkspaceName;
 
     if (tab is SearchingTab) {
@@ -93,7 +96,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
       final searchState = searchingTab.searchBloc.state;
 
       final formattedQuery = _buildFormattedQuery(searchingTab);
-      final scopeFacets = searchState.searchScopeFacets;
+      final scopeFacets = scopeFacetsOverride ?? searchState.searchScopeFacets;
       final nonRootScopeFacets =
           scopeFacets.where((facet) => facet != '/').toList();
 
@@ -341,7 +344,10 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
   Future<void> _onAddHistory(
       AddHistory event, Emitter<HistoryState> emit) async {
     try {
-      final bookmark = await _bookmarkFromTab(event.tab);
+      final bookmark = await _bookmarkFromTab(
+        event.tab,
+        scopeFacetsOverride: event.scopeFacets,
+      );
       if (bookmark == null) return;
       add(BulkAddHistory([bookmark]));
     } catch (e) {

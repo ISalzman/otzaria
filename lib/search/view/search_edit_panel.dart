@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
+import 'package:otzaria/search/utils/category_query_parser.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
@@ -52,16 +54,44 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
   }
 
   void _performSearch(BuildContext context) {
-    final query = widget.tab.queryController.text.trim();
+    var query = widget.tab.queryController.text.trim();
 
     if (query.isEmpty) {
       UiSnack.show('נא להזין טקסט לחיפוש');
       return;
     }
 
-    final facetsToSearch = _selectedCategoryFacets.isEmpty
-        ? ['/']
-        : _selectedCategoryFacets.toList();
+    // תחביר קטגוריה: `מונח@קטגוריה` מצמצם את החיפוש לקטגוריה לפי שם.
+    final parsedCategory = parseCategoryQuery(
+      query,
+      context.read<LibraryBloc>().state.library,
+    );
+    if (parsedCategory.hasCategoryToken && !parsedCategory.categoryFound) {
+      UiSnack.showError(
+          'הקטגוריה או הספר "${parsedCategory.categoryName}" לא נמצאו');
+      return;
+    }
+    query = parsedCategory.query;
+    if (query.isEmpty) {
+      UiSnack.show('נא להזין טקסט לחיפוש');
+      return;
+    }
+
+    // אם הוקלד תחביר `@`, מנקים אותו מהשדה — לכידת ההיסטוריה שומרת את טקסט
+    // השדה, והשחזור ממנה אינו מפענח `@` מחדש.
+    if (widget.tab.queryController.text != query) {
+      widget.tab.queryController.value = TextEditingValue(
+        text: query,
+        selection: TextSelection.collapsed(offset: query.length),
+      );
+    }
+
+    // תחביר `@קטגוריה` גובר על בחירת הקטגוריות הידנית.
+    final facetsToSearch = parsedCategory.categoryFound
+        ? parsedCategory.facets!
+        : _selectedCategoryFacets.isEmpty
+            ? ['/']
+            : _selectedCategoryFacets.toList();
     final effectiveOptions = SearchQueryBuilder.effectiveSearchOptions(
       query: query,
       useGlobalOptions: widget.tab.useGlobalSearchOptions.value,
