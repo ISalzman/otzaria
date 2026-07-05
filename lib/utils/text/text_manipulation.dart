@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -256,14 +257,87 @@ String? _highlightCacheKey;
 _CompiledHighlightPattern? _highlightCacheValue;
 bool _highlightCacheValid = false;
 
+/// תבניות הדגשה מבוססות-אינדקס שהוזנו מראש, לפי מפתח פרמטרי החיפוש.
+///
+/// המנוע נסרק אסינכרונית בזמן ריצת החיפוש (ראה `search_engine_gateway`) —
+/// שניות לפני שספר נפתח מהתוצאות — כך שהרינדור הסינכרוני מוצא כאן תבנית
+/// שמדגישה את הווריאנטים שהחיפוש באמת התאים באינדקס (שגיאות כתיב, קידומות,
+/// חלק ממילה), בזהות מלאה להדגשת ה-snippets. רשומה יכולה להיות null (שאילתה
+/// ללא מילים ברות-הדגשה) — לכן containsKey ולא lookup.
+///
+/// כשאין רשומה (חיפוש שלא עבר דרך ה-gateway, או שההזנה נכשלה/טרם הסתיימה)
+/// ממשיכים ל-fallback הסינכרוני שמכיר רק את צורת השאילתה — ההתנהגות הקודמת.
+final LinkedHashMap<String, _CompiledHighlightPattern?> _primedHighlightCache =
+    LinkedHashMap();
+const int _maxPrimedHighlightEntries = 8;
+final Set<String> _primedHighlightInFlight = <String>{};
+
+/// מקמפל את תבניות ה-RegExp שהמנוע החזיר. כל הלוגיקה של בניית התבניות חיה
+/// ב-Rust; כאן קומפילציה בלבד.
+_CompiledHighlightPattern? _compileHighlightPattern(HighlightPattern? pattern) {
+  if (pattern == null) return null;
+  return _CompiledHighlightPattern(
+    RegExp(pattern.combinedPattern, caseSensitive: false),
+    [
+      for (final wordPattern in pattern.wordPatterns)
+        RegExp(wordPattern, caseSensitive: false),
+    ],
+    pattern.wordBoundaryEligible,
+  );
+}
+
+/// מזין מראש תבנית הדגשה מבוססת-אינדקס לפרמטרי חיפוש נתונים.
+///
+/// `fetch` מביא את התבנית מהמנוע (סריקת FST של מילון האינדקס עם אוטומטי
+/// החיפוש עצמם). שגיאה בהבאה נבלעת בכוונה — מסלול ה-fallback ממשיך לשרת.
+Future<void> primeHighlightPattern({
+  required String searchQuery,
+  required Map<String, Map<String, bool>> searchOptions,
+  required Map<int, List<String>> alternativeWords,
+  required Map<String, String> spacingValues,
+  required int searchDistance,
+  required bool isFuzzy,
+  required Future<HighlightPattern?> Function() fetch,
+}) async {
+  final key = _highlightRequestKey(
+    searchQuery,
+    searchOptions,
+    alternativeWords,
+    spacingValues,
+    searchDistance,
+    isFuzzy,
+  );
+  if (_primedHighlightCache.containsKey(key) ||
+      !_primedHighlightInFlight.add(key)) {
+    return;
+  }
+  try {
+    final pattern = await fetch();
+    _primedHighlightCache[key] = _compileHighlightPattern(pattern);
+    while (_primedHighlightCache.length > _maxPrimedHighlightEntries) {
+      _primedHighlightCache.remove(_primedHighlightCache.keys.first);
+    }
+  } catch (error) {
+    debugPrint('primeHighlightPattern failed: $error');
+  } finally {
+    _primedHighlightInFlight.remove(key);
+  }
+}
+
 String _highlightRequestKey(
   String searchQuery,
   Map<String, Map<String, bool>> searchOptions,
   Map<int, List<String>> alternativeWords,
   Map<String, String> spacingValues,
   int searchDistance,
+  bool isFuzzy,
 ) {
+  // מצב fuzzy מפיק תבנית שונה מהותית (וריאנטי מרחק-עריכה וצורות מילון) גם
+  // עבור אותם query/distance — בלעדי הסמן, חיפוש advanced ו-fuzzy עם אותם
+  // פרמטרים היו חולקים רשומת מטמון בטעות.
   final buffer = StringBuffer()
+    ..write(isFuzzy ? 'f' : 'a')
+    ..write(' ')
     ..write(searchDistance)
     ..write(' ')
     ..write(searchQuery)
@@ -307,6 +381,7 @@ _CompiledHighlightPattern? _resolveHighlightPattern(
   Map<int, List<String>> alternativeWords,
   Map<String, String> spacingValues,
   int searchDistance,
+  bool isFuzzy,
 ) {
   final key = _highlightRequestKey(
     searchQuery,
@@ -314,30 +389,24 @@ _CompiledHighlightPattern? _resolveHighlightPattern(
     alternativeWords,
     spacingValues,
     searchDistance,
+    isFuzzy,
   );
+  // תבנית מבוססת-אינדקס שהוזנה מראש קודמת ל-fallback: היא מדגישה את
+  // הווריאנטים שהחיפוש באמת התאים, לא רק את צורת השאילתה.
+  if (_primedHighlightCache.containsKey(key)) {
+    return _primedHighlightCache[key];
+  }
   if (_highlightCacheValid && key == _highlightCacheKey) {
     return _highlightCacheValue;
   }
 
-  final HighlightPattern? pattern = generateHighlightPattern(
+  final compiled = _compileHighlightPattern(generateHighlightPattern(
     query: searchQuery,
     distance: searchDistance < 0 ? 0 : searchDistance,
     customSpacing: spacingValues,
     alternativeWords: alternativeWords,
     searchOptions: searchOptions,
-  );
-
-  _CompiledHighlightPattern? compiled;
-  if (pattern != null) {
-    compiled = _CompiledHighlightPattern(
-      RegExp(pattern.combinedPattern, caseSensitive: false),
-      [
-        for (final wordPattern in pattern.wordPatterns)
-          RegExp(wordPattern, caseSensitive: false),
-      ],
-      pattern.wordBoundaryEligible,
-    );
-  }
+  ));
 
   _highlightCacheKey = key;
   _highlightCacheValue = compiled;
@@ -359,15 +428,21 @@ class _HighlightRange {
   const _HighlightRange(this.start, this.end);
 }
 
-/// ניקוד/טעמים *הצמודים לאות* — U+0591–U+05C7 ללא מקף (U+05BE) ופסק
-/// (U+05C0), שהם מפרידי מילים. אילו נכללו, הליכת הגבול הייתה בולעת מקף
-/// בין מילים ושוברת את זיהוי גבול המילה (וכך את הדגשת ביטוי כמו "אשר־שמע").
+/// ניקוד/טעמים *הצמודים לאות* — U+0591–U+05C7 ללא מפרידי המילים שבטווח:
+/// מקף (U+05BE), פסק (U+05C0), סוף-פסוק (U+05C3) ונו"ן הפוכה (U+05C6) —
+/// אותו סט בדיוק כמו `is_attached_mark` במנוע. אילו נכללו, הליכת הגבול
+/// הייתה בולעת מפריד בין מילים ופוסלת את ההדגשה (למשל "אשר־שמע", או "ברא"
+/// בתוך "ברא׃והארץ" — הגבול היה מדלג מעל ׃ ורואה את ו).
 bool _isHebrewMark(String char) {
   if (char.isEmpty) return false;
   final code = char.codeUnitAt(0);
   return (code >= 0x0591 && code <= 0x05BD) ||
       code == 0x05BF ||
-      (code >= 0x05C1 && code <= 0x05C7);
+      code == 0x05C1 ||
+      code == 0x05C2 ||
+      code == 0x05C4 ||
+      code == 0x05C5 ||
+      code == 0x05C7;
 }
 
 /// אות עברית (א-ת), אות לטינית או ספרה — תו שנחשב חלק ממילת חיפוש.
@@ -527,6 +602,7 @@ String highLight(
     alternativeWords,
     spacingValues,
     searchDistance,
+    isFuzzy,
   );
   if (compiled == null) return data;
 
@@ -643,6 +719,7 @@ int countMatches(String text, String searchQuery) {
     const {},
     const {},
     0,
+    false,
   );
   if (compiled == null) return 0;
   return _findHighlightMatches(text, compiled, compiled.boundaryEligible)
