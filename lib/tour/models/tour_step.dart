@@ -18,14 +18,10 @@ enum TourSpotlightArea {
   bookSearch,
   readingSettings,
   print,
-  sideBySide,
   searchDialog,
   tools,
-  toolsTabs,
   settings,
   designSettings,
-  backupSettings,
-  shortcutsSettings,
   emptyLibrary,
 }
 
@@ -40,8 +36,6 @@ enum TourStepAction {
   openTools,
   openSettings,
   openDesignSettings,
-  openSystemSettings,
-  openShortcutsSettings,
 }
 
 class TourStep extends Equatable {

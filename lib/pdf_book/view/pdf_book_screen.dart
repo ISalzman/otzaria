@@ -4325,6 +4325,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   Future<void> _handlePrintPress(BuildContext context) async {
     if (!context.mounted) return;
+    context.read<TourCubit>().recordInteraction(
+          TourInteraction(type: TourInteractionType.printUsed),
+        );
     final file = File(_resolvedPdfPath);
     final currentPage = widget.tab.pdfViewerController.isReady
         ? (widget.tab.pdfViewerController.pageNumber ?? widget.tab.pageNumber)

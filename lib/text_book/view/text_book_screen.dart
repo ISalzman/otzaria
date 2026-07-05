@@ -548,6 +548,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Future<void> _handlePrintPress(TextBookLoaded state) async {
+    context.read<TourCubit>().recordInteraction(
+          TourInteraction(type: TourInteractionType.printUsed),
+        );
     if (state.showPageShapeView) {
       final png = await _capturePageShapeViewPng();
       if (!mounted) return;
@@ -2213,6 +2216,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       icon: const Icon(FluentIcons.print_24_regular),
       tooltip: 'הדפסה (${shortcut.toUpperCase()})',
       onPressed: () {
+        context.read<TourCubit>().recordInteraction(
+              TourInteraction(type: TourInteractionType.printUsed),
+            );
         final settingsState = context.read<SettingsBloc>().state;
         showDialog(
           context: context,
@@ -2781,6 +2787,9 @@ bool _handleGlobalKeyEvent(
 
   // הדפסה
   if (ShortcutHelper.matchesShortcut(event, printShortcut)) {
+    context.read<TourCubit>().recordInteraction(
+          TourInteraction(type: TourInteractionType.printUsed),
+        );
     final settingsState = context.read<SettingsBloc>().state;
     showDialog(
       context: context,
