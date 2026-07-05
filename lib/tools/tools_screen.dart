@@ -31,7 +31,6 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/widgets/settings_card.dart';
-import 'package:otzaria/tour/tour_target_keys.dart';
 
 /// בדיקה האם שני סטים מכילים את אותם הערכים. שימושי ב-`listenWhen`.
 bool _setEquals(Set<String> a, Set<String> b) {
@@ -927,7 +926,6 @@ class ToolsScreenState extends State<ToolsScreen>
               children: [
                 for (final descriptor in group.tools)
                   ListTile(
-                    key: tourToolTabTargetKeys[descriptor.toolId],
                     leading: buildIcon(descriptor),
                     title: Text(descriptor.label),
                     trailing:
@@ -1081,9 +1079,6 @@ class ToolsScreenState extends State<ToolsScreen>
                                                       ?.pluginId) ...[
                                                 _descriptors[index]
                                                     .buildTopNavItem(
-                                                  key: tourToolTabTargetKeys[
-                                                      _descriptors[index]
-                                                          .toolId],
                                                   isSelected: _selectedToolId ==
                                                       _descriptors[index]
                                                           .toolId,

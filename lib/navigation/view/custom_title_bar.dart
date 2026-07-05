@@ -922,11 +922,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         }
       },
       child: AppContextMenuRegion(
-        key: isSelected ? tourTabContextMenuTargetKey : null,
         menuBuilder: (menuCtx, _) =>
             _buildTabContextMenuEntries(menuCtx, tab, state),
-        menuItemKeysByLabel:
-            isSelected ? {'הצג לצד': tourTabSideBySideMenuItemTargetKey} : null,
         child: StatefulBuilder(
           builder: (context, setLocalState) {
             return MouseRegion(
@@ -1031,10 +1028,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         final otherTabsList =
             state.tabs.where((t) => t != tab && t is! CombinedTab).toList();
         final otherTabs = otherTabsList.asMap().entries.map((mapEntry) {
-          final isFirst = mapEntry.key == 0;
           final otherTab = mapEntry.value;
           return AppContextMenuEntry(
-            key: isFirst ? tourTabSideBySideFirstItemTargetKey : null,
             label: otherTab.title,
             onTap: () {
               context.read<TabsBloc>().add(

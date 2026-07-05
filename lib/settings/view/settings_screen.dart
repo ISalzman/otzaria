@@ -14,6 +14,8 @@ import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/widgets/navigation/keyboard_navigator.dart';
 import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/navigation/sidebar_nav_item.dart';
@@ -129,6 +131,17 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
         SettingsTab.about => 6,
       };
 
+  /// מדווח ל-TourCubit על כניסה לטאב קיצורים/מערכת — פותר טיפי "הידעת".
+  void _recordTabTourInteraction(int index) {
+    final type = switch (index) {
+      4 => TourInteractionType.shortcutsSettingsOpened,
+      5 => TourInteractionType.systemSettingsOpened,
+      _ => null,
+    };
+    if (type == null || !mounted) return;
+    context.read<TourCubit>().recordInteraction(TourInteraction(type: type));
+  }
+
   // ── חיפוש: עיבוד בקשת ניווט מה-registry ──────────────────────────────────
   void _handleSearchNavigation() {
     final request = SettingsSearchRegistry.instance.pendingRequest;
@@ -142,6 +155,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
       _selectedIndex = tabIndex;
       _showMobileMenu = false;
     });
+    _recordTabTourInteraction(tabIndex);
 
     // לאחר טעינת הטאב — גלילה והבזק על הכרטיס.
     final cardId = request.cardId;
@@ -168,6 +182,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
       _selectedIndex = index;
       _clearSearch();
     });
+    _recordTabTourInteraction(index);
     // בטוח רק בdesktop layout — במוד mobile ה-node לא מחובר לעץ הפוקוס
     if (_contentFocusNode.enclosingScope != null) {
       _contentFocusNode.requestFocus();
@@ -361,6 +376,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                                                 _selectedIndex = idx;
                                                 _showMobileMenu = false;
                                               });
+                                              _recordTabTourInteraction(idx);
                                             },
                                           ),
                                       ],

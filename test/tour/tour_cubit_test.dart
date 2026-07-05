@@ -10,6 +10,25 @@ import 'package:otzaria/tour/view/tour_overlay_screen.dart';
 
 import '../helpers/memory_settings_cache.dart';
 
+/// לוחות זמנים עם הספים האמיתיים אך השהיה קצרה — לבדיקות מהירות.
+const List<DelayedTipSchedule> _fastSchedules = [
+  DelayedTipSchedule(
+    id: LiveTipId.customFoldersHint,
+    minimumLaunchCount: 3,
+    delay: Duration(milliseconds: 10),
+  ),
+  DelayedTipSchedule(
+    id: LiveTipId.shortcutsHint,
+    minimumLaunchCount: 5,
+    delay: Duration(milliseconds: 10),
+  ),
+  DelayedTipSchedule(
+    id: LiveTipId.backupHint,
+    minimumLaunchCount: 10,
+    delay: Duration(milliseconds: 10),
+  ),
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -17,13 +36,29 @@ void main() {
     await Settings.init(cacheProvider: MemorySettingsCache());
   });
 
-  test('בונה סיור מלא עם 26 שלבים כאשר הספרייה טעונה', () {
+  test('בונה סיור מלא עם 19 שלבים כאשר הספרייה טעונה', () {
     final steps = TourSteps.build(libraryLoaded: true);
 
-    expect(steps, hasLength(26));
+    expect(steps, hasLength(19));
     expect(steps.first.id, 'welcome');
     expect(steps.last.id, 'finish');
     expect(steps.any((step) => step.id == 'empty_library'), isFalse);
+  });
+
+  test('שלבים שהועברו לטיפים חיים אינם חלק מהסיור', () {
+    final steps = TourSteps.build(libraryLoaded: true);
+
+    for (final id in [
+      'side_by_side',
+      'print',
+      'backup',
+      'shortcuts',
+      'calendar',
+      'gematria',
+      'notes',
+    ]) {
+      expect(steps.any((step) => step.id == id), isFalse, reason: id);
+    }
   });
 
   test('בונה סיור מקוצר עם שלב ספרייה ריקה כאשר הספרייה אינה טעונה', () {
@@ -33,28 +68,6 @@ void main() {
     expect(steps[1].id, 'empty_library');
     expect(steps.any((step) => step.id == 'library'), isFalse);
     expect(steps.last.title, 'הסיור המקוצר הסתיים');
-  });
-
-  test('הסיור מדלג על שלבי כלים שהוסתרו בהגדרות', () async {
-    await Settings.setValue<String>(
-      'key-hidden-builtin-tool-ids',
-      'builtin.calendar,builtin.gematria',
-    );
-
-    final steps = TourSteps.build(libraryLoaded: true);
-
-    expect(steps.any((step) => step.id == 'calendar'), isFalse);
-    expect(steps.any((step) => step.id == 'gematria'), isFalse);
-    expect(steps.any((step) => step.id == 'notes'), isTrue);
-    expect(steps.any((step) => step.id == 'tools'), isTrue);
-  });
-
-  test('הסיור מציג את כל שלבי הכלים כברירת מחדל', () {
-    final steps = TourSteps.build(libraryLoaded: true);
-
-    expect(steps.any((step) => step.id == 'calendar'), isTrue);
-    expect(steps.any((step) => step.id == 'gematria'), isTrue);
-    expect(steps.any((step) => step.id == 'notes'), isTrue);
   });
 
   test('מציג קיצורי מקלדת לפי Settings ולא לפי ברירת מחדל קבועה', () async {
@@ -457,15 +470,14 @@ void main() {
 
     // שתי ההפעלות הראשונות אינן מתזמנות את הטיפ
     for (var i = 0; i < 2; i++) {
-      final cubit =
-          TourCubit(delayedTipDelay: const Duration(milliseconds: 10));
+      final cubit = TourCubit(delayedTipSchedules: _fastSchedules);
       cubit.registerSession();
       await Future<void>.delayed(const Duration(milliseconds: 40));
       expect(cubit.state.activeLiveTipId, isNull);
       await cubit.close();
     }
 
-    final cubit = TourCubit(delayedTipDelay: const Duration(milliseconds: 10));
+    final cubit = TourCubit(delayedTipSchedules: _fastSchedules);
     cubit.registerSession();
     expect(cubit.state.activeLiveTipId, isNull, reason: 'לפני שחלף זמן השימוש');
 
@@ -483,14 +495,20 @@ void main() {
     }
 
     // הפעלה שלישית קצרה — נסגרת לפני שהטיימר יורה
-    final shortSession =
-        TourCubit(delayedTipDelay: const Duration(seconds: 30));
+    final shortSession = TourCubit(
+      delayedTipSchedules: const [
+        DelayedTipSchedule(
+          id: LiveTipId.customFoldersHint,
+          minimumLaunchCount: 3,
+          delay: Duration(seconds: 30),
+        ),
+      ],
+    );
     shortSession.registerSession();
     await shortSession.close();
     expect(shortSession.state.activeLiveTipId, isNull);
 
-    final nextSession =
-        TourCubit(delayedTipDelay: const Duration(milliseconds: 10));
+    final nextSession = TourCubit(delayedTipSchedules: _fastSchedules);
     nextSession.registerSession();
     await Future<void>.delayed(const Duration(milliseconds: 40));
     expect(nextSession.state.activeLiveTipId, LiveTipId.customFoldersHint);
@@ -500,10 +518,15 @@ void main() {
   test('לאחר סגירת טיפ התיקיות הוא אינו חוזר בהפעלה הבאה', () async {
     await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
 
-    final first = TourCubit(
-      delayedTipDelay: const Duration(milliseconds: 10),
-      delayedTipMinimumLaunchCount: 1,
-    );
+    const singleLaunchSchedules = [
+      DelayedTipSchedule(
+        id: LiveTipId.customFoldersHint,
+        minimumLaunchCount: 1,
+        delay: Duration(milliseconds: 10),
+      ),
+    ];
+
+    final first = TourCubit(delayedTipSchedules: singleLaunchSchedules);
     first.registerSession();
     await Future<void>.delayed(const Duration(milliseconds: 40));
     expect(first.state.activeLiveTipId, LiveTipId.customFoldersHint);
@@ -511,14 +534,179 @@ void main() {
     expect(first.state.resolvedTips, contains(LiveTipId.customFoldersHint));
     await first.close();
 
-    final second = TourCubit(
-      delayedTipDelay: const Duration(milliseconds: 10),
-      delayedTipMinimumLaunchCount: 1,
-    );
+    final second = TourCubit(delayedTipSchedules: singleLaunchSchedules);
     second.registerSession();
     await Future<void>.delayed(const Duration(milliseconds: 40));
     expect(second.state.activeLiveTipId, isNull);
     await second.close();
+  });
+
+  test('טיפ הקיצורים מתוזמן מההפעלה החמישית כשטיפ התיקיות כבר נפתר', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 4);
+    await Settings.setValue<String>(
+      LiveTipStorage.resolvedTipsKey,
+      LiveTipStorage.encode({LiveTipId.customFoldersHint}),
+    );
+
+    final cubit = TourCubit(delayedTipSchedules: _fastSchedules);
+    cubit.registerSession(); // הפעלה חמישית
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+
+    expect(cubit.state.activeLiveTipId, LiveTipId.shortcutsHint);
+    await cubit.close();
+  });
+
+  test('כשכמה טיפים מתוזמנים זכאים — מוצג רק הראשון לפי סדר העדיפות', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 9);
+
+    final cubit = TourCubit(delayedTipSchedules: _fastSchedules);
+    cubit.registerSession(); // הפעלה עשירית — כל השלושה זכאים
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+
+    expect(cubit.state.activeLiveTipId, LiveTipId.customFoldersHint);
+    await cubit.close();
+  });
+
+  test('טיפ הגיבוי מתוזמן מההפעלה העשירית כשהקודמים נפתרו', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 9);
+    await Settings.setValue<String>(
+      LiveTipStorage.resolvedTipsKey,
+      LiveTipStorage.encode({
+        LiveTipId.customFoldersHint,
+        LiveTipId.shortcutsHint,
+      }),
+    );
+
+    final cubit = TourCubit(delayedTipSchedules: _fastSchedules);
+    cubit.registerSession();
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+
+    expect(cubit.state.activeLiveTipId, LiveTipId.backupHint);
+    await cubit.close();
+  });
+
+  test('פתיחת טאב הקיצורים פותרת את טיפ הקיצורים', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    final cubit = TourCubit();
+
+    await cubit.recordInteraction(
+      TourInteraction(type: TourInteractionType.shortcutsSettingsOpened),
+    );
+
+    expect(cubit.state.resolvedTips, contains(LiveTipId.shortcutsHint));
+    await cubit.close();
+  });
+
+  test('פתיחת טאב המערכת פותרת את טיפ הגיבוי', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    final cubit = TourCubit();
+
+    await cubit.recordInteraction(
+      TourInteraction(type: TourInteractionType.systemSettingsOpened),
+    );
+
+    expect(cubit.state.resolvedTips, contains(LiveTipId.backupHint));
+    await cubit.close();
+  });
+
+  test('טיפ ההדפסה מוצג אחרי פתיחת ספר מההפעלה השביעית', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 7);
+    final cubit = TourCubit(printHintMinimumSessionDuration: Duration.zero);
+
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.openedTextBook,
+        primaryValue: 'בראשית',
+      ),
+    );
+
+    expect(cubit.state.activeLiveTipId, LiveTipId.printHint);
+    await cubit.close();
+  });
+
+  test('טיפ ההדפסה אינו מוצג לפני ההפעלה השביעית', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 6);
+    final cubit = TourCubit(printHintMinimumSessionDuration: Duration.zero);
+
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.openedTextBook,
+        primaryValue: 'בראשית',
+      ),
+    );
+
+    expect(cubit.state.activeLiveTipId, isNull);
+    await cubit.close();
+  });
+
+  test('טיפ ההדפסה ממתין לזמן שימוש מינימלי בסשן', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 7);
+    final cubit = TourCubit(
+      printHintMinimumSessionDuration: const Duration(minutes: 5),
+    );
+
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.openedTextBook,
+        primaryValue: 'בראשית',
+      ),
+    );
+
+    expect(cubit.state.activeLiveTipId, isNull);
+    await cubit.close();
+  });
+
+  test('הדפסה פותרת את טיפ ההדפסה כך שלא יוצג', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 7);
+    final cubit = TourCubit(printHintMinimumSessionDuration: Duration.zero);
+
+    await cubit.recordInteraction(
+      TourInteraction(type: TourInteractionType.printUsed),
+    );
+    expect(cubit.state.resolvedTips, contains(LiveTipId.printHint));
+
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.openedTextBook,
+        primaryValue: 'בראשית',
+      ),
+    );
+
+    expect(cubit.state.activeLiveTipId, isNull);
+    await cubit.close();
+  });
+
+  test('טיפ אחד לכל היותר בסשן — טיפ נוסף נדחה להפעלה הבאה', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    await Settings.setValue<int>(LiveTipStorage.launchCountKey, 7);
+    final cubit = TourCubit(printHintMinimumSessionDuration: Duration.zero);
+
+    await cubit.recordInteraction(
+      TourInteraction(type: TourInteractionType.textSelected),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(type: TourInteractionType.textSelected),
+    );
+    expect(cubit.state.activeLiveTipId, LiveTipId.dictionaryContextMenuHint);
+    cubit.dismissLiveTip();
+
+    // תנאי טיפ ההדפסה מתקיים, אבל כבר הוצג טיפ בסשן הזה
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.openedTextBook,
+        primaryValue: 'בראשית',
+      ),
+    );
+
+    expect(cubit.state.activeLiveTipId, isNull);
+    await cubit.close();
   });
 
   test('TourCubit מציג טיפ אודות הספר אחרי פתיחת שלושה ספרים שונים', () async {
@@ -718,7 +906,7 @@ void main() {
     );
     expect(
       tourCardSwitchDurationFor(
-        fromStepId: 'shortcuts',
+        fromStepId: 'appearance',
         toStepId: 'finish',
       ),
       Duration.zero,
