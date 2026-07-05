@@ -33,6 +33,10 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
 
   bool _isStale(int opId) => opId != _operationId;
 
+  // ה-state הסופי של עדכון שכבר נכתב ל-DB, בזמן שהקבצים הנלווים עוד רצים.
+  // ביטול בשלב הזה פולט אותו — אחרת hasUpdate אובד והריענון/אינדוקס לא רצים.
+  LibraryUpdateState? _pendingCompleted;
+
   LibraryUpdateBloc({
     required this.repository,
     required this.isOfflineMode,
@@ -76,12 +80,14 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       if (_isStale(opId)) return;
       switch (plan.kind) {
         case LibraryUpdatePlanKind.none:
-          await _runCompanionAssets(emit, opId);
+          final assetsChanged = await _runCompanionAssets(emit, opId);
           if (_isStale(opId)) return;
-          emit(const LibraryUpdateState(
+          // תלמוד/קטלוג שהותקנו משנים את תוכן הספרייה — hasUpdate מפעיל
+          // ריענון ואינדוקס ב-UI גם כשה-DB עצמו לא עודכן.
+          emit(LibraryUpdateState(
             status: LibraryUpdateStatus.completed,
-            message: 'הספרייה מעודכנת',
-            hasUpdate: false,
+            message: assetsChanged ? 'הספרייה עודכנה' : 'הספרייה מעודכנת',
+            hasUpdate: assetsChanged,
           ));
         case LibraryUpdatePlanKind.delta:
           await _runDelta(plan, emit, opId);
@@ -125,13 +131,17 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       // הגענו לכאן ⇒ ה-apply וה-ריענון הצליחו וה-DB עודכן. אם בוטל/הוחלף
       // בינתיים — לא נדרוס את ה-state של הריצה החדשה (ה-DB כבר רוענן ממילא).
       if (_isStale(opId)) return;
-      await _runCompanionAssets(emit, opId);
-      if (_isStale(opId)) return;
-      emit(state.copyWith(
+      // נקודת אל-חזור: ביטול במהלך הקבצים הנלווים יפלוט את זה מ-_onCancel.
+      _pendingCompleted = state.copyWith(
         status: LibraryUpdateStatus.completed,
         message: 'הספרייה עודכנה לגרסה ${plan.targetVersion}',
         hasUpdate: true,
-      ));
+      );
+      await _runCompanionAssets(emit, opId);
+      final completed = _pendingCompleted;
+      _pendingCompleted = null;
+      if (_isStale(opId) || completed == null) return;
+      emit(completed);
     } on PatchDownloadCancelled {
       // ביטול לפני apply — לא שגיאה; _onCancel כבר העביר ל-idle.
     } catch (e, st) {
@@ -167,13 +177,16 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
         onProgress: (progress) => add(_LibraryUpdateProgressed(progress, opId)),
       );
       if (_isStale(opId)) return;
-      await _runCompanionAssets(emit, opId);
-      if (_isStale(opId)) return;
-      emit(state.copyWith(
+      _pendingCompleted = state.copyWith(
         status: LibraryUpdateStatus.completed,
         message: 'הספרייה הותקנה מחדש לגרסה ${plan.targetVersion}',
         hasUpdate: true,
-      ));
+      );
+      await _runCompanionAssets(emit, opId);
+      final completed = _pendingCompleted;
+      _pendingCompleted = null;
+      if (_isStale(opId) || completed == null) return;
+      emit(completed);
     } on PatchDownloadCancelled {
       // ביטול — _onCancel כבר העביר ל-idle.
     } catch (e, st) {
@@ -189,14 +202,15 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
 
   /// מוודא שהקבצים הנלווים (תלמוד, קטלוגים, מילון) קיימים ומעודכנים, בסוף
   /// כל בדיקת/החלת עדכון. best-effort — כשל לא הופך את העדכון לשגיאה.
-  Future<void> _runCompanionAssets(
+  /// מחזיר האם תוכן הספרייה השתנה (ראה [CompanionAssetsService.verifyAndUpdate]).
+  Future<bool> _runCompanionAssets(
     Emitter<LibraryUpdateState> emit,
     int opId,
   ) async {
     final service = companionAssets;
-    if (service == null) return;
+    if (service == null) return false;
     try {
-      await service.verifyAndUpdate(
+      return await service.verifyAndUpdate(
         isCancelled: () => _isStale(opId),
         onStatus: (message) {
           if (_isStale(opId)) return;
@@ -217,6 +231,7 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       );
     } catch (e, st) {
       _logUpdateError('companionAssets', e, st);
+      return false;
     }
   }
 
@@ -240,6 +255,14 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     // וביטול כאן היה משאיר קטלוג ואינדקס ישנים עד restart.
     if (!_canCancel(state)) return;
     _operationId++; // מבטל את הריצה הפעילה — ה-Future הישן יזהה זאת.
+    // ה-DB כבר עודכן והביטול עצר רק את הקבצים הנלווים — פולטים את ה-completed
+    // השמור כדי שהריענון והאינדוקס יופעלו בכל זאת.
+    final pending = _pendingCompleted;
+    _pendingCompleted = null;
+    if (pending != null) {
+      emit(pending);
+      return;
+    }
     emit(const LibraryUpdateState(message: 'העדכון בוטל'));
   }
 
@@ -262,6 +285,7 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     Emitter<LibraryUpdateState> emit,
   ) {
     _operationId++;
+    _pendingCompleted = null;
     emit(const LibraryUpdateState());
   }
 

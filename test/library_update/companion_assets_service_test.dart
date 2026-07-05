@@ -57,6 +57,7 @@ void main() {
     List<({String archive, String outputDir})>? extractions,
     List<String>? talmudDirs,
     void Function()? invalidate,
+    void Function()? invalidateLibrary,
     bool failExtraction = false,
   }) {
     return CompanionAssetsService(
@@ -75,6 +76,7 @@ void main() {
           talmudDirs ??
           [p.join(tmp.path, DatabaseConstants.talmudBavliFolderName)],
       invalidateExternalBooksCache: invalidate ?? () {},
+      invalidateLibraryCaches: invalidateLibrary ?? () {},
     );
   }
 
@@ -101,7 +103,11 @@ void main() {
       final extractions = <({String archive, String outputDir})>[];
       final statuses = <String>[];
       final progress = <int>[];
-      await service(extractions: extractions).verifyAndUpdate(
+      var libraryInvalidated = 0;
+      final changed = await service(
+        extractions: extractions,
+        invalidateLibrary: () => libraryInvalidated++,
+      ).verifyAndUpdate(
         onStatus: statuses.add,
         onDownloadProgress: (done, total) => progress.add(done),
       );
@@ -109,6 +115,10 @@ void main() {
       expect(extractions, hasLength(1));
       expect(extractions.single.outputDir, tmp.path);
       expect(readMarker(), tag);
+      expect(changed, isTrue,
+          reason: 'התקנת תלמוד משנה את הספרייה — נדרש ריענון');
+      expect(libraryInvalidated, 1,
+          reason: 'בלי ניקוי ה-cache הריענון לא יגלה את התיקייה החדשה');
       // מד בזמן החילוץ (שלב ה-zst), ומעבר לספינר בשלב פריסת ה-tar.
       expect(statuses, contains('מחלץ את התלמוד הבבלי'));
       expect(statuses, contains('פורס את קבצי התלמוד'));
@@ -119,7 +129,7 @@ void main() {
       createTalmudDir();
       final requested = <Uri>[];
       final extractions = <({String archive, String outputDir})>[];
-      await service(
+      final changed = await service(
         client: releaseClient(requested: requested),
         extractions: extractions,
       ).verifyAndUpdate();
@@ -127,6 +137,7 @@ void main() {
       expect(readMarker(), tag);
       expect(extractions, isEmpty);
       expect(requested.map((u) => u.toString()), isNot(contains(assetUrl)));
+      expect(changed, isFalse, reason: 'החתמה בלבד אינה שינוי בספרייה');
     });
 
     test('סימון תואם לתג → לא מוריד ולא נוגע', () async {
@@ -181,19 +192,29 @@ void main() {
       final catalog = _FakeCatalogRepository(exists: true, updateResult: true);
       var invalidated = 0;
       createTalmudDir(markerTag: tag);
-      await service(catalog: catalog, invalidate: () => invalidated++)
-          .verifyAndUpdate();
+      final changed =
+          await service(catalog: catalog, invalidate: () => invalidated++)
+              .verifyAndUpdate();
 
       expect(catalog.updateCalled, isTrue);
       expect(catalog.downloadCalled, isFalse);
       expect(invalidated, 1);
+      expect(changed, isTrue);
+    });
+
+    test('קיים ומעודכן → לא מדווח שינוי', () async {
+      final catalog = _FakeCatalogRepository(exists: true);
+      createTalmudDir(markerTag: tag);
+      final changed = await service(catalog: catalog).verifyAndUpdate();
+      expect(changed, isFalse);
     });
 
     test('חסר → מוריד', () async {
       final catalog = _FakeCatalogRepository(exists: false);
       createTalmudDir(markerTag: tag);
-      await service(catalog: catalog).verifyAndUpdate();
+      final changed = await service(catalog: catalog).verifyAndUpdate();
       expect(catalog.downloadCalled, isTrue);
+      expect(changed, isTrue);
     });
   });
 
