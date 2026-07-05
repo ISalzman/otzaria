@@ -111,7 +111,14 @@ class TextBookTab extends OpenedTab {
     this.pinpointHighlight,
     this.pinpointHighlightSectionIndex,
     @visibleForTesting TextBookBloc? blocOverride,
-  }) : super(book.title, isPinned: isPinned, dedupeKey: dedupeKey) {
+    // מהדורה חלופית מקבלת כותרת טאב עם שם המהדורה, להבחנה מהנוסח הממוזג.
+  }) : super(
+          book.versionTitle == null
+              ? book.title
+              : '${book.title} (${book.versionTitle})',
+          isPinned: isPinned,
+          dedupeKey: dedupeKey,
+        ) {
     // קביעת ברירת המחדל של splitedView מההגדרות אם לא סופק
     final bool effectiveSplitedView =
         splitedView ?? (Settings.getValue<bool>('key-splited-view') ?? true);

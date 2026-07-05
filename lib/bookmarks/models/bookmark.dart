@@ -9,6 +9,14 @@ import 'package:otzaria/utils/file/hive_utils.dart';
 /// id/נתיב שונים) יקבלו זהויות שונות, כך שאפשר לסמן בהן סימניות נפרדות באותו
 /// אינדקס בלי שתידחה סימניה.
 String bookIdentity(Book book) {
+  final base = _baseBookIdentity(book);
+  // מהדורה חלופית (book_version) חולקת את אותו db id עם הנוסח הממוזג —
+  // בלי הסיומת סימניות והיסטוריית מיקום היו מתערבבות בין המהדורות.
+  final versionTitle = book is TextBook ? book.versionTitle : null;
+  return versionTitle == null ? base : '$base|version:$versionTitle';
+}
+
+String _baseBookIdentity(Book book) {
   if (book.id != null) {
     return 'id:${book.id}';
   }
