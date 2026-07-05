@@ -4,8 +4,8 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/error_log_file.dart';
-import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart' as engine;
 
 class PreparedIndexDocument {
   final String reference;
@@ -49,23 +49,11 @@ class IndexingWorkComplete extends IndexingIsolateUpdate {
 }
 
 class IndexingDocumentBuilder {
-  static final RegExp _pdfInvisibleChars = RegExp(
-    r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069]'
-    r'|\uFEFF',
-  );
-
-  static final RegExp _pdfLettersAndDigits =
-      RegExp(r'[\u05D0-\u05EAa-zA-Z0-9]');
-  static final RegExp _pdfNonLettersNonSpace =
-      RegExp(r'[^\s\u05D0-\u05EAa-zA-Z0-9]');
-
-  /// \u05DE\u05E0\u05E8\u05DE\u05DC \u05D8\u05E7\u05E1\u05D8 \u05DC\u05D0\u05D9\u05E0\u05D3\u05D5\u05E7\u05E1 \u05DC\u05E4\u05D9 \u05DB\u05DC\u05DC\u05D9 `SearchQueryBuilder.sanitizeQuery`,
-  /// \u05DB\u05DA \u05E9\u05D8\u05D5\u05E7\u05E0\u05D9 \u05D4\u05D0\u05D9\u05E0\u05D3\u05D5\u05E7\u05E1 \u05D5\u05D8\u05D5\u05E7\u05E0\u05D9 \u05D4\u05E9\u05D0\u05D9\u05DC\u05EA\u05D4 \u05D9\u05D9\u05D5\u05D5\u05E6\u05E8\u05D5 \u05DE\u05D0\u05D5\u05EA\u05DD \u05EA\u05D5\u05D5\u05D9\u05DD \u05DE\u05E0\u05D5\u05E8\u05DE\u05DC\u05D9\u05DD.
-  static String normalizeTextForIndexing(String input) {
-    return SearchQueryBuilder.sanitizeQuery(
-      removeVolwels(stripHtmlIfNeeded(input)),
-    );
-  }
+  /// \u05DE\u05E0\u05E8\u05DE\u05DC \u05D8\u05E7\u05E1\u05D8 \u05DC\u05D0\u05D9\u05E0\u05D3\u05D5\u05E7\u05E1. \u05DE\u05D0\u05E6\u05D9\u05DC \u05DC\u05DE\u05E0\u05D5\u05E2 \u05D4-Rust
+  /// ([`engine.normalizeTextForIndexing`]) \u05E9\u05D4\u05D5\u05D0 \u05DE\u05E7\u05D5\u05E8 \u05D4\u05D0\u05DE\u05EA \u05D4\u05D9\u05D7\u05D9\u05D3, \u05DB\u05DA \u05E9\u05D8\u05D5\u05E7\u05E0\u05D9
+  /// \u05D4\u05D0\u05D9\u05E0\u05D3\u05D5\u05E7\u05E1 \u05D5\u05D8\u05D5\u05E7\u05E0\u05D9 \u05D4\u05E9\u05D0\u05D9\u05DC\u05EA\u05D4 \u05D9\u05D9\u05D5\u05D5\u05E6\u05E8\u05D5 \u05DE\u05D0\u05D5\u05EA\u05DD \u05EA\u05D5\u05D5\u05D9\u05DD \u05DE\u05E0\u05D5\u05E8\u05DE\u05DC\u05D9\u05DD \u05D5\u05DC\u05D0 \u05D9\u05D9\u05E4\u05E8\u05D3\u05D5.
+  static String normalizeTextForIndexing(String input) =>
+      engine.normalizeTextForIndexing(input: input);
 
   static List<PreparedIndexDocument> buildTextBookDocuments(String text) {
     final texts = text.split('\n');
@@ -102,32 +90,15 @@ class IndexingDocumentBuilder {
     return documents;
   }
 
-  static String normalizePdfTextForIndexing(String input) {
-    var text = stripHtmlIfNeeded(input);
-    text = text.replaceAll(_pdfInvisibleChars, '');
-    text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
-    text = removeVolwels(text);
-    text = SearchQueryBuilder.sanitizeQuery(text);
-    return text;
-  }
+  /// מנרמל טקסט PDF לאינדוקס. מאציל למנוע ה-Rust
+  /// ([`engine.normalizePdfTextForIndexing`]) — מקור אמת יחיד לצד האינדוקס.
+  static String normalizePdfTextForIndexing(String input) =>
+      engine.normalizePdfTextForIndexing(input: input);
 
-  static bool isProbablyGarbagePdfText(String normalizedText) {
-    final compact = normalizedText.replaceAll(RegExp(r'\s+'), '');
-    if (compact.isEmpty) return true;
-
-    final letters = _pdfLettersAndDigits.allMatches(compact).length;
-    if (letters == 0) return true;
-
-    final nonLetters = _pdfNonLettersNonSpace.allMatches(compact).length;
-    final ratioLetters = letters / compact.length;
-
-    if (compact.length >= 50 && ratioLetters < 0.10) return true;
-    if (compact.length >= 20 && ratioLetters < 0.20 && nonLetters > letters) {
-      return true;
-    }
-
-    return false;
-  }
+  /// זיהוי עמוד PDF שנראה כזבל (רעש OCR) שיש לדלג עליו. מאציל למנוע ה-Rust
+  /// ([`engine.isProbablyGarbagePdfText`]).
+  static bool isProbablyGarbagePdfText(String normalizedText) =>
+      engine.isProbablyGarbagePdfText(normalizedText: normalizedText);
 
   static void _updateReferenceTrail(List<String> reference, String line) {
     if (line.length < 4) {
@@ -155,6 +126,7 @@ class IndexingIsolateService {
     this._errorPort,
     this._exitPort,
     this._workerToken,
+    this._externalLibraryPath,
   ) {
     _messagesSubscription = _receivePort.listen(_handleMessage);
     _errorSubscription = _errorPort.listen(_handleUnhandledWorkerError);
@@ -168,6 +140,11 @@ class IndexingIsolateService {
   final ReceivePort _exitPort;
   final RootIsolateToken? _workerToken;
 
+  /// נתיב מפורש לספריית המנוע הנייטיבית עבור ה-worker isolate. `null`
+  /// ב-production (ה-isolate מאתחל את RustLib בדרך הרגילה); הטסטים מספקים
+  /// נתיב לספרייה שנבנתה מקומית.
+  final String? _externalLibraryPath;
+
   late final StreamSubscription<dynamic> _messagesSubscription;
   late final StreamSubscription<dynamic> _errorSubscription;
   late final StreamSubscription<dynamic> _exitSubscription;
@@ -180,7 +157,11 @@ class IndexingIsolateService {
   bool _disposed = false;
   bool _workerFailureReported = false;
 
-  static Future<IndexingIsolateService> create() async {
+  /// [externalLibraryPath] מיועד לטסטים בלבד: נתיב מפורש לספריית המנוע
+  /// הנייטיבית שה-worker isolate יטען. ב-production השאירו `null`.
+  static Future<IndexingIsolateService> create({
+    @visibleForTesting String? externalLibraryPath,
+  }) async {
     final receivePort = ReceivePort();
     final errorPort = ReceivePort();
     final exitPort = ReceivePort();
@@ -189,6 +170,7 @@ class IndexingIsolateService {
       errorPort,
       exitPort,
       RootIsolateToken.instance,
+      externalLibraryPath,
     );
 
     await service._spawn();
@@ -201,6 +183,7 @@ class IndexingIsolateService {
       _WorkerBootstrapMessage(
         mainSendPort: _receivePort.sendPort,
         rootToken: _workerToken,
+        externalLibraryPath: _externalLibraryPath,
       ),
       debugName: 'indexing_worker',
       onError: _errorPort.sendPort,
@@ -436,9 +419,15 @@ class _WorkerBootstrapMessage {
   final SendPort mainSendPort;
   final RootIsolateToken? rootToken;
 
+  /// נתיב מפורש לספריית המנוע הנייטיבית, לשימוש ה-isolate כשאין ברירת מחדל
+  /// זמינה (למשל תחת `flutter test`). ב-production זה `null` וה-isolate
+  /// מאתחל את RustLib בדרך הרגילה.
+  final String? externalLibraryPath;
+
   const _WorkerBootstrapMessage({
     required this.mainSendPort,
     required this.rootToken,
+    this.externalLibraryPath,
   });
 }
 
@@ -449,6 +438,23 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
   var isProcessing = false;
   var shouldCancel = false;
   Completer<void>? pendingBatchAck;
+
+  // נרמול הטקסט לאינדוקס מאציל למנוע ה-Rust (קריאות FRB סינכרוניות), ולכן
+  // חובה לאתחל את RustLib ב-isolate הזה — אתחול ה-main isolate לא חל כאן.
+  // האתחול עצל וחד-פעמי, לפני עיבוד הספר הראשון.
+  var engineInitialized = false;
+  Future<void> ensureEngine() async {
+    if (engineInitialized) return;
+    final path = bootstrap.externalLibraryPath;
+    if (path != null) {
+      await engine.RustLib.init(
+        externalLibrary: engine.ExternalLibrary.open(path),
+      );
+    } else {
+      await engine.RustLib.init();
+    }
+    engineInitialized = true;
+  }
 
   Future<void> completePendingAck() async {
     final completer = pendingBatchAck;
@@ -473,6 +479,7 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
   }
 
   Future<void> processTextBook(String text) async {
+    await ensureEngine();
     final texts = text.split('\n');
     final reference = <String>[];
     var batch = <Map<String, Object?>>[];
@@ -513,6 +520,7 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
   }
 
   Future<void> processPdfPages(List<dynamic> rawPages) async {
+    await ensureEngine();
     var batch = <Map<String, Object?>>[];
     var ordinal = 0;
 

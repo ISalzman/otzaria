@@ -1,63 +1,10 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
-    show ExternalLibrary;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
-import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
-/// מאתר את שורש חבילת המנוע דרך package_config.json (תחת `flutter test`
-/// ‏Isolate.resolvePackageUri מחזיר null, ולכן קוראים את הקובץ ישירות;
-/// ה-CWD של flutter test הוא שורש הפרויקט).
-String? _searchEnginePackageRoot() {
-  final configFile = File('.dart_tool/package_config.json');
-  if (!configFile.existsSync()) return null;
-  final config = jsonDecode(configFile.readAsStringSync());
-  final packages = config['packages'] as List<dynamic>;
-  for (final package in packages) {
-    if (package['name'] == 'otzaria_search_engine') {
-      final rootUri = Uri.parse(package['rootUri'] as String);
-      final resolved = rootUri.hasScheme
-          ? rootUri
-          : configFile.absolute.parent.uri.resolveUri(rootUri);
-      return resolved.toFilePath();
-    }
-  }
-  return null;
-}
-
-/// טוען את ספריית מנוע החיפוש הנייטיבית מתוך עותק החבילה (build מקומי של
-/// cargo). `highLight` מקבל את תבניות ההדגשה מהמנוע, כך שהטסטים שלו
-/// דורשים את הספרייה; כשאין build זמין (למשל ב-CI ללא Rust) הקבוצה תדולג.
-Future<bool> _tryInitSearchEngine() async {
-  try {
-    final packageRoot = _searchEnginePackageRoot();
-    if (packageRoot == null) return false;
-    const names = [
-      'search_engine.dll',
-      'libsearch_engine.so',
-      'libsearch_engine.dylib',
-    ];
-    for (final profile in ['release', 'debug']) {
-      for (final name in names) {
-        final path = '$packageRoot/rust/target/$profile/$name'
-            .replaceAll('\\', '/')
-            .replaceAll('//', '/');
-        if (File(path).existsSync()) {
-          await RustLib.init(externalLibrary: ExternalLibrary.open(path));
-          return true;
-        }
-      }
-    }
-    return false;
-  } catch (_) {
-    return false;
-  }
-}
+import '../support/search_engine_test_init.dart';
 
 Future<void> main() async {
-  final engineReady = await _tryInitSearchEngine();
+  final engineReady = await tryInitSearchEngine();
 
   group('highLight', () {
     test('single word - highlights the word', () {

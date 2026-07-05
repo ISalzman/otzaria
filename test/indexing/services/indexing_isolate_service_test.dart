@@ -1,8 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/indexing/services/indexing_isolate_service.dart';
 
-void main() {
+import '../../support/search_engine_test_init.dart';
+
+Future<void> main() async {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  // נרמול הטקסט לאינדוקס מאציל למנוע ה-Rust; הטסטים דורשים את הספרייה
+  // הנייטיבית ומדולגים כשאין build זמין.
+  final engineReady = await tryInitSearchEngine();
+  final libraryPath = searchEngineLibraryPath();
 
   group('IndexingDocumentBuilder', () {
     test('builds text book documents with hierarchical references', () {
@@ -37,11 +44,13 @@ void main() {
       expect(documents.last.reference, 'חלק ב');
       expect(documents.last.text, 'טקסט');
     });
-  });
+  }, skip: engineReady ? false : searchEngineSkipReason);
 
   group('IndexingIsolateService', () {
     test('streams prepared text batches from isolate', () async {
-      final service = await IndexingIsolateService.create();
+      final service = await IndexingIsolateService.create(
+        externalLibraryPath: libraryPath,
+      );
       addTearDown(service.dispose);
 
       final stream = await service.processTextBook(
@@ -68,7 +77,9 @@ void main() {
     });
 
     test('cancel stops further batch generation', () async {
-      final service = await IndexingIsolateService.create();
+      final service = await IndexingIsolateService.create(
+        externalLibraryPath: libraryPath,
+      );
       addTearDown(service.dispose);
 
       final text = List.generate(700, (index) => 'שורה $index').join('\n');
@@ -91,5 +102,5 @@ void main() {
       expect(batchesSeen, 1);
       expect(documentCount, lessThan(700));
     });
-  });
+  }, skip: libraryPath != null ? false : searchEngineSkipReason);
 }

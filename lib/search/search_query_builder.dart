@@ -1,4 +1,5 @@
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart' as engine;
 
 class SearchModeScopedParameters {
   final Map<String, String> customSpacing;
@@ -37,23 +38,14 @@ class SearchQueryBuilder {
         for (final option in availableWordOptionKeys) option: false,
       };
 
-  /// רגקס לחילוץ מילות חיפוש:
-  /// - `"` תמיד מפריד (גרשיים — מפצל `ז"ל` לשני טוקנים).
-  /// - `'` בסוף מילה נשמר כחלק מהטוקן (כך `תוס'` נשאר `תוס'`).
+  /// פיצול שאילתה למילות חיפוש. מאציל למנוע ה-Rust
+  /// ([`engine.splitQueryWords`]) שהוא מקור האמת היחיד, כך שהטוקניזציה
+  /// בצד האפליקציה זהה תו-בתו לזו של האינדוקס והשאילתה במנוע:
+  /// - `"` תמיד מפריד (`ז"ל` → שני טוקנים).
+  /// - `'` בסוף מילה נשמר בטוקן (`תוס'`).
   /// - `'` באמצע מילה מפריד (`ד'אש` → `ד` + `אש`).
-  /// תואם את התנהגות HebrewTokenizer בצד ה-Rust.
-  static final RegExp _tokenExtractor = RegExp(
-    r"""[א-ת֐-ׇA-Za-z0-9]+(?:'(?![א-ת֐-ׇA-Za-z0-9]))?""",
-  );
-
-  static List<String> splitQueryWords(String query) {
-    final cleanedQuery = sanitizeQuery(query);
-    return _tokenExtractor
-        .allMatches(cleanedQuery.trim())
-        .map((m) => m.group(0)!)
-        .where((w) => w.isNotEmpty)
-        .toList();
-  }
+  static List<String> splitQueryWords(String query) =>
+      engine.splitQueryWords(query: query);
 
   static bool usesAdvancedParameters(SearchMode searchMode) {
     return searchMode == SearchMode.advanced;
@@ -147,20 +139,13 @@ class SearchQueryBuilder {
     );
   }
 
-  /// ניקוי שאילתה מתווים מיוחדים שיכולים להפריע לחיפוש
-  /// גרשיים וגרש עבריים (״ ׳) מומרים לגרשיים וגרש לועזיים (" ')
-  /// המקף העברי (־) והמקף הלועזי (-) מומרים לרווח כדי שיתפצלו למילים נפרדות
-  /// רווחים מרובים מצומצמים לרווח יחיד בסיום התהליך
-  static String sanitizeQuery(String query) {
-    return query
-        .replaceAll('״', '"')
-        .replaceAll('׳', "'")
-        .replaceAll('־', ' ')
-        .replaceAll('-', ' ')
-        .replaceAll(RegExp(r"""[,;!?:*\(\)\[\]\{\}\^\$\|\\+.~`]"""), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-  }
+  /// ניקוי שאילתה מתווים מיוחדים שיכולים להפריע לחיפוש. מאציל למנוע ה-Rust
+  /// ([`engine.sanitizeQuery`]) שהוא מקור האמת היחיד, כך שנרמול השאילתה
+  /// ונרמול האינדוקס לא יכולים להיפרד:
+  /// גרשיים וגרש עבריים (״ ׳) מומרים לגרשיים וגרש לועזיים (" ');
+  /// המקף העברי (־) והמקף הלועזי (-) מומרים לרווח; רווחים מרובים מצומצמים.
+  static String sanitizeQuery(String query) =>
+      engine.sanitizeQuery(query: query);
 
   static Map<String, String> effectiveSpacingValues({
     required int wordCount,
