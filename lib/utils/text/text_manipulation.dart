@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
-import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show HighlightPattern, generateHighlightPattern;
 
@@ -480,6 +479,31 @@ String _highlightMatchedSearchWords(
   return result.toString();
 }
 
+/// מאתר את התאמות ההדגשה בטקסט: התאמות התבנית המשולבת שעוברות גם את
+/// בדיקת גבולות המילה פר-מילה. משותף ל-[highLight] ול-[countMatches], כך
+/// שהמונה סופר בדיוק את מה שמודגש בפועל.
+List<_HighlightMatch> _findHighlightMatches(
+  String data,
+  _CompiledHighlightPattern compiled,
+  List<bool> requireTokenBoundaries,
+) {
+  return compiled.combined
+      .allMatches(data)
+      .map((match) {
+        final matchedText = match.group(0)!;
+        final ranges = _collectMatchedSearchWordRanges(
+          data,
+          matchedText,
+          match.start,
+          compiled.words,
+          requireTokenBoundaries,
+        );
+        return ranges == null ? null : _HighlightMatch(match, ranges);
+      })
+      .whereType<_HighlightMatch>()
+      .toList();
+}
+
 String highLight(
   String data,
   String searchQuery, {
@@ -513,21 +537,7 @@ String highLight(
       eligible && !yellowBackground && !partialWordMatch,
   ];
 
-  final matches = compiled.combined
-      .allMatches(data)
-      .map((match) {
-        final matchedText = match.group(0)!;
-        final ranges = _collectMatchedSearchWordRanges(
-          data,
-          matchedText,
-          match.start,
-          compiled.words,
-          requireTokenBoundaries,
-        );
-        return ranges == null ? null : _HighlightMatch(match, ranges);
-      })
-      .whereType<_HighlightMatch>()
-      .toList();
+  final matches = _findHighlightMatches(data, compiled, requireTokenBoundaries);
 
   if (matches.isEmpty) return data;
 
@@ -622,20 +632,21 @@ const List<String> _eraCategories = [
 ];
 const String _defaultCategory = 'מפרשים נוספים';
 
+/// סופר את הופעות השאילתה בטקסט — באותה התאמה בדיוק כמו [highLight]
+/// (תבנית מהמנוע, סובלנות ניקוד ובדיקת גבולות מילה), כך שהמונה המוצג
+/// לעולם לא סוטה ממספר ההדגשות בפועל.
 int countMatches(String text, String searchQuery) {
   if (searchQuery.isEmpty) return 0;
-
-  // ניקוי תווים מיוחדים מהשאילתה
-  final cleanedQuery = SearchQueryBuilder.sanitizeQuery(searchQuery);
-
-  if (cleanedQuery.isEmpty) return 0;
-
-  // אותו רג'קס כמו ב-highLight
-  final RegExp regex = RegExp(
-    RegExp.escape(cleanedQuery),
-    caseSensitive: false,
+  final compiled = _resolveHighlightPattern(
+    searchQuery,
+    const {},
+    const {},
+    const {},
+    0,
   );
-  return regex.allMatches(text).length;
+  if (compiled == null) return 0;
+  return _findHighlightMatches(text, compiled, compiled.boundaryEligible)
+      .length;
 }
 
 Future<bool> hasTopic(String title, String topic) async {

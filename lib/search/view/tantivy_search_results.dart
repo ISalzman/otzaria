@@ -402,16 +402,16 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                       .any((alts) => alts.any((w) => w.trim().isNotEmpty));
                   final hasSpacingValues = widget.tab.spacingValues.values
                       .any((v) => v.trim().isNotEmpty);
-                  final looksLikeRegex =
-                      RegExp(r'[\\.\*\+\?\|\(\)\[\]\{\}\^\$]')
-                          .hasMatch(rawQuery);
                   final currentMode =
                       widget.tab.searchBloc.state.configuration.searchMode;
 
+                  // אין צורך בזיהוי "שאילתת רגקס": המנוע מנקה מטא-תווים
+                  // ב-sanitize_query לפני בניית השאילתה, כך שקלט המשתמש
+                  // לעולם אינו מפורש כתבנית — שאילתה בלי אפשרויות מיוחדות
+                  // היא תמיד ליטרלית וניתנת לחיפוש פשוט בתוך הספר.
                   final shouldUseSimpleInBook = !hasEnabledOptions &&
                       !hasAlternativeWords &&
                       !hasSpacingValues &&
-                      !looksLikeRegex &&
                       currentMode != SearchMode.fuzzy;
 
                   final inBookMode =

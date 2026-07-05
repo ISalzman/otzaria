@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
+import 'package:otzaria_search_engine/otzaria_search_engine.dart' as engine;
 
 /// בונה הדגשות לתצוגת תוצאות חיפוש.
 ///
@@ -25,14 +26,6 @@ class SnippetBuilder {
   static const Set<String> _highlightTags = {'font', 'mark'};
 
   static final RegExp _whitespace = RegExp(r'\s+');
-
-  /// מחלקת תווים של אותיות עבריות — לבדיקת גבולות מילה.
-  /// תואם את `_isHebrewLetter` בחיפוש המקומי: אותיות בסיס (U+05D0–U+05EA),
-  /// ליגטורות וגרשיים (U+05F0–U+05F4) וצורות תצוגה (U+FB1D–U+FB4F).
-  static const String _hebrewLetters = 'א-תװ-״יִ-ﭏ';
-
-  /// תווי ניקוד וטעמים אופציונליים בין אותיות בטקסט המוצג (U+0591–U+05C7).
-  static const String _optionalMarks = '[֑-ׇ]*';
 
   /// ממיר HTML מודגש שמגיע ממנוע החיפוש לרשימת [InlineSpan].
   ///
@@ -185,35 +178,22 @@ class SnippetBuilder {
     return '$prefix${text.substring(start, end)}$suffix';
   }
 
-  /// בונה רגקס להתאמה ליטרלית של [query], סובלני לניקוד וגבולות מילה.
+  /// השאילתה שהתבנית הליטרלית שבקאש נבנתה עבורה. ההדגשה רצה פר-snippet
+  /// באותה שאילתה, ולכן קריאת ה-FFI מתבצעת פעם אחת לכל שינוי שאילתה.
+  static String? _literalPatternQuery;
+  static RegExp? _literalPatternCache;
+
+  /// רגקס להתאמה ליטרלית של [query] — נבנה במנוע החיפוש (Rust), מקור האמת
+  /// היחיד לתבניות חיפוש. סובלני לניקוד/טעמים, תופס גרשיים בשתי צורותיהם,
+  /// ומכבד גבולות מילה. הצד של Dart רק מקמפל ומחיל.
   /// מחזיר `null` אם השאילתה ריקה.
   static RegExp? _literalQueryPattern(String query) {
-    final words = query.trim().split(_whitespace).where((w) => w.isNotEmpty);
-    final wordPatterns = words.map(_charwisePattern).toList(growable: false);
-    if (wordPatterns.isEmpty) return null;
-
-    final phrase = wordPatterns.join(r'\s+');
-    return RegExp(
-      '(?<![$_hebrewLetters])(?:$phrase)(?![$_hebrewLetters])',
-      caseSensitive: false,
-      unicode: true,
-    );
-  }
-
-  /// בונה תבנית לזיהוי מילה בודדת, עם ניקוד אופציונלי בין התווים והתאמת
-  /// גרשיים לועזיים (`"`/`'`) גם לעבריים (`״`/`׳`).
-  static String _charwisePattern(String word) {
-    final buffer = StringBuffer();
-    for (final char in word.split('')) {
-      if (char == '"') {
-        buffer.write('["״]');
-      } else if (char == "'") {
-        buffer.write("['׳]");
-      } else {
-        buffer.write(RegExp.escape(char));
-      }
-      buffer.write(_optionalMarks);
-    }
-    return buffer.toString();
+    if (query == _literalPatternQuery) return _literalPatternCache;
+    final pattern = engine.generateLiteralHighlightPattern(query: query);
+    _literalPatternQuery = query;
+    _literalPatternCache = pattern == null
+        ? null
+        : RegExp(pattern, caseSensitive: false, unicode: true);
+    return _literalPatternCache;
   }
 }

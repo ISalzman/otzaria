@@ -4,13 +4,19 @@ import 'package:otzaria/search/search_engine_gateway.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
-void main() {
+import '../support/search_engine_test_init.dart';
+
+Future<void> main() async {
+  // sanitizeQuery/splitQueryWords מאצילים למנוע ה-Rust; הטסטים שלהם דורשים
+  // את הספרייה הנייטיבית ומדולגים כשאין build זמין.
+  final engineReady = await tryInitSearchEngine();
+
   group('SearchQueryBuilder - אחריות UI בלבד', () {
     test('sanitizeQuery מנקה תווים שמגיעים מהקלט בלי לבנות שאילתת מנוע', () {
       expect(SearchQueryBuilder.sanitizeQuery('תורה, ומצוות'), 'תורה ומצוות');
       expect(SearchQueryBuilder.sanitizeQuery('אל־משה'), 'אל משה');
       expect(SearchQueryBuilder.sanitizeQuery('!?.,*'), '');
-    });
+    }, skip: engineReady ? false : searchEngineSkipReason);
 
     test('splitQueryWords שומר תאימות לטוקנייזר עבור ראשי תיבות', () {
       expect(SearchQueryBuilder.splitQueryWords('רמב"ם משה'), [
@@ -19,7 +25,7 @@ void main() {
         'משה',
       ]);
       expect(SearchQueryBuilder.splitQueryWords("ה'"), ["ה'"]);
-    });
+    }, skip: engineReady ? false : searchEngineSkipReason);
 
     test('effectiveSearchOptions מרחיב אפשרויות גלובליות לפי מילים', () {
       final options = SearchQueryBuilder.effectiveSearchOptions(
