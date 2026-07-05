@@ -21,6 +21,8 @@ import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/dialogs/settings_dialogs_exports.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
+import 'package:otzaria/settings/services/backup/backup_maintenance.dart';
+import 'package:otzaria/settings/services/backup/backup_rotation.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
@@ -44,7 +46,6 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
-import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -233,6 +234,22 @@ class SystemSettingsTab extends StatefulWidget {
       keywords: ['שחזור', 'גיבוי', 'restore', 'import'],
     ),
     SettingsSearchEntry(
+      id: 'system.advanced.backup.retention',
+      title: 'ניקוי גיבויים ישנים',
+      subtitle: 'מדיניות שמירת גיבויים ומיזוגם לארכיון',
+      tab: SettingsTab.system,
+      cardId: 'system.advanced',
+      keywords: ['גיבוי', 'ניקוי', 'רוטציה', 'ארכיון', 'מקום', 'חסכוני'],
+    ),
+    SettingsSearchEntry(
+      id: 'system.advanced.backup.archive_restore',
+      title: 'שחזר מהארכיון',
+      subtitle: 'שחזור כל הנתונים שגובו אי-פעם, כולל פריטים שנמחקו',
+      tab: SettingsTab.system,
+      cardId: 'system.advanced',
+      keywords: ['שחזור', 'ארכיון', 'גיבוי', 'היסטוריה'],
+    ),
+    SettingsSearchEntry(
       id: 'system.advanced.cypher',
       title: 'מצב סייפר',
       subtitle: 'נעילת הגדרות בסיסמה',
@@ -298,6 +315,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   // ── גיבוי (expandable) ─────────────────────────────────────────────────────
   bool _isBackupExpanded = false;
   BackupStatus? _backupStatus;
+  BackupOverview? _backupOverview;
+  bool _isRunningMaintenance = false;
 
   // ── גרסאות ────────────────────────────────────────────────────────────────
   String? _appVersion;
@@ -364,6 +383,34 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final status = await BackupService.analyzeBackupStatus();
     if (!mounted) return;
     setState(() => _backupStatus = status);
+    final overview = await BackupMaintenance.getOverview();
+    if (!mounted) return;
+    setState(() => _backupOverview = overview);
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+
+  String _buildOverviewSubtitle(RetentionProfile profile) {
+    final base = switch (profile) {
+      RetentionProfile.economy =>
+        'שמירה מצומצמת — גיבויים ישנים ממוזגים לארכיון מוקדם',
+      RetentionProfile.balanced =>
+        'שבוע מלא, חודשיים שבועי, שנה חודשי — הישן ממוזג לארכיון',
+      RetentionProfile.keepAll => 'שום גיבוי לא נמחק',
+    };
+    final overview = _backupOverview;
+    if (overview == null) return base;
+    final parts = [
+      '${overview.backupCount} גיבויים',
+      if (overview.archiveExists) 'ארכיון',
+      _formatBytes(overview.totalBytes),
+    ];
+    return '$base\nכעת: ${parts.join(' · ')}';
   }
 
   Future<void> _openBooksListDialog(BuildContext context) async {
@@ -1390,6 +1437,33 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     );
     if (confirmed != true) return;
 
+    await _performRestore(filePath);
+  }
+
+  /// שחזור מהארכיון הממוזג — כולל פריטים שנמחקו בעבר, ולכן אזהרה נפרדת.
+  Future<void> _restoreFromArchive() async {
+    final archivePath = await BackupService.getArchivePathIfExists();
+    if (!mounted) return;
+    if (archivePath == null) {
+      UiSnack.show('עדיין לא נוצר ארכיון — הוא נבנה כשגיבויים ישנים ממוזגים');
+      return;
+    }
+
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: 'שחזור מהארכיון?',
+      content: 'הארכיון מאחד את כל הגיבויים הישנים, ולכן הוא כולל גם פריטים '
+          '(סימניות, הערות, תוספים ועוד) שנמחקו מאז בכוונה — הם ישוחזרו גם הם.',
+      subtitle: 'פעולה זו אינה הפיכה!',
+      cancelText: 'ביטול',
+      confirmText: 'שחזר הכל',
+    );
+    if (confirmed != true) return;
+
+    await _performRestore(archivePath);
+  }
+
+  Future<void> _performRestore(String filePath) async {
     try {
       final skipped = await BackupService.restoreFromBackup(filePath);
       if (!mounted) return;
@@ -1413,6 +1487,29 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     } catch (e) {
       if (!mounted) return;
       UiSnack.showError('שגיאה בשחזור הגיבוי: ${e.toString()}');
+    }
+  }
+
+  /// "נקה עכשיו" — רוטציה, מיזוג לארכיון ואיסוף קבצים יתומים.
+  Future<void> _runMaintenanceNow() async {
+    setState(() => _isRunningMaintenance = true);
+    try {
+      final result = await BackupMaintenance.runMaintenance();
+      if (!mounted) return;
+      final actions = <String>[
+        if (result.mergedIntoArchive > 0)
+          '${result.mergedIntoArchive} גיבויים מוזגו לארכיון',
+        if (result.deletedBackups > 0) '${result.deletedBackups} קבצים נמחקו',
+        if (result.freedBytes > 0) 'התפנו ${_formatBytes(result.freedBytes)}',
+      ];
+      UiSnack.show(
+          actions.isEmpty ? 'אין מה לנקות — הכל מעודכן' : actions.join(', '));
+      await _loadBackupStatus();
+    } catch (e) {
+      if (!mounted) return;
+      UiSnack.showError('שגיאה בניקוי הגיבויים: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isRunningMaintenance = false);
     }
   }
 
@@ -1497,6 +1594,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   Widget _buildAdvancedSection(BuildContext context, SettingsState state) {
     final autoFrequency =
         Settings.getValue<String>(_keyAutoBackupFrequency) ?? 'weekly';
+    final retentionProfile = RetentionProfile.fromName(
+        Settings.getValue<String>(BackupMaintenance.keyRetentionProfile));
     final repository = RepositoryProvider.of<SettingsRepository>(context);
     final hasPassword = state.protectedModePasswordSet;
 
@@ -1525,7 +1624,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
         // ── גיבוי אוטומטי ──
         ExpandableSection(
-          headerKey: tourBackupSettingsTargetKey,
           icon: FluentIcons.calendar_clock_24_regular,
           title: 'גיבוי אוטומטי',
           subtitle: _buildAutoBackupSubtitle(autoFrequency),
@@ -1612,6 +1710,45 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 _loadResolvedBackupPath();
               },
             ),
+            SettingsActionTile.dropdownTile<String>(
+              icon: FluentIcons.calendar_clock_24_regular,
+              title: 'גיבוי אוטומטי',
+              subtitle: switch (autoFrequency) {
+                'daily' => 'יתבצע גיבוי בכל יום',
+                'weekly' => 'יתבצע גיבוי כל שבוע',
+                'monthly' => 'יתבצע גיבוי כל חודש',
+                _ => 'גיבוי אוטומטי מושבת',
+              },
+              value: autoFrequency,
+              entries: const [
+                AppMenuEntry(value: 'none', label: 'ללא'),
+                AppMenuEntry(value: 'daily', label: 'יומי'),
+                AppMenuEntry(value: 'weekly', label: 'שבועי'),
+                AppMenuEntry(value: 'monthly', label: 'חודשי'),
+              ],
+              onSelected: (value) {
+                if (value == null) return;
+                Settings.setValue<String>(_keyAutoBackupFrequency, value);
+                setState(() {});
+              },
+            ),
+            SettingsActionTile.dropdownTile<String>(
+              icon: FluentIcons.broom_24_regular,
+              title: 'ניקוי גיבויים ישנים',
+              subtitle: _buildOverviewSubtitle(retentionProfile),
+              value: retentionProfile.name,
+              entries: const [
+                AppMenuEntry(value: 'economy', label: 'חסכוני'),
+                AppMenuEntry(value: 'balanced', label: 'מאוזן'),
+                AppMenuEntry(value: 'keepAll', label: 'שמור הכל'),
+              ],
+              onSelected: (value) {
+                if (value == null) return;
+                Settings.setValue<String>(
+                    BackupMaintenance.keyRetentionProfile, value);
+                setState(() {});
+              },
+            ),
             SettingsActionTile.segmentedTile<_BackupMode>(
               icon: FluentIcons.options_24_regular,
               title: 'מצב גיבוי',
@@ -1688,6 +1825,51 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 onChanged: () => setState(() {}),
               ),
             ],
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ActionButton.recommended(
+                      icon: FluentIcons.arrow_upload_24_regular,
+                      text: 'צור גיבוי עכשיו',
+                      onPressed: _createBackup,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ActionButton.neutral(
+                      icon: FluentIcons.arrow_download_24_regular,
+                      text: 'שחזר מגיבוי',
+                      onPressed: _restoreBackup,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ActionButton.neutral(
+                      icon: FluentIcons.broom_24_regular,
+                      text: 'נקה עכשיו',
+                      isLoading: _isRunningMaintenance,
+                      onPressed: _runMaintenanceNow,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ActionButton.neutral(
+                      icon: FluentIcons.archive_24_regular,
+                      text: 'שחזר מהארכיון',
+                      onPressed: _restoreFromArchive,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
 
