@@ -32,6 +32,28 @@ class IndexSpecificBooks extends IndexingWorkEvent {
   List<Object?> get props => [books, library];
 }
 
+/// אינדוקס מחדש של ספרים שתוכנם השתנה — רשומותיהם הישנות מוסרות תחילה.
+class ReindexChangedBooks extends IndexingWorkEvent {
+  final List<Book> books;
+  final Library library;
+
+  const ReindexChangedBooks(this.books, this.library);
+
+  @override
+  List<Object?> get props => [books, library];
+}
+
+/// השוואת טביעות-האצבע שבאינדקס מול תוכן הספרייה, ואינדוקס מחדש של
+/// הספרים שנמצאו שונים — למסלולים בהם איש לא דיווח מה השתנה (הורדה מלאה).
+class ReconcileIndex extends IndexingWorkEvent {
+  final Library library;
+
+  const ReconcileIndex(this.library);
+
+  @override
+  List<Object?> get props => [library];
+}
+
 class CheckIndexStatus extends IndexingEvent {
   final Library library;
 

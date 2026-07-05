@@ -248,6 +248,11 @@ class IndexingRepository {
     final text = await _loadTextBookText(book, preloadedText: preloadedText);
     var wroteDocuments = false;
 
+    // טביעת אצבע של טקסט המקור הגולמי — מוטבעת על כל מסמכי הספר, כדי
+    // ש-reconcileIndexWithLibrary יוכל לזהות ספר שתוכנו השתנה מול ה-DB.
+    final BigInt? contentHash =
+        text != null ? await computeContentFingerprint(text: text) : null;
+
     if (text != null) {
       final stream = await isolateService.processTextBook(text: text);
       wroteDocuments = await _consumePreparedDocuments(
@@ -255,6 +260,7 @@ class IndexingRepository {
         stream: stream,
         isolateService: isolateService,
         catalogueOrderByBookKey: catalogueOrderByBookKey,
+        contentHash: contentHash,
         onActualIndexingStarted: onActualIndexingStarted,
       );
     }
@@ -263,6 +269,7 @@ class IndexingRepository {
       await _writeEmptyBookMarker(
         book,
         catalogueOrderByBookKey: catalogueOrderByBookKey,
+        contentHash: contentHash,
       );
     }
   }
@@ -302,6 +309,7 @@ class IndexingRepository {
   Future<void> _writeEmptyBookMarker(
     Book book, {
     required Map<String, int> catalogueOrderByBookKey,
+    BigInt? contentHash,
   }) async {
     if (!_tantivyDataProvider.isIndexing.value) {
       return;
@@ -312,6 +320,7 @@ class IndexingRepository {
         PreparedIndexDocument(reference: '', text: '', segment: 0, ordinal: 0),
       ],
       catalogueOrderByBookKey: catalogueOrderByBookKey,
+      contentHash: contentHash,
     );
   }
 
@@ -451,6 +460,7 @@ class IndexingRepository {
     required Stream<IndexingIsolateUpdate> stream,
     required IndexingIsolateService isolateService,
     required Map<String, int> catalogueOrderByBookKey,
+    BigInt? contentHash,
     void Function()? onActualIndexingStarted,
   }) async {
     var wroteDocuments = false;
@@ -469,6 +479,7 @@ class IndexingRepository {
           book,
           update.documents,
           catalogueOrderByBookKey: catalogueOrderByBookKey,
+          contentHash: contentHash,
           onActualIndexingStarted: onActualIndexingStarted,
         );
         wroteDocuments = wroteDocuments || update.documents.isNotEmpty;
@@ -485,6 +496,7 @@ class IndexingRepository {
     Book book,
     List<PreparedIndexDocument> documents, {
     required Map<String, int> catalogueOrderByBookKey,
+    BigInt? contentHash,
     void Function()? onActualIndexingStarted,
   }) async {
     if (documents.isEmpty) {
@@ -529,6 +541,7 @@ class IndexingRepository {
           segment: BigInt.from(document.segment),
           isPdf: isPdf,
           filePath: filePath,
+          contentHash: contentHash,
         ),
     ];
 
@@ -585,7 +598,9 @@ class IndexingRepository {
     if (book.id != null) {
       // id טבעי חופף בין seforim.db ל-user_books.db — בלי תיוג המקור
       // ספר אישי 'id:5' מתנגש בספר רשמי 'id:5' ומדולג באינדוקס.
-      return book.isUserBook ? 'uid:${book.id}' : 'id:${book.id}';
+      return book.isUserBook
+          ? userBookKey(book.id!)
+          : officialBookKey(book.id!);
     }
 
     final categoryKey = book.category?.path ?? book.categoryPath ?? '';
@@ -593,6 +608,12 @@ class IndexingRepository {
     final pathKey = book is FileBook ? book.path : (book.filePath ?? '');
     return '${book.title}|$categoryKey|$fileTypeKey|$pathKey';
   }
+
+  /// מפתח catalogueOrderKey לספר אישי (user_books.db) לפי id גולמי.
+  static String userBookKey(int id) => 'uid:$id';
+
+  /// מפתח catalogueOrderKey לספר רשמי (seforim.db) לפי id גולמי.
+  static String officialBookKey(int id) => 'id:$id';
 
   static String buildIndexedBookFilePath(Book book) {
     if (book is PdfBook) {
@@ -767,17 +788,13 @@ class IndexingRepository {
     await _tantivyDataProvider.clear();
   }
 
-  /// מסיר מהאינדקס רשומות של ספרי-קובץ שנתיבם השתנה בהעברת הספרייה.
+  /// מסיר מהאינדקס את רשומות הספרים הנתונים, לפי כותרת (ה-API היחיד במנוע).
   ///
-  /// רשומות אלו מאונדקסות לפי נתיב מוחלט (PDF, וספרי קובץ ללא id יציב),
-  /// ולכן אחרי העברה הן מצביעות לנתיב הישן. בלי הסרתן, האינדוקס האוטומטי
-  /// שלאחר הרענון מוסיף את אותם ספרים בנתיב החדש ⇒ כפילויות ותוצאות שבורות.
-  /// המחיקה לפי כותרת (ה-API היחיד), ולכן עשויה להסיר גם ספר רשמי בעל אותה
-  /// כותרת — הוא ייווצר מחדש באינדוקס שלאחר הרענון (האינדקס נטען מחדש בהפעלה).
-  Future<void> dropRelocatedFileBookEntries(
-      Iterable<Book> relocatedBooks) async {
+  /// המחיקה לפי כותרת מסירה כל ספר בעל אותה כותרת — הקורא אחראי להעביר את
+  /// כל הספרים החולקים כותרת כדי שיאונדקסו מחדש יחד.
+  Future<void> dropBookIndexEntries(Iterable<Book> books) async {
     final titles = <String>{
-      for (final book in relocatedBooks)
+      for (final book in books)
         if (book.title.isNotEmpty) book.title,
     };
     if (titles.isEmpty) return;
@@ -793,8 +810,153 @@ class IndexingRepository {
     try {
       await engine.commit();
     } catch (e) {
-      debugPrint('⚠️ commit אחרי מחיקת רשומות אינדקס שהועברו נכשל: $e');
+      debugPrint('⚠️ commit אחרי מחיקת רשומות אינדקס נכשל: $e');
     }
+    for (final book in books) {
+      _tantivyDataProvider.indexedFilePaths
+          .remove(buildIndexedBookFilePath(book));
+    }
+  }
+
+  /// מסיר מהאינדקס רשומות של ספרי-קובץ שנתיבם השתנה בהעברת הספרייה.
+  ///
+  /// רשומות אלו מאונדקסות לפי נתיב מוחלט (PDF, וספרי קובץ ללא id יציב),
+  /// ולכן אחרי העברה הן מצביעות לנתיב הישן. בלי הסרתן, האינדוקס האוטומטי
+  /// שלאחר הרענון מוסיף את אותם ספרים בנתיב החדש ⇒ כפילויות ותוצאות שבורות.
+  Future<void> dropRelocatedFileBookEntries(
+          Iterable<Book> relocatedBooks) async =>
+      dropBookIndexEntries(relocatedBooks);
+
+  /// מאנדקס מחדש ספרים שתוכנם השתנה: מסיר את רשומותיהם הישנות מהאינדקס
+  /// ומאנדקס אותם מחדש דרך [indexBooks].
+  ///
+  /// מחזיר true אם הסתיים בהצלחה, false אם בוטל או שנדרש אינדוקס ידני מלא.
+  Future<bool> reindexChangedBooks(
+    List<Book> changedBooks,
+    Library library, {
+    void Function()? onActualIndexingStarted,
+    required void Function(int processed, int total) onProgress,
+  }) async {
+    if (changedBooks.isEmpty) return true;
+    if (await requiresManualReindex(library)) return false;
+
+    // המחיקה במנוע היא לפי כותרת, ולכן כל ספר החולק כותרת עם ספר שהשתנה
+    // מוסר גם הוא — חובה לכלול אותו באינדוקס מחדש כדי שלא יישאר חסר.
+    final titles = <String>{
+      for (final book in changedBooks)
+        if (book.title.isNotEmpty) book.title,
+    };
+    final booksToReindex = library
+        .getAllBooks()
+        .where((b) => isIndexableBook(b) && titles.contains(b.title))
+        .toList();
+    if (booksToReindex.isEmpty) return true;
+
+    await dropBookIndexEntries(booksToReindex);
+    return indexBooks(
+      booksToReindex,
+      library,
+      onActualIndexingStarted: onActualIndexingStarted,
+      onProgress: onProgress,
+    );
+  }
+
+  /// משווה את טביעות-האצבע שבאינדקס מול תוכן הספרייה הנוכחי ומאנדקס מחדש
+  /// רק ספרים שתוכנם השתנה — מכסה מסלולים שבהם איש לא דיווח מה השתנה
+  /// (למשל הורדה מלאה של הספרייה, שמחליפה את ה-DB כולו).
+  ///
+  /// סורק ספרי טקסט בלבד: ל-PDF אין טביעת אצבע (תוכנו לא ב-DB), והוא מכוסה
+  /// ע"י זיהוי mtime/גודל בסריקת הקבצים. ספר שאינו באינדקס מדולג — מסלול
+  /// הספרים החדשים (StartIndexing/IndexSpecificBooks) מטפל בו.
+  ///
+  /// [onScanProgress] מדווח על שלב הסריקה (קריאת ה-DB והשוואה);
+  /// [onProgress] מדווח על שלב האינדוקס-מחדש של הספרים שנמצאו שונים.
+  /// מחזיר true אם הסתיים (גם כשאין שינויים), false אם בוטל או שנדרש
+  /// אינדוקס ידני מלא.
+  ///
+  /// [loadText] ו-[fingerprintOf] ניתנים להזרקה בטסטים בלבד.
+  Future<bool> reconcileIndexWithLibrary(
+    Library library, {
+    void Function(int processed, int total)? onScanProgress,
+    void Function()? onActualIndexingStarted,
+    required void Function(int processed, int total) onProgress,
+    @visibleForTesting Future<String?> Function(TextBook book)? loadText,
+    @visibleForTesting Future<BigInt> Function(String text)? fingerprintOf,
+  }) async {
+    if (await requiresManualReindex(library)) return false;
+
+    final engine = await _tantivyDataProvider.engine;
+    final indexFingerprints = await engine.getBookFingerprints();
+
+    final textLoader = loadText ?? _loadTextBookText;
+    final fingerprint =
+        fingerprintOf ?? ((text) => computeContentFingerprint(text: text));
+
+    final candidates = library
+        .getAllBooks()
+        .where((b) => b is TextBook || b is DocxBook)
+        .toList();
+    final total = candidates.length;
+    final changed = <Book>[];
+    var cancelled = false;
+
+    // isIndexing משמש גם כחיווי עבודה וגם כערוץ הביטול של המשתמש —
+    // בדיוק כמו במסלולי האינדוקס עצמם.
+    _tantivyDataProvider.isIndexing.value = true;
+    try {
+      await _setDbReadBoost(true);
+      var processed = 0;
+      for (final book in candidates) {
+        if (!_tantivyDataProvider.isIndexing.value) {
+          cancelled = true;
+          break;
+        }
+        processed++;
+
+        final indexHash = indexFingerprints[buildIndexedBookFilePath(book)];
+        if (indexHash == null) {
+          // הספר אינו באינדקס — ספר חדש, לא ענייננו כאן.
+          onScanProgress?.call(processed, total);
+          continue;
+        }
+
+        final TextBook textBook =
+            book is TextBook ? book : (book as DocxBook).toTextBook();
+        final text = await textLoader(textBook);
+        if (text == null) {
+          // אין תוכן להשוואה (כשל טעינה) — לא נוגעים ברשומה הקיימת.
+          onScanProgress?.call(processed, total);
+          continue;
+        }
+
+        // hash אפס = "לא ניתן לאימות" (מסמכים סותרים / אינדוקס ישן) —
+        // מאנדקסים מחדש כדי לרכוש טביעת אצבע תקינה.
+        final dbHash = await fingerprint(text);
+        if (indexHash == BigInt.zero || dbHash != indexHash) {
+          changed.add(book);
+        }
+
+        onScanProgress?.call(processed, total);
+        await Future.delayed(Duration.zero);
+      }
+    } finally {
+      await _setDbReadBoost(false);
+      _tantivyDataProvider.isIndexing.value = false;
+    }
+
+    if (cancelled) return false;
+    if (changed.isEmpty) {
+      debugPrint('🔎 reconcile: האינדקס תואם את הספרייה — אין מה לעדכן');
+      return true;
+    }
+
+    debugPrint('🔁 reconcile: ${changed.length} ספרים השתנו — מאנדקס מחדש');
+    return reindexChangedBooks(
+      changed,
+      library,
+      onActualIndexingStarted: onActualIndexingStarted,
+      onProgress: onProgress,
+    );
   }
 
   /// Returns true for book types that the indexer actually processes.
