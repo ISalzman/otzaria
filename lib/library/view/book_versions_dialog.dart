@@ -16,15 +16,31 @@ Future<void> showBookVersionsDialog(BuildContext context, TextBook book) {
   );
 }
 
-class BookVersionsDialog extends StatelessWidget {
+class BookVersionsDialog extends StatefulWidget {
   final TextBook book;
 
   const BookVersionsDialog({super.key, required this.book});
 
   @override
+  State<BookVersionsDialog> createState() => _BookVersionsDialogState();
+}
+
+class _BookVersionsDialogState extends State<BookVersionsDialog> {
+  // נטען פעם אחת ב-initState — Future בתוך build היה מריץ את השאילתה מחדש
+  // בכל rebuild של הדיאלוג.
+  late final Future<List<BookVersionInfo>> _versionsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _versionsFuture = DatabaseLibraryProvider.instance
+        .getBookVersions(widget.book.title, widget.book.categoryId ?? -1);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AppCustomContentDialog(
-      title: 'גרסאות — ${book.title}',
+      title: 'גרסאות — ${widget.book.title}',
       scrollable: false,
       actions: [
         ActionButton.neutral(
@@ -33,8 +49,7 @@ class BookVersionsDialog extends StatelessWidget {
         ),
       ],
       child: FutureBuilder<List<BookVersionInfo>>(
-        future: DatabaseLibraryProvider.instance
-            .getBookVersions(book.title, book.categoryId ?? -1),
+        future: _versionsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -49,7 +64,7 @@ class BookVersionsDialog extends StatelessWidget {
             itemCount: versions.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, index) => _VersionTile(
-              book: book,
+              book: widget.book,
               version: versions[index],
               isOnlyVersion: versions.length == 1,
             ),

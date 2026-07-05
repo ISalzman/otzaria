@@ -414,6 +414,17 @@ void main() {
       expect(bookIdentity(edition),
           bookIdentity(merged.copyWith(versionTitle: 'Warsaw 1861')));
     });
+
+    test('historyKey של מהדורה חלופית נפרד משל הנוסח הממוזג', () {
+      final merged = TextBook(id: 7, title: 'טור', categoryId: 3);
+      final edition = merged.copyWith(versionTitle: 'Warsaw 1861');
+
+      final mergedEntry = Bookmark(ref: 'טור א', book: merged, index: 5);
+      final editionEntry = Bookmark(ref: 'טור א', book: edition, index: 9);
+
+      expect(mergedEntry.historyKey, isNot(editionEntry.historyKey));
+      expect(editionEntry.historyKey, contains('Warsaw 1861'));
+    });
   });
 
   group('Bookmark model', () {
