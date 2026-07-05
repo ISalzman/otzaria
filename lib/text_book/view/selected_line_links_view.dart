@@ -64,7 +64,7 @@ String buildSelectedLinkContentKey(Link link) {
 String buildSelectedLinkInstanceKey(Link link) {
   final target =
       '${link.targetIsUserBook ? 'u' : 'o'}_${link.targetCategoryId ?? ''}';
-  return '${link.path2}_${link.index1}_${link.index2}_${link.heRef}_${link.start}_${link.end}_${link.connectionType}_$target';
+  return '${link.path2}_${link.index1}_${link.index2}_${link.index2End ?? ''}_${link.heRef}_${link.start}_${link.end}_${link.connectionType}_$target';
 }
 
 @visibleForTesting

@@ -403,6 +403,30 @@ void main() {
     });
   });
 
+  group('bookIdentity', () {
+    test('מהדורה חלופית מקבלת זהות שונה מהנוסח הממוזג של אותו ספר', () {
+      final merged = TextBook(id: 7, title: 'טור', categoryId: 3);
+      final edition = merged.copyWith(versionTitle: 'Warsaw 1861');
+      final otherEdition = merged.copyWith(versionTitle: 'Vilna 1923');
+
+      expect(bookIdentity(merged), isNot(bookIdentity(edition)));
+      expect(bookIdentity(edition), isNot(bookIdentity(otherEdition)));
+      expect(bookIdentity(edition),
+          bookIdentity(merged.copyWith(versionTitle: 'Warsaw 1861')));
+    });
+
+    test('historyKey של מהדורה חלופית נפרד משל הנוסח הממוזג', () {
+      final merged = TextBook(id: 7, title: 'טור', categoryId: 3);
+      final edition = merged.copyWith(versionTitle: 'Warsaw 1861');
+
+      final mergedEntry = Bookmark(ref: 'טור א', book: merged, index: 5);
+      final editionEntry = Bookmark(ref: 'טור א', book: edition, index: 9);
+
+      expect(mergedEntry.historyKey, isNot(editionEntry.historyKey));
+      expect(editionEntry.historyKey, contains('Warsaw 1861'));
+    });
+  });
+
   group('Bookmark model', () {
     test('toJson ו-fromJson עוברים סיבוב מלא', () {
       final original = Bookmark(

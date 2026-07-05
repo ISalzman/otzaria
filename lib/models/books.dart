@@ -123,6 +123,10 @@ abstract class Book {
 ///a text book has a getter 'text' which returns a [Future] that resolvs to a [String].
 ///it has also a 'tableOfContents' field that returns a [Future] that resolvs to a list of [TocEntry]s
 class TextBook extends Book {
+  /// כשלא null — הספר נפתח כמהדורה חלופית (book_version בשם זה) והתוכן
+  /// נטען מ-version_line במקום הטקסט הממוזג.
+  final String? versionTitle;
+
   TextBook(
       {super.id,
       required super.title,
@@ -146,7 +150,8 @@ class TextBook extends Book {
       super.categoryId,
       super.extraTitles,
       super.isUserBook,
-      super.externalLibraryId});
+      super.externalLibraryId,
+      this.versionTitle});
 
   /// Retrieves the table of contents of the book.
   ///
@@ -195,6 +200,7 @@ class TextBook extends Book {
     String? heCategories,
     String? author,
     String? heEra,
+    String? versionTitle,
   }) {
     return TextBook(
       id: id ?? this.id,
@@ -220,6 +226,7 @@ class TextBook extends Book {
       extraTitles: extraTitles,
       isUserBook: isUserBook,
       externalLibraryId: externalLibraryId,
+      versionTitle: versionTitle ?? this.versionTitle,
     );
   }
 
@@ -237,6 +244,7 @@ class TextBook extends Book {
       heCategories: json['heCategories'],
       isUserBook: json['isUserBook'] ?? false,
       externalLibraryId: json['externalLibraryId'],
+      versionTitle: json['versionTitle'],
     );
   }
 
@@ -256,6 +264,7 @@ class TextBook extends Book {
       'heCategories': heCategories,
       'isUserBook': isUserBook,
       'externalLibraryId': externalLibraryId,
+      'versionTitle': versionTitle,
     };
   }
 }

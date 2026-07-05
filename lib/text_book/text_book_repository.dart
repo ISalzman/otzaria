@@ -39,6 +39,17 @@ class TextBookRepository {
         _sqliteProvider = sqliteProvider ?? SqliteDataProvider.instance;
 
   Future<String> getBookContent(TextBook book) async {
+    // מהדורה חלופית: נטענת אך ורק משאילתת ה-overlay של version_line — בלי
+    // ליפול בשקט לנוסח הממוזג (שהיה מוצג בשם המהדורה). כישלון = טקסט ריק.
+    if (book.versionTitle != null) {
+      final range = await getBookContentRange(
+        book,
+        startLine: 0,
+        endLine: 1 << 30,
+      );
+      return range?.lines.join('\n') ?? '';
+    }
+
     // Primary path: go through the provider manager (handles file system + DB).
     // This can fail early in app startup because some providers require catalog caching.
     final title = book.title;
@@ -122,6 +133,7 @@ class TextBookRepository {
         fileType,
         startLine: startLine,
         endLine: endLine,
+        versionTitle: book.versionTitle,
       );
       if (range != null && range.lines.isNotEmpty) {
         return BookContentRange(
@@ -131,6 +143,15 @@ class TextBookRepository {
           lines: range.lines,
         );
       }
+      // מהדורה חלופית שלא נמצאה (DB ישן / שם שהשתנה): אין ליפול לנוסח
+      // הממוזג בשם המהדורה — מחזירים null והטאב יציג ריק.
+      if (book.versionTitle != null) {
+        return null;
+      }
+    }
+
+    if (book.versionTitle != null) {
+      return null;
     }
 
     final range = await _sqliteProvider.getBookTextRangeFromDb(

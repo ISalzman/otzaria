@@ -8,6 +8,7 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'dart:math';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/book_locator.dart';
+import 'package:otzaria/library/view/book_versions_dialog.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/layout/app_card.dart';
@@ -548,6 +549,9 @@ class _BookGridActionColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // מהדורות (book_version) קיימות רק לספרי הספרייה הרשמית (seforim.db).
+    final showVersions =
+        book is TextBook && !book.isUserBook && book.categoryId != null;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -558,7 +562,8 @@ class _BookGridActionColumn extends StatelessWidget {
             // מחיקה מהספרייה מותרת רק לספרי משתמש מסוג "עותק עצמאי"
             // (התוכן שמור בתוכנה). ספר "קריאה מהקבצים" נמחק רק ע"י מחיקת
             // הקובץ מהדיסק, והספרייה הרשמית (seforim.db) אינה ניתנת למחיקה.
-            if (snapshot.data != true) {
+            final canDelete = snapshot.data == true;
+            if (!canDelete && !showVersions) {
               return const SizedBox.shrink();
             }
 
@@ -581,15 +586,24 @@ class _BookGridActionColumn extends StatelessWidget {
                 onSelected: (value) {
                   if (value == 'delete') {
                     _showDeleteBookDialog(context, book, onBookDeleted);
+                  } else if (value == 'versions') {
+                    showBookVersionsDialog(context, book as TextBook);
                   }
                 },
-                entries: const [
-                  AppMenuEntry<String>(
-                    value: 'delete',
-                    label: 'מחק מהספרייה',
-                    icon: FluentIcons.delete_24_regular,
-                    isDestructive: true,
-                  ),
+                entries: [
+                  if (showVersions)
+                    const AppMenuEntry<String>(
+                      value: 'versions',
+                      label: 'גרסאות',
+                      icon: FluentIcons.stack_24_regular,
+                    ),
+                  if (canDelete)
+                    const AppMenuEntry<String>(
+                      value: 'delete',
+                      label: 'מחק מהספרייה',
+                      icon: FluentIcons.delete_24_regular,
+                      isDestructive: true,
+                    ),
                 ],
               ),
             );
