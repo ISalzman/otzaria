@@ -49,7 +49,7 @@ void main() {
     });
 
     test('toJson/fromJson משחזר searchOptions פר-מילה', () {
-      final source = SearchingTab('חיפוש', 'צדיק');
+      final source = SearchingTab('חיפוש', 'צדיק גאולה');
       addTearDown(source.dispose);
       source.searchOptions['צדיק_0'] = {'חלק ממילה': true};
       source.searchOptions['גאולה_1'] = {'כתיב מלא/חסר': true};
@@ -59,6 +59,25 @@ void main() {
 
       expect(restored.searchOptions['צדיק_0']?['חלק ממילה'], true);
       expect(restored.searchOptions['גאולה_1']?['כתיב מלא/חסר'], true);
+    });
+
+    test('fromJson מנקה state פר-מילה שנשמר על פיצול-מילים ישן', () {
+      // מפתחות שנבנו כשחוקי הפיצול היו אחרים (רמב"ם כשתי מילים) אינם
+      // תואמים את הפיצול הנוכחי — שחזורם היה מזליג אפשרויות/מרווחים
+      // למילה הלא-נכונה, ולכן הם נזרקים כמקשה אחת.
+      final source = SearchingTab('חיפוש', 'רמב"ם משה');
+      addTearDown(source.dispose);
+      source.searchOptions['רמב_0'] = {'חלק ממילה': true};
+      source.searchOptions['ם_1'] = {'כתיב מלא/חסר': true};
+      source.alternativeWords[2] = ['רבינו'];
+      source.spacingValues['1-2'] = '3';
+
+      final restored = SearchingTab.fromJson(source.toJson());
+      addTearDown(restored.dispose);
+
+      expect(restored.searchOptions, isEmpty);
+      expect(restored.alternativeWords, isEmpty);
+      expect(restored.spacingValues, isEmpty);
     });
 
     test('toJson/fromJson משחזר alternativeWords ו-spacingValues', () {

@@ -273,7 +273,10 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
   List<TextSpan> _buildFormattedTextSpans(String text, BuildContext context) {
     if (text.trim().isEmpty) return [const TextSpan(text: '')];
 
-    final words = text.trim().split(RegExp(r'\s+'));
+    // פיצול דרך המנוע — המפתחות "{word}_{index}" חייבים להתאים לאלו
+    // שבונה advanced_search_controls מ-splitQueryWords (רמב"ם מילה אחת,
+    // בית-דין שתיים), אחרת האפשרויות יוצגו ליד המילה הלא-נכונה.
+    final words = SearchQueryBuilder.splitQueryWords(text);
     final List<TextSpan> spans = [];
     final activeParameters = SearchQueryBuilder.normalizeParametersForMode(
       widget.tab.searchBloc.state.configuration.searchMode,

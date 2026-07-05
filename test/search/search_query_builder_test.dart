@@ -19,12 +19,51 @@ Future<void> main() async {
     }, skip: engineReady ? false : searchEngineSkipReason);
 
     test('splitQueryWords שומר תאימות לטוקנייזר עבור ראשי תיבות', () {
+      // גרשיים וגרש בין אותיות הם חלק מהמילה; ״/׳ וזוג גרשים ('')
+      // מנורמלים ל-"/' ASCII — כמו בטוקנייזר של האינדקס.
       expect(SearchQueryBuilder.splitQueryWords('רמב"ם משה'), [
-        'רמב',
-        'ם',
+        'רמב"ם',
         'משה',
       ]);
+      expect(SearchQueryBuilder.splitQueryWords('רמב״ם'), ['רמב"ם']);
+      expect(SearchQueryBuilder.splitQueryWords("רמב''ם"), ['רמב"ם']);
+      expect(SearchQueryBuilder.splitQueryWords("ג'ורג'"), ["ג'ורג'"]);
       expect(SearchQueryBuilder.splitQueryWords("ה'"), ["ה'"]);
+      // גרשיים בקצה מילה נשארות מפריד.
+      expect(SearchQueryBuilder.splitQueryWords('אמר "שלום" לו'), [
+        'אמר',
+        'שלום',
+        'לו',
+      ]);
+    }, skip: engineReady ? false : searchEngineSkipReason);
+
+    test('restoredPerWordStateMatches מזהה state שנשמר על פיצול ישן', () {
+      // state שנשמר כשרמב"ם היה שתי מילים ("רמב_0", "ם_1") חייב להיפסל,
+      // אחרת המרווחים/החלופות זולגים למילה הלא-נכונה.
+      expect(
+        SearchQueryBuilder.restoredPerWordStateMatches(
+          'רמב"ם משה',
+          searchOptions: const {
+            'רמב_0': {'קידומות': true},
+            'ם_1': {'קידומות': true},
+          },
+          spacingValues: const {'1-2': '3'},
+        ),
+        isFalse,
+      );
+      expect(
+        SearchQueryBuilder.restoredPerWordStateMatches(
+          'רמב"ם משה',
+          searchOptions: const {
+            'רמב"ם_0': {'קידומות': true},
+          },
+          alternativeWords: const {
+            1: ['רבינו'],
+          },
+          spacingValues: const {'0-1': '2'},
+        ),
+        isTrue,
+      );
     }, skip: engineReady ? false : searchEngineSkipReason);
 
     test('effectiveSearchOptions מרחיב אפשרויות גלובליות לפי מילים', () {
