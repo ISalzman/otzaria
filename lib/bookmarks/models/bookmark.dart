@@ -9,6 +9,14 @@ import 'package:otzaria/utils/file/hive_utils.dart';
 /// id/נתיב שונים) יקבלו זהויות שונות, כך שאפשר לסמן בהן סימניות נפרדות באותו
 /// אינדקס בלי שתידחה סימניה.
 String bookIdentity(Book book) {
+  final base = _baseBookIdentity(book);
+  // מהדורה חלופית (book_version) חולקת את אותו db id עם הנוסח הממוזג —
+  // בלי הסיומת סימניות והיסטוריית מיקום היו מתערבבות בין המהדורות.
+  final versionTitle = book is TextBook ? book.versionTitle : null;
+  return versionTitle == null ? base : '$base|version:$versionTitle';
+}
+
+String _baseBookIdentity(Book book) {
   if (book.id != null) {
     return 'id:${book.id}';
   }
@@ -57,8 +65,16 @@ class Bookmark {
   /// null בסימניות ישנות שנשמרו לפני הוספת השדה.
   final DateTime? createdAt;
 
-  /// A stable key for history management, unique per book title.
-  String get historyKey => isSearch ? ref : '${targetKind.name}:${book.title}';
+  /// A stable key for history management, unique per book title (and edition).
+  String get historyKey {
+    if (isSearch) return ref;
+    final base = '${targetKind.name}:${book.title}';
+    // מהדורה חלופית מקבלת רשומת היסטוריה נפרדת — אחרת snapshot של מהדורה
+    // אחת מוחק את מיקום הקריאה השמור של האחרת (הדחה לפי historyKey זהה).
+    final b = book;
+    final versionTitle = b is TextBook ? b.versionTitle : null;
+    return versionTitle == null ? base : '$base|version:$versionTitle';
+  }
 
   Bookmark({
     required this.ref,

@@ -74,6 +74,13 @@ class Link {
   /// הם הראשון שבהם (לתאימות ולאות שבפאנל); ההזרקה לטקסט עוברת על כולם.
   final List<LinkAnchorSpan> anchorSpans;
 
+  /// קישור-טווח: ה-heRef של השורה האחרונה בטווח בצד המקושר (path2), או null
+  /// לקישור לשורה בודדת.
+  final String? heRefEnd;
+
+  /// קישור-טווח: אינדקס (1-based) של השורה האחרונה בטווח בצד המקושר, או null.
+  final int? index2End;
+
   /// Creates a new instance of [Link] with the provided parameters.
   Link({
     required this.heRef,
@@ -92,6 +99,8 @@ class Link {
     this.linkedAnchorStart,
     this.linkedAnchorEnd,
     this.anchorSpans = const [],
+    this.heRefEnd,
+    this.index2End,
   });
 
   static final LinkedHashMap<String, Future<String>> _contentCache =
@@ -107,7 +116,8 @@ class Link {
     }
     // המפתח כולל את זהות היעד (אישי/רשמי+קטגוריה) כדי ששני קישורים לאותה
     // כותרת ואינדקס — אחד אישי ואחד רשמי — לא יחזירו זה את תוכן זה.
-    final key = '$path2:$index2:${targetIsUserBook ? 'u' : 'o'}:'
+    final key =
+        '$path2:$index2:${index2End ?? ''}:${targetIsUserBook ? 'u' : 'o'}:'
         '${targetCategoryId ?? ''}';
     final cached = _contentCache.remove(key);
     if (cached != null) {
@@ -123,27 +133,47 @@ class Link {
     return future;
   }
 
+  /// סיומת טווח לכתובת התצוגה: לקישור-טווח מוסיפה "–<קצה>" כשרק הרכיב האחרון
+  /// שונה (למשל "יח, י, ב–ג"), או " – <כתובת מלאה>" כשהכתובות שונות לגמרי.
+  String get _rangeDisplaySuffix {
+    final end = heRefEnd?.trim();
+    if (end == null || end.isEmpty || end == heRef.trim()) return '';
+    final startSegs = heRef.trim().split(', ');
+    final endSegs = end.split(', ');
+    var common = 0;
+    while (common < startSegs.length - 1 &&
+        common < endSegs.length - 1 &&
+        startSegs[common] == endSegs[common]) {
+      common++;
+    }
+    final tail = endSegs.sublist(common).join(', ');
+    return common > 0 ? '–$tail' : ' – $tail';
+  }
+
   /// מחזירה כתובת תצוגה בטוחה גם כאשר לא ניתן לחשב TOC מלא.
   String get fallbackDisplayReference {
     final targetTitle = utils.getTitleFromPath(path2);
     return formatDisplayReference(
-      bookTitle: targetTitle,
-      fallbackRef: heRef,
-    );
+          bookTitle: targetTitle,
+          fallbackRef: heRef,
+        ) +
+        _rangeDisplaySuffix;
   }
 
   /// מחזירה כתובת תצוגה מלאה של ספר היעד, עם מטמון לפי ספר ואינדקס.
   Future<String> get displayReference {
-    final cacheKey = '${path2}_${index2}_${targetIsUserBook ? 'u' : 'o'}_'
+    final cacheKey = '${path2}_${index2}_${index2End ?? ''}_'
+        '${targetIsUserBook ? 'u' : 'o'}_'
         '${targetCategoryId ?? ''}';
     return _displayReferenceCache.putIfAbsent(cacheKey, () async {
       final targetTitle = utils.getTitleFromPath(path2);
       final targetFileType = _resolveTargetFileType();
       if (index2 <= 0) {
         return formatDisplayReference(
-          bookTitle: targetTitle,
-          fallbackRef: heRef,
-        );
+              bookTitle: targetTitle,
+              fallbackRef: heRef,
+            ) +
+            _rangeDisplaySuffix;
       }
 
       try {
@@ -159,15 +189,17 @@ class Link {
               .then((toc) => toc ?? const <TocEntry>[]),
         );
         return formatDisplayReference(
-          bookTitle: targetTitle,
-          resolvedRef: resolvedRef,
-          fallbackRef: heRef,
-        );
+              bookTitle: targetTitle,
+              resolvedRef: resolvedRef,
+              fallbackRef: heRef,
+            ) +
+            _rangeDisplaySuffix;
       } catch (_) {
         return formatDisplayReference(
-          bookTitle: targetTitle,
-          fallbackRef: heRef,
-        );
+              bookTitle: targetTitle,
+              fallbackRef: heRef,
+            ) +
+            _rangeDisplaySuffix;
       }
     });
   }
@@ -220,7 +252,10 @@ class Link {
         anchorLabel = null,
         linkedAnchorStart = null,
         linkedAnchorEnd = null,
-        anchorSpans = const [];
+        anchorSpans = const [],
+        // קישורי-טווח מגיעים רק ממסד הנתונים (link_range), לא מקבצי JSON.
+        heRefEnd = null,
+        index2End = null;
 }
 
 /// Retrieves a list of [Link] objects for the given list of [indexes] and the [links] to be processed.
