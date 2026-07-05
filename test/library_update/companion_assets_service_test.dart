@@ -166,6 +166,18 @@ void main() {
       expect(readMarker(), tag);
     });
 
+    test('עדכון מנקה קובץ ישן שהוסר ב-release החדש', () async {
+      createTalmudDir(markerTag: 'v1.0.0');
+      final stale = File(p.join(talmudDir(), 'מסכת_שהוסרה.pdf'))
+        ..writeAsStringSync('old');
+
+      await service().verifyAndUpdate();
+
+      expect(stale.existsSync(), isFalse,
+          reason: 'קבצים ישנים לא אמורים לשרוד עדכון');
+      expect(readMarker(), tag);
+    });
+
     test('כשל ב-API של התלמוד לא עוצר את הקטלוג והמילון', () async {
       final catalog = _FakeCatalogRepository(exists: true);
       final dictionary = _FakeDictionaryDownloader();
