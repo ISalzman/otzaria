@@ -5,6 +5,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/search/magic_dictionary_downloader.dart';
@@ -34,6 +35,7 @@ class CompanionAssetsService {
       void Function(double progress)? onProgress) _extractTarArchive;
   final List<String> Function() _talmudDirsProvider;
   final VoidCallback _invalidateExternalBooksCache;
+  final VoidCallback _invalidateLibraryCaches;
   final String _talmudReleaseApiUrl;
 
   CompanionAssetsService({
@@ -44,6 +46,7 @@ class CompanionAssetsService {
         extractTarArchive,
     List<String> Function()? talmudDirsProvider,
     VoidCallback? invalidateExternalBooksCache,
+    VoidCallback? invalidateLibraryCaches,
     String? talmudReleaseApiUrl,
   })  : _clientFactory = clientFactory ?? http.Client.new,
         _catalogRepository =
@@ -56,30 +59,36 @@ class CompanionAssetsService {
             DatabaseConstants.getTalmudBavliDirectoryPaths,
         _invalidateExternalBooksCache = invalidateExternalBooksCache ??
             (() => DataRepository.instance.invalidateExternalBooksCache()),
+        _invalidateLibraryCaches = invalidateLibraryCaches ??
+            (() => FileSystemData.instance.clearBookCache()),
         _talmudReleaseApiUrl = talmudReleaseApiUrl ?? talmudReleaseApi;
 
   /// מריץ אימות ועדכון של שלושת הפריטים הנלווים, לפי הסדר: תלמוד, קטלוג,
-  /// מילון.
-  Future<void> verifyAndUpdate({
+  /// מילון. מחזיר האם תוכן הספרייה השתנה (תלמוד/קטלוג הותקנו או עודכנו) —
+  /// אז נדרש ריענון ספרייה; עדכון מילון אינו משנה את הספרייה.
+  Future<bool> verifyAndUpdate({
     void Function(String message)? onStatus,
     void Function(int received, int? total)? onDownloadProgress,
     bool Function()? isCancelled,
   }) async {
     bool cancelled() => isCancelled?.call() ?? false;
+    var libraryChanged = false;
 
     try {
-      await _ensureTalmud(onStatus, onDownloadProgress, cancelled);
+      if (await _ensureTalmud(onStatus, onDownloadProgress, cancelled)) {
+        libraryChanged = true;
+      }
     } catch (e) {
       debugPrint('[CompanionAssets] talmud update failed: $e');
     }
-    if (cancelled()) return;
+    if (cancelled()) return libraryChanged;
 
     try {
-      await _ensureCatalog(onStatus);
+      if (await _ensureCatalog(onStatus)) libraryChanged = true;
     } catch (e) {
       debugPrint('[CompanionAssets] catalog update failed: $e');
     }
-    if (cancelled()) return;
+    if (cancelled()) return libraryChanged;
 
     try {
       onStatus?.call('בודק מילון חיפוש');
@@ -101,11 +110,13 @@ class CompanionAssetsService {
     } catch (e) {
       debugPrint('[CompanionAssets] dictionary update failed: $e');
     }
+    return libraryChanged;
   }
 
   // ── תלמוד בבלי ────────────────────────────────────────────────────────
 
-  Future<void> _ensureTalmud(
+  /// מחזיר `true` רק כשהתלמוד הורד והותקן בפועל.
+  Future<bool> _ensureTalmud(
     void Function(String message)? onStatus,
     void Function(int received, int? total)? onDownloadProgress,
     bool Function() cancelled,
@@ -133,11 +144,11 @@ class CompanionAssetsService {
           // התקנה קיימת ללא סימון גרסה — מחתימים את התג הנוכחי בלי להוריד
           // מחדש; עדכונים יזוהו מה-release הבא ואילך.
           marker.writeAsStringSync(release.tag);
-          return;
+          return false;
         }
-        if (installed == release.tag) return;
+        if (installed == release.tag) return false;
       }
-      if (cancelled()) return;
+      if (cancelled()) return false;
 
       onStatus?.call('מוריד את התלמוד הבבלי');
       final targetDir = existingDir ?? dirs.first;
@@ -151,7 +162,7 @@ class CompanionAssetsService {
           onDownloadProgress,
           cancelled,
         );
-        if (cancelled()) return;
+        if (cancelled()) return false;
 
         onStatus?.call('מחלץ את התלמוד הבבלי');
         Directory(targetDir).createSync(recursive: true);
@@ -176,6 +187,10 @@ class CompanionAssetsService {
       }
       File(p.join(targetDir, talmudVersionFileName))
           .writeAsStringSync(release.tag);
+      // קיום תיקיית התלמוד ממוטמן ב-DatabaseLibraryProvider — בלי ניקוי,
+      // הריענון שאחרי העדכון לא יגלה את התיקייה החדשה עד הפעלה מחדש.
+      _invalidateLibraryCaches();
+      return true;
     } finally {
       client.close();
     }
@@ -245,7 +260,8 @@ class CompanionAssetsService {
 
   // ── קטלוג otzar-HB ────────────────────────────────────────────────────
 
-  Future<void> _ensureCatalog(
+  /// מחזיר `true` כשהקטלוג הורד או עודכן בפועל.
+  Future<bool> _ensureCatalog(
     void Function(String message)? onStatus,
   ) async {
     final repository = _catalogRepository();
@@ -253,10 +269,11 @@ class CompanionAssetsService {
       onStatus?.call('בודק עדכון קטלוגים');
       final updated = await repository.updateDatabaseIfNeeded();
       if (updated) _invalidateExternalBooksCache();
-      return;
+      return updated;
     }
     onStatus?.call('מוריד את הקטלוגים');
     await repository.downloadLatestDatabase();
     _invalidateExternalBooksCache();
+    return true;
   }
 }
