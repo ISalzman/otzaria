@@ -81,7 +81,10 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       switch (plan.kind) {
         case LibraryUpdatePlanKind.none:
           final assetsChanged = await _runCompanionAssets(emit, opId);
-          if (_isStale(opId)) return;
+          // ביטול בזמן הנלווים אחרי שתלמוד/קטלוג כבר שונו: בלי completed עם
+          // hasUpdate הריענון והאינדוקס לא ירוצו עד הפעלה מחדש. state.isBusy
+          // מגן מדריסת ריצה חדשה שכבר התחילה.
+          if (_isStale(opId) && (!assetsChanged || state.isBusy)) return;
           // תלמוד/קטלוג שהותקנו משנים את תוכן הספרייה — hasUpdate מפעיל
           // ריענון ואינדוקס ב-UI גם כשה-DB עצמו לא עודכן.
           emit(LibraryUpdateState(
