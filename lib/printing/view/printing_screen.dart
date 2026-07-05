@@ -1349,23 +1349,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
     String dataString = await _dataFuture;
 
-    if (_removeNikud && _removeTaamim) {
-      dataString = removeVolwels(dataString);
-    } else if (_removeNikud && !_removeTaamim) {
-      dataString = dataString
-          .replaceAll('ײ¾', ' ')
-          .replaceAll('׳€', ' ')
-          .replaceAll('|', ' ')
-          .replaceAll(RegExp(r'[\u05B0-\u05C7]'), '');
-    } else if (!_removeNikud && _removeTaamim) {
-      dataString = removeTeamim(dataString);
-    }
-
     final shouldReplaceHolyNames =
         Settings.getValue<bool>('key-replace-holy-names') ?? true;
-    if (shouldReplaceHolyNames) {
-      dataString = replaceHolyNames(dataString);
-    }
+    dataString = _applyTextTransforms(dataString, shouldReplaceHolyNames);
 
     // שומרים את תגיות ה-HTML — WordExportService ממיר אותן לעיצוב במסמך
     final allLines = dataString.split('\n').toList();
@@ -1604,20 +1590,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (!keepHtml) {
       text = stripHtmlIfNeeded(text);
     }
-    if (_removeNikud && _removeTaamim) {
-      text = removeVolwels(text);
-    } else if (_removeNikud && !_removeTaamim) {
-      text = text
-          .replaceAll('־', ' ')
-          .replaceAll('׀', ' ')
-          .replaceAll('|', ' ')
-          .replaceAll(RegExp(r'[\u05B0-\u05C7]'), '');
-    } else if (!_removeNikud && _removeTaamim) {
-      text = removeTeamim(text);
-    }
-    if (shouldReplaceHolyNames) {
-      text = replaceHolyNames(text);
-    }
+    text = _applyTextTransforms(text, shouldReplaceHolyNames);
 
     _commentaryContentCache[key] = text;
     return text;
