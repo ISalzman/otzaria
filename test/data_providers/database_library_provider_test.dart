@@ -537,6 +537,177 @@ void main() {
       }
     });
 
+    test('גרסאות: רשימת המהדורות נטענת — עם תוכן תחילה, לפי priority',
+        () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_versions');
+      final dbPath = path.join(tempDir.path, 'db.sqlite');
+      final db = sqlite3.sqlite3.open(dbPath);
+
+      try {
+        db.execute(
+            'CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, totalLines INTEGER)');
+        db.execute(
+            'CREATE TABLE book_version (id INTEGER PRIMARY KEY, bookId INTEGER, versionTitle TEXT, heVersionTitle TEXT, versionSource TEXT, priority REAL, license TEXT, versionNotes TEXT, heVersionNotes TEXT, hasContent INTEGER)');
+        db.execute(
+            'CREATE TABLE version_line (versionId INTEGER, lineId INTEGER, content TEXT, charCount INTEGER, PRIMARY KEY (versionId, lineId))');
+
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, totalLines) VALUES (1, 'טור', 7, 3)");
+        db.execute(
+            "INSERT INTO book_version VALUES (11, 1, 'Warsaw 1861', NULL, 'http://w', 1.0, 'Public Domain', NULL, NULL, 1)");
+        db.execute(
+            "INSERT INTO book_version VALUES (12, 1, 'Vilna 1923', 'וילנא תרפ\"ג', NULL, 2.0, NULL, NULL, NULL, 1)");
+        db.execute(
+            "INSERT INTO book_version VALUES (13, 1, 'Old Edition', NULL, NULL, 3.0, NULL, NULL, NULL, 0)");
+
+        final rows = DatabaseLibraryProvider.loadBookVersionsRowsForTesting(
+          dbPath: dbPath,
+          title: 'טור',
+          categoryId: 7,
+        );
+        // עם-תוכן תחילה; בתוך כל קבוצה priority יורד.
+        expect(
+          rows.map((r) => r['versionTitle']).toList(),
+          ['Vilna 1923', 'Warsaw 1861', 'Old Edition'],
+        );
+        expect(rows[0]['heVersionTitle'], 'וילנא תרפ"ג');
+        expect(rows[1]['license'], 'Public Domain');
+        expect(rows[2]['hasContent'], 0);
+
+        // ספר שאינו קיים — רשימה ריקה.
+        final missing = DatabaseLibraryProvider.loadBookVersionsRowsForTesting(
+          dbPath: dbPath,
+          title: 'איננו',
+          categoryId: 7,
+        );
+        expect(missing, isEmpty);
+      } finally {
+        db.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('גרסאות: DB ישן בלי book_version מחזיר רשימה ריקה', () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_versions_old');
+      final dbPath = path.join(tempDir.path, 'db.sqlite');
+      final db = sqlite3.sqlite3.open(dbPath);
+
+      try {
+        db.execute(
+            'CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, totalLines INTEGER)');
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, totalLines) VALUES (1, 'טור', 7, 3)");
+
+        final rows = DatabaseLibraryProvider.loadBookVersionsRowsForTesting(
+          dbPath: dbPath,
+          title: 'טור',
+          categoryId: 7,
+        );
+        expect(rows, isEmpty);
+
+        // בקשת טקסט של מהדורה מול DB ישן — null, בלי ליפול לנוסח הממוזג.
+        final range = DatabaseLibraryProvider.loadBookTextRangeRowsForTesting(
+          dbPath: dbPath,
+          title: 'טור',
+          categoryId: 7,
+          fileType: 'txt',
+          startLine: 0,
+          endLine: 10,
+          versionTitle: 'Vilna 1923',
+        );
+        expect(range, isNull);
+      } finally {
+        db.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('גרסאות: overlay — תוכן מהמהדורה, כותרת מהשלד, סגמנט חסר ריק',
+        () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_versions_text');
+      final dbPath = path.join(tempDir.path, 'db.sqlite');
+      final db = sqlite3.sqlite3.open(dbPath);
+
+      try {
+        db.execute(
+            'CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, totalLines INTEGER)');
+        db.execute(
+            'CREATE TABLE line (id INTEGER PRIMARY KEY, bookId INTEGER, lineIndex INTEGER, content TEXT, heRef TEXT)');
+        db.execute(
+            'CREATE TABLE book_version (id INTEGER PRIMARY KEY, bookId INTEGER, versionTitle TEXT, heVersionTitle TEXT, versionSource TEXT, priority REAL, license TEXT, versionNotes TEXT, heVersionNotes TEXT, hasContent INTEGER)');
+        db.execute(
+            'CREATE TABLE version_line (versionId INTEGER, lineId INTEGER, content TEXT, charCount INTEGER, PRIMARY KEY (versionId, lineId))');
+
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, totalLines) VALUES (1, 'טור', 7, 4)");
+        // שורה 0: כותרת (heRef NULL); 1-3: תוכן, כשלמהדורה יש נוסח רק ל-1 ו-3.
+        db.execute("INSERT INTO line VALUES (10, 1, 0, '<h1>טור</h1>', NULL)");
+        db.execute(
+            "INSERT INTO line VALUES (11, 1, 1, 'נוסח ממוזג א', 'טור א')");
+        db.execute(
+            "INSERT INTO line VALUES (12, 1, 2, 'נוסח ממוזג ב', 'טור ב')");
+        db.execute(
+            "INSERT INTO line VALUES (13, 1, 3, 'נוסח ממוזג ג', 'טור ג')");
+        db.execute(
+            "INSERT INTO book_version VALUES (11, 1, 'Warsaw 1861', NULL, NULL, NULL, NULL, NULL, NULL, 1)");
+        db.execute(
+            "INSERT INTO version_line VALUES (11, 11, 'נוסח ורשא א', 11)");
+        db.execute(
+            "INSERT INTO version_line VALUES (11, 13, 'נוסח ורשא ג', 11)");
+
+        final versionRange =
+            DatabaseLibraryProvider.loadBookTextRangeRowsForTesting(
+          dbPath: dbPath,
+          title: 'טור',
+          categoryId: 7,
+          fileType: 'txt',
+          startLine: 0,
+          endLine: 10,
+          versionTitle: 'Warsaw 1861',
+        );
+        expect(versionRange, isNotNull);
+        expect(versionRange!.lines, [
+          '<h1>טור</h1>', // כותרת נשארת מהשלד
+          'נוסח ורשא א',
+          '', // סגמנט שחסר במהדורה — ריק, לא נוסח ממוזג
+          'נוסח ורשא ג',
+        ]);
+        expect(versionRange.totalLines, 4);
+
+        // בלי versionTitle — הנוסח הממוזג הרגיל, ללא שינוי.
+        final mergedRange =
+            DatabaseLibraryProvider.loadBookTextRangeRowsForTesting(
+          dbPath: dbPath,
+          title: 'טור',
+          categoryId: 7,
+          fileType: 'txt',
+          startLine: 0,
+          endLine: 10,
+        );
+        expect(mergedRange!.lines,
+            ['<h1>טור</h1>', 'נוסח ממוזג א', 'נוסח ממוזג ב', 'נוסח ממוזג ג']);
+
+        // מהדורה שאינה קיימת — null, בלי ליפול לנוסח הממוזג.
+        final unknownVersion =
+            DatabaseLibraryProvider.loadBookTextRangeRowsForTesting(
+          dbPath: dbPath,
+          title: 'טור',
+          categoryId: 7,
+          fileType: 'txt',
+          startLine: 0,
+          endLine: 10,
+          versionTitle: 'איננה',
+        );
+        expect(unknownVersion, isNull);
+      } finally {
+        db.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
     test('loadAlternativeStructuresRowsForTesting טוען כותרות חלופיות מה-DB',
         () async {
       final tempDir = await Directory.systemTemp.createTemp('otzaria_db_alt');

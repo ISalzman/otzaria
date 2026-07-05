@@ -14,6 +14,7 @@ import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/database/sql/sqlite3_utils.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
+import 'package:otzaria/models/book_version.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/link_types.dart';
@@ -405,6 +406,15 @@ bool _hasLinkRangeTables(sqlite3.Database db) => db
     )
     .isNotEmpty;
 
+/// מהדורות ספרים (book_version/version_line) — קיימות רק במסדים חדשים; במסד
+/// ישן רשימת הגרסאות ריקה ופתיחת גרסה נכשלת בשקט. שתי הטבלאות נשלחות יחד,
+/// לכן די בבדיקת book_version.
+bool _hasBookVersionTables(sqlite3.Database db) => db
+    .select(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='book_version' LIMIT 1",
+    )
+    .isNotEmpty;
+
 /// עמודות קצה-הטווח של צד-הפאנל: heRef של השורה האחרונה בטווח + האינדקס שלה
 /// (0-based), או NULL כשאין טווח / כשהמסד ישן.
 String _rangeEndSelectColumns(bool hasLinkRanges) => hasLinkRanges
@@ -749,6 +759,7 @@ Future<List<Map<String, Object?>>> _runBookLinksInRangeInIsolate({
   required String fileType,
   required int startLine,
   required int endLine,
+  String? versionTitle,
 }) {
   sqlite3.Database? db;
   try {
@@ -771,10 +782,32 @@ Future<List<Map<String, Object?>>> _runBookLinksInRangeInIsolate({
     final normalizedStart = startLine.clamp(0, totalLines - 1);
     final normalizedEnd = endLine.clamp(normalizedStart, totalLines - 1);
 
-    final rows = db.select(
-      'SELECT content FROM line WHERE bookId = ? AND lineIndex >= ? AND lineIndex <= ? ORDER BY lineIndex',
-      [bookId, normalizedStart, normalizedEnd],
-    ).toMapList();
+    final List<Map<String, dynamic>> rows;
+    if (versionTitle != null) {
+      if (!_hasBookVersionTables(db)) return null;
+      final versionRows = db.select(
+        'SELECT id FROM book_version WHERE bookId = ? AND versionTitle = ? LIMIT 1',
+        [bookId, versionTitle],
+      ).toMapList();
+      if (versionRows.isEmpty) return null;
+      final versionId = versionRows.first['id'] as int;
+      // מהדורה חלופית: שורות מבנה (heRef NULL — כותרות/מחברים) נשארות מהשלד;
+      // שורת תוכן מקבלת את נוסח המהדורה, וסגמנט שחסר בה מוצג ריק — לעולם לא
+      // נופלים בשקט לנוסח הממוזג.
+      rows = db.select('''
+        SELECT CASE WHEN l.heRef IS NULL THEN l.content
+                    ELSE COALESCE(vl.content, '') END AS content
+        FROM line l
+        LEFT JOIN version_line vl ON vl.versionId = ? AND vl.lineId = l.id
+        WHERE l.bookId = ? AND l.lineIndex >= ? AND l.lineIndex <= ?
+        ORDER BY l.lineIndex
+      ''', [versionId, bookId, normalizedStart, normalizedEnd]).toMapList();
+    } else {
+      rows = db.select(
+        'SELECT content FROM line WHERE bookId = ? AND lineIndex >= ? AND lineIndex <= ? ORDER BY lineIndex',
+        [bookId, normalizedStart, normalizedEnd],
+      ).toMapList();
+    }
     if (rows.isEmpty) {
       return null;
     }
@@ -801,6 +834,7 @@ Future<({int startLine, int endLine, int totalLines, List<String> lines})?>
   required String fileType,
   required int startLine,
   required int endLine,
+  String? versionTitle,
 }) {
   return Isolate.run(
     () => _loadBookTextRangeRowsInIsolate(
@@ -810,6 +844,54 @@ Future<({int startLine, int endLine, int totalLines, List<String> lines})?>
       fileType: fileType,
       startLine: startLine,
       endLine: endLine,
+      versionTitle: versionTitle,
+    ),
+  );
+}
+
+/// Top-level worker לרשימת המהדורות (book_version) של ספר. רשימה ריקה כשה-DB
+/// ישן (אין טבלה) או כשאין לספר מידע גרסאות.
+List<Map<String, dynamic>> _loadBookVersionsRowsInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+    if (!_hasBookVersionTables(db)) return const [];
+
+    final bookResults = db.select(
+      'SELECT id FROM book WHERE title = ? AND categoryId = ? LIMIT 1',
+      [title, categoryId],
+    ).toMapList();
+    if (bookResults.isEmpty) return const [];
+    final bookId = bookResults.first['id'] as int;
+
+    return db.select('''
+      SELECT versionTitle, heVersionTitle, versionSource, priority, license,
+             versionNotes, heVersionNotes, hasContent
+      FROM book_version
+      WHERE bookId = ?
+      ORDER BY hasContent DESC, priority DESC, versionTitle
+    ''', [bookId]).toMapList();
+  } finally {
+    db?.close();
+  }
+}
+
+/// Top-level wrapper עבור רשימת מהדורות ב-isolate.
+/// ראה ההסבר ב-[_runAlternativeStructuresInIsolate].
+Future<List<Map<String, dynamic>>> _runBookVersionsInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+}) {
+  return Isolate.run(
+    () => _loadBookVersionsRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
     ),
   );
 }
@@ -983,6 +1065,41 @@ class DatabaseLibraryProvider implements LibraryProvider {
       startLineIndex: startLineIndex,
       endLineIndex: endLineIndex,
       targetBookTitles: targetBookTitles,
+    );
+  }
+
+  @visibleForTesting
+  static List<Map<String, dynamic>> loadBookVersionsRowsForTesting({
+    required String dbPath,
+    required String title,
+    required int categoryId,
+  }) {
+    return _loadBookVersionsRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+    );
+  }
+
+  @visibleForTesting
+  static ({int startLine, int endLine, int totalLines, List<String> lines})?
+      loadBookTextRangeRowsForTesting({
+    required String dbPath,
+    required String title,
+    required int categoryId,
+    required String fileType,
+    required int startLine,
+    required int endLine,
+    String? versionTitle,
+  }) {
+    return _loadBookTextRangeRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+      startLine: startLine,
+      endLine: endLine,
+      versionTitle: versionTitle,
     );
   }
 
@@ -2773,7 +2890,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
   }
 
   /// טוען טווח שורות תוכן ב-isolate נפרד (כמו [getLinksForBookRange]), כדי
-  /// שהשאילתה וה-split לא יחסמו את ה-UI thread בזמן גלילה.
+  /// שהשאילתה וה-split לא יחסמו את ה-UI thread בזמן גלילה. כש-[versionTitle]
+  /// לא null נטען נוסח המהדורה הזו (version_line) על שלד שורות הספר.
   Future<({int startLine, int endLine, int totalLines, List<String> lines})?>
       getBookTextRange(
     String title,
@@ -2781,6 +2899,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     String fileType, {
     required int startLine,
     required int endLine,
+    String? versionTitle,
   }) async {
     if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
       return null;
@@ -2797,10 +2916,35 @@ class DatabaseLibraryProvider implements LibraryProvider {
         fileType: fileType,
         startLine: startLine,
         endLine: endLine,
+        versionTitle: versionTitle,
       );
     } catch (e) {
       debugPrint('⚠️ Error in getBookTextRange "$title": $e');
       return null;
+    }
+  }
+
+  /// רשימת המהדורות (book_version) של ספר, מהדורות עם טקסט מלא תחילה.
+  /// רשימה ריקה כשה-DB ישן או כשאין לספר מידע גרסאות.
+  Future<List<BookVersionInfo>> getBookVersions(
+    String title,
+    int categoryId,
+  ) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return const [];
+    }
+
+    final dbPath = _sqliteProvider.dbPath;
+    try {
+      final rows = await _runBookVersionsInIsolate(
+        dbPath: dbPath,
+        title: title,
+        categoryId: categoryId,
+      );
+      return rows.map(BookVersionInfo.fromDbRow).toList();
+    } catch (e) {
+      debugPrint('⚠️ Error in getBookVersions "$title": $e');
+      return const [];
     }
   }
 
