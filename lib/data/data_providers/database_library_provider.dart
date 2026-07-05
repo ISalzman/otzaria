@@ -2972,16 +2972,14 @@ class DatabaseLibraryProvider implements LibraryProvider {
           .getLineByIndex(resolvedBook.book.id, link.index2 - 1);
       if (line == null) return 'שגיאה: אינדקס מחוץ לטווח';
 
-      // קישור-טווח: מצרפים את כל שורות הטווח עד index2End (1-based, כולל).
+      // קישור-טווח: מצרפים את כל שורות הטווח עד index2End (1-based, כולל)
+      // בשאילתת טווח אחת במקום שאילתה פר-שורה.
       final end0 = (link.index2End ?? link.index2) - 1;
       if (end0 <= link.index2 - 1) return line.content;
-      final parts = <String>[line.content];
-      for (var idx0 = link.index2; idx0 <= end0; idx0++) {
-        final extra = await resolvedBook.repository
-            .getLineByIndex(resolvedBook.book.id, idx0);
-        if (extra != null) parts.add(extra.content);
-      }
-      return parts.join('<br>');
+      final rangeLines = await resolvedBook.repository
+          .getLines(resolvedBook.book.id, link.index2 - 1, end0);
+      if (rangeLines.isEmpty) return line.content;
+      return rangeLines.map((l) => l.content).join('<br>');
     } catch (e) {
       debugPrint('⚠️ Error in getLinkContent: $e');
       return 'שגיאה בטעינת תוכן המפרש';
