@@ -12,7 +12,13 @@ class SetCurrentWorkspaceName extends HistoryEvent {
 
 class AddHistory extends HistoryEvent {
   final OpenedTab tab;
-  AddHistory(this.tab);
+
+  /// scope מפורש לחיפוש, במקום קריאה מ-state של ה-SearchBloc.
+  /// נדרש כי SetFacetsWithoutSearch מעבד את ה-state אסינכרונית, אחרי
+  /// שהיסטוריית החיפוש כבר נלכדה — ואז ה-scope היה נאבד.
+  final List<String>? scopeFacets;
+
+  AddHistory(this.tab, {this.scopeFacets});
 }
 
 class CaptureStateForHistory extends HistoryEvent {

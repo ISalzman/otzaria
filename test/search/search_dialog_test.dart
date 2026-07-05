@@ -13,6 +13,9 @@ import 'package:otzaria/history/bloc/history_state.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
+import 'package:otzaria/library/bloc/library_event.dart';
+import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
@@ -32,6 +35,20 @@ class MockIndexingBloc extends MockBloc<IndexingEvent, IndexingState>
 class MockNavigationBloc extends MockBloc<NavigationEvent, NavigationState>
     implements NavigationBloc {}
 
+class MockLibraryBloc extends MockBloc<LibraryEvent, LibraryState>
+    implements LibraryBloc {}
+
+/// LibraryBloc מדומה עם ספרייה ריקה — מספיק ל-parseCategoryQuery בדיאלוג.
+MockLibraryBloc _stubLibraryBloc() {
+  final bloc = MockLibraryBloc();
+  whenListen(
+    bloc,
+    const Stream<LibraryState>.empty(),
+    initialState: const LibraryState(),
+  );
+  return bloc;
+}
+
 Widget _buildDialogHarness({
   required ThemeData theme,
   required HistoryBloc historyBloc,
@@ -46,6 +63,7 @@ Widget _buildDialogHarness({
         BlocProvider<HistoryBloc>.value(value: historyBloc),
         BlocProvider<IndexingBloc>.value(value: indexingBloc),
         BlocProvider<NavigationBloc>.value(value: navigationBloc),
+        BlocProvider<LibraryBloc>.value(value: _stubLibraryBloc()),
       ],
       child: Scaffold(body: dialog),
     ),
@@ -462,6 +480,7 @@ void main() {
           BlocProvider<HistoryBloc>.value(value: historyBloc),
           BlocProvider<IndexingBloc>.value(value: indexingBloc),
           BlocProvider<NavigationBloc>.value(value: navigationBloc),
+          BlocProvider<LibraryBloc>.value(value: _stubLibraryBloc()),
         ],
         child: MaterialApp(
           theme: theme,

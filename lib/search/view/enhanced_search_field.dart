@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/search_query_builder.dart';
+import 'package:otzaria/search/utils/category_query_parser.dart';
 import 'package:otzaria/search/view/tantivy_full_text_search.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -381,6 +384,28 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
 
     String query = widget.tab.queryController.text.trim();
     if (query.isNotEmpty) {
+      // תחביר קטגוריה: `מונח@קטגוריה` מצמצם את החיפוש לקטגוריה לפי שם.
+      final parsedCategory = parseCategoryQuery(
+        query,
+        context.read<LibraryBloc>().state.library,
+      );
+      if (parsedCategory.hasCategoryToken && !parsedCategory.categoryFound) {
+        UiSnack.showError(
+            'הקטגוריה או הספר "${parsedCategory.categoryName}" לא נמצאו');
+        return;
+      }
+      query = parsedCategory.query;
+      if (query.isEmpty) return;
+
+      // אם הוקלד תחביר `@`, מנקים אותו מהשדה — ההיסטוריה שומרת את טקסט השדה,
+      // והשחזור ממנה אינו מפענח `@` מחדש (אחרת יחפש מילולית "שלום@תורה").
+      if (widget.tab.queryController.text != query) {
+        widget.tab.queryController.value = TextEditingValue(
+          text: query,
+          selection: TextSelection.collapsed(offset: query.length),
+        );
+      }
+
       // החיפוש עובד תמיד על טקסט ללא ניקוד.
       if (utils.hasNikud(query)) {
         query = utils.removeVolwels(query);
@@ -396,7 +421,18 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
       );
 
       widget.tab.updateTitleFromAppliedQuery(query);
-      context.read<HistoryBloc>().add(AddHistory(widget.tab));
+      // תחביר `@קטגוריה`/`@ספר` גובר על scope הקיים של הטאב. מעבירים את
+      // ה-scope במפורש להיסטוריה כדי שלא ייאבד עד שה-SearchBloc יעדכן state.
+      context.read<HistoryBloc>().add(AddHistory(
+            widget.tab,
+            scopeFacets:
+                parsedCategory.categoryFound ? parsedCategory.facets : null,
+          ));
+      if (parsedCategory.categoryFound) {
+        context
+            .read<SearchBloc>()
+            .add(SetFacetsWithoutSearch(parsedCategory.facets!));
+      }
       context.read<SearchBloc>().add(
             UpdateSearchQuery(
               query,
