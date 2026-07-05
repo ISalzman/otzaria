@@ -7,6 +7,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
 import 'package:otzaria/history/history_repository.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -224,7 +225,10 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
     final text = tab.queryController.text;
     if (text.trim().isEmpty) return '';
 
-    final words = text.trim().split(RegExp(r'\\s+'));
+    // פיצול דרך המנוע, באותם חוקים שבהם נבנו מפתחות ה-searchOptions.
+    // (הקוד הקודם — split(RegExp(r'\\s+')) — חיפש \s מילולי ולכן מעולם
+    // לא פיצל; תוויות רב-מילים היו שבורות ממילא.)
+    final words = SearchQueryBuilder.splitQueryWords(text);
     final List<String> parts = [];
 
     const Map<String, String> optionAbbreviations = {

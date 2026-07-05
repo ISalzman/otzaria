@@ -342,7 +342,35 @@ class SearchingTab extends OpenedTab {
       }
     }
 
+    tab.dropStalePerWordStateIfNeeded();
+
     return tab;
+  }
+
+  /// state פר-מילה משוחזר שנבנה על ספירת מילים ישנה (חוקי הפיצול של
+  /// המנוע השתנו מאז השמירה, למשל `רמב"ם` שהפך משתי מילים לאחת) נופל
+  /// בשקט או זולג למילה הלא-נכונה — במקרה כזה עדיף למחוק אותו כליל
+  /// והמשתמש יגדיר מחדש.
+  void dropStalePerWordStateIfNeeded() {
+    final query = queryController.text;
+    if (query.trim().isEmpty) return;
+    bool matches;
+    try {
+      matches = SearchQueryBuilder.restoredPerWordStateMatches(
+        query,
+        searchOptions: searchOptions,
+        alternativeWords: alternativeWords,
+        spacingValues: spacingValues,
+      );
+    } catch (_) {
+      // המנוע עדיין לא אותחל — אין דרך לאמת; משאירים כמות שהוא.
+      return;
+    }
+    if (!matches) {
+      searchOptions.clear();
+      alternativeWords.clear();
+      spacingValues.clear();
+    }
   }
 
   @override

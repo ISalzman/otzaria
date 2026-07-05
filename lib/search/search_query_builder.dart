@@ -41,11 +41,52 @@ class SearchQueryBuilder {
   /// פיצול שאילתה למילות חיפוש. מאציל למנוע ה-Rust
   /// ([`engine.splitQueryWords`]) שהוא מקור האמת היחיד, כך שהטוקניזציה
   /// בצד האפליקציה זהה תו-בתו לזו של האינדוקס והשאילתה במנוע:
-  /// - `"` תמיד מפריד (`ז"ל` → שני טוקנים).
-  /// - `'` בסוף מילה נשמר בטוקן (`תוס'`).
-  /// - `'` באמצע מילה מפריד (`ד'אש` → `ד` + `אש`).
+  /// - `"` בין אותיות הוא חלק מהמילה (`רמב"ם`, `ז"ל` — מילה אחת);
+  ///   בקצה מילה — מפריד.
+  /// - `'` בין אותיות או בסוף מילה נשמר בטוקן (`ג'ורג'`, `תוס'`).
+  /// - `''` בין אותיות מאוחד ל-`"` (מוסכמת `רמב''ם` בקבצים ישנים);
+  ///   ״/׳ עבריים מנורמלים ל-"/' לפני הפיצול.
   static List<String> splitQueryWords(String query) =>
       engine.splitQueryWords(query: query);
+
+  /// אימות state פר-מילה משוחזר (סשן/היסטוריה) מול הפיצול הנוכחי:
+  /// המפות נבנו על `splitQueryWords` של הגרסה ששמרה אותן, ואם חוקי
+  /// הפיצול השתנו מאז (למשל `רמב"ם` שהפך משתי מילים לאחת) המפתחות
+  /// נופלים בשקט או זולגים למילה הלא-נכונה. מחזיר true כשכל המפתחות
+  /// עקביים עם הפיצול הנוכחי של השאילתה.
+  static bool restoredPerWordStateMatches(
+    String query, {
+    Map<String, Map<String, bool>> searchOptions = const {},
+    Map<int, List<String>> alternativeWords = const {},
+    Map<String, String> spacingValues = const {},
+  }) {
+    final words = splitQueryWords(query);
+    for (final key in searchOptions.keys) {
+      final sep = key.lastIndexOf('_');
+      if (sep <= 0) return false;
+      final word = key.substring(0, sep);
+      final index = int.tryParse(key.substring(sep + 1));
+      if (index == null ||
+          index < 0 ||
+          index >= words.length ||
+          words[index] != word) {
+        return false;
+      }
+    }
+    for (final index in alternativeWords.keys) {
+      if (index < 0 || index >= words.length) return false;
+    }
+    for (final key in spacingValues.keys) {
+      final parts = key.split('-');
+      if (parts.length != 2) return false;
+      final from = int.tryParse(parts[0]);
+      final to = int.tryParse(parts[1]);
+      if (from == null || to == null || to != from + 1 || to >= words.length) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   static bool usesAdvancedParameters(SearchMode searchMode) {
     return searchMode == SearchMode.advanced;

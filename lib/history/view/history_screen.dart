@@ -249,6 +249,9 @@ class _HistoryViewState extends State<HistoryView> {
                         .addAll(item.alternativeWords ?? {});
                     searchTab.spacingValues.clear();
                     searchTab.spacingValues.addAll(item.spacingValues ?? {});
+                    // פריט שנשמר תחת חוקי-פיצול ישנים של המנוע ימופה
+                    // למילים הלא-נכונות — עדיף לנקות מאשר לזלוג.
+                    searchTab.dropStalePerWordStateIfNeeded();
                     searchTab.searchBloc.add(
                       SetSearchMode(item.searchMode ?? SearchMode.advanced),
                     );
