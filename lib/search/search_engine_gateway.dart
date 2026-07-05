@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' as text_utils;
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
 /// בקשת חיפוש אחידה שמגיעה משכבת האפליקציה אל מנוע החיפוש.
@@ -100,6 +103,12 @@ abstract class SearchEngineOperations {
     SearchEngineRequest request, {
     required String facetPrefix,
   });
+
+  /// מזין מראש את תבנית הדגשת-הספר-הפתוח מבוססת-האינדקס לפרמטרי החיפוש —
+  /// כך שכשהמשתמש יפתח תוצאה, `utils.highLight` ימצא תבנית שמדגישה את
+  /// הווריאנטים שהחיפוש באמת התאים (שגיאות כתיב, קידומות, חלק ממילה).
+  /// Fire-and-forget; ברירת מחדל ריקה למימושי בדיקות.
+  void primeHighlightPattern(SearchEngineRequest request) {}
 }
 
 class RustSearchEngineOperations implements SearchEngineOperations {
@@ -337,6 +346,42 @@ class RustSearchEngineOperations implements SearchEngineOperations {
   static int _fuzzyDistance(int distance) {
     return distance.clamp(0, 2).toInt();
   }
+
+  /// מזין מראש את תבנית ההדגשה מבוססת-האינדקס (ראה
+  /// `text_manipulation.primeHighlightPattern`). מפתח המטמון נגזר מאותם
+  /// פרמטרים ש-`utils.highLight` ישתמש בהם ברינדור, כך שהתבנית תימצא שם.
+  ///
+  /// במצב exact אין פער להשלים: החיפוש מתאים רק את הטוקנים המדויקים, ותבנית
+  /// ה-fallback הסינכרונית כבר מדגישה בדיוק אותם.
+  @override
+  void primeHighlightPattern(SearchEngineRequest request) {
+    if (request.query.trim().isEmpty ||
+        request.searchMode == SearchMode.exact) {
+      return;
+    }
+    unawaited(text_utils.primeHighlightPattern(
+      searchQuery: request.query,
+      searchOptions: request.searchOptions,
+      alternativeWords: request.alternativeWords,
+      spacingValues: request.customSpacing,
+      searchDistance: request.distance,
+      isFuzzy: request.searchMode == SearchMode.fuzzy,
+      fetch: () => switch (request.searchMode) {
+        SearchMode.advanced => _engine.generateIndexHighlightPattern(
+            query: request.query,
+            distance: request.distance < 0 ? 0 : request.distance,
+            customSpacing: request.customSpacing,
+            alternativeWords: request.alternativeWords,
+            searchOptions: request.searchOptions,
+          ),
+        SearchMode.fuzzy => _engine.generateIndexFuzzyHighlightPattern(
+            query: request.query,
+            maxDistance: _fuzzyDistance(request.distance),
+          ),
+        SearchMode.exact => Future.value(null),
+      },
+    ));
+  }
 }
 
 class SearchEngineGateway {
@@ -346,6 +391,9 @@ class SearchEngineGateway {
     SearchEngineOperations engine,
     SearchEngineRequest request,
   ) async {
+    // בזמן שהחיפוש רץ, תבנית ההדגשה לספר-פתוח נבנית ברקע מאותם פרמטרים —
+    // עד שהמשתמש יפתח תוצאה היא כבר במטמון.
+    engine.primeHighlightPattern(request);
     switch (request.searchMode) {
       case SearchMode.exact:
         return engine.searchExact(request);
@@ -360,6 +408,7 @@ class SearchEngineGateway {
     SearchEngineOperations engine,
     SearchEngineRequest request,
   ) async {
+    engine.primeHighlightPattern(request);
     switch (request.searchMode) {
       case SearchMode.exact:
         return engine.searchAndCountExact(request);
@@ -375,6 +424,7 @@ class SearchEngineGateway {
     SearchEngineRequest request, {
     required int chunkSize,
   }) {
+    engine.primeHighlightPattern(request);
     switch (request.searchMode) {
       case SearchMode.exact:
         return engine.searchExactStream(request, chunkSize: chunkSize);

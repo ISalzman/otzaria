@@ -671,7 +671,7 @@ class _RecordingTantivyDataProvider implements TantivyDataProvider {
 /// עוקף את indexBooks כדי לבדוק את reindexChangedBooks בבידוד: הרחבת
 /// הכותרות והמחיקה אמיתיות, האינדוקס עצמו רק מוקלט.
 class _ReindexProbeRepository extends IndexingRepository {
-  _ReindexProbeRepository(TantivyDataProvider provider) : super(provider);
+  _ReindexProbeRepository(super.provider);
 
   List<Book>? indexedBooks;
 

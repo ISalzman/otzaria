@@ -377,4 +377,7 @@ class _RecordingSearchEngineOperations implements SearchEngineOperations {
     calls.add(_EngineCall.getFacetCountsFuzzy);
     return const [];
   }
+
+  @override
+  void primeHighlightPattern(SearchEngineRequest request) {}
 }
