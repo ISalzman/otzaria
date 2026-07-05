@@ -57,12 +57,14 @@ void main() {
     List<({String archive, String outputDir})>? extractions,
     List<String>? talmudDirs,
     void Function()? invalidate,
+    bool failExtraction = false,
   }) {
     return CompanionAssetsService(
       clientFactory: () => client ?? releaseClient(),
       catalogRepository: () => catalog ?? _FakeCatalogRepository(exists: true),
       dictionaryFactory: () => dictionary ?? _FakeDictionaryDownloader(),
       extractTarArchive: (archive, outputDir, onProgress) async {
+        if (failExtraction) throw Exception('החילוץ נקטע');
         extractions?.add((archive: archive, outputDir: outputDir));
         onProgress?.call(0.5);
         onProgress?.call(1.0);
@@ -139,6 +141,16 @@ void main() {
       final extractions = <({String archive, String outputDir})>[];
       await service(extractions: extractions).verifyAndUpdate();
 
+      expect(extractions, hasLength(1));
+      expect(readMarker(), tag);
+    });
+
+    test('חילוץ שנקטע משאיר סימון-ביניים, והריצה הבאה מורידה מחדש', () async {
+      await service(failExtraction: true).verifyAndUpdate();
+      expect(readMarker(), CompanionAssetsService.talmudInstallingMarker);
+
+      final extractions = <({String archive, String outputDir})>[];
+      await service(extractions: extractions).verifyAndUpdate();
       expect(extractions, hasLength(1));
       expect(readMarker(), tag);
     });
