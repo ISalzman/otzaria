@@ -625,6 +625,10 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Settings screen controller | `test/unit/settings/settings_screen_controller_test.dart` |
 | Bookmark model | `test/unit/settings/history/bookmark_model_test.dart` |
 | Custom folders BLoC | `test/settings/services/custom_folders/custom_folders_bloc_test.dart` |
+| Backup service (roundtrip, plugins, auto-backup) | `test/settings/services/backup_service_test.dart` |
+| Backup store (blobs, dedup, GC) + maintenance helpers | `test/unit/settings/backup/backup_store_test.dart` |
+| Backup rotation (GFS) | `test/unit/settings/backup/backup_rotation_test.dart` |
+| Backup archive merge rules | `test/unit/settings/backup/backup_merge_test.dart` |
 | SegmentedSettingsTile | `test/widgets/segmented_settings_tile_test.dart` |
 | SwitchSettingsTile | `test/widgets/switch_settings_tile_test.dart` |
 
