@@ -2181,8 +2181,14 @@ class MainWindowScreenState extends State<MainWindowScreen>
         !renderObject.hasSize) {
       return null;
     }
-    final topLeft = renderObject.localToGlobal(Offset.zero);
-    return (topLeft & renderObject.size).inflate(inflate);
+    // ילד keep-alive שנגלל מחוץ ל-viewport עובר את בדיקות attached/hasSize,
+    // אבל layoutOffset שלו ב-sliver הוא null ו-localToGlobal זורק.
+    try {
+      final topLeft = renderObject.localToGlobal(Offset.zero);
+      return (topLeft & renderObject.size).inflate(inflate);
+    } catch (_) {
+      return null;
+    }
   }
 
   void _scheduleTourTargetRebuilds({required int remainingFrames}) {
@@ -3123,27 +3129,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
                         // האפליקציה. הוא חי כל זמן שה-MainWindowScreen קיים,
                         // ולא תלוי במסך "כלים".
                         const PluginBackgroundHost(),
-                        if (isImmersive)
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: IconButton(
-                              tooltip: 'צא ממסך מלא',
-                              icon: Icon(
-                                  FluentIcons.full_screen_minimize_24_regular),
-                              onPressed: () async {
-                                await FullscreenHelper.toggleFullscreen(
-                                    context, false);
-                              },
-                              style: IconButton.styleFrom(
-                                backgroundColor: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
-                                foregroundColor:
-                                    Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                          ),
                         ContextOverlayPanel(
                           isOpen: _isReadingSettingsPanelOpen &&
                               (state.currentScreen == Screen.reading ||

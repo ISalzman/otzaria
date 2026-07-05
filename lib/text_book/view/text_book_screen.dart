@@ -2,7 +2,9 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:async';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:collection/collection.dart' show IterableExtension;
+import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -24,6 +26,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/text_book/utils/text_book_export_utils.dart';
 import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -35,7 +38,9 @@ import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/printing/print_content_models.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
+import 'package:otzaria/printing/word_export_service.dart';
 import 'package:otzaria/text_book/view/text_book_scaffold.dart';
 import 'package:otzaria/text_book/view/text_book_search_screen.dart';
 import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
@@ -51,6 +56,7 @@ import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
@@ -63,6 +69,7 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/utils/link_helpers.dart';
+import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
@@ -75,6 +82,95 @@ const String _viewModeBelow = 'below';
 const String _viewModePage = 'page';
 // פעולה (לא מצב תצוגה): פתיחת כרטיסיית מפרשים נפרדת
 const String _actionOpenCommentatorsTab = 'open_commentators_tab';
+
+enum _TextBookExportFormat {
+  word('docx'),
+  text('txt');
+
+  final String extension;
+  const _TextBookExportFormat(this.extension);
+}
+
+class _WordExportRequest {
+  final String title;
+  final String rawContent;
+  final bool removeNikud;
+  final bool removeTaamim;
+  final bool shouldReplaceHolyNames;
+  final String? fontFamily;
+  final double fontSize;
+
+  const _WordExportRequest({
+    required this.title,
+    required this.rawContent,
+    required this.removeNikud,
+    required this.removeTaamim,
+    required this.shouldReplaceHolyNames,
+    required this.fontFamily,
+    required this.fontSize,
+  });
+}
+
+class _TextExportRequest {
+  final String rawContent;
+  final bool removeNikud;
+  final bool removeTaamim;
+  final bool shouldReplaceHolyNames;
+
+  const _TextExportRequest({
+    required this.rawContent,
+    required this.removeNikud,
+    required this.removeTaamim,
+    required this.shouldReplaceHolyNames,
+  });
+}
+
+Uint8List _createTextBookWordExport(_WordExportRequest request) {
+  final blocks = request.rawContent
+      .split('\n')
+      .map(
+        (line) => PrintBlock(
+          kind: PrintBlockKind.text,
+          text: applyTextBookExportTextTransforms(
+            line,
+            removeNikud: request.removeNikud,
+            removeTaamim: request.removeTaamim,
+            shouldReplaceHolyNames: request.shouldReplaceHolyNames,
+            stripHtml: false,
+          ),
+        ),
+      )
+      .toList(growable: false);
+
+  return WordExportService.createWordDocument(
+    title: request.title,
+    blocks: blocks,
+    format: PdfPageFormat.a4,
+    isLandscape: false,
+    pageMargin: 20,
+    fontFamily: request.fontFamily,
+    fontSize: request.fontSize,
+  );
+}
+
+String _createTextBookTextExport(_TextExportRequest request) {
+  if (request.rawContent.isEmpty) {
+    return '';
+  }
+
+  return request.rawContent
+      .split('\n')
+      .map(
+        (line) => applyTextBookExportTextTransforms(
+          line,
+          removeNikud: request.removeNikud,
+          removeTaamim: request.removeTaamim,
+          shouldReplaceHolyNames: request.shouldReplaceHolyNames,
+          stripHtml: true,
+        ),
+      )
+      .join('\n');
+}
 
 final GlobalKey textBookNavigationTourTargetKey = GlobalKey(
   debugLabel: 'text_book_navigation_tour_target',
@@ -144,7 +240,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   // נפתח (false→true) ולא בכל rebuild - אחרת היה גונב פוקוס מתוכן הספר.
   bool _wasLeftPaneShown = false;
   FocusRepository? _focusRepository; // שמירת הפניה לשימוש ב-dispose
-  final GlobalKey _viewModeMenuKey = GlobalKey(); // מפתח לתפריט בחירת התצוגה
   String? _selectedTextForSearch;
   int?
       _selectedLineForNote; // שורת המקור של הטקסט המסומן, ליצירת הערה בקיצור מקשים
@@ -510,6 +605,95 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
+  Future<void> _exportWholeBook(TextBookLoaded state) async {
+    if (!await verifySaferModePassword(context)) return;
+    if (!mounted) return;
+
+    try {
+      final selectedFormat = await _pickTextBookExportFormat();
+      if (selectedFormat == null) return;
+
+      final extension = selectedFormat.extension;
+      final path = await FilePicker.saveFile(
+        dialogTitle: 'ייצוא הספר',
+        fileName:
+            '${sanitizeTextBookExportFileName(state.book.title)}.$extension',
+        type: FileType.custom,
+        allowedExtensions: [extension],
+        lockParentWindow: true,
+      );
+      if (path == null) return;
+      if (!mounted) return;
+
+      final file = File(normalizeTextBookExportPath(
+        path,
+        defaultExtension: extension,
+      ));
+
+      final settingsState = context.read<SettingsBloc>().state;
+      final removeTaamim = !settingsState.showTeamim;
+      final shouldReplaceHolyNames =
+          Settings.getValue<bool>('key-replace-holy-names') ?? true;
+      final fullContent =
+          await context.read<TextBookBloc>().repository.getBookContent(
+                state.book,
+              );
+
+      if (selectedFormat == _TextBookExportFormat.word) {
+        final bytes = await compute(
+          _createTextBookWordExport,
+          _WordExportRequest(
+            title: state.book.title,
+            rawContent: fullContent,
+            removeNikud: state.removeNikud,
+            removeTaamim: removeTaamim,
+            shouldReplaceHolyNames: shouldReplaceHolyNames,
+            fontFamily: settingsState.fontFamily,
+            fontSize: state.fontSize,
+          ),
+        );
+        await file.writeAsBytes(bytes);
+        UiSnack.showSuccess('קובץ Word נשמר בהצלחה');
+        return;
+      }
+
+      final text = await compute(
+        _createTextBookTextExport,
+        _TextExportRequest(
+          rawContent: fullContent,
+          removeNikud: state.removeNikud,
+          removeTaamim: removeTaamim,
+          shouldReplaceHolyNames: shouldReplaceHolyNames,
+        ),
+      );
+      await file.writeAsString(text);
+      UiSnack.showSuccess('קובץ טקסט נשמר בהצלחה');
+    } on FileSystemException catch (e) {
+      if (isLockedTextBookExportFileException(e)) {
+        UiSnack.showError(
+            'לא ניתן לשמור את הקובץ כי הוא פתוח בתוכנה אחרת. יש לסגור אותו ולנסות שוב.');
+        return;
+      }
+      UiSnack.showError('ייצוא הספר נכשל: ${e.message}');
+    } catch (e) {
+      UiSnack.showError('ייצוא הספר נכשל: $e');
+    }
+  }
+
+  Future<_TextBookExportFormat?> _pickTextBookExportFormat() async {
+    final result = await showTwoActionsDialog(
+      context: context,
+      title: 'בחירת סוג קובץ',
+      content: 'בחר פורמט לייצוא',
+      cancelText: 'טקסט',
+      confirmText: 'Word',
+      barrierDismissible: true,
+    );
+
+    if (result == null) return null;
+    return result ? _TextBookExportFormat.word : _TextBookExportFormat.text;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -617,6 +801,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   // השתנה - אם הגדרות הניקוד עצמן השתנו, יש להחיל את
                   // הערך החדש
                   preserveRemoveNikud: !isNikudSettingsChange,
+                  // לפיסוק אין הגדרה גלובלית — שינוי גופן/ניקוד לעולם
+                  // לא מאפס את בחירת המשתמש.
+                  preserveRemovePunctuation: true,
                   // שינוי הגדרות גלובליות (גופן/ניקוד) לעולם לא יכבה
                   // את מצב הרצף שהמשתמש בחר עבור הספר.
                   preserveContinuousReadingMode: true,
@@ -763,10 +950,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     textBookBloc.add(LoadContent(
       fontSize: settingsBloc.state.fontSize,
-      // בתצוגה משולבת, מפרשים תמיד מתחת
-      showSplitView: widget.isInCombinedView
-          ? false
-          : (Settings.getValue<bool>('key-splited-view') ?? true),
+      showSplitView: Settings.getValue<bool>('key-splited-view') ?? true,
       removeNikud: settingsBloc.state.defaultRemoveNikud,
       preserveState: true,
       // בתצוגה משולבת, חלונית הצד תמיד סגורה
@@ -995,11 +1179,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   context.read<TextBookBloc>().add(
                         LoadContent(
                           fontSize: settingsState.fontSize,
-                          // בתצוגה משולבת, מפרשים תמיד מתחת (showSplitView = false)
-                          // אחרת, משתמשים בערך שנשמר ב-state של הטאב
-                          showSplitView: widget.isInCombinedView
-                              ? false
-                              : state.splitedView,
+                          showSplitView: state.splitedView,
                           removeNikud: settingsState.defaultRemoveNikud,
                           // בתצוגה משולבת, חלונית הצד תמיד סגורה
                           forceCloseLeftPane: widget.isInCombinedView,
@@ -1308,15 +1488,40 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           key: widget.enableTourTargets
               ? textBookCommentatorsTourTargetKey
               : null,
-          child: _buildViewModeDropdown(context, state, key: _viewModeMenuKey),
+          child: _buildViewModeDropdown(context, state),
         ),
         icon: _getViewModeIcon(state),
         tooltip: _getViewModeTooltip(state),
-        onPressed: () {
-          // פתיחת התפריט באופן פרוגרמטי (למקרה שהכפתור עבר לתפריט overflow)
-          final dynamic menuState = _viewModeMenuKey.currentState;
-          menuState?.showButtonMenu();
-        },
+        // ב-overflow הכפתור עצמו לא בנוי בעץ, לכן המצבים מוצגים כתת-תפריט
+        submenuItems: [
+          ActionButtonData(
+            widget: const SizedBox.shrink(),
+            icon: FluentIcons.panel_left_24_regular,
+            tooltip: 'מפרשים בצד',
+            onPressed: () =>
+                _onViewModeSelected(context, state, _viewModeSplit),
+          ),
+          ActionButtonData(
+            widget: const SizedBox.shrink(),
+            icon: FluentIcons.panel_bottom_20_regular,
+            tooltip: 'מפרשים מתחת',
+            onPressed: () =>
+                _onViewModeSelected(context, state, _viewModeBelow),
+          ),
+          ActionButtonData(
+            widget: const SizedBox.shrink(),
+            icon: FluentIcons.book_open_24_regular,
+            tooltip: 'צורת הדף',
+            onPressed: () => _onViewModeSelected(context, state, _viewModePage),
+          ),
+          ActionButtonData(
+            widget: const SizedBox.shrink(),
+            icon: FluentIcons.open_24_regular,
+            tooltip: 'פתח כרטיסיית מפרשים',
+            onPressed: () =>
+                _onViewModeSelected(context, state, _actionOpenCommentatorsTab),
+          ),
+        ],
       ),
 
       // 3) Nikud Button
@@ -1486,6 +1691,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             : null,
       ),
 
+      // ייצוא הספר המלא - Word מעוצב או טקסט פשוט
+      if (!widget.isInCombinedView)
+        ActionButtonData(
+          widget: const SizedBox.shrink(),
+          icon: FluentIcons.arrow_export_ltr_24_regular,
+          tooltip: 'ייצוא הספר',
+          onPressed: () => _exportWholeBook(state),
+        ),
+
       // 6) הדפסה - לא בתצוגה משולבת
       if (!widget.isInCombinedView)
         ActionButtonData(
@@ -1540,6 +1754,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               icon: FluentIcons.print_24_regular,
               tooltip: 'הדפסה',
               onPressed: () => _handlePrintPress(state),
+            ),
+            ActionButtonData(
+              widget: const SizedBox.shrink(),
+              icon: FluentIcons.arrow_export_ltr_24_regular,
+              tooltip: 'ייצוא הספר',
+              onPressed: () => _exportWholeBook(state),
             ),
             ActionButtonData(
               widget: const SizedBox.shrink(),
@@ -1600,9 +1820,51 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
   }
 
+  /// טיפול בבחירת מצב תצוגה — משותף לתפריט הכפתור ולתת-התפריט ב-overflow
+  Future<void> _onViewModeSelected(
+      BuildContext context, TextBookLoaded state, String value) async {
+    // פתיחת כרטיסיית מפרשים נפרדת — פעולה, לא מצב תצוגה
+    if (value == _actionOpenCommentatorsTab) {
+      context.read<TabsBloc>().add(
+            AddTab(
+              CommentatorsTab(sourceTab: widget.tab),
+              insertAdjacent: true,
+            ),
+          );
+      return;
+    }
+
+    final bloc = context.read<TextBookBloc>();
+    final tourCubit = context.read<TourCubit>();
+
+    // קביעת מצב היעד לפי הבחירה
+    final bool isPageSelected = value == _viewModePage;
+    final bool isSplitSelected = value == _viewModeSplit;
+
+    // עדכון תצוגת צורת הדף במידת הצורך
+    if (isPageSelected != state.showPageShapeView) {
+      bloc.add(TogglePageShapeView(isPageSelected));
+    }
+
+    // עדכון תצוגת המפרשים במידת הצורך (רק במצבים שאינם 'צורת הדף')
+    if (!isPageSelected && isSplitSelected != state.showSplitView) {
+      bloc.add(ToggleSplitView(isSplitSelected));
+      await _savePerBookSettingsDirectly(context, state,
+          showSplitView: isSplitSelected);
+    }
+
+    if (isPageSelected || isSplitSelected) {
+      tourCubit.recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.commentaryUsed,
+          primaryValue: widget.tab.title,
+        ),
+      );
+    }
+  }
+
   /// בניית תפריט נפתח לבחירת מצב תצוגה
-  Widget _buildViewModeDropdown(BuildContext context, TextBookLoaded state,
-      {Key? key}) {
+  Widget _buildViewModeDropdown(BuildContext context, TextBookLoaded state) {
     final iconWidget = Icon(_getViewModeIcon(state));
 
     final isSplit = !state.showPageShapeView && state.showSplitView;
@@ -1610,54 +1872,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final isPage = state.showPageShapeView;
 
     return AppPopupMenuButton<String>(
-      key: key,
       tooltip: 'בחר סוג תצוגת מפרשים',
       iconData: _getViewModeIcon(state),
       icon: iconWidget,
-      enabled: !widget.isInCombinedView,
       initialValue: state.showPageShapeView
           ? _viewModePage
           : (state.showSplitView ? _viewModeSplit : _viewModeBelow),
-      onSelected: (value) async {
-        // פתיחת כרטיסיית מפרשים נפרדת — פעולה, לא מצב תצוגה
-        if (value == _actionOpenCommentatorsTab) {
-          context.read<TabsBloc>().add(
-                AddTab(
-                  CommentatorsTab(sourceTab: widget.tab),
-                  insertAdjacent: true,
-                ),
-              );
-          return;
-        }
-
-        final bloc = context.read<TextBookBloc>();
-        final tourCubit = context.read<TourCubit>();
-
-        // קביעת מצב היעד לפי הבחירה
-        final bool isPageSelected = value == _viewModePage;
-        final bool isSplitSelected = value == _viewModeSplit;
-
-        // עדכון תצוגת צורת הדף במידת הצורך
-        if (isPageSelected != state.showPageShapeView) {
-          bloc.add(TogglePageShapeView(isPageSelected));
-        }
-
-        // עדכון תצוגת המפרשים במידת הצורך (רק במצבים שאינם 'צורת הדף')
-        if (!isPageSelected && isSplitSelected != state.showSplitView) {
-          bloc.add(ToggleSplitView(isSplitSelected));
-          await _savePerBookSettingsDirectly(context, state,
-              showSplitView: isSplitSelected);
-        }
-
-        if (isPageSelected || isSplitSelected) {
-          tourCubit.recordInteraction(
-            TourInteraction(
-              type: TourInteractionType.commentaryUsed,
-              primaryValue: widget.tab.title,
-            ),
-          );
-        }
-      },
+      onSelected: (value) => _onViewModeSelected(context, state, value),
       entries: [
         AppMenuEntry(
           value: _viewModeSplit,
@@ -1777,7 +1998,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Widget _buildZoomInButton(BuildContext context, TextBookLoaded state) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return ToolbarActionButton(
-      tooltip: 'הגדל את גודל הטקסט (CTRL + +)',
+      tooltip:
+          'הגדל את גודל הטקסט (${ShortcutHelper.formatShortcutForDisplay('ctrl++')})',
       icon: FluentIcons.zoom_in_24_regular,
       compact: isCompact,
       onPressed: () async {
@@ -1791,7 +2013,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Widget _buildZoomOutButton(BuildContext context, TextBookLoaded state) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return ToolbarActionButton(
-      tooltip: 'הקטן את גודל הטקסט (CTRL + -)',
+      tooltip:
+          'הקטן את גודל הטקסט (${ShortcutHelper.formatShortcutForDisplay('ctrl+-')})',
       icon: FluentIcons.zoom_out_24_regular,
       compact: isCompact,
       onPressed: () async {
