@@ -180,8 +180,11 @@ class _FakeCompanionService extends CompanionAssetsService {
 
 /// שירות נלווים שנחסם עד שחרור ה-gate — לבדיקת ביטול במהלך הריצה שלו.
 class _GatedCompanionService extends CompanionAssetsService {
-  _GatedCompanionService(this.gate);
+  _GatedCompanionService(this.gate, {this.changed = false});
   final Completer<void> gate;
+
+  /// מדמה תלמוד/קטלוג שכבר שונו לפני שהביטול נקלט — הדגל המצטבר מוחזר.
+  final bool changed;
 
   @override
   Future<bool> verifyAndUpdate({
@@ -191,7 +194,7 @@ class _GatedCompanionService extends CompanionAssetsService {
   }) async {
     onStatus?.call('מוריד את התלמוד הבבלי');
     await gate.future;
-    return false;
+    return changed;
   }
 }
 
@@ -443,6 +446,51 @@ void main() {
             .having((s) => s.hasUpdate, 'hasUpdate', true),
       ],
     );
+
+    test(
+        'plan none: ביטול בזמן הנלווים שכבר שינו את הספרייה → completed עם hasUpdate',
+        () async {
+      final gate = Completer<void>();
+      final bloc = _bloc(_FakeService(nonePlan),
+          companionAssets: _GatedCompanionService(gate, changed: true));
+
+      bloc.add(const StartLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.message, 'מוריד את התלמוד הבבלי');
+      bloc.add(const CancelLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.message, 'העדכון בוטל');
+
+      // השירות מחזיר את הדגל המצטבר — תלמוד/קטלוג כבר שונו לפני הביטול.
+      gate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(bloc.state.status, LibraryUpdateStatus.completed);
+      expect(bloc.state.hasUpdate, isTrue,
+          reason: 'הספרייה כבר השתנתה — ביטול לא יכול לאבד את הריענון/אינדוקס');
+      await bloc.close();
+    });
+
+    test(
+        'plan none: ביטול בזמן נלווים שלא שינו דבר → נשאר מבוטל, בלי completed',
+        () async {
+      final gate = Completer<void>();
+      final bloc = _bloc(_FakeService(nonePlan),
+          companionAssets: _GatedCompanionService(gate));
+
+      bloc.add(const StartLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      bloc.add(const CancelLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      gate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(bloc.state.status, LibraryUpdateStatus.idle);
+      expect(bloc.state.message, 'העדכון בוטל',
+          reason: 'שום דבר לא השתנה — אין לפלוט completed מריצה שבוטלה');
+      await bloc.close();
+    });
 
     test('ביטול בשלב הנלווים אחרי עדכון דלתא → עדיין completed עם hasUpdate',
         () async {
