@@ -478,6 +478,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     List<String> existingAvailableCommentators = const [];
     List<CommentatorGroup> existingCommentatorGroups = const [];
     bool? preservedRemoveNikud;
+    bool? preservedRemovePunctuation;
     bool? preservedPinLeftPane;
 
     if (state is TextBookLoaded && event.preserveState) {
@@ -498,6 +499,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       existingAvailableCommentators = currentState.availableCommentators;
       existingCommentatorGroups = currentState.commentatorGroups;
       preservedRemoveNikud = currentState.removeNikud;
+      preservedRemovePunctuation = currentState.removePunctuation;
       preservedPinLeftPane = currentState.pinLeftPane;
       pinpointHighlightIndex = currentState.pinpointHighlightIndex;
       pinpointHighlightText = currentState.pinpointHighlightText;
@@ -754,6 +756,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         removeNikud: (event.preserveRemoveNikud && preservedRemoveNikud != null)
             ? preservedRemoveNikud
             : removeNikud,
+        removePunctuation: (event.preserveRemovePunctuation &&
+                preservedRemovePunctuation != null)
+            ? preservedRemovePunctuation
+            : false,
         isTanach: isTanach,
         supportsContinuousReadingMode: supportsContinuousReading,
         continuousReadingMode: effectiveContinuousReading,
@@ -1256,6 +1262,19 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       state.book.title,
       workspaceId: workspaceId,
     );
+    Map<String, String?> configuration;
+    if (storedConfiguration != null) {
+      configuration = storedConfiguration;
+    } else {
+      final defaults = await DefaultCommentators.getPageShapeDefaults(
+        state.book,
+        availableCommentators: candidateCommentators,
+      );
+      configuration = defaults.commentators;
+      for (final entry in defaults.visibility.entries) {
+        if (!entry.value) columnVisibility[entry.key] = false;
+      }
+    }
     final cacheKey = [
       state.book.title,
       state.book.heCategories ?? '',
@@ -1268,12 +1287,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (_cachedPageShapeTargetBookTitlesKey == cacheKey) {
       return _cachedPageShapeTargetBookTitles;
     }
-
-    final configuration = storedConfiguration ??
-        await DefaultCommentators.getDefaults(
-          state.book,
-          availableCommentators: candidateCommentators,
-        );
 
     final selectedCommentators = resolvePageShapeDisplayedCommentators(
       leftSelection: configuration['left'],
@@ -1519,20 +1532,29 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
+      final scrollIndex = event.scrollToIndex ?? event.permanentHighlightLine;
+      // ניווט deep-link לא נשען על ה-position listener של גלילת הטקסט (שנבלע
+      // כשהטאב ברקע וה-controller לא מחובר). מעדכנים ישירות את המיקום הגלוי
+      // וטוענים את קישורי חלון היעד, אחרת חלוניות המפרשים נשארות על המיקום הקודם.
+      final navigateCommentary = scrollIndex != null &&
+          _shouldLoadLinksForVisibleIndicesChange(currentState);
       emit(currentState.copyWith(
         highlightText: event.highlightText,
         permanentHighlightLine: event.permanentHighlightLine,
         clearPermanentHighlight: event.permanentHighlightLine == null,
         searchText: '',
+        visibleIndices: navigateCommentary ? [scrollIndex] : null,
       ));
       // גלילה לסעיף המבוקש כדי שההדגשה תהיה גלויה
-      final scrollIndex = event.scrollToIndex ?? event.permanentHighlightLine;
       if (scrollIndex != null && scrollController.isAttached) {
         scrollController.scrollTo(
           index: scrollIndex,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
+      }
+      if (navigateCommentary) {
+        _loadLinksInBackground(currentState.book, [scrollIndex]);
       }
     } else {
       // Initial או Loading — שומרים כ-pending, יוחל ב-_onLoadContent

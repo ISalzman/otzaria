@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/links.dart';
@@ -25,34 +26,31 @@ Future<List<Link>> loadUserLinksForBook({
   final ucr = UserContentRepository(repo.database);
   final result = <Link>[];
 
-  // forward — רק כשקוראים את ספר-המשתמש עצמו.
-  if (isUserBook) {
-    final sourceId =
-        await ucr.bookIdByTitle(bookTitle, categoryId: bookCategoryId);
-    if (sourceId != null) {
-      final forward = await ucr.forwardUserLinks(
-        sourceId,
-        startLineIndex: startLineIndex,
-        endLineIndex: endLineIndex,
-      );
-      for (final r in forward) {
-        final targetLine = r.targetLineIndex;
-        // ללא יעד-שורה אין לאן לפתוח (index2==0 נכשל כ-"Invalid link reference").
-        if (targetLine == null) continue;
-        result.add(Link(
-          heRef: r.targetRef ?? r.targetTitle,
-          index1: r.sourceLineIndex + 1,
-          path2: r.targetTitle,
-          index2: targetLine + 1,
-          connectionType: r.connectionType,
-          targetCategoryId: r.targetCategoryId,
-          targetIsUserBook: r.targetIsUserBook,
-        ));
-      }
-    }
+  // forward — קישורים היוצאים מהספר הנקרא (אישי או רשמי).
+  final forward = await ucr.forwardUserLinks(
+    bookTitle,
+    sourceIsUserBook: isUserBook,
+    sourceCategoryId: bookCategoryId,
+    startLineIndex: startLineIndex,
+    endLineIndex: endLineIndex,
+  );
+  for (final r in forward) {
+    final targetLine = r.targetLineIndex;
+    // ללא יעד-שורה אין לאן לפתוח (index2==0 נכשל כ-"Invalid link reference").
+    if (targetLine == null) continue;
+    result.add(Link(
+      heRef: r.targetRef ?? r.targetTitle,
+      index1: r.sourceLineIndex + 1,
+      path2: r.targetTitle,
+      index2: targetLine + 1,
+      connectionType: r.connectionType,
+      targetCategoryId: r.targetCategoryId,
+      targetIsUserBook: r.targetIsUserBook,
+    ));
   }
 
-  // inverse — מפרש-משתמש שמצביע אל הספר הנקרא.
+  // inverse — קישור-משתמש שמצביע אל הספר הנקרא; פתיחתו חוזרת אל ספר המקור
+  // (אישי או רשמי, לפי sourceIsUserBook).
   final inverse = await ucr.inverseUserLinks(
     bookTitle,
     targetIsUserBook: isUserBook,
@@ -62,20 +60,52 @@ Future<List<Link>> loadUserLinksForBook({
   );
   for (final r in inverse) {
     final targetLine = r.targetLineIndex;
-    final sourceTitle = r.sourceTitle;
-    if (targetLine == null || sourceTitle == null) continue;
+    if (targetLine == null) continue;
     result.add(Link(
-      heRef: sourceTitle,
+      heRef: r.sourceTitle,
       index1: targetLine + 1,
-      path2: sourceTitle,
+      path2: r.sourceTitle,
       index2: r.sourceLineIndex + 1,
-      connectionType: r.connectionType,
-      targetIsUserBook: true,
+      // כמו ה-inverse של seforim.db: מפרש שקורא את בסיסו רואה אותו כ'מקור'
+      // וירטואלי בפאנל הקישורים, לא כמפרש.
+      connectionType: LinkTypes.isDependentTextLink(r.connectionType)
+          ? LinkTypes.source
+          : r.connectionType,
+      targetIsUserBook: r.sourceIsUserBook,
       targetCategoryId: r.sourceCategoryId,
     ));
   }
 
-  return _applyCommentatorFilter(result, targetBookTitles);
+  return _applyCommentatorFilter(dedupeUserLinks(result), targetBookTitles);
+}
+
+/// כותרות מפרשי-המשתמש של ספר — להזנת רשימת המפרשים לבחירה (שאחרת נבנית
+/// רק מ-seforim.db ואינה מכירה קישורי-משתמש). ריק אם user_books.db לא פתוח.
+Future<List<String>> loadUserCommentatorTitles({
+  required String bookTitle,
+  required int? bookCategoryId,
+  required bool isUserBook,
+}) async {
+  final repo = UserBooksDatabaseHolder.instance.repositoryIfInitialized;
+  if (repo == null) return const [];
+  return UserContentRepository(repo.database).userCommentatorTitles(
+    bookTitle,
+    sourceIsUserBook: isUserBook,
+    sourceCategoryId: bookCategoryId,
+  );
+}
+
+/// מסיר כפילויות בין forward ל-inverse: קישור דו-כיווני (כמו שמייצר "מנהל
+/// המפרשים והקישורים") מיובא משני קבצים ומופיע משני הכיוונים — זהו אותו קישור.
+/// ה-forward נוסף ראשון ולכן נשמר (ה-heRef שלו עדיף).
+@visibleForTesting
+List<Link> dedupeUserLinks(List<Link> links) {
+  final seen = <String>{};
+  // המפתח כולל גם דגל-אישי וקטגוריה — שני ספרים שונים יכולים לחלוק כותרת.
+  return links
+      .where((l) => seen.add('${l.index1}|${l.path2}|${l.index2}|'
+          '${l.connectionType}|${l.targetIsUserBook}|${l.targetCategoryId}'))
+      .toList();
 }
 
 /// מסנן קישורי-מפרש לפי המפרשים הנבחרים (כמו הסינון ב-getLinksForBookRange):
