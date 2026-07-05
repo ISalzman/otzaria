@@ -134,10 +134,9 @@ class IndexingRepository {
               : (book is DocxBook ? book.toTextBook() : null);
           if (textBookForIndex != null) {
             if (!isBookIndexed(book)) {
-              debugPrint('📖 מאנדקס ספר טקסט ב-isolate: ${book.title}');
+              debugPrint('📖 מאנדקס ספר טקסט במנוע: ${book.title}');
               await _indexTextBook(
                 textBookForIndex,
-                isolateService,
                 catalogueOrderByBookKey: catalogueOrderByBookKey,
                 onActualIndexingStarted: () {
                   if (didStartActualIndexing) {
@@ -239,8 +238,7 @@ class IndexingRepository {
   }
 
   Future<void> _indexTextBook(
-    TextBook book,
-    IndexingIsolateService isolateService, {
+    TextBook book, {
     required Map<String, int> catalogueOrderByBookKey,
     String? preloadedText,
     void Function()? onActualIndexingStarted,
@@ -248,28 +246,33 @@ class IndexingRepository {
     final text = await _loadTextBookText(book, preloadedText: preloadedText);
     var wroteDocuments = false;
 
-    // טביעת אצבע של טקסט המקור הגולמי — מוטבעת על כל מסמכי הספר, כדי
-    // ש-reconcileIndexWithLibrary יוכל לזהות ספר שתוכנו השתנה מול ה-DB.
-    final BigInt? contentHash =
-        text != null ? await computeContentFingerprint(text: text) : null;
-
     if (text != null) {
-      final stream = await isolateService.processTextBook(text: text);
-      wroteDocuments = await _consumePreparedDocuments(
-        book: book,
-        stream: stream,
-        isolateService: isolateService,
-        catalogueOrderByBookKey: catalogueOrderByBookKey,
-        contentHash: contentHash,
-        onActualIndexingStarted: onActualIndexingStarted,
+      // כל הכנת הספר — פיצול לשורות, מעקב reference trail, נרמול, טביעת
+      // אצבע ואינדוקס — רצה במנוע בקריאת FFI אחת: הטקסט חוצה את הגשר פעם
+      // אחת בלבד, במקום המסלול הישן (isolate ‏← נרמול באצוות ‏← העתקת
+      // SendPort ‏← addDocumentsBatch) שהעתיק את תוכן הספר ארבע-חמש פעמים.
+      // הביטול נבדק לפני הקריאה; בתוך ספר בודד הכתיבה אטומית מבחינתנו.
+      onActualIndexingStarted?.call();
+      if (!_tantivyDataProvider.isIndexing.value) {
+        return;
+      }
+      final engine = await _tantivyDataProvider.engine;
+      final added = await engine.addTextBook(
+        title: book.title,
+        topics: _bookTopics(book),
+        filePath: buildIndexedBookFilePath(book),
+        catalogueOrder:
+            catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF,
+        text: text,
       );
+      wroteDocuments = added > 0;
     }
 
     if (!wroteDocuments) {
+      // text == null ⇒ אין טביעת אצבע; במסלול המלא המנוע חותם אותה בעצמו.
       await _writeEmptyBookMarker(
         book,
         catalogueOrderByBookKey: catalogueOrderByBookKey,
-        contentHash: contentHash,
       );
     }
   }
@@ -327,12 +330,12 @@ class IndexingRepository {
   bool _hasUsablePdfText(
       List<({String reference, String text, int pageIndex})> pages) {
     for (final page in pages) {
-      for (final line in page.text.split('\n')) {
-        final normalized =
-            IndexingDocumentBuilder.normalizePdfTextForIndexing(line);
-        if (!IndexingDocumentBuilder.isProbablyGarbagePdfText(normalized)) {
-          return true;
-        }
+      // קריאת FFI אחת לעמוד (נרמול + סינון זבל באצווה) במקום שתיים לכל שורה.
+      final prepared = IndexingDocumentBuilder.normalizePdfTextsForIndexing(
+        page.text.split('\n'),
+      );
+      if (prepared.any((line) => !line.isGarbage)) {
+        return true;
       }
     }
     return false;
@@ -492,6 +495,19 @@ class IndexingRepository {
     return wroteDocuments;
   }
 
+  /// נתיב ה-facet של הספר — משותף לכתיבת אצוות (PDF/סמן-ריק) ולמסלול
+  /// ה-addTextBook המלא, כדי ששני המסלולים לא יסטו זה מזה.
+  String _bookTopics(Book book) => BookFacet.buildFacetPath(
+        title: book.title,
+        topics: book.topics,
+        externalLibraryId: book.externalLibraryId,
+        bookId: book.id,
+        isUserBook: book.isUserBook,
+        categoryPath: book.category?.path ?? book.categoryPath,
+        fileType: book.fileType,
+        filePath: book is FileBook ? book.path : book.filePath,
+      );
+
   Future<void> _writePreparedBatch(
     Book book,
     List<PreparedIndexDocument> documents, {
@@ -511,16 +527,7 @@ class IndexingRepository {
 
     final index = await _tantivyDataProvider.engine;
     final title = book.title;
-    final topics = BookFacet.buildFacetPath(
-      title: title,
-      topics: book.topics,
-      externalLibraryId: book.externalLibraryId,
-      bookId: book.id,
-      isUserBook: book.isUserBook,
-      categoryPath: book.category?.path ?? book.categoryPath,
-      fileType: book.fileType,
-      filePath: book is FileBook ? book.path : book.filePath,
-    );
+    final topics = _bookTopics(book);
     final isPdf = book is PdfBook;
     final filePath = buildIndexedBookFilePath(book);
     final catalogueOrder =
@@ -685,7 +692,6 @@ class IndexingRepository {
               debugPrint('📖 מאנדקס ספר טקסט חדש: ${book.title}');
               await _indexTextBook(
                 textBookForIndex,
-                isolateService,
                 catalogueOrderByBookKey: catalogueOrderByBookKey,
                 onActualIndexingStarted: () {
                   if (didStartActualIndexing) return;
@@ -788,34 +794,66 @@ class IndexingRepository {
     await _tantivyDataProvider.clear();
   }
 
-  /// מסיר מהאינדקס את רשומות הספרים הנתונים, לפי כותרת (ה-API היחיד במנוע).
-  ///
-  /// המחיקה לפי כותרת מסירה כל ספר בעל אותה כותרת — הקורא אחראי להעביר את
-  /// כל הספרים החולקים כותרת כדי שיאונדקסו מחדש יחד.
+  /// מסיר מהאינדקס את רשומות הספרים הנתונים — מחיקה מדויקת לפי מפתח
+  /// ה-filePath שהמסמכים נכתבו איתו ([buildIndexedBookFilePath]), כך שספר
+  /// אחר החולק את אותה כותרת אינו נפגע.
   Future<void> dropBookIndexEntries(Iterable<Book> books) async {
-    final titles = <String>{
-      for (final book in books)
-        if (book.title.isNotEmpty) book.title,
-    };
-    if (titles.isEmpty) return;
+    final keys = <String>{
+      for (final book in books) buildIndexedBookFilePath(book),
+    }..remove('');
+    if (keys.isEmpty) return;
 
     final engine = await _tantivyDataProvider.engine;
-    for (final title in titles) {
-      try {
-        await engine.removeDocumentsByTitle(title: title);
-      } catch (e) {
-        debugPrint('⚠️ מחיקת רשומות אינדקס לכותרת "$title" נכשלה: $e');
-      }
-    }
     try {
+      await engine.deleteDocumentsByFilePaths(filePaths: keys.toList());
       await engine.commit();
     } catch (e) {
-      debugPrint('⚠️ commit אחרי מחיקת רשומות אינדקס נכשל: $e');
+      // בלי commit המחיקה לא נקלטה — משאירים את המעקב המקומי כמות שהוא.
+      debugPrint('⚠️ מחיקת רשומות אינדקס נכשלה: $e');
+      return;
     }
-    for (final book in books) {
-      _tantivyDataProvider.indexedFilePaths
-          .remove(buildIndexedBookFilePath(book));
+    _tantivyDataProvider.indexedFilePaths.removeAll(keys);
+  }
+
+  /// מסיר מהאינדקס רשומות "יתומות" — ספרים שכבר אינם בספרייה (למשל ספר
+  /// אישי שנמחק או תיקייה מותאמת שהוסרה). בלעדי זה מסמכי הספר ממשיכים
+  /// לעלות בחיפוש, וגרוע מזה: מזהי המסמכים שלהם (המקודדים לפי סדר קטלוגי)
+  /// עלולים להתפענח לספר אחר אחרי שהסדר השתנה.
+  ///
+  /// שמרני בכוונה: נוגע רק במפתחות ספרים אישיים (`uid:`) ובמפתחות
+  /// נתיב-מוחלט (PDF) שהקובץ מאחוריהם כבר לא קיים בדיסק. מפתחות ספרים
+  /// רשמיים (`id:`) וחיצוניים (`ext:`) לא נמחקים כאן — טעינה חלקית של
+  /// הספרייה הרשמית לא תגרור מחיקת אינדקס המונית ואינדוקס-מחדש של שעות.
+  ///
+  /// מחזיר את מספר הספרים שהוסרו.
+  Future<int> dropOrphanedIndexEntries(Library library) async {
+    final books = library.getAllBooks();
+    if (books.isEmpty) return 0;
+
+    // מוודא שה-indexedFilePaths כבר נטענו מהאינדקס (חלק מאתחול המנוע).
+    final engine = await _tantivyDataProvider.engine;
+
+    final libraryKeys = <String>{
+      for (final book in books) buildIndexedBookFilePath(book),
+    };
+
+    final orphans = <String>[];
+    // snapshot — הלולאה מכילה await ואסור שהסט החי ישתנה תחתיה.
+    for (final key in _tantivyDataProvider.indexedFilePaths.toList()) {
+      if (libraryKeys.contains(key)) continue;
+      if (key.startsWith('uid:')) {
+        orphans.add(key);
+      } else if (p.isAbsolute(key) && !await File(key).exists()) {
+        orphans.add(key);
+      }
     }
+    if (orphans.isEmpty) return 0;
+
+    await engine.deleteDocumentsByFilePaths(filePaths: orphans);
+    await engine.commit();
+    _tantivyDataProvider.indexedFilePaths.removeAll(orphans);
+    debugPrint('🧹 נוקו ${orphans.length} ספרים יתומים מהאינדקס');
+    return orphans.length;
   }
 
   /// מסיר מהאינדקס רשומות של ספרי-קובץ שנתיבם השתנה בהעברת הספרייה.
@@ -840,16 +878,9 @@ class IndexingRepository {
     if (changedBooks.isEmpty) return true;
     if (await requiresManualReindex(library)) return false;
 
-    // המחיקה במנוע היא לפי כותרת, ולכן כל ספר החולק כותרת עם ספר שהשתנה
-    // מוסר גם הוא — חובה לכלול אותו באינדוקס מחדש כדי שלא יישאר חסר.
-    final titles = <String>{
-      for (final book in changedBooks)
-        if (book.title.isNotEmpty) book.title,
-    };
-    final booksToReindex = library
-        .getAllBooks()
-        .where((b) => isIndexableBook(b) && titles.contains(b.title))
-        .toList();
+    // המחיקה מדויקת לפי מפתח ה-filePath של כל ספר, ולכן אין צורך להרחיב
+    // לספרים אחרים החולקים כותרת — מאנדקסים מחדש רק את מה שבאמת השתנה.
+    final booksToReindex = changedBooks.where(isIndexableBook).toList();
     if (booksToReindex.isEmpty) return true;
 
     await dropBookIndexEntries(booksToReindex);
@@ -889,8 +920,10 @@ class IndexingRepository {
     final indexFingerprints = await engine.getBookFingerprints();
 
     final textLoader = loadText ?? _loadTextBookText;
-    final fingerprint =
-        fingerprintOf ?? ((text) => computeContentFingerprint(text: text));
+    // computeContentFingerprint היא כעת קריאת FFI סינכרונית; העטיפה
+    // ה-async נשמרת רק כדי לא לשבור את חתימת ההזרקה של הטסטים.
+    final fingerprint = fingerprintOf ??
+        ((text) async => computeContentFingerprint(text: text));
 
     final candidates = library
         .getAllBooks()

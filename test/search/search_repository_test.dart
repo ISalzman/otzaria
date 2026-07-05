@@ -142,7 +142,9 @@ enum _EngineCall {
   getFacetCountsFuzzy,
 }
 
-class _RecordingSearchEngineOperations implements SearchEngineOperations {
+// extends (ולא implements) כדי לרשת את מימושי ברירת המחדל של הממשק —
+// למשל searchStreamWithCounts, שמורכב מהמתודות שה-fake כבר מממש.
+class _RecordingSearchEngineOperations extends SearchEngineOperations {
   _RecordingSearchEngineOperations({
     List<List<SearchResult>>? streamChunks,
   }) : streamChunks = streamChunks ?? const [];

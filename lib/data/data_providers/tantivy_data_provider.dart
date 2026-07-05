@@ -38,8 +38,9 @@ class TantivyDataProvider {
   static final Map<String, int> _globalFacetCache = {};
   static String _lastCachedQuery = '';
 
-  // Track ongoing counts to prevent duplicates
-  static final Set<String> _ongoingCounts = {};
+  // ספירות שכבר רצות: קריאה חוזרת לאותו מפתח ממתינה על אותו Future במקום
+  // לרוץ שוב (מחליף את לולאת ה-polling הישנה של 50ms).
+  static final Map<String, Future<int>> _inflightCounts = {};
 
   /// תוצאת בדיקת התאימות של האינדקס, כפי שנקראה מהאינדקס עצמו
   /// (otzaria_index_meta.json או meta.json של Tantivy) דרך מנוע החיפוש.
@@ -51,7 +52,7 @@ class TantivyDataProvider {
     debugPrint(
         '🧹 Clearing global facet cache (${_globalFacetCache.length} entries)');
     _globalFacetCache.clear();
-    _ongoingCounts.clear();
+    _inflightCounts.clear();
     _lastCachedQuery = '';
   }
 
@@ -372,24 +373,15 @@ class TantivyDataProvider {
       return _globalFacetCache[cacheKey]!;
     }
 
-    // Check if this count is already in progress
-    if (_ongoingCounts.contains(cacheKey)) {
-      debugPrint('⏳ Count already in progress for $facets, waiting...');
-      // Wait for the ongoing count to complete
-      while (_ongoingCounts.contains(cacheKey)) {
-        await Future.delayed(const Duration(milliseconds: 50));
-        if (_globalFacetCache.containsKey(cacheKey)) {
-          debugPrint(
-              '🎯 DELAYED CACHE HIT for $facets: ${_globalFacetCache[cacheKey]}');
-          return _globalFacetCache[cacheKey]!;
-        }
-      }
+    // ספירה זהה שכבר רצה: ממתינים על אותו Future במקום להריץ שוב
+    // (ובלי לולאת ה-polling של 50ms שהייתה כאן).
+    final inflight = _inflightCounts[cacheKey];
+    if (inflight != null) {
+      debugPrint('⏳ Count already in progress for $facets, awaiting...');
+      return inflight;
     }
 
-    // Mark this count as in progress
-    _ongoingCounts.add(cacheKey);
-
-    try {
+    final future = () async {
       final count = await _searchGateway.count(
         RustSearchEngineOperations(await engine),
         SearchEngineRequest(
@@ -406,16 +398,16 @@ class TantivyDataProvider {
       // Save to global cache
       _lastCachedQuery = query;
       _globalFacetCache[cacheKey] = count;
-      _ongoingCounts.remove(cacheKey); // Mark as completed
       debugPrint('💾 GLOBAL CACHE SAVE for $facets: $count');
 
       return count;
-    } catch (e) {
-      // Log error in production
-      rethrow;
+    }();
+
+    _inflightCounts[cacheKey] = future;
+    try {
+      return await future;
     } finally {
-      // Remove from ongoing counts even on error
-      _ongoingCounts.remove(cacheKey);
+      _inflightCounts.remove(cacheKey);
     }
   }
 
@@ -533,10 +525,12 @@ class TantivyDataProvider {
       (byParent[parent] ??= []).add(facet);
     }
 
-    for (final entry in byParent.entries) {
-      final parent = entry.key;
-      final siblings = entry.value;
-
+    // הקבוצות בלתי-תלויות והמנוע תומך בקריאות במקביל (RwLock — קוראים
+    // אינם חוסמים זה את זה), לכן כל הקבוצות נשלחות יחד במקום await סדרתי
+    // פר-קבוצה; מטמון הטרמים במנוע הופך את הקריאות לאותה שאילתה לזולות.
+    Future<Map<String, int>> countGroup(
+        String parent, List<String> siblings) async {
+      final groupResults = <String, int>{};
       if (siblings.length > 1) {
         // כמה siblings מאותו parent - קריאה אחת ל-getFacetCounts מספיקה
         try {
@@ -551,7 +545,7 @@ class TantivyDataProvider {
             for (final fc in facetCounts) fc.path: fc.count.toInt(),
           };
           for (final sibling in siblings) {
-            results[sibling] = countMap[sibling] ?? 0;
+            groupResults[sibling] = countMap[sibling] ?? 0;
           }
           debugPrint(
               '✅ getFacetCounts: ${countMap.entries.where((e) => e.value > 0).length} non-zero');
@@ -560,13 +554,13 @@ class TantivyDataProvider {
           // fallback לקריאות count נפרדות
           for (final facet in siblings) {
             try {
-              results[facet] = await _searchGateway.count(
+              groupResults[facet] = await _searchGateway.count(
                 operations,
                 baseRequest.copyWith(facets: [facet]),
               );
             } catch (e2) {
               debugPrint('❌ count failed for $facet: $e2');
-              results[facet] = 0;
+              groupResults[facet] = 0;
             }
           }
         }
@@ -574,15 +568,23 @@ class TantivyDataProvider {
         // sibling יחיד - count ישיר יעיל יותר
         final facet = siblings[0];
         try {
-          results[facet] = await _searchGateway.count(
+          groupResults[facet] = await _searchGateway.count(
             operations,
             baseRequest.copyWith(facets: [facet]),
           );
         } catch (e) {
           debugPrint('❌ count failed for $facet: $e');
-          results[facet] = 0;
+          groupResults[facet] = 0;
         }
       }
+      return groupResults;
+    }
+
+    final groupResults = await Future.wait([
+      for (final entry in byParent.entries) countGroup(entry.key, entry.value),
+    ]);
+    for (final group in groupResults) {
+      results.addAll(group);
     }
 
     stopwatch.stop();

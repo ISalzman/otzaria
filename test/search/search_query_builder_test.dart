@@ -237,7 +237,8 @@ enum _EngineCall {
   getFacetCountsFuzzy,
 }
 
-class _RecordingSearchEngineOperations implements SearchEngineOperations {
+// extends (ולא implements) כדי לרשת את מימושי ברירת המחדל של הממשק (searchStreamWithCounts).
+class _RecordingSearchEngineOperations extends SearchEngineOperations {
   final List<_EngineCall> calls = [];
 
   @override

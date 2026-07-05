@@ -1,4 +1,5 @@
 import 'package:bloc_concurrency/bloc_concurrency.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
@@ -49,6 +50,16 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
 
     if (event is ReconcileIndex) {
       await _onReconcileIndex(event, emit);
+      return;
+    }
+
+    if (event is DropOrphanedIndexEntries) {
+      // עבודת רקע שקטה — בלי מצבי התקדמות; כשל אינו קריטי (ינוקה ברענון הבא).
+      try {
+        await _repository.dropOrphanedIndexEntries(event.library);
+      } catch (e) {
+        debugPrint('⚠️ ניקוי רשומות יתומות מהאינדקס נכשל: $e');
+      }
     }
   }
 

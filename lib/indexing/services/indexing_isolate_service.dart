@@ -55,8 +55,21 @@ class IndexingDocumentBuilder {
   static String normalizeTextForIndexing(String input) =>
       engine.normalizeTextForIndexing(input: input);
 
+  /// נרמול אצוות שורות בקריאת FFI אחת. ה-overhead הקבוע של קריאת גשר
+  /// (קידוד/פענוח מחרוזות) גובר על עלות הנרמול עצמו בשורות קצרות, וספרייה
+  /// מלאה היא מיליוני שורות — לכן מסלולי האינדוקס עובדים תמיד באצוות.
+  static List<String> normalizeTextsForIndexing(List<String> inputs) =>
+      engine.normalizeTextsForIndexing(inputs: inputs);
+
+  /// נרמול + סינון-זבל לאצוות שורות PDF בקריאת FFI אחת (מחליף את שתי
+  /// הקריאות-לשורה של [normalizePdfTextForIndexing] + [isProbablyGarbagePdfText]).
+  static List<engine.PdfIndexLine> normalizePdfTextsForIndexing(
+          List<String> inputs) =>
+      engine.normalizePdfTextsForIndexing(inputs: inputs);
+
   static List<PreparedIndexDocument> buildTextBookDocuments(String text) {
     final texts = text.split('\n');
+    final normalized = normalizeTextsForIndexing(texts);
     final documents = <PreparedIndexDocument>[];
     final reference = <String>[];
 
@@ -64,23 +77,11 @@ class IndexingDocumentBuilder {
       final rawLine = texts[i];
       if (rawLine.startsWith('<h')) {
         _updateReferenceTrail(reference, rawLine);
-        final headerLine = normalizeTextForIndexing(rawLine);
-        documents.add(
-          PreparedIndexDocument(
-            reference: stripHtmlIfNeeded(reference.join(', ')),
-            text: headerLine,
-            segment: i,
-            ordinal: documents.length,
-          ),
-        );
-        continue;
       }
-
-      final line = normalizeTextForIndexing(rawLine);
       documents.add(
         PreparedIndexDocument(
           reference: stripHtmlIfNeeded(reference.join(', ')),
-          text: line,
+          text: normalized[i],
           segment: i,
           ordinal: documents.length,
         ),
@@ -482,41 +483,39 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
     await ensureEngine();
     final texts = text.split('\n');
     final reference = <String>[];
-    var batch = <Map<String, Object?>>[];
     var ordinal = 0;
 
-    for (int i = 0; i < texts.length; i++) {
+    // נרמול בחלונות של _batchSize: קריאת FFI אחת לכל חלון במקום אחת לכל
+    // שורה — ה-overhead הקבוע פר-קריאה היה החלק הדומיננטי בזמן ההכנה.
+    for (var start = 0;
+        start < texts.length;
+        start += IndexingIsolateService._batchSize) {
       if (shouldCancel) {
         return;
       }
 
-      final rawLine = texts[i];
-      if (rawLine.startsWith('<h')) {
-        IndexingDocumentBuilder._updateReferenceTrail(reference, rawLine);
-        final headerLine =
-            IndexingDocumentBuilder.normalizeTextForIndexing(rawLine);
+      final end =
+          (start + IndexingIsolateService._batchSize).clamp(0, texts.length);
+      final window = texts.sublist(start, end);
+      final normalized =
+          IndexingDocumentBuilder.normalizeTextsForIndexing(window);
+
+      final batch = <Map<String, Object?>>[];
+      for (var j = 0; j < window.length; j++) {
+        final rawLine = window[j];
+        if (rawLine.startsWith('<h')) {
+          IndexingDocumentBuilder._updateReferenceTrail(reference, rawLine);
+        }
         batch.add({
           'reference': stripHtmlIfNeeded(reference.join(', ')),
-          'text': headerLine,
-          'segment': i,
-          'ordinal': ordinal++,
-        });
-      } else {
-        batch.add({
-          'reference': stripHtmlIfNeeded(reference.join(', ')),
-          'text': IndexingDocumentBuilder.normalizeTextForIndexing(rawLine),
-          'segment': i,
+          'text': normalized[j],
+          'segment': start + j,
           'ordinal': ordinal++,
         });
       }
 
-      if (batch.length >= IndexingIsolateService._batchSize) {
-        await emitBatch(batch);
-        batch = <Map<String, Object?>>[];
-      }
+      await emitBatch(batch);
     }
-
-    await emitBatch(batch);
   }
 
   Future<void> processPdfPages(List<dynamic> rawPages) async {
@@ -533,25 +532,34 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
       final pageIndex = (page['pageIndex'] as num?)?.toInt() ?? 0;
 
       final rawLines = text.split('\n');
-      for (final rawLine in rawLines) {
+      // נרמול + סינון זבל בחלונות — קריאת FFI אחת לחלון במקום שתיים לשורה.
+      for (var start = 0;
+          start < rawLines.length;
+          start += IndexingIsolateService._batchSize) {
         if (shouldCancel) return;
 
-        final normalized =
-            IndexingDocumentBuilder.normalizePdfTextForIndexing(rawLine);
-        if (IndexingDocumentBuilder.isProbablyGarbagePdfText(normalized)) {
-          continue;
-        }
+        final end = (start + IndexingIsolateService._batchSize)
+            .clamp(0, rawLines.length);
+        final prepared = IndexingDocumentBuilder.normalizePdfTextsForIndexing(
+          rawLines.sublist(start, end),
+        );
 
-        batch.add({
-          'reference': reference,
-          'text': normalized,
-          'segment': pageIndex,
-          'ordinal': ordinal++,
-        });
+        for (final line in prepared) {
+          if (line.isGarbage) {
+            continue;
+          }
 
-        if (batch.length >= IndexingIsolateService._batchSize) {
-          await emitBatch(batch);
-          batch = <Map<String, Object?>>[];
+          batch.add({
+            'reference': reference,
+            'text': line.text,
+            'segment': pageIndex,
+            'ordinal': ordinal++,
+          });
+
+          if (batch.length >= IndexingIsolateService._batchSize) {
+            await emitBatch(batch);
+            batch = <Map<String, Object?>>[];
+          }
         }
       }
     }

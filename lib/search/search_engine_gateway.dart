@@ -109,6 +109,38 @@ abstract class SearchEngineOperations {
   /// הווריאנטים שהחיפוש באמת התאים (שגיאות כתיב, קידומות, חלק ממילה).
   /// Fire-and-forget; ברירת מחדל ריקה למימושי בדיקות.
   void primeHighlightPattern(SearchEngineRequest request) {}
+
+  /// Stream חיפוש משולב: האירוע הראשון נושא את הספירה הכוללת ואת הספירה
+  /// לפי ספר, ואחריו מגיעים chunks של תוצאות. במימוש ה-Rust כל אלה מחושבים
+  /// במעבר אינדקס אחד — במקום שלוש ריצות נפרדות של אותה שאילתה (stream +
+  /// count + countByBook).
+  ///
+  /// ברירת המחדל כאן מרכיבה את אותה סמנטיקה מהמתודות הקיימות, כך שמימושי
+  /// בדיקות קיימים ממשיכים לעבוד בלי לממש את המתודה.
+  Stream<SearchStreamUpdate> searchStreamWithCounts(
+    SearchEngineRequest request, {
+    required int chunkSize,
+  }) async* {
+    final Map<String, int> byBook = switch (request.searchMode) {
+      SearchMode.exact => await countByBookExact(request),
+      SearchMode.advanced => await countByBookAdvanced(request),
+      SearchMode.fuzzy => await countByBookFuzzy(request),
+    };
+    yield SearchStreamUpdate(
+      totalCount: byBook.values.fold<int>(0, (sum, count) => sum + count),
+      bookCounts: byBook,
+      results: const [],
+    );
+    final chunks = switch (request.searchMode) {
+      SearchMode.exact => searchExactStream(request, chunkSize: chunkSize),
+      SearchMode.advanced =>
+        searchAdvancedStream(request, chunkSize: chunkSize),
+      SearchMode.fuzzy => searchFuzzyStream(request, chunkSize: chunkSize),
+    };
+    await for (final chunk in chunks) {
+      yield SearchStreamUpdate(results: chunk);
+    }
+  }
 }
 
 class RustSearchEngineOperations implements SearchEngineOperations {
@@ -343,6 +375,49 @@ class RustSearchEngineOperations implements SearchEngineOperations {
     );
   }
 
+  /// המימוש האמיתי של ה-stream המשולב: קריאה אחת למנוע, שמריצה את השאילתה
+  /// פעם אחת ומחזירה ספירות + תוצאות מאותו מעבר אינדקס.
+  @override
+  Stream<SearchStreamUpdate> searchStreamWithCounts(
+    SearchEngineRequest request, {
+    required int chunkSize,
+  }) {
+    switch (request.searchMode) {
+      case SearchMode.exact:
+        return _engine.searchExactStreamWithCounts(
+          query: request.query,
+          facets: request.facets,
+          limit: request.limit,
+          offset: request.offset,
+          order: request.order,
+          chunkSize: chunkSize,
+        );
+      case SearchMode.advanced:
+        return _engine.searchAdvancedStreamWithCounts(
+          query: request.query,
+          facets: request.facets,
+          limit: request.limit,
+          offset: request.offset,
+          distance: request.distance,
+          customSpacing: request.customSpacing,
+          alternativeWords: request.alternativeWords,
+          searchOptions: request.searchOptions,
+          order: request.order,
+          chunkSize: chunkSize,
+        );
+      case SearchMode.fuzzy:
+        return _engine.searchFuzzyStreamWithCounts(
+          query: request.query,
+          facets: request.facets,
+          limit: request.limit,
+          offset: request.offset,
+          maxDistance: _fuzzyDistance(request.distance),
+          order: request.order,
+          chunkSize: chunkSize,
+        );
+    }
+  }
+
   static int _fuzzyDistance(int distance) {
     return distance.clamp(0, 2).toInt();
   }
@@ -433,6 +508,17 @@ class SearchEngineGateway {
       case SearchMode.fuzzy:
         return engine.searchFuzzyStream(request, chunkSize: chunkSize);
     }
+  }
+
+  /// Stream משולב (תוצאות + ספירה כוללת + ספירה לפי ספר במעבר אחד);
+  /// ראה [SearchEngineOperations.searchStreamWithCounts].
+  Stream<SearchStreamUpdate> searchStreamWithCounts(
+    SearchEngineOperations engine,
+    SearchEngineRequest request, {
+    required int chunkSize,
+  }) {
+    engine.primeHighlightPattern(request);
+    return engine.searchStreamWithCounts(request, chunkSize: chunkSize);
   }
 
   Future<int> count(
