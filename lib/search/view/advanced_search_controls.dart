@@ -107,6 +107,9 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     final words = SearchQueryBuilder.splitQueryWords(text);
     _words = words;
 
+    // המילים מנורמלות ל-'/" ASCII בעוד שהשדה עשוי להכיל ׳/״ עבריים;
+    // הקיפול שומר-אורך ולכן ה-offsets בטקסט הגולמי נשארים נכונים.
+    final searchText = _foldQuoteForms(text);
     int currentPos = 0;
     int? foundIndex;
     String? foundWord;
@@ -115,7 +118,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
       final word = words[i];
       if (word.isEmpty) continue;
 
-      final wordStart = text.indexOf(word, currentPos);
+      final wordStart = searchText.indexOf(word, currentPos);
       if (wordStart == -1) continue;
       final wordEnd = wordStart + word.length;
 
@@ -171,10 +174,17 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     });
   }
 
+  /// קיפול שומר-אורך של צורות הגרש העבריות לצורת ה-ASCII שמילות
+  /// `splitQueryWords` נושאות, כדי ש-indexOf ימצא אותן בטקסט הגולמי.
+  /// (`''` נשאר כפי שהוא — האיחוד ל-`"` משנה אורך; חיפוש שיחטיא בו
+  /// ממשיך ליפול בחן כמו כל פיסוק שנמחק ב-sanitize.)
+  static String _foldQuoteForms(String text) =>
+      text.replaceAll('״', '"').replaceAll('׳', "'");
+
   void _navigateToWord(int newIndex) {
     if (newIndex < 0 || newIndex >= _words.length) return;
 
-    final text = widget.tab.queryController.text;
+    final text = _foldQuoteForms(widget.tab.queryController.text);
     int currentPos = 0;
     for (int i = 0; i < newIndex; i++) {
       final wordStart = text.indexOf(_words[i], currentPos);
