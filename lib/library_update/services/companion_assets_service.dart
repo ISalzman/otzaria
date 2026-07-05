@@ -21,6 +21,10 @@ class CompanionAssetsService {
   static const String talmudReleaseApi =
       'https://api.github.com/repos/Otzaria/otzaria-library/releases/latest';
   static const String talmudVersionFileName = '.version';
+
+  /// נכתב לקובץ הגרסה לפני החילוץ; חילוץ שנקטע משאיר אותו, וכך ההתקנה
+  /// החלקית לא נחתמת כשלמה במסלול "ללא סימון גרסה" אלא מורדת מחדש.
+  static const String talmudInstallingMarker = 'installing';
   static const Duration _apiTimeout = Duration(seconds: 15);
 
   final http.Client Function() _clientFactory;
@@ -108,11 +112,15 @@ class CompanionAssetsService {
   ) async {
     onStatus?.call('בודק את התלמוד הבבלי');
     final dirs = _talmudDirsProvider();
-    final existingDir = dirs
-        .where((d) =>
-            Directory(d).existsSync() &&
-            Directory(d).listSync().whereType<File>().isNotEmpty)
-        .firstOrNull;
+    final existingDir = dirs.where((d) {
+      // תיקייה שאינה נגישה לקריאה (הרשאות, אחסון חיצוני) נחשבת כלא קיימת.
+      try {
+        final dir = Directory(d);
+        return dir.existsSync() && dir.listSync().whereType<File>().isNotEmpty;
+      } on FileSystemException {
+        return false;
+      }
+    }).firstOrNull;
 
     final client = _clientFactory();
     try {
@@ -146,6 +154,9 @@ class CompanionAssetsService {
         if (cancelled()) return;
 
         onStatus?.call('מחלץ את התלמוד הבבלי');
+        Directory(targetDir).createSync(recursive: true);
+        File(p.join(targetDir, talmudVersionFileName))
+            .writeAsStringSync(talmudInstallingMarker);
         // הארכיון מכיל את התיקייה 'תלמוד בבלי/' — מחולץ לתיקיית האב.
         // ההתקדמות מכסה את שלב ה-zst; שלב פריסת ה-tar ללא מדידה — עוברים
         // להודעת ספינר כדי שהמד לא ייתקע על 100%.

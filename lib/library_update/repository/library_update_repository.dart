@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
@@ -398,7 +399,10 @@ class LibraryUpdateRepository implements LibraryUpdateService {
           // היציאה מ-WAL דורשת שאין חיבורים אחרים — סוגרים לרגע את ה-RO,
           // אחרת ההמרה נתקעת על מלוא ה-busy_timeout ונכשלת.
           await SqliteDataProvider.instance.closeForExternalWrite();
-          _trySetJournalMode(dbPath, 'DELETE');
+          if (!_trySetJournalMode(dbPath, 'DELETE')) {
+            debugPrint(
+                '[LibraryUpdate] failed to revert journal_mode to DELETE');
+          }
         }
         await SqliteDataProvider.instance.reopenAfterExternalWrite();
       }
