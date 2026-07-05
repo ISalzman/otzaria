@@ -21,11 +21,13 @@ import 'package:path/path.dart' as p;
 class CompanionAssetsService {
   static const String talmudReleaseApi =
       'https://api.github.com/repos/Otzaria/otzaria-library/releases/latest';
-  static const String talmudVersionFileName = '.version';
+  static const String talmudVersionFileName =
+      DatabaseConstants.talmudBavliVersionFileName;
 
-  /// נכתב לקובץ הגרסה לפני החילוץ; חילוץ שנקטע משאיר אותו, וכך ההתקנה
-  /// החלקית לא נחתמת כשלמה במסלול "ללא סימון גרסה" אלא מורדת מחדש.
-  static const String talmudInstallingMarker = 'installing';
+  /// נכתב לקובץ הגרסה לפני החילוץ; חילוץ שנקטע משאיר אותו, וכך שכבת הספרייה
+  /// מתעלמת מההתקנה החלקית וההרצה הבאה מורידה מחדש.
+  static const String talmudInstallingMarker =
+      DatabaseConstants.talmudBavliInstallingMarker;
   static const Duration _apiTimeout = Duration(seconds: 15);
 
   final http.Client Function() _clientFactory;
@@ -165,9 +167,18 @@ class CompanionAssetsService {
         if (cancelled()) return false;
 
         onStatus?.call('מחלץ את התלמוד הבבלי');
-        Directory(targetDir).createSync(recursive: true);
-        File(p.join(targetDir, talmudVersionFileName))
-            .writeAsStringSync(talmudInstallingMarker);
+        final dir = Directory(targetDir);
+        dir.createSync(recursive: true);
+        final markerFile = File(p.join(targetDir, talmudVersionFileName));
+        markerFile.writeAsStringSync(talmudInstallingMarker);
+        // עדכון מעל התקנה קיימת: מנקים קבצים ישנים שאולי הוסרו ב-release החדש.
+        // הסימון-ביניים כבר נכתב, כך שקטיעה בשלב הזה מותירה התקנה חלקית מסומנת.
+        for (final entity in dir.listSync()) {
+          if (entity is File &&
+              p.basename(entity.path) != talmudVersionFileName) {
+            entity.deleteSync();
+          }
+        }
         // הארכיון מכיל את התיקייה 'תלמוד בבלי/' — מחולץ לתיקיית האב.
         // ההתקדמות מכסה את שלב ה-zst; שלב פריסת ה-tar ללא מדידה — עוברים
         // להודעת ספינר כדי שהמד לא ייתקע על 100%.

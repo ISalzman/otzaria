@@ -114,6 +114,27 @@ void main() {
       );
     });
 
+    test('isTalmudBavliInstallInProgress מזהה חילוץ שנקטע לפי סימון-הביניים',
+        () {
+      final dir = Directory.systemTemp.createTempSync('talmud_marker_test');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final marker =
+          File(DatabaseConstants.talmudBavliVersionFilePath(dir.path));
+
+      expect(
+          DatabaseConstants.isTalmudBavliInstallInProgress(dir.path), isFalse,
+          reason: 'תיקייה בלי סימון נחשבת שלמה');
+
+      marker.writeAsStringSync(DatabaseConstants.talmudBavliInstallingMarker);
+      expect(
+          DatabaseConstants.isTalmudBavliInstallInProgress(dir.path), isTrue);
+
+      marker.writeAsStringSync('v2.0.0');
+      expect(
+          DatabaseConstants.isTalmudBavliInstallInProgress(dir.path), isFalse,
+          reason: 'סימון עם תג גרסה אמיתי הוא התקנה שלמה');
+    });
+
     test('resolveFileBookPathForTesting מתקן נתיב PDF ישן לפי הספרייה הפעילה',
         () async {
       final tempDir =
