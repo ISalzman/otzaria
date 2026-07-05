@@ -14,7 +14,6 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
-import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
@@ -149,24 +148,28 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       errorMessage: null,
     ));
 
-    final booksToSearch = state.booksToSearch.map((e) => e.title).toList();
-    Map<int, Book>? bookByCatalogueOrder;
+    Map<String, Book>? bookByIndexedFilePath;
 
-    if (!shouldPreserveFacetCounts) {
-      final library = await DataRepository.instance.library;
-      bookByCatalogueOrder = _buildBooksByCatalogueOrder(library);
-    }
+    // עץ ה-facets נבנה על טווח הסריקה המקורי. כשהחיפוש רץ על אותו טווח
+    // (המקרה הרגיל), הספירות של ה-stream המשולב משרתות גם את העץ וגם את
+    // הספירה הכוללת — ריצה אחת של השאילתה במקום שלוש. רק כשהמשתמש צמצם
+    // לתת-בחירה מהעץ נדרשת ספירת-ספרים נפרדת על הטווח המלא.
+    final scopeEqualsSearch = setEquals(
+      requestedFacets.toSet(),
+      state.searchScopeFacets.toSet(),
+    );
 
     try {
-      // התחל לבנות את עץ ה-facets המלא במקביל כבר מתחילת החיפוש —
-      // אלא אם הספירות שב-state כבר חושבו עבור בדיוק אותה חתימה.
-      if (!shouldSkipFacetRecount) {
+      // ספירת-ספרים נפרדת נדרשת רק כשהחיפוש רץ על תת-בחירה מהעץ (אחרת
+      // ה-stream המשולב מספק את הספירות), וגם אז רק אם החתימה השתנתה.
+      if (!scopeEqualsSearch && !shouldSkipFacetRecount) {
         unawaited(_refreshFacetCountsForAllBooks(
             event, requestId, recountSignature, recountInputs));
       }
 
-      // שימוש ב-streaming לתוצאות מהירות יותר
-      final stream = _repository.searchTextsStream(
+      // stream משולב: האירוע הראשון נושא ספירה כוללת + ספירה לפי ספר
+      // מאותו מעבר אינדקס, ואחריו chunks של תוצאות.
+      final stream = _repository.searchTextsStreamWithCounts(
         SearchQueryBuilder.sanitizeQuery(query),
         requestedFacets,
         state.numResults,
@@ -181,43 +184,45 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       );
 
       final allResults = <SearchResult>[];
-      bool isFirstChunk = true;
 
-      await for (final chunk in stream) {
+      await for (final update in stream) {
         if (requestId != _searchRequestId) {
           return; // החיפוש בוטל
         }
 
-        allResults.addAll(chunk);
-
-        // עדכון ה-UI עם כל chunk
-        if (isFirstChunk) {
-          // Chunk ראשון - בנה ספירות חלקיות
-          isFirstChunk = false;
-          final partialFacetCounts = bookByCatalogueOrder == null
-              ? const <String, int>{}
-              : FacetHelper.buildFacetCountsFromResults(
-                  allResults,
-                  bookByCatalogueOrder,
-                );
-
+        final bookCounts = update.bookCounts;
+        if (update.totalCount != null) {
+          // אירוע הספירות — מגיע עוד לפני ה-chunk הראשון של התוצאות.
+          Map<String, int>? aggregated;
+          if (scopeEqualsSearch && bookCounts != null) {
+            bookByIndexedFilePath ??= _buildBooksByIndexedFilePath(
+              await DataRepository.instance.library,
+            );
+            aggregated = FacetHelper.buildFacetCountsFromBookCounts(
+              bookCounts,
+              bookByIndexedFilePath,
+            );
+            // הספירות שנכנסות ל-state חושבו עבור החתימה הנוכחית — שמירה שלה
+            // מאפשרת לדלג על ספירה חוזרת בלחיצה על קטגוריה מהעץ.
+            _facetCountsSignature = recountSignature;
+          }
           emit(state.copyWith(
-            results: List.from(allResults),
-            totalResults: allResults.length,
-            isLoading: true, // עדיין טוען
-            facetCounts:
-                shouldPreserveFacetCounts || state.facetCounts.isNotEmpty
-                    ? state.facetCounts
-                    : partialFacetCounts,
-          ));
-        } else {
-          // Chunks נוספים - רק עדכן תוצאות
-          emit(state.copyWith(
-            results: List.from(allResults),
-            totalResults: allResults.length,
-            isLoading: true, // עדיין טוען
+            totalResults: update.totalCount,
+            // null משאיר את הספירות הקיימות (למשל כשהעץ מתעדכן בנפרד
+            // דרך ReplaceFacetCounts במקרה של תת-בחירה).
+            facetCounts: aggregated,
+            isLoading: true,
           ));
         }
+
+        if (update.results.isEmpty) {
+          continue;
+        }
+        allResults.addAll(update.results);
+        emit(state.copyWith(
+          results: List.from(allResults),
+          isLoading: true, // עדיין טוען
+        ));
       }
 
       // סיום - כל התוצאות התקבלו
@@ -227,28 +232,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
       emit(state.copyWith(
         results: allResults,
-        totalResults: allResults.length,
         isLoading: false,
-      ));
-
-      // ספירה כוללת (אם צריך - אבל בעצם allResults.length כבר נותן את זה)
-      final totalResults = await TantivyDataProvider.instance.countTexts(
-        SearchQueryBuilder.sanitizeQuery(query),
-        booksToSearch,
-        requestedFacets,
-        fuzzy: state.fuzzy,
-        distance: state.distance,
-        searchMode: state.configuration.searchMode,
-        customSpacing: event.customSpacing,
-        alternativeWords: event.alternativeWords,
-        searchOptions: event.searchOptions,
-      );
-
-      if (requestId != _searchRequestId) {
-        return;
-      }
-      emit(state.copyWith(
-        totalResults: totalResults,
       ));
     } catch (e, stackTrace) {
       // זיהוי שגיאה: שגיאת מנוע (למשל כשל קומפילציית רגקס) פעם נבלעה כאן
@@ -879,22 +863,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       UiSnack.showError('אירעה שגיאה בטעינת תוצאות נוספות');
       emit(state.copyWith(isLoading: false));
     }
-  }
-
-  Map<int, Book> _buildBooksByCatalogueOrder(Library library) {
-    final orderByBookKey = SearchCatalogueOrderHelper.buildKeyOrderMap(
-      library,
-      keyOf: (book) => IndexingRepository.catalogueOrderKey(book as Book),
-    );
-    final booksByCatalogueOrder = <int, Book>{};
-
-    for (final book in library.getAllBooks()) {
-      final order = orderByBookKey[IndexingRepository.catalogueOrderKey(book)];
-      if (order == null) continue;
-      booksByCatalogueOrder.putIfAbsent(order, () => book);
-    }
-
-    return booksByCatalogueOrder;
   }
 
   Map<String, Book> _buildBooksByIndexedFilePath(Library library) {

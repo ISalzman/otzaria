@@ -66,10 +66,14 @@ class FacetHelper {
     }
   }
 
-  /// Builds facet counts from search results and library books
+  /// Builds facet counts from search results and library books.
+  ///
+  /// כל תוצאה מפוענחת לספר דרך שדה ה-`filePath` שנכתב על מסמכיה באינדוקס
+  /// (המפתח היציב של הספר) — ולא דרך הסדר הקטלוגי המוטמע במזהה המסמך,
+  /// שמשתנה כשספרים נוספים/נמחקים מהספרייה אחרי האינדוקס.
   static Map<String, int> buildFacetCountsFromResults(
     List<dynamic> results,
-    Map<int, Book> bookByCatalogueOrder,
+    Map<String, Book> bookByIndexedFilePath,
   ) {
     final counts = <String, int>{};
     if (results.isEmpty) {
@@ -77,9 +81,7 @@ class FacetHelper {
     }
 
     for (final result in results) {
-      final catalogueOrder =
-          IndexingRepository.catalogueOrderFromDocumentId(result.id as BigInt);
-      final book = bookByCatalogueOrder[catalogueOrder];
+      final book = bookByIndexedFilePath[result.filePath as String];
       if (book == null) continue;
 
       _incrementBookAndAncestors(counts, book);

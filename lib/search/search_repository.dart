@@ -142,4 +142,36 @@ class SearchRepository {
       chunkSize: chunkSize,
     );
   }
+
+  /// כמו [searchTextsStream], אבל האירוע הראשון נושא גם את הספירה הכוללת
+  /// ואת הספירה לפי ספר — מחושבות באותו מעבר אינדקס של החיפוש עצמו, במקום
+  /// שלוש ריצות נפרדות של אותה שאילתה.
+  Stream<SearchStreamUpdate> searchTextsStreamWithCounts(
+      String query, List<String> facets, int limit,
+      {int offset = 0,
+      int chunkSize = 50,
+      ResultsOrder order = ResultsOrder.relevance,
+      bool fuzzy = false,
+      int distance = 0,
+      SearchMode searchMode = SearchMode.exact,
+      Map<String, String>? customSpacing,
+      Map<int, List<String>>? alternativeWords,
+      Map<String, Map<String, bool>>? searchOptions}) async* {
+    yield* _gateway.searchStreamWithCounts(
+      await _engine(),
+      SearchEngineRequest(
+        query: query,
+        facets: facets,
+        limit: limit,
+        offset: offset,
+        order: order,
+        searchMode: fuzzy ? SearchMode.fuzzy : searchMode,
+        distance: distance,
+        customSpacing: customSpacing ?? const {},
+        alternativeWords: alternativeWords ?? const {},
+        searchOptions: searchOptions ?? const {},
+      ),
+      chunkSize: chunkSize,
+    );
+  }
 }

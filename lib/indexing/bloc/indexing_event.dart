@@ -54,6 +54,17 @@ class ReconcileIndex extends IndexingWorkEvent {
   List<Object?> get props => [library];
 }
 
+/// ניקוי רשומות יתומות מהאינדקס — ספרים שכבר אינם בספרייה (ספר אישי
+/// שנמחק, תיקייה מותאמת שהוסרה). רץ בתור העבודה הסדרתי, בלי UI התקדמות.
+class DropOrphanedIndexEntries extends IndexingWorkEvent {
+  final Library library;
+
+  const DropOrphanedIndexEntries(this.library);
+
+  @override
+  List<Object?> get props => [library];
+}
+
 class CheckIndexStatus extends IndexingEvent {
   final Library library;
 

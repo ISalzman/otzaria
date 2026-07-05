@@ -2346,6 +2346,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
               if (state.library != null) {
                 _checkAndStartIndexing(context, state.library!);
                 _indexAfterDbUpdateIfNeeded(context, state.library!);
+                // ניקוי רשומות אינדקס של ספרים שכבר אינם בספרייה (ספר אישי
+                // שנמחק, תיקייה שהוסרה). רץ על כל טעינת/רענון ספרייה, בתור
+                // העבודה הסדרתי — אחרי מסלולי האינדוקס של אותו רענון.
+                context
+                    .read<IndexingBloc>()
+                    .add(DropOrphanedIndexEntries(state.library!));
               }
               final navigationState = context.read<NavigationBloc>().state;
               if (navigationState.hasCheckedLibrary &&
