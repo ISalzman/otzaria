@@ -537,12 +537,15 @@ class _PrintingScreenState extends State<PrintingScreen> {
       // וההייצוא כוללים את כל הטווח דרך _createOutputPdf).
       final limitIdx = min(lastIdx, firstIdx + _maxPreviewPages - 1);
 
+      // רזולוציית התצוגה המקדימה בלבד — הפלט המודפס הוא ה-PDF הווקטורי,
+      // כך שאין השפעה על איכות ההדפסה. 2x הכפיל את זיכרון ה-preview לחינם.
+      const previewScale = 1.5;
       for (var i = firstIdx; i <= limitIdx; i++) {
         if (generation != _renderGeneration || !mounted) break;
         final page = doc.pages[i];
         final pdfImage = await page.render(
-          fullWidth: page.width * 2,
-          fullHeight: page.height * 2,
+          fullWidth: page.width * previewScale,
+          fullHeight: page.height * previewScale,
           backgroundColor: AppColors.pageWhite.toARGB32(),
         );
         if (pdfImage == null) continue;

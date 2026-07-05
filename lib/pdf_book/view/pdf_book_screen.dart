@@ -3279,11 +3279,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                               if (state is PdfBookError ||
                                   state is! PdfBookLoaded ||
                                   state.isLoading) {
+                                // RepaintBoundary סביב הספינר בלבד: בלי הבידוד
+                                // כל טיק שלו מרסטר מחדש את כל שכבת ה-viewport
+                                // (כולל ה-ColorFiltered) — יקר בטעינות ארוכות.
                                 return const Positioned.fill(
                                   child: ColoredBox(
                                     color: AppColors.pageWhite,
                                     child: Center(
-                                      child: CircularProgressIndicator(),
+                                      child: RepaintBoundary(
+                                        child: CircularProgressIndicator(),
+                                      ),
                                     ),
                                   ),
                                 );
