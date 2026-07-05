@@ -21,7 +21,13 @@ class LinkAnchorSpan {
 /// Represents a link between two books in the library.
 class Link {
   static const int _maxContentCacheEntries = 400;
-  static final Map<String, Future<String>> _displayReferenceCache = {};
+
+  // חסום כמו _contentCache — בלי חסם המפה גדלה ללא גבול לאורך session
+  // עם הרבה מפרשים (דליפה רכה). LinkedHashMap במפורש: פינוי ה-LRU מסתמך
+  // על סדר ההכנסה.
+  static const int _maxDisplayReferenceCacheEntries = 1000;
+  static final LinkedHashMap<String, Future<String>> _displayReferenceCache =
+      LinkedHashMap<String, Future<String>>();
 
   /// The Hebrew reference of the link.
   final String heRef;
@@ -160,48 +166,60 @@ class Link {
         _rangeDisplaySuffix;
   }
 
-  /// מחזירה כתובת תצוגה מלאה של ספר היעד, עם מטמון לפי ספר ואינדקס.
+  /// מחזירה כתובת תצוגה מלאה של ספר היעד, עם מטמון LRU לפי ספר ואינדקס.
   Future<String> get displayReference {
     final cacheKey = '${path2}_${index2}_${index2End ?? ''}_'
         '${targetIsUserBook ? 'u' : 'o'}_'
         '${targetCategoryId ?? ''}';
-    return _displayReferenceCache.putIfAbsent(cacheKey, () async {
-      final targetTitle = utils.getTitleFromPath(path2);
-      final targetFileType = _resolveTargetFileType();
-      if (index2 <= 0) {
-        return formatDisplayReference(
-              bookTitle: targetTitle,
-              fallbackRef: heRef,
-            ) +
-            _rangeDisplaySuffix;
-      }
+    final cached = _displayReferenceCache.remove(cacheKey);
+    if (cached != null) {
+      _displayReferenceCache[cacheKey] = cached;
+      return cached;
+    }
+    final future = _computeDisplayReference();
+    _displayReferenceCache[cacheKey] = future;
+    if (_displayReferenceCache.length > _maxDisplayReferenceCacheEntries) {
+      _displayReferenceCache.remove(_displayReferenceCache.keys.first);
+    }
+    return future;
+  }
 
-      try {
-        final resolvedRef = await refFromIndex(
-          index2 - 1,
-          LibraryProviderManager.instance
-              .getBookToc(
-                targetTitle,
-                categoryId: targetCategoryId,
-                fileType: targetFileType,
-                preferUserBooks: targetIsUserBook,
-              )
-              .then((toc) => toc ?? const <TocEntry>[]),
-        );
-        return formatDisplayReference(
-              bookTitle: targetTitle,
-              resolvedRef: resolvedRef,
-              fallbackRef: heRef,
-            ) +
-            _rangeDisplaySuffix;
-      } catch (_) {
-        return formatDisplayReference(
-              bookTitle: targetTitle,
-              fallbackRef: heRef,
-            ) +
-            _rangeDisplaySuffix;
-      }
-    });
+  Future<String> _computeDisplayReference() async {
+    final targetTitle = utils.getTitleFromPath(path2);
+    final targetFileType = _resolveTargetFileType();
+    if (index2 <= 0) {
+      return formatDisplayReference(
+            bookTitle: targetTitle,
+            fallbackRef: heRef,
+          ) +
+          _rangeDisplaySuffix;
+    }
+
+    try {
+      final resolvedRef = await refFromIndex(
+        index2 - 1,
+        LibraryProviderManager.instance
+            .getBookToc(
+              targetTitle,
+              categoryId: targetCategoryId,
+              fileType: targetFileType,
+              preferUserBooks: targetIsUserBook,
+            )
+            .then((toc) => toc ?? const <TocEntry>[]),
+      );
+      return formatDisplayReference(
+            bookTitle: targetTitle,
+            resolvedRef: resolvedRef,
+            fallbackRef: heRef,
+          ) +
+          _rangeDisplaySuffix;
+    } catch (_) {
+      return formatDisplayReference(
+            bookTitle: targetTitle,
+            fallbackRef: heRef,
+          ) +
+          _rangeDisplaySuffix;
+    }
   }
 
   String? _resolveTargetFileType() {
