@@ -130,6 +130,10 @@ abstract class SearchEngineOperations {
       totalCount: byBook.values.fold<int>(0, (sum, count) => sum + count),
       bookCounts: byBook,
       results: const [],
+      // This compatibility fallback runs the separate count/stream calls and
+      // has no visibility into single-word budget truncation; the real Rust
+      // stream surfaces it.
+      truncated: false,
     );
     final chunks = switch (request.searchMode) {
       SearchMode.exact => searchExactStream(request, chunkSize: chunkSize),
@@ -138,7 +142,7 @@ abstract class SearchEngineOperations {
       SearchMode.fuzzy => searchFuzzyStream(request, chunkSize: chunkSize),
     };
     await for (final chunk in chunks) {
-      yield SearchStreamUpdate(results: chunk);
+      yield SearchStreamUpdate(results: chunk, truncated: false);
     }
   }
 }

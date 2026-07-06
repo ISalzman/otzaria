@@ -31,15 +31,15 @@ class TantivyFullTextSearch extends StatefulWidget {
 
 /// קובע אם להציג את באנר סינון הקטגוריות.
 ///
-/// מחזיר `true` כשהחיפוש מוגבל לקטגוריות מסוימות — כלומר כשבטווח החיפוש
-/// ([searchScopeFacets]) או בסינון הנוכחי ([currentFacets]) קיימת קטגוריה
-/// שאינה השורש. הפאסט `'/'` (שורש = כל הספרייה) מנורמל החוצה, כך ש-`['/']`
-/// ו-`[]` נחשבים זהים (שניהם ללא סינון) ולא מציגים באנר מיותר.
+/// מחזיר `true` רק כשהחיפוש הוגבל *מראש* לקטגוריות מסוימות — כלומר כש-
+/// [searchScopeFacets] מכיל קטגוריה שאינה השורש. סינון זמני שנבחר בעץ
+/// התוצאות (currentFacets) אינו מפעיל את הבאנר. הפאסט `'/'` (שורש = כל
+/// הספרייה) מנורמל החוצה, כך ש-`['/']` ו-`[]` נחשבים "ללא הגבלה" ולא
+/// מציגים באנר מיותר.
 @visibleForTesting
 bool shouldShowFacetFilterBanner({
   required String searchQuery,
   required List<String> searchScopeFacets,
-  required List<String> currentFacets,
 }) {
   if (searchQuery.isEmpty) {
     return false;
@@ -47,10 +47,8 @@ bool shouldShowFacetFilterBanner({
 
   final normalizedScope = searchScopeFacets.toSet()
     ..removeWhere((facet) => facet == '/');
-  final normalizedCurrent = currentFacets.toSet()
-    ..removeWhere((facet) => facet == '/');
 
-  return normalizedScope.isNotEmpty || normalizedCurrent.isNotEmpty;
+  return normalizedScope.isNotEmpty;
 }
 
 class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
@@ -59,6 +57,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   bool get wantKeepAlive => true;
 
   bool _indexInProgressWarningDismissed = false;
+  // חיווי הגבלת ה-scope ניתן להסתרה ידנית. ההסתרה היא ויזואלית בלבד (אינה
+  // משנה את החיפוש) ומתאפסת בחיפוש חדש או בשינוי הטווח — ראה ה-listener ב-build.
+  bool _facetBannerDismissed = false;
   bool _showEditPanel = false;
   // במסך צר עץ הקטגוריות תופס את כל הרוחב ומסתיר את התוצאות. לכן בכניסה
   // הראשונה לכל טאב במסך צר סוגרים את העץ אוטומטית; המשתמש עדיין יכול
@@ -94,11 +95,21 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   }
 
   bool _shouldShowFacetFilterBanner(SearchState state) =>
+      !_facetBannerDismissed &&
       shouldShowFacetFilterBanner(
         searchQuery: state.searchQuery,
         searchScopeFacets: state.searchScopeFacets,
-        currentFacets: state.currentFacets,
       );
+
+  /// השוואת טווחי-חיפוש ללא תלות בסדר — לזיהוי שינוי scope לצורך איפוס
+  /// ההסתרה הידנית של החיווי. הפאסט `'/'` מנורמל החוצה כמו בלוגיקת ההצגה
+  /// ([shouldShowFacetFilterBanner]), כך ש-`['/', '/תנ"ך']` ו-`['/תנ"ך']`
+  /// נחשבים שקולים ולא מאפסים את ההסתרה לשווא.
+  bool _sameFacetScope(List<String> a, List<String> b) {
+    final setA = a.toSet()..removeWhere((facet) => facet == '/');
+    final setB = b.toSet()..removeWhere((facet) => facet == '/');
+    return setA.length == setB.length && setA.containsAll(setB);
+  }
 
   Widget _buildNoCategoriesSelectedMessage(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -133,45 +144,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _resetSearchScope() {
-    final searchMode = widget.tab.searchBloc.state.configuration.searchMode;
-    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
-      searchMode,
-      customSpacing: widget.tab.spacingValues,
-      alternativeWords: widget.tab.alternativeWords,
-      searchOptions: widget.tab.effectiveSearchOptions(
-        query: widget.tab.searchBloc.state.searchQuery,
-      ),
-    );
-    widget.tab.searchBloc.add(const SetFacetsWithoutSearch(['/']));
-    widget.tab.searchBloc.add(UpdateSearchQuery(
-      widget.tab.searchBloc.state.searchQuery,
-      customSpacing: normalizedParameters.customSpacing,
-      alternativeWords: normalizedParameters.alternativeWords,
-      searchOptions: normalizedParameters.searchOptions,
-    ));
-  }
-
-  void _resetFacetFiltering() {
-    final searchMode = widget.tab.searchBloc.state.configuration.searchMode;
-    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
-      searchMode,
-      customSpacing: widget.tab.spacingValues,
-      alternativeWords: widget.tab.alternativeWords,
-      searchOptions: widget.tab.effectiveSearchOptions(
-        query: widget.tab.searchBloc.state.searchQuery,
-      ),
-    );
-    widget.tab.searchBloc.add(
-      SetFacet(
-        '/',
-        customSpacing: normalizedParameters.customSpacing,
-        alternativeWords: normalizedParameters.alternativeWords,
-        searchOptions: normalizedParameters.searchOptions,
       ),
     );
   }
@@ -343,23 +315,37 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     super.build(context);
     return BlocListener<NavigationBloc, NavigationState>(
       listener: (context, state) => _onNavigationChanged(state),
-      child: Scaffold(
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final isNarrow = constraints.maxWidth < 800;
-            // במסך צר, בכניסה הראשונה של הטאב, סוגרים את עץ הקטגוריות
-            // כדי שהתוצאות יוצגו ולא יוסתרו ע"י העץ ברוחב מלא.
-            if (isNarrow &&
-                !_appliedNarrowLeftPaneDefault &&
-                widget.tab.isLeftPaneOpen.value) {
-              _appliedNarrowLeftPaneDefault = true;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) widget.tab.isLeftPaneOpen.value = false;
-              });
-            }
-            if (isNarrow) return _buildForSmallScreens();
-            return _buildForWideScreens();
-          },
+      child: BlocListener<SearchBloc, SearchState>(
+        // חיפוש חדש (שינוי שאילתה) או שינוי טווח → מציגים שוב חיווי שהוסתר ידנית.
+        listenWhen: (previous, current) =>
+            previous.searchQuery != current.searchQuery ||
+            !_sameFacetScope(
+              previous.searchScopeFacets,
+              current.searchScopeFacets,
+            ),
+        listener: (context, state) {
+          if (_facetBannerDismissed) {
+            setState(() => _facetBannerDismissed = false);
+          }
+        },
+        child: Scaffold(
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 800;
+              // במסך צר, בכניסה הראשונה של הטאב, סוגרים את עץ הקטגוריות
+              // כדי שהתוצאות יוצגו ולא יוסתרו ע"י העץ ברוחב מלא.
+              if (isNarrow &&
+                  !_appliedNarrowLeftPaneDefault &&
+                  widget.tab.isLeftPaneOpen.value) {
+                _appliedNarrowLeftPaneDefault = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) widget.tab.isLeftPaneOpen.value = false;
+                });
+              }
+              if (isNarrow) return _buildForSmallScreens();
+              return _buildForWideScreens();
+            },
+          ),
         ),
       ),
     );
@@ -669,26 +655,18 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     );
   }
 
-  /// באנר שמראה באילו קטגוריות מתבצע החיפוש
+  /// באנר שמראה שהחיפוש הוגבל מראש לקטגוריות מסוימות (scope).
+  /// מוצג רק כשהוגדר טווח מראש; כפתור ה-X מסתיר אותו ויזואלית בלבד.
   Widget _buildFacetFilterBanner(BuildContext context, SearchState state) {
     final cs = Theme.of(context).colorScheme;
-    final isTemporaryFacetFilter = state.currentFacets.toSet().length !=
-            state.searchScopeFacets.toSet().length ||
-        state.currentFacets
-            .toSet()
-            .difference(state.searchScopeFacets.toSet())
-            .isNotEmpty;
-    final activeFacets =
-        isTemporaryFacetFilter ? state.currentFacets : state.searchScopeFacets;
-    final facetNames = activeFacets.map((facet) {
+    final facetNames =
+        state.searchScopeFacets.where((facet) => facet != '/').map((facet) {
       // facet בפורמט "/תנ"ך" או "/תנ"ך/ראשונים" - ניקח את החלק האחרון
       final parts = facet.split('/').where((p) => p.isNotEmpty).toList();
       return parts.isNotEmpty ? parts.last : facet;
     }).toList();
     final tooltipMessage = 'חיפוש בקטגוריות: ${facetNames.join(', ')}';
-    final bannerTitle = isTemporaryFacetFilter
-        ? 'התוצאות מסוננות כעת לקטגוריות שנבחרו בעץ'
-        : 'החיפוש הוגבל לקטגוריות מסוימות';
+    const bannerTitle = 'החיפוש הוגבל לקטגוריות מסוימות';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
@@ -745,19 +723,15 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
             ),
           ),
           const Spacer(),
-          // כפתור לאיפוס הסינון - חזרה לכל הקטגוריות
+          // כפתור הסתרה - מסתיר את החיווי בלבד, ללא שינוי בחיפוש או בטווח.
           IconButton(
             icon: Icon(
               FluentIcons.dismiss_24_regular,
               size: 16,
               color: cs.primary,
             ),
-            tooltip: isTemporaryFacetFilter
-                ? 'בטל את הסינון הזמני'
-                : 'חפש בכל הקטגוריות',
-            onPressed: isTemporaryFacetFilter
-                ? _resetFacetFiltering
-                : _resetSearchScope,
+            tooltip: 'הסתר הודעה זו',
+            onPressed: () => setState(() => _facetBannerDismissed = true),
             constraints: const BoxConstraints(),
             padding: const EdgeInsets.all(4),
           ),
