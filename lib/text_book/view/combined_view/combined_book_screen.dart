@@ -1996,18 +1996,21 @@ class _CombinedViewState extends State<CombinedView> {
             ),
           ),
         ),
-        // המפרשים - ללא SelectionArea נפרד, כי יש SelectionArea כללי
+        // לכרטיס המפרשים SelectionArea משלו; disabled מנתק אותו מאזור הבחירה
+        // של הטקסט הראשי — קינון SelectionArea שובר את ההעתקה (issue #530).
         if (widget.showCommentaryAsExpansionTiles &&
             isSelected &&
             _hasCommentaries(state, selectedLineIndex))
-          _CommentaryCard(
-            key: ValueKey('commentary_card_$selectedLineIndex'),
-            index: selectedLineIndex,
-            textSize: widget.textSize,
-            openBookCallback: widget.openBookCallback,
-            viewportHeight: _viewportHeight,
-            selectionSyncController: widget.selectionSyncController,
-            searchText: state.searchText,
+          SelectionContainer.disabled(
+            child: _CommentaryCard(
+              key: ValueKey('commentary_card_$selectedLineIndex'),
+              index: selectedLineIndex,
+              textSize: widget.textSize,
+              openBookCallback: widget.openBookCallback,
+              viewportHeight: _viewportHeight,
+              selectionSyncController: widget.selectionSyncController,
+              searchText: state.searchText,
+            ),
           ),
       ],
     );
