@@ -230,8 +230,18 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         return;
       }
 
+      // יישוב הספירה: כשהעמוד הראשון ביקש את כל התוצאות (total <= limit)
+      // אך המנוע החזיר פחות ממה שספר (מסמך שנספר אבל נכשל בשליפה מה-store,
+      // נרשם ביומן המנוע), המונה הגולמי היה מצייר "3/4 תוצאות" עם כפתור
+      // "טען עוד" שלעולם לא מספק. מיישרים את הספירה למה שבאמת ניתן להצגה.
+      final reconciledTotal = (state.totalResults <= state.numResults &&
+              allResults.length < state.totalResults)
+          ? allResults.length
+          : state.totalResults;
+
       emit(state.copyWith(
         results: allResults,
+        totalResults: reconciledTotal,
         isLoading: false,
       ));
     } catch (e, stackTrace) {
@@ -854,8 +864,13 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         searchOptions: event.searchOptions,
       );
 
+      final combined = [...state.results, ...nextResults];
       emit(state.copyWith(
-        results: [...state.results, ...nextResults],
+        results: combined,
+        // עמוד ריק למרות ש-totalResults מבטיח עוד: ההיטים הנותרים נספרו אך
+        // אינם ניתנים לשליפה (ראה יומן המנוע). בלי היישור הזה הכפתור היה
+        // מציג "טען תוצאות נוספות (N)" לנצח ומסתובב בלי להביא כלום.
+        totalResults: nextResults.isEmpty ? combined.length : null,
         isLoading: false,
       ));
     } catch (e, stackTrace) {
