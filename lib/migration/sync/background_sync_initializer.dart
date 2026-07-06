@@ -78,7 +78,8 @@ class BackgroundSyncInitializer {
       }
 
       final dbPath = sqliteProvider.dbPath;
-      final libraryPath = Settings.getValue<String>('key-library-path');
+      final libraryPath =
+          Settings.getValue<String>(SettingsRepository.keyLibraryPath);
       if (libraryPath == null || libraryPath.isEmpty) {
         _log.warning('Library path not set, skipping sync');
         _syncCompleter?.complete(null);

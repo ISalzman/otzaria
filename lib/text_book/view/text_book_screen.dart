@@ -2325,7 +2325,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
         if (categoryPath.isNotEmpty) {
           final libraryPath =
-              Settings.getValue<String>('key-library-path') ?? '.';
+              Settings.getValue<String>(SettingsRepository.keyLibraryPath) ??
+                  '.';
           bookPath =
               '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}$categoryPath${Platform.pathSeparator}$bookTitle.txt';
           debugPrint('Book path from DB: $bookPath');

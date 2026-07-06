@@ -327,7 +327,8 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     if (!sqliteProvider.isInitialized) throw Exception('מסד הנתונים לא זמין');
 
     final dbPath = sqliteProvider.dbPath;
-    final libraryPath = Settings.getValue<String>('key-library-path');
+    final libraryPath =
+        Settings.getValue<String>(SettingsRepository.keyLibraryPath);
     if (libraryPath == null || libraryPath.isEmpty) {
       throw Exception('נתיב הספרייה לא מוגדר');
     }

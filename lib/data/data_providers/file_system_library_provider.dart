@@ -63,7 +63,8 @@ class FileSystemLibraryProvider implements LibraryProvider {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    _libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
+    _libraryPath =
+        Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.';
     _isInitialized = true;
     debugPrint('📁 FileSystemLibraryProvider initialized');
   }

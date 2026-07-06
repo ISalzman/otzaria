@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:path/path.dart' as path;
 
 /// Database configuration constants
@@ -63,13 +64,15 @@ class DatabaseConstants {
   static String getDatabasePath() {
     // Android: check for an internal-storage override first
     final effectivePath =
-        Settings.getValue<String>('key-db-effective-path') ?? '';
+        Settings.getValue<String>(SettingsRepository.keyDbEffectivePath) ?? '';
     if (effectivePath.isNotEmpty) {
       return effectivePath;
     }
-    final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
+    final libraryPath =
+        Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.';
     final folderName =
-        Settings.getValue<String>('key-library-folder-name') ?? '';
+        Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
+            '';
     return _buildDbPath(libraryPath, folderName);
   }
 
@@ -78,9 +81,11 @@ class DatabaseConstants {
   /// this still returns the ORIGINAL library directory so that sibling
   /// files (external-catalog DB, links, metadata) are found correctly.
   static String getDatabaseDirectoryPath() {
-    final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
+    final libraryPath =
+        Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.';
     final folderName =
-        Settings.getValue<String>('key-library-folder-name') ?? '';
+        Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
+            '';
     return path.dirname(_buildDbPath(libraryPath, folderName));
   }
 
@@ -105,10 +110,11 @@ class DatabaseConstants {
     String? libraryPath,
     String? folderName,
   ]) {
-    final basePath =
-        libraryPath ?? Settings.getValue<String>('key-library-path') ?? '.';
+    final basePath = libraryPath ??
+        Settings.getValue<String>(SettingsRepository.keyLibraryPath) ??
+        '.';
     final folder = folderName ??
-        Settings.getValue<String>('key-library-folder-name') ??
+        Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
         '';
     final databaseDirectory = path.dirname(_buildDbPath(basePath, folder));
     return path.join(databaseDirectory, talmudBavliFolderName);
@@ -122,8 +128,9 @@ class DatabaseConstants {
     String? libraryPath,
     String? folderName,
   ]) {
-    final basePath =
-        libraryPath ?? Settings.getValue<String>('key-library-path') ?? '.';
+    final basePath = libraryPath ??
+        Settings.getValue<String>(SettingsRepository.keyLibraryPath) ??
+        '.';
     final primary = getTalmudBavliDirectoryPath(libraryPath, folderName);
     final fallback = path.join(basePath, talmudBavliFolderName);
 
@@ -195,7 +202,7 @@ class DatabaseConstants {
 
     // Fallback for directory paths (legacy support)
     final folder = folderName ??
-        Settings.getValue<String>('key-library-folder-name') ??
+        Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
         '';
     return _buildDbPath(filePath, folder);
   }

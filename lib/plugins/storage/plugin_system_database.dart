@@ -505,8 +505,13 @@ class PluginSystemDatabase {
     }
   }
 
-  /// סוגר ומאפס את חיבור ה-DB. חשוף לבדיקות בלבד כדי לאפשר אתחול מחדש
-  /// של ה-singleton מול תיקיית נתונים זמנית.
+  /// סוגר ומאפס את חיבור ה-DB כדי לאפשר החלפת תיקיית נתונים בזמן ריצה.
+  Future<void> close() async {
+    _database?.close();
+    _database = null;
+  }
+
+  /// מאפס סינכרונית את ה-singleton עבור בדיקות קיימות.
   @visibleForTesting
   void resetForTests() {
     _database?.close();

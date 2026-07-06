@@ -115,6 +115,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
   bool? _requiresManualReindex;
   String? _defaultLibraryPath;
   String? _indexPath;
+  String? _databasesPath;
 
   @override
   void initState() {
@@ -124,6 +125,9 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     });
     AppPaths.getIndexPath().then((path) {
       if (mounted) setState(() => _indexPath = path);
+    });
+    AppPaths.getDatabasesPath().then((path) {
+      if (mounted) setState(() => _databasesPath = path);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -248,8 +252,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
           ? p.dirname(libraryPath)
           : libraryPath;
 
-  /// שורת מיקום הספרייה והאינדקס — מציגה את תיקיית השורש המשותפת
-  /// (ההורה של books ו-index), בלי אפשרות ניקוי (הספרייה חיונית לפעולה).
+  /// שורת מיקום הספרייה, האינדקס ונתוני המשתמש — מציגה את תיקיית השורש
+  /// המשותפת, בלי אפשרות ניקוי (הספרייה חיונית לפעולה).
   Widget _buildLibraryLocationWidget(BuildContext context) {
     final booksPath =
         Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '';
@@ -259,6 +263,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             ? null
             : _libraryRootOf(_defaultLibraryPath!);
     final indexPath = _indexPath ?? '';
+    final databasesPath = _databasesPath ?? '';
 
     return SettingsActionTile.pathTile(
       icon: FluentIcons.folder_24_regular,
@@ -284,9 +289,9 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             : null,
         moveContentsWarning:
             'בזמן העברת הספרייה התוכנה תיסגר ותיטען מחדש, ולא תהיה זמינה עד '
-            'לסיום הפעולה. תחת התיקייה שתבחר ייווצרו "books" (הספרייה) ו-"index" '
-            '(אינדקס החיפוש). רק קבצי הספרייה המזוהים יועברו; קבצים אחרים '
-            'שהוספת לתיקייה יישארו במקומם.',
+            'לסיום הפעולה. תחת התיקייה שתבחר ייווצרו "books", "index" '
+            'ו-"databases". רק קבצי הספרייה המזוהים יועברו; קבצים אחרים '
+            'שהוספת לתיקיית הספרייה יישארו במקומם.',
         defaultPath: defaultRoot,
       ),
       onOpenFolder: () => _openInFileManager(rootPath),
@@ -295,6 +300,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
         PathTarget(label: 'תיקייה ראשית', path: rootPath),
         PathTarget(label: 'ספרייה', path: booksPath),
         PathTarget(label: 'אינדקס', path: indexPath),
+        PathTarget(label: 'נתוני משתמש', path: databasesPath),
       ],
     );
   }

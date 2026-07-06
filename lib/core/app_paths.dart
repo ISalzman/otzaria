@@ -107,7 +107,7 @@ class AppPaths {
 
   static String? get cachedDataRootPath => _cachedDataRootPath;
 
-  /// Detects whether the app is installed system-wide or per-user.
+  /// מזהה אם ההתקנה מערכתית (כמנהל) או התקנת משתמש.
   static Future<InstallMode> detectInstallMode() async {
     // מצב נייד לעולם אינו התקנה מערכתית — הנתונים יושבים ליד ה-executable
     // ואסור ליפול לנתיבים משותפים כמו ProgramData.
@@ -146,15 +146,11 @@ class AppPaths {
     return InstallMode.perUser;
   }
 
-  /// Default library path.
+  /// מחזיר את נתיב ברירת המחדל של הספרייה.
   ///
-  /// On system-wide desktop installs this remains in the shared data root.
-  /// Otherwise it lives under the user-scoped app data root.
-  ///
-  /// On Linux and macOS, if the app is launched from a FULL bundle (אוצריא/
-  /// folder sitting next to the executable with a marker file inside), that
-  /// bundled library wins over the per-user default. Windows handles this
-  /// case via the Inno Setup installer, so detection is skipped there.
+  /// בהתקנה מערכתית הנתיב נשאר תחת שורש הנתונים המשותף. אחרת הוא יושב תחת
+  /// שורש הנתונים של המשתמש. ב-Linux וב-macOS חבילת FULL עם marker תקין
+  /// ליד ה-executable מנצחת את ברירת המחדל; ב-Windows ה-installer מטפל בכך.
   static Future<String> getDefaultLibraryPath() async {
     final bundled = await _detectBundledLibraryPath();
     if (bundled != null) {
@@ -345,6 +341,24 @@ class AppPaths {
     return _getDefaultIndexPath();
   }
 
+  /// מחזיר את תיקיית מסדי הנתונים האישיים של המשתמש.
+  ///
+  /// התקנות קיימות עם `<dataRoot>/databases` ממשיכות להשתמש בו. התקנות
+  /// חדשות יוצרות את התיקייה ליד הספרייה, כך שהיא ניידת יחד עם הספרייה.
+  static Future<String> getDatabasesPath() async {
+    final saved =
+        Settings.getValue<String>(SettingsRepository.keyDatabasesPath);
+    if (saved != null && saved.isNotEmpty) return saved;
+
+    final legacyPath = p.join(await getDataRootPath(), 'databases');
+    if (await Directory(legacyPath).exists()) {
+      return legacyPath;
+    }
+
+    final libraryPath = await getLibraryPath();
+    return p.join(p.dirname(libraryPath), 'databases');
+  }
+
   /// נתיב קובץ המילון המורפולוגי (`lexical.db`) של החיפוש המקורב.
   ///
   /// יושב לצד `seforim.db`. בהיעדרו החיפוש המקורב נופל חזרה ל-fuzzy רגיל.
@@ -399,7 +413,7 @@ class AppPaths {
 
   /// Resolves the notes database path - for cross-platform compatibility.
   static Future<String> resolveNotesDbPath(String fileName) async {
-    final dbDir = Directory(p.join(await getDataRootPath(), 'databases'));
+    final dbDir = Directory(await getDatabasesPath());
     if (!await dbDir.exists()) await dbDir.create(recursive: true);
     return p.join(dbDir.path, fileName);
   }
@@ -461,7 +475,7 @@ class AppPaths {
   /// של קובצי PDF חיצוניים).
   ///
   /// נפרד מ-`seforim.db` הרשמי כדי ש-`seforim.db` יוכל להיפתח read-only —
-  /// כתיבות מטמון בזמן ריצה זורמות לקובץ כתיב זה תחת `<dataRoot>/databases/`.
+  /// כתיבות מטמון בזמן ריצה זורמות לקובץ כתיב זה בתיקיית מסדי הנתונים הפעילה.
   static Future<String> resolveCacheDbPath() async {
     return resolveNotesDbPath('cache.db');
   }

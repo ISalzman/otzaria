@@ -202,6 +202,8 @@ class BackupService {
       SettingsRepository.keyCopyWithHeaders,
       SettingsRepository.keyCopyHeaderFormat,
       SettingsRepository.keyLibraryPath,
+      SettingsRepository.keyIndexPath,
+      SettingsRepository.keyDatabasesPath,
       SettingsRepository.keyDbEffectivePath,
       SettingsRepository.keyHebrewBooksPath,
       SettingsRepository.keyDevChannel,
