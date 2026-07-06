@@ -513,6 +513,43 @@ void main() {
       expect(actualIndexingStarted, isFalse);
       expect(progressCalls, 0);
     });
+
+    test('מדווח את הספר הנוכחי בתחילת עיבודו, לפני הכתיבה למנוע', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      // ‏PDF שקבציהם חסרים — עוברים במסלול סמן-ריק, בלי pdfrx ובלי DB.
+      library.books.addAll([
+        PdfBook(title: 'א', path: r'C:\missing\א.pdf'),
+        PdfBook(title: 'ב', path: r'C:\missing\ב.pdf'),
+      ]);
+      final repository = IndexingRepository(provider);
+      final calls = <(int, int, int)>[];
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (p, t) => calls.add((p, t, engine.addedDocuments.length)),
+      );
+
+      expect(result, isTrue);
+      // הדיווח הראשון הוא תחילת הספר הראשון — עוד לפני שנכתב מסמך כלשהו.
+      expect(calls.first, (1, 2, 0));
+      expect(calls.last.$1, 2);
+    });
+  });
+
+  group('IndexingRepository.orderBooksForIndexing', () {
+    test('ספרי PDF נדחפים לסוף, סדר שאר הספרים נשמר', () {
+      final t1 = TextBook(title: 'א');
+      final pdf1 = PdfBook(title: 'ב', path: r'C:\b.pdf');
+      final t2 = TextBook(title: 'ג');
+      final pdf2 = PdfBook(title: 'ד', path: r'C:\d.pdf');
+
+      expect(
+        IndexingRepository.orderBooksForIndexing([t1, pdf1, t2, pdf2]),
+        [t1, t2, pdf1, pdf2],
+      );
+    });
   });
 
   group('IndexingRepository.buildCatalogueDocumentId', () {
@@ -761,10 +798,22 @@ class _ReindexProbeRepository extends IndexingRepository {
 
 class _RecordingSearchEngine implements SearchEngine {
   final List<String> removedFilePaths = [];
+  final List<DocumentInput> addedDocuments = [];
   int commitCount = 0;
 
   /// טביעות-אצבע פר-ספר שהמנוע "קרא מהאינדקס" — לבדיקות reconcile.
   Map<String, BigInt> fingerprints = {};
+
+  @override
+  Future<void> addDocumentsBatch({required List<DocumentInput> docs}) async {
+    addedDocuments.addAll(docs);
+  }
+
+  @override
+  Future<void> setBulkIndexing({required bool enabled}) async {}
+
+  @override
+  Future<void> optimize() async {}
 
   @override
   Future<void> deleteDocumentsByFilePaths(
