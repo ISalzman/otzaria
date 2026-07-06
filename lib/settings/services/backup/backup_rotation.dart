@@ -56,7 +56,7 @@ class BackupRotation {
     RetentionProfile profile,
     DateTime now,
   ) {
-    if (profile == RetentionProfile.keepAll) return const [];
+    if (profile == RetentionProfile.keepAll) return [];
 
     final candidates = backups.where((b) => !b.isManual).toList()
       ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
