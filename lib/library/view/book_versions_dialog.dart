@@ -98,8 +98,6 @@ class _VersionTile extends StatelessWidget {
       if (isDisplayedText) 'הנוסח המוצג בספרייה',
       if (!version.hasContent && !isOnlyVersion)
         'טקסט הגרסה אינו כלול במאגר הנוכחי',
-      if (version.license != null && version.license!.trim().isNotEmpty)
-        'רישיון: ${version.license}',
       if ((version.heVersionNotes ?? version.versionNotes)?.trim().isNotEmpty ==
           true)
         (version.heVersionNotes ?? version.versionNotes)!.trim(),

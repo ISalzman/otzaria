@@ -24,8 +24,10 @@ class BookVersionInfo {
     required this.hasContent,
   });
 
-  /// שם התצוגה: הכותרת העברית כשקיימת, אחרת ה-versionTitle של ספריא.
-  String get displayTitle => heVersionTitle ?? versionTitle;
+  /// שם התצוגה: הכותרת העברית כשקיימת (ולא ריקה), אחרת ה-versionTitle של ספריא.
+  String get displayTitle => heVersionTitle?.trim().isNotEmpty == true
+      ? heVersionTitle!
+      : versionTitle;
 
   factory BookVersionInfo.fromDbRow(Map<String, dynamic> row) {
     return BookVersionInfo(
