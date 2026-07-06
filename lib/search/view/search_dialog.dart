@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -16,7 +17,9 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_query_builder.dart';
+import 'package:otzaria/search/saved_alternatives_store.dart';
 import 'package:otzaria/search/utils/category_query_parser.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/search/view/enhanced_search_field.dart';
@@ -56,6 +59,10 @@ class SearchDialogResult {
 /// כשמבצעים חיפוש, הדיאלוג נסגר ונפתחת לשונית תוצאות
 class SearchDialog extends StatefulWidget {
   final SearchingTab? existingTab;
+
+  /// טאב תוצאות חי לעריכה: הדיאלוג נפתח עם כל הפרמטרים שלו, ובאישור
+  /// החיפוש מוחל עליו במקום (ללא יצירת טאב חדש).
+  final SearchingTab? editTab;
   final Function(
     String query,
     Map<String, Map<String, bool>> searchOptions,
@@ -70,6 +77,7 @@ class SearchDialog extends StatefulWidget {
   const SearchDialog(
       {super.key,
       this.existingTab,
+      this.editTab,
       this.onSearch,
       this.bookTitle,
       this.returnResultOnSubmit = false});
@@ -94,7 +102,9 @@ class _SearchDialogState extends State<SearchDialog> {
   final Object _historyTapRegionGroupId = Object();
 
   bool get _usesStagedSubmit =>
-      widget.onSearch != null || widget.returnResultOnSubmit;
+      widget.onSearch != null ||
+      widget.returnResultOnSubmit ||
+      widget.editTab != null;
 
   @override
   void initState() {
@@ -104,13 +114,14 @@ class _SearchDialogState extends State<SearchDialog> {
     _ownsSearchTab = widget.existingTab == null;
     if (widget.existingTab != null) {
       _searchTab = widget.existingTab!;
+    } else if (widget.editTab != null) {
+      // עריכה: עובדים על עותק — הטאב החי מתעדכן רק באישור החיפוש
+      _searchTab = SearchingTab.clone(widget.editTab!);
     } else {
       final lastTyping =
           Settings.getValue<String>('key-last-search-typing') ?? '';
       final lastMode =
           Settings.getValue<String>('key-last-search-mode') ?? 'advanced';
-
-      _searchTab = SearchingTab("חיפוש", lastTyping);
 
       final searchMode = switch (lastMode) {
         'fuzzy' => SearchMode.fuzzy,
@@ -118,7 +129,18 @@ class _SearchDialogState extends State<SearchDialog> {
         _ => SearchMode.advanced,
       };
 
-      _searchTab.searchBloc.add(SetSearchMode(searchMode));
+      _searchTab = SearchingTab(
+        "חיפוש",
+        lastTyping,
+        initialConfiguration: SearchConfiguration(
+          searchMode: searchMode,
+          distance: searchMode == SearchMode.fuzzy ? 2 : 0,
+        ),
+      );
+
+      // חיפוש חדש נפתח עם אפשרויות ברירת המחדל (או מצב הסשן הנוכחי)
+      _searchTab.globalSearchOptions
+          .addAll(SearchDefaults.initialOptionsForNewSearch());
     }
 
     final persisted = SearchScopePreferences.load();
@@ -145,7 +167,8 @@ class _SearchDialogState extends State<SearchDialog> {
     // מאזין לשינויים בתיבת החיפוש כדי לעדכן את האפשרויות ולשמור את ההקלדה
     _queryListener = () {
       if (!mounted) return;
-      // שמירת ההקלדה הנוכחית
+      // שמירת ההקלדה הנוכחית (לא בעריכה — כדי לא לדרוס את ההקלדה האחרונה)
+      if (widget.editTab != null) return;
       Settings.setValue<String>(
         'key-last-search-typing',
         _searchTab.queryController.text,
@@ -300,6 +323,10 @@ class _SearchDialogState extends State<SearchDialog> {
     _searchTab.queryController.removeListener(_queryListener);
     _advancedControlsHasFocus.dispose();
     if (_ownsSearchTab) {
+      if (widget.editTab == null) {
+        // מצב האפשרויות נשמר לסשן הנוכחי; בהפעלה הבאה חוזרים לברירת המחדל
+        SearchDefaults.rememberSessionOptions(_searchTab.globalSearchOptions);
+      }
       _searchTab.dispose();
     }
     super.dispose();
@@ -353,10 +380,15 @@ class _SearchDialogState extends State<SearchDialog> {
       globalOptions: _searchTab.globalSearchOptions,
       perWordOptions: _searchTab.searchOptions,
     );
+    // כשמתג "חלופות שמורות" דלוק — הרחבת החיפוש בחלופות הגלובליות השמורות
+    final effectiveAlternatives = _searchTab.useSavedAlternatives
+        ? SavedAlternativesStore.mergeIntoQuery(
+            query, _searchTab.alternativeWords)
+        : _searchTab.alternativeWords;
     final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
       currentMode,
       customSpacing: _searchTab.spacingValues,
-      alternativeWords: _searchTab.alternativeWords,
+      alternativeWords: effectiveAlternatives,
       searchOptions: effectiveOptions,
     );
     final modeString = switch (currentMode) {
@@ -364,7 +396,9 @@ class _SearchDialogState extends State<SearchDialog> {
       SearchMode.exact => 'exact',
       SearchMode.fuzzy => 'fuzzy',
     };
-    Settings.setValue<String>('key-last-search-mode', modeString);
+    if (widget.editTab == null) {
+      Settings.setValue<String>('key-last-search-mode', modeString);
+    }
 
     if (widget.returnResultOnSubmit) {
       Navigator.of(context).pop(
@@ -401,9 +435,39 @@ class _SearchDialogState extends State<SearchDialog> {
       return;
     }
 
-    // יצירת טאב חדש לגמרי - ללא קשר לטאב קודם
-    // שם הלשונית: "חיפוש: [מילות החיפוש]"
-    final newSearchTab = SearchingTab("חיפוש: $query", query);
+    // ה-facets שנבחרו לחיפוש. תחביר `@קטגוריה`/`@ספר` גובר על הבחירה הידנית.
+    final facetsToSearch = parsedCategory.categoryFound
+        ? parsedCategory.facets!
+        : _selectedCategoryFacets.isEmpty
+            ? ['/']
+            : _selectedCategoryFacets.toList();
+    final distance = _searchTab.searchBloc.state.distance;
+
+    if (widget.editTab != null) {
+      _applyEditToTarget(
+        query: query,
+        mode: currentMode,
+        distance: distance,
+        facetsToSearch: facetsToSearch,
+        effectiveAlternatives: effectiveAlternatives,
+        normalizedParameters: normalizedParameters,
+      );
+      return;
+    }
+
+    // יצירת טאב חדש לגמרי - ללא קשר לטאב קודם.
+    // ה-configuration מוזרקת בבנייה ולא דרך events אחרי AddTab, אחרת
+    // snapshot השמירה של הטאבים מצלם את ברירת המחדל והמצב אובד בהפעלה הבאה.
+    final newSearchTab = SearchingTab(
+      "חיפוש: $query",
+      query,
+      initialConfiguration: SearchConfiguration(
+        searchMode: currentMode,
+        distance: distance,
+        currentFacets: facetsToSearch,
+        searchScopeFacets: facetsToSearch,
+      ),
+    );
 
     // העתקת כל ההגדרות מהטאב הנוכחי לטאב החדש
     newSearchTab.searchOptions.addAll(_searchTab.searchOptions.map(
@@ -412,26 +476,17 @@ class _SearchDialogState extends State<SearchDialog> {
     newSearchTab.globalSearchOptions.addAll(_searchTab.globalSearchOptions);
     newSearchTab.useGlobalSearchOptions.value =
         _searchTab.useGlobalSearchOptions.value;
-    newSearchTab.alternativeWords.addAll(normalizedParameters.alternativeWords);
-    newSearchTab.spacingValues.addAll(normalizedParameters.customSpacing);
-    newSearchTab.searchBloc.add(SetSearchMode(currentMode));
-    newSearchTab.searchBloc
-        .add(UpdateDistance(_searchTab.searchBloc.state.distance));
-
-    // ה-facets שנבחרו לחיפוש. תחביר `@קטגוריה`/`@ספר` גובר על הבחירה הידנית.
-    final facetsToSearch = parsedCategory.categoryFound
-        ? parsedCategory.facets!
-        : _selectedCategoryFacets.isEmpty
-            ? ['/']
-            : _selectedCategoryFacets.toList();
+    // חלופות שמורות שמוזגו הופכות לחלק מהטאב — נשמרות ומשוחזרות איתו
+    newSearchTab.alternativeWords.addAll(effectiveAlternatives.map(
+      (key, value) => MapEntry(key, List<String>.from(value)),
+    ));
+    newSearchTab.spacingValues.addAll(_searchTab.spacingValues);
 
     // מעבירים את ה-scope במפורש להיסטוריה — SetFacetsWithoutSearch מעדכן את
     // state אסינכרונית, ובלי זה החיפוש היה נשמר בלי ה-scope שנבחר.
     context
         .read<HistoryBloc>()
         .add(AddHistory(newSearchTab, scopeFacets: facetsToSearch));
-
-    newSearchTab.searchBloc.add(SetFacetsWithoutSearch(facetsToSearch));
 
     // ביצוע החיפוש בטאב החדש
     newSearchTab.searchBloc.add(
@@ -454,6 +509,60 @@ class _SearchDialogState extends State<SearchDialog> {
 
     // מעבר למסך העיון
     navigationBloc.add(const NavigateToScreen(Screen.search));
+  }
+
+  /// מחיל את פרמטרי הדיאלוג על טאב התוצאות הנערך ומריץ בו את החיפוש מחדש.
+  void _applyEditToTarget({
+    required String query,
+    required SearchMode mode,
+    required int distance,
+    required List<String> facetsToSearch,
+    required Map<int, List<String>> effectiveAlternatives,
+    required SearchModeScopedParameters normalizedParameters,
+  }) {
+    final target = widget.editTab!;
+
+    target.queryController.text = query;
+    target.searchOptions
+      ..clear()
+      ..addAll(_searchTab.searchOptions.map(
+        (key, value) => MapEntry(key, Map<String, bool>.from(value)),
+      ));
+    target.globalSearchOptions
+      ..clear()
+      ..addAll(_searchTab.globalSearchOptions);
+    target.useGlobalSearchOptions.value =
+        _searchTab.useGlobalSearchOptions.value;
+    target.alternativeWords
+      ..clear()
+      ..addAll(effectiveAlternatives.map(
+        (key, value) => MapEntry(key, List<String>.from(value)),
+      ));
+    target.spacingValues
+      ..clear()
+      ..addAll(_searchTab.spacingValues);
+    target.updateTitleFromAppliedQuery(query);
+
+    target.searchBloc.add(SetSearchModeWithoutSearch(mode));
+    target.searchBloc.add(UpdateDistanceWithoutSearch(distance));
+    target.searchBloc.add(SetFacetsWithoutSearch(facetsToSearch));
+    context
+        .read<HistoryBloc>()
+        .add(AddHistory(target, scopeFacets: facetsToSearch));
+    target.searchBloc.add(UpdateSearchQuery(
+      query,
+      customSpacing: normalizedParameters.customSpacing,
+      alternativeWords: normalizedParameters.alternativeWords,
+      searchOptions: normalizedParameters.searchOptions,
+    ));
+
+    final tabsBloc = context.read<TabsBloc>();
+    Navigator.of(context).pop();
+    // שמירת הטאבים אחרי שאירועי ה-configuration הסינכרוניים עובדו,
+    // אחרת ה-snapshot היה מצלם את המצב הישן של הטאב הנערך.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      tabsBloc.add(const SaveTabs());
+    });
   }
 
   void _setSearchAllCategories(bool value) {
@@ -487,9 +596,7 @@ class _SearchDialogState extends State<SearchDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isSpecific
-            ? colorScheme.primaryContainer.withValues(alpha: 0.6)
-            : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        color: AppSurfaces.togglePill(colorScheme, active: isSpecific),
         borderRadius: AppTokens.borderRadiusAll,
       ),
       child: Row(
@@ -614,9 +721,11 @@ class _SearchDialogState extends State<SearchDialog> {
                     const Icon(FluentIcons.search_24_filled, size: 28),
                     const SizedBox(width: 12),
                     Text(
-                      widget.bookTitle != null
-                          ? 'חיפוש ב${widget.bookTitle}'
-                          : 'חיפוש',
+                      widget.editTab != null
+                          ? 'עריכת חיפוש'
+                          : widget.bookTitle != null
+                              ? 'חיפוש ב${widget.bookTitle}'
+                              : 'חיפוש',
                       style: const TextStyle(
                           fontSize: 24, fontWeight: FontWeight.bold),
                     ),

@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/search/saved_alternatives_store.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 /// ווידג'ט לניהול אפשרויות חיפוש מתקדמות לכל מילה בנפרד.
-/// מחליף את שכפול הקוד בין SearchDialog ל-SearchEditPanel.
 class AdvancedSearchControls extends StatefulWidget {
   final SearchingTab tab;
   final bool compactMode;
@@ -141,6 +144,15 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     if (alts != null) {
       _currentAlternatives.addAll(alts);
     }
+    // כשהמתג דלוק — החלופות השמורות של המילה מוצגות ברשימה כרגילות
+    if (widget.tab.useSavedAlternatives && index < _words.length) {
+      final word = _words[index];
+      for (final alt in SavedAlternativesStore.alternativesFor(word)) {
+        if (alt != word && !_currentAlternatives.contains(alt)) {
+          _currentAlternatives.add(alt);
+        }
+      }
+    }
 
     final wordsCount = _words.where((w) => w.isNotEmpty).length;
     if (index < wordsCount - 1) {
@@ -216,12 +228,35 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
       );
     }
 
-    // המתג ממוקם לצד שורת הניווט (במקום הריק) כדי לא לתפוס שורה נפרדת
-    final navigationWithToggle = Row(
-      children: [
-        Expanded(child: _buildNavigationRow(perWordInputsEnabled)),
-        _buildScopeToggle(),
-      ],
+    // המתגים ממוקמים לצד שורת הניווט; ברוחב צר יורדים לשורה נפרדת
+    final navigationWithToggle = LayoutBuilder(
+      builder: (context, constraints) {
+        final toggles = Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          alignment: WrapAlignment.center,
+          children: [
+            _buildSavedAlternativesToggle(),
+            _buildScopeToggle(),
+          ],
+        );
+        if (constraints.maxWidth < 520) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildNavigationRow(perWordInputsEnabled),
+              const SizedBox(height: 4),
+              toggles,
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: _buildNavigationRow(perWordInputsEnabled)),
+            toggles,
+          ],
+        );
+      },
     );
 
     if (widget.compactMode) {
@@ -235,6 +270,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
           ],
           const SizedBox(height: 16),
           _buildCheckboxGrid(checkboxesEnabled, compactMode: true),
+          _buildSaveDefaultsRow(),
         ],
       );
     }
@@ -259,10 +295,117 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildCheckboxGrid(checkboxesEnabled, compactMode: false),
+              _buildSaveDefaultsRow(),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  /// מתג הרחבת החיפוש בחלופות השמורות — כבוי בכל חיפוש חדש.
+  Widget _buildSavedAlternativesToggle() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final enabled = widget.tab.useSavedAlternatives;
+
+    return Tooltip(
+      message: enabled
+          ? 'החיפוש יורחב במילים החילופיות שנשמרו עבור מילות השאילתה'
+          : 'הפעל כדי להרחיב את החיפוש במילים החילופיות שנשמרו',
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppSurfaces.togglePill(colorScheme, active: enabled),
+          borderRadius: AppTokens.borderRadiusAll,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'חלופות שמורות',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: enabled
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Transform.scale(
+              scale: 0.75,
+              child: Switch(
+                value: enabled,
+                onChanged: (value) {
+                  setState(() {
+                    widget.tab.useSavedAlternatives = value;
+                    _updateLocalStateForWord(_wordIndex);
+                  });
+                },
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// תפריט נפתח לסימון אילו אפשרויות מופעלות כברירת מחדל בחיפוש חדש,
+  /// ולצדו לחצן שמאפס את האפשרויות הנוכחיות לברירת המחדל השמורה.
+  Widget _buildSaveDefaultsRow() {
+    final defaults = SearchDefaults.loadDefaults();
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Wrap(
+        spacing: 4,
+        children: [
+          MenuAnchor(
+            menuChildren: [
+              for (final key in SearchQueryBuilder.availableWordOptionKeys)
+                CheckboxMenuButton(
+                  value: defaults[key] ?? false,
+                  closeOnActivate: false,
+                  onChanged: (checked) {
+                    setState(() {
+                      SearchDefaults.saveDefaults(
+                          {...defaults, key: checked ?? false});
+                      // שינוי ברירת מחדל מוחל מיד גם על הריבוע בחלונית הפתוחה
+                      widget.tab.globalSearchOptions[key] = checked ?? false;
+                    });
+                    widget.tab.searchOptionsChanged.value++;
+                  },
+                  child: Text(key),
+                ),
+            ],
+            builder: (context, controller, _) => Tooltip(
+              message: 'סמן אילו אפשרויות יופעלו אוטומטית בכל חיפוש חדש',
+              child: ActionButton.ghost(
+                text: 'ברירת מחדל לחיפוש חדש',
+                icon: FluentIcons.options_24_regular,
+                onPressed: () =>
+                    controller.isOpen ? controller.close() : controller.open(),
+              ),
+            ),
+          ),
+          Tooltip(
+            message: 'החזרת האפשרויות המסומנות למצב ברירת המחדל השמורה',
+            child: ActionButton.ghost(
+              text: 'חזרה לברירת מחדל',
+              icon: FluentIcons.arrow_reset_24_regular,
+              onPressed: () {
+                setState(() {
+                  widget.tab.globalSearchOptions
+                    ..clear()
+                    ..addAll(SearchDefaults.loadDefaults());
+                  widget.tab.searchOptions.clear();
+                });
+                widget.tab.searchOptionsChanged.value++;
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -277,9 +420,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
           : 'ההגדרות נשמרות לכל מילה בנפרד',
       child: Container(
         decoration: BoxDecoration(
-          color: useGlobal
-              ? colorScheme.primaryContainer.withValues(alpha: 0.6)
-              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          color: AppSurfaces.togglePill(colorScheme, active: useGlobal),
           borderRadius: AppTokens.borderRadiusAll,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -512,6 +653,8 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
       widget.tab.alternativeWords[_wordIndex!]!.add(text);
     }
     widget.tab.alternativeWordsChanged.value++;
+    // כל חלופה שנוספת נשמרת גם במאגר הגלובלי עבור המילה הנוכחית
+    SavedAlternativesStore.addAlternative(_currentWord!, text);
     _alternativeWordController.clear();
   }
 
@@ -528,6 +671,10 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
       widget.tab.alternativeWords.remove(_wordIndex!);
     }
     widget.tab.alternativeWordsChanged.value++;
+    // הסרה מוחקת את החלופה גם מהמאגר הגלובלי של המילה הנוכחית
+    if (_currentWord != null) {
+      SavedAlternativesStore.removeAlternative(_currentWord!, word);
+    }
   }
 
   Widget _buildCheckboxGrid(bool isEnabled, {required bool compactMode}) {
