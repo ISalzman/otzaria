@@ -410,10 +410,16 @@ class PluginSystemDatabase {
   // --- Runtime Log ---
 
   Future<void> writeLog(String pluginId, String level, String message) async {
-    final db = await database;
-    db.execute(
-        'INSERT INTO plugin_runtime_log (plugin_id, level, message, created_at) VALUES (?, ?, ?, ?)',
-        [pluginId, level, message, DateTime.now().toIso8601String()]);
+    // לוג ריצה הוא best-effort ונקרא fire-and-forget; אם פתיחת ה-DB נכשלת
+    // אסור שהכישלון יבעבע ויפיל את הקורא (או ייהפך לשגיאה אסינכרונית לא-מטופלת).
+    try {
+      final db = await database;
+      db.execute(
+          'INSERT INTO plugin_runtime_log (plugin_id, level, message, created_at) VALUES (?, ?, ?, ?)',
+          [pluginId, level, message, DateTime.now().toIso8601String()]);
+    } catch (e) {
+      debugPrint('[PluginSystemDatabase] writeLog failed: $e');
+    }
   }
 
   // --- Backup / Restore ---
