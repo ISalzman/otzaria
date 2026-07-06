@@ -182,7 +182,7 @@ class _RecordingSearchEngineOperations extends SearchEngineOperations {
     SearchEngineRequest request,
   ) async {
     _record(_EngineCall.searchAndCountExact, request);
-    return SearchPageResult(totalCount: 42, results: [
+    return SearchPageResult(totalCount: 42, truncated: false, results: [
       _result(id: 4, text: 'page result'),
     ]);
   }
@@ -192,7 +192,7 @@ class _RecordingSearchEngineOperations extends SearchEngineOperations {
     SearchEngineRequest request,
   ) async {
     _record(_EngineCall.searchAndCountAdvanced, request);
-    return const SearchPageResult(totalCount: 0, results: []);
+    return const SearchPageResult(totalCount: 0, results: [], truncated: false);
   }
 
   @override
@@ -200,7 +200,7 @@ class _RecordingSearchEngineOperations extends SearchEngineOperations {
     SearchEngineRequest request,
   ) async {
     _record(_EngineCall.searchAndCountFuzzy, request);
-    return const SearchPageResult(totalCount: 0, results: []);
+    return const SearchPageResult(totalCount: 0, results: [], truncated: false);
   }
 
   @override
