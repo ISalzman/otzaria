@@ -70,6 +70,26 @@ Future<void> main() async {
       expect(doubled[1].start, 7);
     }, skip: engineReady ? false : searchEngineSkipReason);
 
+    test('queryWordSpans: מקטע מעורב — משנה-אורך שגם מתפצל לכמה מילים', () {
+      // כישלון איתור של מילה אחת אינו גורר את שאר מילות המקטע: במקטע
+      // רמב''ם-משה המילה רמב"ם מקבלת את הפער עד משה, ומשה מאותרת
+      // במדויק — הסמן עליה בוחר אותה ולא את הראשונה.
+      final spans = SearchQueryBuilder.queryWordSpans("רמב''ם-משה");
+      expect(spans.map((s) => s.word).toList(), ['רמב"ם', 'משה']);
+      expect(spans[0].start, 0);
+      expect(spans[0].end, 7);
+      expect(spans[1].start, 7);
+      expect(spans[1].end, 10);
+
+      // וגם בכיוון ההפוך: המילה הראשונה מאותרת, השנייה משנת-אורך.
+      final reversed = SearchQueryBuilder.queryWordSpans("משה-רמב''ם");
+      expect(reversed.map((s) => s.word).toList(), ['משה', 'רמב"ם']);
+      expect(reversed[0].start, 0);
+      expect(reversed[0].end, 3);
+      expect(reversed[1].start, 3);
+      expect(reversed[1].end, 10);
+    }, skip: engineReady ? false : searchEngineSkipReason);
+
     test('restoredPerWordStateMatches מזהה state שנשמר על פיצול ישן', () {
       // state שנשמר כשרמב"ם היה שתי מילים ("רמב_0", "ם_1") חייב להיפסל,
       // אחרת המרווחים/החלופות זולגים למילה הלא-נכונה.
