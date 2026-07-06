@@ -325,13 +325,11 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
       return;
     }
 
-    // If indexing is complete
-    if (event.processed >= event.total) {
-      emit(const IndexingComplete());
-    } else if (!_repository.isIndexing()) {
+    // processed==total כאן פירושו "בעבודה על הספר האחרון" — ההשלמה נפלטת
+    // ממטפל העבודה עצמו אחרי שה-repository מסיים (כולל commit ו-optimize).
+    if (!_repository.isIndexing()) {
       emit(IndexingInitial());
     } else {
-      // Update progress state
       emit(IndexingInProgress(
         booksProcessed: event.processed,
         totalBooks: event.total,

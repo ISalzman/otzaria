@@ -51,6 +51,14 @@ class IndexingRepository {
     );
   }
 
+  /// סדר העיבוד באינדוקס מלא: ספרי PDF נדחפים לסוף — חילוצם איטי בסדר
+  /// גודל מספרי טקסט, וכך שאר הספרייה זמינה לחיפוש מוקדם ככל האפשר.
+  @visibleForTesting
+  static List<Book> orderBooksForIndexing(List<Book> books) => [
+        ...books.where((b) => b is! PdfBook),
+        ...books.whereType<PdfBook>(),
+      ];
+
   /// האם הספר כבר מאונדקס — לפי המסמכים החיים שנקראו מהאינדקס עצמו.
   bool isBookIndexed(Book book) => _tantivyDataProvider.indexedFilePaths
       .contains(buildIndexedBookFilePath(book));
@@ -75,7 +83,7 @@ class IndexingRepository {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
   }) async {
-    final allBooks = library.getAllBooks();
+    final allBooks = orderBooksForIndexing(library.getAllBooks());
     final totalBooks = allBooks.length;
 
     if (await requiresManualReindex(library)) {
@@ -167,6 +175,9 @@ class IndexingRepository {
               : (book is DocxBook ? book.toTextBook() : null);
           if (textBookForIndex != null) {
             if (!isBookIndexed(book)) {
+              // דיווח הספר הנוכחי כבר בתחילת עיבודו — אחרת המונה נראה
+              // תקוע על הספר הקודם לאורך כל עיבוד ספר גדול.
+              onProgress(bookIndex + 1, totalBooks);
               await _indexTextBook(
                 textBookForIndex,
                 catalogueOrderByBookKey: catalogueOrderByBookKey,
@@ -194,6 +205,7 @@ class IndexingRepository {
             }
           } else if (book is PdfBook) {
             if (!isBookIndexed(book)) {
+              onProgress(bookIndex + 1, totalBooks);
               // צריכת ה-prefetch אם הוא של הספר הנוכחי; מיד אחריה מוזנק
               // חילוץ ה-PDF הבא, שירוץ במקביל לאינדוקס של הספר הזה.
               Future<PdfExtraction>? preExtracted;
@@ -284,8 +296,7 @@ class IndexingRepository {
         debugPrint('💾 commit סופי: ${commitStopwatch.elapsedMilliseconds}ms');
         final optimizeStopwatch = Stopwatch()..start();
         await optimizeIndexBestEffort(index.optimize);
-        debugPrint(
-            '⚙️ optimize: ${optimizeStopwatch.elapsedMilliseconds}ms');
+        debugPrint('⚙️ optimize: ${optimizeStopwatch.elapsedMilliseconds}ms');
         debugPrint('⏱️ סה"כ אינדוקס: ${totalStopwatch.elapsed}');
       }
     } finally {
@@ -393,8 +404,7 @@ class IndexingRepository {
     // אונדקסו; בהיעדרו מחלצים כאן. שני המסלולים עוברים דרך העטיפה
     // ששומרת את השגיאה בתוצאה, כדי שסמנטיקת ה-sidecar/הפצת-שגיאה תישאר
     // זהה.
-    final extracted =
-        await (preExtracted ?? _extractPdfPagesGuarded(book));
+    final extracted = await (preExtracted ?? _extractPdfPagesGuarded(book));
     final pages = extracted.pages;
     final outline = extracted.outline;
     final openError = extracted.error;
@@ -806,6 +816,7 @@ class IndexingRepository {
               : (book is DocxBook ? book.toTextBook() : null);
           if (textBookForIndex != null) {
             if (!isBookIndexed(book)) {
+              onProgress(processedBooks + 1, totalBooks);
               debugPrint('📖 מאנדקס ספר טקסט חדש: ${book.title}');
               await _indexTextBook(
                 textBookForIndex,
@@ -826,6 +837,7 @@ class IndexingRepository {
             }
           } else if (book is PdfBook) {
             if (!isBookIndexed(book)) {
+              onProgress(processedBooks + 1, totalBooks);
               debugPrint('📄 מאנדקס PDF חדש: ${book.title}');
               await _indexPdfBook(
                 book,
