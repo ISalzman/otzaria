@@ -63,6 +63,9 @@ const double _kAppBarControlsWidth = 105.0;
 const double _kWindowCaptionButtonsWidth = 138.0;
 const double _kWindowCaptionButtonWidth = 46.0;
 
+/// רוחב אזור כפתורי המערכת של macOS (traffic lights) המצוירים מעל התוכן.
+const double _kMacosTrafficLightsWidth = 78.0;
+
 /// רוחב מרבי לטאב בודד: טאב לא נמתח מעבר לזה גם כשיש מעט טאבים ומלא מקום.
 const double _kTabMaxWidth = 140.0;
 
@@ -233,11 +236,28 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                           child: _buildContent(context, navState),
                         ),
 
-                        // כפתורי חלון (רק בדסקטופ)
-                        if (!kIsWeb &&
-                            (Platform.isWindows ||
-                                Platform.isLinux ||
-                                Platform.isMacOS))
+                        // ב-macOS אין כפתורי חלון מותאמים — רק כפתורי המערכת
+                        // המובנים (traffic lights), שמצוירים מעל התוכן בפינה
+                        // השמאלית; שומרים להם מרווח פנוי הניתן לגרירת החלון.
+                        if (!kIsWeb && Platform.isMacOS)
+                          SizedBox(
+                            height: 50,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const ManagedUpdateTitleBarIndicator(),
+                                if (!settingsState.isFullscreen)
+                                  const SizedBox(
+                                    width: _kMacosTrafficLightsWidth,
+                                    child: DragToMoveArea(
+                                        child: SizedBox.expand()),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                        // כפתורי חלון מותאמים (Windows/Linux בלבד)
+                        if (!kIsWeb && (Platform.isWindows || Platform.isLinux))
                           SizedBox(
                             height: 50,
                             child: Row(
