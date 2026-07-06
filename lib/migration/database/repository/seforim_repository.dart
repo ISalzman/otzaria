@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:logging/logging.dart';
 
 import '../../../utils/text/text_manipulation.dart';
@@ -971,6 +973,18 @@ class SeforimRepository {
   Future<List<Line>> getLines(int bookId, int startIndex, int endIndex) async {
     return await _database.lineDao
         .selectByBookIdRange(bookId, startIndex, endIndex);
+  }
+
+  /// תוכן כל שורות הספר בסדר השורות — מסלול קריאה רזה לאינדוקס
+  /// (ראה [LineDao.selectContentByBookId]).
+  Future<List<String>> getLineContents(int bookId) async {
+    return await _database.lineDao.selectContentByBookId(bookId);
+  }
+
+  /// תוכן הספר כבייטים גולמיים (UTF-8) מאוחים ב-`\n` — מסלול האינדוקס
+  /// (ראה [LineDao.selectContentBytesByBookId]).
+  Future<Uint8List> getLineContentBytes(int bookId) async {
+    return await _database.lineDao.selectContentBytesByBookId(bookId);
   }
 
   /// Gets only IDs and indices for all lines in a book.
