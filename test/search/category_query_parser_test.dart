@@ -67,6 +67,74 @@ void main() {
       expect(parsed.facets, isEmpty);
     });
 
+    test('כמה @ — מאחד את ה-facets של כל הספרים', () {
+      final library = Library(categories: [
+        _category('תורה', [
+          TextBook(title: 'רשי'),
+          TextBook(title: 'רמבן'),
+        ]),
+      ]);
+
+      final parsed = parseCategoryQuery('ערבך ערבא@רמבן@רשי', library);
+
+      expect(parsed.query, 'ערבך ערבא');
+      expect(parsed.hasCategoryToken, isTrue);
+      expect(parsed.categoryFound, isTrue);
+      expect(parsed.facets!.length, 2);
+    });
+
+    test('כמה @ — שם אחד לא קיים מדווח ב-notFoundNames', () {
+      final library = Library(categories: [
+        _category('תורה', [TextBook(title: 'רשי')]),
+      ]);
+
+      final parsed = parseCategoryQuery('שלום@רשי@לא-קיים', library);
+
+      expect(parsed.hasCategoryToken, isTrue);
+      expect(parsed.categoryFound, isFalse);
+      expect(parsed.notFoundNames, ['לא-קיים']);
+    });
+
+    test('התאמה מדויקת גוברת על הכלה — לא נגררים ספרים שמכילים את השם', () {
+      final library = Library(categories: [
+        _category('תנך', [
+          TextBook(title: 'בראשית'),
+          TextBook(title: 'רשי על בראשית'),
+        ]),
+      ]);
+
+      final parsed = parseCategoryQuery('שלום@בראשית', library);
+
+      expect(parsed.categoryFound, isTrue);
+      expect(parsed.facets!.length, 1);
+      expect(parsed.facets!.single, isNot(contains('רשי')));
+    });
+
+    test('שם חלקי — התאמת הכלה בכותרת', () {
+      final library = Library(categories: [
+        _category('הלכה', [
+          TextBook(title: 'משנה ברורה'),
+          TextBook(title: 'ביאור הלכה'),
+        ]),
+      ]);
+
+      final parsed = parseCategoryQuery('שלום@ברורה', library);
+
+      expect(parsed.categoryFound, isTrue);
+      expect(parsed.facets!.single, contains('משנה ברורה'));
+    });
+
+    test('שגיאת כתיב — התאמה סלחנית לפי מרחק עריכה', () {
+      final library = Library(categories: [
+        _category('הלכה', [TextBook(title: 'משנה ברורה')]),
+      ]);
+
+      final parsed = parseCategoryQuery('שלום@משנה ברורא', library);
+
+      expect(parsed.categoryFound, isTrue);
+      expect(parsed.facets!.single, contains('משנה ברורה'));
+    });
+
     test('@ ריק — מתעלם מהתחביר', () {
       final library = Library(categories: []);
 

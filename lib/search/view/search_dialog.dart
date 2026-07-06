@@ -329,7 +329,7 @@ class _SearchDialogState extends State<SearchDialog> {
     );
     if (parsedCategory.hasCategoryToken && !parsedCategory.categoryFound) {
       UiSnack.showError(
-          'הקטגוריה או הספר "${parsedCategory.categoryName}" לא נמצאו');
+          'הקטגוריה או הספר "${parsedCategory.notFoundNames.join('", "')}" לא נמצאו');
       return;
     }
     query = parsedCategory.query;
