@@ -280,7 +280,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
       query: state.searchQuery,
     );
 
-    return ListView.builder(
+    final resultsList = ListView.builder(
       key: PageStorageKey(widget.tab),
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
@@ -608,6 +608,48 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
           },
         );
       },
+    );
+
+    if (!state.resultsTruncated) {
+      return resultsList;
+    }
+    // תוצאות חלקיות: השאילתה חרגה מתקציב איסוף-הטרמים במנוע, כך שרק
+    // ההרחבות בעדיפות הגבוהה הוגשו. מציגים באנר קבוע מעל הרשימה.
+    return Column(
+      children: [
+        _buildTruncatedBanner(context),
+        Expanded(child: resultsList),
+      ],
+    );
+  }
+
+  Widget _buildTruncatedBanner(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      color: colorScheme.tertiaryContainer,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Icon(
+            FluentIcons.warning_24_regular,
+            size: 18,
+            color: colorScheme.onTertiaryContainer,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'ייתכן שהתוצאות חלקיות: החיפוש רחב מדי ולכן הוצגו רק חלק '
+              'מההתאמות. צמצמו את החיפוש (למשל הוסיפו אות או מילה).',
+              style: TextStyle(
+                fontSize: 13,
+                color: colorScheme.onTertiaryContainer,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

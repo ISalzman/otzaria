@@ -28,6 +28,12 @@ class SearchState {
   /// לגיטימי. השדה מתאפס בתחילת חיפוש חדש (clear-then-set), ונשמר אחרת.
   final String? errorMessage;
 
+  /// `true` כאשר שאילתת מילה-יחידה רחבה חרגה מתקציב איסוף הטרמים במנוע, כך
+  /// שגם הספירה וגם התוצאות חלקיות (רק ההרחבות בעדיפות הגבוהה הוגשו). ה-UI
+  /// מציג באנר "ייתכן שהתוצאות חלקיות — צמצמו את החיפוש". מתאפס בתחילת כל
+  /// חיפוש חדש.
+  final bool resultsTruncated;
+
   const SearchState({
     this.results = const [],
     this.booksToSearch = const {},
@@ -39,6 +45,7 @@ class SearchState {
     this.facetCounts = const {},
     this.configuration = const SearchConfiguration(),
     this.errorMessage,
+    this.resultsTruncated = false,
   });
 
   SearchState copyWith({
@@ -52,6 +59,7 @@ class SearchState {
     Map<String, int>? facetCounts,
     SearchConfiguration? configuration,
     Object? errorMessage = _unset,
+    bool? resultsTruncated,
   }) {
     return SearchState(
       results: results ?? this.results,
@@ -66,6 +74,7 @@ class SearchState {
       errorMessage: identical(errorMessage, _unset)
           ? this.errorMessage
           : errorMessage as String?,
+      resultsTruncated: resultsTruncated ?? this.resultsTruncated,
     );
   }
 

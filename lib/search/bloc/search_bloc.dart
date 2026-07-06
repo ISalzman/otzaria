@@ -146,6 +146,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       // איפוס שגיאה קודמת בתחילת חיפוש חדש, אחרת הודעת שגיאה ישנה הייתה
       // נשארת ב-state ומבלבלת את המשתמש במהלך החיפוש החדש.
       errorMessage: null,
+      // איפוס דגל התוצאות-החלקיות; ייקבע מחדש מאירוע הספירות אם השאילתה
+      // חורגת מתקציב האיסוף במנוע.
+      resultsTruncated: false,
     ));
 
     Map<String, Book>? bookByIndexedFilePath;
@@ -212,6 +215,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
             // דרך ReplaceFacetCounts במקרה של תת-בחירה).
             facetCounts: aggregated,
             isLoading: true,
+            // דגל התוצאות-החלקיות מגיע באירוע הספירות בלבד.
+            resultsTruncated: update.truncated,
           ));
         }
 
