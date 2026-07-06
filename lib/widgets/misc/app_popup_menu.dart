@@ -1042,11 +1042,26 @@ double calculateAppMenuPreferredWidth<T>(
   }
 
   final hasIcon = entries.any((entry) => entry.icon != null);
+
+  var maxTrailingWidth = 0.0;
+  var hasExtraSlot = false;
+  for (final entry in entries) {
+    if (entry.trailing != null) {
+      final tWidth = entry.trailingReservedWidth > 0
+          ? entry.trailingReservedWidth
+          : metrics.iconSize + 8;
+      if (tWidth > maxTrailingWidth) maxTrailingWidth = tWidth;
+      if (entry.reserveTrailingGap) hasExtraSlot = true;
+    }
+  }
+
   // תמיד משוריין מקום לסימן ה-✓ שמוצג ליד הפריט הנבחר, יהיה אשר יהיה.
   final occupiedWidth = metrics.itemPadding.horizontal +
       (hasIcon ? metrics.iconSize + 8 : 0) +
       metrics.iconSize +
-      _kCheckmarkGap;
+      _kCheckmarkGap +
+      maxTrailingWidth +
+      (hasExtraSlot ? metrics.iconSize + 8 : 0);
 
   return max(metrics.menuMinWidth, maxLabelWidth + occupiedWidth);
 }
