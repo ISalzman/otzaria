@@ -862,12 +862,13 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   void _handleExternalSelectionChange() {
     final controller = widget.selectionSyncController;
-    if (controller == null ||
-        controller.activeOwner == null ||
-        identical(controller.activeOwner, _selectionOwner)) {
-      return;
-    }
-    if (!mounted) return;
+    if (controller == null || !mounted) return;
+    final shouldRebuild = shouldRebuildSelectionAreaOnExternalChange(
+      activeOwner: controller.activeOwner,
+      selfOwner: _selectionOwner,
+      hasOwnSelection: _savedSelectedText.value != null,
+    );
+    if (!shouldRebuild) return;
     _savedSelectedText.value = null;
     _lastSelectedLink.value = null;
     setState(() {
