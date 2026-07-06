@@ -547,5 +547,15 @@ Future<void> main() async {
       final result = highLight('פסוק\u{05C6} אחר', 'פסוק');
       expect(result, contains('<span style="color: red">פסוק</span>'));
     });
+
+    test('ליגטורת יידיש לפני התאמה אינה נחשבת גבול מילה', () {
+      final result = highLight('אב\u{05F0}שלום', 'שלום');
+      expect(result, isNot(contains('<span')));
+    });
+
+    test('צורת תצוגה עברית לפני התאמה אינה נחשבת גבול מילה', () {
+      final result = highLight('אב\u{FB1D}שלום', 'שלום');
+      expect(result, isNot(contains('<span')));
+    });
   }, skip: engineReady ? false : searchEngineSkipReason);
 }
