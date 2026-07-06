@@ -299,29 +299,23 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
   // המילה הנוכחית (לפי מיקום הסמן), במונחי splitQueryWords של המנוע:
   // ה-word וה-index חייבים להתאים למפתחות "{word}_{index}" שבונה
   // advanced_search_controls, אחרת האפשרויות ייקשרו למילה הלא-נכונה.
+  // המיפוי לטווחים בטקסט הגולמי — כולל סמן על `דין` בתוך `בית-דין`
+  // ומקטעים שהנורמליזציה שינתה את אורכם (`רמב''ם`) — ב-queryWordSpans.
   Map<String, dynamic>? _getCurrentWordInfo() {
     final text = widget.tab.queryController.text;
     final cursorPosition = widget.tab.queryController.selection.baseOffset;
 
     if (text.isEmpty || cursorPosition < 0) return null;
 
-    // סריקת מקטעי לא-רווח עם מיקומיהם בטקסט הגולמי; כל מקטע ממופה
-    // למילות המנוע שהוא מניב, כך שהאינדקס המצטבר מתיישר עם
-    // splitQueryWords על השאילתה כולה (מקטע כמו `בית-דין` מניב שתיים,
-    // ו-`רמב"ם` נשאר מילה אחת).
-    int wordIndex = 0;
-    for (final match in RegExp(r'\S+').allMatches(text)) {
-      final engineWords = SearchQueryBuilder.splitQueryWords(match.group(0)!);
-      if (cursorPosition >= match.start && cursorPosition <= match.end) {
-        if (engineWords.isEmpty) return null;
+    for (final span in SearchQueryBuilder.queryWordSpans(text)) {
+      if (cursorPosition >= span.start && cursorPosition <= span.end) {
         return {
-          'word': engineWords.first,
-          'index': wordIndex,
-          'start': match.start,
-          'end': match.end,
+          'word': span.word,
+          'index': span.index,
+          'start': span.start,
+          'end': span.end,
         };
       }
-      wordIndex += engineWords.length;
     }
 
     return null;
