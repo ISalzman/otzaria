@@ -37,6 +37,39 @@ Future<void> main() async {
       ]);
     }, skip: engineReady ? false : searchEngineSkipReason);
 
+    test('queryWordSpans ממפה כל מילת-מנוע לטווח נפרד בטקסט הגולמי', () {
+      // מקטע שמתפצל לכמה מילים (בית-דין): הסמן על `דין` חייב לבחור את
+      // דין_1, לא את בית_0.
+      final spans = SearchQueryBuilder.queryWordSpans('בית-דין צדק');
+      expect(spans.map((s) => s.word).toList(), ['בית', 'דין', 'צדק']);
+      expect(spans.map((s) => s.index).toList(), [0, 1, 2]);
+      expect(spans[0].start, 0);
+      expect(spans[0].end, 3);
+      expect(spans[1].start, 4);
+      expect(spans[1].end, 7);
+      expect(spans[2].start, 8);
+      expect(spans[2].end, 11);
+    }, skip: engineReady ? false : searchEngineSkipReason);
+
+    test('queryWordSpans מאתר מילים עם צורות גרש עבריות ומשני-אורך', () {
+      // ״ עברי בשדה: קיפול שומר-אורך — טווח מדויק.
+      final hebrew = SearchQueryBuilder.queryWordSpans('רמב״ם משה');
+      expect(hebrew[0].word, 'רמב"ם');
+      expect(hebrew[0].start, 0);
+      expect(hebrew[0].end, 5);
+      expect(hebrew[1].word, 'משה');
+      expect(hebrew[1].index, 1);
+
+      // '' שמאוחד ל-" משנה אורך — המילה מקבלת את גבולות המקטע כולו,
+      // כך שהסמן בכל מקום בתוכו עדיין בוחר אותה.
+      final doubled = SearchQueryBuilder.queryWordSpans("רמב''ם משה");
+      expect(doubled[0].word, 'רמב"ם');
+      expect(doubled[0].start, 0);
+      expect(doubled[0].end, 6);
+      expect(doubled[1].word, 'משה');
+      expect(doubled[1].start, 7);
+    }, skip: engineReady ? false : searchEngineSkipReason);
+
     test('restoredPerWordStateMatches מזהה state שנשמר על פיצול ישן', () {
       // state שנשמר כשרמב"ם היה שתי מילים ("רמב_0", "ם_1") חייב להיפסל,
       // אחרת המרווחים/החלופות זולגים למילה הלא-נכונה.

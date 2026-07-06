@@ -13,6 +13,23 @@ class SearchModeScopedParameters {
   });
 }
 
+/// טווח של מילת-מנוע אחת ([SearchQueryBuilder.splitQueryWords]) בתוך
+/// טקסט השאילתה הגולמי, לצורכי UI (איתור המילה שתחת הסמן, ניווט).
+class QueryWordSpan {
+  /// מילת המנוע המנורמלת (כפי שמופיעה במפתחות `"{word}_{index}"`).
+  final String word;
+
+  /// האינדקס בפיצול המלא של השאילתה.
+  final int index;
+
+  /// גבולות בטקסט הגולמי. כשלא ניתן לאתר את המילה בתוך המקטע
+  /// (נורמליזציה משנת-אורך) — גבולות מקטע-הרווח כולו.
+  final int start;
+  final int end;
+
+  const QueryWordSpan(this.word, this.index, this.start, this.end);
+}
+
 /// מחלקת שירות לריכוז עיבוד קלט החיפוש בצד האפליקציה.
 ///
 /// המחלקה מטפלת רק בפעולות UI כגון ניקוי טקסט, פיצול מילים לצורך
@@ -48,6 +65,48 @@ class SearchQueryBuilder {
   ///   ״/׳ עבריים מנורמלים ל-"/' לפני הפיצול.
   static List<String> splitQueryWords(String query) =>
       engine.splitQueryWords(query: query);
+
+  /// קיפול שומר-אורך של צורות הגרש העבריות לצורת ה-ASCII שמילות
+  /// [splitQueryWords] נושאות, כדי שאיתור מילה בטקסט הגולמי לא יזיז
+  /// offsets. נורמליזציות משנות-אורך (`''`→`"`) אינן מטופלות כאן —
+  /// [queryWordSpans] נופל לגבולות המקטע כולו במקרים אלה.
+  static String foldQuoteForms(String text) =>
+      text.replaceAll('״', '"').replaceAll('׳', "'");
+
+  /// מיפוי מילות [splitQueryWords] לטווחיהן בטקסט הגולמי, מקטע-רווח
+  /// אחרי מקטע-רווח. מקטע שמתפצל לכמה מילות מנוע (`בית-דין`) מקבל
+  /// טווח נפרד לכל מילה, כך שהסמן על `דין` בוחר את `דין` ולא את
+  /// `בית`. מילה שלא ניתן לאתר בתוך המקטע — נורמליזציה משנת-אורך
+  /// (`רמב''ם`→`רמב"ם`) או פיסוק שקוף בתוך מילה (`א.ב`→`אב`) —
+  /// מקבלת את גבולות המקטע כולו: עדיף טווח גס ממיקום שגוי.
+  static List<QueryWordSpan> queryWordSpans(String text) {
+    final spans = <QueryWordSpan>[];
+    var index = 0;
+    for (final match in RegExp(r'\S+').allMatches(text)) {
+      final chunk = match.group(0)!;
+      final words = splitQueryWords(chunk);
+      final folded = foldQuoteForms(chunk);
+      var searchPos = 0;
+      var located = true;
+      for (final word in words) {
+        var start = match.start;
+        var end = match.end;
+        if (located) {
+          final rel = folded.indexOf(word, searchPos);
+          if (rel == -1) {
+            located = false; // מכאן והלאה — גבולות המקטע כולו
+          } else {
+            start = match.start + rel;
+            end = start + word.length;
+            searchPos = rel + word.length;
+          }
+        }
+        spans.add(QueryWordSpan(word, index, start, end));
+        index++;
+      }
+    }
+    return spans;
+  }
 
   /// אימות state פר-מילה משוחזר (סשן/היסטוריה) מול הפיצול הנוכחי:
   /// המפות נבנו על `splitQueryWords` של הגרסה ששמרה אותן, ואם חוקי

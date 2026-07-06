@@ -104,31 +104,21 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     // כך שמפתחות `${_currentWord}_$_wordIndex` ואינדקסי `alternativeWords` /
     // `spacingValues` שנשמרים פר-מילה יתאימו לחיפוש בפועל.
     // ללא יישור זה, שאילתות כמו `רמב"ם` מצרות מפתחות שאינם נקראים.
-    final words = SearchQueryBuilder.splitQueryWords(text);
-    _words = words;
+    _words = SearchQueryBuilder.splitQueryWords(text);
 
-    // המילים מנורמלות ל-'/" ASCII בעוד שהשדה עשוי להכיל ׳/״ עבריים;
-    // הקיפול שומר-אורך ולכן ה-offsets בטקסט הגולמי נשארים נכונים.
-    final searchText = _foldQuoteForms(text);
-    int currentPos = 0;
+    // המיפוי מהסמן למילה — דרך queryWordSpans, שמאתר כל מילת-מנוע
+    // בטקסט הגולמי (כולל ׳/״ עבריים בשדה ומקטעים משני-אורך כמו
+    // `רמב''ם`, שמקבלים את גבולות המקטע כולו).
     int? foundIndex;
     String? foundWord;
 
-    for (int i = 0; i < words.length; i++) {
-      final word = words[i];
-      if (word.isEmpty) continue;
-
-      final wordStart = searchText.indexOf(word, currentPos);
-      if (wordStart == -1) continue;
-      final wordEnd = wordStart + word.length;
-
-      if (selection.baseOffset >= wordStart &&
-          selection.baseOffset <= wordEnd) {
-        foundIndex = i;
-        foundWord = word;
+    for (final span in SearchQueryBuilder.queryWordSpans(text)) {
+      if (selection.baseOffset >= span.start &&
+          selection.baseOffset <= span.end) {
+        foundIndex = span.index;
+        foundWord = span.word;
         break;
       }
-      currentPos = wordEnd;
     }
 
     if (foundIndex != _wordIndex || foundWord != _currentWord) {
@@ -174,33 +164,20 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     });
   }
 
-  /// קיפול שומר-אורך של צורות הגרש העבריות לצורת ה-ASCII שמילות
-  /// `splitQueryWords` נושאות, כדי ש-indexOf ימצא אותן בטקסט הגולמי.
-  /// (`''` נשאר כפי שהוא — האיחוד ל-`"` משנה אורך; חיפוש שיחטיא בו
-  /// ממשיך ליפול בחן כמו כל פיסוק שנמחק ב-sanitize.)
-  static String _foldQuoteForms(String text) =>
-      text.replaceAll('״', '"').replaceAll('׳', "'");
-
   void _navigateToWord(int newIndex) {
     if (newIndex < 0 || newIndex >= _words.length) return;
 
-    final text = _foldQuoteForms(widget.tab.queryController.text);
-    int currentPos = 0;
-    for (int i = 0; i < newIndex; i++) {
-      final wordStart = text.indexOf(_words[i], currentPos);
-      // המילים מגיעות מ-splitQueryWords על raw text שעבר sanitize, ולכן
-      // ייתכן שמילה מסוימת לא תימצא ככל שהיא (למשל אחרי מחיקת `!,;.`).
-      // במקרה כזה נעצור את הניווט במקום לחשב offset שגוי שיקרוס/יקפוץ.
-      if (wordStart == -1) return;
-      currentPos = wordStart + _words[i].length;
-    }
-
-    final targetWordStart = text.indexOf(_words[newIndex], currentPos);
-    if (targetWordStart != -1) {
-      final newOffset = targetWordStart + (_words[newIndex].length ~/ 2);
-      widget.tab.queryController.selection =
-          TextSelection.collapsed(offset: newOffset);
-    }
+    // queryWordSpans מחזיר טווח לכל מילת-מנוע בטקסט הגולמי; מילה
+    // שאינה ניתנת לאיתור מדויק (נורמליזציה משנת-אורך) מקבלת את גבולות
+    // המקטע שלה — הצבת הסמן באמצע הטווח נכונה בשני המקרים.
+    final spans = SearchQueryBuilder.queryWordSpans(
+      widget.tab.queryController.text,
+    );
+    if (newIndex >= spans.length) return;
+    final span = spans[newIndex];
+    widget.tab.queryController.selection = TextSelection.collapsed(
+      offset: span.start + (span.end - span.start) ~/ 2,
+    );
   }
 
   @override
