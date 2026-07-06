@@ -755,7 +755,8 @@ class FileSyncService {
       return const FileSyncResult(errors: ['Sync already in progress']);
     }
 
-    final libraryPath = Settings.getValue<String>('key-library-path');
+    final libraryPath =
+        Settings.getValue<String>(SettingsRepository.keyLibraryPath);
     if (libraryPath == null || libraryPath.isEmpty) {
       _log.warning('Library path not set, skipping sync');
       return const FileSyncResult(errors: ['Library path not set']);
@@ -766,7 +767,8 @@ class FileSyncService {
     final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
 
     final libraryFolderName =
-        Settings.getValue<String>('key-library-folder-name') ?? '';
+        Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
+            '';
     final result = await syncCustomFoldersWithInputs(
       libraryPath: libraryPath,
       customFolders: customFolders,

@@ -55,6 +55,7 @@ class SettingsRepository {
       'key-queue-error-reports-when-offline';
   static const String keyLibraryPath = 'key-library-path';
   static const String keyIndexPath = 'key-index-path';
+  static const String keyDatabasesPath = 'key-databases-path';
   static const String keyBackupPath = 'key-backup-path';
   static const String keyLibraryFolderName = 'key-library-folder-name';
 

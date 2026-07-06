@@ -9,11 +9,14 @@ import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/data/data_providers/cache_database_holder.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
+import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -199,6 +202,7 @@ Future<void> _restoreMoveSettings({
   required String? libraryFolderName,
   required String? dbEffectivePath,
   required String? indexPath,
+  required String? databasesPath,
 }) async {
   await Settings.setValue<String?>(
       SettingsRepository.keyLibraryPath, libraryPath);
@@ -207,14 +211,18 @@ Future<void> _restoreMoveSettings({
   await Settings.setValue<String?>(
       SettingsRepository.keyDbEffectivePath, dbEffectivePath);
   await Settings.setValue<String?>(SettingsRepository.keyIndexPath, indexPath);
+  await Settings.setValue<String?>(
+      SettingsRepository.keyDatabasesPath, databasesPath);
 }
 
 Future<void> _cleanupCreatedMoveTargets({
   String? stagingRoot,
   required String newLibrary,
   required String newIndex,
+  required String newDatabases,
   required bool finalLibraryCreated,
   required bool finalIndexCreated,
+  required bool finalDatabasesCreated,
 }) async {
   if (stagingRoot != null) {
     try {
@@ -237,6 +245,13 @@ Future<void> _cleanupCreatedMoveTargets({
       debugPrint('[performLibraryMove] index cleanup failed: $e');
     }
   }
+  if (finalDatabasesCreated) {
+    try {
+      await _deleteIfExists(newDatabases);
+    } catch (e) {
+      debugPrint('[performLibraryMove] databases cleanup failed: $e');
+    }
+  }
 }
 
 @visibleForTesting
@@ -248,19 +263,30 @@ Future<void> cleanupCreatedMoveTargetsForTesting({
   String? stagingRoot,
   required String newLibrary,
   required String newIndex,
+  required String newDatabases,
   required bool finalLibraryCreated,
   required bool finalIndexCreated,
+  required bool finalDatabasesCreated,
 }) =>
     _cleanupCreatedMoveTargets(
       stagingRoot: stagingRoot,
       newLibrary: newLibrary,
       newIndex: newIndex,
+      newDatabases: newDatabases,
       finalLibraryCreated: finalLibraryCreated,
       finalIndexCreated: finalIndexCreated,
+      finalDatabasesCreated: finalDatabasesCreated,
     );
 
+Future<void> _closeUserDatabasesForMove() async {
+  await UserBooksDatabaseHolder.instance.close();
+  await CacheDatabaseHolder.instance.close();
+  await PersonalNotesDatabase.instance.close();
+  await PluginSystemDatabase.instance.close();
+}
+
 /// מעביר את ספריית אוצריא למיקום חדש. [to] היא התיקייה שהמשתמש בחר, ותחתיה
-/// נוצרות `<to>/books` (הספרייה) ו-`<to>/index` (אינדקס החיפוש), כך שמבנה
+/// נוצרות `<to>/books`, `<to>/index` ו-`<to>/databases`, כך שמבנה
 /// התיקיות נשמר ולא נשפך לתיקיית האב.
 ///
 /// סדר בטוח שמתמודד עם נעילת קבצים: מעתיק קודם ל-staging, מקדם ליעד הסופי
@@ -288,8 +314,12 @@ Future<void> performLibraryMove({
   final include = scan.include;
   final oldIndex = await AppPaths.getIndexPath();
   final newIndex = p.join(to, p.basename(oldIndex));
+  final oldDatabases = await AppPaths.getDatabasesPath();
+  final newDatabases = p.join(to, p.basename(oldDatabases));
   final indexNeedsMove =
       !p.equals(oldIndex, newIndex) && await Directory(oldIndex).exists();
+  final databasesNeedsMove = !p.equals(oldDatabases, newDatabases) &&
+      await Directory(oldDatabases).exists();
   final indexingActive = TantivyDataProvider.instance.isIndexing.value;
   final shouldCopyIndex = shouldCopyIndexDuringLibraryMove(
     indexNeedsMove: indexNeedsMove,
@@ -307,16 +337,23 @@ Future<void> performLibraryMove({
       Settings.getValue<String>(SettingsRepository.keyDbEffectivePath);
   final previousIndexPath =
       Settings.getValue<String>(SettingsRepository.keyIndexPath);
+  final previousDatabasesPath =
+      Settings.getValue<String>(SettingsRepository.keyDatabasesPath);
 
   String? stagingRoot;
   var finalLibraryCreated = false;
   var finalIndexCreated = false;
+  var finalDatabasesCreated = false;
   var settingsUpdated = false;
 
   try {
     await _ensureMoveTargetAvailable(newLibrary);
     if (indexNeedsMove) {
       await _ensureMoveTargetAvailable(newIndex);
+    }
+    if (databasesNeedsMove) {
+      await _ensureMoveTargetAvailable(newDatabases);
+      await _closeUserDatabasesForMove();
     }
 
     final staging = await Directory(
@@ -325,17 +362,25 @@ Future<void> performLibraryMove({
     stagingRoot = staging.path;
     final stagedLibrary = p.join(staging.path, p.basename(newLibrary));
     final stagedIndex = p.join(staging.path, p.basename(newIndex));
+    final stagedDatabases = p.join(staging.path, p.basename(newDatabases));
 
     // 1. מעתיקים ל-staging בלבד. אם ההעתקה נכשלת, היעד הסופי נשאר נקי.
     await copyDirectoryEntries(from, stagedLibrary, includeOnly: include);
     if (shouldCopyIndex) {
       await copyDirectoryEntries(oldIndex, stagedIndex);
     }
+    if (databasesNeedsMove) {
+      await copyDirectoryEntries(oldDatabases, stagedDatabases);
+    }
     await Directory(stagedLibrary).rename(newLibrary);
     finalLibraryCreated = true;
     if (shouldCopyIndex) {
       await Directory(stagedIndex).rename(newIndex);
       finalIndexCreated = true;
+    }
+    if (databasesNeedsMove) {
+      await Directory(stagedDatabases).rename(newDatabases);
+      finalDatabasesCreated = true;
     }
     await _deleteIfExists(staging.path);
     stagingRoot = null;
@@ -353,6 +398,8 @@ Future<void> performLibraryMove({
       await Settings.setValue<String>(
           SettingsRepository.keyIndexPath, newIndex);
     }
+    await Settings.setValue<String>(
+        SettingsRepository.keyDatabasesPath, newDatabases);
     settingsUpdated = true;
     // 4. מיפוי נתיבי הספרים הפתוחים *בזיכרון* (לא רק ב-Hive), אחרת שמירת
     //    הטאבים בעת הרענון תדרוס את המיפוי וה-PDF ייפתח מהנתיב הישן.
@@ -392,14 +439,17 @@ Future<void> performLibraryMove({
         libraryFolderName: previousLibraryFolderName,
         dbEffectivePath: previousDbEffectivePath,
         indexPath: previousIndexPath,
+        databasesPath: previousDatabasesPath,
       );
     }
     await _cleanupCreatedMoveTargets(
       stagingRoot: stagingRoot,
       newLibrary: newLibrary,
       newIndex: newIndex,
+      newDatabases: newDatabases,
       finalLibraryCreated: finalLibraryCreated,
       finalIndexCreated: finalIndexCreated,
+      finalDatabasesCreated: finalDatabasesCreated,
     );
     if (navigator.canPop()) navigator.pop();
     UiSnack.showError('שגיאה בהעברת הספרייה: $e');
@@ -427,6 +477,7 @@ Future<void> performLibraryMove({
       await Future<void>.delayed(const Duration(milliseconds: 800));
       final leftover = await deleteMovedEntries(from, includeOnly: include);
       var indexDeleteFailed = false;
+      var databasesDeleteFailed = false;
       if (indexNeedsMove && await Directory(oldIndex).exists()) {
         try {
           await Directory(oldIndex).delete(recursive: true);
@@ -434,7 +485,14 @@ Future<void> performLibraryMove({
           indexDeleteFailed = true;
         }
       }
-      if (leftover != null || indexDeleteFailed) {
+      if (databasesNeedsMove && await Directory(oldDatabases).exists()) {
+        try {
+          await Directory(oldDatabases).delete(recursive: true);
+        } catch (_) {
+          databasesDeleteFailed = true;
+        }
+      }
+      if (leftover != null || indexDeleteFailed || databasesDeleteFailed) {
         UiSnack.showWarning(
           'הספרייה הועברה, אך חלק מהקבצים הישנים לא נמחקו. ניתן למחוק אותם '
           'ידנית מהמיקום הישן.',
@@ -652,8 +710,6 @@ class _MoveContentsWarning extends StatelessWidget {
   }
 }
 
-// folder_arrow_right_24_regular ו-folder_swap_24_regular אינם בטבלת הנגד של RtlIcon —
-// אין להם גרסת RTL ולא מתהפכים, לכן נעשה שימוש ב-Icon הרגיל.
 class _OptionTile extends StatelessWidget {
   final IconData icon;
   final String title;

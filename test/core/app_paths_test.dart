@@ -47,6 +47,81 @@ void main() {
       expect(await AppPaths.getIndexPath(), legacyIndex.path);
     });
 
+    test('getDatabasesPath מעדיף נתיב שמור מפורש', () async {
+      final dataRoot = await Directory.systemTemp.createTemp('otzaria_data_');
+      final databasesRoot =
+          await Directory.systemTemp.createTemp('otzaria_databases_');
+
+      addTearDown(() async {
+        if (await dataRoot.exists()) {
+          await dataRoot.delete(recursive: true);
+        }
+        if (await databasesRoot.exists()) {
+          await databasesRoot.delete(recursive: true);
+        }
+      });
+
+      AppPaths.debugOverrideDataRootPath(dataRoot.path);
+      await Settings.setValue(
+        SettingsRepository.keyDatabasesPath,
+        databasesRoot.path,
+      );
+
+      expect(await AppPaths.getDatabasesPath(), databasesRoot.path);
+    });
+
+    test('getDatabasesPath מעדיף legacy databases תחת data root אם הוא קיים',
+        () async {
+      final dataRoot = await Directory.systemTemp.createTemp('otzaria_data_');
+      final libraryRoot =
+          await Directory.systemTemp.createTemp('otzaria_library_');
+      final legacyDatabases = Directory(p.join(dataRoot.path, 'databases'));
+      await legacyDatabases.create(recursive: true);
+
+      addTearDown(() async {
+        if (await dataRoot.exists()) {
+          await dataRoot.delete(recursive: true);
+        }
+        if (await libraryRoot.exists()) {
+          await libraryRoot.delete(recursive: true);
+        }
+      });
+
+      AppPaths.debugOverrideDataRootPath(dataRoot.path);
+      await Settings.setValue(
+        SettingsRepository.keyLibraryPath,
+        p.join(libraryRoot.path, 'books'),
+      );
+
+      expect(await AppPaths.getDatabasesPath(), legacyDatabases.path);
+    });
+
+    test('getDatabasesPath ממקם התקנה חדשה ליד תיקיית הספרייה', () async {
+      final dataRoot = await Directory.systemTemp.createTemp('otzaria_data_');
+      final libraryRoot =
+          await Directory.systemTemp.createTemp('otzaria_library_');
+
+      addTearDown(() async {
+        if (await dataRoot.exists()) {
+          await dataRoot.delete(recursive: true);
+        }
+        if (await libraryRoot.exists()) {
+          await libraryRoot.delete(recursive: true);
+        }
+      });
+
+      AppPaths.debugOverrideDataRootPath(dataRoot.path);
+      await Settings.setValue(
+        SettingsRepository.keyLibraryPath,
+        p.join(libraryRoot.path, 'books'),
+      );
+
+      expect(
+        await AppPaths.getDatabasesPath(),
+        p.join(libraryRoot.path, 'databases'),
+      );
+    });
+
     test('AppPaths bundled library — Linux mzhה bundle אם יש marker', () async {
       if (!Platform.isLinux) {
         return;
