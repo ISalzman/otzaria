@@ -25,22 +25,14 @@ class PrintingAppBar extends StatelessWidget {
       height: kToolbarHeight,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Center(
-              child: Text(
-                title,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            if (leading != null)
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: leading,
-              ),
-          ],
+        child: NavigationToolbar(
+          leading: leading,
+          middle: Text(
+            title,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          centerMiddle: true,
         ),
       ),
     );
@@ -233,7 +225,9 @@ class PrintingSwitchRow extends StatelessWidget {
                 ),
               ),
             ),
-            CustomSwitch(value: value, onChanged: onChanged),
+            ExcludeFocus(
+              child: CustomSwitch(value: value, onChanged: onChanged),
+            ),
           ],
         ),
       ),
