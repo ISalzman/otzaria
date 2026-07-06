@@ -12,13 +12,10 @@ final _sourceNormalizationRegex = RegExp(r'[-_\s]');
 // מיפוי שמות המקורות לטקסט בעברית וקישורים (ללא כפילויות)
 const _sourceMappings = {
   'sefaria': (text: 'ספריא', url: 'https://www.sefaria.org/texts'),
-  'benyehuda': (text: 'פרוייקט בן-יהודה', url: 'https://benyehuda.org/'),
+  'benyehuda': (text: 'פרוייקט בן י.', url: 'https://benyehuda.org/'),
   'dicta': (text: 'ספריית דיקטה', url: 'https://library.dicta.org.il/'),
   'onyourway': (text: 'ובלכתך בדרך', url: 'https://mobile.tora.ws/'),
-  'orayta': (
-    text: 'אורייתא',
-    url: 'https://github.com/MosheWagner/Orayta-Books'
-  ),
+  'orayta': (text: 'אורייתא', url: 'https://github.com/MosheWagner/Orayta-Books'),
   'tashma': (text: 'תא שמע', url: 'https://tashma.co.il/'),
   'pninim': (text: 'פנינים', url: 'https://pninim.org/'),
   'wikisource': (text: 'ויקיטקסט', url: 'https://he.wikisource.org/wiki'),
@@ -26,12 +23,9 @@ const _sourceMappings = {
     text: 'אוצר הספרים היהודי השיתופי',
     url: 'https://wiki.jewishbooks.org.il/'
   ),
+  'nationallibrary': (text: 'יד הרמב"ם', url: 'https://fjms.genizah.org/'),
+  'toratemet': (text: 'תורת אמת', url: 'https://www.toratemetfreeware.com/index.html'),
   'morebooks': (text: 'ספרים פרטיים או מקורות נוספים', url: ''),
-  'tootzaria': (text: 'מקורות שהועברו לאוצריא', url: ''),
-  'toratemet': (
-    text: 'תורת אמת',
-    url: 'http://www.toratemetfreeware.com/index.html?downloads;1;'
-  ),
   'unknown': (text: 'מקור לא ידוע', url: ''),
 };
 
