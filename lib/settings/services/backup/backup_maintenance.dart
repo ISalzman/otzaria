@@ -218,8 +218,20 @@ class BackupMaintenance {
         }
       }
 
-      if (await archiveFile.exists()) await archiveFile.delete();
-      await tmp.rename(archiveFile.path);
+      // גיבוי הארכיון הישן ל-.bak לפני ההחלפה; אם ה-rename ייכשל נשחזר ממנו.
+      File? oldBackup;
+      if (await archiveFile.exists()) {
+        oldBackup = File('${archiveFile.path}.bak');
+        if (await oldBackup.exists()) await oldBackup.delete();
+        await archiveFile.rename(oldBackup.path);
+      }
+      try {
+        await tmp.rename(archiveFile.path);
+      } catch (_) {
+        if (oldBackup != null) await oldBackup.rename(archiveFile.path);
+        rethrow;
+      }
+      if (oldBackup != null) await oldBackup.delete();
       return true;
     } catch (e) {
       _logger.severe('Failed to write archive: $e');
