@@ -428,11 +428,8 @@ class _HighlightRange {
   const _HighlightRange(this.start, this.end);
 }
 
-/// ניקוד/טעמים *הצמודים לאות* — U+0591–U+05C7 ללא מפרידי המילים שבטווח:
-/// מקף (U+05BE), פסק (U+05C0), סוף-פסוק (U+05C3) ונו"ן הפוכה (U+05C6) —
-/// אותו סט בדיוק כמו `is_attached_mark` במנוע. אילו נכללו, הליכת הגבול
-/// הייתה בולעת מפריד בין מילים ופוסלת את ההדגשה (למשל "אשר־שמע", או "ברא"
-/// בתוך "ברא׃והארץ" — הגבול היה מדלג מעל ׃ ורואה את ו).
+/// ניקוד/טעמים הצמודים לאות; מפרידי מילים שבטווח נשארים מחוץ לסט כדי
+/// שבדיקת גבולות לא תדלג מעל מקף, פסק, סוף-פסוק או נו"ן הפוכה.
 bool _isHebrewMark(String char) {
   if (char.isEmpty) return false;
   final code = char.codeUnitAt(0);
@@ -445,11 +442,13 @@ bool _isHebrewMark(String char) {
       code == 0x05C7;
 }
 
-/// אות עברית (א-ת), אות לטינית או ספרה — תו שנחשב חלק ממילת חיפוש.
+/// תו שנחשב חלק ממילת חיפוש, כולל ליגטורות יידיש וצורות תצוגה עבריות.
 bool _isSearchTokenChar(String char) {
   if (char.isEmpty) return false;
   final code = char.codeUnitAt(0);
   return (code >= 0x05D0 && code <= 0x05EA) ||
+      (code >= 0x05F0 && code <= 0x05F2) ||
+      (code >= 0xFB1D && code <= 0xFB4F) ||
       (code >= 0x41 && code <= 0x5A) ||
       (code >= 0x61 && code <= 0x7A) ||
       (code >= 0x30 && code <= 0x39);
