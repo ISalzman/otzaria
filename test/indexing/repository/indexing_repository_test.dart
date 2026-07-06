@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
-import 'package:otzaria/indexing/services/indexing_isolate_service.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
@@ -464,12 +463,7 @@ void main() {
         indexedFilePaths: indexedFilePaths,
         requiresManualReindexValue: false,
       );
-      final isolateService = FakeIndexingIsolateService();
-
-      final repository = IndexingRepository(
-        provider,
-        isolateService: isolateService,
-      );
+      final repository = IndexingRepository(provider);
 
       var actualIndexingStarted = false;
       var progressCalls = 0;
@@ -487,7 +481,6 @@ void main() {
       expect(result, isTrue);
       expect(actualIndexingStarted, isFalse);
       expect(progressCalls, 0);
-      expect(isolateService.wasUsed, isFalse);
     });
 
     test('לא מדלג ב-fast path כשנדרש manual reindex', () async {
@@ -501,12 +494,7 @@ void main() {
         indexedFilePaths: indexedFilePaths,
         requiresManualReindexValue: true,
       );
-      final isolateService = FakeIndexingIsolateService();
-
-      final repository = IndexingRepository(
-        provider,
-        isolateService: isolateService,
-      );
+      final repository = IndexingRepository(provider);
 
       var actualIndexingStarted = false;
       var progressCalls = 0;
@@ -524,7 +512,6 @@ void main() {
       expect(result, isFalse);
       expect(actualIndexingStarted, isFalse);
       expect(progressCalls, 0);
-      expect(isolateService.wasUsed, isFalse);
     });
   });
 
@@ -792,41 +779,6 @@ class _RecordingSearchEngine implements SearchEngine {
 
   @override
   Future<Map<String, BigInt>> getBookFingerprints() async => fingerprints;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) {
-    throw UnimplementedError('Unexpected call: $invocation');
-  }
-}
-
-class FakeIndexingIsolateService implements IndexingIsolateService {
-  bool wasUsed = false;
-
-  @override
-  Future<void> cancelActiveWork() async {
-    wasUsed = true;
-  }
-
-  @override
-  Future<void> dispose() async {
-    wasUsed = true;
-  }
-
-  @override
-  Future<Stream<IndexingIsolateUpdate>> processPdfPages({
-    required List<({String reference, String text, int pageIndex})> pages,
-  }) async {
-    wasUsed = true;
-    return const Stream.empty();
-  }
-
-  @override
-  Future<Stream<IndexingIsolateUpdate>> processTextBook({
-    required String text,
-  }) async {
-    wasUsed = true;
-    return const Stream.empty();
-  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) {
