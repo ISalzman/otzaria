@@ -30,6 +30,9 @@ class SearchingTab extends OpenedTab {
   // מילים חילופיות לכל מילה (אינדקס_מילה -> רשימת מילים חילופיות)
   final Map<int, List<String>> alternativeWords = {};
 
+  // הרחבת החיפוש בחלופות השמורות הגלובליות — כבוי בכל חיפוש חדש (לא נשמר)
+  bool useSavedAlternatives = false;
+
   // מרווחים בין מילים (מפתח_מרווח -> ערך_מרווח)
   final Map<String, String> spacingValues = {};
 

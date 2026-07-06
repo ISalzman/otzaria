@@ -17,7 +17,7 @@ import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/view/full_text_settings_widgets.dart';
 import 'package:otzaria/search/view/tantivy_search_results.dart';
 import 'package:otzaria/search/view/full_text_facet_filtering.dart';
-import 'package:otzaria/search/view/search_edit_panel.dart';
+import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/widgets/layout/resizable_facet_filtering.dart';
 import 'package:otzaria/widgets/feedback/indexing_warning.dart';
 import 'package:otzaria/widgets/misc/thin_divider.dart';
@@ -60,12 +60,18 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   // חיווי הגבלת ה-scope ניתן להסתרה ידנית. ההסתרה היא ויזואלית בלבד (אינה
   // משנה את החיפוש) ומתאפסת בחיפוש חדש או בשינוי הטווח — ראה ה-listener ב-build.
   bool _facetBannerDismissed = false;
-  bool _showEditPanel = false;
   // במסך צר עץ הקטגוריות תופס את כל הרוחב ומסתיר את התוצאות. לכן בכניסה
   // הראשונה לכל טאב במסך צר סוגרים את העץ אוטומטית; המשתמש עדיין יכול
   // לפתוח אותו ידנית, וזה לא משפיע על מסכים רחבים שבהם השניים מוצגים זה
   // לצד זה.
   bool _appliedNarrowLeftPaneDefault = false;
+
+  void _openEditDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => SearchDialog(editTab: widget.tab),
+    );
+  }
 
   Widget _buildIndexingWarning() {
     return IndexingWarningContainer(
@@ -219,11 +225,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
             const SizedBox(height: 16),
             ActionButton.neutral(
               text: 'ערוך חיפוש',
-              onPressed: () {
-                setState(() {
-                  _showEditPanel = true;
-                });
-              },
+              onPressed: _openEditDialog,
               icon: FluentIcons.edit_24_regular,
             ),
           ],
@@ -368,22 +370,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               // חיווי סינון קטגוריות
               if (_shouldShowFacetFilterBanner(state))
                 _buildFacetFilterBanner(context, state),
-              // פאנל עריכה - מופיע מתחת לשורה התחתונה.
-              // עטוף ב-Flexible+SingleChildScrollView כדי לאפשר גלילה
-              // כאשר התוכן גבוה מהמקום הזמין (במיוחד במסכים צרים).
-              if (_showEditPanel)
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: SearchEditPanel(
-                      tab: widget.tab,
-                      onClose: () {
-                        setState(() {
-                          _showEditPanel = false;
-                        });
-                      },
-                    ),
-                  ),
-                ),
               Expanded(
                 child: Stack(
                   children: [
@@ -414,11 +400,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                         decoration: const BoxDecoration(),
                         child: TantivySearchResults(
                           tab: widget.tab,
-                          onEditSearch: () {
-                            setState(() {
-                              _showEditPanel = true;
-                            });
-                          },
+                          onEditSearch: _openEditDialog,
                         ),
                       ),
                     ValueListenableBuilder(
@@ -509,22 +491,13 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                               ),
                               const SizedBox(width: 8),
                               ToolbarActionButton(
-                                tooltip: _showEditPanel
-                                    ? 'סגור עריכה'
-                                    : 'ערוך חיפוש',
-                                icon: _showEditPanel
-                                    ? FluentIcons.chevron_up_24_regular
-                                    : FluentIcons.edit_24_regular,
-                                selected: _showEditPanel,
+                                tooltip: 'ערוך חיפוש',
+                                icon: FluentIcons.edit_24_regular,
                                 compact: context
                                     .read<SettingsBloc>()
                                     .state
                                     .compactMenuMode,
-                                onPressed: () {
-                                  setState(() {
-                                    _showEditPanel = !_showEditPanel;
-                                  });
-                                },
+                                onPressed: _openEditDialog,
                               ),
                             ],
                           ),
@@ -558,22 +531,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // פאנל עריכה - מופיע מתחת לשורה העליונה.
-                        // עטוף ב-Flexible+SingleChildScrollView כדי לאפשר
-                        // גלילה אם התוכן גבוה מהמקום הזמין.
-                        if (_showEditPanel)
-                          Flexible(
-                            child: SingleChildScrollView(
-                              child: SearchEditPanel(
-                                tab: widget.tab,
-                                onClose: () {
-                                  setState(() {
-                                    _showEditPanel = false;
-                                  });
-                                },
-                              ),
-                            ),
-                          ),
                         Expanded(
                           child: Row(
                             children: [
@@ -630,11 +587,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                       decoration: const BoxDecoration(),
                                       child: TantivySearchResults(
                                         tab: widget.tab,
-                                        onEditSearch: () {
-                                          setState(() {
-                                            _showEditPanel = true;
-                                          });
-                                        },
+                                        onEditSearch: _openEditDialog,
                                       ),
                                     );
                                   },
@@ -791,18 +744,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                       ),
                     ),
                   IconButton(
-                    icon: Icon(
-                      _showEditPanel
-                          ? FluentIcons.chevron_up_24_regular
-                          : FluentIcons.edit_24_regular,
-                      size: 20,
-                    ),
-                    tooltip: _showEditPanel ? 'סגור עריכה' : 'ערוך חיפוש',
-                    onPressed: () {
-                      setState(() {
-                        _showEditPanel = !_showEditPanel;
-                      });
-                    },
+                    icon: const Icon(FluentIcons.edit_24_regular, size: 20),
+                    tooltip: 'ערוך חיפוש',
+                    onPressed: _openEditDialog,
                   ),
                 ],
               ),

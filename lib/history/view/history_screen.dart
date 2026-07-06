@@ -233,9 +233,23 @@ class _HistoryViewState extends State<HistoryView> {
                 onItemTap: (ctx, item, originalIndex) {
                   if (item.isSearch) {
                     final tabsBloc = ctx.read<TabsBloc>();
-                    // Always create a new search tab instead of reusing existing one
-                    final searchTab = SearchingTab('חיפוש', null);
-                    tabsBloc.add(AddTab(searchTab));
+                    final searchMode = item.searchMode ?? SearchMode.advanced;
+                    final scopeFacets = (item.searchScopeFacets != null &&
+                            item.searchScopeFacets!.isNotEmpty)
+                        ? List<String>.from(item.searchScopeFacets!)
+                        : const ['/'];
+                    // ה-configuration מוזרקת בבנייה ולא דרך events אחרי AddTab,
+                    // אחרת snapshot השמירה מצלם advanced והמצב אובד בהפעלה הבאה.
+                    final searchTab = SearchingTab(
+                      'חיפוש',
+                      null,
+                      initialConfiguration: SearchConfiguration(
+                        searchMode: searchMode,
+                        distance: searchMode == SearchMode.fuzzy ? 2 : 0,
+                        currentFacets: scopeFacets,
+                        searchScopeFacets: scopeFacets,
+                      ),
+                    );
 
                     // Restore search query and options
                     // ההיסטוריה שומרת אפשרויות מורחבות פר-מילה,
@@ -252,18 +266,11 @@ class _HistoryViewState extends State<HistoryView> {
                     // פריט שנשמר תחת חוקי-פיצול ישנים של המנוע ימופה
                     // למילים הלא-נכונות — עדיף לנקות מאשר לזלוג.
                     searchTab.dropStalePerWordStateIfNeeded();
-                    searchTab.searchBloc.add(
-                      SetSearchMode(item.searchMode ?? SearchMode.advanced),
-                    );
-
-                    if (item.searchScopeFacets != null &&
-                        item.searchScopeFacets!.isNotEmpty) {
-                      searchTab.searchBloc
-                          .add(SetFacetsWithoutSearch(item.searchScopeFacets!));
-                    }
 
                     searchTab.updateTitleFromAppliedQuery(
                         searchTab.queryController.text);
+                    // AddTab רק אחרי שכל מצב הטאב מולא — saveTabs מצלם אותו כאן
+                    tabsBloc.add(AddTab(searchTab));
                     searchTab.searchBloc.add(UpdateSearchQuery(
                       searchTab.queryController.text,
                       customSpacing: searchTab.spacingValues,
