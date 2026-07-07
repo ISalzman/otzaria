@@ -555,6 +555,104 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
   }
 }
 
+/// Top-level worker לסיכום קישורי ספר לפי (ספר-יעד, סוג חיבור) — שאילתת
+/// GROUP BY זולה במקום למשוך עשרות אלפי שורות קישורים לדארט.
+({List<Map<String, dynamic>> rows, int? maxSourceLineIndex})
+    _loadBookLinkTargetsSummaryRowsInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+
+    final bookResults = db.select(
+      'SELECT id FROM book WHERE title = ? AND categoryId = ? LIMIT 1',
+      [title, categoryId],
+    ).toMapList();
+    if (bookResults.isEmpty) {
+      return (rows: const [], maxSourceLineIndex: null);
+    }
+
+    final bookId = bookResults.first['id'] as int;
+    final hasLinkRanges = _hasLinkRangeTables(db);
+
+    // קישור-טווח נספר פעם לכל שורה מכוסה — כמו בטעינת הקישורים המלאה, כדי
+    // שסיווג "מפרש נדיר" לפי הספירה יישאר שקול.
+    final coverageArm = hasLinkRanges
+        ? '''
+          UNION ALL
+          SELECT lc.linkId FROM link_coverage lc
+          JOIN link cl ON cl.id = lc.linkId
+          WHERE lc.side = 0 AND cl.sourceBookId = ?'''
+        : '';
+    final forwardRows = db.select('''
+        WITH anchors(linkId) AS (
+          SELECT id FROM link WHERE sourceBookId = ?
+          $coverageArm
+        )
+        SELECT tb.title as targetBookTitle,
+               ct.name as connectionTypeName,
+               COUNT(*) as linkCount
+        FROM anchors a
+        JOIN link l ON l.id = a.linkId
+        JOIN book tb ON l.targetBookId = tb.id
+        LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
+        GROUP BY tb.title, ct.name
+      ''', [bookId, if (hasLinkRanges) bookId]).toMapList();
+
+    // הזרוע ההפוכה — מפרשים ששמורים כקישור מהם אל הספר הזה (מוצגים כ-SOURCE),
+    // כמו ב-_loadInverseSourceRows.
+    final depTypes = LinkTypes.dependentTextTypes.toList();
+    final typePlaceholders = List.filled(depTypes.length, '?').join(', ');
+    final inverseRows = db.select('''
+        SELECT sb.title as targetBookTitle,
+               'SOURCE' as connectionTypeName,
+               COUNT(*) as linkCount
+        FROM link l
+        JOIN book sb ON l.sourceBookId = sb.id
+        JOIN connection_type ct ON l.connectionTypeId = ct.id
+        WHERE l.targetBookId = ?
+          AND ct.name IN ($typePlaceholders)
+          AND l.sourceBookId != l.targetBookId
+        GROUP BY sb.title
+      ''', [bookId, ...depTypes]).toMapList();
+
+    final maxRows = db.select(
+      'SELECT MAX(sl.lineIndex) as maxIdx FROM link l '
+      'JOIN line sl ON sl.id = l.sourceLineId WHERE l.sourceBookId = ?',
+      [bookId],
+    ).toMapList();
+    final maxSourceLineIndex =
+        maxRows.isEmpty ? null : maxRows.first['maxIdx'] as int?;
+
+    return (
+      rows: [...forwardRows, ...inverseRows],
+      maxSourceLineIndex: maxSourceLineIndex,
+    );
+  } finally {
+    db?.close();
+  }
+}
+
+/// Top-level wrapper עבור סיכום קישורי ספר ב-isolate.
+/// ראה ההסבר ב-[_runAlternativeStructuresInIsolate].
+Future<({List<Map<String, dynamic>> rows, int? maxSourceLineIndex})>
+    _runBookLinkTargetsSummaryInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+}) {
+  return Isolate.run(
+    () => _loadBookLinkTargetsSummaryRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+    ),
+  );
+}
+
 List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
   required String dbPath,
   required String title,
@@ -1066,6 +1164,20 @@ class DatabaseLibraryProvider implements LibraryProvider {
       startLineIndex: startLineIndex,
       endLineIndex: endLineIndex,
       targetBookTitles: targetBookTitles,
+    );
+  }
+
+  @visibleForTesting
+  static ({List<Map<String, dynamic>> rows, int? maxSourceLineIndex})
+      loadBookLinkTargetsSummaryRowsForTesting({
+    required String dbPath,
+    required String title,
+    required int categoryId,
+  }) {
+    return _loadBookLinkTargetsSummaryRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
     );
   }
 
@@ -2888,6 +3000,43 @@ class DatabaseLibraryProvider implements LibraryProvider {
     } catch (e) {
       debugPrint('⚠️ Error in getLinksForBookRange "$title": $e');
       return [];
+    }
+  }
+
+  /// סיכום קישורי הספר לפי (ספר-יעד, סוג חיבור), בתוספת השורה הגבוהה ביותר
+  /// שיש עליה קישור (1-based, כמו [Link.index1]; 0 אם אין קישורים).
+  /// מיועד לבניית רשימת המפרשים של ספר בלי לטעון את כל הקישורים לזיכרון.
+  /// מחזיר null אם המסד לא זמין או שהשאילתה נכשלה.
+  Future<({List<LinkTargetSummary> targets, int maxSourceLine})?>
+      getBookLinkTargetsSummary(String title, int categoryId) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return null;
+    }
+
+    // ראה הערה ב-_runAlternativeStructuresInIsolate.
+    final dbPath = _sqliteProvider.dbPath;
+
+    try {
+      final result = await _runBookLinkTargetsSummaryInIsolate(
+        dbPath: dbPath,
+        title: title,
+        categoryId: categoryId,
+      );
+      return (
+        targets: [
+          for (final row in result.rows)
+            LinkTargetSummary(
+              targetTitle: row['targetBookTitle'] as String,
+              connectionType:
+                  row['connectionTypeName'] as String? ?? 'reference',
+              linkCount: (row['linkCount'] as int?) ?? 0,
+            ),
+        ],
+        maxSourceLine: (result.maxSourceLineIndex ?? -1) + 1,
+      );
+    } catch (e) {
+      debugPrint('⚠️ Error in getBookLinkTargetsSummary "$title": $e');
+      return null;
     }
   }
 

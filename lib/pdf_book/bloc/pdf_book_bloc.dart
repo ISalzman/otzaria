@@ -4,9 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
@@ -214,10 +212,11 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
 
   Future<void> _loadHeadingsAndLinks(PdfBook book) async {
     try {
-      debugPrint('=== Loading PDF Headings and Links ===');
+      debugPrint('=== Loading PDF Headings ===');
       debugPrint('Book title: ${book.title}');
 
-      // Load headings from DB
+      // הקישורים עצמם נטענים ב-PdfBookScreen (חלון סביב המיקום הנוכחי) —
+      // הטעינה המלאה שהייתה כאן רצה במקביל אליה ושכפלה את כל קישורי הספר.
       final headings = await PdfHeadings.loadFromDatabase(
         book.title,
         categoryId: book.categoryId,
@@ -228,22 +227,11 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
         debugPrint('✅ Loaded ${headings.headingsMap.length} headings');
       }
 
-      // Load links
-      final library = await DataRepository.instance.library;
-      final textBook = library.getCompanionBook(book, TextBook) as TextBook?;
-      List<Link> links = [];
-
-      if (textBook != null) {
-        links = await textBook.links
-          ..sort((a, b) => a.index1.compareTo(b.index1));
-        debugPrint('✅ Loaded ${links.length} links');
-      }
-
       if (!isClosed) {
-        add(LoadHeadingsAndLinks(headings: headings, links: links));
+        add(LoadHeadingsAndLinks(headings: headings));
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ Error loading PDF headings and links: $e');
+      debugPrint('❌ Error loading PDF headings: $e');
       debugPrint('Stack trace: $stackTrace');
     }
   }
@@ -392,15 +380,17 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     Emitter<PdfBookState> emit,
   ) {
     final current = state;
+    // אירוע ללא קישורים (טעינת headings בלבד) לא דורס את חלון הקישורים
+    // ש-PdfBookScreen כבר מילא ב-tab.links.
     if (current is! PdfBookLoaded) {
       // Store for later if not loaded yet
       tab.pdfHeadings = event.headings;
-      tab.links = event.links;
+      if (event.links.isNotEmpty) tab.links = event.links;
       return;
     }
 
     tab.pdfHeadings = event.headings;
-    tab.links = event.links;
+    if (event.links.isNotEmpty) tab.links = event.links;
 
     emit(current.copyWith(
       pdfHeadings: event.headings,
