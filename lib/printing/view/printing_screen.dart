@@ -228,6 +228,8 @@ class _PrintingScreenState extends State<PrintingScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.data != widget.data) {
       _dataFuture = widget.data;
+      _cachedBasePdf = null;
+      _cachedBaseKey = null;
       _initPreviewRange();
     }
   }
@@ -535,12 +537,15 @@ class _PrintingScreenState extends State<PrintingScreen> {
       // וההייצוא כוללים את כל הטווח דרך _createOutputPdf).
       final limitIdx = min(lastIdx, firstIdx + _maxPreviewPages - 1);
 
+      // רזולוציית התצוגה המקדימה בלבד — הפלט המודפס הוא ה-PDF הווקטורי,
+      // כך שאין השפעה על איכות ההדפסה. 2x הכפיל את זיכרון ה-preview לחינם.
+      const previewScale = 1.5;
       for (var i = firstIdx; i <= limitIdx; i++) {
         if (generation != _renderGeneration || !mounted) break;
         final page = doc.pages[i];
         final pdfImage = await page.render(
-          fullWidth: page.width * 2,
-          fullHeight: page.height * 2,
+          fullWidth: page.width * previewScale,
+          fullHeight: page.height * previewScale,
           backgroundColor: AppColors.pageWhite.toARGB32(),
         );
         if (pdfImage == null) continue;
@@ -602,16 +607,54 @@ class _PrintingScreenState extends State<PrintingScreen> {
         : format;
   }
 
+  // מטמון ה-base PDF: שינוי שמשפיע רק על שלב הרסטור (מספר עמודים בגיליון,
+  // טווח עמודים ב-PDF חיצוני) לא בונה מחדש את המסמך — רק מרסטר אותו שוב.
+  Uint8List? _cachedBasePdf;
+  String? _cachedBaseKey;
+
+  /// חתימת כל הפרמטרים שמשפיעים על תוכן ה-base PDF. שדות שמשפיעים רק על
+  /// הרסטור (‎_pagesPerSheet, טווח עמודים ב-PDF חיצוני) בכוונה אינם נכללים.
+  String _baseCacheKey(PdfPageFormat format) {
+    if (widget.createPdfOverride != null) {
+      return 'override|${orientation.name}|${format.width}x${format.height}';
+    }
+    final holyNames = Settings.getValue<bool>('key-replace-holy-names') ?? true;
+    return [
+      orientation.name,
+      format.width,
+      format.height,
+      pageMargin,
+      fontSize,
+      fontName,
+      _removeNikud,
+      _removeTaamim,
+      holyNames,
+      startLine,
+      endLine,
+      _includeCommentaries,
+      _includePersonalNotes,
+    ].join('|');
+  }
+
   Future<Uint8List> _createBasePdf(PdfPageFormat format) async {
+    final key = _baseCacheKey(format);
+    final cached = _cachedBasePdf;
+    if (cached != null && _cachedBaseKey == key) {
+      return cached;
+    }
     final override = widget.createPdfOverride;
+    final Uint8List bytes;
     if (override != null) {
       final effectiveFormat = orientation == pw.PageOrientation.landscape
           ? format.landscape
           : format;
-      return override(effectiveFormat);
+      bytes = await override(effectiveFormat);
+    } else {
+      bytes = await createPdf(format);
     }
-    final r = await createPdf(format);
-    return r;
+    _cachedBasePdf = bytes;
+    _cachedBaseKey = key;
+    return bytes;
   }
 
   Future<Uint8List> _createNUpPdfFromRaster(
@@ -776,40 +819,18 @@ class _PrintingScreenState extends State<PrintingScreen> {
       format = format.landscape;
     }
 
-    // הסרת ניקוד וטעמים לפי הגדרות המשתמש
-    // טעמים: U+0591-U+05AF
-    // ניקוד: U+05B0-U+05C7
-    if (_removeNikud && _removeTaamim) {
-      // הסרת ניקוד וטעמים (U+0591-U+05C7)
-      dataString = removeVolwels(dataString);
-    } else if (_removeNikud && !_removeTaamim) {
-      // הסרת ניקוד בלבד, שמירת טעמים (U+05B0-U+05C7)
-      dataString = dataString
-          .replaceAll('־', ' ')
-          .replaceAll('׀', ' ')
-          .replaceAll('|', ' ')
-          .replaceAll(RegExp(r'[\u05B0-\u05C7]'), '');
-    } else if (!_removeNikud && _removeTaamim) {
-      // הסרת טעמים בלבד, שמירת ניקוד
-      dataString = removeTeamim(dataString);
-    }
-    // אם שניהם false - לא מסירים כלום
-
     final shouldReplaceHolyNames =
         Settings.getValue<bool>('key-replace-holy-names') ?? true;
-    if (shouldReplaceHolyNames) {
-      dataString = replaceHolyNames(dataString);
-    }
 
-    List<String> data = stripHtmlIfNeeded(dataString).split('\n').toList();
+    // חלוקה גולמית לשורות בלבד. הטרנספורמציות היקרות (הסרת ניקוד/טעמים/HTML
+    // והחלפת שמות קודש) מוחלות פר-שורה על הטווח הנבחר ב-_buildPrintBlocks —
+    // לא על כל הספר. חוסך עבודה כשמדפיסים קטע קצר מתוך ספר ארוך.
+    final allLines = dataString.split('\n');
     final pageMargin = this.pageMargin;
     final fontSize = this.fontSize;
 
-    String bookName = data[0];
-    if (shouldReplaceHolyNames) {
-      bookName = replaceHolyNames(bookName);
-    }
-    final allLines = data;
+    String bookName = allLines.isNotEmpty ? stripHtmlIfNeeded(allLines[0]) : '';
+    bookName = _applyTextTransforms(bookName, shouldReplaceHolyNames);
     final selectedStart = startLine.clamp(0, allLines.length);
     final selectedEnd = endLine.clamp(selectedStart, allLines.length);
 
@@ -1206,10 +1227,12 @@ class _PrintingScreenState extends State<PrintingScreen> {
         : <Link>[];
 
     for (var i = selectedStart; i < selectedEnd; i++) {
-      var lineText = allLines[i];
-      if (shouldReplaceHolyNames) {
-        lineText = replaceHolyNames(lineText);
-      }
+      // הסרת HTML + ניקוד/טעמים + שמות קודש מוחלת כאן, על שורות הטווח הנבחר
+      // בלבד (הועברה לכאן מהטרנספורמציה על כל הספר ב-createPdf).
+      final lineText = _applyTextTransforms(
+        stripHtmlIfNeeded(allLines[i]),
+        shouldReplaceHolyNames,
+      );
       blocks.add({'kind': 'text', 'text': lineText});
 
       final lineNumber1Based = i + 1;
@@ -1546,7 +1569,10 @@ class _PrintingScreenState extends State<PrintingScreen> {
     required bool shouldReplaceHolyNames,
     bool keepHtml = false,
   }) async {
-    final key = '${link.path2}::${link.index2}::${link.heRef}::$keepHtml';
+    // המפתח כולל את דגלי הניקוד/טעמים/שמות-קודש: אחרת החלפת "הדפסה עם ניקוד"
+    // הייתה מחזירה תוכן מפרש מוטרנספרם קודם (באג: הניקוד לא התעדכן).
+    final key = '$_removeNikud|$_removeTaamim|$shouldReplaceHolyNames'
+        '::${link.path2}::${link.index2}::${link.heRef}::$keepHtml';
     final cached = _commentaryContentCache[key];
     if (cached != null) return cached;
 

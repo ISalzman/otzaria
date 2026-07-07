@@ -14,8 +14,13 @@ import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/pdf_book/utils/pdf_links_window.dart';
+import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/utils/ui/commentary_pane_policy.dart';
 import 'package:otzaria/utils/file/file_book_path_resolver.dart';
@@ -1927,6 +1932,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             .toDouble()
         : spreadRect.center.dy;
 
+    // כשאין תיקון ממשי חובה להחזיר את המטריצה המקורית: calcMatrixFor מייצר
+    // מטריצה שונה-במקצת (עיגול צף) בכל פריים, וההבדל הזעיר מניע לולאת
+    // repaint אינסופית (~48fps) בזמן מנוחה בתצוגת ספר.
+    if ((targetCenterX - candidateVisibleRect.center.dx).abs() < 0.1 &&
+        (targetCenterY - candidateVisibleRect.center.dy).abs() < 0.1) {
+      return matrix;
+    }
+
     return controller.calcMatrixFor(
       Offset(targetCenterX, targetCenterY),
       zoom: newZoom,
@@ -2633,13 +2646,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _recordCommentaryOpenedIfNeeded();
   }
 
-  Future<void> _loadCommentatorGroups() async {
-    final commentatorsSet = <String>{};
-    for (final link in widget.tab.links) {
-      if (LinkTypes.isDependentTextLink(link.connectionType)) {
-        commentatorsSet.add(utils.getTitleFromPath(link.path2));
-      }
-    }
+  Future<void> _loadCommentatorGroups(Set<String> commentatorsSet) async {
     // ודא שבחירה שמורה הוחלה לפני קביעת ברירת מחדל והפתיחה האוטומטית.
     await _loadActiveCommentators();
     await _applyDefaultCommentatorsIfNeeded(commentatorsSet.toList());
@@ -2710,6 +2717,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (!mounted || !_isPageStillCurrent(targetPage)) return;
     widget.tab.currentTextLineNumber = resolved.start;
     widget.tab.currentTextLineNumberEnd = resolved.end;
+    unawaited(_refreshLinksWindow());
     if (mounted) setState(() {});
   }
 
@@ -2844,26 +2852,62 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         widget.tab.pdfHeadings = headings;
       }
 
-      // טעינת links
+      // טעינת links: לספרי מסד נטענים רק סיכום מפרשים קל + חלון קישורים
+      // סביב המיקום הנוכחי (ראה PdfLinksWindowPolicy); לספרים אחרים נשמרת
+      // הטעינה המלאה.
       final library = await DataRepository.instance.library;
 
       final textBook =
           library.getCompanionBook(widget.tab.book, TextBook) as TextBook?;
 
       if (textBook != null) {
-        final loadedLinks = await textBook.links
-          ..sort((a, b) => a.index1.compareTo(b.index1));
-        widget.tab.links = loadedLinks;
-        // טעינת דורות מראש כדי שמיון הקישורים לפי דורות יעבוד סינכרונית
-        // (תפריט הקשר + פאנל קישורים)
-        CommentaryService.preloadEras(loadedLinks
-            .where((l) => !LinkTypes.isDependentTextLink(l.connectionType))
-            .map((l) => utils.getTitleFromPath(l.path2)));
-        final commentaryCount = loadedLinks
-            .where((l) => LinkTypes.isDependentTextLink(l.connectionType))
-            .length;
-        _bookHasCommentaryLinks = commentaryCount > 0;
-        await _loadCommentatorGroups();
+        final provider = LibraryProviderManager.instance.getProviderForBook(
+          textBook.title,
+          categoryId: textBook.categoryId,
+          fileType: textBook.fileType ?? 'txt',
+        );
+        ({
+          List<otz_links.LinkTargetSummary> targets,
+          int maxSourceLine
+        })? summary;
+        if (provider is DatabaseLibraryProvider &&
+            textBook.categoryId != null) {
+          summary = await provider.getBookLinkTargetsSummary(
+              textBook.title, textBook.categoryId!);
+        }
+        final Set<String> commentators;
+        if (summary != null) {
+          _linksTextBook = textBook;
+          // טעינת דורות מראש כדי שמיון הקישורים לפי דורות יעבוד סינכרונית
+          // (תפריט הקשר + פאנל קישורים)
+          CommentaryService.preloadEras({
+            for (final target in summary.targets)
+              if (!LinkTypes.isDependentTextLink(target.connectionType))
+                utils.getTitleFromPath(target.targetTitle),
+          });
+          commentators = {
+            for (final target in summary.targets)
+              if (LinkTypes.isDependentTextLink(target.connectionType))
+                utils.getTitleFromPath(target.targetTitle),
+          };
+        } else {
+          // ספר שאינו במסד, או ששאילתת הסיכום נכשלה — הטעינה המלאה הישנה,
+          // כדי שכשל נקודתי לא ייראה כמו ספר בלי מפרשים.
+          final loadedLinks = await textBook.links
+            ..sort((a, b) => a.index1.compareTo(b.index1));
+          widget.tab.links = loadedLinks;
+          widget.tab.linksAreComplete = true;
+          CommentaryService.preloadEras(loadedLinks
+              .where((l) => !LinkTypes.isDependentTextLink(l.connectionType))
+              .map((l) => utils.getTitleFromPath(l.path2)));
+          commentators = {
+            for (final link in loadedLinks)
+              if (LinkTypes.isDependentTextLink(link.connectionType))
+                utils.getTitleFromPath(link.path2),
+          };
+        }
+        _bookHasCommentaryLinks = commentators.isNotEmpty;
+        await _loadCommentatorGroups(commentators);
       }
 
       final currentPage = widget.tab.pdfViewerController.isReady
@@ -2879,6 +2923,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       if (!mounted) return;
       widget.tab.currentTextLineNumber = resolved.start;
       widget.tab.currentTextLineNumberEnd = resolved.end;
+      await _refreshLinksWindow();
+      if (!mounted) return;
 
       if (mounted) {
         _linksLoading = false;
@@ -2944,6 +2990,49 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   int? _initialPageNumber; // שמירת מספר העמוד ההתחלתי
   bool _isJumping = false; // flag לציון שאנחנו בתהליך קפיצה
   bool _linksLoading = true; // true עד שטעינת הקישורים מסתיימת
+
+  // מסלול חלון-הקישורים (ספרי מסד): tab.links מחזיק רק חלון שורות סביב
+  // המיקום הנוכחי ומתרענן בדפדוף — ראה PdfLinksWindowPolicy.
+  TextBook? _linksTextBook; // לא-null רק כשמסלול החלון פעיל
+  int? _linksWindowStart; // 1-based, כולל
+  int? _linksWindowEnd;
+  int _linksWindowRequestId = 0;
+  late final TextBookRepository _linksRepository =
+      TextBookRepository(fileSystem: FileSystemData.instance);
+
+  /// טוען חלון קישורים חדש אם הטווח הנוכחי מתקרב לקצה החלון הטעון.
+  Future<void> _refreshLinksWindow() async {
+    final textBook = _linksTextBook;
+    if (textBook == null || widget.tab.linksAreComplete) return;
+    final range = _getCurrentPdfLinesRange();
+    if (range == null) return;
+
+    final window = PdfLinksWindowPolicy.nextWindow(
+      rangeStart: range.startLine,
+      rangeEnd: range.endLine,
+      loadedStart: _linksWindowStart,
+      loadedEnd: _linksWindowEnd,
+    );
+    if (window == null) return;
+
+    final requestId = ++_linksWindowRequestId;
+    final loaded = await _linksRepository.getBookLinksInRange(
+      textBook,
+      startIndex: window.startLine - 1,
+      endIndex: window.endLine - 1,
+    );
+    if (!mounted ||
+        requestId != _linksWindowRequestId ||
+        widget.tab.linksAreComplete) {
+      return;
+    }
+    // הצרכנים (פאנל מפרשים, תפריט הקשר) מסתמכים על מיון לפי index1.
+    loaded.sort((a, b) => a.index1.compareTo(b.index1));
+    widget.tab.links = loaded;
+    _linksWindowStart = window.startLine;
+    _linksWindowEnd = window.endLine;
+    setState(() {});
+  }
 
   void _onPdfViewerControllerUpdate() async {
     if (!widget.tab.pdfViewerController.isReady) return;
@@ -3020,6 +3109,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       if (!mounted) return;
       widget.tab.currentTextLineNumber = resolved.start;
       widget.tab.currentTextLineNumberEnd = resolved.end;
+      unawaited(_refreshLinksWindow());
       _maybeRegisterPdfCommentaryOpportunity();
       tourCubit.recordInteraction(
         TourInteraction(
@@ -3078,6 +3168,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (!mounted) return;
     widget.tab.currentTextLineNumber = resolved.start;
     widget.tab.currentTextLineNumberEnd = resolved.end;
+    unawaited(_refreshLinksWindow());
     setState(() {});
   }
 
@@ -3271,11 +3362,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                               if (state is PdfBookError ||
                                   state is! PdfBookLoaded ||
                                   state.isLoading) {
+                                // RepaintBoundary סביב הספינר בלבד: בלי הבידוד
+                                // כל טיק שלו מרסטר מחדש את כל שכבת ה-viewport
+                                // (כולל ה-ColorFiltered) — יקר בטעינות ארוכות.
                                 return const Positioned.fill(
                                   child: ColoredBox(
                                     color: AppColors.pageWhite,
                                     child: Center(
-                                      child: CircularProgressIndicator(),
+                                      child: RepaintBoundary(
+                                        child: CircularProgressIndicator(),
+                                      ),
                                     ),
                                   ),
                                 );
@@ -3967,12 +4063,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return buildBookViewNavigationActions(
       firstAction: buildBookViewFirstNavigationAction(
         widget: ToolbarActionButton(
-          tooltip: 'תחילת הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+home')})',
+          tooltip:
+              'תחילת הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+home')})',
           icon: FluentIcons.arrow_previous_24_filled,
           compact: isCompact,
           onPressed: () => _goToPageWithSpreadLock(1),
         ),
-        tooltip: 'תחילת הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+home')})',
+        tooltip:
+            'תחילת הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+home')})',
         onPressed: () => _goToPageWithSpreadLock(1),
       ),
       previousAction: buildBookViewPreviousNavigationAction(
@@ -3997,13 +4095,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
       lastAction: buildBookViewLastNavigationAction(
         widget: ToolbarActionButton(
-          tooltip: 'סוף הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+end')})',
+          tooltip:
+              'סוף הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+end')})',
           icon: FluentIcons.arrow_next_24_filled,
           compact: isCompact,
           onPressed: () =>
               _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
         ),
-        tooltip: 'סוף הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+end')})',
+        tooltip:
+            'סוף הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+end')})',
         onPressed: () =>
             _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
       ),
@@ -4039,10 +4139,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     return ReaderNavCenter(
       title: title,
-      prevMajorTooltip: 'תחילת הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+home')})',
+      prevMajorTooltip:
+          'תחילת הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+home')})',
       prevMinorTooltip: 'הקודם',
       nextMinorTooltip: 'הבא',
-      nextMajorTooltip: 'סוף הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+end')})',
+      nextMajorTooltip:
+          'סוף הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+end')})',
       onPrevMajor: () => _goToPageWithSpreadLock(1),
       onPrevMinor: _goPreviousPage,
       onNextMinor: _goNextPage,

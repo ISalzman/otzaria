@@ -64,6 +64,11 @@ class PdfBookTab extends OpenedTab {
   /// Links for the current book
   List<Link> links = [];
 
+  /// האם [links] מכיל את *כל* קישורי הספר. במסך ה-PDF נטען רק חלון קישורים
+  /// סביב המיקום הנוכחי (false); כרטיסיית המפרשים העצמאית משדרגת לרשימה
+  /// המלאה וקובעת true — ומאותו רגע טעינת החלון מפסיקה לגעת ברשימה.
+  bool linksAreComplete = false;
+
   /// Active commentators to show
   Set<String> activeCommentators = <String>{};
 

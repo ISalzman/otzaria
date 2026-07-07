@@ -325,9 +325,15 @@ class _ReadingScreenState extends State<ReadingScreen>
                               : null,
                           children: [
                             for (var i = 0; i < state.tabs.length; i++)
-                              _buildTabView(
-                                state.tabs[i],
-                                enableTourTargets: i == validIndex,
+                              // טאבי רקע נשארים חיים (keepAlive) והאנימציות
+                              // שלהם (ספינרים וכד') ממשיכות לתזמן פריימים
+                              // ברציפות — TickerMode מכבה אותן עד שהטאב מוצג.
+                              TickerMode(
+                                enabled: i == validIndex,
+                                child: _buildTabView(
+                                  state.tabs[i],
+                                  enableTourTargets: i == validIndex,
+                                ),
                               ),
                           ],
                         )),

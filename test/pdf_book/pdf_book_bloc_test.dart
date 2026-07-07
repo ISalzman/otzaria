@@ -783,6 +783,37 @@ void main() {
     );
 
     blocTest<PdfBookBloc, PdfBookState>(
+      'אירוע headings בלבד לא דורס links קיימים ב-tab וב-state',
+      build: () {
+        final tab = _tab();
+        tab.links = [
+          Link(
+              heRef: 'א',
+              index1: 10,
+              path2: 'x.txt',
+              index2: 1,
+              connectionType: 'commentary'),
+        ];
+        return _makeBloc(tab);
+      },
+      seed: () => _loaded().copyWith(
+        links: [
+          Link(
+              heRef: 'א',
+              index1: 10,
+              path2: 'x.txt',
+              index2: 1,
+              connectionType: 'commentary'),
+        ],
+      ),
+      act: (b) => b.add(const LoadHeadingsAndLinks(links: [])),
+      verify: (b) {
+        expect(b.tab.links, hasLength(1));
+        expect((b.state as PdfBookLoaded).links, hasLength(1));
+      },
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
       'כשlinks חדשים עם אותו אורך אך תוכן שונה → emit state חדש',
       build: () => _makeBloc(_tab()),
       seed: () => _loaded().copyWith(

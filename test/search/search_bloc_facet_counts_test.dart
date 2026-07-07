@@ -256,6 +256,82 @@ void main() {
       ],
     );
 
+    group('חתימת ספירת facets (דילוג על ספירה חוזרת)', () {
+      test('חתימה זהה לאירועים שקולים ושונה כשמשתנה קלט שמשפיע על הספירה',
+          () async {
+        final bloc = SearchBloc();
+        addTearDown(bloc.close);
+
+        final base = UpdateSearchQuery('שלום', searchOptions: const {
+          'שלום_0': {'קידומות': true},
+        });
+        final sameAsBase = UpdateSearchQuery('שלום', searchOptions: const {
+          'שלום_0': {'קידומות': true},
+        });
+
+        expect(
+          bloc.facetRecountSignatureForTesting(base),
+          bloc.facetRecountSignatureForTesting(sameAsBase),
+        );
+
+        final differentQuery = UpdateSearchQuery('ברכה');
+        final differentOptions =
+            UpdateSearchQuery('שלום', searchOptions: const {
+          'שלום_0': {'סיומות': true},
+        });
+        expect(
+          bloc.facetRecountSignatureForTesting(base),
+          isNot(bloc.facetRecountSignatureForTesting(differentQuery)),
+        );
+        expect(
+          bloc.facetRecountSignatureForTesting(base),
+          isNot(bloc.facetRecountSignatureForTesting(differentOptions)),
+        );
+      });
+
+      test('שינוי scope או מצב חיפוש משנה את החתימה', () async {
+        final bloc = SearchBloc();
+        addTearDown(bloc.close);
+
+        final event = UpdateSearchQuery('שלום');
+        final before = bloc.facetRecountSignatureForTesting(event);
+
+        bloc.add(const SetFacetsWithoutSearch(['/תנ"ך']));
+        await Future<void>.delayed(Duration.zero);
+        final afterScope = bloc.facetRecountSignatureForTesting(event);
+        expect(afterScope, isNot(before));
+
+        bloc.add(SetSearchModeWithoutSearch(SearchMode.fuzzy));
+        await Future<void>.delayed(Duration.zero);
+        expect(bloc.facetRecountSignatureForTesting(event), isNot(afterScope));
+      });
+
+      blocTest<SearchBloc, SearchState>(
+        'ReplaceFacetCounts עדכני שומר את החתימה, ו-ResetSearch מנקה אותה',
+        build: SearchBloc.new,
+        act: (bloc) async {
+          bloc.add(
+              ReplaceFacetCounts({'/א': 1}, requestId: 0, signature: 'sig-a'));
+          await Future<void>.delayed(Duration.zero);
+          expect(bloc.facetCountsSignatureForTesting, 'sig-a');
+          bloc.add(ResetSearch());
+        },
+        verify: (bloc) {
+          expect(bloc.facetCountsSignatureForTesting, isNull);
+        },
+      );
+
+      blocTest<SearchBloc, SearchState>(
+        'ReplaceFacetCounts עם requestId ישן לא שומר חתימה',
+        build: SearchBloc.new,
+        act: (bloc) => bloc.add(
+            ReplaceFacetCounts({'/א': 1}, requestId: 99, signature: 'sig-a')),
+        verify: (bloc) {
+          expect(bloc.facetCountsSignatureForTesting, isNull);
+        },
+      );
+    });
+
     blocTest<SearchBloc, SearchState>(
       'LoadMoreResults מבקש תוצאות מה-offset הנוכחי ומצרף אותן',
       build: () => SearchBloc(
