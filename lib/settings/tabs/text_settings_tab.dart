@@ -347,22 +347,6 @@ class TextSettingsTab extends StatelessWidget {
       nikudValue = 'show_tanach_only';
     }
 
-    // קביעת ה-subtitle בהתאם למצב
-    String nikudSubtitle;
-    switch (nikudValue) {
-      case 'show_always':
-        nikudSubtitle = 'הניקוד יוצג בכל הספרים';
-        break;
-      case 'show_tanach_only':
-        nikudSubtitle = 'הניקוד יוצג בספרי התנ"ך בלבד';
-        break;
-      case 'hide_all':
-        nikudSubtitle = 'הניקוד לא יוצג בכלל';
-        break;
-      default:
-        nikudSubtitle = '';
-    }
-
     return SettingsCard(
       cardId: 'text.nikud',
       title: 'כתרי אותיות',
@@ -370,11 +354,22 @@ class TextSettingsTab extends StatelessWidget {
         SettingsActionTile.segmentedTile<String>(
           icon: FluentIcons.text_font_info_24_regular,
           title: 'הצגת הניקוד',
-          subtitle: nikudSubtitle,
           options: const [
-            SegmentOption(value: 'show_always', label: 'הצג תמיד'),
-            SegmentOption(value: 'show_tanach_only', label: 'הצג בתנ"ך'),
-            SegmentOption(value: 'hide_all', label: 'אל תציג'),
+            SegmentOption(
+              value: 'show_always',
+              label: 'הצג תמיד',
+              subtitle: 'הניקוד יוצג בכל הספרים',
+            ),
+            SegmentOption(
+              value: 'show_tanach_only',
+              label: 'הצג בתנ"ך',
+              subtitle: 'הניקוד יוצג בספרי התנ"ך בלבד',
+            ),
+            SegmentOption(
+              value: 'hide_all',
+              label: 'אל תציג',
+              subtitle: 'הניקוד לא יוצג בכלל',
+            ),
           ],
           currentValue: nikudValue,
           onChanged: (value) {
@@ -429,47 +424,6 @@ class TextSettingsTab extends StatelessWidget {
   }
 
   Widget _buildCopySection(BuildContext context, SettingsState state) {
-    // קביעת ה-subtitle בהתאם למצב העתקת הכותרת
-    String copySubtitle;
-    switch (state.copyWithHeaders) {
-      case 'none':
-        copySubtitle = 'הטקסט יועתק ללא כותרות';
-        break;
-      case 'book_name':
-        copySubtitle = 'הטקסט יועתק עם שם הספר בלבד';
-        break;
-      case 'book_and_path':
-        copySubtitle = 'הטקסט יועתק עם שם הספר ונתיב הטקסט';
-        break;
-      default:
-        copySubtitle = '';
-    }
-
-    // קביעת ה-subtitle בהתאם לעיצוב ההעתקה
-    String formatSubtitle;
-    switch (state.copyHeaderFormat) {
-      case 'same_line_after_brackets':
-        formatSubtitle = 'הכותרת תופיע באותה שורה אחרי הטקסט (עם סוגריים)';
-        break;
-      case 'same_line_after_no_brackets':
-        formatSubtitle = 'הכותרת תופיע באותה שורה אחרי הטקסט (בלי סוגריים)';
-        break;
-      case 'same_line_before_brackets':
-        formatSubtitle = 'הכותרת תופיע באותה שורה לפני הטקסט (עם סוגריים)';
-        break;
-      case 'same_line_before_no_brackets':
-        formatSubtitle = 'הכותרת תופיע באותה שורה לפני הטקסט (בלי סוגריים)';
-        break;
-      case 'separate_line_after':
-        formatSubtitle = 'הכותרת תופיע בפסקה נפרדת אחרי הטקסט';
-        break;
-      case 'separate_line_before':
-        formatSubtitle = 'הכותרת תופיע בפסקה נפרדת לפני הטקסט';
-        break;
-      default:
-        formatSubtitle = '';
-    }
-
     return SettingsCard(
       cardId: 'text.copy',
       title: 'העתקת כותרות ופרקים',
@@ -477,11 +431,22 @@ class TextSettingsTab extends StatelessWidget {
         SettingsActionTile.segmentedTile<String>(
           icon: FluentIcons.copy_24_regular,
           title: 'העתקת הכותרת',
-          subtitle: copySubtitle,
           options: const [
-            SegmentOption(value: 'none', label: 'ללא'),
-            SegmentOption(value: 'book_name', label: 'שם הספר'),
-            SegmentOption(value: 'book_and_path', label: 'שם וכותרת'),
+            SegmentOption(
+              value: 'none',
+              label: 'ללא',
+              subtitle: 'הטקסט יועתק ללא כותרות',
+            ),
+            SegmentOption(
+              value: 'book_name',
+              label: 'שם הספר',
+              subtitle: 'הטקסט יועתק עם שם הספר בלבד',
+            ),
+            SegmentOption(
+              value: 'book_and_path',
+              label: 'שם וכותרת',
+              subtitle: 'הטקסט יועתק עם שם הספר ונתיב הטקסט',
+            ),
           ],
           currentValue: state.copyWithHeaders,
           onChanged: (value) {
@@ -492,32 +457,37 @@ class TextSettingsTab extends StatelessWidget {
           SettingsActionTile.dropdownTile<String>(
             rtlIcon: FluentIcons.text_align_right_24_regular,
             title: 'עיצוב כותרות',
-            subtitle: formatSubtitle,
             value: state.copyHeaderFormat,
             entries: const [
               AppMenuEntry(
                 value: 'same_line_after_brackets',
                 label: 'אותה שורה אחרי (עם סוגריים)',
+                subtitle: 'הכותרת תופיע באותה שורה אחרי הטקסט (עם סוגריים)',
               ),
               AppMenuEntry(
                 value: 'same_line_after_no_brackets',
                 label: 'אותה שורה אחרי (בלי סוגריים)',
+                subtitle: 'הכותרת תופיע באותה שורה אחרי הטקסט (בלי סוגריים)',
               ),
               AppMenuEntry(
                 value: 'same_line_before_brackets',
                 label: 'אותה שורה לפני (עם סוגריים)',
+                subtitle: 'הכותרת תופיע באותה שורה לפני הטקסט (עם סוגריים)',
               ),
               AppMenuEntry(
                 value: 'same_line_before_no_brackets',
                 label: 'אותה שורה לפני (בלי סוגריים)',
+                subtitle: 'הכותרת תופיע באותה שורה לפני הטקסט (בלי סוגריים)',
               ),
               AppMenuEntry(
                 value: 'separate_line_after',
                 label: 'פסקה נפרדת אחרי',
+                subtitle: 'הכותרת תופיע בפסקה נפרדת אחרי הטקסט',
               ),
               AppMenuEntry(
                 value: 'separate_line_before',
                 label: 'פסקה נפרדת לפני',
+                subtitle: 'הכותרת תופיע בפסקה נפרדת לפני הטקסט',
               ),
             ],
             onSelected: (value) {
