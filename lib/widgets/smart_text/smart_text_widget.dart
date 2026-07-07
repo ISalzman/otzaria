@@ -4,6 +4,7 @@ import 'package:html/dom.dart' as dom;
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/utils/text/html_link_handler.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
+import 'package:otzaria/widgets/smart_text/simple_inline_html.dart';
 import 'package:otzaria/widgets/smart_text/text_renderer_service.dart';
 
 /// ווידג'ט חכם להצגת טקסט עברי
@@ -47,18 +48,37 @@ class SmartTextWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // עיבוד הטקסט דרך השירות המרכזי
-    final processedHtml = TextRendererService.render(text, settings);
+    final processedHtml = TextRendererService.processText(text, settings);
+    final textStyle = TextStyle(
+      fontSize: settings.fontSize,
+      fontFamily: settings.fontFamily,
+      fontWeight: settings.fontWeight,
+      height: settings.lineHeight,
+    );
+
+    // מסלול מהיר: רוב השורות הן טקסט פשוט (או עם תגי עיצוב בסיסיים) —
+    // רינדור ישיר ב-Text.rich חוסך את מלוא עלות הפרסור של HtmlWidget.
+    if (renderMode == RenderMode.column) {
+      final simpleSpan = SimpleInlineHtml.tryParse(processedHtml, textStyle);
+      if (simpleSpan != null) {
+        if (simpleSpan.toPlainText().isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Text.rich(
+          simpleSpan,
+          key: widgetKey,
+          style: textStyle,
+          textAlign: settings.justifyText ? TextAlign.justify : TextAlign.right,
+        );
+      }
+    }
 
     return HtmlWidget(
-      processedHtml,
+      TextRendererService.wrapWithRtlDiv(processedHtml,
+          justifyText: settings.justifyText),
       key: widgetKey,
       renderMode: renderMode,
-      textStyle: TextStyle(
-        fontSize: settings.fontSize,
-        fontFamily: settings.fontFamily,
-        fontWeight: settings.fontWeight,
-        height: settings.lineHeight,
-      ),
+      textStyle: textStyle,
       customStylesBuilder: (dom.Element element) {
         if (element.localName == 'span' &&
             element.classes.contains('footnote-marker-number')) {
