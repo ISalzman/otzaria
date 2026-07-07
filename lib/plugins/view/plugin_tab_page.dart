@@ -39,6 +39,8 @@ import 'package:otzaria/plugins/view/plugin_webview2_missing_view.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
+import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 
 // ---------------------------------------------------------------------------
 // Stub SDK — injected at AT_DOCUMENT_START before any page JS runs.
@@ -77,6 +79,14 @@ const String _sdkStub = r'''
     console.error('window.open is locked for security.');
     return null;
   };
+
+  // מקשי מקלדת נבלעים ב-WebView ולא מגיעים ל-Flutter — מעבירים ESC לאפליקציה
+  // (יציאה ממסך מלא).
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && window.flutter_inappwebview) {
+      window.flutter_inappwebview.callHandler('otzaria_escape_pressed');
+    }
+  }, true);
 })();
 ''';
 
@@ -463,6 +473,15 @@ class _PluginTabPageState extends State<PluginTabPage> {
           PluginRuntimeDispatcher.instance
               .registerController(widget.plugin.pluginId, controller);
           _bridge.register(controller);
+          controller.addJavaScriptHandler(
+            handlerName: 'otzaria_escape_pressed',
+            callback: (_) {
+              if (!mounted) return;
+              if (context.read<SettingsBloc>().state.isFullscreen) {
+                FullscreenHelper.toggleFullscreen(context, false);
+              }
+            },
+          );
         } catch (e) {
           // bridge.register נכשל — התהליך חי, לא קריסה native. מנקים גם את
           // ה-registration הלא שלם וגם את ה-canary של ה-crash guard.
