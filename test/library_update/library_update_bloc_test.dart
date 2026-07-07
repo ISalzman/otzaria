@@ -198,6 +198,31 @@ class _GatedCompanionService extends CompanionAssetsService {
   }
 }
 
+/// נלווים לתרחיש race: הקריאה הראשונה נחסמת ומחזירה שינוי (הנכס הוחלף לפני
+/// הביטול); השנייה נחסמת ומחזירה false (הנכס כבר מעודכן).
+class _RaceCompanionService extends CompanionAssetsService {
+  _RaceCompanionService(this.firstGate, this.secondGate);
+  final Completer<void> firstGate;
+  final Completer<void> secondGate;
+  int calls = 0;
+
+  @override
+  Future<bool> verifyAndUpdate({
+    void Function(String message)? onStatus,
+    void Function(int received, int? total)? onDownloadProgress,
+    bool Function()? isCancelled,
+  }) async {
+    calls++;
+    if (calls == 1) {
+      onStatus?.call('מוריד את התלמוד הבבלי');
+      await firstGate.future;
+      return true;
+    }
+    await secondGate.future;
+    return false;
+  }
+}
+
 LibraryUpdateBloc _bloc(
   LibraryUpdateService service, {
   bool offline = false,
@@ -468,6 +493,41 @@ void main() {
       expect(bloc.state.status, LibraryUpdateStatus.completed);
       expect(bloc.state.hasUpdate, isTrue,
           reason: 'הספרייה כבר השתנתה — ביטול לא יכול לאבד את הריענון/אינדוקס');
+      await bloc.close();
+    });
+
+    test(
+        'plan none: ביטול והתחלה מיידית של ריצה חדשה → השינוי מהריצה שבוטלה מדווח',
+        () async {
+      final firstGate = Completer<void>();
+      final secondGate = Completer<void>();
+      final bloc = _bloc(_FakeService(nonePlan),
+          companionAssets: _RaceCompanionService(firstGate, secondGate));
+
+      bloc.add(const StartLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.message, 'מוריד את התלמוד הבבלי');
+      bloc.add(const CancelLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.message, 'העדכון בוטל');
+
+      // המשתמש לוחץ שוב "עדכון" לפני שהריצה הישנה חזרה — הריצה החדשה busy.
+      bloc.add(const StartLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.isBusy, isTrue);
+
+      // הריצה הישנה חוזרת עם שינוי, אך לא פולטת כי הריצה החדשה busy.
+      firstGate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.isBusy, isTrue);
+
+      // הריצה החדשה רואה את הנכס כבר מעודכן — אך חייבת לדווח את השינוי השמור.
+      secondGate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.status, LibraryUpdateStatus.completed);
+      expect(bloc.state.hasUpdate, isTrue,
+          reason:
+              'הספרייה השתנתה בריצה שבוטלה — הריענון/אינדוקס לא יכולים ללכת לאיבוד');
       await bloc.close();
     });
 
