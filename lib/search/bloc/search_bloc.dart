@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
@@ -21,8 +22,20 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   final SearchRepository _repository;
   int _searchRequestId = 0;
 
+  /// חתימת החיפוש שעבורו חושבו ספירות ה-facets שב-state כרגע.
+  /// מאפשרת לדלג על ספירת כל-האינדקס (countByBook) כשלחיצה על קטגוריה
+  /// מפעילה חיפוש חוזר עם אותה שאילתה ואותן אפשרויות — התוצאה זהה ממילא.
+  String? _facetCountsSignature;
+
   @visibleForTesting
   SearchRepository get repositoryForTesting => _repository;
+
+  @visibleForTesting
+  String facetRecountSignatureForTesting(UpdateSearchQuery event) =>
+      _facetRecountSignature(event.query, event);
+
+  @visibleForTesting
+  String? get facetCountsSignatureForTesting => _facetCountsSignature;
 
   static int _defaultDistanceForMode(SearchMode mode) {
     return mode == SearchMode.fuzzy ? 2 : 0;
@@ -106,6 +119,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     final requestedFacets = List<String>.from(state.currentFacets);
     final shouldPreserveFacetCounts =
         state.searchQuery == query && state.facetCounts.isNotEmpty;
+    final recountSignature = _facetRecountSignature(query, event);
+    final shouldSkipFacetRecount = state.facetCounts.isNotEmpty &&
+        recountSignature == _facetCountsSignature;
 
     // Clear global cache for new search
     TantivyDataProvider.clearGlobalCache();
@@ -128,8 +144,12 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
 
     try {
-      // התחל לבנות את עץ ה-facets המלא במקביל כבר מתחילת החיפוש.
-      unawaited(_refreshFacetCountsForAllBooks(event, requestId));
+      // התחל לבנות את עץ ה-facets המלא במקביל כבר מתחילת החיפוש —
+      // אלא אם הספירות שב-state כבר חושבו עבור בדיוק אותה חתימה.
+      if (!shouldSkipFacetRecount) {
+        unawaited(
+            _refreshFacetCountsForAllBooks(event, requestId, recountSignature));
+      }
 
       // שימוש ב-streaming לתוצאות מהירות יותר
       final stream = _repository.searchTextsStream(
@@ -232,8 +252,24 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
   }
 
+  /// חתימה של כל הקלטים שמשפיעים על תוצאת countByBook. חוסר-התאמה גורר
+  /// לכל היותר ספירה מיותרת (הכיוון הבטוח), לכן הצפנת ה-JSON אינה ממוינת.
+  String _facetRecountSignature(String query, UpdateSearchQuery event) {
+    return [
+      query,
+      state.configuration.searchMode.name,
+      state.fuzzy,
+      state.distance,
+      state.searchScopeFacets.join(','),
+      jsonEncode(event.customSpacing ?? const <String, String>{}),
+      jsonEncode((event.alternativeWords ?? const <int, List<String>>{})
+          .map((k, v) => MapEntry(k.toString(), v))),
+      jsonEncode(event.searchOptions ?? const <String, Map<String, bool>>{}),
+    ].join('|');
+  }
+
   Future<void> _refreshFacetCountsForAllBooks(
-      UpdateSearchQuery event, int requestId) async {
+      UpdateSearchQuery event, int requestId, String signature) async {
     final query = event.query;
     if (query.isEmpty) return;
     if (requestId != _searchRequestId) return;
@@ -276,7 +312,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       bookByIndexedFilePath,
     );
 
-    add(ReplaceFacetCounts(aggregated, requestId: requestId));
+    add(ReplaceFacetCounts(aggregated,
+        requestId: requestId, signature: signature));
   }
 
   Future<void> _onUpdateFilterQuery(
@@ -507,6 +544,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     ResetSearch event,
     Emitter<SearchState> emit,
   ) {
+    _facetCountsSignature = null;
     emit(const SearchState());
   }
 
@@ -671,6 +709,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   ) {
     // התעלמות מספירות של חיפוש שכבר הוחלף בזמן שה-event המתין בתור.
     if (event.requestId != _searchRequestId) return;
+    // החתימה נשמרת רק כשהספירות באמת נכנסות ל-state, כדי שהדילוג על ספירה
+    // חוזרת לעולם לא יסתמך על ספירות שנזרקו בגלל requestId ישן.
+    _facetCountsSignature = event.signature;
     emit(state.copyWith(facetCounts: event.facetCounts));
   }
 

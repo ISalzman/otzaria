@@ -112,7 +112,11 @@ class ReplaceFacetCounts extends SearchEvent {
   /// הבדיקה לפני ה-add לא מספיקה, כי חיפוש חדש יכול להתחיל בזמן שה-event
   /// ממתין בתור, ואז ספירות ישנות היו דורסות את החדשות.
   final int requestId;
-  ReplaceFacetCounts(this.facetCounts, {required this.requestId});
+
+  /// חתימת החיפוש שעבורו חושבו הספירות (ראו SearchBloc._facetRecountSignature).
+  final String? signature;
+  ReplaceFacetCounts(this.facetCounts,
+      {required this.requestId, this.signature});
 }
 
 // Event לטעינת תוצאות נוספות
