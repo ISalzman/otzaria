@@ -1,13 +1,16 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' hide Category;
+import 'package:otzaria/data/cache/generation_cache.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
+import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/book_facet.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
+import 'package:otzaria/search/utils/foundational_book_classifier.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
@@ -58,6 +61,44 @@ class IndexingRepository {
         ...books.where((b) => b is! PdfBook),
         ...books.whereType<PdfBook>(),
       ];
+
+  @visibleForTesting
+  static int chronologicalOrderForBook(Book book) {
+    final foundationalTier = foundationalTierForBook(book);
+    if (foundationalTier != null) return foundationalTier - 1;
+
+    final eraOrder =
+        GenerationCache.instance.getOrderForBook(book.id, book.isUserBook);
+    final base = book.isUserBook ? 96 : 64;
+    return base + eraOrder.clamp(0, 31);
+  }
+
+  @visibleForTesting
+  static int? foundationalTierForBook(Book book) {
+    final categoryPath = book.categoryPath?.isNotEmpty == true
+        ? book.categoryPath
+        : _categoryPathForBook(book);
+    return FoundationalBookClassifier.classify(
+      categoryPath,
+      book.title,
+    );
+  }
+
+  static String? _categoryPathForBook(Book book) {
+    if (!book.isUserBook && book.id != null) {
+      final cached =
+          ReferenceBooksCache.instance.getCategoryPathForBookSync(book.id!);
+      if (cached != null && cached.isNotEmpty) return cached;
+    }
+
+    final parts = <String>[];
+    Category? current = book.category;
+    while (current != null && current is! Library) {
+      parts.insert(0, current.title);
+      current = current.parent;
+    }
+    return parts.isEmpty ? null : parts.join(', ');
+  }
 
   /// האם הספר כבר מאונדקס — לפי המסמכים החיים שנקראו מהאינדקס עצמו.
   bool isBookIndexed(Book book) => _tantivyDataProvider.indexedFilePaths
@@ -120,6 +161,10 @@ class IndexingRepository {
         library,
         keyOf: (book) => catalogueOrderKey(book as Book),
       );
+      await Future.wait([
+        GenerationCache.instance.warmUp(),
+        ReferenceBooksCache.instance.warmUp(),
+      ]);
 
       int processedBooks = 0;
       int actuallyIndexed = 0;
@@ -358,6 +403,7 @@ class IndexingRepository {
       final filePath = buildIndexedBookFilePath(book);
       final catalogueOrder =
           catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF;
+      final generationOrder = chronologicalOrderForBook(book);
       final engineStopwatch = Stopwatch()..start();
       final added = hasBytes
           ? await engine.addTextBookBytes(
@@ -365,6 +411,7 @@ class IndexingRepository {
               topics: topics,
               filePath: filePath,
               catalogueOrder: catalogueOrder,
+              generationOrder: generationOrder,
               text: bytes,
             )
           : await engine.addTextBook(
@@ -372,6 +419,7 @@ class IndexingRepository {
               topics: topics,
               filePath: filePath,
               catalogueOrder: catalogueOrder,
+              generationOrder: generationOrder,
               text: text!,
             );
       engineStopwatch.stop();
@@ -479,6 +527,7 @@ class IndexingRepository {
       filePath: buildIndexedBookFilePath(book),
       catalogueOrder:
           catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF,
+      generationOrder: chronologicalOrderForBook(book),
       pages: [
         for (final page in pages)
           PdfPageInput(
@@ -524,6 +573,7 @@ class IndexingRepository {
         isPdf: book is PdfBook,
         filePath: buildIndexedBookFilePath(book),
         contentHash: contentHash,
+        generationOrder: chronologicalOrderForBook(book),
       ),
     ]);
   }
@@ -793,6 +843,10 @@ class IndexingRepository {
       library,
       keyOf: (book) => catalogueOrderKey(book as Book),
     );
+    await Future.wait([
+      GenerationCache.instance.warmUp(),
+      ReferenceBooksCache.instance.warmUp(),
+    ]);
 
     final totalBooks = books.length;
     int processedBooks = 0;

@@ -552,6 +552,33 @@ void main() {
     });
   });
 
+  group('IndexingRepository.chronologicalOrderForBook', () {
+    test('ספר יסוד קודם לפירוש גם כשהפירוש שייך לדור מוקדם', () {
+      final source = TextBook(
+        title: 'שבת',
+        categoryPath: 'משנה, סדר מועד',
+      );
+      final commentary = TextBook(
+        title: 'פירוש המגן על שבת',
+        categoryPath: 'משנה, ראשונים, ברטנורא, סדר מועד',
+      );
+
+      expect(
+        IndexingRepository.chronologicalOrderForBook(source),
+        lessThan(IndexingRepository.chronologicalOrderForBook(commentary)),
+      );
+    });
+
+    test('פירוש תחת קטגוריית יסוד אינו מסווג כספר יסוד', () {
+      final commentary = TextBook(
+        title: 'הסולם על ספר הזהר',
+        categoryPath: 'קבלה, זהר',
+      );
+
+      expect(IndexingRepository.foundationalTierForBook(commentary), isNull);
+    });
+  });
+
   group('IndexingRepository.buildCatalogueDocumentId', () {
     test('נותן עדיפות לסדר הספר לפני הסדר הפנימי בתוך הספר', () {
       final earlierBookLateSegment =
