@@ -365,6 +365,82 @@ void main() {
       }
     });
 
+    test(
+        'loadBookLinkTargetsSummaryRowsForTesting מסכם יעדים לפי סוג כולל inverse',
+        () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_summary');
+      final dbPath = path.join(tempDir.path, 'db.sqlite');
+      final db = sqlite3.sqlite3.open(dbPath);
+
+      try {
+        db.execute(
+            'CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT, orderIndex INTEGER)');
+        db.execute(
+            'CREATE TABLE line (id INTEGER PRIMARY KEY, bookId INTEGER, lineIndex INTEGER, heRef TEXT)');
+        db.execute(
+            'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
+        db.execute(
+            'CREATE TABLE link (id INTEGER PRIMARY KEY, sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (1, 'בראשית', 7, 'txt', 1)");
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (2, 'מפרש א', 8, 'txt', 1)");
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (3, 'ילקוט', 8, 'txt', 2)");
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (4, 'מדרש', 8, 'txt', 3)");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (10, 1, 4, 'ד')");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (11, 1, 9, 'ט')");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (20, 2, 0, 'א')");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (21, 2, 1, 'ב')");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (30, 3, 0, 'א')");
+        db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, heRef) VALUES (40, 4, 0, 'א')");
+        db.execute(
+            "INSERT INTO connection_type (id, name) VALUES (1, 'COMMENTARY')");
+        db.execute(
+            "INSERT INTO connection_type (id, name) VALUES (5, 'reference')");
+        // שני קישורי מפרש + reference אחד מבראשית; קישור COMMENTARY מ'מדרש'
+        // שמצביע אל בראשית (יופיע כ-SOURCE בזרוע ההפוכה).
+        db.execute(
+            'INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 10, 20, 2, 1)');
+        db.execute(
+            'INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 11, 21, 2, 1)');
+        db.execute(
+            'INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 10, 30, 3, 5)');
+        db.execute(
+            'INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (4, 40, 10, 1, 1)');
+
+        final summary =
+            DatabaseLibraryProvider.loadBookLinkTargetsSummaryRowsForTesting(
+          dbPath: dbPath,
+          title: 'בראשית',
+          categoryId: 7,
+        );
+
+        Map<String, Object?> rowFor(String title) =>
+            summary.rows.firstWhere((row) => row['targetBookTitle'] == title);
+
+        expect(summary.rows, hasLength(3));
+        expect(rowFor('מפרש א')['connectionTypeName'], 'COMMENTARY');
+        expect(rowFor('מפרש א')['linkCount'], 2);
+        expect(rowFor('ילקוט')['connectionTypeName'], 'reference');
+        expect(rowFor('ילקוט')['linkCount'], 1);
+        expect(rowFor('מדרש')['connectionTypeName'], 'SOURCE');
+        expect(summary.maxSourceLineIndex, 9);
+      } finally {
+        db.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
     test('קישורי-טווח: שורה מכוסה מקבלת את הקישור וקצה הטווח נחשף', () async {
       final tempDir =
           await Directory.systemTemp.createTemp('otzaria_db_ranged');

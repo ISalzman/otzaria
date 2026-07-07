@@ -8,6 +8,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
 import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
+import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -333,20 +335,64 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     }
   }
 
+  /// סיכום קישורי הספר (יעדים + ספירות) מהמסד — תחליף קל לסריקת כל הקישורים
+  /// כש-tab.links מחזיק רק חלון סביב המיקום הנוכחי.
+  Future<({List<LinkTargetSummary> targets, int maxSourceLine})?>
+      _loadLinkTargetsSummary() async {
+    try {
+      final library = await DataRepository.instance.library;
+      final companion =
+          library.getCompanionBook(widget.tab.book, TextBook) as TextBook?;
+      if (companion == null || companion.categoryId == null) return null;
+      final provider = LibraryProviderManager.instance.getProviderForBook(
+        companion.title,
+        categoryId: companion.categoryId,
+        fileType: companion.fileType ?? 'txt',
+      );
+      if (provider is! DatabaseLibraryProvider) return null;
+      return provider.getBookLinkTargetsSummary(
+          companion.title, companion.categoryId!);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _loadCommentatorGroups() async {
     final commentatorsSet = <String>{};
     final linkCountByTitle = <String, int>{};
+    final nonCommentaryTitles = <String>{};
     // אומדן גיבוי למספר השורות (השורה הגבוהה ביותר עם קישור) — משמש רק אם
     // מספר השורות האמיתי לא נשלף מה-DB.
     var maxSourceLine = 0;
-    for (final link in widget.tab.links) {
-      if (link.index1 > maxSourceLine) maxSourceLine = link.index1;
-      if (LinkTypes.isDependentTextLink(link.connectionType)) {
+
+    if (widget.tab.linksAreComplete) {
+      for (final link in widget.tab.links) {
+        if (link.index1 > maxSourceLine) maxSourceLine = link.index1;
         final title = utils.getTitleFromPath(link.path2);
-        commentatorsSet.add(title);
-        linkCountByTitle[title] = (linkCountByTitle[title] ?? 0) + 1;
+        if (LinkTypes.isDependentTextLink(link.connectionType)) {
+          commentatorsSet.add(title);
+          linkCountByTitle[title] = (linkCountByTitle[title] ?? 0) + 1;
+        } else {
+          nonCommentaryTitles.add(title);
+        }
+      }
+    } else {
+      final summary = await _loadLinkTargetsSummary();
+      if (summary != null) {
+        maxSourceLine = summary.maxSourceLine;
+        for (final target in summary.targets) {
+          final title = utils.getTitleFromPath(target.targetTitle);
+          if (LinkTypes.isDependentTextLink(target.connectionType)) {
+            commentatorsSet.add(title);
+            linkCountByTitle[title] =
+                (linkCountByTitle[title] ?? 0) + target.linkCount;
+          } else {
+            nonCommentaryTitles.add(title);
+          }
+        }
       }
     }
+
     final availableCommentators = commentatorsSet.toList();
     final rare = computeRareCommentators(
       bookTotalLines: await _resolveSourceBookTotalLines() ?? maxSourceLine,
@@ -356,11 +402,6 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     // טעינת דורות הקישורים הרגילים (לא מפרשים) מראש - fire-and-forget כדי לא
     // לחסום את בניית קבוצות המפרשים. כשתסתיים, מאפסים את מטמון התוכן הנראה
     // ומרעננים, כדי שסדר fallback (אלפבתי) שאולי נקבע מוקדם לא יישאר תקוע.
-    final nonCommentaryTitles = <String>{
-      for (final link in widget.tab.links)
-        if (!LinkTypes.isDependentTextLink(link.connectionType))
-          utils.getTitleFromPath(link.path2),
-    };
     if (nonCommentaryTitles.isNotEmpty) {
       CommentaryService.preloadEras(nonCommentaryTitles).then((_) {
         if (mounted) {
@@ -433,8 +474,12 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       _loadCommentatorGroups();
     } else if (oldWidget.linksCount != widget.linksCount) {
       _visibleContentCache = null;
-      _commentatorGroups = [];
-      _loadCommentatorGroups();
+      // בחלון-קישורים linksCount משתנה בכל דפדוף, אבל רשימת המפרשים של
+      // הספר קבועה — אין לבנות אותה מחדש (ולירות שאילתת סיכום) בכל רענון.
+      if (_commentatorGroups.isEmpty || widget.tab.linksAreComplete) {
+        _commentatorGroups = [];
+        _loadCommentatorGroups();
+      }
     }
   }
 

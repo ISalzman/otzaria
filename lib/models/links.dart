@@ -8,6 +8,25 @@ import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 
+/// שורת סיכום של קישורי ספר לפי ספר-יעד וסוג חיבור — תחליף קל-משקל לטעינת
+/// כל הקישורים כשנדרשת רק רשימת המפרשים/היעדים של הספר (פאנל מפרשים ב-PDF).
+class LinkTargetSummary {
+  /// שם ספר היעד (שקול ל-[Link.path2]).
+  final String targetTitle;
+
+  /// שם סוג החיבור (שקול ל-[Link.connectionType]).
+  final String connectionType;
+
+  /// מספר הקישורים מסוג זה אל ספר היעד.
+  final int linkCount;
+
+  const LinkTargetSummary({
+    required this.targetTitle,
+    required this.connectionType,
+    required this.linkCount,
+  });
+}
+
 /// עוגן-מילה בודד של קישור בשורה המוצגת. קישור יכול לשאת כמה עוגנים
 /// (למשל הערה אחת שמסומנת בשני מקומות בשורה).
 class LinkAnchorSpan {
