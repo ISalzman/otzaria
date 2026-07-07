@@ -115,6 +115,23 @@ Widget? _buildSettingIcon(IconData? icon, IconData? rtlIcon, Color? iconColor) {
   return null;
 }
 
+/// תת-כותרת האפשרות הנבחרת מתוך [options] — משמש ע"י dropdownTile/segmentedTile
+/// כדי לא לחייב כל call site לבנות מיפוי value→subtitle בנפרד.
+/// [explicitSubtitle], אם סופק, גובר על תת-הכותרת של האפשרות.
+String? _selectedOptionSubtitle<TOption, TValue>({
+  required String? explicitSubtitle,
+  required TValue value,
+  required List<TOption> options,
+  required TValue Function(TOption option) valueOf,
+  required String? Function(TOption option) subtitleOf,
+}) {
+  if (explicitSubtitle != null) return explicitSubtitle;
+  for (final option in options) {
+    if (valueOf(option) == value) return subtitleOf(option);
+  }
+  return null;
+}
+
 // ── Segmented width calculation ────────────────────────────────────────────────
 // חישוב רוחב מדויק לפקד ה-Segmented לפי מספר האפשרויות ואורך הטקסט.
 // מחושב בנפרד ולא בתוך הwidget כדי שאפשר לקרוא לו גם מ-build() ב-LayoutBuilder.
@@ -127,7 +144,7 @@ const _kSegMinWidth = 180.0;
 const _kSegMaxWidth = 400.0;
 
 double _segGroupWidth(List<SegmentOption<dynamic>> options) {
-  final hasIcons = options.any((o) => o.icon != null);
+  final hasIcons = options.any((o) => o.icon != null || o.rtlIcon != null);
   final maxLen =
       options.map((o) => o.label.length).reduce((a, b) => a > b ? a : b);
   final btnW = (hasIcons ? _kSegBaseWithIcon : _kSegBaseNoIcon) +
@@ -303,12 +320,13 @@ class SettingsActionTile extends StatelessWidget {
       );
 
   /// שורה עם [AppDropdownField].
+  /// [subtitle] — כשלא סופק, נלקח אוטומטית מ-[AppMenuEntry.subtitle] של האפשרות הנבחרת.
   static Widget dropdownTile<T>({
     Key? key,
     IconData? icon,
     IconData? rtlIcon,
     required String title,
-    required String subtitle,
+    String? subtitle,
     required T? value,
     required List<AppMenuEntry<T>> entries,
     required ValueChanged<T?> onSelected,
@@ -328,6 +346,8 @@ class SettingsActionTile extends StatelessWidget {
 
   /// שורה עם [AppSegmentedControl].
   /// במסך רחב: מוגבל ל-400px. במסך צר: מתרחב לכל הרוחב.
+  /// כשלאפשרויות ([SegmentOption.icon]) יש אייקונים, אייקון השורה עוקב
+  /// אוטומטית אחרי הבחירה הנוכחית ([icon] משמש רק כברירת מחדל).
   static Widget segmentedTile<T>({
     Key? key,
     IconData? icon,
@@ -566,7 +586,7 @@ class _DropdownTile<T> extends StatelessWidget {
   final IconData? icon;
   final IconData? rtlIcon;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final T? value;
   final List<AppMenuEntry<T>> entries;
   final ValueChanged<T?> onSelected;
@@ -577,7 +597,7 @@ class _DropdownTile<T> extends StatelessWidget {
     this.icon,
     this.rtlIcon,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.value,
     required this.entries,
     required this.onSelected,
@@ -590,7 +610,13 @@ class _DropdownTile<T> extends StatelessWidget {
       icon: icon,
       rtlIcon: rtlIcon,
       title: title,
-      subtitle: subtitle,
+      subtitle: _selectedOptionSubtitle<AppMenuEntry<T>, T?>(
+        explicitSubtitle: subtitle,
+        value: value,
+        options: entries,
+        valueOf: (e) => e.value,
+        subtitleOf: (e) => e.subtitle,
+      ),
       actions: [
         AppDropdownField<T>(
           value: value,
@@ -657,6 +683,35 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
     _focusedIndex = idx < 0 ? 0 : idx;
   }
 
+  // כשלאפשרויות יש אייקונים משלהן, אייקון הכרטיס עוקב אחרי הבחירה הנוכחית
+  // (כמו בהתראות לוח שנה) — במקום להישאר קבוע לפי [SettingsActionTile.icon]/[rtlIcon].
+  bool get _iconTracksSelection =>
+      widget.options.any((o) => o.icon != null || o.rtlIcon != null);
+
+  ({IconData? icon, IconData? rtlIcon}) get _leadingIcons {
+    if (!_iconTracksSelection) {
+      return (icon: widget.icon, rtlIcon: widget.rtlIcon);
+    }
+    final selected = widget.options.firstWhere(
+      (o) => o.value == widget.currentValue,
+      orElse: () => widget.options.first,
+    );
+    if (selected.rtlIcon != null) {
+      return (icon: null, rtlIcon: selected.rtlIcon);
+    }
+    if (selected.icon != null) return (icon: selected.icon, rtlIcon: null);
+    return (icon: widget.icon, rtlIcon: widget.rtlIcon);
+  }
+
+  /// [widget.subtitle], אם סופק, גובר על תת-הכותרת של האפשרות הנבחרת.
+  String? get _resolvedSubtitle => _selectedOptionSubtitle<SegmentOption<T>, T>(
+        explicitSubtitle: widget.subtitle,
+        value: widget.currentValue,
+        options: widget.options,
+        valueOf: (o) => o.value,
+        subtitleOf: (o) => o.subtitle,
+      );
+
   @override
   void dispose() {
     _focusNode.dispose();
@@ -707,10 +762,10 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
             skipTraversal: true,
             onKeyEvent: _handleKeyEvent,
             child: SettingsActionTile.text(
-              icon: widget.icon,
-              rtlIcon: widget.rtlIcon,
+              icon: _leadingIcons.icon,
+              rtlIcon: _leadingIcons.rtlIcon,
               title: widget.title,
-              subtitle: widget.subtitle,
+              subtitle: _resolvedSubtitle,
               actions: [
                 SizedBox(
                   width: _segGroupWidth(widget.options),
@@ -731,11 +786,11 @@ class __SegmentedTileState<T> extends State<_SegmentedTile<T>> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               ListTile(
-                leading: _buildSettingIcon(
-                    widget.icon, widget.rtlIcon, widget.iconColor),
+                leading: _buildSettingIcon(_leadingIcons.icon,
+                    _leadingIcons.rtlIcon, widget.iconColor),
                 title: _settingTitle(widget.title),
-                subtitle: widget.subtitle != null
-                    ? _settingSubtitle(widget.subtitle!)
+                subtitle: _resolvedSubtitle != null
+                    ? _settingSubtitle(_resolvedSubtitle!)
                     : null,
               ),
               Padding(

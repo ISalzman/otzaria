@@ -33,6 +33,10 @@ class AppMenuEntry<T> {
   /// 0 = ברירת מחדל (iconSize + 8).
   final double trailingReservedWidth;
 
+  /// תת-כותרת המשויכת לאפשרות זו — נלקחת אוטומטית ע"י
+  /// [SettingsActionTile.dropdownTile] כשלא סופק subtitle מפורש.
+  final String? subtitle;
+
   const AppMenuEntry({
     required this.value,
     required this.label,
@@ -43,6 +47,7 @@ class AppMenuEntry<T> {
     this.labelWidget,
     this.reserveTrailingGap = false,
     this.trailingReservedWidth = 0,
+    this.subtitle,
   });
 }
 
@@ -380,6 +385,7 @@ Future<T?> showAnchoredAppMenu<T>({
   PopupMenuPosition position = PopupMenuPosition.under,
   Offset offset = const Offset(0, 4),
   T? initialValue,
+  double? minWidth,
 }) async {
   final metrics = Theme.of(context).extension<AppMenuMetrics>() ??
       AppMenuMetrics.create(compactMenus: false);
@@ -422,8 +428,10 @@ Future<T?> showAnchoredAppMenu<T>({
     position: anchorRect,
     items: items,
     initialValue: initialValue,
-    // מינימום רוחב תואם רוחב הטריגר — סעיף 4
-    constraints: BoxConstraints(minWidth: targetRect.width),
+    // רוחב מינימלי: רוחב הטריגר, או רוחב התוכן הרצוי (calculateAppMenuPreferredWidth) — הגדול מביניהם.
+    // התוכן בפועל עדיין קובע את הרוחב הסופי (IntrinsicWidth בתוך _PopupMenu).
+    constraints:
+        BoxConstraints(minWidth: max(targetRect.width, minWidth ?? 0.0)),
   );
 }
 
@@ -444,6 +452,7 @@ Future<T?> showAnchoredAppSearchMenu<T>({
   Offset offset = const Offset(0, 4),
   List<String>? filterLabels,
   List<bool Function(AppMenuEntry<T>)?>? filterPredicates,
+  int initialFilter = 0,
   double? menuMinWidth,
 }) async {
   if (entries.isEmpty) return null;
@@ -485,12 +494,25 @@ Future<T?> showAnchoredAppSearchMenu<T>({
       ? targetRect.bottom + offset.dy
       : targetRect.top - menuHeight - offset.dy;
 
-  // menuMinWidth מאפשר לתפריט להיות רחב מהשדה המפעיל.
-  // מוגבל לרוחב ה-overlay כדי שה-clamp לא יקבל גבול עליון שלילי.
-  final effectiveWidth =
-      max(menuMinWidth ?? 0.0, targetRect.width).clamp(0.0, overlay.size.width);
+  // הרוחב הוא הגדול מבין: הרוחב שהמפעיל ביקש (menuMinWidth), הרוחב הדרוש
+  // לפריט הארוך ביותר, רוחב שורת צ'יפי הסינון (כדי שכולם ייראו בלי גלילה),
+  // ורוחב השדה המפעיל. מוגבל לרוחב ה-overlay כדי שה-clamp לא יקבל גבול שלילי.
+  final preferredWidth = calculateAppMenuPreferredWidth(metrics, entries);
+  final filterRowWidth =
+      hasFilters ? _calculateFilterRowWidth(metrics, filterLabels) : 0.0;
+  final effectiveWidth = [
+    menuMinWidth ?? 0.0,
+    preferredWidth,
+    filterRowWidth,
+    targetRect.width
+  ].reduce(max).clamp(0.0, overlay.size.width);
+  // ברירת מחדל (RTL): הקצה הימני של התפריט מיושר לקצה הימני של הכפתור,
+  // והתפריט מתרחב שמאלה. אם ההתרחבות שמאלה חורגת מקצה החלון — מיישרים לקצה
+  // השמאלי של הכפתור ומתרחבים ימינה (פנימה), כדי שהתפריט לא יבלוט מהחלון.
   final rawMenuLeft = targetRect.right - effectiveWidth;
-  final menuLeft = rawMenuLeft.clamp(0.0, overlay.size.width - effectiveWidth);
+  final maxLeft = max(0.0, overlay.size.width - effectiveWidth);
+  final menuLeft =
+      (rawMenuLeft >= 0 ? rawMenuLeft : targetRect.left).clamp(0.0, maxLeft);
 
   return Navigator.of(context).push<T>(
     _AnchoredSearchMenuRoute<T>(
@@ -506,6 +528,7 @@ Future<T?> showAnchoredAppSearchMenu<T>({
       metrics: metrics,
       filterLabels: filterLabels,
       filterPredicates: filterPredicates,
+      initialFilter: initialFilter,
     ),
   );
 }
@@ -518,6 +541,7 @@ class _AnchoredSearchMenuRoute<T> extends PopupRoute<T> {
   final AppMenuMetrics metrics;
   final List<String>? filterLabels;
   final List<bool Function(AppMenuEntry<T>)?>? filterPredicates;
+  final int initialFilter;
 
   _AnchoredSearchMenuRoute({
     required this.anchorRect,
@@ -527,6 +551,7 @@ class _AnchoredSearchMenuRoute<T> extends PopupRoute<T> {
     required this.metrics,
     this.filterLabels,
     this.filterPredicates,
+    this.initialFilter = 0,
   });
 
   @override
@@ -556,6 +581,7 @@ class _AnchoredSearchMenuRoute<T> extends PopupRoute<T> {
       animation: animation,
       filterLabels: filterLabels,
       filterPredicates: filterPredicates,
+      initialFilter: initialFilter,
     );
   }
 }
@@ -569,6 +595,7 @@ class _AnchoredSearchMenuContent<T> extends StatefulWidget {
   final Animation<double> animation;
   final List<String>? filterLabels;
   final List<bool Function(AppMenuEntry<T>)?>? filterPredicates;
+  final int initialFilter;
 
   const _AnchoredSearchMenuContent({
     required this.anchorRect,
@@ -579,6 +606,7 @@ class _AnchoredSearchMenuContent<T> extends StatefulWidget {
     required this.animation,
     this.filterLabels,
     this.filterPredicates,
+    this.initialFilter = 0,
   });
 
   @override
@@ -592,11 +620,14 @@ class _AnchoredSearchMenuContentState<T>
   late final FocusNode _searchFocus;
   late final ScrollController _scrollController;
   String _query = '';
-  int _activeFilter = 0;
+  late int _activeFilter;
 
   @override
   void initState() {
     super.initState();
+    final filterCount = widget.filterLabels?.length ?? 0;
+    _activeFilter =
+        filterCount == 0 ? 0 : widget.initialFilter.clamp(0, filterCount - 1);
     _searchController = TextEditingController();
     _searchFocus = FocusNode();
     _scrollController = ScrollController();
@@ -786,17 +817,17 @@ class _AnchoredSearchMenuContentState<T>
                                   width: double.infinity,
                                   height: widget.metrics.itemHeight,
                                   child: LayoutBuilder(
-                                    // המרת הרוחב הזמין למקסימום שלוקח buildAppMenuRowContent.
-                                    // הוא יחסר את itemPadding פנימית לחישוב labelMaxWidth,
-                                    // ולכן מוסיפים בחזרה את הפדינג כך שהחישוב יהיה נכון.
+                                    // constraints.maxWidth הוא הרוחב החיצוני (לפני
+                                    // ריפוד ה-Container שבתוך buildAppMenuRowContent) —
+                                    // בדיוק מה ש-calculateAppMenuLabelMaxWidth מצפה
+                                    // לקבל, כי הוא כבר מחסיר את itemPadding בעצמו.
                                     builder: (ctx, constraints) =>
                                         buildAppMenuRowContent(
                                       context,
                                       widget.metrics,
                                       label: entry.label,
                                       labelWidget: entry.labelWidget,
-                                      maxWidth: constraints.maxWidth +
-                                          widget.metrics.itemPadding.horizontal,
+                                      maxWidth: constraints.maxWidth,
                                       icon: entry.icon,
                                       trailing: entry.trailing,
                                       isSelected: isSelected,
@@ -830,6 +861,16 @@ class _AnchoredSearchMenuContentState<T>
 // • הרקע הנבחר ממלא שורה שלמה (ללא borderRadius, ללא גבול)
 // • סימן ✓ תמיד מופיע לפריט נבחר
 // ═══════════════════════════════════════════════════════════════════════════
+
+/// המרחק בין סוף התוכן לסימן ה-✓ — משותף לרינדור בפועל
+/// ([buildAppMenuRowContent]) ולחישוב הרוחב ([calculateAppMenuPreferredWidth])
+/// כדי ששניהם יישארו מסונכרנים.
+const double _kCheckmarkGap = 4;
+
+/// משקל הגופן של פריט נבחר — משותף לרינדור בפועל ולחישוב הרוחב, כדי שהמדידה
+/// תשקף את הרוחב הרחב יותר של הטקסט המודגש (אחרת הפריט הארוך ביותר עלול
+/// לגלוש על סימן ה-✓ כשהוא נבחר, כי הגופן המודגש רחב יותר מהרגיל).
+const FontWeight _kSelectedItemFontWeight = FontWeight.w600;
 
 Widget buildAppMenuRowContent(
   BuildContext context,
@@ -870,7 +911,7 @@ Widget buildAppMenuRowContent(
   final labelTextStyle = TextStyle(
     fontFamily: 'Roboto',
     fontSize: metrics.fontSize,
-    fontWeight: isSelected ? FontWeight.w600 : metrics.itemFontWeight,
+    fontWeight: isSelected ? _kSelectedItemFontWeight : metrics.itemFontWeight,
     color: foregroundColor,
   );
   final labelChild = labelWidget ??
@@ -909,7 +950,7 @@ Widget buildAppMenuRowContent(
             child: trailing,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: _kCheckmarkGap),
         Icon(
           FluentIcons.checkmark_circle_24_filled,
           size: metrics.iconSize,
@@ -917,7 +958,7 @@ Widget buildAppMenuRowContent(
         ),
       ] else if (isSelected) ...[
         const Spacer(),
-        const SizedBox(width: 6),
+        const SizedBox(width: _kCheckmarkGap),
         Icon(
           FluentIcons.checkmark_circle_24_filled,
           size: metrics.iconSize,
@@ -972,6 +1013,85 @@ double? calculateAppMenuLabelMaxWidth(
   if (availableWidth <= 0) return null;
 
   return availableWidth;
+}
+
+/// מחשב את הרוחב הדרוש להצגת הפריט הארוך ביותר ב-[entries] בלי קיצוץ —
+/// משמש גם לקביעת רוחב התפריט וגם לרוחב הכפתור הפותח אותו (AppDropdownField).
+double calculateAppMenuPreferredWidth<T>(
+  AppMenuMetrics metrics,
+  List<AppMenuEntry<T>> entries,
+) {
+  if (entries.isEmpty) return metrics.menuMinWidth;
+
+  // נמדד במשקל של פריט נבחר (מודגש) — כל פריט עשוי להיות זה שנבחר,
+  // והגופן המודגש רחב יותר מהרגיל.
+  final textStyle = TextStyle(
+    fontFamily: 'Roboto',
+    fontSize: metrics.fontSize,
+    fontWeight: _kSelectedItemFontWeight,
+  );
+
+  var maxLabelWidth = 0.0;
+  for (final entry in entries) {
+    final painter = TextPainter(
+      text: TextSpan(text: entry.label, style: textStyle),
+      textDirection: TextDirection.rtl,
+      maxLines: 1,
+    )..layout();
+    if (painter.width > maxLabelWidth) maxLabelWidth = painter.width;
+  }
+
+  final hasIcon = entries.any((entry) => entry.icon != null);
+
+  var maxTrailingWidth = 0.0;
+  var hasExtraSlot = false;
+  for (final entry in entries) {
+    if (entry.trailing != null) {
+      final tWidth = entry.trailingReservedWidth > 0
+          ? entry.trailingReservedWidth
+          : metrics.iconSize + 8;
+      if (tWidth > maxTrailingWidth) maxTrailingWidth = tWidth;
+      if (entry.reserveTrailingGap) hasExtraSlot = true;
+    }
+  }
+
+  // תמיד משוריין מקום לסימן ה-✓ שמוצג ליד הפריט הנבחר, יהיה אשר יהיה.
+  final occupiedWidth = metrics.itemPadding.horizontal +
+      (hasIcon ? metrics.iconSize + 8 : 0) +
+      metrics.iconSize +
+      _kCheckmarkGap +
+      maxTrailingWidth +
+      (hasExtraSlot ? metrics.iconSize + 8 : 0);
+
+  return max(metrics.menuMinWidth, maxLabelWidth + occupiedWidth);
+}
+
+/// מחשב את רוחב שורת צ'יפי הסינון (סכום כל הצ'יפים + רווחים + ריפוד השורה),
+/// כדי שרוחב התפריט יבטיח שכל הצ'יפים ייראו בלי גלילה אופקית.
+/// הקבועים תואמים את רינדור הצ'יפים ב-[_AnchoredSearchMenuContent].
+double _calculateFilterRowWidth(AppMenuMetrics metrics, List<String> labels) {
+  // ריפוד ה-Padding העוטף (EdgeInsets.fromLTRB(8, 0, 8, 4)) + רווח בין צ'יפים.
+  const double rowHorizontalPadding = 16.0;
+  const double chipGap = 6.0;
+  // מסגרת הצ'יפ: labelPadding (8+8) + padding (2+2) בניכוי צמצום compact, עם מרווח ביטחון.
+  const double chipChrome = 22.0;
+
+  final chipTextStyle = TextStyle(
+    fontFamily: 'Roboto',
+    fontSize: metrics.fontSize - 1,
+  );
+
+  var total = rowHorizontalPadding;
+  for (var i = 0; i < labels.length; i++) {
+    if (i > 0) total += chipGap;
+    final painter = TextPainter(
+      text: TextSpan(text: labels[i], style: chipTextStyle),
+      textDirection: TextDirection.rtl,
+      maxLines: 1,
+    )..layout();
+    total += painter.width + chipChrome;
+  }
+  return total;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

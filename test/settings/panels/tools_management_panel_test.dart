@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -67,7 +68,7 @@ PluginManifest _manifest({
     'version': '1.0.0',
     'entrypoint': 'index.html',
     'permissions': permissions,
-    'networkEnabled': networkEnabled,
+    'network': {'enabled': networkEnabled},
     'contributes': {
       'toolTab': {'title': id},
     },
@@ -83,6 +84,7 @@ InstalledPlugin _plugin({
   bool networkAccessGranted = false,
   bool runOnStartupGranted = false,
   List<String> permissions = const [],
+  bool networkEnabled = false,
 }) {
   return InstalledPlugin(
     pluginId: id,
@@ -96,7 +98,8 @@ InstalledPlugin _plugin({
     showInTools: !hidden,
     networkAccessGranted: networkAccessGranted,
     runOnStartupGranted: runOnStartupGranted,
-    manifest: _manifest(id: id, permissions: permissions),
+    manifest: _manifest(
+        id: id, permissions: permissions, networkEnabled: networkEnabled),
     installedAt: DateTime.utc(2026, 1, 1),
     updatedAt: DateTime.utc(2026, 1, 1),
   );
@@ -150,6 +153,15 @@ Finder _rowButton(String label, String tooltip) => find.descendant(
       ),
       matching: find.byTooltip(tooltip),
     );
+
+/// מדמה ריחוף עכבר מעל שורת תוסף — כפתורי הטוגל של השורה מוצגים רק בריחוף.
+Future<TestGesture> _hoverRow(WidgetTester tester, String name) async {
+  final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  await gesture.addPointer(location: Offset.zero);
+  await gesture.moveTo(tester.getCenter(find.text(name)));
+  await tester.pumpAndSettle();
+  return gesture;
+}
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -292,7 +304,8 @@ void main() {
   );
 
   testWidgets(
-    'a hidden built-in tool shows the "show" button and the "מוסתר" badge',
+    'a hidden built-in tool\'s show-button is highlighted; a visible tool\'s '
+    'hide-button is not',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -310,10 +323,22 @@ void main() {
 
       // הכלי עדיין מופיע בטבלה — רק הוא מוסתר מהממשק הראשי.
       expect(find.text('לוח שנה'), findsOneWidget);
-      // תגית "מוסתר" (אייקון עם tooltip) צריכה להופיע.
-      expect(find.byTooltip('מוסתר'), findsOneWidget);
-      // הלחצן בשורת לוח-שנה צריך להציע "הצג בממשק" (ולא "הסתר").
-      expect(_rowButton('לוח שנה', 'הצג בממשק'), findsOneWidget);
+      // הלחצן בשורת לוח-שנה מציע "הצג בממשק" (ולא "הסתר"), ומודגש ברקע
+      // cs.surfaceContainerHighest — ההדגשה שמורה למצב "מושבת" (מוסתר).
+      final hiddenButton = tester.widget<IconButton>(find.ancestor(
+        of: _rowButton('לוח שנה', 'הצג בממשק'),
+        matching: find.byType(IconButton),
+      ));
+      expect(hiddenButton.isSelected, isFalse);
+      expect(hiddenButton.style?.backgroundColor?.resolve({}), isNotNull);
+
+      // כלי אחר שלא הוסתר — הלחצן שלו במצב "מוצג" (isSelected) וללא הדגשה.
+      final visibleButton = tester.widget<IconButton>(find.ancestor(
+        of: _rowButton('גימטריה', 'הסתר מהממשק'),
+        matching: find.byType(IconButton),
+      ));
+      expect(visibleButton.isSelected, isTrue);
+      expect(visibleButton.style?.backgroundColor?.resolve({}), isNull);
     },
   );
 
@@ -339,6 +364,116 @@ void main() {
       expect(find.text('1 נבחרו'), findsOneWidget);
       expect(find.text('מחק'), findsOneWidget);
       expect(find.text('השבת'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'idle plugin row shows status badges; hover swaps them for the toggle '
+    'icons; selection mode shows the badges again',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(
+            id: 'p1',
+            name: 'תוסף-A',
+            hidden: true,
+            pinnedToNavRail: true,
+            permissions: const ['network.access'],
+            networkAccessGranted: true,
+          ),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+
+      // מצב רגיל (לא ריחוף, לא בחירה) — רק התגיות מוצגות, בלי כפתורי טוגל.
+      expect(find.byTooltip('מוסתר'), findsOneWidget);
+      expect(find.byTooltip('בסרגל ניווט'), findsOneWidget);
+      expect(find.byTooltip('משתמש ברשת'), findsOneWidget);
+      expect(_rowButton('תוסף-A', 'הצג בממשק'), findsNothing);
+
+      // ריחוף — התגיות נעלמות, וכפתורי הטוגל (כמו כעת) מופיעים במקומן.
+      final gesture = await _hoverRow(tester, 'תוסף-A');
+      addTearDown(() => gesture.removePointer());
+
+      expect(find.byTooltip('מוסתר'), findsNothing);
+      expect(find.byTooltip('בסרגל ניווט'), findsNothing);
+      expect(find.byTooltip('משתמש ברשת'), findsNothing);
+      expect(_rowButton('תוסף-A', 'הצג בממשק'), findsOneWidget);
+
+      await gesture.moveTo(const Offset(0, 0));
+      await tester.pumpAndSettle();
+
+      await _enterSelectionMode(tester);
+
+      // במצב בחירה — התגיות חוזרות להופיע (אין כפתורי טוגל בשורה עצמה).
+      expect(find.byTooltip('מוסתר'), findsOneWidget);
+      expect(find.byTooltip('בסרגל ניווט'), findsOneWidget);
+      expect(find.byTooltip('משתמש ברשת'), findsOneWidget);
+      // התוסף מופעל, אז אין תגית "מושבת".
+      expect(find.byTooltip('מושבת'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'selection mode shows a "מושבת" badge in error colors for a disabled plugin',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(id: 'p1', name: 'תוסף-A', enabled: false),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+      await _enterSelectionMode(tester);
+
+      final badge = find.byTooltip('מושבת');
+      expect(badge, findsOneWidget);
+      final container = tester.widget<Container>(find.descendant(
+        of: badge,
+        matching: find.byType(Container),
+      ));
+      final cs = Theme.of(tester.element(badge)).colorScheme;
+      expect((container.decoration as BoxDecoration).color, cs.errorContainer);
+    },
+  );
+
+  testWidgets(
+    'selection mode shows a "מנותק מהרשת" badge in error colors when a '
+    'network-dependent plugin has access revoked',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(
+            id: 'p1',
+            name: 'תוסף-A',
+            permissions: const ['network.access'],
+            networkAccessGranted: false,
+            networkEnabled: true,
+          ),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+      await _enterSelectionMode(tester);
+
+      final badge = find.byTooltip('מנותק מהרשת');
+      expect(badge, findsOneWidget);
+      final container = tester.widget<Container>(find.descendant(
+        of: badge,
+        matching: find.byType(Container),
+      ));
+      final cs = Theme.of(tester.element(badge)).colorScheme;
+      expect((container.decoration as BoxDecoration).color, cs.errorContainer);
     },
   );
 
@@ -450,11 +585,188 @@ void main() {
       await tester.tap(find.text('הסתר'));
       await tester.pumpAndSettle();
 
-      final events =
-          pluginBloc.dispatched.whereType<SetPluginShowInToolsRequested>().toList();
+      final events = pluginBloc.dispatched
+          .whereType<SetPluginShowInToolsRequested>()
+          .toList();
       expect(events, hasLength(1));
       expect(events.single.pluginId, 'p1');
       expect(events.single.showInTools, isFalse);
+    },
+  );
+
+  testWidgets(
+    'a disabled plugin row shows only the enable and delete buttons, '
+    'but keeps its icon and version like an enabled row',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(
+            id: 'p1',
+            name: 'תוסף-A',
+            enabled: false,
+            permissions: const ['network.access', 'app.run_on_startup'],
+          ),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(_rowButton('תוסף-A', 'הפעל'), findsOneWidget);
+      expect(_rowButton('תוסף-A', 'מחק תוסף'), findsOneWidget);
+      expect(_rowButton('תוסף-A', 'ניהול הרשאות'), findsNothing);
+      expect(_rowButton('תוסף-A', 'הסתר מהממשק'), findsNothing);
+      expect(_rowButton('תוסף-A', 'הצמד לסרגל הניווט'), findsNothing);
+      expect(_rowButton('תוסף-A', 'אישור גישה לרשת'), findsNothing);
+      expect(_rowButton('תוסף-A', 'הפעלת טעינה בעלייה'), findsNothing);
+
+      // האייקון והגרסה נשארים מוצגים — גובה השורה זהה לשורת תוסף פעיל.
+      final row = find.ancestor(
+        of: find.text('תוסף-A'),
+        matching: find.byType(ListTile),
+      );
+      expect(
+        find.descendant(
+            of: row,
+            matching: find.byIcon(FluentIcons.puzzle_piece_24_regular)),
+        findsOneWidget,
+      );
+      expect(find.text('v1.0.0'), findsOneWidget);
+
+      // כפתור המחיקה אף פעם לא "נבחר" — לכן אף פעם לא מקבל צבע, גם כשהתוסף מושבת.
+      final deleteButton = tester.widget<IconButton>(find.ancestor(
+        of: _rowButton('תוסף-A', 'מחק תוסף'),
+        matching: find.byType(IconButton),
+      ));
+      expect(deleteButton.style?.backgroundColor?.resolve({}), isNull);
+    },
+  );
+
+  testWidgets(
+    'enabled plugin row — network/startup/visibility buttons are highlighted '
+    'only while disabled/blocked/hidden',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(
+            id: 'p1',
+            name: 'תוסף-A',
+            hidden: true,
+            permissions: const ['network.access', 'app.run_on_startup'],
+            networkAccessGranted: false,
+            runOnStartupGranted: false,
+          ),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+      final gesture = await _hoverRow(tester, 'תוסף-A');
+      addTearDown(() => gesture.removePointer());
+
+      IconButton buttonWithTooltip(String tooltip) =>
+          tester.widget<IconButton>(find.ancestor(
+              of: _rowButton('תוסף-A', tooltip),
+              matching: find.byType(IconButton)));
+
+      // מוסתר, ללא גישה לרשת, וללא טעינה בעלייה — כל שלושת הכפתורים מודגשים.
+      expect(buttonWithTooltip('הצג בממשק').style?.backgroundColor?.resolve({}),
+          isNotNull);
+      expect(
+          buttonWithTooltip('אישור גישה לרשת')
+              .style
+              ?.backgroundColor
+              ?.resolve({}),
+          isNotNull);
+      expect(
+          buttonWithTooltip('הפעלת טעינה בעלייה')
+              .style
+              ?.backgroundColor
+              ?.resolve({}),
+          isNotNull);
+    },
+  );
+
+  testWidgets(
+    'enabled plugin row — network toggle button dispatches granted:true '
+    'and is absent without the permission',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final pluginBloc = _FakePluginSystemBloc([
+        _plugin(
+          id: 'p1',
+          name: 'תוסף-A',
+          permissions: const ['network.access'],
+          networkAccessGranted: false,
+        ),
+        _plugin(id: 'p2', name: 'תוסף-B'),
+      ]);
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: pluginBloc,
+      ));
+      await tester.pumpAndSettle();
+
+      var gesture = await _hoverRow(tester, 'תוסף-B');
+      expect(_rowButton('תוסף-B', 'אישור גישה לרשת'), findsNothing);
+      await gesture.removePointer();
+
+      gesture = await _hoverRow(tester, 'תוסף-A');
+      addTearDown(() => gesture.removePointer());
+      await tester.tap(_rowButton('תוסף-A', 'אישור גישה לרשת'));
+      await tester.pumpAndSettle();
+
+      final events = pluginBloc.dispatched
+          .whereType<SetPluginPermissionRequested>()
+          .where((e) => e.permission == 'network.access')
+          .toList();
+      expect(events, hasLength(1));
+      expect(events.single.pluginId, 'p1');
+      expect(events.single.granted, isTrue);
+    },
+  );
+
+  testWidgets(
+    'enabled plugin row — startup toggle button dispatches granted:false '
+    'when already granted',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final pluginBloc = _FakePluginSystemBloc([
+        _plugin(
+          id: 'p1',
+          name: 'תוסף-A',
+          permissions: const ['app.run_on_startup'],
+          runOnStartupGranted: true,
+        ),
+      ]);
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: pluginBloc,
+      ));
+      await tester.pumpAndSettle();
+      final gesture = await _hoverRow(tester, 'תוסף-A');
+      addTearDown(() => gesture.removePointer());
+
+      await tester.tap(_rowButton('תוסף-A', 'ביטול טעינה בעלייה'));
+      await tester.pumpAndSettle();
+
+      final events = pluginBloc.dispatched
+          .whereType<SetPluginPermissionRequested>()
+          .where((e) => e.permission == 'app.run_on_startup')
+          .toList();
+      expect(events, hasLength(1));
+      expect(events.single.pluginId, 'p1');
+      expect(events.single.granted, isFalse);
     },
   );
 
@@ -532,6 +844,96 @@ void main() {
   );
 
   testWidgets(
+    'idle plugin row shows a single "עוד פעולות" (⋯) button, not the action '
+    'icons; tapping it opens the full actions menu',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(
+              id: 'p1', name: 'תוסף-A', permissions: const ['network.access']),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+
+      // מצב רגיל: כפתור ⋯ בלבד, בלי אייקוני הפעולה הישירים.
+      expect(_rowButton('תוסף-A', 'עוד פעולות'), findsOneWidget);
+      expect(_rowButton('תוסף-A', 'ניהול הרשאות'), findsNothing);
+      expect(_rowButton('תוסף-A', 'אישור גישה לרשת'), findsNothing);
+
+      // לחיצה על ⋯ פותחת תפריט עם כל האפשרויות.
+      await tester.tap(_rowButton('תוסף-A', 'עוד פעולות'));
+      await tester.pumpAndSettle();
+      expect(find.text('ניהול הרשאות'), findsOneWidget);
+      expect(find.text('אישור גישה לרשת'), findsOneWidget);
+      expect(find.text('מחק תוסף'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'right-clicking a plugin row opens the actions menu',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(id: 'p1', name: 'תוסף-A'),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(
+        tester.getCenter(find.text('תוסף-A')),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('ניהול הרשאות'), findsOneWidget);
+      expect(find.text('מחק תוסף'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'plugin row height stays constant between idle (badges) and hover (version)',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(
+            id: 'p1',
+            name: 'תוסף-A',
+            hidden: true,
+            pinnedToNavRail: true,
+            permissions: const ['network.access'],
+            networkAccessGranted: true,
+          ),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+
+      Finder rowTile() => find.ancestor(
+            of: find.text('תוסף-A'),
+            matching: find.byType(ListTile),
+          );
+
+      final idleHeight = tester.getSize(rowTile()).height;
+
+      final gesture = await _hoverRow(tester, 'תוסף-A');
+      addTearDown(() => gesture.removePointer());
+      expect(tester.getSize(rowTile()).height, idleHeight,
+          reason: 'hover must not resize the row');
+    },
+  );
+
+  testWidgets(
     'dragging a plugin row to another row dispatches ReorderPluginsRequested',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
@@ -548,15 +950,14 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      final handles =
-          find.byIcon(FluentIcons.re_order_dots_vertical_24_regular);
-      expect(handles, findsNWidgets(2));
-
-      final srcCenter = tester.getCenter(handles.first);
-      final dstCenter = tester.getCenter(handles.last);
+      // הגרירה זמינה מכל מקום בכרטיס (לא רק מאייקון ייעודי) — גוררים מהכותרת.
+      final srcFinder = find.text('תוסף-A');
+      final dstFinder = find.text('תוסף-B');
+      final srcCenter = tester.getCenter(srcFinder);
+      final dstCenter = tester.getCenter(dstFinder);
 
       await tester.timedDrag(
-        handles.first,
+        srcFinder,
         Offset(0, dstCenter.dy - srcCenter.dy),
         const Duration(milliseconds: 200),
       );
@@ -567,6 +968,130 @@ void main() {
       expect(events, hasLength(1));
       // p1 (index 0) dragged to p2 (index 1) → p1 inserted after p2
       expect(events.single.orderedPluginIds, orderedEquals(['p2', 'p1']));
+    },
+  );
+
+  testWidgets(
+    'hovering a plugin row shows the drag-reorder icon instead of the plugin icon',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(id: 'p1', name: 'תוסף-A'),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(FluentIcons.re_order_dots_vertical_24_regular),
+          findsNothing);
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(() => gesture.removePointer());
+      await gesture.addPointer(location: Offset.zero);
+      await gesture.moveTo(tester.getCenter(find.text('תוסף-A')));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(FluentIcons.re_order_dots_vertical_24_regular),
+          findsOneWidget);
+
+      await gesture.moveTo(const Offset(0, 0));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(FluentIcons.re_order_dots_vertical_24_regular),
+          findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a disabled plugin row is still draggable and shows the drag-reorder hint',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final pluginBloc = _FakePluginSystemBloc([
+        _plugin(id: 'p1', name: 'תוסף-A', enabled: false),
+        _plugin(id: 'p2', name: 'תוסף-B'),
+      ]);
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: pluginBloc,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Draggable<String>), findsNWidgets(2));
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(() => gesture.removePointer());
+      await gesture.addPointer(location: Offset.zero);
+      await gesture.moveTo(tester.getCenter(find.text('תוסף-A')));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(FluentIcons.re_order_dots_vertical_24_regular),
+          findsOneWidget);
+
+      final srcCenter = tester.getCenter(find.text('תוסף-A'));
+      final dstCenter = tester.getCenter(find.text('תוסף-B'));
+      await tester.timedDrag(
+        find.text('תוסף-A'),
+        Offset(0, dstCenter.dy - srcCenter.dy),
+        const Duration(milliseconds: 200),
+      );
+      await tester.pumpAndSettle();
+
+      final events =
+          pluginBloc.dispatched.whereType<ReorderPluginsRequested>().toList();
+      expect(events, hasLength(1));
+      expect(events.single.orderedPluginIds, orderedEquals(['p2', 'p1']));
+    },
+  );
+
+  testWidgets(
+    'tapping a plugin row (not a specific button) opens its permissions dialog',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(id: 'p1', name: 'תוסף-A'),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('תוסף-A'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ניהול הרשאות: תוסף-A'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a plugin row uses the default (non-suppressed) ListTile hover, like '
+    'SettingsActionTile.switchTile',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(
+        settingsBloc: _FakeSettingsBloc(),
+        pluginBloc: _FakePluginSystemBloc([
+          _plugin(id: 'p1', name: 'תוסף-A'),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+
+      final tile = tester.widget<ListTile>(find.ancestor(
+        of: find.text('תוסף-A'),
+        matching: find.byType(ListTile),
+      ));
+      // אין דיכוי ידני של ה-hover — הצבע מגיע מהתמה כברירת מחדל, בדיוק כמו
+      // ב-SettingsActionTile.switchTile (ראו onTap שם, שגם הוא מפעיל את ה-hover).
+      expect(tile.hoverColor, isNull);
+      expect(tile.onTap, isNotNull);
     },
   );
 
@@ -607,7 +1132,7 @@ void main() {
   );
 
   testWidgets(
-    'a pinned built-in tool shows "בסרגל ניווט" badge and "הסר מסרגל הניווט" button',
+    'a pinned built-in tool shows the "הסר מסרגל הניווט" button',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -624,23 +1149,12 @@ void main() {
       await _expandBuiltIn(tester);
 
       expect(find.text('לוח שנה'), findsOneWidget);
-      // _badge מציג אייקון בלבד; הטקסט חי כ-Tooltip.message — נחפש byTooltip.
-      // ה-Stack מרנדר placeholder בלתי-נראה + badge נראה — שניהם נושאים את ה-tooltip.
-      final calendarRow = find.ancestor(
-        of: find.text('לוח שנה'),
-        matching: find.byType(ListTile),
-      );
-      expect(
-        find.descendant(
-            of: calendarRow, matching: find.byTooltip('בסרגל ניווט')),
-        findsNWidgets(2),
-      );
       expect(_rowButton('לוח שנה', 'הסר מסרגל הניווט'), findsOneWidget);
     },
   );
 
   testWidgets(
-    'built-in tool row height stays constant across all badge states',
+    'built-in tool row height stays constant across hidden/pinned states',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));

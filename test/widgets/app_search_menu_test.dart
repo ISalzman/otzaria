@@ -1,3 +1,4 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
@@ -13,6 +14,9 @@ void main() {
     required ValueChanged<T?> onResult,
     T? initialValue,
     String searchHint = 'חיפוש',
+    List<String>? filterLabels,
+    List<bool Function(AppMenuEntry<T>)?>? filterPredicates,
+    int initialFilter = 0,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -29,6 +33,9 @@ void main() {
                       entries: entries,
                       initialValue: initialValue,
                       searchHint: searchHint,
+                      filterLabels: filterLabels,
+                      filterPredicates: filterPredicates,
+                      initialFilter: initialFilter,
                     );
                     onResult(result);
                   },
@@ -178,5 +185,212 @@ void main() {
 
     expect(called, isTrue);
     expect(selected, isNull);
+  });
+
+  testWidgets(
+      'בחירת הפריט הארוך ביותר כ-initialValue לא גורמת לגלישת רינדור '
+      '(סימן ה-✓ מוצג בגופן מודגש הרחב יותר מהרגיל)', (tester) async {
+    await pumpAnchorWithMenu<int>(
+      tester,
+      initialValue: 1,
+      entries: const [
+        AppMenuEntry<int>(
+          value: 1,
+          label: 'פרק א, סימן ב, פסקה ג - כותרת ארוכה מאוד לבדיקה',
+        ),
+        AppMenuEntry<int>(value: 2, label: 'קצר'),
+      ],
+      onResult: (_) {},
+    );
+
+    await tester.tap(find.text('פתח'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'סימן ה-✓ צמוד לתוכן כשהפריט הנבחר הוא גם הכי ארוך בתפריט '
+      '(רוחב התפריט נגזר ממנו, אז אין רווח גדול משאריות ה-Spacer)',
+      (tester) async {
+    const longestLabel = 'פרק א, סימן ב, פסקה ג - כותרת ארוכה מאוד לבדיקה';
+    await pumpAnchorWithMenu<int>(
+      tester,
+      initialValue: 1,
+      entries: const [
+        AppMenuEntry<int>(value: 1, label: longestLabel),
+        AppMenuEntry<int>(value: 2, label: 'קצר'),
+      ],
+      onResult: (_) {},
+    );
+
+    await tester.tap(find.text('פתח'));
+    await tester.pumpAndSettle();
+
+    final textRect = tester.getRect(find.text(longestLabel));
+    final checkRect = tester.getRect(
+      find.byIcon(FluentIcons.checkmark_circle_24_filled),
+    );
+
+    // ב-LTR (ברירת המחדל בטסט) הסימון נמצא מימין לטקסט.
+    final gap = checkRect.left - textRect.right;
+    expect(gap, lessThan(10),
+        reason:
+            'כשהתפריט נגזר ברוחבו מהפריט הזה, המרחק לסימן ה-✓ אמור להיות קטן');
+  });
+
+  testWidgets('initialFilter פותח את התפריט על הצ\'יפ המבוקש ומסנן לפיו',
+      (tester) async {
+    await pumpAnchorWithMenu<String>(
+      tester,
+      entries: const [
+        AppMenuEntry<String>(value: 'h', label: 'כותרת'),
+        AppMenuEntry<String>(value: 'l', label: 'שורה 1'),
+      ],
+      onResult: (_) {},
+      filterLabels: const ['כותרות', 'שורות'],
+      filterPredicates: [
+        (e) => e.value == 'h',
+        (e) => e.value == 'l',
+      ],
+      // הצ'יפ השני ('שורות') פעיל בפתיחה.
+      initialFilter: 1,
+    );
+
+    await tester.tap(find.text('פתח'));
+    await tester.pumpAndSettle();
+
+    // רק פריטי הסינון של הצ'יפ הפעיל מוצגים.
+    expect(find.text('שורה 1'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(InkWell),
+        matching: find.text('כותרת'),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('צ\'יפי סינון ארוכים מהטקסט מרחיבים את רוחב התפריט',
+      (tester) async {
+    Rect menuRect() => tester.getRect(
+          find.byWidgetPredicate((w) => w is Material && w.elevation == 8),
+        );
+
+    // ללא צ'יפים — הרוחב נגזר מהפריטים הקצרים בלבד.
+    await pumpAnchorWithMenu<String>(
+      tester,
+      entries: const [
+        AppMenuEntry<String>(value: 'a', label: 'א'),
+        AppMenuEntry<String>(value: 'b', label: 'ב'),
+      ],
+      onResult: (_) {},
+    );
+    await tester.tap(find.text('פתח'));
+    await tester.pumpAndSettle();
+    final widthWithoutChips = menuRect().width;
+    await tester.tapAt(const Offset(5, 5)); // סגירה
+    await tester.pumpAndSettle();
+
+    // עם צ'יפים ארוכים בהרבה מהפריטים — הרוחב חייב לגדול כדי להכילם.
+    await pumpAnchorWithMenu<String>(
+      tester,
+      entries: const [
+        AppMenuEntry<String>(value: 'a', label: 'א'),
+        AppMenuEntry<String>(value: 'b', label: 'ב'),
+      ],
+      onResult: (_) {},
+      filterLabels: const [
+        'כותרות ראשיות מאוד ארוכות',
+        'כותרות משנה ארוכות',
+        'שורות',
+      ],
+      filterPredicates: [
+        (e) => true,
+        (e) => true,
+        (e) => true,
+      ],
+    );
+    await tester.tap(find.text('פתח'));
+    await tester.pumpAndSettle();
+
+    expect(menuRect().width, greaterThan(widthWithoutChips),
+        reason: 'צ\'יפים רחבים מהפריטים אמורים להרחיב את התפריט');
+  });
+
+  testWidgets('התפריט מתרחב לרוחב התוכן גם בלי menuMinWidth מפורש',
+      (tester) async {
+    await pumpAnchorWithMenu<int>(
+      tester,
+      entries: const [
+        AppMenuEntry<int>(value: 1, label: 'קצר'),
+        AppMenuEntry<int>(
+          value: 2,
+          label: 'תווית ארוכה בהרבה מרוחב השדה המפעיל את התפריט הזה',
+        ),
+      ],
+      onResult: (_) {},
+    );
+
+    await tester.tap(find.text('פתח'));
+    await tester.pumpAndSettle();
+
+    // pumpAnchorWithMenu ממקם את האנקור ב-SizedBox ברוחב 240 (ר' הגדרתו למעלה).
+    final menuRect = tester.getRect(
+      find.byWidgetPredicate((w) => w is Material && w.elevation == 8),
+    );
+    expect(menuRect.width, greaterThan(240),
+        reason: 'תווית ארוכה מהאנקור אמורה להרחיב את התפריט אוטומטית');
+  });
+
+  testWidgets('כפתור צמוד לקצה שמאל: תפריט רחב מתרחב פנימה ולא בולט מחוץ לחלון',
+      (tester) async {
+    // כפתור צר בפינה השמאלית-עליונה; תפריט רחב בהרבה מהכפתור.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 90,
+              child: Builder(
+                builder: (anchorContext) => ElevatedButton(
+                  onPressed: () => showAnchoredAppSearchMenu<int>(
+                    context: anchorContext,
+                    anchorContext: anchorContext,
+                    entries: const [
+                      AppMenuEntry<int>(
+                        value: 1,
+                        label:
+                            'תווית ארוכה מאוד שמרחיבה את התפריט הרבה מעבר לרוחב הכפתור',
+                      ),
+                    ],
+                  ),
+                  child: const Text('פתח'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('פתח'));
+    await tester.pumpAndSettle();
+
+    final screenWidth =
+        tester.view.physicalSize.width / tester.view.devicePixelRatio;
+    final menuRect = tester.getRect(
+      find.byWidgetPredicate((w) => w is Material && w.elevation == 8),
+    );
+
+    expect(menuRect.left, greaterThanOrEqualTo(0.0),
+        reason: 'התפריט לא אמור לחרוג משמאל לקצה החלון');
+    expect(menuRect.right, lessThanOrEqualTo(screenWidth + 0.5),
+        reason: 'התפריט לא אמור לחרוג מימין לקצה החלון');
+    // התפריט מתרחב פנימה (ימינה) מהכפתור שבקצה, ולא נצמד לקצה השמאלי.
+    final buttonRect = tester.getRect(find.text('פתח'));
+    expect(menuRect.left, lessThanOrEqualTo(buttonRect.left + 1),
+        reason: 'שמאל התפריט מיושר לכפתור (מתרחב ימינה פנימה)');
   });
 }

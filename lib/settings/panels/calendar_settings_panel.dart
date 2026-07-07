@@ -148,16 +148,22 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                 SettingsActionTile.segmentedTile<CalendarType>(
                   icon: FluentIcons.calendar_24_regular,
                   title: 'סוג לוח שנה',
-                  subtitle: state.calendarType == CalendarType.hebrew
-                      ? 'יוצג לוח השנה היהודי בלבד'
-                      : state.calendarType == CalendarType.gregorian
-                          ? 'יוצג לוח השנה הלועזי בלבד'
-                          : 'יוצגו תאריכים מהלוח העברי והלועזי יחד',
                   options: const [
-                    SegmentOption(value: CalendarType.hebrew, label: 'עברי'),
-                    SegmentOption(value: CalendarType.combined, label: 'משולב'),
                     SegmentOption(
-                        value: CalendarType.gregorian, label: 'לועזי'),
+                      value: CalendarType.hebrew,
+                      label: 'עברי',
+                      subtitle: 'יוצג לוח השנה היהודי בלבד',
+                    ),
+                    SegmentOption(
+                      value: CalendarType.combined,
+                      label: 'משולב',
+                      subtitle: 'יוצגו תאריכים מהלוח העברי והלועזי יחד',
+                    ),
+                    SegmentOption(
+                      value: CalendarType.gregorian,
+                      label: 'לועזי',
+                      subtitle: 'יוצג לוח השנה הלועזי בלבד',
+                    ),
                   ],
                   currentValue: state.calendarType,
                   onChanged: (value) {
@@ -167,24 +173,27 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                 SettingsActionTile.dropdownTile<CalendarDayTransition>(
                   icon: FluentIcons.weather_sunny_low_24_regular,
                   title: 'מעבר יום',
-                  subtitle: _calendarDayTransitionSubtitle(state.dayTransition),
                   value: state.dayTransition,
                   entries: const [
                     AppMenuEntry(
                       value: CalendarDayTransition.sunset,
                       label: 'שקיעה',
+                      subtitle: 'היום בלוח יתחלף בזמן השקיעה של העיר הנבחרת',
                     ),
                     AppMenuEntry(
                       value: CalendarDayTransition.tzais,
                       label: 'צאה"כ',
+                      subtitle: 'היום בלוח יתחלף בצאת הכוכבים של העיר הנבחרת',
                     ),
                     AppMenuEntry(
                       value: CalendarDayTransition.rabbeinuTam,
                       label: 'רבינו תם',
+                      subtitle: 'היום בלוח יתחלף בצאת הכוכבים לרבינו תם',
                     ),
                     AppMenuEntry(
                       value: CalendarDayTransition.midnight,
                       label: '12 בלילה',
+                      subtitle: 'היום בלוח יתחלף בשעה 12 בלילה',
                     ),
                   ],
                   onSelected: (value) {
@@ -223,24 +232,25 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
               title: 'אירועים ותזכורות',
               children: [
                 SettingsActionTile.segmentedTile<CalendarNotificationMode>(
-                  icon: _notificationModeIcon(state.notificationMode),
                   title: 'התראות',
-                  subtitle: _notificationModeSubtitle(state.notificationMode),
                   options: const [
                     SegmentOption(
                       value: CalendarNotificationMode.sound,
                       label: 'צליל',
                       icon: FluentIcons.alert_urgent_24_regular,
+                      subtitle: 'הצג התראות על המסך והשמע את צליל המערכת',
                     ),
                     SegmentOption(
                       value: CalendarNotificationMode.silent,
                       label: 'שקט',
                       icon: FluentIcons.alert_24_regular,
+                      subtitle: 'הצג התראות על המסך ללא השמעת צליל',
                     ),
                     SegmentOption(
                       value: CalendarNotificationMode.off,
                       label: 'כבוי',
                       icon: FluentIcons.alert_off_24_regular,
+                      subtitle: 'אל תציג התראות עבור אירועים בלוח השנה',
                     ),
                   ],
                   currentValue: state.notificationMode,
@@ -254,12 +264,15 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                   SettingsActionTile.dropdownTile<int>(
                     icon: FluentIcons.timer_24_regular,
                     title: 'מועד ההתראה',
-                    subtitle: _calendarNotificationTimeSubtitle(
-                        state.calendarNotificationTime),
                     value: state.calendarNotificationTime,
                     entries: _notificationTimeLabels.entries
-                        .map((e) =>
-                            AppMenuEntry<int>(value: e.key, label: e.value))
+                        .map((e) => AppMenuEntry<int>(
+                              value: e.key,
+                              label: e.value,
+                              subtitle: e.key == 0
+                                  ? 'התראה תישלח בדיוק בזמן האירוע'
+                                  : 'ההתראה תופיע ${e.value} לפני מועד האירוע',
+                            ))
                         .toList(),
                     onSelected: (value) {
                       if (value != null) {
@@ -454,48 +467,6 @@ const Map<int, String> _notificationTimeLabels = {
   1440: 'יום',
   2880: 'יומיים',
 };
-
-String _calendarNotificationTimeSubtitle(int minutes) {
-  if (minutes == 0) return 'התראה תישלח בדיוק בזמן האירוע';
-  final label = _notificationTimeLabels[minutes];
-  if (label != null) return 'ההתראה תופיע $label לפני מועד האירוע';
-  return 'ההתראה תופיע לפני מועד האירוע';
-}
-
-IconData _notificationModeIcon(CalendarNotificationMode mode) {
-  switch (mode) {
-    case CalendarNotificationMode.sound:
-      return FluentIcons.alert_urgent_24_regular;
-    case CalendarNotificationMode.silent:
-      return FluentIcons.alert_24_regular;
-    case CalendarNotificationMode.off:
-      return FluentIcons.alert_off_24_regular;
-  }
-}
-
-String _notificationModeSubtitle(CalendarNotificationMode mode) {
-  switch (mode) {
-    case CalendarNotificationMode.sound:
-      return 'הצג התראות על המסך והשמע את צליל המערכת';
-    case CalendarNotificationMode.silent:
-      return 'הצג התראות על המסך ללא השמעת צליל';
-    case CalendarNotificationMode.off:
-      return 'אל תציג התראות עבור אירועים בלוח השנה';
-  }
-}
-
-String _calendarDayTransitionSubtitle(CalendarDayTransition transition) {
-  switch (transition) {
-    case CalendarDayTransition.sunset:
-      return 'היום בלוח יתחלף בזמן השקיעה של העיר הנבחרת';
-    case CalendarDayTransition.tzais:
-      return 'היום בלוח יתחלף בצאת הכוכבים של העיר הנבחרת';
-    case CalendarDayTransition.rabbeinuTam:
-      return 'היום בלוח יתחלף בצאת הכוכבים לרבינו תם';
-    case CalendarDayTransition.midnight:
-      return 'היום בלוח יתחלף בשעה 12 בלילה';
-  }
-}
 
 Future<List<T>?> _showCalendarMultiSelectionDialog<T>({
   required BuildContext context,
